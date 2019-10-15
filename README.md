@@ -11,3 +11,15 @@
 2. セクション毎に分割 & 改行の除去
 3. Google翻訳で英語を日本語にする
 4. セクション毎に英文、日本語文を並べて表示するページの生成
+
+```
+pip install requests lxml
+pip install googletrans
+pip install hyper
+```
+
+
+```python
+python fetch_rfc.py 1
+python trans_rfc.py 1
+```
