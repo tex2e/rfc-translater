@@ -18,15 +18,20 @@ class Translator:
         self.browser = webdriver.Chrome(options=self.options)
         self.browser.implicitly_wait(3)
 
+        self.count = 0
+        self.total = 0
+
     def translate(self, text):
         # Start translation
-        url_text = "https://translate.google.co.jp/#en/ja/{0}".format(text)
-        url = urllib.parse.quote_plus(url_text, "/:?=&#")
+        text_for_url = urllib.parse.quote_plus(text, safe='')
+        url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
         self.browser.get(url)
 
         # take interval
-        wait_time = 1 + len(text) / 20
-        print('len(text):', len(text), 'sleep:', wait_time)
+        wait_time = 1 + len(text) / 22 # IMPORTANT!!!
+        if self.total > 0:
+            print('%3d/%d: ' % (self.count, self.total), end='')
+        print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
         time.sleep(wait_time)
 
         # Get translation result
@@ -52,6 +57,8 @@ def trans_rfc(number):
         obj = json.load(f)
 
     translator = Translator()
+    translator.count = 0
+    translator.total = len(obj['contents'])
     is_canceled = False
 
     try:
@@ -68,6 +75,7 @@ def trans_rfc(number):
                 obj['contents'][i]['ja'] = ''
                 continue
 
+            translator.count = i + 1
             ja = translator.translate(text)
             obj['contents'][i]['ja'] = ja
 

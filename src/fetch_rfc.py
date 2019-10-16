@@ -20,7 +20,7 @@ class Paragraph:
         if self.is_toc:
             self.is_code = True
         if not self.is_code and not is_code:
-            self.text = self.text.replace('\n', ' ') # 複数行を1行にまとめる
+            self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
 
     def __str__(self):
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
@@ -42,6 +42,7 @@ class Paragraph:
 class Paragraphs:
     def __init__(self, text):
         is_header = True
+        prev_indent = 0
         chunks = re.compile(r'\n\n+').split(text)
         self.paragraphs = []
         for i, chunk in enumerate(chunks):

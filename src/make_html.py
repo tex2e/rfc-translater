@@ -1,4 +1,5 @@
 
+import os
 import json
 from mako.template import Template
 from mako.lookup import TemplateLookup
@@ -17,6 +18,8 @@ def make_html(rfc_number):
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template('templates/rfc.html')
     output = mytemplate.render_unicode(ctx=obj)
+
+    os.makedirs(output_dir, exist_ok=True)
 
     with open(output_file, 'w') as f:
         f.write(output)
