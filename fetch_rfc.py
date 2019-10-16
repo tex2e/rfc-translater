@@ -71,7 +71,11 @@ def fetch_rfc(number):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    page = requests.get(url)
+    headers = {
+        'User-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36',
+        'referer': url,
+    }
+    page = requests.get(url, headers)
     tree = html.fromstring(page.content)
 
     contents = tree.xpath(
