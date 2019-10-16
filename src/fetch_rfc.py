@@ -70,6 +70,10 @@ def get_indent_diff(text1, text2):
     return abs(len(first_line1) - len(first_line2))
 
 
+class RFCNotFound(Exception):
+    pass
+
+
 def fetch_rfc(number):
 
     url = 'https://tools.ietf.org/html/rfc%d' % number
@@ -83,6 +87,10 @@ def fetch_rfc(number):
     tree = html.fromstring(page.content)
 
     title = tree.xpath('//title/text()')[0]
+
+    content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
+    if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
+        raise RFCNotFound
 
     contents = tree.xpath(
         '//pre/text() | ' # 本文

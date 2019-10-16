@@ -55,8 +55,6 @@ def trans_rfc(number):
     is_canceled = False
 
     try:
-        print('RFC %d:' % number)
-
         text = obj['title']['text'].split(' - ')[1] # "RFC XXXX - Title"
         ja = translator.translate(text)
         obj['title']['ja'] = "RFC %d - %s" % (number, ja)

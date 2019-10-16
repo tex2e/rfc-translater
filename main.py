@@ -1,12 +1,22 @@
 
 import sys
-from src.fetch_rfc import fetch_rfc
+from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
 from src.fetch_index import diff_remote_and_local_index
 
 def main(rfc_number):
-    fetch_rfc(rfc_number)
+    print('RFC %d:' % rfc_number)
+
+    try:
+        fetch_rfc(rfc_number)
+    except RFCNotFound as e:
+        print('Exception: RFCNotFound!')
+        filename = "html/rfc%d-not-found.html" % rfc_number
+        with open(filename, "w") as f:
+            f.write('')
+        return
+
     trans_rfc(rfc_number)
     make_html(rfc_number)
 
