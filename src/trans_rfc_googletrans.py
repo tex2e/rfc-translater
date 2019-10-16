@@ -3,7 +3,7 @@
 
 # from googletrans import Translator
 # translator = Translator()
-# translator.translate('Test', dest='ja')
+# translator.translate('This is a pen.', dest='ja')
 
 import os
 import re

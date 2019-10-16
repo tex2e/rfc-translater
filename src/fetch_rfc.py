@@ -95,7 +95,7 @@ class RFCNotFound(Exception):
 def fetch_rfc(number):
 
     url = 'https://tools.ietf.org/html/rfc%d' % number
-    output_dir = 'data/%04d/%03d' % (round(number, -3), round(number, -2))
+    output_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
     os.makedirs(output_dir, exist_ok=True)

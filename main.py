@@ -5,7 +5,7 @@ from src.trans_rfc import trans_rfc
 from src.make_html import make_html
 from src.fetch_index import diff_remote_and_local_index
 
-def main(rfc_number):
+def main(rfc_number, trans_mode=None):
     print('RFC %d:' % rfc_number)
 
     try:
@@ -17,15 +17,14 @@ def main(rfc_number):
             f.write('')
         return
 
-    trans_rfc(rfc_number)
-    if ENDLESS_MODE: return
+    trans_rfc(rfc_number, mode=trans_mode)
     make_html(rfc_number)
 
 def continuous_main(maximum=100, begin=None, end=None):
-    if begin and end:
-        numbers = list(range(begin, end+1))
-    else:
-        numbers = list(diff_remote_and_local_index())
+    numbers = list(diff_remote_and_local_index())
+    if begin and end: # 開始と終了区間の設定
+        numbers = [x for x in numbers if begin <= x <= end]
+
     for rfc_number in numbers[:maximum]:
         main(rfc_number)
 
@@ -40,12 +39,10 @@ if __name__ == '__main__':
     parser.add_argument('--max', type=int, help='continuous: max time')
     parser.add_argument('--begin', type=int, help='continuous: begin rfc number')
     parser.add_argument('--end', type=int, help='continuous: end rfc number')
-    parser.add_argument('--endless-mode',
-        dest='endless_mode', action='store_true', help='continuous: end rfc number')
+    parser.add_argument('--trans-mode', dest='trans_mode', type=str,
+        choices=['selenium', 'googletrans'],
+        help='continuous: end rfc number')
     args = parser.parse_args()
-
-    global ENDLESS_MODE
-    ENDLESS_MODE = args.endless_mode
 
     if args.fetch and args.rfc:
         fetch_rfc(args.rfc)
@@ -55,6 +52,7 @@ if __name__ == '__main__':
         make_html(args.rfc)
 
     elif not args.continuous and args.rfc:
-        main(args.rfc)
+        main(args.rfc, trans_mode=trans_mode)
     else:
-        continuous_main(maximum=args.max, begin=args.begin, end=args.end)
+        continuous_main(maximum=args.max, begin=args.begin, end=args.end,
+            trans_mode=trans_mode)
