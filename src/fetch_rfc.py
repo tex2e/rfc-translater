@@ -27,12 +27,15 @@ class Paragraph:
             (self.indent, self.is_code, self.text)
 
     def _find_code_pattern(self, text):
-        return text.find('---') >= 0
+        # "---" や "___" が現れたときは図・表とする
+        return text.find('---') >= 0 or text.find('___') >= 0
 
     def _find_toc_pattern(self, text):
+        # ".....NN" が現れたときは目次(TOC)とする
         return re.search(r'\.{5,}\d', text)
 
     def _find_section_title_pattern(self, text):
+        # "N." が現れたときはセクションのタイトルとする
         return re.match(r'^\d+\.', text)
 
 
@@ -45,9 +48,13 @@ class Paragraphs:
             indent = get_indent(chunk)
             if i >= 1 and indent == 0:
                 is_header = False
+            is_large_indent = (indent - prev_indent > 3)
 
-            oneline = (len(chunk.split('\n')) == 1)
-            if is_header or (not oneline and indent - prev_indent > 3):
+            is_oneline = (len(chunk.split('\n')) == 1)
+            has_special_chars = has_many_special_chars(chunk)
+
+            if (is_header or (not is_oneline and is_large_indent
+                                             and has_special_chars)):
                 flag = True
             else:
                 flag = None
@@ -68,6 +75,16 @@ def get_indent_diff(text1, text2):
     first_line1 = text1.split('\n')[0]
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
+
+def has_many_special_chars(text):
+    # 図や表によく現れる文字が2個以上あればTrueを返す
+    count = 0
+    for char in text:
+        if char in '|{}<>=^':
+            count += 1
+            if count >= 2:
+                return True
+    return False
 
 
 class RFCNotFound(Exception):
