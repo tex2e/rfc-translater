@@ -28,7 +28,7 @@ class Translator:
         self.browser.get(url)
 
         # take interval
-        wait_time = 1 + len(text) / 22 # IMPORTANT!!!
+        wait_time = 1 + len(text) / 25 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))

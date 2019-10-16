@@ -47,7 +47,7 @@ class Paragraphs:
         self.paragraphs = []
         for i, chunk in enumerate(chunks):
             indent = get_indent(chunk)
-            if i >= 1 and indent == 0:
+            if i >= 1 and indent <= 3:
                 is_header = False
             is_large_indent = (indent - prev_indent > 3)
 
@@ -104,7 +104,10 @@ def fetch_rfc(number):
     page = requests.get(url, headers)
     tree = html.fromstring(page.content)
 
-    title = tree.xpath('//title/text()')[0]
+    title = tree.xpath('//title/text()')
+    if len(title) == 0:
+        raise RFCNotFound
+    title = title[0]
 
     content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
     if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
