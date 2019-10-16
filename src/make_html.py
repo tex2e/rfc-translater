@@ -1,6 +1,5 @@
 
 import json
-# from lxml.html.clean import clean_html, autolink_html
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
