@@ -9,8 +9,34 @@ import re
 import json
 import time
 
-options = Options()
-options.add_argument('--headless')
+
+class Translator:
+
+    def __init__(self):
+        self.options = Options()
+        self.options.add_argument('--headless')
+        self.browser = webdriver.Chrome(options=self.options)
+        self.browser.implicitly_wait(3)
+
+    def translate(self, text):
+        # Start translation
+        url_text = "https://translate.google.co.jp/#en/ja/{0}".format(text)
+        url = urllib.parse.quote_plus(url_text, "/:?=&#")
+        self.browser.get(url)
+
+        # take interval
+        wait_time = 1 + len(text) / 20
+        print('len(text):', len(text), 'sleep:', wait_time)
+        time.sleep(wait_time)
+
+        # Get translation result
+        ja = BeautifulSoup(self.browser.page_source, "html.parser").find(class_ = "tlid-translation translation").text
+
+        return ja
+
+    def quit(self):
+        self.browser.quit()
+
 
 def _find_toc_pattern(text):
     return re.search(r'\.{5,}\d', text)
@@ -25,12 +51,16 @@ def trans_rfc(number):
     with open(input_file, 'r') as f:
         obj = json.load(f)
 
-    browser = webdriver.Chrome(options=options)
-    browser.implicitly_wait(3)
+    translator = Translator()
     is_canceled = False
 
     try:
         print('RFC %d:' % number)
+
+        text = obj['title']['text'].split(' - ')[1] # "RFC XXXX - Title"
+        ja = translator.translate(text)
+        obj['title']['ja'] = "RFC %d - %s" % (number, ja)
+
         for i, paragraph in enumerate(obj['contents']):
             text = paragraph['text']
 
@@ -40,26 +70,14 @@ def trans_rfc(number):
                 obj['contents'][i]['ja'] = ''
                 continue
 
-            # Start translation
-            url_text = "https://translate.google.co.jp/#en/ja/{0}".format(text)
-            url = urllib.parse.quote_plus(url_text, "/:?=&#")
-            browser.get(url)
-
-            # take interval
-            wait_time = 1 + len(text) / 20
-            print('len(text):', len(text), 'sleep:', wait_time)
-            time.sleep(wait_time)
-
-            # Get translation result
-            ja = BeautifulSoup(browser.page_source, "html.parser").find(class_ = "tlid-translation translation").text
-
+            ja = translator.translate(text)
             obj['contents'][i]['ja'] = ja
 
     except KeyboardInterrupt as e:
         print('Interrupted!')
         is_canceled = True
     finally:
-        browser.quit()
+        translator.quit()
 
     if not is_canceled:
         with open(output_file, 'w') as f:

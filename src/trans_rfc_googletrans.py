@@ -1,4 +1,6 @@
 
+# Don't use!
+
 # from googletrans import Translator
 # translator = Translator()
 # translator.translate('Test', dest='ja')
