@@ -35,7 +35,7 @@ class Translator:
         time.sleep(wait_time)
 
         # Get translation result
-        ja = BeautifulSoup(self.browser.page_source, "html.parser").find(class_ = "tlid-translation translation").text
+        ja = BeautifulSoup(self.browser.page_source, "html.parser").find(class_="tlid-translation translation").text
 
         return ja
 

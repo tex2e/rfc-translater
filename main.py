@@ -18,11 +18,15 @@ def main(rfc_number):
         return
 
     trans_rfc(rfc_number)
+    if ENDLESS_MODE: return
     make_html(rfc_number)
 
-def continuous_main(maximum=10):
-    numbers = diff_remote_and_local_index()
-    for rfc_number in list(numbers)[:10]:
+def continuous_main(maximum=100, begin=None, end=None):
+    if begin and end:
+        numbers = list(range(begin, end+1))
+    else:
+        numbers = list(diff_remote_and_local_index())
+    for rfc_number in numbers[:maximum]:
         main(rfc_number)
 
 if __name__ == '__main__':
@@ -33,8 +37,15 @@ if __name__ == '__main__':
     parser.add_argument('--trans', action='store_true', help='only translate')
     parser.add_argument('--make', action='store_true', help='only make HTML')
     parser.add_argument('--continuous', action='store_true', help='continuous process')
-    parser.add_argument('--max', type=int, help='continuous process max time')
+    parser.add_argument('--max', type=int, help='continuous: max time')
+    parser.add_argument('--begin', type=int, help='continuous: begin rfc number')
+    parser.add_argument('--end', type=int, help='continuous: end rfc number')
+    parser.add_argument('--endless-mode',
+        dest='endless_mode', action='store_true', help='continuous: end rfc number')
     args = parser.parse_args()
+
+    global ENDLESS_MODE
+    ENDLESS_MODE = args.endless_mode
 
     if args.fetch and args.rfc:
         fetch_rfc(args.rfc)
@@ -46,4 +57,4 @@ if __name__ == '__main__':
     elif not args.continuous and args.rfc:
         main(args.rfc)
     else:
-        continuous_main(maximum=args.max)
+        continuous_main(maximum=args.max, begin=args.begin, end=args.end)
