@@ -128,7 +128,8 @@ def fetch_rfc(number):
     paragraphs = Paragraphs(text)
 
     obj = {
-        'title': title,
+        'title': { 'text': title },
+        'number': number,
         'created_at': str(datetime.now(JST)),
         'updated_by': '',
         'contents': [],
