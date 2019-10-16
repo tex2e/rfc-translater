@@ -12,10 +12,23 @@ def fetch_remote_index():
     page = requests.get(url, headers)
     tree = html.fromstring(page.content)
 
-    rfc_urls = tree.xpath('//div[@class="content"]/pre/a/@href')
+    # RFC INDEX の内容を抽出
+    rfc_index = tree.xpath('//div[@class="content"]/pre//text()')
+    rfc_index = ''.join(rfc_index)
+    tmp = rfc_index.split(
+        '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')[2]
+    # RFCの一覧のみを抽出
+    contents = re.compile(r'\n\n+').split(tmp)[2:] # 空行区切り、先頭の余分な文字を除去
+    rfcs = []
+    for content in contents:
+        content = re.sub(r'\n +', ' ', content)
+        if re.search(r'Not Issued', content):
+            continue
+        rfcs.append(content)
+
     rfc_numbers = []
-    for rfc_url in rfc_urls:
-        m = re.search(r'(\d+)$', rfc_url)
+    for rfc in rfcs:
+        m = re.match(r'^RFC(\d+)', rfc)
         if m:
             rfc_numbers.append(int(m[1]))
 
