@@ -20,13 +20,13 @@ def main(rfc_number, trans_mode=None):
     trans_rfc(rfc_number, mode=trans_mode)
     make_html(rfc_number)
 
-def continuous_main(maximum=100, begin=None, end=None):
+def continuous_main(maximum=100, begin=None, end=None, trans_mode=None):
     numbers = list(diff_remote_and_local_index())
     if begin and end: # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
 
     for rfc_number in numbers[:maximum]:
-        main(rfc_number)
+        main(rfc_number, trans_mode=trans_mode)
 
 if __name__ == '__main__':
     import argparse
