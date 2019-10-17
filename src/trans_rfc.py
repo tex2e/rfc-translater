@@ -10,8 +10,6 @@ class Translator: # selenium
     def __init__(self):
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
-        from bs4 import BeautifulSoup
-        import urllib.parse
 
         self.options = Options()
         self.options.add_argument('--headless')
@@ -22,6 +20,9 @@ class Translator: # selenium
         self.total = 0
 
     def translate(self, text, dest='ja'):
+        from bs4 import BeautifulSoup
+        import urllib.parse
+
         # Start translation
         text_for_url = urllib.parse.quote_plus(text, safe='')
         url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
