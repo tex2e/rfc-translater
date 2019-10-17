@@ -9,8 +9,8 @@
 ### 流れ
 1. RFCのインデックス取得 https://tools.ietf.org/rfc/index (fetch_index)
 1. RFCスクレイピング https://tools.ietf.org/html/rfcXXXX (fetch_rfc)
-  - WANTS: RFCの有名度 : https://www.google.com/search?q=ietf+rfc1
-  - @id="resultStats" => About 13,700 results から抽出して数値の大小を比較する
+    - WANTS: RFCの有名度 : https://www.google.com/search?q=ietf+rfc1
+    - @id="resultStats" => About 13,700 results から抽出して数値の大小を比較する
 2. セクション毎に分割 & 改行の除去 (fetch_rfc)
 3. Google翻訳で英語を日本語にする (trans_rfc)
 4. セクション毎に英文、日本語文を並べて表示するページの生成 (make_html)
