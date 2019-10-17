@@ -98,6 +98,9 @@ def fetch_rfc(number):
     output_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
+    if os.path.isfile(output_file):
+        return 0
+
     os.makedirs(output_dir, exist_ok=True)
 
     headers = { 'User-agent': '', 'referer': url }
@@ -144,7 +147,7 @@ def fetch_rfc(number):
             # print('  ', indent1, prev_last_line)
             # print('  ', indent2, next_first_line)
             if (not prev_last_line.endswith('.') and
-                    indent1 != 0 and indent1 == indent2):
+                    re.match(r'^ *[a-z]', next_first_line) and indent1 == indent2):
                 # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる
                 contents[i+3] = ' ' + contents[i+3].lstrip()
             else:

@@ -74,10 +74,14 @@ def trans_rfc(number, mode='selenium'):
     input_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
     input_file = '%s/rfc%d.json' % (input_dir, number)
     output_file = '%s/rfc%d-trans.json' % (input_dir, number)
-    output_file2 = '%s/rfc%d-midway.json' % (input_dir, number)
+    midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
 
-    with open(input_file, 'r') as f:
-        obj = json.load(f)
+    if os.path.isfile(midway_file): # 途中まで翻訳済みのファイルがあれば復元する
+        with open(midway_file, 'r') as f:
+            obj = json.load(f)
+    else:
+        with open(input_file, 'r') as f:
+            obj = json.load(f)
 
     translator = None
     if mode == 'selenium':
@@ -95,6 +99,10 @@ def trans_rfc(number, mode='selenium'):
         obj['title']['ja'] = "RFC %d - %s" % (number, ja)
 
         for i, paragraph in enumerate(obj['contents']):
+
+            if paragraph.get('ja'): # 既に翻訳済みの段落はスキップする
+                continue
+
             text = paragraph['text']
 
             if _find_toc_pattern(text): # TOCはページ番号を除去して翻訳する
@@ -119,8 +127,10 @@ def trans_rfc(number, mode='selenium'):
     if not is_canceled:
         with open(output_file, 'w') as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
+        # 不要になったファイルの削除
         os.remove(input_file)
-
+        if os.path.isfile(midway_file):
+            os.remove(midway_file)
     else:
-        with open(output_file2, 'w') as f:
+        with open(midway_file, 'w') as f: # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
