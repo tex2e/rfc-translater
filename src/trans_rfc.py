@@ -78,10 +78,11 @@ def trans_rfc(number, mode='selenium'):
     with open(input_file, 'r') as f:
         obj = json.load(f)
 
-    if mode == 'googletrans':
-        Translator = Translator2
+    if mode == 'selenium':
+        translator = Translator()
+    elif mode == 'googletrans'
+        translator = Translator2()
 
-    translator = Translator()
     translator.count = 0
     translator.total = len(obj['contents'])
     is_canceled = False
