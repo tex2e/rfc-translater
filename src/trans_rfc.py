@@ -13,10 +13,7 @@ class Translator: # selenium
 
         self.options = Options()
         self.options.add_argument('--headless')
-        args = {}
-        if os.path.isfile('/usr/bin/chromedriver'):
-            args['excutable_path'] = '/usr/bin/chromedriver'
-        self.browser = webdriver.Chrome(options=self.options, **args)
+        self.browser = webdriver.Chrome(options=self.options)
         self.browser.implicitly_wait(3)
 
         self.count = 0
