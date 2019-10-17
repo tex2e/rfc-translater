@@ -47,7 +47,7 @@ if __name__ == '__main__':
     if args.fetch and args.rfc:
         fetch_rfc(args.rfc)
     elif args.trans and args.rfc:
-        trans_rfc(args.rfc)
+        trans_rfc(args.rfc, mode=trans_mode)
     elif args.make and args.rfc:
         make_html(args.rfc)
 

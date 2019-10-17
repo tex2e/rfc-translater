@@ -29,7 +29,7 @@ class Translator: # selenium
         self.browser.get(url)
 
         # take interval
-        wait_time = 1 + len(text) / 25 # IMPORTANT!!!
+        wait_time = 1 + len(text) / 35 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
@@ -55,7 +55,7 @@ class Translator2: # googletrans
     def translate(self, text, dest='ja'):
         ja = self.translator.translate(text, dest='ja')
         # take interval
-        wait_time = len(text) / 25 # IMPORTANT!!!
+        wait_time = len(text) / 30 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
@@ -94,10 +94,13 @@ def trans_rfc(number, mode='selenium'):
     is_canceled = False
 
     try:
-        text = obj['title']['text'].split(' - ', 1)[1] # "RFC XXXX - Title"
-        ja = translator.translate(text)
-        obj['title']['ja'] = "RFC %d - %s" % (number, ja)
+        # タイトルの翻訳
+        if not obj['title'].get('ja'): # 既に翻訳済みの段落はスキップする
+            text = obj['title']['text'].split(' - ', 1)[1] # "RFC XXXX - Title"
+            ja = translator.translate(text)
+            obj['title']['ja'] = "RFC %d - %s" % (number, ja)
 
+        # 段落の翻訳
         for i, paragraph in enumerate(obj['contents']):
 
             if paragraph.get('ja'): # 既に翻訳済みの段落はスキップする

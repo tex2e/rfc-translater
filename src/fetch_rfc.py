@@ -1,6 +1,6 @@
 
-from lxml import html
 import requests
+from lxml import html
 import re
 import textwrap
 import json
@@ -14,11 +14,8 @@ class Paragraph:
         self.text = textwrap.dedent(text)
         self.indent = get_indent_diff(text, self.text)
         self.is_code = is_code if is_code else self._find_code_pattern(text)
-        self.is_toc = self._find_toc_pattern(text)
         self.is_section_title = self._find_section_title_pattern(text)
 
-        if self.is_toc:
-            self.is_code = True
         if not self.is_code and not is_code:
             self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
             self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
@@ -28,15 +25,17 @@ class Paragraph:
             (self.indent, self.is_code, self.text)
 
     def _find_code_pattern(self, text):
-        # "---" や "___" が現れたときは図・表とする
-        return text.find('---') >= 0 or text.find('___') >= 0
-
-    def _find_toc_pattern(self, text):
-        # ".....NN" が現れたときは目次(TOC)とする
-        return re.search(r'\.{5,}\d', text)
+        # "---" や "___" が現れたときは図・表
+        # "........" が現れたときは目次
+        return (text.find('---') >= 0
+                or text.find('___') >= 0
+                or text.find('.........') >= 0
+                or text.find('. . . . . . . ') >= 0)
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする
+        if len(text.split('\n')) >= 2:
+            return False
         return re.match(r'^\d+\.', text)
 
 
