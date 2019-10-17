@@ -52,7 +52,7 @@ class Translator2: # googletrans
         self.total = 0
 
     def translate(self, text, dest='ja'):
-        ja = translator.translate(text, dest='ja')
+        ja = self.translator.translate(text, dest='ja')
         # take interval
         wait_time = 1 + len(text) / 25 # IMPORTANT!!!
         if self.total > 0:
@@ -78,9 +78,10 @@ def trans_rfc(number, mode='selenium'):
     with open(input_file, 'r') as f:
         obj = json.load(f)
 
+    translator = None
     if mode == 'selenium':
         translator = Translator()
-    elif mode == 'googletrans'
+    elif mode == 'googletrans':
         translator = Translator2()
 
     translator.count = 0

@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--begin', type=int, help='continuous: begin rfc number')
     parser.add_argument('--end', type=int, help='continuous: end rfc number')
     parser.add_argument('--trans-mode', dest='trans_mode', type=str,
-        choices=['selenium', 'googletrans'],
+        choices=['selenium', 'googletrans'], default='selenium',
         help='continuous: end rfc number')
     args = parser.parse_args()
 
