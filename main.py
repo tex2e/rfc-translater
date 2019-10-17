@@ -52,7 +52,7 @@ if __name__ == '__main__':
         make_html(args.rfc)
 
     elif not args.continuous and args.rfc:
-        main(args.rfc, trans_mode=trans_mode)
+        main(args.rfc, trans_mode=args.trans_mode)
     else:
         continuous_main(maximum=args.max, begin=args.begin, end=args.end,
-            trans_mode=trans_mode)
+            trans_mode=args.trans_mode)
