@@ -20,6 +20,7 @@ class Paragraph:
         if self.is_toc:
             self.is_code = True
         if not self.is_code and not is_code:
+            self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
             self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
 
     def __str__(self):
@@ -147,7 +148,7 @@ def fetch_rfc(number):
             # print('  ', indent1, prev_last_line)
             # print('  ', indent2, next_first_line)
             if (not prev_last_line.endswith('.') and
-                    re.match(r'^ *[a-z]', next_first_line) and indent1 == indent2):
+                    re.match(r'^ *[a-z(]', next_first_line) and indent1 == indent2):
                 # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる
                 contents[i+3] = ' ' + contents[i+3].lstrip()
             else:
