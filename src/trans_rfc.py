@@ -42,7 +42,7 @@ class Translator: # selenium
         self.browser.quit()
 
 
-class Translater2: # googletrans
+class Translator2: # googletrans
 
     def __init__(self):
         from googletrans import Translator as GoogleTranslater
