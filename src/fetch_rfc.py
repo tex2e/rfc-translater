@@ -33,8 +33,7 @@ class Paragraph:
                 or text.find('___') >= 0
                 or text.find('.........') >= 0
                 or text.find('. . . . . . . ') >= 0
-                or text.find('/*') >= 0
-                or has_many_special_chars(text))
+                or text.find('/*') >= 0)
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする
@@ -79,16 +78,6 @@ def get_line_len_diff(text1, text2):
     first_line1 = text1.split('\n')[0]
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
-
-def has_many_special_chars(text):
-    # 図や表によく現れる文字が2個以上あればTrueを返す
-    count = 0
-    for char in text:
-        if char in '|{}<>=^':
-            count += 1
-            if count >= 2:
-                return True
-    return False
 
 
 class RFCNotFound(Exception):
