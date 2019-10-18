@@ -12,7 +12,7 @@ JST = timezone(timedelta(hours=+9), 'JST')
 class Paragraph:
     def __init__(self, text, is_code=False):
         self.text = textwrap.dedent(text)
-        self.indent = get_indent_diff(text, self.text)
+        self.indent = get_line_len_diff(text, self.text)
         self.is_code = is_code if is_code else self._find_code_pattern(text)
         self.is_section_title = self._find_section_title_pattern(text)
 
@@ -47,7 +47,8 @@ class Paragraphs:
         chunks = re.compile(r'\n\n+').split(text)
         self.paragraphs = []
         for i, chunk in enumerate(chunks):
-            indent = get_indent(chunk)
+            # indent = get_indent(chunk)
+            indent = get_line_len_diff(chunk, textwrap.dedent(chunk))
             if i >= 1 and indent <= 3:
                 is_header = False
             is_large_indent = (indent - prev_indent > 3)
@@ -73,7 +74,7 @@ class Paragraphs:
 def get_indent(text):
     return len(text) - len(text.lstrip())
 
-def get_indent_diff(text1, text2):
+def get_line_len_diff(text1, text2):
     first_line1 = text1.split('\n')[0]
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
