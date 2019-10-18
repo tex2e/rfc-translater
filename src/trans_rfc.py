@@ -29,7 +29,7 @@ class Translator: # selenium
         self.browser.get(url)
 
         # take interval
-        wait_time = 1 + len(text) / 35 # IMPORTANT!!!
+        wait_time = 2 + len(text) / 100 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
@@ -55,7 +55,7 @@ class Translator2: # googletrans
     def translate(self, text, dest='ja'):
         ja = self.translator.translate(text, dest='ja')
         # take interval
-        wait_time = len(text) / 30 # IMPORTANT!!!
+        wait_time = 1 + len(text) / 80 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
