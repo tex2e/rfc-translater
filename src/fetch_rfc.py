@@ -16,9 +16,10 @@ class Paragraph:
         self.is_code = is_code if is_code else self._find_code_pattern(text)
         self.is_section_title = self._find_section_title_pattern(text)
 
-        if not self.is_code and not is_code:
+        if not self.is_code:
             self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
             self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
+            self.text = re.sub(r' +', ' ', self.text) # 連続した空白を1つにまとめる
 
     def __str__(self):
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
