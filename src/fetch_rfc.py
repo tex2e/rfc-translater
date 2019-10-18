@@ -121,6 +121,7 @@ def fetch_rfc(number):
         '//a[@class="invisible"]' # ページの区切り
     )
 
+    contents_len = len(contents)
     for i, content in enumerate(contents):
         # ページ区切りのとき
         if (isinstance(content, html.HtmlElement) and
@@ -128,8 +129,12 @@ def fetch_rfc(number):
 
             contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
             contents[i+0] = '' # ページ区切りの除去
+            if i + 1 >= contents_len: continue
             contents[i+1] = '' # 余分な改行の除去
+            if i + 2 >= contents_len: continue
             contents[i+2] = '' # 余分な空白の除去
+            if i + 3 >= contents_len: continue
+            if not isinstance(contents[i+3], str): continue
             contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
 
             # ページをまたぐ文章に対応する処理

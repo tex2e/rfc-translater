@@ -16,6 +16,12 @@ def main(rfc_number, trans_mode=None):
         with open(filename, "w") as f:
             f.write('')
         return
+    except Exception as e:
+        print(e)
+        filename = "html/rfc%d-error.html" % rfc_number
+        with open(filename, "w") as f:
+            f.write('')
+        return
 
     trans_rfc(rfc_number, mode=trans_mode)
     make_html(rfc_number)
