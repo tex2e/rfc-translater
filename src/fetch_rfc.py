@@ -33,7 +33,8 @@ class Paragraph:
                 or text.find('___') >= 0
                 or text.find('.........') >= 0
                 or text.find('. . . . . . . ') >= 0
-                or text.find('/*') >= 0)
+                or text.find('/*') >= 0
+                or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2)
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする
