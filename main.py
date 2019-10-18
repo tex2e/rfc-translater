@@ -3,7 +3,7 @@ import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
-from src.fetch_index import diff_remote_and_local_index
+from src.fetch_index import diff_remote_and_local_index, show_progress
 
 def main(rfc_number, trans_mode=None):
     print('RFC %d:' % rfc_number)
@@ -42,7 +42,12 @@ if __name__ == '__main__':
     parser.add_argument('--trans-mode', dest='trans_mode', type=str,
         choices=['selenium', 'googletrans'], default='selenium',
         help='continuous: end rfc number')
+    parser.add_argument('--progress', action='store_true', help="show progress")
     args = parser.parse_args()
+
+    if args.progress:
+        show_progress()
+        sys.exit(0)
 
     if args.fetch and args.rfc:
         fetch_rfc(args.rfc)

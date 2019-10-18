@@ -50,3 +50,11 @@ def diff_remote_and_local_index():
     local_index  = fetch_local_index()
     diff_index = set(remote_index) - set(local_index)
     return diff_index
+
+def show_progress():
+    local_index  = fetch_local_index()
+    remote_index = fetch_remote_index()
+    current = len(local_index)
+    total   = len(remote_index)
+    print('current/total: %d/%d' % (current, total))
+    print('progress:      %.2f%%' % (current * 100 / total))
