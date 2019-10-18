@@ -28,10 +28,13 @@ class Paragraph:
     def _find_code_pattern(self, text):
         # "---" や "___" が現れたときは図・表
         # "........" が現れたときは目次
+        # ソースコードなども図に分類する
         return (text.find('---') >= 0
                 or text.find('___') >= 0
                 or text.find('.........') >= 0
-                or text.find('. . . . . . . ') >= 0)
+                or text.find('. . . . . . . ') >= 0
+                or text.find('/*') >= 0
+                or has_many_special_chars(text))
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする
@@ -54,10 +57,8 @@ class Paragraphs:
             is_large_indent = (indent - prev_indent > 3)
 
             is_oneline = (len(chunk.split('\n')) == 1)
-            has_special_chars = has_many_special_chars(chunk)
 
-            if (is_header or (not is_oneline and is_large_indent
-                                             and has_special_chars)):
+            if (is_header or (not is_oneline and is_large_indent)):
                 flag = True
             else:
                 flag = None
