@@ -55,7 +55,7 @@ class Translator2: # googletrans
     def translate(self, text, dest='ja'):
         ja = self.translator.translate(text, dest='ja')
         # take interval
-        wait_time = 1 + len(text) / 60 # IMPORTANT!!!
+        wait_time = 1 + len(text) / 50 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
