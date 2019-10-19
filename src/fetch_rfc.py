@@ -37,6 +37,12 @@ class Paragraph:
                 or text.find('/*') >= 0
                 or text.find('::=') >= 0
                 or text.find('+-+-+-+') >= 0
+                or text.find('": [') >= 0 # json
+                or text.find('": {') >= 0 # json
+                or text.find('": "') >= 0 # json
+                or text.find('": \'') >= 0 # json
+                or text.find('": true,') >= 0 # json
+                or text.find('": false,') >= 0 # json
                 or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2)
 
     def _find_section_title_pattern(self, text):
