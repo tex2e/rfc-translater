@@ -29,7 +29,7 @@ class Translator: # selenium
         self.browser.get(url)
 
         # take interval
-        wait_time = 2 + len(text) / 100 # IMPORTANT!!!
+        wait_time = 2 + len(text) / 80 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
