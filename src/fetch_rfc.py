@@ -37,6 +37,7 @@ class Paragraph:
                 or text.find('/*') >= 0
                 or text.find('::=') >= 0
                 or text.find('+-+-+-+') >= 0
+                or text.find('+--') >= 0 # directory tree
                 or text.find('": [') >= 0 # json
                 or text.find('": {') >= 0 # json
                 or text.find('": "') >= 0 # json
@@ -53,8 +54,8 @@ class Paragraph:
 
 
 class Paragraphs:
-    def __init__(self, text):
-        is_header = True
+    def __init__(self, text, has_header=True):
+        is_header = has_header
         prev_indent = 0
         chunks = re.compile(r'\n\n+').split(text)
         self.paragraphs = []
