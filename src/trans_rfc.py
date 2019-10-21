@@ -66,9 +66,6 @@ class Translator2: # googletrans
         return
 
 
-def _find_toc_pattern(text):
-    return re.search(r'\.{5,}\d', text)
-
 def trans_rfc(number, mode='selenium'):
 
     input_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
@@ -105,14 +102,10 @@ def trans_rfc(number, mode='selenium'):
 
             if paragraph.get('ja'): # 既に翻訳済みの段落はスキップする
                 continue
+            if paragraph.get('raw') == True: # 図や表は翻訳しない
+                continue
 
             text = paragraph['text']
-
-            if _find_toc_pattern(text): # TOCはページ番号を除去して翻訳する
-                text = re.sub(r'\.{5,}\d+', '', text)
-            elif paragraph.get('raw') == True: # 図や表は翻訳しない
-                obj['contents'][i]['ja'] = ''
-                continue
 
             translator.count = i + 1
             ja = translator.translate(text)

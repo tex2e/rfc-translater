@@ -10,6 +10,10 @@ def make_html(rfc_number):
     output_dir = 'html'
     output_file = '%s/rfc%d.html' % (output_dir, rfc_number)
 
+    if not os.path.isfile(input_file):
+        print("make_html: Not found:", input_file)
+        return
+
     with open(input_file, 'r') as f:
         obj = json.load(f)
 

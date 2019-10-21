@@ -11,10 +11,10 @@ JST = timezone(timedelta(hours=+9), 'JST')
 
 class Paragraph:
     def __init__(self, text, is_code=False):
-        self.text = textwrap.dedent(text)
+        self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         self.indent = get_line_len_diff(text, self.text)
-        self.is_code = is_code if is_code else self._find_code_pattern(text)
-        self.is_section_title = self._find_section_title_pattern(text)
+        self.is_code = is_code if is_code else self._find_code_pattern(self.text)
+        self.is_section_title = self._find_section_title_pattern(self.text)
 
         if not self.is_code:
             self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
@@ -29,22 +29,24 @@ class Paragraph:
         # "---" や "___" が現れたときは図・表
         # "........" が現れたときは目次
         # ソースコードなども図に分類する
-        return (text.find('---') >= 0
-                or text.find('___') >= 0
-                or text.find('.........') >= 0
-                or text.find('. . . . . . . ') >= 0
-                or text.find('=========') >= 0
-                or text.find('/*') >= 0
-                or text.find('::=') >= 0
-                or text.find('+-+-+-+') >= 0
+        return (text.find('---') >= 0 # figure and table
+                or text.find('___') >= 0 # figure
+                or text.find('~~~') >= 0 # figure
+                or text.find('+-+-+-+') >= 0 # figure
+                or text.find('.........') >= 0 # TOC
+                or text.find('. . . . . . . ') >= 0 # TOC
+                or text.find('=========') >= 0 # table
                 or text.find('+--') >= 0 # directory tree
+                or text.find('/*') >= 0 # src
+                or text.find('::=') >= 0 # syntax
                 or text.find('": [') >= 0 # json
                 or text.find('": {') >= 0 # json
                 or text.find('": "') >= 0 # json
                 or text.find('": \'') >= 0 # json
                 or text.find('": true,') >= 0 # json
                 or text.find('": false,') >= 0 # json
-                or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2)
+                or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
+                )
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする

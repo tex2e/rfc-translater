@@ -6,6 +6,7 @@ import re
 import glob
 
 def fetch_remote_index():
+    # 発行されているRFCの番号の一覧をページから取得する
 
     url = 'https://tools.ietf.org/rfc/index'
     headers = { 'User-agent': '', 'referer': url }
@@ -35,6 +36,7 @@ def fetch_remote_index():
     return rfc_numbers
 
 def fetch_local_index():
+    # 作成したRFCに対応するHTMLの番号の一覧をローカルディスクから取得する
 
     pathname = 'html/rfc*.html'
     rfc_numbers = []
@@ -50,11 +52,3 @@ def diff_remote_and_local_index():
     local_index  = fetch_local_index()
     diff_index = set(remote_index) - set(local_index)
     return diff_index
-
-def show_progress():
-    local_index  = fetch_local_index()
-    remote_index = fetch_remote_index()
-    current = len(local_index)
-    total   = len(remote_index)
-    print('current/total: %d/%d' % (current, total))
-    print('progress:      %.2f%%' % (current * 100 / total))
