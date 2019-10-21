@@ -4,6 +4,9 @@ import re
 import json
 import time
 
+from datetime import datetime, timedelta, timezone
+JST = timezone(timedelta(hours=+9), 'JST')
+
 
 class Translator: # selenium
 
@@ -53,6 +56,7 @@ class Translator2: # googletrans
         self.total = 0
 
     def translate(self, text, dest='ja'):
+        text = re.sub(r'&([a-z]+);', r'& \1;', text)
         ja = self.translator.translate(text, dest='ja')
         # take interval
         wait_time = 1 + len(text) / 40 # IMPORTANT!!!
@@ -113,6 +117,7 @@ def trans_rfc(number, mode='selenium'):
 
     except json.decoder.JSONDecodeError as e:
         print('[-] googletrans is blocked by Google :(')
+        print('[-]', datetime.now(JST))
         is_canceled = True
     except KeyboardInterrupt as e:
         print('Interrupted!')
