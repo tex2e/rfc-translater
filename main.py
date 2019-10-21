@@ -23,7 +23,8 @@ def main(rfc_number, trans_mode=None):
             f.write('')
         return
 
-    trans_rfc(rfc_number, mode=trans_mode)
+    res = trans_rfc(rfc_number, mode=trans_mode)
+    if res is False: return False
     make_html(rfc_number)
 
 def continuous_main(begin=None, end=None, trans_mode=None):
@@ -32,7 +33,8 @@ def continuous_main(begin=None, end=None, trans_mode=None):
         numbers = [x for x in numbers if begin <= x <= end]
 
     for rfc_number in numbers:
-        main(rfc_number, trans_mode=trans_mode)
+        res = main(rfc_number, trans_mode=trans_mode)
+        if res is False: break
 
 if __name__ == '__main__':
     import argparse

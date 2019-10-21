@@ -127,9 +127,11 @@ def trans_rfc(number, mode='selenium'):
         os.remove(input_file)
         if os.path.isfile(midway_file):
             os.remove(midway_file)
+        return True
     else:
         with open(midway_file, 'w') as f: # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
+        return False
 
 
 # googletrans:
