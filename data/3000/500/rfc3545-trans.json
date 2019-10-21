@@ -1,0 +1,784 @@
+{
+  "title": {
+    "text": "RFC 3545 - Enhanced Compressed RTP (CRTP) for Links with High Delay, Packet Loss and Reordering",
+    "ja": "RFC 3545 - ハイ遅延、パケットロスおよび順序変更とリンクの強化された圧縮RTP（CRTP）"
+  },
+  "number": 3545,
+  "created_at": "2019-10-19 11:45:41.234717+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                           T. Koren\nRequest for Comments: 3545                                 Cisco Systems\nCategory: Standards Track                                      S. Casner\n                                                           Packet Design\n                                                          J. Geevarghese\n                                         Motorola India Electronics Ltd.\n                                                             B. Thompson\n                                                                P. Ruddy\n                                                           Cisco Systems\n                                                               July 2003",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "Enhanced Compressed RTP (CRTP) for Links with High Delay,\n               Packet Loss and Reordering",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2003). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2003）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a header compression scheme for point to point links with packet loss and long delays. It is based on Compressed Real-time Transport Protocol (CRTP), the IP/UDP/RTP header compression described in RFC 2508. CRTP does not perform well on such links: packet loss results in context corruption and due to the long delay, many more packets are discarded before the context is repaired. To correct the behavior of CRTP over such links, a few extensions to the protocol are specified here. The extensions aim to reduce context corruption by changing the way the compressor updates the context at the decompressor: updates are repeated and include updates to full and differential context parameters. With these extensions, CRTP performs well over links with packet loss, packet reordering and long delays.",
+      "ja": "この文書では、パケット損失と長い遅延とのリンクをポイント・ツー・ポイントのためのヘッダ圧縮スキームを説明します。これは、圧縮されたリアルタイムトランスポートプロトコル（CRTP）に基づいており、RFC 2508に記述されたIP / UDP / RTPヘッダー圧縮はCRTPはそのようなリンクでうまく行っていない：コンテキストの破損や長時間の遅延が原因でパケットロスの結果、多くのコンテキストが修復される前に、より多くのパケットが破棄されます。このようなリンクの上にCRTPの動作を修正するには、プロトコルにいくつかの拡張は、ここで指定されています。拡張子は、コンプレッサーがデコンプレッサでコンテキストを更新する方法を変更することにより、コンテキストの破損を軽減することを目指して：アップデートを繰り返し、フルと差分コンテキストパラメータへの更新が含まれています。これらの拡張機能を使用すると、CRTPはパケットロス、パケットの並べ替えと長い遅延とのリンクの上にうまく機能します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction .................................................  2\n    1.1.  CRTP Operation .........................................  4\n    1.2.  How do contexts get corrupted? .........................  4\n    1.3.  Preventing context corruption ..........................  5\n    1.4.  Specification of Requirements ..........................  5\n2.  Enhanced CRTP ................................................  5\n    2.1.  Extended COMPRESSED_UDP packet .........................  6\n    2.2.  CRTP Headers Checksum .................................. 11\n    2.3.  Achieving robust operation ............................. 13\n          2.3.1.  Examples ....................................... 15\n3.  Negotiating usage of enhanced-CRTP ........................... 18\n4.  Security Considerations ...................................... 18\n5.  Acknowledgements ............................................. 19\n6.  References ................................................... 19\n    6.1.  Normative References ................................... 19\n    6.2.  Informative References ................................. 20\n7.  Intellectual Property Rights Notice .......................... 20\n8.  Authors' Addresses ........................................... 21\n9.  Full Copyright Statement ..................................... 22",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "RTP header compression (CRTP) as described in RFC 2508 was designed to reduce the header overhead of IP/UDP/RTP datagrams by compressing the three headers. The IP/UDP/RTP headers are compressed to 2-4 bytes most of the time.",
+      "ja": "RFC 2508に記載されるようにRTPヘッダ圧縮（CRTP）は3つのヘッダを圧縮することによってIP / UDP / RTPデータグラムのヘッダのオーバーヘッドを低減するように設計しました。 IP / UDP / RTPヘッダはほとんどの時間2-4バイトに圧縮されます。"
+    },
+    {
+      "indent": 3,
+      "text": "CRTP was designed for reliable point to point links with short delays. It does not perform well over links with high rate of packet loss, packet reordering and long delays.",
+      "ja": "CRTPは、短い遅延を持つリンクを指すように信頼性の高いポイントのために設計されました。これは、パケットロス、パケットの並べ替えと長い遅延率が高いとのリンクの上にうまく実行されません。"
+    },
+    {
+      "indent": 3,
+      "text": "An example of such a link is a PPP session that is tunneled using an IP level tunneling protocol such as L2TP. Packets within the tunnel are carried by an IP network and hence may get lost and reordered. The longer the tunnel, the longer the round trip time.",
+      "ja": "そのようなリンクの例は、L2TPなどのIPレベルのトンネリングプロトコルを使用してトンネリングされるPPPセッションです。トンネル内のパケットは、IPネットワークによって運ばれ、したがって失われると並べ替えを取得してもよいです。トンネル、長いラウンドトリップ時間が長いです。"
+    },
+    {
+      "indent": 3,
+      "text": "Another example is an IP network that uses layer 2 technologies such as ATM and Frame Relay for the access portion of the network. Layer 2 transport networks such as ATM and Frame Relay behave like point to point serial links in that they do not reorder packets. In addition, Frame Relay and ATM virtual circuits used as IP access technologies often have a low bit rate associated with them. These virtual circuits differ from low speed serial links in that they may span a larger physical distance than a point to point serial link. Speed of light delays within the layer 2 transport network will result in higher round trip delays between the endpoints of the circuit. In addition, congestion within the layer 2 transport network may result in an effective drop rate for the virtual circuit which is significantly higher than error rates typically experienced on point to point serial links.",
+      "ja": "別の例では、レイヤ2つのATMなどの技術を使用して、ネットワークのアクセス部分にフレームリレー、IPネットワークです。 ATMやフレームリレーなどのレイヤ2つのトランスポートネットワークは、彼らが、パケットの順序を変更していないという点で、シリアルリンクをポイントツーポイントのように振る舞います。また、IPアクセス技術として使用するフレームリレーやATM仮想回線は、多くの場合、それらに関連付けられている低ビットレートを持っています。これらの仮想回線は、それらがシリアルリンクをポイントツーポイントよりも物理的な距離に及ぶことができるという点で、低速シリアルリンクとは異なります。レイヤ2トランスポートネットワーク内の光遅延の速さは、回路のエンドポイント間の高いラウンドトリップ遅延になります。また、レイヤ2トランスポートネットワーク内の輻輳は、典型的には、シリアルリンクをポイントツーポイントで経験エラー率よりも有意に高い仮想回線の効果的な低下率をもたらすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It may be desirable to extend existing CRTP implementations for use also over IP tunnels and other virtual circuits, where packet losses, reordering, and long delays are common characteristics. To address these scenarios, this document defines modifications and extensions to CRTP to increase robustness to both packet loss and misordering between the compressor and the decompressor. This is achieved by repeating updates and allowing the sending of absolute (uncompressed) values in addition to delta values for selected context parameters. Although these new mechanisms impose some additional overhead, the overall compression is still substantial. The enhanced CRTP, as defined in this document, is thus suitable for many applications in the scenarios discussed above, e.g., tunneling and other virtual circuits.",
+      "ja": "また、パケットロス、並べ替え、及び長い遅延が共通の特徴であるIPトンネルと他の仮想回線上で使用するための既存のCRTPの実装を拡張することが望ましい場合があります。これらのシナリオに対処するために、この文書は、コンプレッサとデコンプレッサとの間のパケットロスと誤った順序の両方にロバスト性を高めるためにCRTPに修正および拡張を定義します。これは、更新を繰り返し、選択されたコンテキストパラメータのデルタ値に加えて、絶対的な（非圧縮）の値の送信を可能にすることによって達成されます。これらの新しいメカニズムは、いくつかの追加のオーバーヘッドを課すものの、全体的な圧縮は、まだかなりのものです。拡張CRTPは、本文書で定義されるように、上述のシナリオ、例えば、トンネリングおよび他の仮想回線で多くの用途に適しています。"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 3095 defines another RTP header compression scheme called Robust Header Compression [ROHC]. ROHC was developed with wireless links as the main target, and introduced new compression mechanisms with the primary objective to achieve the combination of robustness against packet loss and maximal compression efficiency. ROHC is expected to be the preferred compression mechanism over links where compression efficiency is important. However, ROHC was designed with the same link assumptions as CRTP, e.g., that the compression scheme should not have to tolerate misordering of compressed packets between the compressor and decompressor, which may occur when packets are carried in an IP tunnel across multiple hops.",
+      "ja": "RFC 3095は、ロバストヘッダ圧縮[ROHC]と呼ばれる別のRTPヘッダ圧縮スキームを定義します。 ROHCは、メインターゲットとして、無線リンクで開発、およびパケット損失と最大の圧縮効率に対するロバスト性の組み合わせを達成するための第一の目的と新しい圧縮メカニズムを導入しました。 ROHCは、圧縮効率が重要なリンク上で好ましい圧縮機構であると予想されます。しかし、ROHC圧縮方式はパケットが複数のホップを横切るIPトンネルで搬送される際に発生する可能性があり、コンプレッサとデコンプレッサとの間に圧縮されたパケットの誤った順序を許容しなければならないことを、例えば、CRTP同じリンク前提で設計しました。"
+    },
+    {
+      "indent": 3,
+      "text": "At some time in the future, enhancements may be defined for ROHC to allow it to perform well in the presence of misordering of compressed packets. The result might be more efficient than the compression protocol specified in this document. However, there are many environments for which the enhanced CRTP defined here may be the preferred choice. In particular, for those environments where CRTP is already implemented, the additional effort required to implement the extensions defined here is expected to be small. There are also cases where the implementation simplicity of this enhanced CRTP relative to ROHC is more important than the performance advantages of ROHC.",
+      "ja": "将来のある時点で、機能強化は、それが圧縮されたパケットの誤った順序の存在下でも行うことができるようにROHCのために定義することができます。結果は、この文書で指定された圧縮プロトコルよりも効率的であるかもしれません。しかし、ここで定義された強化CRTPが好ましい選択肢とすることができるため、多くの環境があります。特に、CRTPがすでに実装されているこれらの環境のために、ここで定義された拡張を実現するために必要な追加作業は小さいと予想されます。 ROHCにこの強化されCRTPの相対的な実装のシンプルさは、ROHCのパフォーマンス上の利点よりも重要である場合もあります。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. CRTP Operation",
+      "section_title": true,
+      "ja": "1.1。 CRTP操作"
+    },
+    {
+      "indent": 3,
+      "text": "During compression of an RTP stream, a session context is defined. For each context, the session state is established and shared between the compressor and the decompressor. Once the context state is established, compressed packets may be sent.",
+      "ja": "RTPストリームの圧縮時には、セッションコンテキストが定義されています。コンテキストごとに、セッション状態が確立され、コンプレッサとデコンプレッサとの間で共有します。コンテキスト状態が確立されると、圧縮されたパケットが送信されても​​よいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The context state consists of the full IP/UDP/RTP headers, a few first order differential values, a link sequence number, a generation number and a delta encoding table.",
+      "ja": "コンテキスト状態は、完全なIP / UDP / RTPヘッダ、いくつかの一次微分値、リンクシーケンス番号、世代番号とデルタ符号化テーブルから成ります。"
+    },
+    {
+      "indent": 3,
+      "text": "The headers part of the context is set by the FULL_HEADER packet that always starts a compression session. The first order differential values (delta values) are set by sending COMPRESSED_RTP packets that include updates to the delta values.",
+      "ja": "コンテキストのヘッダ部分は、常に圧縮セッションを開始FULL_HEADERパケットによって設定されています。 1階微分値（デルタ値）デルタ値への更新を含むCOMPRESSED_RTPパケットを送信することによって設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The context state must be synchronized between compressor and decompressor for successful decompression to take place. If the context gets out of sync, the decompressor is not able to restore the compressed headers accurately. The decompressor invalidates the context and sends a CONTEXT_STATE packet to the compressor indicating that the context has been corrupted. To resume compression, the compressor must re-establish the context.",
+      "ja": "コンテキスト状態は場所を取るために成功した解凍する圧縮機とデコンプレッサとの間で同期させる必要があります。コンテキストが同期して取得した場合、デコンプレッサは正確に圧縮ヘッダを復元することができません。デコンプレッサは、コンテキストを無効にして、コンテキストが破損していることを示す圧縮機にCONTEXT_STATEパケットを送信します。圧縮を再開するには、コンプレッサーは、コンテキストを再確立する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "During the time the context is corrupted, the decompressor discards all the packets received for that context. Since the context repair mechanism in CRTP involves feedback from the decompressor, context repair takes at least as much time as the round trip time of the link. If the round trip time of the link is long, and especially if the link bandwidth is high, many packets will be discarded before the context is repaired. On such links it is desirable to minimize context invalidation.",
+      "ja": "コンテキストが破損している時間の間に、デコンプレッサは、そのコンテキストに受信したすべてのパケットを破棄します。 CRTPのコンテキスト修復機構は、解凍器からのフィードバックを伴うため、コンテキストの修理は、少なくともリンクの往復時間と同じくらいの時間がかかります。リンクの往復時間が長い場合は、リンクの帯域幅が高い場合は特に状況が修復される前に、そして、多くのパケットが破棄されます。このようなリンク上では、コンテキストの無効化を最小限に抑えることが望ましいです。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. How do contexts get corrupted?",
+      "section_title": true,
+      "ja": "1.2。どのコンテキストが破損しているのですか？"
+    },
+    {
+      "indent": 3,
+      "text": "As long as the fields in the combined IP/UDP/RTP headers change as expected for the sequence of packets in a session, those headers can be compressed, and the decompressor can fully restore the compressed headers using the context state. When the headers don't change as expected it's necessary to update some of the full or the delta values of the context. For example, the RTP timestamp is expected to increment by delta RTP timestamp (dT). If silence suppression is used, packets are not sent during silence periods. Then when voice activity resumes, packets are sent again, but the RTP timestamp is incremented by a large value and not by dT. In this case an update must be sent.",
+      "ja": "セッション内のパケットのシーケンスについて予想されるように組み合わされたIP / UDP / RTPヘッダ内のフィールドを変更する限り、これらのヘッダを圧縮することができ、デコンプレッサは、完全コンテキスト状態を使用して圧縮されたヘッダを復元することができます。ヘッダーが期待通りに変化していない場合には、コンテキストの完全またはデルタ値の一部を更新する必要があります。例えば、RTPタイムスタンプは、デルタRTPタイムスタンプ（DT）によってインクリメントすることが期待されます。無音圧縮を使用する場合、パケットは沈黙期間中に送信されません。音声活動が再開すると、次に、パケットが再送信されますが、RTPタイムスタンプは、大きな値ではなくdTを増加させます。この場合、アップデートを送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a packet that includes an update to some context state values is lost, the state at the decompressor is not updated. The shared state is now different at the compressor and decompressor. When the next packet arrives at the decompressor, the decompressor will fail to restore the compressed headers accurately since the context state at the decompressor is different than the state at the compressor.",
+      "ja": "いくつかのコンテキスト状態値の更新を含むパケットが失われた場合、デコンプレッサの状態が更新されません。共有状態は、コンプレッサとデコンプレッサで今異なっています。次のパケットをデコンプレッサに到着すると、減圧装置は、減圧装置におけるコンテキスト状態は、圧縮機の状態とは異なるので、正確に圧縮ヘッダを復元するために失敗します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Preventing context corruption",
+      "section_title": true,
+      "ja": "1.3。コンテキストの破損を防止"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the decompressor fails not when a packet is lost, but when the next compressed packet arrives. If the next packet happens to include the same context update as in the lost packet, the context at the decompressor may be updated successfully and decompression may continue uninterrupted. If the lost packet included an update to a delta field such as the delta RTP timestamp (dT), the next packet can't compensate for the loss since the update of a delta value is relative to the previous packet which was lost. But if the update is for an absolute value such as the full RTP timestamp or the RTP payload type, this update can be repeated in the next packet independently of the lost packet. Hence it is useful to be able to update the absolute values of the context.",
+      "ja": "デコンプレッサは、パケットが失われていない時に失敗することに注意してください、しかし、次の圧縮パケットが到着したとき。次のパケットが失われたパケットと同じコンテキストの更新が含まれるようになった場合、デコンプレッサのコンテキストが正常に更新され、解凍が中断しないことがあります。失われたパケットは、デルタRTPタイムスタンプ（DT）としてデルタフィールドの更新が含まれている場合、デルタ値の更新が失われた前のパケットに対するものであるので、次のパケットの損失を補うことができません。更新は、完全なRTPタイムスタンプまたはRTPペイロードタイプとして絶対値のためのものである場合には、この更新は、独立して、失われたパケットの次のパケットに繰り返すことができます。したがってコンテキストの絶対値を更新することができることが有用です。"
+    },
+    {
+      "indent": 3,
+      "text": "The next chapter describes several extensions to CRTP that add the capability to selectively update absolute values of the context, rather than sending a FULL_HEADER packet, in addition to the existing updates of the delta values. This enhanced version of CRTP is intended to minimize context invalidation and thus improve the performance over lossy links with a long round trip time.",
+      "ja": "次の章では、選択的ではなく、デルタ値の既存のアップデートに加えて、FULL_HEADERパケットを送信するよりも、文脈の絶対値を更新する機能を追加CRTPにいくつかの拡張機能について説明します。 CRTPのこの拡張バージョンは、コンテキストの無効化を最小限に抑え、長いラウンドトリップ時間と損失の多いリンク上でのパフォーマンスを向上させることを意図しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.4. Specification of Requirements",
+      "section_title": true,
+      "ja": "1.4。要件の仕様"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Enhanced CRTP",
+      "section_title": true,
+      "ja": "2.強化CRTP"
+    },
+    {
+      "indent": 3,
+      "text": "This chapter specifies the changes in this enhanced version of CRTP. They are:",
+      "ja": "この章では、CRTPのこの拡張バージョンでの変更を指定します。彼らです："
+    },
+    {
+      "indent": 3,
+      "text": "- Extensions to the COMPRESSED_UDP packet to allow updating the differential RTP values in the decompressor context and to selectively update the absolute IPv4 ID and the following RTP values: sequence number, timestamp, payload type, CSRC count and CSRC list. This allows context sync to be maintained even with some packet loss.",
+      "ja": " - デコンプレッサコンテキストで微分RTP値を更新できるようにし、選択絶対IPv4のIDと、次RTP値を更新するCOMPRESSED_UDPパケットへの拡張：シーケンス番号、タイムスタンプ、ペイロードタイプ、CSRCカウントとCSRCリスト。これは、コンテキスト同期はさらにいくつかのパケットロスを維持することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "- A \"headers checksum\" to be inserted by the compressor and removed by the decompressor when the UDP checksum is not present so that validation of the decompressed headers is still possible. This allows the decompressor to verify that context sync has not been lost after a packet loss.",
+      "ja": " - 「ヘッダチェックサム」は、圧縮機によって挿入され、解凍ヘッダの検証が依然として可能であるようにUDPチェックサムが存在しないとき解凍装置によって除去されます。これは、そのコンテキストの同期を確認するために、デコンプレッサは、パケット損失の後に失われていないことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An algorithm is then described to use these changes with repeated updates to achieve robust operation over links with packet loss and long delay.",
+      "ja": "次いで、アルゴリズムは、パケット損失や長時間の遅延を持つリンク上で堅牢な動作を実現するために繰り返しアップデートでこれらの変更を使用することが記載されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Extended COMPRESSED_UDP packet",
+      "section_title": true,
+      "ja": "2.1。拡張COMPRESSED_UDPパケット"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to accommodate some packet loss between the compressor and decompressor using the \"twice\" algorithm in RFC 2508 so long as the context remains in sync. In that algorithm, the delta values are added to the previous context twice (or more) to effect the change that would have occurred if the missing packets had arrived. The result is verified with the UDP checksum. Keeping the context in sync requires reliably communicating both the absolute value and the delta value whenever the delta value changes. For many environments, sufficient reliability can be achieved by repeating the update with each of several successive packets.",
+      "ja": "とても長い文脈が同期に残るようRFC 2508で「二回」アルゴリズムを使用して、コンプレッサとデコンプレッサとの間にいくつかのパケット損失に対応することが可能です。そのアルゴリズムでは、デルタ値が欠落したパケットが到着した場合は発生したであろう変化をもたらすために二回（またはそれ以上）前のコンテキストに追加されます。結果は、UDPチェックサムを検証しています。同期コンテキストを維持するたびにデルタ値の変化を確実に絶対値とデルタ値の両方を通信する必要があります。多くの環境では、十分な信頼性は、いくつかの連続するパケットのそれぞれに更新を繰り返すことによって達成することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The COMPRESSED_UDP packet satisfies the need to communicate the absolute values of the differential RTP fields, but it is specified in RFC 2508 to reset the delta RTP timestamp. That limitation can be removed with the following simple change: RFC 2508 describes the format of COMPRESSED_UDP as being the same as COMPRESSED_RTP except that the M, S and T bits are always 0 and the corresponding delta fields are never included. This enhanced version of CRTP changes that specification to say that the T bit MAY be nonzero to indicate that the delta RTP timestamp is included explicitly rather than being reset to zero.",
+      "ja": "COMPRESSED_UDPパケットは、差動RTPフィールドの絶対値を通信する必要性を満たし、デルタRTPタイムスタンプをリセットするために、RFC 2508で指定されています。この制限は、以下の簡単な変更で除去することができる：RFC 2508はM、SおよびTビットは常に0であり、対応するデルタフィールドが含まれることはないことを除いてCOMPRESSED_RTPと同じであるとCOMPRESSED_UDPのフォーマットを記述する。 CRTPのこの拡張バージョンは、TビットはデルタRTPタイムスタンプが明示的ではなく、ゼロにリセットされるよりも含まれていることを示すためにゼロ以外であるかもしれないことを言うために、その仕様を変更します。"
+    },
+    {
+      "indent": 3,
+      "text": "A second change adds another byte of flag bits to the COMPRESSED_UDP packet to allow only selected individual uncompressed fields of the RTP header to be included in the packet rather than carrying the full RTP header as part of the UDP data. The additional flags do increase computational complexity somewhat, but the corresponding increase in bit efficiency is important when the differential field updates are communicated multiple times in successive COMPRESSED_UDP packets. With this change, there are flag bits to indicate inclusion of both delta values and absolute values, so the flag nomenclature is changed. The original S, T, I bits which indicate the inclusion of deltas are renamed dS, dT, dI, and the inclusion of absolute values is indicated by S, T, I. The M bit is absolute as before. A new flag P indicates inclusion of the absolute RTP payload type value and another flag C indicates the inclusion of the CSRC count. When C=1, an additional byte is added following the two flag bytes to include the absolute value of the four-bit CC field in the RTP header.",
+      "ja": "第2の変更ではなく、UDPデータの一部として、完全なRTPヘッダを運ぶよりRTPヘッダのみ選択された個々の圧縮されていないフィールドは、パケットに含まれることを可能にするCOMPRESSED_UDPパケットにフラグビットの別のバイトを追加します。追加フラグは、幾分計算の複雑さを増加させるかが、差分フィールドの更新は、連続COMPRESSED_UDPパケットに複数回通信されるときにビット効率の対応する増加が重要です。この変更により、フラグ命名法が変更されるように、デルタ値と絶対値の両方を含むことを示すためのフラグビットが存在します。元のS、T、デルタの包含を示すIビットが変更されDS、dTを、ジ、及び絶対値の包含は、S、Tで示され、I.ザMビットは、前のように絶対的です。新しいフラグPは、絶対RTPペイロードタイプ値の包含を示し、別のフラグCは、CSRCカウントを含めることを示しています。 C = 1、追加のバイトは、RTPヘッダ内の4ビットのCCフィールドの絶対値を含めるために、2つのフラグバイト以下の追加されたとき。"
+    },
+    {
+      "indent": 3,
+      "text": "The last of the three changes to the COMPRESSED_UDP packet deals with updating the IPv4 ID field. For this field, the COMPRESSED_UDP packet as specified in RFC 2508 can already convey a new value for the delta IPv4 ID, but not the absolute value which is only conveyed by the FULL_HEADER packet. Therefore, a new flag I is added to the COMPRESSED_UDP packet to indicate inclusion of the absolute IPv4 ID value. The I flag replaces the dS flag which is not needed in the COMPRESSED_UDP packet since the delta RTP sequence number always remains 1 in the decompressor context and hence does not need to be updated. Note that IPv6 does not have an IP ID field, so when compressing IPv6 packets both the I and the dI flags are always set to 0.",
+      "ja": "IPv4のIDフィールドを更新するとCOMPRESSED_UDPパケットプランへの3つの変更の最後。このフィールドは、RFC 2508で指定されCOMPRESSED_UDPパケットが既にデルタIPv4のIDの新しい値だけでなくFULL_HEADERパケットにより搬送された絶対値を伝えることができます。したがって、新しいフラグIは絶対IPv4のID値を含むことを示すためCOMPRESSED_UDPパケットに付加されています。 Iフラグは、デルタRTPシーケンス番号は常に更新する必要はありませんので、デコンプレッサのコンテキストで1のままとするのでCOMPRESSED_UDPパケットで必要とされないのDSフラグを置き換えます。 IPv6はIP IDフィールドを持っていないことに注意してくださいので、IPv6パケットを圧縮したとき、私とのDI両方のフラグは常に0に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the flags/sequence byte for the original COMPRESSED_UDP packet is shown here for reference:",
+      "ja": "オリジナルCOMPRESSED_UDPパケットのフラグ/シーケンス・バイトのフォーマットは、参照のためにここに示されています。"
+    },
+    {
+      "indent": 6,
+      "text": "+---+---+---+---+---+---+---+---+\n| 0 | 0 | 0 |dI | link sequence |\n+---+---+---+---+---+---+---+---+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The new definition of the flags/sequence byte plus an extension flags byte for the COMPRESSED_UDP packet is as follows, where the new F flag indicates the inclusion of the extension flags byte:",
+      "ja": "フラグはCOMPRESSED_UDPパケットのバイトのフラグ/シーケンス・バイトの新しい定義プラス拡張は、新しいFフラグは、フラグバイト拡張の包含を示し、以下の通りであります："
+    },
+    {
+      "indent": 6,
+      "text": "+---+---+---+---+---+---+---+---+\n| F | I |dT |dI | link sequence |\n+---+---+---+---+---+---+---+---+\n: M : S : T : P : C : 0 : 0 : 0 :  (if F = 1)\n+...+...+...+...+...+...+...+...+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "dI = delta IPv4 ID dT = delta RTP timestamp I = absolute IPv4 ID F = additional flags byte M = marker bit S = absolute RTP sequence number T = absolute RTP timestamp P = RTP payload type C = CSRC count CID = Context ID",
+      "ja": "DiはデルタのIPv4 ID dTはデルタRTPタイムスタンプI =絶対IPv4のID F = =追加フラグがM =マーカービットSをバイト= =絶対RTPシーケンス番号T =絶対RTPタイムスタンプP = RTPペイロードタイプC = CSRCは、CID =コンテキストIDを数えます"
+    },
+    {
+      "indent": 3,
+      "text": "When F=0, there is only one flags byte, and the only available flags are: dI, dT and I. In this case the packet includes the full RTP header. As in RFC 2508, if dI=0, the decompressor does not change deltaI. If dT=0, the decompressor sets deltaT to 0.",
+      "ja": "F = 0、唯一のフラグバイトがあり、唯一の利用可能なフラグがある場合：ジDTおよびこの場合I.パケットは、完全なRTPヘッダを含みます。 Diは= 0の場合、RFC 2508のように、デコンプレッサはdeltaIを変更しません。 dTを= 0の場合、デコンプレッサは0にデルタTを設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "When C=1, an additional byte is added following the two flag bytes. This byte includes the CC, the count of CSRC identifiers, in its lower 4 bits:",
+      "ja": "C = 1、追加のバイトは、二つのフラグバイト以下の追加されたとき。このバイトは、その下位4ビットでCC、CSRC識別子の数を、含まれています。"
+    },
+    {
+      "indent": 6,
+      "text": "+---+---+---+---+---+---+---+---+\n| F | I |dT |dI | link sequence |\n+---+---+---+---+---+---+---+---+\n: M : S : T : P : C : 0 : 0 : 0 :  (if F = 1)\n+...+...+...+...+...+...+...+...+\n: 0 : 0 : 0 : 0 :      CC       :  (if C = 1)\n+...+...+...+...+...............+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The bits marked \"0\" in the second flag byte and the CC byte SHOULD be set to zero by the sender and SHOULD be ignored by the receiver.",
+      "ja": "ビットは、第2のフラグ・バイトの「0」とマークし、CCバイトが送信者によってゼロに設定されるべきであり、受信機によって無視されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Some example packet formats will illustrate the use of the new flags. First, when F=0, the \"traditional\" COMPRESSED_UDP packet which carries the full RTP header as part of the UDP data:",
+      "ja": "いくつかの例のパケットフォーマットは、新しいフラグの使用方法を説明します。まず、F = 0、UDPデータの一部として、完全なRTPヘッダを搬送する「伝統的な」COMPRESSED_UDPパケット："
+    },
+    {
+      "indent": 6,
+      "text": "  0   1   2   3   4   5   6   7\n+...............................+\n:   msb of session context ID   :  (if 16-bit CID)\n+-------------------------------+\n|   lsb of session context ID   |\n+---+---+---+---+---+---+---+---+\n|F=0| I |dT |dI | link sequence |\n+---+---+---+---+---+---+---+---+\n:                               :\n+         UDP checksum          +  (if nonzero in context)\n:                               :\n+...............................+\n:                               :\n+        \"RANDOM\" fields        +  (if encapsulated)\n:                               :\n+...............................+\n:         delta IPv4 ID         :  (if dI = 1)\n+...............................+\n:      delta RTP timestamp      :  (if dT = 1)\n+...............................+\n:                               :\n+           IPv4 ID             +  (if I = 1)\n:                               :\n+...............................+\n|           UDP data            |\n:   (uncompressed RTP header)   :",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "When F=1, there is an additional flags byte and the available flags are: dI, dT, I, M, S, T, P, C. If C=1, there is an additional byte that includes the number of CSRC identifiers. When F=1, the packet does not include the full RTP header, but includes selected fields from the RTP header as specified by the flags. As in RFC 2508, if dI=0 the decompressor does not change deltaI. However, in contrast to RFC 2508, if dT=0 the decompressor KEEPS THE CURRENT deltaT in the context (DOES NOT set deltaT to 0).",
+      "ja": "ジdTを、I、M、S、T、P、Cの場合はC = 1は、CSRC識別子の数を含む追加のバイトがある：F = 1、追加のフラグはバイトおよび使用可能フラグが存在する場合に。場合F = 1、パケットは、完全なRTPヘッダが含まれていないが、フラグで指定されたRTPヘッダから選択されたフィールドを含みます。 DIは0を=場合はRFC 2508のように、デコンプレッサはdeltaIは変更されません。しかし、RFC 2508とは対照的に、dTが= 0デコンプレッサは、（0にデルタTを設定していない）コンテキスト内の現在のデルタTを保持している場合。"
+    },
+    {
+      "indent": 3,
+      "text": "An enhanced COMPRESSED_UDP packet is similar in contents and behavior to a COMPRESSED_RTP packet, but it has more flag bits, some of which correspond to absolute values for RTP header fields.",
+      "ja": "拡張COMPRESSED_UDPパケットはCOMPRESSED_RTPパケットの内容及び動作が同様であるが、それは、RTPヘッダフィールドの絶対値に対応するいくつかのより多くのフラグビットを有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "COMPRESSED_UDP with individual RTP fields, when F=1:",
+      "ja": "個々のRTPフィールド、F = 1とCOMPRESSED_UDP："
+    },
+    {
+      "indent": 3,
+      "text": "  0   1   2   3   4   5   6   7\n+...............................+\n:   msb of session context ID   :  (if 16-bit CID)\n+-------------------------------+\n|   lsb of session context ID   |\n+---+---+---+---+---+---+---+---+\n|F=1| I |dT |dI | link sequence |\n+---+---+---+---+---+---+---+---+\n| M | S | T | P | C | 0 | 0 | 0 |\n+---+---+---+---+---+---+---+---+\n: 0 : 0 : 0 : 0 :      CC       :  (if C = 1)\n+...+...+...+...+...............+\n:                               :\n+         UDP checksum          +  (if nonzero in context)\n:                               :\n+...............................+\n:                               :\n:        \"RANDOM\" fields        :  (if encapsulated)\n:                               :\n+...............................+\n:         delta IPv4 ID         :  (if dI = 1)\n+...............................+\n:      delta RTP timestamp      :  (if dT = 1)\n+...............................+\n:                               :\n+           IPv4 ID             +  (if I = 1)\n:                               :\n+...............................+\n:                               :\n+     RTP sequence number       +  (if S = 1)\n:                               :\n+...............................+\n:                               :\n+                               +\n:                               :\n+         RTP timestamp         +  (if T = 1)\n:                               :\n+                               +\n:                               :\n+...............................+\n:       RTP payload type        :  (if P = 1)\n+...............................+\n:                               :\n:           CSRC list           :  (if CC > 0)\n:                               :\n+...............................+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": ":                               :\n:      RTP header extension     :  (if X set in context)\n:                               :\n+-------------------------------+\n|                               |\n/           RTP data            /\n/                               /\n|                               |\n+-------------------------------+\n:            padding            :  (if P set in context)\n+...............................+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Usage for the enhanced COMPRESSED_UDP packet:",
+      "ja": "強化COMPRESSED_UDPパケットの使用法："
+    },
+    {
+      "indent": 3,
+      "text": "It is useful for the compressor to periodically refresh the state of the decompressor to avoid having the decompressor send CONTEXT_STATE messages in the case of unrecoverable packet loss. Using the flags F=0 and I=1, dI=1, dT=1, the COMPRESSED_UDP packet refreshes all the context parameters.",
+      "ja": "コンプレッサーが定期的にデコンプレッサが回復不能なパケット損失の場合にCONTEXT_STATEメッセージを送信することを避けるためにデコンプレッサの状態をリフレッシュすることが有用です。フラグF = 0、I = 1を使用して、diは= 1、のdT = 1は、COMPRESSED_UDPパケットは、すべてのコンテキストパラメータをリフレッシュ。"
+    },
+    {
+      "indent": 3,
+      "text": "When compression is done over a lossy link with a long round trip delay, we want to minimize context invalidation. If the delta values are changing frequently, the context might get invalidated often. In such cases the compressor MAY choose to always send absolute values and never delta values, using COMPRESSED_UDP packets with the flags F=1, and any of S, T, I as necessary.",
+      "ja": "圧縮が長いラウンドトリップ遅延と損失の多いリンク上で行われているとき、私たちは、コンテキストの無効化を最小限に抑えたいです。デルタ値が頻繁に変更された場合、コンテキストは、多くの場合、無効になるかもしれません。 I必要に応じて、このような場合には圧縮機は、フラグF = 1とCOMPRESSED_UDPパケットを使用して、常に絶対値と決してデルタ値を送信することを選択することができ、S、Tのいずれかです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. CRTP Headers Checksum",
+      "section_title": true,
+      "ja": "2.2。 CRTPヘッダチェックサム"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 2508, in Section 3.3.5, describes how the UDP checksum may be used to validate header reconstruction periodically or when the \"twice\" algorithm is used. When a UDP checksum is not present (has value zero) in a stream, such validation would not be possible. To cover that case, this enhanced CRTP provides an option whereby the compressor MAY replace the null UDP checksum with a 16-bit headers checksum (HDRCKSUM) which is subsequently removed by the decompressor after validation. Note that this option is never used with IPv6 since a null UDP checksum is not allowed.",
+      "ja": "RFC 2508は、3.3.5項では、UDPチェックサムがまたは「二回」のアルゴリズムを使用する場合は、定期的にヘッダ再構築を検証するために使用することができる方法を説明します。 UDPチェックサムが存在しない場合、ストリームに（ゼロの値を有する）、そのような検証は可能ではないであろう。そのケースをカバーするために、この拡張CRTPは、圧縮機は、その後、検証後に解凍器により除去される16ビットのヘッダチェックサム（HDRCKSUM）とヌルUDPチェックサムを置き換えることができることにより、オプションを提供します。ヌルUDPチェックサムので、IPv6で使用されることはありません。このオプションが許可されていないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A new flag C in the FULL_HEADER packet, as specified below, indicates when set that all COMPRESSED_UDP and COMPRESSED_RTP packets sent in that context will have HDRCKSUM inserted. The compressor MAY set the C flag when UDP packet carried in the FULL_HEADER packet originally contained a checksum value of zero. If the C flag is set, the FULL_HEADER packet itself MUST also have the HDRCKSUM inserted. If a packet in the same stream subsequently arrives at the compressor with a UDP checksum present, then a new FULL_HEADER packet MUST be sent with the flag cleared to re-establish the context.",
+      "ja": "設定した場合FULL_HEADERパケットに新しいフラグCは、以下に指定されるように、そのコンテキストで送信されるすべてのCOMPRESSED_UDPとCOMPRESSED_RTPパケットがHDRCKSUMが挿入されているであろうことを示しています。 FULL_HEADERパケットで運ばれたUDPパケットが本来ゼロのチェックサム値を含む場合、圧縮機は、Cフラグを設定してもよいです。 Cフラグが設定されている場合、FULL_HEADERパケット自体もHDRCKSUMが挿入されている必要があります。同じストリームのパケットがその後UDPチェックサムの存在とコンプレッサーに到着した場合、新しいFULL_HEADERパケットがコンテキストを再確立するクリアフラグを送らなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The HDRCKSUM is calculated in the same way as a UDP checksum except that it does not cover all of the UDP data. That is, the HDRCKSUM is the 16-bit one's complement of the one's complement sum of the pseudo-IP header (as defined for UDP), the UDP header, the first 12 bytes of the UDP data which are assumed to hold the fixed part of an RTP header, and the CSRC list. The extended part of the RTP header beyond the CSRC list and the RTP data will not be included in the HDRCKSUM. The HDRCKSUM is placed in the COMPRESSED_UDP or COMPRESSED_RTP packet where a UDP checksum would have been. The decompressor MUST zero out the UDP checksum field in the reconstructed packets.",
+      "ja": "HDRCKSUMは、それがUDPデータのすべてをカバーしていないことを除いて、UDPチェックサムと同じ方法で計算されます。すなわち、HDRCKSUM擬似IPヘッダの1の補数和（UDPについて定義した通り）、UDPヘッダ、固定部を保持するために想定されるUDPデータの最初の12バイトの16ビットの1の補数でありますRTPヘッダ、及びCSRCリスト。 CSRCリストを超えRTPヘッダ及びRTPデータの拡張部分はHDRCKSUMに含まれないであろう。 HDRCKSUMは、UDPチェックサムがあったであろうCOMPRESSED_UDPまたはCOMPRESSED_RTPパケットに配置されます。デコンプレッサは、再構成パケットにUDPチェックサムフィールドをゼロにしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "For a non-RTP context, there may be fewer than 12 UDP data bytes present. The IP and UDP headers can still be compressed into a COMPRESSED_UDP packet. For this case, the HDRCKSUM is calculated over the pseudo-IP header, the UDP header, and the UDP data bytes that are present. If the number of data bytes is odd, then a zero padding byte is appended for the purpose of calculating the checksum, but not transmitted.",
+      "ja": "非RTPコンテキストのために、より少ない12のUDPデータバイトが存在してもよいです。 IPおよびUDPヘッダはまだCOMPRESSED_UDPパケットに圧縮することができます。この場合の、HDRCKSUM擬似IPヘッダ、UDPヘッダ、及び存在するUDPデータバイトにわたって計算されます。データ・バイトの数が奇数である場合、ゼロパディングバイトはチェックサムを計算する目的のために添付が、送信されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The HDRCKSUM does not validate the RTP data. If the link layer is configured to deliver packets without checking for errors, then errors in the RTP data will not be detected. Over such links, the compressor SHOULD add the HDRCKSUM if a UDP checksum is not present, and the decompressor SHOULD validate each reconstructed packet to make sure that at least the headers are correct. This ensures that the packet will be delivered to the right destination. If only HDRCKSUM is available, the RTP data will be delivered even if it includes errors. This might be a desirable feature for applications that can tolerate errors in the RTP data. The same holds for the extended part of the RTP header beyond the CSRC list.",
+      "ja": "HDRCKSUMは、RTPデータを検証しません。リンク層は、エラーをチェックせずにパケットを送出するように構成されている場合は、RTPデータのエラーが検出されません。 UDPチェックサムが存在せず、解凍器は、少なくともヘッダが正しいことを確認するために、各再構成パケットを検証する必要がある場合はそのようなリンクの上に、コンプレッサーはHDRCKSUMを追加する必要があります。これは、パケットが正しい宛先に配信されることを保証します。のみHDRCKSUMが利用可能な場合は、RTPデータは、それがエラーを含んでいても配信されます。これは、RTPデータのエラーを許容できるアプリケーションのために望ましい特徴であるかもしれません。同じことが、CSRCリストを超えRTPヘッダの拡張部分にも当てはまります。"
+    },
+    {
+      "indent": 3,
+      "text": "Here is the format of the FULL_HEADER length fields with the new flag C to indicate that a header checksum will be added in COMPRESSED_UDP and COMPRESSED_RTP packets:",
+      "ja": "ここで、ヘッダチェックサムがCOMPRESSED_UDPとCOMPRESSED_RTPパケットに追加されることを示す新しいフラグCとFULL_HEADER長フィールドの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "For 8-bit context ID:",
+      "ja": "8ビットのコンテキストIDのために："
+    },
+    {
+      "indent": 3,
+      "text": "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ |0|1| Generation| CID | First length field +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "ja": "+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + | 0 | 1 |ジェネレーション| CID |第1の長さフィールド+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +"
+    },
+    {
+      "indent": 3,
+      "text": "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ | 0 |C| seq | Second length field +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ C=1: HDRCKSUM will be added",
+      "ja": "+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + | 0 | C |配列|第2の長さフィールド+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + C = 1：HDRCKSUMが追加されます"
+    },
+    {
+      "indent": 3,
+      "text": "For 16-bit context ID:",
+      "ja": "16ビットのコンテキストIDのための："
+    },
+    {
+      "indent": 3,
+      "text": "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ |1|1| Generation| 0 |C| seq | First length field +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ C=1: HDRCKSUM will be added",
+      "ja": "+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + | 1 | 1 |ジェネレーション| 0 | C |配列|第1の長さフィールド+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + C = 1：HDRCKSUMが追加されます"
+    },
+    {
+      "indent": 3,
+      "text": "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ | CID | Second length field +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "ja": "+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  + | CID |第2の長さフィールド+  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +  -  +"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Achieving robust operation",
+      "section_title": true,
+      "ja": "2.3。堅牢な動作を実現"
+    },
+    {
+      "indent": 3,
+      "text": "Enhanced CRTP achieves robust operation by sending changes multiple times to keep the compressor and decompressor in sync. This method is characterized by a number \"N\" that represents the quality of the link between the hosts. What it means is that the probability of more than N adjacent packets getting lost on this link is small. For every change in a full value or a delta value, if the compressor includes the change in N+1 consecutive packets, then the decompressor can keep its context state in sync with the compressor using the \"twice\" algorithm so long as no more than N adjacent packets are lost.",
+      "ja": "拡張CRTPは同期して、コンプレッサとデコンプレッサを維持するための変更を複数回送信することにより、堅牢な動作を実現します。この方法は、ホストとの間のリンクの品質を表す数値「N」によって特徴付けられます。何それが意味することは、このリンク上のN隣接するパケットが迷子以上の確率が小さいことです。圧縮機はN + 1人の連続するパケットの変更が含まれている場合、完全な値のすべての変更または差分値に対して、次に減圧装置は超えない限り、「倍」アルゴリズムを使用して、圧縮機と同期して、そのコンテキスト状態を保つことができますN隣接したパケットが失われます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since updates are repeated in N+1 packets, if at least one of these N+1 update packets is received by the decompressor, both the full and delta values in the context at the decompressor will get updated and its context will stay synchronized with the context at the compressor. We can conclude that as long as less than N+1 adjacent packets are lost, the context at the decompressor is guaranteed to be synchronized with the context at the compressor, and use of the \"twice\" algorithm to recover from packet loss will successfully update the context and restore the compressed packets.",
+      "ja": "これらのN + 1つの更新パケットの少なくとも一つが、解凍器によって受信された場合、更新がデコンプレッサでコンテキストで、N + 1つのパケットでフルとデルタ値の両方を繰り返しているので、更新されますし、そのコンテキストをして同期を維持しますコンプレッサーの文脈。私たちは、限り少ない1 + Nよりも、隣接するパケットが失われ、デコンプレッサのコンテキストは、圧縮機でコンテキストと同期されることが保証され、かつ、パケット損失から回復させる「二回」アルゴリズムの使用が正常に更新されると結論付けることができますコンテキストとは、圧縮されたパケットを復元します。"
+    },
+    {
+      "indent": 3,
+      "text": "The link sequence number cycles in 16 packets, so it's not always clear how many packets were lost. For example, if the previous link sequence number was 5 and the current number is 4, one possibility is that 15 packets were lost, but another possibility is that due to misordering packet 5 arrived before packet 4 and they are really adjacent. If there is an interpretation of the link sequence numbers that could be a gap of less than N+1, the \"twice\" algorithm may be applied that many times and verified with the UDP checksum (or the HDRCKSUM).",
+      "ja": "16のパケット内のリンクシーケンス番号サイクルは、それは多くのパケットが失われたか必ずしも明確ではありません。例えば、前のリンクのシーケンス番号は5場合だったと現在の数は、一つの可能​​性は15個のパケットが失われたということですが、別の可能性が原因パケット5を誤った順序にパケット4の前に到着したことで、彼らは本当に隣接している、4です。 N + 1未満のギャップであり得るリンクシーケンス番号の解釈がある場合、「回」アルゴリズムは、多数回適用し、UDPのチェックサム（またはHDRCKSUM）を用いて検証することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When more than N packets are lost, all of the repetitions of an update might have been lost. The context state may then be different at the compressor and decompressor. The decompressor can still try to recover by making one or more guesses for how many packets were lost and then applying the \"twice\" algorithm that many times.",
+      "ja": "以上のNのパケットが失われた場合は、更新の繰り返しのすべてが失われた可能性があります。コンテキスト状態は、その後、圧縮と解凍装置でも異なっていてもよいです。デコンプレッサはまだ失われてから、その何倍も「二回」のアルゴリズムを適用し、どのように多くのパケットのための1つまたは複数の推測を行うことで回復を試みることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "However, since the IPv4 ID field is not included in the checksum, this does not validate the IPv4 ID.",
+      "ja": "IPv4のIDフィールドは、チェックサムには含まれていないので、これはIPv4のIDを検証しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The conclusion is that for IPv4 if more than N packets were lost, the decompressor SHOULD NOT try to recover using the \"twice\" algorithm and instead SHOULD invalidate the context and send a CONTEXT_STATE packet. In IPv6 the decompressor MAY always try to recover from packet loss by using the \"twice\" algorithm and verifying the result with the UDP checksum.",
+      "ja": "結論は、N個のパケットが失われたよりも多くの場合はIPv4のために、デコンプレッサは、コンテキストを無効にしてCONTEXT_STATEパケットを送るべきである代わりに、「二回」アルゴリズムを使用して回復しようとはならないことです。 IPv6ではデコンプレッサは、常に「二回」アルゴリズムを使用してUDPチェックサムとの結果を検証することにより、パケットの損失から回復しようとするかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "It is up to the implementation to derive an appropriate N for a link. The value is maintained independently for each context and is not required to be the same for all contexts. When compressing a new stream, the compressor sets a value of N for that context and sends N+1 FULL_HEADER packets. The compressor MUST also repeat each subsequent COMPRESSED_UDP update N+1 times. The value of N may be changed for an existing context by sending a new sequence of FULL_HEADER packets.",
+      "ja": "これは、リンクのための適切なNを導出するために、実装次第です。値は、コンテキストごとに独立して維持され、すべてのコンテキストで同じである必要はありません。新しいストリームを圧縮する場合、圧縮器はそのコンテキストに対するNの値を設定し、N + 1つのFULL_HEADERパケットを送信します。圧縮機はまた、後続の各COMPRESSED_UDP更新N + 1回繰り返さなければなりません。 Nの値はFULL_HEADERパケットの新しいシーケンスを送信することによって、既存のコンテキストのために変更することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The decompressor learns the value of N by counting the number of times the FULL_HEADER packet is repeated and storing the resulting value in the corresponding context. If some of the FULL_HEADER packets are lost, the decompressor may still be able to determine the correct value of N by observing the change in the 4-bit sequence number carried in the FULL_HEADER packets. Any inaccuracy in the counting will lead the decompressor to assume a smaller value of N than the compressor is sending. This is safe in that the only negative consequence is that the decompressor might send a CONTEXT_STATE packet when it was not really necessary to do so. In response, the compressor will send FULL_HEADER packets again, providing another opportunity for the decompressor to count the correct N.",
+      "ja": "減圧装置はFULL_HEADERパケットが繰り返される回数をカウントし、対応するコンテクスト中の得られた値を格納することによってNの値を学習します。 FULL_HEADERパケットの一部が失われた場合、デコンプレッサは依然としてFULL_HEADERパケットで運ば4ビットのシーケンス番号の変化を観察することによって、Nの正しい値を決定することができます。カウントの任意の不正確さは、圧縮機が送信しているよりもNの小さな値をとるように減圧装置をもたらします。これが唯一のマイナスの結果は、そうするように本当に必要ではなかったとき、デコンプレッサがCONTEXT_STATEパケットを送信するかもしれないということであるという点で安全です。応答では、圧縮機は、デコンプレッサが正しいNをカウントするために別の機会を提供し、再びFULL_HEADERパケットを送信します"
+    },
+    {
+      "indent": 3,
+      "text": "The sending of FULL_HEADER packets is also triggered by a change in one of the fields held constant in the context, such as the IP TOS. If such a change should occur while the compressor is in the middle of sending the N+1 FULL_HEADER packets, then the compressor MUST send N+1 FULL_HEADER packets after making the change. This could cause the decompressor to receive more than N+1 FULL_HEADER packets in a row with the result that it assumes a larger value for N than is correct. That could lead to an undetected loss of context synchronization. Therefore, the compressor MUST change the \"generation\" number in the context and in the FULL_HEADER packet when it begins sending the sequence of N+1 FULL_HEADER packets so the decompressor can detect the new sequence. For IPv4, this is a change in behavior relative to RFC 2508.",
+      "ja": "FULL_HEADERパケットの送信はまた、IP TOSのような文脈で一定に保持フィールドの一つの変化によってトリガされます。圧縮機はN + 1 FULL_HEADERパケットを送信中であるが、このような変化が発生した場合、圧縮機は、変更を行った後、N + 1つのFULL_HEADERパケットを送信しなければなりません。これは、デコンプレッサは、それが正しいよりもNのために大きな値をとるという結果と行のN + 1 FULL_HEADERパケットより多くを受信する可能性があります。これは、コンテキスト同期の検出されない損失につながる可能性があります。それは減圧装置が新しい配列を検出できるように、N + 1 FULL_HEADERパケットのシーケンスの送信を開始するときしたがって、圧縮器はコンテキストおよびFULL_HEADERパケットの「世代」の数を変更しなければなりません。 IPv4の場合、これはRFC 2508に対する行動の変化です。"
+    },
+    {
+      "indent": 3,
+      "text": "CONTEXT_STATE packets SHOULD also be repeated N+1 times (using the same sequence number for each context) to provide a similar measure of robustness against packet loss. Here N can be the largest N of all contexts included in the CONTEXT_STATE packet, or any number the decompressor finds necessary in order to ensure robustness.",
+      "ja": "CONTEXT_STATEパケットは、パケット損失に対するロバスト性の同様の測定値を提供する（各コンテキストの同じシーケンス番号を使用して）N + 1回繰り返されるべきです。ここでNはCONTEXT_STATEパケットに含まれるすべてのコンテキストの最大N、またはデコンプレッサは、堅牢性を確保するために必要と認める任意の数とすることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3.1. Examples",
+      "section_title": true,
+      "ja": "2.3.1。例"
+    },
+    {
+      "indent": 3,
+      "text": "Here are some examples to demonstrate the robust operation of enhanced CRTP using N+1 repetitions of updates. In this stream the audio codec sends a sample every 10 milliseconds. The first talkspurt is 1 second long. Then there are 2 seconds of silence, then another talkspurt. We also assume in this first example that the IPv4 ID field does not increment at a constant rate because the host is generating other uncorrelated traffic streams at the same time and therefore the delta IPv4 ID changes for each packet.",
+      "ja": "ここでは、更新のN + 1回の反復を使用して拡張CRTPの堅牢な動作を実証するためのいくつかの例があります。このストリームではオーディオコーデックは、サンプルごとに10ミリ秒を送信します。最初のトークスパートは1秒の長さです。そして、沈黙の2秒、その後、別の有音があります。我々はまた、ホストが各パケットのデルタのIPv4 IDの変更を同時に流れ、したがって他の無相関のトラフィックを生成しているので、IPv4のIDフィールドは、一定の速度でインクリメントしないことは、この最初の例では想定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In these examples, we will use some short notations:",
+      "ja": "これらの例では、我々はいくつかの短い表記法を使用します。"
+    },
+    {
+      "indent": 4,
+      "text": "FH FULL_HEADER CR COMPRESSED_RTP CU COMPRESSED_UDP",
+      "ja": "FH FULL_HEADER CR COMPRESSED_RTP CU COMPRESSED_UDP"
+    },
+    {
+      "indent": 3,
+      "text": "When operating on a link with low loss, we can just use COMPRESSED_RTP packets in the basic CRTP method specified in RFC 2508. We might have the following packet sequence:",
+      "ja": "低損失でリンク上で動作している場合、私達はちょうど私たちは、次のパケットシーケンスを持っているかもしれませんRFC 2508で指定された基本的なCRTP方法でCOMPRESSED_RTPパケットを使用することができます。"
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt updates and comments # type 1 10 FH 2 20 CR dI dT=10 3 30 CR dI 4 40 CR dI ... 100 1000 CR dI",
+      "ja": "SEQ時間PKTの更新やコメント＃1型10 FH 2 20 CRのdIのdT = 10 3 30 CRのdI 4 40 CRのdI ... 100~1000 CRのdI"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CR dI dT=2010 102 3020 CR dI dT=10 103 3030 CR dI 104 3040 CR dI ...",
+      "ja": "DTのdI CR 101 3010 2010 102 3020 CR =のdIのdT = 10 103 3030 104 3040 CR CRのdIのdI ..."
+    },
+    {
+      "indent": 3,
+      "text": "In the above sequence, if a packet is lost we cannot recover (\"twice\" will not work due to the unpredictable IPv4 ID) and the context must be invalidated.",
+      "ja": "パケットが失われた場合は、上記の手順では、回復することはできません（「二回」による予測不可能なIPv4のIDに動作しません）とコンテキストが無効にされなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Here is the same example using the enhanced CRTP method specified in this document, when N=2. Note that the compressor only sends the absolute IPv4 ID (I) and not the delta IPv4 ID (dI).",
+      "ja": "ここではN = 2、本書で指定された拡張CRTPの方法を使用して同じ例です。圧縮機のみ絶対IPv4のID（I）としないデルタIPv4のID（DI）を送信することに留意されたいです。"
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt CU flags updates and comments # type F I dT dI M S T P 1 10 FH 2 20 FH repeat constant fields 3 30 FH repeat constant fields 4 40 CU 1 1 1 0 M 0 1 0 I T=40 dT=10 5 50 CU 1 1 1 0 M 0 1 0 I T=50 dT=10 repeat update T & dT 6 60 CU 1 1 1 0 M 0 1 0 I T=60 dT=10 repeat update T & dT 7 70 CU 1 1 0 0 M 0 0 0 I 8 80 CU 1 1 0 0 M 0 0 0 I ... 100 1000 CU 1 1 0 0 M 0 0 0 I",
+      "ja": "SEQ時間PKTのCUフラグの更新やコメント＃型FIのdTのdI MSTP 1~10 FH 2 20 FHは一定フィールド3 30 FHは、ITが40のdT = 10 5 50 CU 1 = 4 40 CU 1 1 1 0 M 0 1 0定数フィールドを繰り返す繰り返し1 1 0 M 0 1 0 IT 50のdT = 10の反復更新T＆dTを6~60 CU 1 1 1 0 M 0 1 0 IT = 60のdT = 10の反復更新T＆dTを7 70 CU 1 1 0 0 M 0 = 0 I 8 80 CU 1 1 0 0 M 0 0 0 I ... 100千CU 1 1 0 0 M 0 0 0 I"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CU 1 1 0 0 M 0 1 0 I T=3010 T changed, keep deltas 102 3020 CU 1 1 0 0 M 0 1 0 I T=3020 repeat updated T 103 3030 CU 1 1 0 0 M 0 1 0 I T=3030 repeat updated T 104 3040 CU 1 1 0 0 M 0 0 0 I 105 3050 CU 1 1 0 0 M 0 0 0 I ...",
+      "ja": "ITは、3010 Tが変化= 101 3010 CU 1 1 0 0 M 0 1 0、ITは、3030 = 1 1 0 0 M 0 1 0 ITが3020反復更新T 103 3030 CU = 1〜1 0 0 M 0 1 0 CU 102 3020デルタを保ちます私は1 1 0 0 M 0 0 0 CU 105 3050 1 1 0 0 M 0 0 0更新T 104 3040 CUを繰り返して..."
+    },
+    {
+      "indent": 3,
+      "text": "This second example is the same sequence, but assuming the delta IP ID is constant. First the basic CRTP for a lossless link:",
+      "ja": "この第二の例では、同じ配列であるが、デルタIP IDを仮定すると、一定です。ロスレスリンクのための第1の基本CRTP："
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt updates and comments # type 1 10 FH 2 20 CR dI dT=10 3 30 CR 4 40 CR ... 100 1000 CR",
+      "ja": "SEQ時間PKTの更新やコメント＃1型10 FH 2 20 CRのdIのdT = 10 3 30 4 CR 40 CR ... 100~1000 CR"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CR dT=2010 102 3020 CR dT=10 103 3030 CR 104 3040 CR ...",
+      "ja": "101 3010 CRのdT = 2010 102 3020 CR dTが10 103 3030 CR 104 3040 CRを= ..."
+    },
+    {
+      "indent": 3,
+      "text": "For the equivalent sequence in enhanced CRTP, the more efficient COMPRESSED_RTP packet can still be used once the deltas are all established:",
+      "ja": "デルタは、すべての確立された後の強化CRTPで等価な配列のために、より効率的なCOMPRESSED_RTPパケットは、まだ使用することができます。"
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt CU flags updates and comments # type F I dT dI M S T P 1 10 FH 2 20 FH repeat constant fields 3 30 FH repeat constant fields 4 40 CU 1 1 1 1 M 0 1 0 I dI T=40 dT=10 5 50 CU 1 1 1 1 M 0 1 0 I dI T=50 dT=10 repeat updates 6 60 CU 1 1 1 1 M 0 1 0 I dI T=60 dT=10 repeat updates 7 70 CR 8 80 CR ... 100 1000 CR",
+      "ja": "SEQ時間PKTのCUフラグの更新やコメント＃型FIのdTのdI MSTP 1~10 FH 2 20 FHは一定フィールド3 30 FHは一定フィールド4 40 CU 1 1 1 1 M 0 1 0 IのdI T = 40のdT = 10 5〜50を繰り返し繰り返しCU 1 1 1 1 M 0 1 0 IのdI T = 50のdT = 10の反復更新6~60 CU 1 1 1 1 M 0 1 0 IのdI T = 60 dTが= 10回の反復更新70 CR 8 80 CR 7 ... 100 1000年CR"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CU 1 0 0 0 M 0 1 0 T=3010 T changed, keep deltas 102 3020 CU 1 0 0 0 M 0 1 0 T=3020 repeat updated T 103 3030 CU 1 0 0 0 M 0 1 0 T=3030 repeat updated T 104 3040 CR 105 3050 CR ...",
+      "ja": "101 Tが変更3010 CU 1 0 0 M 0 1 0 T = 3010、T = 3020の反復更新T 103 3030 CU 1 0 0 M 0 1 0 T = 3030 1 0 0 M 0 1 0 CU 102 3020デルタを保ちます更新T 104 3040 CR 105 3050 CRを繰り返して..."
+    },
+    {
+      "indent": 3,
+      "text": "Here is the second example when using IPv6. First the basic CRTP for a lossless link:",
+      "ja": "ここではIPv6を用いた第2の例があります。ロスレスリンクのための第1の基本CRTP："
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt updates and comments # type 1 10 FH 2 20 CR dT=10 3 30 CR 4 40 CR ... 100 1000 CR",
+      "ja": "SEQ時間PKTの更新やコメント＃1型10 FH 2 20 CRのdT = 10 3 30 4 CR 40 CR ... 100~1000 CR"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CR dT=2010 102 3020 CR dT=10 103 3030 CR 104 3040 CR ...",
+      "ja": "101 3010 CRのdT = 2010 102 3020 CR dTが10 103 3030 CR 104 3040 CRを= ..."
+    },
+    {
+      "indent": 3,
+      "text": "For the equivalent sequence in enhanced CRTP, the more efficient COMPRESSED_RTP packet can still be used once the deltas are all established:",
+      "ja": "デルタは、すべての確立された後の強化CRTPで等価な配列のために、より効率的なCOMPRESSED_RTPパケットは、まだ使用することができます。"
+    },
+    {
+      "indent": 4,
+      "text": "seq Time pkt CU flags updates and comments # type F I dT dI M S T P 1 10 FH 2 20 FH repeat constant fields 3 30 FH repeat constant fields 4 40 CU 1 0 1 0 M 0 1 0 T=40 dT=10 5 50 CU 1 0 1 0 M 0 1 0 T=50 dT=10 repeat updates 6 60 CU 1 0 1 0 M 0 1 0 T=60 dT=10 repeat updates 7 70 CR 8 80 CR ... 100 1000 CR",
+      "ja": "SEQ時間PKTのCUフラグの更新やコメント＃型FIのdTのdI MSTP 1~10 FH 2 20 FHは一定フィールド3 30 FHは一定フィールド4 40 CU 1 0 1 0 M 0 1 0 T = 40のdT = 10 5 50 CU 1を繰り返し繰り返し0 1 0 M 0 1 0 = 50のdT = 10回の反復更新6~60 CU 1 0 1 0 M 0 1 0 T = 60のdT = 10回の反復更新7 70 8 CR 80 CR T ... 100~1000 CR"
+    },
+    {
+      "indent": 4,
+      "text": "101 3010 CU 1 0 0 0 M 0 1 0 T=3010 T changed, keep deltas 102 3020 CU 1 0 0 0 M 0 1 0 T=3020 repeat updated T 103 3030 CU 1 0 0 0 M 0 1 0 T=3030 repeat updated T 104 3040 CR 105 3050 CR ...",
+      "ja": "101 Tが変更3010 CU 1 0 0 M 0 1 0 T = 3010、T = 3020の反復更新T 103 3030 CU 1 0 0 M 0 1 0 T = 3030 1 0 0 M 0 1 0 CU 102 3020デルタを保ちます更新T 104 3040 CR 105 3050 CRを繰り返して..."
+    },
+    {
+      "indent": 0,
+      "text": "3. Negotiating usage of enhanced-CRTP",
+      "section_title": true,
+      "ja": "強化-CRTPの3交渉の使用状況"
+    },
+    {
+      "indent": 3,
+      "text": "The use of IP/UDP/RTP compression (CRTP) over a particular link is a function of the link-layer protocol. It is expected that negotiation of the use of CRTP will be defined separately for each link layer.",
+      "ja": "特定のリンク上のIP / UDP / RTP圧縮（CRTP）の使用は、リンク層プロトコルの関数です。 CRTPの使用の交渉は、各リンク層のために個別に定義されることが期待されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For link layers that already have defined a negotiation for the use of CRTP as specified in RFC 2508, an extension to that negotiation will be required to indicate use of the enhanced CRTP defined in this document since the syntax of the existing packet formats has been extended.",
+      "ja": "RFC 2508で指定され、その交渉への拡張は、既存のパケットフォーマットの構文が拡張されているので、この文書で定義された強化CRTPの使用を示すために必要とされるように、既にCRTPを使用するための交渉が定義されているリンク層のための。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Because encryption eliminates the redundancy that this compression scheme tries to exploit, there is some inducement to forego encryption in order to achieve operation over a low-bandwidth link. However, for those cases where encryption of data and not headers is satisfactory, RTP does specify an alternative encryption method in which only the RTP payload is encrypted and the headers are left in the clear [SRTP]. That would allow compression to still be applied.",
+      "ja": "暗号化は、この圧縮方式を活用しようとすると、冗長性を排除しているため、低帯域幅リンク上での動作を実現するために暗号化を見送るためにいくつかの誘因があります。しかし、データはなく、ヘッダの暗号化が十分であるような場合のために、RTPは、RTPペイロードが暗号化され、ヘッダはクリア[SRTP]に放置された別の暗号化方式を指定しません。これは圧縮がまだ適用することが可能となります。"
+    },
+    {
+      "indent": 3,
+      "text": "A malfunctioning or malicious compressor could cause the decompressor to reconstitute packets that do not match the original packets but still have valid IP, UDP and RTP headers and possibly even valid UDP check-sums. Such corruption may be detected with end-to-end authentication and integrity mechanisms which will not be affected by the compression. Constant portions of authentication headers will be compressed as described in [IPHCOMP].",
+      "ja": "誤動作や悪意のあるコンプレッサーは、デコンプレッサは、元のパケットに一致するが、まだ有効なIP、UDPおよびRTPヘッダーや可能性も有効なUDPのチェックサムを持っていないパケットを再構成する可能性があります。そのような破損は、圧縮によって影響されないエンドツーエンド認証および完全性機構を用いて検出することができます。 【IPHCOMP]に記載されているように、認証ヘッダの一定部分が圧縮されます。"
+    },
+    {
+      "indent": 3,
+      "text": "No authentication is performed on the CONTEXT_STATE control packet sent by this protocol. An attacker with access to the link between the decompressor and compressor could inject false CONTEXT_STATE packets and cause compression efficiency to be reduced, probably resulting in congestion on the link. However, an attacker with access to the link could also disrupt the traffic in many other ways.",
+      "ja": "認証はこのプロトコルによって送られCONTEXT_STATE制御パケットに対して実行されません。デコンプレッサと、コンプレッサとの間のリンクにアクセスできる攻撃者は、偽のCONTEXT_STATEパケットを注入し、圧縮効率が低下することになり、おそらくリンク上で輻輳が生じ可能性があります。ただし、リンクへのアクセス権を持つ攻撃者は、また、他の多くの方法でトラフィックを破壊する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A potential denial-of-service threat exists when using compression techniques that have non-uniform receiver-end computational load. The attacker can inject pathological datagrams into the stream which are complex to decompress and cause the receiver to be overloaded and degrading processing of other streams. However, this compression does not exhibit any significant non-uniformity.",
+      "ja": "不均一受信エンド計算負荷を有する圧縮技術を使用するときに潜在的なサービス拒否の脅威が存在します。攻撃者は、他のストリームのオーバーロードされる受信機と分解処理を解凍し、原因が複雑であるストリームに病理学的データグラムを注入することができます。しかし、この圧縮は、有意な不均一性を示しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Acknowledgements",
+      "section_title": true,
+      "ja": "5.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Van Jacobson, co-author of RFC 2508, and the authors of RFC 2507, Mikael Degermark, Bjorn Nordgren, and Stephen Pink. The authors would also like to thank Dana Blair, Francois Le Faucheur, Tim Gleeson, Matt Madison, Hussein Salama, Mallik Tatipamula, Mike Thomas, Alex Tweedly, Herb Wildfeuer, Andrew Johnson, and Dan Wing.",
+      "ja": "著者はバン・ジェイコブソン、RFC 2508の共著者、およびRFC 2507、ミカエルDegermark、ビョルンNordgren、およびスティーブンピンクの作者に感謝したいと思います。著者らはまた、ダナ・ブレア、フランソワ・ルFaucheur、ティムグリーソン、マット・マディソン、フセインサラマ、Mallik Tatipamula、マイク・トーマス、アレックスTweedly、ハーブWildfeuer、アンドリュー・ジョンソン、そしてダン・ウィングに感謝したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6.参照"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[CRTP] Casner, S. and V. Jacobson, \"Compressing IP/UDP/RTP Headers for Low-Speed Serial Links\", RFC 2508, February 1999.",
+      "ja": "[CRTP] Casner、S.とV.ヤコブソン、RFC 2508、1999年2月 \"低速シリアルリンクのIP / UDP / RTPヘッダの圧縮\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPHCOMP] Degermark, M., Nordgren, B. and S. Pink, \"IP Header Compression\", RFC 2507, February 1999.",
+      "ja": "[IPHCOMP] Degermark、M.、Nordgren、B.とS.ピンク、 \"IPヘッダー圧縮\"、RFC 2507、1999年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPCPHC] Koren, T., Casner, S. and C. Bormann, \"IP Header Compression over PPP\", RFC 3544, July 2003.",
+      "ja": "[IPCPHC]コレン、T.、Casner、S.とC.ボルマン、 \"PPP上のIPヘッダー圧縮\"、RFC 3544、2003年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[KEYW] Bradner, S. \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[KEYW]ブラドナーの、S. \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RTP] Schulzrinne, H., Casner, S., Frederick, R. and V. Jacobson, \"RTP: A Transport Protocol for Real-Time Applications\", RFC 3550, July 2003.",
+      "ja": "[RTP] Schulzrinneと、H.、Casner、S.、フレデリック、R.とV. Jacobson氏、 \"RTP：リアルタイムアプリケーションのためのトランスポートプロトコル\"、RFC 3550、2003年7月。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ROHC] Bormann, C., Burmeister, C., Degermark, M., Fukushima, H., Hannu, H., Jonsson, L., Hakenberg, R., Koren, T., Le, K., Liu, Z., Martensson, A., Miyazaki, A., Svanbro, K., Wiebke, T., Yoshimura, T. and H. Zheng, \"RObust Header Compression (ROHC): Framework and four profiles: RTP, UDP, ESP, and uncompressed\", RFC 3095, July 2001.",
+      "ja": "[ROHC]ボルマン、C.、Burmeister、C.、Degermark、M.、福島、H.、ハンヌ、H.、ジョンソン、L.、Hakenberg、R.、コレン、T.、ル、K.、劉、 Z.、Martenssonから、A.、宮崎、A.、Svanbro、K.、Wiebke、T.、吉村、T.とH.鄭、「ロバストヘッダ圧縮（ROHC）：フレームワークおよび4つのプロファイル：RTP、UDP、ESP 「、および圧縮されていない、RFC 3095、2001年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SRTP] Baugher, M., McGrew, D., Carrara, E., Naslund, M. and K. Norrman, \"The Secure Real-time Transport Protocol\", Work in Progress.",
+      "ja": "[SRTP] Baugher、M.、マグリュー、D.、カララ、E.、Naslund、M.及びK. Norrman、 \"セキュアリアルタイムトランスポートプロトコル\"、ProgressのWork。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Intellectual Property Rights Notice",
+      "section_title": true,
+      "ja": "7.知的財産権に関するお知らせ"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any intellectual property or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; neither does it represent that it has made any effort to identify any such rights. Information on the IETF's procedures with respect to rights in standards-track and standards-related documentation can be found in BCP-11. Copies of claims of rights made available for publication and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementors or users of this specification can be obtained from the IETF Secretariat.",
+      "ja": "IETFは、そのような権限下で、ライセンスがたりないかもしれない可能性があるためにどの本書または程度に記載されている技術の実装や使用に関係すると主張される可能性があります任意の知的財産やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能。また、そうした権利を特定するために取り組んできたことを表していないん。スタンダードトラックおよび標準関連文書における権利に関するIETFの手続きの情報は、BCP-11に記載されています。権利の主張のコピーは、出版のために利用可能とライセンスの保証が利用できるようにする、または本仕様の実装者または利用者が、そのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますIETF事務局から。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights which may cover technology that may be required to practice this standard. Please address the information to the IETF Executive Director.",
+      "ja": "IETFは、その注意にこの標準を実践するために必要な場合があり技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 IETF専務に情​​報を扱ってください。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Authors' Addresses",
+      "section_title": true,
+      "ja": "8.著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tmima Koren Cisco Systems, Inc. 170 West Tasman Drive San Jose, CA 95134-1706 USA",
+      "ja": "Tmimaコレンシスコシステムズ、株式会社170西タスマン・ドライブサンノゼ、CA 95134-1706 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: tmima@cisco.com",
+      "ja": "メールアドレス：tmima@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Stephen L. Casner Packet Design 3400 Hillview Avenue, Building 3 Palo Alto, CA 94304 USA",
+      "ja": "スティーブンL. Casnerパケットデザイン3400ヒルビュー・アベニュー、3パロアルト、CA 94304 USAの構築"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: casner@acm.org",
+      "ja": "メールアドレス：casner@acm.org"
+    },
+    {
+      "indent": 3,
+      "text": "John Geevarghese Motorola India Electronics Ltd. No. 33 A Ulsoor Road Bangalore, India",
+      "ja": "ジョンGeevargheseモトローラインドエレクトロニクス株式会社第33アルスールロードバンガロール、インド"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: geevjohn@hotmail.com",
+      "ja": "メールアドレス：geevjohn@hotmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Bruce Thompson Cisco Systems, Inc. 170 West Tasman Drive San Jose, CA 95134-1706 USA",
+      "ja": "ブルース・トンプソンシスコシステムズ、株式会社170西タスマン・ドライブサンノゼ、CA 95134-1706 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: brucet@cisco.com",
+      "ja": "メールアドレス：brucet@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Patrick Ruddy Cisco Systems, Inc. 3rd Floor 96 Commercial Street Leith, Edinburgh EH6 6LX Scotland",
+      "ja": "パトリック・ルディシスコシステムズ、株式会社3階96コマーシャルストリートリース、エジンバラEH6 6LXスコットランド"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: pruddy@cisco.com",
+      "ja": "メールアドレス：pruddy@cisco.com"
+    },
+    {
+      "indent": 0,
+      "text": "9. Full Copyright Statement",
+      "section_title": true,
+      "ja": "9.完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2003). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2003）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

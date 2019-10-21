@@ -1,0 +1,680 @@
+{
+  "title": {
+    "text": "RFC 4077 - A Negative Acknowledgement Mechanism for Signaling Compression",
+    "ja": "RFC 4077 - シグナリング圧縮のための否定応答メカニズム"
+  },
+  "number": 4077,
+  "created_at": "2019-10-19 12:59:25.099414+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                         A.B. Roach\nRequest for Comments: 4077                              Estacado Systems\nCategory: Standards Track                                       May 2005",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "A Negative Acknowledgement Mechanism for Signaling Compression",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2005).",
+      "ja": "著作権（C）インターネット協会（2005）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a mechanism that allows Signaling Compression (SigComp) implementations to report precise error information upon receipt of a message which cannot be decompressed. This negative feedback can be used by the recipient to make fine-grained adjustments to the compressed message before retransmitting it, allowing for rapid and efficient recovery from error situations.",
+      "ja": "この文書は、シグナリング圧縮（SigCompの）実装を解凍することができないメッセージを受信すると、正確なエラー情報を報告することを可能にするメカニズムを説明しています。この負のフィードバックは、エラー状況から迅速かつ効率的な回収を可能に、それを再送信する前に圧縮されたメッセージへのきめ細かな調整を行うために受信者によって使用することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n   1.1. The Problem ................................................2\n        1.1.1. Compartment Disposal ................................3\n        1.1.2. Client Restart ......................................3\n        1.1.3. Server Failover .....................................3\n   1.2. The Solution ...............................................4\n2. Node Behavior ...................................................4\n   2.1. Normal SigComp Message Transmission ........................4\n   2.2. Receiving a \"Bad\" SigComp Message ..........................5\n   2.3. Receiving a SigComp NACK ...................................6\n        2.3.1. Unreliable Transport ................................6\n        2.3.2. Reliable Transport ..................................6\n   2.4. Detecting Support for NACK .................................7\n3. Message Format ..................................................7\n   3.1. Message Fields .............................................8\n   3.2. Reason Codes ...............................................9\n4. Security Considerations ........................................13\n   4.1. Reflector Attacks .........................................13\n   4.2. NACK Spoofing .............................................13\n5. IANA Considerations ............................................14\n6. Acknowledgements ...............................................14\n7. References .....................................................14\n   7.1. Normative References ......................................14\n   7.2. Informative References ....................................14",
+      "raw": true,
+      "ja": "1.はじめに\n   1.1。問題\n        1.1.1。コンパートメント処分\n        1.1.2。クライアントを再起動します\n        1.1.3。サーバーのフェイルオーバー\n   1.2。ソリューション\n2.ノードの動作\n   2.1。通常のSigCompメッセージ送信\n   2.2。 「悪い」のSigCompメッセージを受信しました\n   2.3。 SigCompのNACKを受信\n        2.3.1。信頼性の低い交通\n        2.3.2。信頼性の高い交通\n   2.4。 NACKのサポートを検出\n3.メッセージフォーマット\n   3.1。メッセージ・フィールド\n   3.2。理由コード\n4.セキュリティについての考慮事項\n   4.1。リフレクター攻撃\n   4.2。 NACKなりすまし\n5. IANAの考慮事項\n6.謝辞\n7.参考\n   7.1。引用規格\n   7.2。参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Signaling Compression [1], often called \"SigComp\", defines a protocol for transportation of compressed messages between two network elements. One of the key features of SigComp is the ability of the sending node to request that the receiving node store state objects for later retrieval.",
+      "ja": "シグナリング圧縮[1]は、しばしば「のSigComp」と呼ばれる、2つのネットワーク要素間で圧縮されたメッセージの輸送のためのプロトコルを定義します。 SigCompのの重要な特徴の一つは、後の検索のために、ノード格納状態オブジェクトを受信することを要求する送信ノードの能力です。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. The Problem",
+      "section_title": true,
+      "ja": "1.1。問題"
+    },
+    {
+      "indent": 3,
+      "text": "While the \"SigComp - Extended Operations\" document [2] defines a mechanism that allows for confirmation of state creation, operational experience with the SigComp protocol has demonstrated that there are still several circumstances in which a sender's view of the shared state differs from the receiver's view. A non-exhaustive list detailing the circumstances in which such failures may occur is below.",
+      "ja": "「のSigComp  - 拡張操作」をしながら、文書[2]の状態の作成の確認を可能にするメカニズムを定義する、のSigCompプロトコル運用経験は、共有状態の送信者のビューは、受信機のと異なっているいくつかの状況が依然として存在することを実証しました見る。このような障害が発生してもよいした状況を詳述非網羅的なリストは以下です。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1.1. Compartment Disposal",
+      "section_title": true,
+      "ja": "1.1.1。コンパートメント処分"
+    },
+    {
+      "indent": 3,
+      "text": "In SigComp, stored states are associated with compartments. Conceptually, the compartments represent one instance of a remote application. These compartments are used to limit the amount of state that each remote application is allowed to store. Compartments are created upon receipt of a valid SigComp message from a remote application. In the current protocol, applications are expected to signal when they are finished with a compartment so that it can be deleted (by using the S-bit in requested feedback data).",
+      "ja": "SigCompのでは、格納された状態は、区画に関連付けられています。概念的に、区画はリモートアプリケーションの1つのインスタンスを表します。これらの区画は、それぞれのリモートアプリケーションがストアに許可されている状態の量を制限するために使用されます。コンパートメントは、リモート・アプリケーションから有効なのSigCompメッセージの受信時に作成されます。現在のプロトコルでは、アプリケーションは、それが（要求されたフィードバックデータにSビットを使用して）削除することができるように、それらはコンパートメントを終了しているときに信号が期待されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Unfortunately, expecting the applications to be well-behaved is not sufficient to prevent state from piling up. Unexpected client failures, reboots, and loss of connectivity can cause compartments to become \"stuck\" and never removed. To prevent this situation, it becomes necessary to implement a scheme by which compartments that appear disused may eventually be discarded.",
+      "ja": "残念ながら、アプリケーションは行儀ことを期待して積み重ねから状態を防ぐのに十分ではありません。予期しないクライアントの失敗、再起動後、接続の損失は、区画が「スタック」と決して取り外さないなる可能性があります。このような状況を防ぐために、それが廃止に表示された区画は、最終的に破棄されるかもしれないスキームを実装するために必要になります。"
+    },
+    {
+      "indent": 3,
+      "text": "While the preceding facts make such a practice necessary, discarding compartments without explicit signaling can have the unfortunate side effect that active compartments are sometimes discarded. This leads to a different view of state between the server and the client.",
+      "ja": "前述の事実は、このような練習が必要するが、明示的なシグナリングなし区画を破棄すると、アクティブ区画が時々廃棄される不幸な副作用を有することができます。これは、サーバーとクライアント間の状態の別のビューにつながります。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1.2. Client Restart",
+      "section_title": true,
+      "ja": "1.1.2。クライアントを再起動します"
+    },
+    {
+      "indent": 3,
+      "text": "The prime motivation for SigComp was compression of messages to be sent over a radio interface. Consequently, most deployments of SigComp will involve a mobile unit as one of the endpoints. Mobile terminals are generally not guaranteed to be available for extended durations of time. Node restarts (due to, for example, a battery running out) will induce situations in which the network-based server believes that the client contains several states that are no longer actually available.",
+      "ja": "SigCompのためのプライム動機は、メッセージの圧縮は、無線インタフェースを介して送信されることになっていました。その結果、SigCompののほとんどの展開は、エンドポイントの1つとして、モバイル・ユニットを含むことになります。モバイル端末は、一般的に、時間の延長期間のために利用可能であることが保証されていません。 （原因たとえば、バッテリーが切れ、へ）ノードの再起動は、ネットワークベースのサーバは、クライアントがもはや実際に利用可能ないくつかの状態が含まれていることを信じている状況を誘発します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1.3. Server Failover",
+      "section_title": true,
+      "ja": "1.1.3。サーバーのフェイルオーバー"
+    },
+    {
+      "indent": 3,
+      "text": "Many applications for which SigComp will be used (e.g., SIP [3]) use DNS SRV records for server lookup. One of the important features of DNS SRV records is the ability to specify multiple servers from which clients will select at random, with probabilities determined by the q-value weighting. The reason for defining this behavior for SRV records is to allow load distribution through a set of equivalent servers, and to permit clients to continue to function even if the server with which they are communicating fails. When using protocols that use SRV for such distribution, the traffic to a failed server is typically sent by the client to an equivalent server that can serve the same purpose. From an application perspective, this new server often appears to be the same endpoint as the failed server, and will consequently resolve to the same compartment.",
+      "ja": "SigCompが使用されるため、多くの用途（例えば、SIP [3]）サーバの検索にDNS SRVレコードを使用します。 DNS SRVレコードの重要な特徴の一つは、q値の重みによって決まる確率で、クライアントがランダムに選択されます、そこから複数のサーバを指定する機能です。 SRVレコードのこの振る舞いを定義するための理由は、同等のサーバーのセットを介して負荷分散を可能にし、それらが通信しているサーバーに障害が発生した場合でも機能し続けるために、クライアントを可能にすることです。そのような分布のためにSRVを使用するプロトコルを使用する場合は、障害の発生したサーバーへのトラフィックは通常、同じ目的を果たすことができる同等のクライアントからサーバに送信されます。アプリケーションの観点からは、この新しいサーバーは、多くの場合、障害の発生したサーバーと同じエンドポイントであるように思われる、その結果、同じコンパートメントに解決されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Although SigComp state can be replicated amongst such a cluster of servers, maintaining integrity of such states requires a two-phase commit process that adds a great deal of complexity to the server and can degrade performance significantly.",
+      "ja": "SigCompの状態はサーバのように、クラスタ間で複製することができますが、そのような状態の整合性を維持することは、二相は、サーバーへの複雑さの多くを追加し、大幅にパフォーマンスが低下する可能性がコミット・プロセスを必要とします。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. The Solution",
+      "section_title": true,
+      "ja": "1.2。ソリューション"
+    },
+    {
+      "indent": 3,
+      "text": "Although SigComp allows returned SigComp parameters to signal that all states have been lost (by setting \"state_memory_size\" to 0 for one message in the reverse direction), such an approach provides an incomplete solution to the problem. In addition to wiping out an entire compartment when only one state is corrupt or missing, this approach suffers from the unfortunate behavior that it requires a message in the reverse direction that the remote application will authorize. Unless a lower-layer security mechanism is employed (e.g., TLS), this would typically mean that a compressed application-level message in the reverse direction must be sent before recovery can occur. In many cases (such as SIP-based mobile terminals), these messages won't be sent often; in others (pure client/server deployments), they won't ever be sent.",
+      "ja": "SigCompのすべての状態が（逆方向に一つのメッセージを0に「state_memory_size」を設定することによって）失われたことを知らせるためのSigCompパラメータを返却可能にするが、そのようなアプローチは、問題に対する不完全な解決策を提供します。唯一の状態が破損しているときに全体区画を一掃または不足に加えて、このアプローチは、リモートアプリケーションが認可する逆方向のメッセージを必要とすること不幸挙動に苦しんでいます。下層のセキュリティメカニズム（例えば、TLS）を使用されていない限り、これは、典型的には回復が起こり得る前に、逆方向に圧縮されたアプリケーションレベルのメッセージが送信されなければならないことを意味します。 （例えば、SIPベースのモバイル端末のような）多くの場合、これらのメッセージは頻繁に送信されません。その他（純粋なクライアント/サーバーの展開）で、彼らはこれまで送信されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The proposed solution to this problem is a simple Negative Acknowledgement (NACK) mechanism which allows the recipient to communicate to the sender that a failure has occurred. This NACK contains a reason code that communicates the nature of the failure. For certain types of failures, the NACK will also contain additional details that might be useful in recovering from the failure.",
+      "ja": "この問題に対する提案された解決策は、受信者は、障害が発生した送信者に通信することを可能にする単純な否定応答（NACK）機構です。このNACKは失敗の本質を伝える理由コードが含まれています。障害のある特定のタイプの場合、NACKはまた、障害からの回復に有用であるかもしれない追加の詳細情報が含まれています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Node Behavior",
+      "section_title": true,
+      "ja": "2.ノードの動作"
+    },
+    {
+      "indent": 3,
+      "text": "The following sections detail the behavior of nodes sending and receiving SigComp NACKs. The actual format and values are described in Section 3.",
+      "ja": "以下のセクションで詳細にSigComp NACKを送信し、受信ノードの動作。実際のフォーマットと値はセクション3に記載されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Normal SigComp Message Transmission",
+      "section_title": true,
+      "ja": "2.1。通常のSigCompメッセージ送信"
+    },
+    {
+      "indent": 3,
+      "text": "Although normal in all other respects, SigComp implementations that use the NACK mechanism need to calculate and store a SHA-1 hash for each SigComp message that they send. This must be stored in such a way that, given the SHA-1 hash, the implementation is able to locate the compartment with which the sent message was associated.",
+      "ja": "他の全ての点で正常が、NACKメカニズムを使用SigCompの実装は、それらが送信それぞれのSigCompメッセージのSHA-1ハッシュを計算して格納する必要があります。これは、SHA-1ハッシュを与え、そのような方法で格納する必要があり、実装は、送信されたメッセージが関連しているとコンパートメントを見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In other words, if someone hands the SHA-1 hash back to the compressor, it needs to be able to find the compartment with which it was working when it sent the message with that hash. This only requires that the compressor knows with which compartment it is working when it sends a message (which is always the case), and that the SHA-1 hash, when stored, points to that compartment in some way.",
+      "ja": "誰かが戻って圧縮機にSHA-1ハッシュを渡す言い換えれば、それはそのハッシュを有するメッセージを送信したときに、それが働いたとコンパートメントを見つけることができる必要があります。これは、圧縮機が保存した場合、SHA-1ハッシュが、何らかの方法でその区画を指していることが（常にそうである）メッセージを送信するときに、それが作動しているコンパートメントと知って、その必要とします。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Receiving a \"Bad\" SigComp Message",
+      "section_title": true,
+      "ja": "2.2。 「悪い」のSigCompメッセージを受信しました"
+    },
+    {
+      "indent": 3,
+      "text": "When a received SigComp message causes a decompression failure, the recipient forms and sends a SigComp NACK message. This NACK message contains a SHA-1 hash of the received SigComp message that could not be decompressed. It also contains the exact reason decompression failed, as well as any additional details that might assist the NACK recipient to correct any problems. See Section 3 for more information about formatting the NACK message and its fields.",
+      "ja": "場合受信のSigCompメッセージは、解凍の失敗を引き起こしたレシピエントの形態とのSigComp NACKメッセージを送信します。このNACKメッセージは、解凍することができなかった受信のSigCompメッセージのSHA-1ハッシュを含んでいます。また、解凍に失敗した正確な理由だけでなく、すべての問題を修正するためにNACK受信者を支援する可能性のある追加の詳細情報が含まれています。 NACKメッセージとそのフィールドの書式設定の詳細については、セクション3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "For a connection-oriented transport, such as TCP, the NACK message is sent back to the originator of the failed message over that same connection.",
+      "ja": "TCPのようなコネクション指向の輸送については、NACKメッセージが同じ接続上失敗したメッセージの発信者に送り返されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For a stream-based transport, such as TCP, the standard SigComp delimiter of 0xFFFF is used to terminate the NACK message.",
+      "ja": "TCPなどのストリームベースの輸送のために、0xFFFFでの標準のSigCompデリミタは、NACKメッセージを終了するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For a connectionless transport, such as UDP, the NACK message is sent back to the originator of the failed message at the port and IP address from which the message was sent. Note that this may or may not be the same port on which the application would typically receive messages. To accommodate implementations that use connect() or similar constructs, the NACK will be sent from the IP address and port to which the uninterpretable message was sent. From a practical perspective, this is probably easiest to determine by binding listening sockets to a specific interface; however, other mechanisms may also be employed.",
+      "ja": "UDPなどのコネクションレスのトランスポートのために、NACKメッセージは、メッセージが送信されたポートとIPアドレスに失敗したメッセージの発信者に送り返されます。これはよく、またはアプリケーションは、通常のメッセージを受け取ることになるしたのと同じポートではないかもしれないことに注意してください。 （接続使用する実装）または類似の構築物を収容するために、NACKが解釈できないメッセージが送信された先のIPアドレスとポートから送信されます。実用的な観点から、これはおそらく、特定のインターフェイスにリスニングソケットを結合することによって決定するのが最も簡単です。しかしながら、他のメカニズムを使用することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "The behavior specified above is strictly necessary for any generally useful form of a NACK mechanism. In the most general case, when an implementation receives a message that it cannot decompress, it has exactly three useful pieces of information: (1) the contents of the message, (2) an indication of why the message cannot be decoded, and (3) the IP address and port from which the message originated. Note that none of these contains any indication of where the remote application is listening for messages, if it differs from the sending port.",
+      "ja": "上記指定された動作は、NACK機構のいずれか一般的に有用な形のために厳密には必要です。 （1）メッセージの内容、（2）メッセージを復号化できない理由の表示、及び（：インプリメンテーションは、それが解凍できないというメッセージを受信したときに最も一般的なケースでは、それは情報のちょうど3つの有用な部分を有していますメッセージが発信された3）IPアドレスとポート。それは、送信ポートと異なる場合、これらのいずれも、リモート・アプリケーションがメッセージを聞いているところの兆候が含まれていないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Receiving a SigComp NACK",
+      "section_title": true,
+      "ja": "2.3。 SigCompのNACKを受信"
+    },
+    {
+      "indent": 3,
+      "text": "The first action taken upon receipt of a NACK is an attempt to find the message to which the NACK corresponds. This search is performed using the 20-byte SHA-1 hash contained in the NACK. Once the matching message is located, further operations are performed based on the compartment that was associated with the sent message.",
+      "ja": "NACKを受信すると取ら最初のアクションは、NACKが対応するメッセージを検索しようとする試みです。この検索は、NACKに含まれる20バイトのSHA-1ハッシュを使用して実行されます。マッチングメッセージが配置されると、更なる動作が送信されたメッセージに関連付けられた区画に基づいて行われます。"
+    },
+    {
+      "indent": 3,
+      "text": "Further behavior of a node upon receiving a SigComp NACK depends on whether a reliable or unreliable transport is being used.",
+      "ja": "SigCompのNACKを受信するノードのさらなる動作は、信頼できる、または信頼できないトランスポートが使用されているかどうかに依存します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3.1. Unreliable Transport",
+      "section_title": true,
+      "ja": "2.3.1。信頼性の低い交通"
+    },
+    {
+      "indent": 3,
+      "text": "When SigComp is used over an unreliable transport, the application has no reasonable expectation that the transport layer will deliver any particular message. It then becomes the application layer's responsibility to ensure that data is retransmitted as necessary. In these circumstances, the NACK mechanism relies on such behavior to ensure delivery of the message, and never performs retransmissions on the application's behalf.",
+      "ja": "SigCompのが信頼性の低いトランスポート上で使用される場合、アプリケーションは、トランスポート層は、任意の特定のメッセージを配信することは、合理的な期待を持っていません。これは、データが必要に応じて再送信されることを保証するために、アプリケーション層の責任になります。このような状況では、NACKメカニズムは、メッセージの配信を保証するために、このような行動に依存し、アプリケーションに代わって再送信を実行することはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When a NACK is received for a message sent over an unreliable transport, the NACK recipient uses the contained information to make appropriate adjustments to the compressor associated with the proper compartment. The exact nature of these adjustments are specific to the compression scheme being used, and will vary from implementation to implementation. The only requirement on these adjustments is that they must have the effect of compensating for the error that has been indicated (e.g., by removing the state that the remote node indicates it cannot retrieve).",
+      "ja": "NACKは、信頼性の低いトランスポートを介して送信されるメッセージのために受信されると、NACKの受信者は、適切な区画に関連付けられている圧縮機に適切な調整を行うために含まれている情報を使用します。これらの調整の正確な性質は、使用される圧縮方式に固有であり、実現例ごとに異なります。これらの調整上の唯一の要件は、それらが（例えば、リモート・ノードが取得できない示す状態を除去することによって）指示された誤差を補償する効果を有していなければならないということです。"
+    },
+    {
+      "indent": 3,
+      "text": "In particular, when an unreliable transport is used, the original message must not be retransmitted by the SigComp layer upon receipt of a NACK. Instead, the next application-initiated transmission of a message will take advantage of the adjustments made as a result of processing the NACK.",
+      "ja": "具体的には、信頼性の低いトランスポートを使用する場合、元のメッセージは、NACKを受信したときのSigComp層によって再送信されてはなりません。代わりに、メッセージの次のアプリケーションが開始した送信は、NACKを処理した結果として行われる調整を利用します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3.2. Reliable Transport",
+      "section_title": true,
+      "ja": "2.3.2。信頼性の高い交通"
+    },
+    {
+      "indent": 3,
+      "text": "When a reliable transport is employed, the application makes a basic assumption that any message passed down the stack will be retransmitted as necessary to ensure that the remote node receives it, unless a failure is indicated by the transport layer. Because SigComp acts as a shim between the transport-layer and the application, it becomes the responsibility of the SigComp implementation to ensure that any failure to transmit a message is communicated to the application.",
+      "ja": "信頼性の高いトランスポートを用いる場合、アプリケーションは、障害がトランスポート層で示されない限り、リモート・ノードは、それを受け取ることを保証するために、必要に応じて再送信される任意のメッセージがスタックに通し基本的な仮定を行います。 SigCompのは、トランスポート層とアプリケーションとの間のシムとして作用するので、メッセージを送信する任意の障害がアプリケーションに通信されることを保証するためのSigComp実装の責任となります。"
+    },
+    {
+      "indent": 3,
+      "text": "When a NACK is received for a message sent over a reliable transport, the SigComp layer must indicate to the application that an error has occurred. In general, the application should react in the same way as it does for any other transport layer error, such as a TCP connection reset. For most applications, this reaction will initially be an attempt to reset and re-establish the connection, and re-initiate the failed transaction. The SigComp layer should also use the information contained in the NACK to make appropriate adjustments to the compressor associated with the proper compartment (similar to the adjustments made for unreliable transport). Thus, if the compartment is not reset by resetting the TCP connection, the next message will take advantage of the adjustments.",
+      "ja": "NACKは、信頼性の高いトランスポートを介して送信されるメッセージのために受信されると、SigCompの層は、エラーが発生したことをアプリケーションに指示しなければなりません。それは、他のトランスポートレイヤ誤差の場合と同様に、一般的に、アプリケーションは、TCP接続のリセットとして、同じように反応します。ほとんどのアプリケーションでは、この反応は、最初にリセットして、接続を再確立し、失敗したトランザクションを再起動しようとする試みとなります。 SigCompの層は、（信頼性の低いトランスポートのために作られた調整と同様に）適切な区画に関連付けられた圧縮機に適切な調整を行うNACKに含まれる情報を使用すべきです。コンパートメントは、TCP接続をリセットすることによってリセットされない場合このように、次のメッセージが調整を利用します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Detecting Support for NACK",
+      "section_title": true,
+      "ja": "2.4。 NACKのサポートを検出"
+    },
+    {
+      "indent": 3,
+      "text": "Detection of support for the NACK mechanism may be beneficial in certain circumstances. For example, with the current definition of SigComp, acknowledgment of state receipt is required before a sender can reference such state. When multiple messages are sent before a response is received, the need to wait for such responses can cause significant decreases in message compression efficiency. If it is known that the receiver supports the NACK mechanism, the sender can instead optimistically assume that the state created by a sent message has been created, and is allowed to be referenced. If such an assumption turns out to be false (due to, for example, packet loss or packet reordering), the sender can recover upon receipt of a NACK.",
+      "ja": "NACK機構のサポートの検出は、特定の状況において有益であり得ます。送信者がこのような状態を参照することができる前に、例えば、SigCompの現在の定義には、状態受信の肯定応答が必要です。応答が受信される前に、複数のメッセージが送信されると、そのような応答を待つ必要はメッセージ圧縮効率の有意な減少を引き起こす可能性があります。受信機がNACKメカニズムをサポートしていることが知られている場合は、送信者が代わりに楽観的に送信されたメッセージによって作成された状態が作成されており、参照することが許可されていることを前提とすることができます。このような仮定が偽であることが判明した場合（に起因して、例えば、パケットロスやパケットの並べ替えのために）、送信者は、NACKを受信したときに回復することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to facilitate such detection, any implementation that will send NACK messages upon decompression failure will indicate a SigComp version number of 0x02 in its Universal Decompressor Virtual Machine (UDVM). The bytecodes sent to such an endpoint can check the version number, and send appropriate indication back to their compressor as requested feedback. Except for the NACK mechanism described in this document, implementations advertising a version of 0x02 behave exactly like those advertising a version number of 0x01.",
+      "ja": "このような検出を容易にするためには、解凍の失敗時にNACKメッセージを送信するすべての実装は、ユニバーサルデコンプレッサ仮想マシン（UDVM）における0x02ののSigCompのバージョン番号が表示されます。そのようなエンドポイントに送信されたバイトコードは、バージョン番号をチェックし、要求されたフィードバックとしての圧縮機に戻って適切な指示を送ることができます。このドキュメントで説明NACKメカニズムを除き、0x02でのバージョンを宣伝実装は、正確には0x01のバージョン番号を宣伝したもののように振る舞います。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Message Format",
+      "section_title": true,
+      "ja": "3.メッセージフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "SigComp NACK packets are syntactically valid SigComp messages which have been specifically designed to be safely ignored by implementations that do not support the NACK mechanism.",
+      "ja": "SigCompのNACKパケットは、特別に設計されている構文的に有効なのSigCompメッセージが安全にNACKメカニズムをサポートしない実装によって無視されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "In particular, NACK messages are formatted as the second variant of a SigComp message (typically used for code upload) with a \"code_len\" field of zero. The NACK information (message identifier, reason for failure, and error details) is encoded in the \"remaining SigComp message\" area, typically used for input data. Further, the \"destination\" field is used as a version identifier to indicate which version of NACK is being employed.",
+      "ja": "具体的には、NACKメッセージがゼロの「code_len」フィールドで（典型的には、コードのアップロードのために使用される）のSigCompメッセージの第2の変形例としてフォーマットされています。 NACK情報（メッセージ識別子、失敗の理由、およびエラーの詳細）は、典型的には、入力データのために使用される「残りのSigCompメッセージ」領域で符号化されます。さらに、「宛先」フィールドは使用されているNACKのバージョンを示すために、バージョン識別子として使用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Message Fields",
+      "section_title": true,
+      "ja": "3.1。メッセージ・フィールド"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the NACK message and the use of the fields within it are shown in Figure 1.",
+      "ja": "NACKメッセージとその内のフィールドの使用のフォーマットは、図1に示されています。"
+    },
+    {
+      "indent": 20,
+      "text": "  0   1   2   3   4   5   6   7\n+---+---+---+---+---+---+---+---+\n| 1   1   1   1   1 | T |   0   |\n+---+---+---+---+---+---+---+---+\n|                               |\n:    returned feedback item     :\n|                               |\n+---+---+---+---+---+---+---+---+\n|         code_len = 0          |\n+---+---+---+---+---+---+---+---+\n| code_len = 0  |  version = 1  |\n+---+---+---+---+---+---+---+---+\n|          Reason Code          |\n+---+---+---+---+---+---+---+---+\n|  OPCODE of failed instruction |\n+---+---+---+---+---+---+---+---+\n|   PC of failed instruction    |\n|                               |\n+---+---+---+---+---+---+---+---+\n|                               |\n: SHA-1 Hash of failed message  :\n|                               |\n+---+---+---+---+---+---+---+---+\n|                               |\n:         Error Details         :\n|                               |\n+---+---+---+---+---+---+---+---+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 1: SigComp NACK Message Format",
+      "ja": "図1：SigCompのNACKメッセージの形式"
+    },
+    {
+      "indent": 3,
+      "text": "o \"Reason Code\" is a one-byte value that indicates the nature of the decompression failure. The specific codes are given in Section 3.2.",
+      "ja": "O「理由コードは、」解凍失敗の性質を示す1バイトの値です。具体的なコードは、セクション3.2に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"OPCODE of failed instruction\" is a one-byte field that includes the opcode to which the PC was pointing when the failure occurred. If failure occurred before the UDVM began executing any code, this field is set to 0.",
+      "ja": "O「失敗した命令のオペコードは、」障害が発生したときにPCが指した先のオペコードを含んでいる1バイトのフィールドです。 UDVMは、任意のコードを実行開始する前に障害が発生した場合、このフィールドは0に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"PC of failed instruction\" is a two-byte field containing the value of the program counter when failure occurred (i.e., the memory address of the failed UDVM instruction). The field is encoded with the most significant byte of the PC first (i.e., in network or big endian order). If failure occurred before the UDVM began executing any code, this field is set to 0.",
+      "ja": "O「失敗した命令のPCは、」障害が発生したとき、プログラムカウンタの値を含む2バイトのフィールドである（すなわち、障害が発生したUDVM命令のメモリアドレス）。フィールドは、最初のPCの最上位バイト（すなわち、ネットワークまたはビッグエンディアン順）でエンコードされます。 UDVMは、任意のコードを実行開始する前に障害が発生した場合、このフィールドは0に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"SHA-1 Hash of failed message\" contains the full 20-byte SHA-1 hash of the SigComp message that could not be decompressed. This information allows the NACK recipient to locate the message that failed to decompress so that adjustments to the correct compartment can be performed. When performing this hash, the entire SigComp message is used, from the header byte (binary 11111xxx) to the end of the input. Any lower-level protocol headers (such as UDP or IP) and message delimiters (the 0xFFFF that marks message boundaries in stream protocols) are not included in the hash. When used over a stream based protocol, any 0xFFxx escape sequences are un-escaped before performing the hash operation.",
+      "ja": "O「失敗したメッセージのSHA-1ハッシュは、」解凍することができなかったのSigCompメッセージの完全な20バイトのSHA-1ハッシュが含まれています。この情報は、正しい区画の調整を行うことができるように解凍することができなかったメッセージを検索するためにNACK受信者を可能にします。このハッシュを実行するとき、全体のSigCompメッセージは、ヘッダバイト（バイナリ11111xxx）からの入力の終わりに、使用されています。任意の下位レベル（例えば、UDPやIPなど）プロトコル・ヘッダとメッセージ・デリミタ（ストリームプロトコルでメッセージの境界をマークが0xFFFF）がハッシュに含まれていません。ストリームベースのプロトコルで使用される場合、任意0xFFxxエスケープシーケンスは、ハッシュ演算を実行する前に、非エスケープされます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"Error Details\" provides additional information that might be useful in correcting the problem that caused decompression failure. Its meaning is specific to the \"Reason Code\". See Section 3.2 for specific information on what appears in this field.",
+      "ja": "O「エラーの詳細は、」解凍失敗の原因となった問題を修正するのに有用である可能性がある追加情報を提供します。その意味は、「理由コード」に固有のものです。このフィールドに表示されるかについての具体的な情報については、セクション3.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"Code_len\" is the \"code_len\" field from a standard SigComp message. It is always set to \"0\" for NACK messages.",
+      "ja": "O「Code_lenは、」標準のSigCompメッセージから「code_len」フィールドです。それは、常にNACKメッセージのために「0」に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"Version\" gives the version of the NACK mechanism being employed. This document defines version 1.",
+      "ja": "O「バージョンは、」NACKメカニズムのバージョンが採用されています。このドキュメントでは、バージョン1を定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Reason Codes",
+      "section_title": true,
+      "ja": "3.2。理由コード"
+    },
+    {
+      "indent": 3,
+      "text": "Note that many of the status codes are more useful in debugging interoperability problems than with on-the-fly correction of errors. The \"STATE_NOT_FOUND\" error is a notable exception: it will generally cause the NACK recipient to encode future messages so as to not use the indicated state.",
+      "ja": "ステータスコードの多くは、エラーのオンザフライ補正よりも相互運用性の問題のデバッグに、より有用であることに注意してください。 「STATE_NOT_FOUND」エラーが顕著な例外である：それは、一般的に示された状態を使用しないように、NACK受信者が今後のメッセージをエンコードするようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving the other status messages, an implementation would typically be expected either to use a different set of bytecodes or, if that is not an option, to send that specific message uncompressed.",
+      "ja": "他のステータスメッセージを受信すると、インプリメンテーションは、典型的には、それがオプションでない場合、特定のメッセージは、圧縮されていないことを送信するために、バイトコードの異なるセットを使用するかするか予想されます。"
+    },
+    {
+      "indent": 7,
+      "text": "Error                      Code Details\n-------------------------- ---- ---------------------------\nSTATE_NOT_FOUND              1  State ID (6 - 20 bytes)\nCYCLES_EXHAUSTED             2  Cycles Per Bit (1 byte)\nUSER_REQUESTED               3\nSEGFAULT                     4\nTOO_MANY_STATE_REQUESTS      5\nINVALID_STATE_ID_LENGTH      6\nINVALID_STATE_PRIORITY       7\nOUTPUT_OVERFLOW              8\nSTACK_UNDERFLOW              9\nBAD_INPUT_BITORDER          10\nDIV_BY_ZERO                 11\nSWITCH_VALUE_TOO_HIGH       12\nTOO_MANY_BITS_REQUESTED     13\nINVALID_OPERAND             14\nHUFFMAN_NO_MATCH            15\nMESSAGE_TOO_SHORT           16\nINVALID_CODE_LOCATION       17\nBYTECODES_TOO_LARGE         18  Memory size (2 bytes)\nINVALID_OPCODE              19\nINVALID_STATE_PROBE         20\nID_NOT_UNIQUE               21  State ID (6 - 20 bytes)\nMULTILOAD_OVERWRITTEN       22\nSTATE_TOO_SHORT             23  State ID (6 - 20 bytes)\nINTERNAL_ERROR              24\nFRAMING_ERROR               25",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Only the five errors \"STATE_NOT_FOUND\", \"CYCLES_EXHAUSTED\", \"BYTECODES_TOO_LARGE\", \"ID_NOT_UNIQUE\", and \"STATE_TOO_SHORT\" contain details; for all other error codes, the \"Error Details\" field has zero length.",
+      "ja": "わずか5つのエラー \"STATE_NOT_FOUND\"、 \"CYCLES_EXHAUSTED\"、 \"BYTECODES_TOO_LARGE\"、 \"ID_NOT_UNIQUE\"、および \"STATE_TOO_SHORTは\" 詳細が含まれています。他のすべてのエラーコードについては、「エラーの詳細」フィールドの長さはゼロ。"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 2: SigComp NACK Reason Codes",
+      "ja": "図2：SigCompのNACKの理由コード"
+    },
+    {
+      "indent": 3,
+      "text": "1. STATE_NOT_FOUND A state that was referenced cannot be found. The state may have been referenced by the UDVM executing a STATE-ACCESS instruction; it also may have been referenced by the \"partial state identifier\" field in a SigComp message. The \"details\" field contains the state identifier for the state that could not be found. This is also the proper error to return in the case that a unique state item was matched but fewer bytes of state ID were sent than required by the minimum_access_length.",
+      "ja": "1. STATE_NOT_FOUND参照された状態が見つかりません。状態は、状態アクセス命令を実行するUDVMによって参照されていてもよいです。それはまたのSigCompメッセージに「部分状態識別子」フィールドによって参照されていてもよいです。 「詳細」フィールドが見つかりませんでした状態のための状態識別子が含まれています。これはまた、ユニークな状態の項目が一致したが、状態IDの少ないバイトがminimum_access_lengthによって必要とされるよりも、送信された場合に返す適切なエラーです。"
+    },
+    {
+      "indent": 3,
+      "text": "2. CYCLES_EXHAUSTED Decompression of the message has taken more cycles than were allocated to it. The \"details\" field contains a one-byte value that communicates the number of cycles per bit. The cycles per bit is represented as an unsigned 8-bit integer (i.e., not encoded).",
+      "ja": "メッセージの2 CYCLES_EXHAUSTED解凍は、それに割り当てられていたよりも多くのサイクルをとっています。 「詳細」の欄には、ビットあたりのサイクル数を伝達する1バイトの値が含まれています。ビット当たりのサイクルは、符号なし8ビット整数（すなわち、符号化されていない）として表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. USER_REQUESTED The DECOMPRESSION-FAILURE opcode has been executed.",
+      "ja": "3. USER_REQUESTED圧縮解除-FAILUREオペコードが実行されています。"
+    },
+    {
+      "indent": 3,
+      "text": "4. SEGFAULT An attempt to read from or write to memory that is outside of the UDVM's memory space has been attempted.",
+      "ja": "4.セグメンテーション違反から読み取るか、UDVMのメモリ空間の外にあるメモリへの書き込みしようとする試みが試みられています。"
+    },
+    {
+      "indent": 3,
+      "text": "5. TOO_MANY_STATE_REQUESTS More than four requests to store or delete state objects have been requested.",
+      "ja": "5. TOO_MANY_STATE_REQUESTS状態オブジェクトを保存または削除する4つ以上の要求が要求されています。"
+    },
+    {
+      "indent": 3,
+      "text": "6. INVALID_STATE_ID_LENGTH A state id length less than 6 or greater than 20 has been specified.",
+      "ja": "状態IDの長さ6より小さいか20より大きい6 INVALID_STATE_ID_LENGTHが指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "7. INVALID_STATE_PRIORITY A state priority of 65535 has been specified when attempting to store a state.",
+      "ja": "状態を保存しようとすると、7 INVALID_STATE_PRIORITY 65535の状態優先度が指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "8. OUTPUT_OVERFLOW The decompressed message is too large to be decoded by the receiving node.",
+      "ja": "減圧メッセージOUTPUT_OVERFLOW 8は、受信ノードによって復号化するには大きすぎます。"
+    },
+    {
+      "indent": 3,
+      "text": "9. STACK_UNDERFLOW An attempt to pop a value off the UDVM stack was made with a stack_fill value of 0.",
+      "ja": "9. STACK_UNDERFLOW UDVMスタックオフ値をポップしようとする試みは、0のstack_fill値で行われました。"
+    },
+    {
+      "indent": 3,
+      "text": "10. BAD_INPUT_BITORDER An INPUT-BITS or INPUT-HUFFMAN instruction was encountered with the \"input_bit_order\" register set to an invalid value (i.e., one of the upper 13 bits is set).",
+      "ja": "10. BAD_INPUT_BITORDER INPUTビットまたはINPUT  - ハフマン指示が無効な値に設定レジスタ「input_bit_order」に遭遇した（すなわち、上位13ビットのうちの1つが設定されています）。"
+    },
+    {
+      "indent": 3,
+      "text": "11. DIV_BY_ZERO A DIVIDE or REMAINDER opcode was encountered with a divisor of 0.",
+      "ja": "11. DIV_BY_ZERO DIVIDE又はREMAINDERオペコード0の除数で遭遇しました。"
+    },
+    {
+      "indent": 3,
+      "text": "12. SWITCH_VALUE_TOO_HIGH The input to a SWITCH opcode exceeds the number of branches defined.",
+      "ja": "SWITCHオペコードに入力SWITCH_VALUE_TOO_HIGH 12は、定義された分岐の数を超えます。"
+    },
+    {
+      "indent": 3,
+      "text": "13. TOO_MANY_BITS_REQUESTED An INPUT-BITS or INPUT-HUFFMAN instruction was encountered that attempted to input more than 16 bits.",
+      "ja": "13は、入力ビットまたはINPUT-ハフマン命令は16ビット以上の入力しようとしたことを検出されましたTOO_MANY_BITS_REQUESTED。"
+    },
+    {
+      "indent": 3,
+      "text": "14. INVALID_OPERAND An operand for an instruction could not be resolved to an integer value (e.g., a literal or reference operand beginning with 11111111).",
+      "ja": "命令のオペランドが整数値に解決することができなかった14 INVALID_OPERAND（例えば、11111111で始まるリテラルまたは参照オペランド）。"
+    },
+    {
+      "indent": 3,
+      "text": "15. HUFFMAN_NO_MATCH The input string does not match any of the bitcodes in the INPUT-HUFFMAN opcode.",
+      "ja": "15. HUFFMAN_NO_MATCHは、入力文字列は、入力ハフマンオペコードにbitcodesのいずれとも一致しません。"
+    },
+    {
+      "indent": 3,
+      "text": "16. MESSAGE_TOO_SHORT When attempting to decode a SigComp message, the recipient determined that there were not enough bytes in the message for it to be valid.",
+      "ja": "SigCompメッセージを解読しようとすると16 MESSAGE_TOO_SHORT、受信者は、それが有効であるために十分なバイトがメッセージの中に存在しなかったと判断しました。"
+    },
+    {
+      "indent": 3,
+      "text": "17. INVALID_CODE_LOCATION The \"code location\" field in the SigComp message was set to the invalid value of 0.",
+      "ja": "SigCompメッセージに17 INVALID_CODE_LOCATION「コード位置」フィールドは0の無効な値に設定しました。"
+    },
+    {
+      "indent": 3,
+      "text": "18. BYTECODES_TOO_LARGE The bytecodes that a SigComp message attempted to upload exceed the amount of memory available in the receiving UDVM. The details field is a two-byte expression of the DECOMPRESSION_MEMORY_SIZE of the receiving UDVM. This value is communicated most-significant-byte first.",
+      "ja": "SigCompメッセージが受信UDVMに利用可能なメモリの量を超えてアップロードしようとしたバイトコードBYTECODES_TOO_LARGE 18。詳細フィールドは、受信UDVMのDECOMPRESSION_MEMORY_SIZEの2バイト表現です。この値は、最初に最上位バイトを伝えています。"
+    },
+    {
+      "indent": 3,
+      "text": "19. INVALID_OPCODE The UDVM attempted to identify an undefined byte value as an instruction.",
+      "ja": "19. INVALID_OPCODEザ・UDVMは命令として未定義バイト値を特定しようとしました。"
+    },
+    {
+      "indent": 3,
+      "text": "20. INVALID_STATE_PROBE When attempting to retrieve state, the state_length operand is set to 0 but the state_begin operand is non-zero.",
+      "ja": "状態を取得しようと20 INVALID_STATE_PROBEは、state_lengthオペランドが0に設定されているが、STATE_BEGINオペランドが非ゼロです。"
+    },
+    {
+      "indent": 3,
+      "text": "21. ID_NOT_UNIQUE A partial state identifier that was used to access state matched more than one state item. Note that this error might be returned as the result of executing a STATE-ACCESS instruction or attempting to locate a unique piece of state as identified by the \"partial state identifier\" in a SigComp message. The \"details\" field contains the partial state identifier that was requested.",
+      "ja": "21. ID_NOT_UNIQUE状態にアクセスするために使用されたパーシャル状態識別子は、複数の状態項目に一致しました。このエラーはステートアクセス命令を実行するか、のSigCompメッセージに「部分状態識別子」によって識別される状態のユニークな作品を検索する試みの結果として返されるかもしれないことに留意されたいです。 「詳細」フィールドには、要求された部分状態識別子が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "22. MULTILOAD_OVERWRITTEN A MULTILOAD instruction attempted to overwrite itself.",
+      "ja": "22. MULTILOAD_OVERWRITTEN A MULTILOAD命令自体を上書きしようとしました。"
+    },
+    {
+      "indent": 3,
+      "text": "23. STATE_TOO_SHORT A STATE-ACCESS instruction has attempted to copy more bytes from a state item than the state item actually contains. The \"details\" field contains the partial state identifier that was requested. Implementors are cautioned to return only the partial state identifier that was requested; if the NACK contains any state identifier in addition to what was requested, attackers may be able to use that additional information to access the state.",
+      "ja": "23. STATE_TOO_SHORT STATE-ACCESS命令は、状態項目が実際に含まれているよりも、状態項目から複数のバイトをコピーしようとしています。 「詳細」フィールドには、要求された部分状態識別子が含まれています。実装者は、要求された唯一の部分状態識別子を返すように警告しています。 NACKが要求されたものに加えて、任意の状態識別子が含まれている場合、攻撃者は状態にアクセスするためにその追加情報を使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "24. INTERNAL_ERROR The UDVM encountered an unexpected condition that prevented it from decompressing the message.",
+      "ja": "24. INTERNAL_ERRORザ・UDVMは、メッセージを解凍するのを防ぐ予期しない状態に遭遇しました。"
+    },
+    {
+      "indent": 3,
+      "text": "25. FRAMING_ERROR The UDVM encountered a framing error (unquoted 0xFF 80 .. 0xFF FE in an input stream.) This error is applicable only to messages received on a stream transport. In the case of a framing error, a SHA-1 hash for a unique message cannot be determined. Consequently, when a FRAMING_ERROR NACK is sent, the \"SHA-1 Hash of failed message\" field should be set to all zeros.",
+      "ja": "25. FRAMING_ERRORザUDVMは、（入力ストリームに引用符で囲まれていない0xFFの80 .. 0xFFのFE）フレーミングエラーが発生しました。このエラーのみストリームトランスポート上で受信されたメッセージに適用可能です。フレーミングエラーの場合には、一意のメッセージのSHA-1ハッシュを決定することができません。 FRAMING_ERROR NACKが送信される場合、結果として、フィールド「失敗したメッセージのSHA-1ハッシュ」がすべてゼロに設定されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Reflector Attacks",
+      "section_title": true,
+      "ja": "4.1。リフレクター攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "Because SigComp NACK messages are by necessity sent in response to other messages, it is possible to trigger them by intentionally sending malformed messages to a SigComp implementation with a spoofed IP address. However, because such actions can only generate one message for each message sent, they don't serve as amplifier attacks. Further, due to the reasonably small size of NACK packets, there cannot be a significant increase in the size of the packet generated.",
+      "ja": "SigCompのNACKメッセージが他のメッセージに応答して送信される必要であるため、意図的に偽装されたIPアドレスとのSigComp実装に不正な形式のメッセージを送信することによって、それらをトリガすることが可能です。そのような行動は、のみ送信メッセージごとに一つのメッセージを生成することができますので、しかし、彼らは、アンプ攻撃として機能しません。さらに、NACKパケットの適度に小さいサイズのため、生成されたパケットのサイズが大幅に増加があることはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "It is worth noting that nearly all deployed protocols exhibit this same behavior.",
+      "ja": "これは、そのほぼすべての展開のプロトコルの展示これと同じ動作は注目に値します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. NACK Spoofing",
+      "section_title": true,
+      "ja": "4.2。 NACKなりすまし"
+    },
+    {
+      "indent": 3,
+      "text": "Although it is possible to forge NACK messages as if they were generated by a different node, the damage that can be caused is minimal. Reporting a loss of state will typically result in nothing more than the re-transmission of that state in a subsequent message. Other failure codes would result in the next message being sent using an alternate compression mechanism, or possibly uncompressed.",
+      "ja": "それは彼らが別のノードによって生成されたかのようにNACKメッセージを偽造することは可能ですが、発生する可能性がダメージは最小限です。状態の損失を報告することは、典型的に、後続のメッセージにおいてその状態の再送信よりも何をもたらすであろう。他の故障コードが代替圧縮機構、またはおそらくは非圧縮を使用して送信される次のメッセージをもたらすであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Although all of the above consequences result in slightly larger messages, none of them have particularly catastrophic implications for security.",
+      "ja": "上記の結果の全てがわずかに大きいメッセージが表示されるが、それらのどれも、セキュリティのために特に壊滅的な影響を持っていません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a new value for the IANA registered attribute SigComp_version.",
+      "ja": "このドキュメントは、IANA登録された属性SigComp_versionの新しい値を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "Value (in hex): 02",
+      "ja": "（16進数）値：02"
+    },
+    {
+      "indent": 3,
+      "text": "Description: SigComp version 2 (NACK support)",
+      "ja": "説明：SigCompのバージョン2（NACKサポート）"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: [RFC4077]",
+      "ja": "参考：[RFC4077]"
+    },
+    {
+      "indent": 0,
+      "text": "6. Acknowledgements",
+      "section_title": true,
+      "ja": "6.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Carsten Bormann, Zhigang Liu, Pekka Pessi, and Robert Sugar for their comments and suggestions. Special thanks to Abigail Surtees and Richard Price for several very detailed reviews and suggestions.",
+      "ja": "彼らのコメントや提案のためのカルステンボルマン、志剛劉、ペッカPessi、そしてロバート・シュガーに感謝します。いくつかの非常に詳細なレビューと提案のためのアビゲイルサーティースとリチャード価格に感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7.参考"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Price, R., Bormann, C., Christoffersson, J., Hannu, H., Liu, Z., and J. Rosenberg, \"Signaling Compression (SigComp)\", RFC 3320, January 2003.",
+      "ja": "[1]価格、R.、ボルマン、C.、Christoffersson、J.、ハンヌ、H.、劉、Z.、およびJ.ローゼンバーグ、 \"シグナリング圧縮（SigCompの）\"、RFC 3320、2003年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Hannu, H., Christoffersson, J., Forsgren, S., Leung, K.-C., Liu, Z., and R. Price, \"Signaling Compression (SigComp) - Extended Operations\", RFC 3321, January 2003.",
+      "ja": "[2]ハンヌ、H.、Christoffersson、J.、Forsgren、S.、レオン、K.-C.、劉、Z.、およびR.価格、 \"シグナリング圧縮（SigCompの） - 拡張操作\"、RFC 3321、 2003年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Rosenberg, J., Schulzrinne, H., Camarillo, G., Johnston, A., Peterson, J., Sparks, R., Handley, M., and E. Schooler, \"SIP: Session Initiation Protocol\", RFC 3261, June 2002.",
+      "ja": "[3]ローゼンバーグ、J.、Schulzrinneと、H.、カマリロ、G.、ジョンストン、A.、ピーターソン、J.、スパークス、R.、ハンドレー、M.、およびE.学生、 \"SIP：セッション開始プロトコル\" 、RFC 3261、2002年6月。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Adam Roach Estacado Systems 17210 Campbell Road Suite 250 Dallas, TX 75252 US",
+      "ja": "アダムローチEstacadoシステム17210キャンベル道スイート250、ダラス、TX 75252米国"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: adam@estacado.net",
+      "ja": "メールアドレス：adam@estacado.net"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2005).",
+      "ja": "著作権（C）インターネット協会（2005）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}
