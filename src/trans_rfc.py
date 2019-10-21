@@ -158,3 +158,13 @@ def trans_rfc(number, mode='selenium'):
 #   URL: https://translate.google.com/translate_a/single?...
 #
 #
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('text', help='english text')
+    args = parser.parse_args()
+
+    translator = Translator2()
+    ja = translator.translate(args.text, dest='ja')
+    print(ja)
