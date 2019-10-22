@@ -38,8 +38,8 @@ class Paragraph:
                 or text.find('=========') >= 0 # table
                 or text.find('+--') >= 0 # directory tree
                 or text.find('/*') >= 0 # src
-                or text.find('enum {') # tls
-                or text.find('struct {') # tls
+                or text.find('enum {') >= 0 # tls
+                or text.find('struct {') >= 0 # tls
                 or text.find('::=') >= 0 # syntax
                 or text.find('": [') >= 0 # json
                 or text.find('": {') >= 0 # json

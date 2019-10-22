@@ -164,6 +164,11 @@ def trans_rfc(number, mode='selenium'):
 #
 #
 
+def trans_test():
+    translator = Translator2()
+    ja = translator.translate('test', dest='ja')
+    return ja == 'テスト'
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()

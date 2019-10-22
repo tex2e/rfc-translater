@@ -50,13 +50,17 @@ if __name__ == '__main__':
         choices=['selenium', 'googletrans'], default='selenium')
     parser.add_argument('--make-index', dest='make_index',
         action='store_true', help='make index.html')
+    parser.add_argument('--transtest', action='store_true')
     args = parser.parse_args()
 
     if args.make_index:
         make_index()
-        sys.exit(0)
 
-    if args.fetch and args.rfc:
+    elif args.transtest:
+        from src.trans_rfc import trans_test
+        trans_test()
+
+    elif args.fetch and args.rfc:
         fetch_rfc(args.rfc)
     elif args.trans and args.rfc:
         trans_rfc(args.rfc, mode=trans_mode)
