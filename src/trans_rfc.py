@@ -56,7 +56,7 @@ class Translator2: # googletrans
         self.total = 0
 
     def translate(self, text, dest='ja'):
-        text = re.sub(r'&([a-z]+|#[0-9]+);', r'& \1;', text)
+        text = re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text)
         ja = self.translator.translate(text, dest='ja')
         # take interval
         wait_time = 1 + len(text) / 40 # IMPORTANT!!!
