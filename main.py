@@ -3,6 +3,7 @@ import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
+from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
 
 def main(rfc_number, trans_mode=None):
@@ -47,7 +48,13 @@ if __name__ == '__main__':
     parser.add_argument('--end', type=int, help='end rfc number')
     parser.add_argument('--trans-mode', dest='trans_mode',
         choices=['selenium', 'googletrans'], default='selenium')
+    parser.add_argument('--make-index', dest='make_index',
+        action='store_true', help='make index.html')
     args = parser.parse_args()
+
+    if args.make_index:
+        make_index()
+        sys.exit(0)
 
     if args.fetch and args.rfc:
         fetch_rfc(args.rfc)
