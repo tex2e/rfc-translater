@@ -1,0 +1,1727 @@
+{
+  "title": {
+    "text": "RFC 8460 - SMTP TLS Reporting",
+    "ja": "RFC 8460 - SMTP TLSレポート"
+  },
+  "number": 8460,
+  "created_at": "2019-10-22 19:36:50.032132+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       D. Margolis\nRequest for Comments: 8460                                  Google, Inc.\nCategory: Standards Track                                     A. Brotman\nISSN: 2070-1721                                            Comcast, Inc.\n                                                         B. Ramakrishnan\n                                                              Oath, Inc.\n                                                                J. Jones\n                                                         Microsoft, Inc.\n                                                               M. Risher\n                                                            Google, Inc.\n                                                          September 2018",
+      "raw": true
+    },
+    {
+      "indent": 27,
+      "text": "SMTP TLS Reporting",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "A number of protocols exist for establishing encrypted channels between SMTP Mail Transfer Agents (MTAs), including STARTTLS, DNS-Based Authentication of Named Entities (DANE) TLSA, and MTA Strict Transport Security (MTA-STS). These protocols can fail due to misconfiguration or active attack, leading to undelivered messages or delivery over unencrypted or unauthenticated channels. This document describes a reporting mechanism and format by which sending systems can share statistics and specific information about potential failures with recipient domains. Recipient domains can then use this information to both detect potential attacks and diagnose unintentional misconfigurations.",
+      "ja": "STARTTLS、名前付きエンティティのDNSベース認証（DANE）TLSA、およびMTA Strict Transport Security（MTA-STS）など、SMTPメール転送エージェント（MTA）間に暗号化されたチャネルを確立するための多数のプロトコルが存在します。 これらのプロトコルは、設定の誤りまたはアクティブな攻撃により失敗し、未配信のメッセージや、暗号化されていないチャネルまたは認証されていないチャネルで配信される可能性があります。 このドキュメントでは、送信側システムが統計情報と潜在的な障害に関する特定の情報を受信側ドメインと共有できるレポートメカニズムと形式について説明します。 受信者ドメインは、この情報を使用して、潜在的な攻撃を検出し、意図しない構成ミスを診断できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット標準化過程の文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、Internet Engineering Task Force（IETF）の製品です。 IETFコミュニティのコンセンサスを表しています。 これは公開レビューを受けており、Internet Engineering Steering Group（IESG）による公開が承認されています。 インターネット標準の詳細については、RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8460.",
+      "ja": "このドキュメントの現在のステータス、エラータ、およびフィードバックの提供方法に関する情報は、https：//www.rfc-editor.org/info/rfc8460で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2018 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（c）2018 IETF Trustおよび文書作成者として特定された人物。 全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書は、この文書の発行日に有効なBCP 78およびIETF文書に関するIETFトラストの法的条項（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するあなたの権利と制限を説明しているので、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust Legal Provisionsのセクション4.eに記載されているSimplified BSD Licenseテキストを含める必要があり、Simplified BSD Licenseに記載されている保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   4\n  1.1.  Terminology . . . . . . . . . . . . . . . . . . . . . . .   4\n2.  Related Technologies  . . . . . . . . . . . . . . . . . . . .   5\n3.  Reporting Policy  . . . . . . . . . . . . . . . . . . . . . .   6\n  3.1.  Example Reporting Policy  . . . . . . . . . . . . . . . .   8\n    3.1.1.  Report Using MAILTO . . . . . . . . . . . . . . . . .   8\n    3.1.2.  Report Using HTTPS  . . . . . . . . . . . . . . . . .   8\n4.  Reporting Schema  . . . . . . . . . . . . . . . . . . . . . .   8\n  4.1.  Report Time Frame . . . . . . . . . . . . . . . . . . . .   9\n  4.2.  Delivery Summary  . . . . . . . . . . . . . . . . . . . .  10\n    4.2.1.  Success Count . . . . . . . . . . . . . . . . . . . .  10\n    4.2.2.  Failure Count . . . . . . . . . . . . . . . . . . . .  10\n  4.3.  Result Types  . . . . . . . . . . . . . . . . . . . . . .  10\n    4.3.1.  Negotiation Failures  . . . . . . . . . . . . . . . .  10\n    4.3.2.  Policy Failures . . . . . . . . . . . . . . . . . . .  11\n    4.3.3.  General Failures  . . . . . . . . . . . . . . . . . .  11\n    4.3.4.  Transient Failures  . . . . . . . . . . . . . . . . .  12\n  4.4.  JSON Report Schema  . . . . . . . . . . . . . . . . . . .  12\n  4.5.  Policy Samples  . . . . . . . . . . . . . . . . . . . . .  15\n5.  Report Delivery . . . . . . . . . . . . . . . . . . . . . . .  15\n  5.1.  Report Filename . . . . . . . . . . . . . . . . . . . . .  16\n  5.2.  Compression . . . . . . . . . . . . . . . . . . . . . . .  17\n  5.3.  Email Transport . . . . . . . . . . . . . . . . . . . . .  17\n    5.3.1.  Example Report  . . . . . . . . . . . . . . . . . . .  19\n  5.4.  HTTPS Transport . . . . . . . . . . . . . . . . . . . . .  19\n  5.5.  Delivery Retry  . . . . . . . . . . . . . . . . . . . . .  20\n  5.6.  Metadata Variances  . . . . . . . . . . . . . . . . . . .  20\n6.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  20\n  6.1.  Message Headers . . . . . . . . . . . . . . . . . . . . .  20\n  6.2.  Report Type . . . . . . . . . . . . . . . . . . . . . . .  21\n  6.3.  +gzip Media Type Suffix . . . . . . . . . . . . . . . . .  22\n  6.4.  application/tlsrpt+json Media Type  . . . . . . . . . . .  23\n  6.5.  application/tlsrpt+gzip Media Type  . . . . . . . . . . .  24\n  6.6.  STARTTLS Validation Result Types  . . . . . . . . . . . .  25\n7.  Security Considerations . . . . . . . . . . . . . . . . . . .  26\n8.  Privacy Considerations  . . . . . . . . . . . . . . . . . . .  27\n9.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  28\n  9.1.  Normative References  . . . . . . . . . . . . . . . . . .  28\n  9.2.  Informative References  . . . . . . . . . . . . . . . . .  30\nAppendix A.  Example Reporting Policy . . . . . . . . . . . . . .  32\n  A.1.  Report Using MAILTO . . . . . . . . . . . . . . . . . . .  32\n  A.2.  Report Using HTTPS  . . . . . . . . . . . . . . . . . . .  32\nAppendix B.  Example JSON Report  . . . . . . . . . . . . . . . .  32\nContributors  . . . . . . . . . . . . . . . . . . . . . . . . . .  34\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  34",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The STARTTLS extension to SMTP [RFC3207] allows SMTP clients and hosts to establish secure SMTP sessions over TLS. The protocol design uses an approach that has come to be known as \"Opportunistic Security\" (OS) [RFC7435]. This method maintains interoperability with clients that do not support STARTTLS, but it means that any attacker could potentially eavesdrop on a session. An attacker could perform a downgrade or interception attack by deleting parts of the SMTP session (such as the \"250 STARTTLS\" response) or redirect the entire SMTP session (perhaps by overwriting the resolved MX record of the delivery domain).",
+      "ja": "SMTPのSTARTTLS拡張機能[RFC3207]により、SMTPクライアントとホストはTLSを介して安全なSMTPセッションを確立できます。 プロトコル設計では、「便宜的セキュリティ」（OS）[RFC7435]として知られるようになったアプローチを使用しています。 この方法は、STARTTLSをサポートしていないクライアントとの相互運用性を維持しますが、攻撃者がセッションを盗聴する可能性があることを意味します。 攻撃者は、SMTPセッションの一部（「250 STARTTLS」応答など）を削除することでダウングレード攻撃またはインターセプト攻撃を実行するか、SMTPセッション全体をリダイレクトする（おそらく、配信ドメインの解決済みMXレコードを上書きする）。"
+    },
+    {
+      "indent": 3,
+      "text": "Because such \"downgrade attacks\" are not necessarily apparent to the receiving MTA, this document defines a mechanism for sending domains to report on failures at multiple stages of the MTA-to-MTA conversation.",
+      "ja": "このような「ダウングレード攻撃」は受信側MTAには必ずしも明らかではないため、このドキュメントでは、MTAからMTAへの会話の複数の段階で障害を報告するためにドメインを送信するメカニズムを定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "Recipient domains may also use the mechanisms defined by MTA-STS [RFC8461] or DANE [RFC6698] to publish additional encryption and authentication requirements; this document defines a mechanism for sending domains that are compatible with MTA-STS or DANE to share success and failure statistics with recipient domains.",
+      "ja": "受信者ドメインは、MTA-STS [RFC8461]またはDANE [RFC6698]で定義されたメカニズムを使用して、追加の暗号化および認証要件を公開することもできます。 このドキュメントでは、MTA-STSまたはDANEと互換性のあるドメインを送信するメカニズムを定義して、受信者ドメインと成功および失敗の統計情報を共有します。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, this document defines a reporting schema that covers failures in routing, DNS resolution, and STARTTLS negotiation; policy validation errors for both DANE [RFC6698] and MTA-STS [RFC8461]; and a standard TXT record that recipient domains can use to indicate where reports in this format should be sent. The report can also serve as a heartbeat to indicate that systems are successfully negotiating TLS during sessions as expected.",
+      "ja": "具体的には、このドキュメントでは、ルーティング、DNS解決、STARTTLSネゴシエーションの失敗をカバーするレポートスキーマを定義しています。 DANE [RFC6698]とMTA-STS [RFC8461]の両方のポリシー検証エラー。 受信者ドメインがこの形式のレポートの送信先を示すために使用できる標準TXTレコード。 このレポートは、システムがセッション中に期待どおりにTLSを正常にネゴシエートすることを示すハートビートとしても機能します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is intended as a companion to the specification for SMTP MTA-STS [RFC8461] and adds reporting abilities for those implementing DANE [RFC7672].",
+      "ja": "このドキュメントは、SMTP MTA-STS [RFC8461]の仕様のコンパニオンとして意図されており、DANE [RFC7672]を実装している人のためのレポート機能を追加します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Terminology",
+      "section_title": true,
+      "ja": "1.1。 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」 この文書の「」は、BCP 14 [RFC2119] [RFC8174]で説明されているように、ここに示すようにすべての大文字で表示される場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "We also define the following terms for further use in this document:",
+      "ja": "このドキュメントでさらに使用するために、次の用語も定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "o MTA-STS Policy: A mechanism by which administrators can specify the expected TLS availability, presented identity, and desired actions for a given email recipient domain. MTA-STS is defined in [RFC8461].",
+      "ja": "o MTA-STSポリシー：管理者が、特定の電子メール受信者ドメインに対して予想されるTLSの可用性、提示されたID、および望ましいアクションを指定できるメカニズム。 MTA-STSは[RFC8461]で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o DANE Policy: A mechanism by which administrators can use DNSSEC to commit an MTA to support STARTTLS and to publish criteria to be used to validate its presented certificates. DANE for SMTP is defined in [RFC7672], with the base specification defined in [RFC6698] (and updated by [RFC7671]).",
+      "ja": "o DANEポリシー：管理者がDNSSECを使用してMTLSをコミットし、STARTTLSをサポートし、提示された証明書を検証するために使用する基準を公開できるメカニズム。 SMTPのDANEは[RFC7672]で定義され、基本仕様は[RFC6698]で定義されています（および[RFC7671]で更新されています）。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLSRPT (TLS Reporting) Policy: A policy specifying the endpoint to which Sending MTAs should deliver reports.",
+      "ja": "o TLSRPT（TLSレポート）ポリシー：送信MTAがレポートを配信するエンドポイントを指定するポリシー。"
+    },
+    {
+      "indent": 3,
+      "text": "o Policy Domain: The domain against which a TLSRPT, an MTA-STS, or a DANE policy is defined. For TLSRPT and MTA-STS, this is typically the same as the envelope recipient domain [RFC5321], but when mail is routed to a \"smarthost\" gateway by local policy, the \"smarthost\" domain name is used instead. For DANE, the Policy Domain is the \"TLSA base domain\" of the receiving SMTP server as described in Section 2.2.3 of RFC 7672 and Section 3 of RFC 6698.",
+      "ja": "oポリシードメイン：TLSRPT、MTA-STS、またはDANEポリシーが定義されるドメイン。 TLSRPTおよびMTA-STSの場合、これは通常、エンベロープ受信者ドメイン[RFC5321]と同じですが、ローカルポリシーによってメールが「スマートホスト」ゲートウェイにルーティングされる場合、代わりに「スマートホスト」ドメイン名が使用されます。 DANEの場合、RFC 7672のセクション2.2.3およびRFC 6698のセクション3で説明されているように、ポリシードメインは受信SMTPサーバーの「TLSAベースドメイン」です。"
+    },
+    {
+      "indent": 3,
+      "text": "o Sending MTA: The MTA initiating the relay of an email message.",
+      "ja": "o MTAの送信：電子メールメッセージの中継を開始するMTA。"
+    },
+    {
+      "indent": 3,
+      "text": "o Aggregate Report URI (rua): A comma-separated list of locations where the report is to be submitted.",
+      "ja": "o集計レポートURI（rua）：レポートが送信される場所のコンマ区切りリスト。"
+    },
+    {
+      "indent": 3,
+      "text": "o ABNF: Augmented Backus-Naur Form, a syntax for formally specifying syntax, defined in [RFC5234] and [RFC7405].",
+      "ja": "o ABNF：Augmented Backus-Naur Form、[RFC5234]および[RFC7405]で定義されている構文を正式に指定するための構文。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Related Technologies",
+      "section_title": true,
+      "ja": "2.関連テクノロジー"
+    },
+    {
+      "indent": 3,
+      "text": "o This document is intended as a companion to the specification for SMTP MTA-STS [RFC8461].",
+      "ja": "oこの文書は、SMTP MTA-STS [RFC8461]の仕様のコンパニオンとして意図されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o SMTP TLSRPT defines a mechanism for sending domains that are compatible with MTA-STS or DANE to share success and failure statistics with recipient domains. DANE is defined in [RFC6698], and MTA-STS is defined in [RFC8461].",
+      "ja": "o SMTP TLSRPTは、MTA-STSまたはDANEと互換性のあるドメインを送信するメカニズムを定義して、成功および失敗の統計を受信者ドメインと共有します。 DANEは[RFC6698]で定義され、MTA-STSは[RFC8461]で定義されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Reporting Policy",
+      "section_title": true,
+      "ja": "3.報告ポリシー"
+    },
+    {
+      "indent": 3,
+      "text": "A domain publishes a record to its DNS indicating that it wishes to receive reports. These SMTP TLSRPT policies are distributed via DNS from the Policy Domain's zone as TXT records (similar to Domain-based Message Authentication, Reporting, and Conformance (DMARC) policies) under the name \"_smtp._tls\". For example, for the Policy Domain \"example.com\", the recipient's TLSRPT policy can be retrieved from \"_smtp._tls.example.com\".",
+      "ja": "ドメインは、レポートの受信を希望することを示すレコードをDNSに発行します。 これらのSMTP TLSRPTポリシーは、「_ smtp._tls」という名前で、TXTレコード（ドメインベースのメッセージ認証、レポート、および適合（DMARC）ポリシーと同様）として、ポリシードメインのゾーンからDNSを介して配信されます。 たとえば、ポリシードメイン「example.com」の場合、受信者のTLSRPTポリシーは「_smtp._tls.example.com」から取得できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Policies consist of the following directives:",
+      "ja": "ポリシーは、次のディレクティブで構成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"v\": This document defines version 1 of TLSRPT, for which this value MUST be equal to \"TLSRPTv1\". Other versions may be defined in later documents.",
+      "ja": "o「v」：このドキュメントはTLSRPTのバージョン1を定義します。この値は「TLSRPTv1」に等しくなければなりません。 他のバージョンは、後のドキュメントで定義される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"rua\": A URI specifying the endpoint to which aggregate information about policy validation results should be sent (see Section 4, \"Reporting Schema\", for more information). Two URI schemes are supported: \"mailto\" and \"https\". As with DMARC [RFC7489], the Policy Domain can specify a comma-separated list of URIs.",
+      "ja": "o「rua」：ポリシー検証結果に関する集約情報の送信先となるエンドポイントを指定するURI（詳細については、セクション4「レポートスキーマ」を参照）。 2つのURIスキーム「mailto」と「https」がサポートされています。 DMARC [RFC7489]と同様、ポリシードメインはURIのコンマ区切りリストを指定できます。"
+    },
+    {
+      "indent": 3,
+      "text": "o In the case of \"https\", reports should be submitted via POST [RFC7231] to the specified URI. Report submitters MAY ignore certificate validation errors when submitting reports via HTTPS POST.",
+      "ja": "o「https」の場合、レポートはPOST [RFC7231]を介して指定されたURIに送信する必要があります。 レポート送信者は、HTTPS POSTを介してレポートを送信するときに、証明書検証エラーを無視する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o In the case of \"mailto\", reports should be submitted to the specified email address [RFC6068]. When sending failure reports via SMTP, Sending MTAs MUST deliver reports despite any TLS-related failures and SHOULD NOT include this SMTP session in the next report. This may mean that the reports are delivered unencrypted. Reports sent via SMTP MUST contain a valid DomainKeys Identified Mail (DKIM) [RFC6376] signature by the reporting domain. Reports lacking such a signature MUST be ignored by the recipient. DKIM signatures MUST NOT use the \"l=\" attribute to limit the body length used in the signature. This ensures attackers cannot append extraneous or misleading data to a report without breaking the signature. The DKIM TXT record SHOULD contain the appropriate service type declaration, \"s=tlsrpt\". If not present, the receiving system MAY ignore reports lacking that service type.",
+      "ja": "o「mailto」の場合、指定された電子メールアドレスにレポートを提出する必要があります[RFC6068]。 SMTP経由で障害レポートを送信する場合、MTAの送信はTLS関連の障害にもかかわらずレポートを配信する必要があり、このSMTPセッションを次のレポートに含めるべきではありません。 これは、レポートが暗号化されずに配信されることを意味する場合があります。 SMTP経由で送信されるレポートには、レポートドメインによる有効なDomainKeys Identified Mail（DKIM）[RFC6376]署名が含まれている必要があります。 そのような署名がないレポートは、受信者によって無視されなければなりません。 DKIM署名は、署名で使用される本文の長さを制限するために「l =」属性を使用してはなりません。 これにより、攻撃者は、署名を壊さずに無関係なデータや誤解を招くデータをレポートに追加できなくなります。 DKIM TXTレコードには、適切なサービスタイプ宣言「s = tlsrpt」を含める必要があります。 存在しない場合、受信側システムは、そのサービスタイプがないレポートを無視してもよい（MAY）。"
+    },
+    {
+      "indent": 3,
+      "text": "Sample DKIM record:",
+      "ja": "サンプルDKIMレコード："
+    },
+    {
+      "indent": 6,
+      "text": "dkim_selector._domainkey.example.com TXT \"v=DKIM1;k=rsa;s=tlsrpt;p=Mlf4qwSZfase4fa==\"",
+      "ja": "dkim_selector._domainkey.example.com TXT \"v = DKIM1; k = rsa; s = tlsrpt; p = Mlf4qwSZfase4fa ==\""
+    },
+    {
+      "indent": 3,
+      "text": "The formal definition of the \"_smtp._tls\" TXT record, defined using [RFC5234] and [RFC7405], is as follows:",
+      "ja": "[RFC5234]および[RFC7405]を使用して定義された \"_smtp._tls\" TXTレコードの正式な定義は次のとおりです。"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-record     = tlsrpt-version 1*(field-delim tlsrpt-field)\n                    [field-delim]",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "field-delim = *WSP \";\" *WSP",
+      "ja": "field-delim = * WSP \";\" * WSP"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-field = tlsrpt-rua / ; Note that the tlsrpt-extension ; tlsrpt-rua record is ; required.",
+      "ja": "tlsrpt-field = tlsrpt-rua /; tlsrpt-extensionに注意してください。 tlsrpt-ruaレコードは; 必須。"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-version = %s\"v=TLSRPTv1\"",
+      "ja": "tlsrpt-version =％s \"v = TLSRPTv1\""
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-rua = %s\"rua=\" tlsrpt-uri *(*WSP \",\" *WSP tlsrpt-uri)",
+      "ja": "tlsrpt-rua =％s \"rua =\" tlsrpt-uri *（* WSP \"、\" * WSP tlsrpt-uri）"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-uri = URI ; \"URI\" is imported from [RFC3986]; ; commas (ASCII 0x2C), exclamation ; points (ASCII 0x21), and semicolons ; (ASCII 0x3B) MUST be encoded",
+      "ja": "tlsrpt-uri = URI; 「URI」は[RFC3986]からインポートされます。 ; コンマ（ASCII 0x2C）、感嘆符; ポイント（ASCII 0x21）、およびセミコロン; （ASCII 0x3B）エンコードする必要があります"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-extension = tlsrpt-ext-name \"=\" tlsrpt-ext-value",
+      "ja": "tlsrpt-extension = tlsrpt-ext-name \"=\" tlsrpt-ext-value"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-ext-name = (ALPHA / DIGIT) *31(ALPHA / DIGIT / \"_\" / \"-\" / \".\")",
+      "ja": "tlsrpt-ext-name =（ALPHA / DIGIT）* 31（ALPHA / DIGIT / \"_\" / \"-\" / \"。\"）"
+    },
+    {
+      "indent": 8,
+      "text": "tlsrpt-ext-value = 1*(%x21-3A / %x3C / %x3E-7E) ; chars excluding \"=\", \";\", SP, and control ; chars",
+      "ja": "tlsrpt-ext-value = 1 *（％x21-3A /％x3C /％x3E-7E）; 「=」、「;」、SP、およびコントロールを除く文字。 チャー"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple TXT records for \"_smtp._tls\" are returned by the resolver, records that do not begin with \"v=TLSRPTv1;\" are discarded. If the number of resulting records is not one, senders MUST assume the recipient domain does not implement TLSRPT. If the resulting TXT record contains multiple strings (as described in Section 3.3 of [RFC7208]), then the record MUST be treated as if those strings are concatenated without adding spaces.",
+      "ja": "リゾルバーによって「_smtp._tls」の複数のTXTレコードが返される場合、「v = TLSRPTv1;」で始まらないレコード 廃棄されます。 結果のレコードの数が1つでない場合、送信者は受信者ドメインがTLSRPTを実装していないと想定しなければなりません。 結果のTXTレコードに複数の文字列が含まれる場合（[RFC7208]のセクション3.3で説明）、それらの文字列がスペースを追加せずに連結されているかのようにレコードを処理する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The record supports the ability to declare more than one rua, and if there exists more than one, the reporter MAY attempt to deliver to each of the supported rua destinations. A receiver MAY opt to only attempt delivery to one of the endpoints; however, the report SHOULD NOT be considered successfully delivered until one of the endpoints accepts delivery of the report.",
+      "ja": "このレコードは、複数のruaを宣言する機能をサポートします。複数存在する場合、レポーターはサポートされている各rua宛先に配信しようとする場合があります。 受信者は、いずれかのエンドポイントへの配信のみを試みることを選択できます。 ただし、エンドポイントの1つがレポートの配信を受け入れるまで、レポートは正常に配信されたと見なされるべきではありません（SHOULD NOT）。"
+    },
+    {
+      "indent": 3,
+      "text": "Parsers MUST accept TXT records that are syntactically valid (i.e., valid key/value pairs separated by semicolons) and implement a superset of this specification, in which case unknown fields SHALL be ignored.",
+      "ja": "パーサーは、構文的に有効なTXTレコード（つまり、セミコロンで区切られた有効なキー/値のペア）を受け入れ、この仕様のスーパーセットを実装する必要があります。この場合、不明なフィールドは無視されます（SHALL）。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Example Reporting Policy",
+      "section_title": true,
+      "ja": "3.1。 レポートポリシーの例"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. Report Using MAILTO",
+      "section_title": true,
+      "ja": "3.1.1。 MAILTOを使用したレポート"
+    },
+    {
+      "indent": 12,
+      "text": "_smtp._tls.example.com. IN TXT \\\n        \"v=TLSRPTv1;rua=mailto:reports@example.com\"",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "3.1.2. Report Using HTTPS",
+      "section_title": true,
+      "ja": "3.1.2。 HTTPSを使用したレポート"
+    },
+    {
+      "indent": 11,
+      "text": "_smtp._tls.example.com. IN TXT \\\n        \"v=TLSRPTv1; \\\n        rua=https://reporting.example.com/v1/tlsrpt\"",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "4. Reporting Schema",
+      "section_title": true,
+      "ja": "4.レポートスキーマ"
+    },
+    {
+      "indent": 3,
+      "text": "The report is composed as a plaintext file encoded in the Internet JSON (I-JSON) format [RFC7493].",
+      "ja": "レポートは、インターネットJSON（I-JSON）形式[RFC7493]でエンコードされたプレーンテキストファイルとして構成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Aggregate reports contain the following fields:",
+      "ja": "集計レポートには次のフィールドが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Report metadata:",
+      "ja": "oレポートのメタデータ："
+    },
+    {
+      "indent": 6,
+      "text": "* The organization responsible for the report",
+      "ja": "*レポートを担当する組織"
+    },
+    {
+      "indent": 6,
+      "text": "* Contact information for one or more responsible parties for the contents of the report",
+      "ja": "*レポートの内容に関する1つ以上の責任者の連絡先情報"
+    },
+    {
+      "indent": 6,
+      "text": "* A unique identifier for the report",
+      "ja": "*レポートの一意の識別子"
+    },
+    {
+      "indent": 6,
+      "text": "* The reporting date range for the report",
+      "ja": "*レポートのレポート期間"
+    },
+    {
+      "indent": 3,
+      "text": "o Policy, consisting of:",
+      "ja": "o以下で構成されるポリシー："
+    },
+    {
+      "indent": 6,
+      "text": "* One of the following policy types: (1) the MTA-STS Policy applied (as a string), (2) the DANE TLSA record applied (as a string, with each RR entry of the RRset listed and separated by a semicolon), and (3) the literal string \"no-policy-found\", if neither a DANE nor MTA-STS Policy could be found.",
+      "ja": "*次のポリシータイプのいずれか：（1）適用されたMTA-STSポリシー（文字列として）、（2）適用されたDANE TLSAレコード（文字列として、RRsetの各RRエントリがリストされ、セミコロンで区切られている） 、および（3）DANEポリシーもMTA-STSポリシーも見つからなかった場合のリテラル文字列「no-policy-found」。"
+    },
+    {
+      "indent": 6,
+      "text": "* The domain for which the policy is applied",
+      "ja": "*ポリシーが適用されるドメイン"
+    },
+    {
+      "indent": 6,
+      "text": "* The MX host",
+      "ja": "* MXホスト"
+    },
+    {
+      "indent": 3,
+      "text": "o Aggregate counts, comprising result type, Sending MTA IP, receiving MTA hostname, session count, and an optional additional information field containing a URI for recipients to review further information on a failure type.",
+      "ja": "o結果タイプ、MTA IPの送信、MTAホスト名の受信、セッションカウント、および受信者が障害タイプの詳細情報を確認するためのURIを含むオプションの追加情報フィールドで構成される集計カウント。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the failure types are non-exclusive; an aggregate report may contain overlapping \"counts\" of failure types when a single send attempt encountered multiple errors. Reporters may report multiple applied policies (for example, an MTA-STS Policy and a DANE TLSA record for the same domain and MX). Because of this, even in the case where only a single policy was applied, the \"policies\" field of the report body MUST be an array and not a singular value.",
+      "ja": "障害タイプは非排他的であることに注意してください。 集約レポートには、1回の送信試行で複数のエラーが発生した場合に、障害タイプの重複する「カウント」が含まれる場合があります。 レポーターは、複数の適用されたポリシー（たとえば、同じドメインとMXのMTA-STSポリシーとDANE TLSAレコード）を報告する場合があります。 このため、単一のポリシーのみが適用された場合でも、レポート本文の「ポリシー」フィールドは特異値ではなく配列でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of multiple failure types, the \"failure-details\" array would contain multiple entries. Each entry would have its own set of information pertaining to that failure type.",
+      "ja": "複数の障害タイプの場合、「failure-details」配列には複数のエントリが含まれます。 各エントリには、その障害タイプに関する独自の情報セットがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Report Time Frame",
+      "section_title": true,
+      "ja": "4.1。 レポート時間枠"
+    },
+    {
+      "indent": 3,
+      "text": "The report SHOULD cover a full day, from 00:00-24:00 UTC. This should allow for easier correlation of failure events. To avoid unintentionally overloading the system processing the reports, the reports should be delivered after some delay, perhaps several hours.",
+      "ja": "レポートは、UTC 00：00-24：00からの1日をカバーする必要があります。 これにより、障害イベントの相関が容易になります。 レポートを処理するシステムが意図せずに過負荷になるのを避けるため、レポートは、おそらく数時間遅れて配信される必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "As an example, a sending site might want to introduce a random delay of up to four hours:",
+      "ja": "例として、送信サイトは最大4時間のランダムな遅延を導入する場合があります。"
+    },
+    {
+      "indent": 10,
+      "text": "func generate_sleep_delay() {\n  min_delay = 1\n  max_delay = 14400\n  rand = random(min_delay, max_delay)\n  return rand\n}",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "func generate_report(policy_domain) { do_rpt_work(policy_domain) send_rpt(policy_domain) }",
+      "ja": "func generate_report（policy_domain）{do_rpt_work（policy_domain）send_rpt（policy_domain）}"
+    },
+    {
+      "indent": 10,
+      "text": "func generate_tlsrpt() { sleep(generate_sleep_delay()) for policy_domain in list_of_tlsrpt_enabled_domains { generate_report(policy_domain) } }",
+      "ja": "func generate_tlsrpt（）{list_of_tlsrpt_enabled_domainsのpolicy_domainのsleep（generate_sleep_delay（））{generate_report（policy_domain）}}"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Delivery Summary",
+      "section_title": true,
+      "ja": "4.2。 配信の概要"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. Success Count",
+      "section_title": true,
+      "ja": "4.2.1。 成功回数"
+    },
+    {
+      "indent": 3,
+      "text": "o \"total-successful-session-count\": This indicates that the Sending MTA was able to successfully negotiate a policy-compliant TLS connection and serves to provide a \"heartbeat\" to receiving domains that signifies reporting is functional and tabulating correctly. This field contains an aggregate count of successful connections for the reporting system.",
+      "ja": "o \"total-successful-session-count\"：これは、送信側MTAがポリシーに準拠したTLS接続を正常にネゴシエートでき、レポートが機能し、正しく集計されていることを示す受信ドメインに「ハートビート」を提供することを示します。 このフィールドには、レポートシステムの成功した接続の総数が含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.2. Failure Count",
+      "section_title": true,
+      "ja": "4.2.2。 失敗回数"
+    },
+    {
+      "indent": 3,
+      "text": "o \"total-failure-session-count\": This indicates that the Sending MTA was unable to successfully establish a connection with the receiving platform. Section 4.3, \"Result Types\", will elaborate on the failed negotiation attempts. This field contains an aggregate count of failed connections.",
+      "ja": "o \"total-failure-session-count\"：これは、送信側MTAが受信側プラットフォームとの接続を正常に確立できなかったことを示します。 4.3項「結果タイプ」では、失敗したネゴシエーションの試行について詳しく説明します。 このフィールドには、失敗した接続の総数が含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Result Types",
+      "section_title": true,
+      "ja": "4.3。 結果タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "The list of result types will start with the minimal set below and is expected to grow over time based on real-world experience. The initial set is outlined in Sections 4.3.1 to 4.3.4:",
+      "ja": "結果タイプのリストは、以下の最小限のセットから始まり、実際の経験に基づいて時間とともに成長することが予想されます。 初期セットの概要は、セクション4.3.1〜4.3.4にあります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1. Negotiation Failures",
+      "section_title": true,
+      "ja": "4.3.1。 交渉の失敗"
+    },
+    {
+      "indent": 3,
+      "text": "o \"starttls-not-supported\": This indicates that the recipient MX did not support STARTTLS.",
+      "ja": "o「starttls-not-supported」：これは、受信者MXがSTARTTLSをサポートしなかったことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"certificate-host-mismatch\": This indicates that the certificate presented did not adhere to the constraints specified in the MTA-STS or DANE policy, e.g., if the MX hostname does not match any identities listed in the subject alternative name (SAN) [RFC5280].",
+      "ja": "o「certificate-host-mismatch」：これは、提示された証明書がMTA-STSまたはDANEポリシーで指定された制約を遵守しなかったことを示します。たとえば、MXホスト名がサブジェクトの別名（SAN ）[RFC5280]。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"certificate-expired\": This indicates that the certificate has expired.",
+      "ja": "o \"certificate-expired\"：これは、証明書の有効期限が切れたことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"certificate-not-trusted\": This is a label that covers multiple certificate-related failures that include, but are not limited to, errors such as untrusted/unknown certification authorities (CAs), certificate name constraints, certificate chain errors, etc. When using this declaration, the reporting MTA SHOULD utilize the \"failure-reason-code\" to provide more information to the receiving entity.",
+      "ja": "o「certificate-not-trusted」：これは、信頼できない/不明な証明機関（CA）、証明書名の制約、証明書チェーンエラーなどのエラーを含むがこれらに限定されない複数の証明書関連の障害をカバーするラベルです。 。この宣言を使用する場合、レポートするMTAは「failure-reason-code」を使用して、受信側エンティティに詳細情報を提供する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"validation-failure\": This indicates a general failure for a reason not matching a category above. When using this declaration, the reporting MTA SHOULD utilize the \"failure-reason-code\" to provide more information to the receiving entity.",
+      "ja": "o \"validation-failure\"：これは、上記のカテゴリに一致しない理由で一般的な失敗を示します。 この宣言を使用する場合、レポートするMTAは、「failure-reason-code」を利用して、受信側エンティティにより多くの情報を提供する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2. Policy Failures",
+      "section_title": true,
+      "ja": "4.3.2。 ポリシーの失敗"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2.1. DANE-Specific Policy Failures",
+      "section_title": true,
+      "ja": "4.3.2.1。 DANE固有のポリシーの失敗"
+    },
+    {
+      "indent": 3,
+      "text": "o \"tlsa-invalid\": This indicates a validation error in the TLSA record associated with a DANE policy. None of the records in the RRset were found to be valid.",
+      "ja": "o「tlsa-invalid」：これは、DANEポリシーに関連付けられたTLSAレコードの検証エラーを示します。 RRset内のどのレコードも有効ではありませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"dnssec-invalid\": This indicates that no valid records were returned from the recursive resolver.",
+      "ja": "o \"dnssec-invalid\"：これは、再帰的なリゾルバーから有効なレコードが返されなかったことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"dane-required\": This indicates that the sending system is configured to require DANE TLSA records for all the MX hosts of the destination domain, but no DNSSEC-validated TLSA records were present for the MX host that is the subject of the report. Mandatory DANE for SMTP is described in Section 6 of [RFC7672]. Such policies may be created by mutual agreement between two organizations that frequently exchange sensitive content via email.",
+      "ja": "o \"dane-required\"：これは、送信側システムが宛先ドメインのすべてのMXホストに対してDANE TLSAレコードを要求するように構成されているが、レポートの対象であるMXホストに対してDNSSEC検証済みTLSAレコードが存在しないことを示します 。 SMTPの必須DANEは、[RFC7672]のセクション6で説明されています。 そのようなポリシーは、電子メールを介して機密コンテンツを頻繁に交換する2つの組織間の相互合意によって作成される場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2.2. MTA-STS-specific Policy Failures",
+      "section_title": true,
+      "ja": "4.3.2.2。 MTA-STS固有のポリシーエラー"
+    },
+    {
+      "indent": 3,
+      "text": "o \"sts-policy-fetch-error\": This indicates a failure to retrieve an MTA-STS policy, for example, because the policy host is unreachable.",
+      "ja": "o \"sts-policy-fetch-error\"：これは、たとえば、ポリシーホストに到達できないため、MTA-STSポリシーの取得に失敗したことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"sts-policy-invalid\": This indicates a validation error for the overall MTA-STS Policy.",
+      "ja": "o「sts-policy-invalid」：これは、MTA-STSポリシー全体の検証エラーを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"sts-webpki-invalid\": This indicates that the MTA-STS Policy could not be authenticated using PKIX validation.",
+      "ja": "o \"sts-webpki-invalid\"：これは、PKIX検証を使用してMTA-STSポリシーを認証できなかったことを示します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.3. General Failures",
+      "section_title": true,
+      "ja": "4.3.3。 一般的な失敗"
+    },
+    {
+      "indent": 3,
+      "text": "When a negotiation failure cannot be categorized into one of the \"Negotiation Failures\" stated above, the reporter SHOULD use the \"validation-failure\" category. As TLS grows and becomes more complex, new mechanisms may not be easily categorized. This allows for a generic feedback category. When this category is used, the reporter SHOULD also use \"failure-reason-code\" to give some feedback to the receiving entity. This is intended to be a short text field, and the contents of the field should be an error code or error text, such as \"X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION\".",
+      "ja": "ネゴシエーションの失敗を上記の「ネゴシエーションの失敗」のいずれかに分類できない場合、レポーターは「検証失敗」カテゴリを使用する必要があります。 TLSが成長し、より複雑になると、新しいメカニズムを簡単に分類できない場合があります。 これにより、一般的なフィードバックカテゴリが可能になります。 このカテゴリを使用する場合、レポーターは「failure-reason-code」も使用して、受信エンティティにフィードバックを提供する必要があります。 これは短いテキストフィールドを対象としています。フィールドの内容は、「X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION」などのエラーコードまたはエラーテキストである必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.4. Transient Failures",
+      "section_title": true,
+      "ja": "4.3.4。 一時的な障害"
+    },
+    {
+      "indent": 3,
+      "text": "Transient errors due to too-busy networks, TCP timeouts, etc., are not required to be reported.",
+      "ja": "ネットワークの混雑、TCPタイムアウトなどによる一時的なエラーは、報告する必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. JSON Report Schema",
+      "section_title": true,
+      "ja": "4.4。 JSONレポートスキーマ"
+    },
+    {
+      "indent": 3,
+      "text": "The JSON schema is derived from the HTTP Public Key Pinning (HPKP) JSON schema; see Section 3 of [RFC7469].",
+      "ja": "JSONスキーマは、HTTP公開キー固定（HPKP）JSONスキーマから派生しています。 [RFC7469]のセクション3を参照してください。"
+    },
+    {
+      "indent": 1,
+      "text": "{\n  \"organization-name\": organization-name,\n  \"date-range\": {\n    \"start-datetime\": date-time,\n    \"end-datetime\": date-time\n  },\n  \"contact-info\": email-address,\n  \"report-id\": report-id,\n  \"policies\": [{\n    \"policy\": {\n      \"policy-type\": policy-type,\n      \"policy-string\": policy-string,\n      \"policy-domain\": domain,\n      \"mx-host\": mx-host-pattern\n    },\n    \"summary\": {\n      \"total-successful-session-count\": total-successful-session-count,\n      \"total-failure-session-count\": total-failure-session-count\n    },\n    \"failure-details\": [\n      {\n        \"result-type\": result-type,\n        \"sending-mta-ip\": ip-address,\n        \"receiving-mx-hostname\": receiving-mx-hostname,\n        \"receiving-mx-helo\": receiving-mx-helo,\n        \"receiving-ip\": receiving-ip,\n        \"failed-session-count\": failed-session-count,\n        \"additional-information\": additional-info-uri,\n        \"failure-reason-code\": failure-reason-code\n        }\n      ]\n    }\n  ]\n}",
+      "raw": true
+    },
+    {
+      "indent": 28,
+      "text": "JSON Report Format",
+      "ja": "JSONレポート形式"
+    },
+    {
+      "indent": 3,
+      "text": "o \"organization-name\": The name of the organization responsible for the report. It is provided as a string.",
+      "ja": "o \"organization-name\"：レポートを担当する組織の名前。 文字列として提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"date-time\": The date-time indicates the start and end times for the report range. It is provided as a string formatted according to \"Internet Date/Time Format\", Section 5.6 of [RFC3339]. The report should be for a full UTC day, 00:00-24:00.",
+      "ja": "o「日時」：日時は、レポート範囲の開始時刻と終了時刻を示します。 [インターネット日付/時刻形式]、[RFC3339]のセクション5.6に従ってフォーマットされた文字列として提供されます。 レポートは、UTCの完全な日、00：00-24：00のものである必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"email-address\": The contact information for the party responsible for the report. It is provided as a string formatted according to \"Addr-Spec Specification\", Section 3.4.1 of [RFC5322].",
+      "ja": "o \"email-address\"：レポートの責任者の連絡先情報。 [Addr-Spec Specification]、[RFC5322]のセクション3.4.1に従ってフォーマットされた文字列として提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"report-id\": A unique identifier for the report. Report authors may use whatever scheme they prefer to generate a unique identifier. It is provided as a string.",
+      "ja": "o \"report-id\"：レポートの一意の識別子。 レポート作成者は、一意の識別子を生成するために好きなスキームを使用できます。 文字列として提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"policy-type\": The type of policy that was applied by the sending domain. Presently, the only three valid choices are \"tlsa\", \"sts\", and the literal string \"no-policy-found\". It is provided as a string.",
+      "ja": "o \"policy-type\"：送信ドメインによって適用されたポリシーのタイプ。 現在、有効な選択肢は「tlsa」、「sts」、およびリテラル文字列「no-policy-found」の3つのみです。 文字列として提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"policy-string\": An encoding of the applied policy as a JSON array of strings, whether it's a TLSA record ([RFC6698], Section 2.3) or an MTA-STS Policy. Examples follow in the next section.",
+      "ja": "o \"policy-string\"：TLSAレコード（[RFC6698]、セクション2.3）かMTA-STSポリシーかにかかわらず、適用されたポリシーの文字列のJSON配列としてのエンコード。 次のセクションで例を示します。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"domain\": The Policy Domain against which the MTA-STS or DANE policy is defined. In the case of Internationalized Domain Names [RFC5891], the domain MUST consist of the Punycode-encoded A-labels [RFC3492] and not the U-labels.",
+      "ja": "o「ドメイン」：MTA-STSまたはDANEポリシーが定義されるポリシードメイン。 国際化ドメイン名[RFC5891]の場合、ドメインはPunycodeでエンコードされたAラベル[RFC3492]で構成されなければならず、Uラベルではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"mx-host-pattern\": In the case where \"policy-type\" is \"sts\", it's the pattern of MX hostnames from the applied policy. It is provided as a JSON array of strings and is interpreted in the same manner as the rules in \"MX Host Validation\"; see Section 4.1 of [RFC8461]. In the case of Internationalized Domain Names [RFC5891], the domain MUST consist of the Punycode-encoded A-labels [RFC3492] and not the U-labels.",
+      "ja": "o「mx-host-pattern」：「policy-type」が「sts」の場合、適用されたポリシーのMXホスト名のパターンです。 文字列のJSON配列として提供され、「MXホスト検証」のルールと同じ方法で解釈されます。 [RFC8461]のセクション4.1を参照してください。 国際化ドメイン名[RFC5891]の場合、ドメインはPunycodeでエンコードされたAラベル[RFC3492]で構成されなければならず、Uラベルではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"result-type\": A value from Section 4.3, \"Result Types\", above.",
+      "ja": "o \"result-type\"：セクション4.3、「結果タイプ」の値。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"ip-address\": The IP address of the Sending MTA that attempted the STARTTLS connection. It is provided as a string representation of an IPv4 (see below) or IPv6 [RFC5952] address in dot-decimal or colon-hexadecimal notation.",
+      "ja": "o「ip-address」：STARTTLS接続を試行した送信側MTAのIPアドレス。 IPv4（下記参照）またはIPv6 [RFC5952]アドレスの文字列表現として、ドット10進表記またはコロン16進表記で提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"receiving-mx-hostname\": The hostname of the receiving MTA MX record with which the Sending MTA attempted to negotiate a STARTTLS connection.",
+      "ja": "o「receive-mx-hostname」：送信側MTAがSTARTTLS接続をネゴシエートしようとした受信側MTA MXレコードのホスト名。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"receiving-mx-helo\" (optional): The HELLO (HELO) or Extended HELLO (EHLO) string from the banner announced during the reported session.",
+      "ja": "o \"receive-mx-helo\"（オプション）：報告されたセッション中にアナウンスされたバナーからのHELLO（HELO）またはExtended HELLO（EHLO）文字列。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"receiving-ip\": The destination IP address that was used when creating the outbound session. It is provided as a string representation of an IPv4 (see below) or IPv6 [RFC5952] address in dot-decimal or colon-hexadecimal notation.",
+      "ja": "o「receive-ip」：アウトバウンドセッションの作成時に使用された宛先IPアドレス。 IPv4（下記参照）またはIPv6 [RFC5952]アドレスの文字列表現として、ドット10進表記またはコロン16進表記で提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"total-successful-session-count\": The aggregate count (an integer, encoded as a JSON number) of successfully negotiated TLS-enabled connections to the receiving site.",
+      "ja": "o \"total-successful-session-count\"：受信サイトへの正常にネゴシエートされたTLS対応接続の集計カウント（整数、JSON番号としてエンコード）。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"total-failure-session-count\": The aggregate count (an integer, encoded as a JSON number) of failures to negotiate a TLS-enabled connection to the receiving site.",
+      "ja": "o「total-failure-session-count」：受信サイトへのTLS対応接続のネゴシエーションに失敗した集約カウント（JSON番号としてエンコードされた整数）。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"failed-session-count\": The number of (attempted) sessions that match the relevant \"result-type\" for this section (an integer, encoded as a JSON number).",
+      "ja": "o「failed-session-count」：このセクションに関連する「result-type」に一致する（試行された）セッションの数（JSON番号としてエンコードされた整数）。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"additional-info-uri\" (optional): A URI [RFC3986] that points to additional information around the relevant \"result-type\". For example, this URI might host the complete certificate chain presented during an attempted STARTTLS session.",
+      "ja": "o \"additional-info-uri\"（オプション）：関連する \"result-type\"に関する追加情報を指すURI [RFC3986]。 たとえば、このURIは、試行されたSTARTTLSセッション中に提示された完全な証明書チェーンをホストできます。"
+    },
+    {
+      "indent": 3,
+      "text": "o \"failure-reason-code\": A text field to include a TLS-related error code or error message.",
+      "ja": "o \"failure-reason-code\"：TLS関連のエラーコードまたはエラーメッセージを含むテキストフィールド。"
+    },
+    {
+      "indent": 3,
+      "text": "For report purposes, an IPv4 address is defined via the following ABNF:",
+      "ja": "レポート目的で、IPv4アドレスは次のABNFを介して定義されます。"
+    },
+    {
+      "indent": 5,
+      "text": "IPv4address = dec-octet \".\" dec-octet \".\" dec-octet \".\" dec-octet dec-octet = DIGIT ; 0-9 / %x31-39 DIGIT ; 10-99 / \"1\" 2DIGIT ; 100-199 / \"2\" %x30-34 DIGIT ; 200-249 / \"25\" %x30-35 ; 250-255",
+      "ja": "IPv4address = dec-octet \"。\" 12進数の「。」 12進数の「。」 dec-octet dec-octet = DIGIT; 0-9 /％x31-39 DIGIT; 10-99 / \"1\" 2DIGIT; 100-199 / \"2\"％x30-34 DIGIT; 200-249 / \"25\"％x30-35; 250〜255"
+    },
+    {
+      "indent": 3,
+      "text": "And an IPv6 address is defined via the following ABNF:",
+      "ja": "また、IPv6アドレスは次のABNFを介して定義されます。"
+    },
+    {
+      "indent": 5,
+      "text": "IPv6address = <as defined in [RFC5954]>",
+      "ja": "IPv6address = <[RFC5954]で定義されているとおり>"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Policy Samples",
+      "section_title": true,
+      "ja": "4.5。 ポリシーのサンプル"
+    },
+    {
+      "indent": 3,
+      "text": "Part of the report body includes the policy that is applied when attempting relay to the destination.",
+      "ja": "レポート本文の一部には、宛先への中継を試行するときに適用されるポリシーが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "For DANE TLSA policies, this is a JSON array of strings each representing the RDATA of a single TLSA resource record as a space-separated list of its four TLSA fields; the fields are in presentation format (defined in [RFC6698], Section 2.2) with no internal spaces or grouping parentheses:",
+      "ja": "DANE TLSAポリシーの場合、これは単一のTLSAリソースレコードのRDATAを4つのTLSAフィールドのスペース区切りリストとしてそれぞれ表すストリングのJSON配列です。 フィールドはプレゼンテーション形式（[RFC6698]、セクション2.2で定義）であり、内部スペースやグループ化括弧はありません。"
+    },
+    {
+      "indent": 7,
+      "text": "[\n\"3 0 1 1F850A337E6DB9C609C522D136A475638CC43E1ED424F8EEC8513\n       D747D1D085D\",\n\"3 0 1 12350A337E6DB9C6123522D136A475638CC43E1ED424F8EEC8513\n       D747D1D1234\"\n]",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "For MTA-STS policies, this is an array of JSON strings that represents the policy that is declared by the receiving site, including any errors that may be present. Note that where there are multiple \"mx\" values, they must be listed as separate \"mx\" elements in the policy array rather than as a single nested \"mx\" sub-array.",
+      "ja": "MTA-STSポリシーの場合、これは、存在する可能性のあるエラーを含め、受信サイトによって宣言されたポリシーを表すJSON文字列の配列です。 複数の「mx」値がある場合、それらは単一のネストされた「mx」サブ配列としてではなく、ポリシー配列内の個別の「mx」要素としてリストする必要があることに注意してください。"
+    },
+    {
+      "indent": 23,
+      "text": "[\n\"version: STSv1\",\n\"mode: testing\",\n\"mx: mx1.example.com\",\n\"mx: mx2.example.com\",\n\"mx: mx.backup-example.com\",\n\"max_age: 604800\"\n]",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "5. Report Delivery",
+      "section_title": true,
+      "ja": "5.レポート配信"
+    },
+    {
+      "indent": 3,
+      "text": "Reports can be delivered either via SMTP (as an email message) or via HTTP POST.",
+      "ja": "レポートは、SMTP（電子メールメッセージとして）またはHTTP POSTを介して配信できます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Report Filename",
+      "section_title": true,
+      "ja": "5.1。 レポートファイル名"
+    },
+    {
+      "indent": 3,
+      "text": "The filename is RECOMMENDED to be constructed using the following ABNF:",
+      "ja": "ファイル名は、次のABNFを使用して作成することをお勧めします。"
+    },
+    {
+      "indent": 4,
+      "text": "filename = sender \"!\" policy-domain \"!\" begin-timestamp \"!\" end-timestamp [ \"!\" unique-id ] \".\" extension",
+      "ja": "ファイル名=送信者 \"！\" ポリシードメイン「！」 開始タイムスタンプ「！」 終了タイムスタンプ[\"！\" 一意のID ] \"。\" 拡張"
+    },
+    {
+      "indent": 4,
+      "text": "unique-id = 1*(ALPHA / DIGIT)",
+      "ja": "unique-id = 1 *（ALPHA / DIGIT）"
+    },
+    {
+      "indent": 4,
+      "text": "sender = domain ; from [RFC5321] -- this is used ; as the domain for the `contact-info` ; address in the report body. ; In the case of Internationalized Domain ; Names [RFC5891], the domain MUST consist of ; the Punycode-encoded A-labels [RFC3492] and ; not the U-labels.",
+      "ja": "送信者=ドメイン; [RFC5321]から-これが使用されます。 `contact-info`のドメインとして; レポート本文のアドレス。 ; 国際化ドメインの場合; 名前[RFC5891]、ドメインは以下で構成されなければなりません（MUST）。 PunycodeでエンコードされたAラベル[RFC3492]および; Uラベルではありません。"
+    },
+    {
+      "indent": 4,
+      "text": "policy-domain = domain ; In the case of Internationalized Domain ; Names [RFC5891], the domain MUST consist of ; the Punycode-encoded A-labels [RFC3492] and ; not the U-labels.",
+      "ja": "ポリシードメイン=ドメイン; 国際化ドメインの場合; 名前[RFC5891]、ドメインは以下で構成されなければなりません（MUST）。 PunycodeでエンコードされたAラベル[RFC3492]および; Uラベルではありません。"
+    },
+    {
+      "indent": 4,
+      "text": "begin-timestamp = 1*DIGIT ; seconds since 00:00:00 UTC January 1, 1970 ; indicating start of the time range contained ; in the report",
+      "ja": "begin-timestamp = 1 * DIGIT; UTC 1970年1月1日00:00:00からの秒数。 含まれる時間範囲の開始を示す。 レポートで"
+    },
+    {
+      "indent": 4,
+      "text": "end-timestamp = 1*DIGIT ; seconds since 00:00:00 UTC January 1, 1970 ; indicating end of the time range contained ; in the report",
+      "ja": "end-timestamp = 1 * DIGIT; UTC 1970年1月1日00:00:00からの秒数。 含まれる時間範囲の終了を示す。 レポートで"
+    },
+    {
+      "indent": 4,
+      "text": "extension = \"json\" / \"json.gz\"",
+      "ja": "拡張子= \"json\" / \"json.gz\""
+    },
+    {
+      "indent": 3,
+      "text": "The extension MUST be \"json\" for a plain JSON file or \"json.gz\" for a JSON file compressed using gzip.",
+      "ja": "拡張子は、プレーンなJSONファイルの場合は「json」、gzipを使用して圧縮されたJSONファイルの場合は「json.gz」でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "\"unique-id\" allows an optional unique ID generated by the Sending MTA to distinguish among multiple reports generated simultaneously by different sources for the same Policy Domain. For example, this is a possible filename for a compressed report to the Policy Domain \"example.net\" from the Sending MTA \"mail.sndr.example.com\":",
+      "ja": "「unique-id」を使用すると、送信側MTAによって生成されるオプションの一意のIDにより、同じポリシードメインの異なるソースによって同時に生成される複数のレポートを区別できます。 たとえば、これは、送信側MTA \"mail.sndr.example.com\"からポリシードメイン \"example.net\"への圧縮レポートに使用できるファイル名です。"
+    },
+    {
+      "indent": 3,
+      "text": "\"mail.sndr.example.com!example.net!1470013207!1470186007!001.json.gz\"",
+      "ja": "「mail.sndr.example.com！example.net！1470013207！1470186007！001.json.gz」"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Compression",
+      "section_title": true,
+      "ja": "5.2。 圧縮"
+    },
+    {
+      "indent": 3,
+      "text": "The report SHOULD be subjected to gzip [RFC1952] compression for both email and HTTPS transport. Declining to apply compression can cause the report to be too large for a receiver to process (a commonly observed receiver limit is ten megabytes); compressing the file increases the chances of acceptance of the report at some computational cost.",
+      "ja": "レポートは、電子メールとHTTPSの両方のトランスポートに対してgzip [RFC1952]圧縮の対象とすべきです（SHOULD）。 圧縮の適用を拒否すると、受信者が処理するにはレポートが大きすぎる可能性があります（一般的に観察される受信者の制限は10メガバイトです）。 ファイルを圧縮すると、ある程度の計算コストでレポートが受け入れられる可能性が高くなります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Email Transport",
+      "section_title": true,
+      "ja": "5.3。 メール転送"
+    },
+    {
+      "indent": 3,
+      "text": "The report MAY be delivered by email. To make the reports machine-parsable for the receivers, we define a top-level media type \"multipart/report\" with a new parameter \"report-type=\"tlsrpt\"\". Inside it, there are two parts: The first part is human readable, typically \"text/plain\", and the second part is machine readable with a new media type defined called \"application/tlsrpt+json\". If compressed, the report should use the media type \"application/ tlsrpt+gzip\".",
+      "ja": "レポートは電子メールで配信される場合があります。 受信者に対してレポートを機械で解析できるようにするために、新しいパラメーター「report-type = \"tlsrpt\"」でトップレベルのメディアタイプ「multipart / report」を定義します。 その中には、2つの部分があります。最初の部分は人間が読める、通常は「テキスト/プレーン」で、2番目の部分は「application / tlsrpt + json」と呼ばれる新しいメディアタイプで機械可読です。 圧縮されている場合、レポートはメディアタイプ「application / tlsrpt + gzip」を使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, the following two new top-level message header fields are defined:",
+      "ja": "さらに、次の2つの新しいトップレベルメッセージヘッダーフィールドが定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "\"TLS-Report-Domain: Receiver-Domain\"",
+      "ja": "「TLSレポートドメイン：受信者ドメイン」"
+    },
+    {
+      "indent": 3,
+      "text": "\"TLS-Report-Submitter: Sender-Domain\"",
+      "ja": "「TLS-Report-Submitter：送信者ドメイン」"
+    },
+    {
+      "indent": 3,
+      "text": "The \"TLS-Report-Submitter\" value MUST match the value found in the domain [RFC5321] of the \"contact-info\" from the report body. These message header fields MUST be included and should allow for easy searching for all reports submitted by a reporting domain or a particular submitter, for example, in IMAP [RFC3501]:",
+      "ja": "「TLS-Report-Submitter」値は、レポート本文の「contact-info」のドメイン[RFC5321]で見つかった値と一致しなければなりません。 これらのメッセージヘッダーフィールドを含める必要があり、たとえば、IMAP [RFC3501]のレポートドメインまたは特定の送信者によって送信されたすべてのレポートを簡単に検索できるようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "\"s SEARCH HEADER \"TLS-Report-Domain\" \"example.com\"\"",
+      "ja": "「s SEARCH HEADER \"TLS-Report-Domain\" \"example.com\" \""
+    },
+    {
+      "indent": 3,
+      "text": "It is presumed that the aggregate reporting address will be equipped to process new message header fields and extract MIME parts with the prescribed media type and filename, and ignore the rest. These additional headers SHOULD be included in the DKIM [RFC6376] signature for the message.",
+      "ja": "集約レポートアドレスは、新しいメッセージヘッダーフィールドを処理し、規定のメディアタイプとファイル名でMIME部分を抽出し、残りを無視するために装備されると想定されます。 これらの追加ヘッダーは、メッセージのDKIM [RFC6376]署名に含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The RFC5322.Subject field for report submissions SHOULD conform to the following ABNF:",
+      "ja": "レポート送信のRFC5322.Subjectフィールドは、次のABNFに準拠する必要があります。"
+    },
+    {
+      "indent": 7,
+      "text": "tlsrpt-subject = %s\"Report\" FWS               ; \"Report\"\n                 %s\"Domain:\" FWS              ; \"Domain:\"\n                 domain-name FWS              ; per [RFC6376]\n                 %s\"Submitter:\" FWS           ; \"Submitter:\"\n                 domain-name FWS              ; per [RFC6376]\n                 %s\"Report-ID:\" FWS           ; \"Report-ID:\n                 \"<\" id-left \"@\" id-right \">\" ; per [RFC5322]\n                 [CFWS]                       ; per [RFC5322]\n                                              ; (as with FWS)",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The first domain-name indicates the DNS domain name about which the report was generated. The second domain-name indicates the DNS domain name representing the Sending MTA generating the report. The purpose of the \"Report-ID:\" portion of the field is to enable the Policy Domain to identify and ignore duplicate reports that might be sent by a Sending MTA.",
+      "ja": "最初のドメイン名は、レポートが生成されたDNSドメイン名を示します。 2番目のドメイン名は、レポートを生成する送信側MTAを表すDNSドメイン名を示します。 フィールドの「レポートID：」部分の目的は、ポリシードメインが送信側MTAによって送信される可能性のある重複レポートを識別および無視できるようにすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "For instance, this is a possible Subject field for a report to the Policy Domain \"example.net\" from the Sending MTA \"mail.sender.example.com\". It is line-wrapped as allowed by [RFC5322]:",
+      "ja": "たとえば、これは、送信側MTA \"mail.sender.example.com\"からポリシードメイン \"example.net\"へのレポートの可能なサブジェクトフィールドです。 [RFC5322]で許可されているように、行が折り返されています。"
+    },
+    {
+      "indent": 14,
+      "text": "Subject: Report Domain: example.net\n    Submitter: mail.sender.example.com\n    Report-ID: <735ff.e317+bf22029@mailexample.net>",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "5.3.1. Example Report",
+      "section_title": true,
+      "ja": "5.3.1。 サンプルレポート"
+    },
+    {
+      "indent": 6,
+      "text": "From: tlsrpt@mail.sender.example.com\n    Date: Fri, May 09 2017 16:54:30 -0800\n    To: mts-sts-tlsrpt@example.net\n    Subject: Report Domain: example.net\n        Submitter: mail.sender.example.com\n        Report-ID: <735ff.e317+bf22029@example.net>\n    TLS-Report-Domain: example.net\n    TLS-Report-Submitter: mail.sender.example.com\n    MIME-Version: 1.0\n    Content-Type: multipart/report; report-type=\"tlsrpt\";\n        boundary=\"----=_NextPart_000_024E_01CC9B0A.AFE54C00\"\n    Content-Language: en-us",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "This is a multipart message in MIME format.",
+      "ja": "これは、MIME形式のマルチパートメッセージです。"
+    },
+    {
+      "indent": 10,
+      "text": "------=_NextPart_000_024E_01CC9B0A.AFE54C00\nContent-Type: text/plain; charset=\"us-ascii\"\nContent-Transfer-Encoding: 7bit",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "This is an aggregate TLS report from mail.sender.example.com",
+      "ja": "これは、mail.sender.example.comからの集約TLSレポートです"
+    },
+    {
+      "indent": 10,
+      "text": "------=_NextPart_000_024E_01CC9B0A.AFE54C00\nContent-Type: application/tlsrpt+gzip\nContent-Transfer-Encoding: base64\nContent-Disposition: attachment;\n    filename=\"mail.sender.example!example.com!\n              1013662812!1013749130.json.gz\"",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "<gzipped content of report>",
+      "ja": "<レポートのgzip圧縮されたコンテンツ>"
+    },
+    {
+      "indent": 5,
+      "text": "------=_NextPart_000_024E_01CC9B0A.AFE54C00--\n...",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that, when sending failure reports via SMTP, Sending MTAs MUST NOT honor MTA-STS or DANE TLSA failures.",
+      "ja": "SMTP経由で障害レポートを送信する場合、MTAの送信はMTA-STSまたはDANE TLSAの障害を尊重してはならないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. HTTPS Transport",
+      "section_title": true,
+      "ja": "5.4。 HTTPSトランスポート"
+    },
+    {
+      "indent": 3,
+      "text": "The report MAY be delivered by POST to HTTPS. If compressed, the report SHOULD use the media type \"application/tlsrpt+gzip\"; otherwise it SHOULD use the media type \"application/tlsrpt+json\" (see Section 6, \"IANA Considerations\").",
+      "ja": "レポートは、POSTによってHTTPSに配信される場合があります。 圧縮されている場合、レポートはメディアタイプ「application / tlsrpt + gzip」を使用する必要があります。 それ以外の場合は、メディアタイプ「application / tlsrpt + json」を使用する必要があります（セクション6「IANAの考慮事項」を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "The receiving system MUST return a \"successful\" response from its HTTPS server, typically a 200 or 201 HTTP code [RFC7231]. Other codes could indicate a delivery failure and may be retried as per local sender policy. The receiving system is not expected to process reports at receipt time and MAY store them for processing at a later time.",
+      "ja": "受信システムは、HTTPSサーバーから「成功した」応答、通常は200または201 HTTPコード[RFC7231]を返さなければなりません。 他のコードは配信エラーを示し、ローカル送信者ポリシーに従って再試行される場合があります。 受信システムは、受信時にレポートを処理することは期待されておらず、後で処理するためにそれらを保存することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5. Delivery Retry",
+      "section_title": true,
+      "ja": "5.5。 配送の再試行"
+    },
+    {
+      "indent": 3,
+      "text": "In the event of a delivery failure, regardless of the delivery method, a sender SHOULD attempt redelivery for up to 24 hours after the initial attempt. As previously stated, the reports are optional, so while it is ideal to attempt redelivery, it is not required. If multiple retries are attempted, ideally they SHOULD be done with exponential backoff.",
+      "ja": "配信が失敗した場合、配信方法に関係なく、送信者は最初の試行から最大24時間再配信を試行する必要があります。 前述のように、レポートはオプションであるため、再配信を試みることが理想的ですが、必須ではありません。 複数の再試行が試行される場合、理想的には、指数関数的なバックオフを使用して実行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.6. Metadata Variances",
+      "section_title": true,
+      "ja": "5.6。 メタデータの差異"
+    },
+    {
+      "indent": 3,
+      "text": "As stated above, there are a variable number of ways to declare information about the data therein. If any of the items declared via subject or filename disagree with the report, the report MUST be considered the authoritative source.",
+      "ja": "上記のように、その中のデータに関する情報を宣言する方法はさまざまです。 件名またはファイル名を介して宣言されたアイテムのいずれかがレポートと一致しない場合、レポートは信頼できるソースと見なされなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The following are the IANA considerations discussed in this document.",
+      "ja": "以下は、このドキュメントで説明されているIANAの考慮事項です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Message Headers",
+      "section_title": true,
+      "ja": "6.1。 メッセージヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Below is the Internet Assigned Numbers Authority (IANA) Permanent Message Header Field registration information per [RFC3864].",
+      "ja": "以下は、インターネット割当番号局（IANA）パーマネントメッセージヘッダーフィールドの登録情報です[RFC3864]。"
+    },
+    {
+      "indent": 13,
+      "text": "Header field name:           TLS-Report-Domain\nApplicable protocol:         mail\nStatus:                      standard\nAuthor/Change controller:    IETF\nSpecification document(s):   RFC 8460",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Header field name: TLS-Report-Submitter Applicable protocol: mail Status: standard Author/Change controller: IETF Specification document(s): RFC 8460",
+      "ja": "ヘッダーフィールド名：TLS-Report-Submitter適用プロトコル：メールステータス：標準Author / Changeコントローラー：IETF仕様ドキュメント：RFC 8460"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Report Type",
+      "section_title": true,
+      "ja": "6.2。 レポートタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "This document creates a new registry for the \"report-type\" parameter to the Content-Type header field for the \"multipart/report\" top-level media type defined in [RFC6522].",
+      "ja": "このドキュメントは、[RFC6522]で定義された「multipart / report」トップレベルメディアタイプのContent-Typeヘッダーフィールドへの「report-type」パラメータ用の新しいレジストリを作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "The registry name is \"Report Type Registry\", and the procedure for updating the registry will be \"Specification Required\" [RFC8126].",
+      "ja": "レジストリ名は「Report Type Registry」であり、レジストリを更新する手順は「Specification Required」[RFC8126]になります。"
+    },
+    {
+      "indent": 3,
+      "text": "An entry in this registry should contain:",
+      "ja": "このレジストリのエントリには以下が含まれている必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o the report-type being registered",
+      "ja": "o登録されるレポートタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "o one or more registered media types that can be used with this report-type",
+      "ja": "oこのレポートタイプで使用できる1つ以上の登録済みメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "o the document containing the registration action",
+      "ja": "o登録アクションを含むドキュメント"
+    },
+    {
+      "indent": 3,
+      "text": "o an optional comment",
+      "ja": "oオプションのコメント"
+    },
+    {
+      "indent": 3,
+      "text": "The initial entries are:",
+      "ja": "初期エントリは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "Report-Type: tlsrpt Media Type: application/tlsrpt+gzip, application/tlsrpt+json Registered By: [RFC8460] Comment: Media types suitable for use with this report-type are defined in Sections 6.4 and 6.5 of [RFC8460]",
+      "ja": "レポートタイプ：tlsrptメディアタイプ：application / tlsrpt + gzip、application / tlsrpt + json登録者：[RFC8460]コメント：このレポートタイプでの使用に適したメディアタイプは、[RFC8460]のセクション6.4および6.5で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Report-Type: disposition-notification Media Type: message/disposition-notification Registered By: [RFC8098], Section 10",
+      "ja": "Report-Type：disposition-notification Media Type：message / disposition-notification登録者：[RFC8098]、セクション10"
+    },
+    {
+      "indent": 3,
+      "text": "Report-Type: disposition-notification Media Type: message/global-disposition-notification Registered By: [RFC6533], Section 6",
+      "ja": "Report-Type：disposition-notification Media Type：message / global-disposition-notification登録者：[RFC6533]、セクション6"
+    },
+    {
+      "indent": 3,
+      "text": "Report-Type: delivery-status Media Type: message/delivery-status Registered By: [RFC3464], Section 6.2",
+      "ja": "レポートタイプ：delivery-statusメディアタイプ：message / delivery-status登録者：[RFC3464]、セクション6.2"
+    },
+    {
+      "indent": 3,
+      "text": "Report-Type: delivery-status Media Type: message/global-delivery-status Registered By: [RFC6533], Section 6",
+      "ja": "レポートタイプ：delivery-statusメディアタイプ：message / global-delivery-status登録者：[RFC6533]、セクション6"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. +gzip Media Type Suffix",
+      "section_title": true,
+      "ja": "6.3。 + gzipメディアタイプサフィックス"
+    },
+    {
+      "indent": 3,
+      "text": "This document registers a new media type suffix \"+gzip\". The gzip format is a public domain, cross-platform, interoperable file storage and transfer format, specified in [RFC1952]; it supports compression and is used as the underlying representation by a variety of file formats. The media type \"application/gzip\" has been registered for such files. The suffix \"+gzip\" MAY be used with any media type whose representation follows that established for \"application/gzip\". The registration form for the structured syntax suffix for use with media types is as follows:",
+      "ja": "このドキュメントは、新しいメディアタイプサフィックス「+ gzip」を登録します。 gzip形式は、パブリックドメイン、クロスプラットフォーム、相互運用可能なファイルストレージおよび転送形式であり、[RFC1952]で指定されています。 圧縮をサポートし、さまざまなファイル形式の基礎となる表現として使用されます。 このようなファイルには、メディアタイプ「application / gzip」が登録されています。 接尾辞「+ gzip」は、「application / gzip」に対して確立された表現に従う表現を持つ任意のメディアタイプで使用できます。 メディアタイプで使用するための構造化構文サフィックスの登録フォームは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "Type name: gzip file storage and transfer format.",
+      "ja": "タイプ名：gzipファイルストレージと転送フォーマット。"
+    },
+    {
+      "indent": 3,
+      "text": "+suffix: +gzip",
+      "ja": "+サフィックス：+ gzip"
+    },
+    {
+      "indent": 3,
+      "text": "References: [RFC1952] [RFC6713]",
+      "ja": "参照：[RFC1952] [RFC6713]"
+    },
+    {
+      "indent": 3,
+      "text": "Encoding considerations: gzip is a binary encoding.",
+      "ja": "エンコードに関する考慮事項：gzipはバイナリエンコードです。"
+    },
+    {
+      "indent": 3,
+      "text": "Fragment identifier considerations: The syntax and semantics of fragment identifiers specified for +gzip SHOULD be as specified for \"application/gzip\". (At publication of this document, there is no fragment identification syntax defined for \"application/gzip\".) The syntax and semantics for fragment identifiers for a specific \"xxx/ yyy+gzip\" SHOULD be processed as follows:",
+      "ja": "フラグメント識別子の考慮事項：+ gzipに指定されたフラグメント識別子の構文とセマンティクスは、「application / gzip」に指定されたとおりである必要があります。 （このドキュメントの公開時には、「application / gzip」に定義されたフラグメント識別構文はありません。）特定の「xxx / yyy + gzip」のフラグメント識別子の構文とセマンティクスは、次のように処理される必要があります。"
+    },
+    {
+      "indent": 7,
+      "text": "For cases defined in +gzip, where the fragment identifier\nresolves per the +gzip rules, process as specified in\n+gzip.",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "For cases defined in +gzip, where the fragment identifier does not resolve per the +gzip rules, process as specified in \"xxx/yyy+gzip\".",
+      "ja": "+ gzipルールでフラグメント識別子が解決されない+ gzipで定義されている場合は、「xxx / yyy + gzip」で指定されているとおりに処理します。"
+    },
+    {
+      "indent": 7,
+      "text": "For cases not defined in +gzip, process as specified in \"xxx/yyy+gzip\".",
+      "ja": "+ gzipで定義されていない場合は、「xxx / yyy + gzip」で指定されているとおりに処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: N/A",
+      "ja": "相互運用性に関する考慮事項：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Security considerations: gzip format doesn't provide confidentiality protection. Integrity protection is provided by an Adler-32 checksum, which is not cryptographically strong. See also the security considerations of [RFC6713]. Each individual media type registered with a +gzip suffix can have additional security considerations. Additionally, gzip objects can contain multiple files and associated paths. File paths must be validated when the files are extracted; a malicious file path could otherwise cause the extractor to overwrite application or system files.",
+      "ja": "セキュリティに関する考慮事項：gzip形式は機密保護を提供しません。 整合性保護は、暗号的に強力ではないAdler-32チェックサムによって提供されます。 [RFC6713]のセキュリティに関する考慮事項も参照してください。 + gzipサフィックスで登録された各メディアタイプには、追加のセキュリティ上の考慮事項があります。 さらに、gzipオブジェクトには複数のファイルと関連するパスを含めることができます。 ファイルを抽出するとき、ファイルパスを検証する必要があります。 そうでない場合、悪意のあるファイルパスにより、エクストラクターがアプリケーションまたはシステムファイルを上書きする可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Contact: art@ietf.org",
+      "ja": "連絡先：art@ietf.org"
+    },
+    {
+      "indent": 3,
+      "text": "Author/Change controller: Internet Engineering Task Force (iesg@ietf.org).",
+      "ja": "作成者/変更コントローラー：インターネットエンジニアリングタスクフォース（iesg@ietf.org）。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. application/tlsrpt+json Media Type",
+      "section_title": true,
+      "ja": "6.4。 application / tlsrpt + jsonメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "This document registers multiple media types, beginning with Table 1 below.",
+      "ja": "このドキュメントは、以下の表1から始まる複数のメディアタイプを登録します。"
+    },
+    {
+      "indent": 4,
+      "text": "+-------------+----------------+-------------+-------------------+\n| Type        | Subtype        | File Ext    | Specification     |\n+-------------+----------------+-------------+-------------------+\n| application | tlsrpt+json    |  .json      | Section 5.3       |\n+-------------+----------------+-------------+-------------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "Table 1: SMTP TLS Reporting Media Type",
+      "ja": "表1：SMTP TLSレポートメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Type name: application",
+      "ja": "タイプ名：アプリケーション"
+    },
+    {
+      "indent": 3,
+      "text": "Subtype name: tlsrpt+json",
+      "ja": "サブタイプ名：tlsrpt + json"
+    },
+    {
+      "indent": 3,
+      "text": "Required parameters: N/A",
+      "ja": "必須パラメーター：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Optional parameters: N/A",
+      "ja": "オプションのパラメーター：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Encoding considerations: Encoding considerations are identical to those specified for the \"application/json\" media type. See [RFC7493].",
+      "ja": "エンコードに関する考慮事項：エンコードに関する考慮事項は、「application / json」メディアタイプに指定されたものと同じです。 [RFC7493]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Security considerations: Security considerations relating to SMTP TLS Reporting are discussed in Section 7.",
+      "ja": "セキュリティに関する考慮事項：SMTP TLSレポートに関するセキュリティに関する考慮事項については、セクション7で説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: This document specifies the format of conforming messages and the interpretation thereof.",
+      "ja": "相互運用性に関する考慮事項：このドキュメントでは、適合メッセージの形式とその解釈を指定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Published specification: Section 5.3 of RFC 8460.",
+      "ja": "公開された仕様：RFC 8460のセクション5.3。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that use this media type: Mail User Agents (MUAs) and Mail Transfer Agents.",
+      "ja": "このメディアタイプを使用するアプリケーション：メールユーザーエージェント（MUA）およびメール転送エージェント。"
+    },
+    {
+      "indent": 3,
+      "text": "Additional information:",
+      "ja": "追加情報："
+    },
+    {
+      "indent": 6,
+      "text": "Deprecated alias names for this type: N/A",
+      "ja": "このタイプの非推奨の別名：N / A"
+    },
+    {
+      "indent": 6,
+      "text": "Magic number(s): N/A",
+      "ja": "マジックナンバー：N / A"
+    },
+    {
+      "indent": 6,
+      "text": "File extension(s): \".json\"",
+      "ja": "ファイル拡張子： \".json\""
+    },
+    {
+      "indent": 6,
+      "text": "Macintosh file type code(s): N/A",
+      "ja": "Macintoshファイルタイプコード：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Person & email address to contact for further information: See the Authors' Addresses section.",
+      "ja": "詳細については、連絡先の個人と電子メールアドレス：「著者のアドレス」セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: COMMON",
+      "ja": "使用目的：共通"
+    },
+    {
+      "indent": 3,
+      "text": "Restrictions on usage: N/A",
+      "ja": "使用制限：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Author: See the Authors' Addresses section.",
+      "ja": "著者：著者の住所セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Change controller: Internet Engineering Task Force (iesg@ietf.org).",
+      "ja": "コントローラの変更：インターネットエンジニアリングタスクフォース（iesg@ietf.org）。"
+    },
+    {
+      "indent": 0,
+      "text": "6.5. application/tlsrpt+gzip Media Type",
+      "section_title": true,
+      "ja": "6.5。 application / tlsrpt + gzipメディアタイプ"
+    },
+    {
+      "indent": 4,
+      "text": "+-------------+----------------+-------------+-------------------+\n| Type        | Subtype        | File Ext    | Specification     |\n+-------------+----------------+-------------+-------------------+\n| application | tlsrpt+gzip    |  .gz        | Section 5.3       |\n+-------------+----------------+-------------+-------------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "Table 2: SMTP TLS Reporting Media Type",
+      "ja": "表2：SMTP TLSレポートメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Type name: application",
+      "ja": "タイプ名：アプリケーション"
+    },
+    {
+      "indent": 3,
+      "text": "Subtype name: tlsrpt+gzip",
+      "ja": "サブタイプ名：tlsrpt + gzip"
+    },
+    {
+      "indent": 3,
+      "text": "Required parameters: N/A",
+      "ja": "必須パラメーター：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Optional parameters: N/A",
+      "ja": "オプションのパラメーター：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Encoding considerations: Binary",
+      "ja": "エンコードに関する考慮事項：バイナリ"
+    },
+    {
+      "indent": 3,
+      "text": "Security considerations: Security considerations relating to SMTP TLS Reporting are discussed in Section 7. Security considerations related to gzip compression are discussed in RFC 6713.",
+      "ja": "セキュリティに関する考慮事項：SMTP TLSレポートに関するセキュリティに関する考慮事項はセクション7で説明されています。gzip圧縮に関するセキュリティに関する考慮事項はRFC 6713で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: This document specifies the format of conforming messages and the interpretation thereof.",
+      "ja": "相互運用性に関する考慮事項：このドキュメントでは、適合メッセージの形式とその解釈を指定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Published specification: Section 5.3 of RFC 8460.",
+      "ja": "公開された仕様：RFC 8460のセクション5.3。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that use this media type: Mail User Agents (MUAs) and Mail Transfer Agents.",
+      "ja": "このメディアタイプを使用するアプリケーション：メールユーザーエージェント（MUA）およびメール転送エージェント。"
+    },
+    {
+      "indent": 3,
+      "text": "Additional information:",
+      "ja": "追加情報："
+    },
+    {
+      "indent": 6,
+      "text": "Deprecated alias names for this type: N/A",
+      "ja": "このタイプの非推奨の別名：N / A"
+    },
+    {
+      "indent": 6,
+      "text": "Magic number(s): The first two bytes are 0x1f, 0x8b.",
+      "ja": "マジックナンバー：最初の2バイトは0x1f、0x8bです。"
+    },
+    {
+      "indent": 6,
+      "text": "File extension(s): \".gz\"",
+      "ja": "ファイル拡張子： \".gz\""
+    },
+    {
+      "indent": 6,
+      "text": "Macintosh file type code(s): N/A",
+      "ja": "Macintoshファイルタイプコード：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Person & email address to contact for further information: See the Authors' Addresses section.",
+      "ja": "詳細については、連絡先の個人と電子メールアドレス：「著者のアドレス」セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: COMMON",
+      "ja": "使用目的：共通"
+    },
+    {
+      "indent": 3,
+      "text": "Restrictions on usage: N/A",
+      "ja": "使用制限：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Author: See the Authors' Addresses section.",
+      "ja": "著者：著者の住所セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Change controller: Internet Engineering Task Force (iesg@ietf.org).",
+      "ja": "コントローラの変更：インターネットエンジニアリングタスクフォース（iesg@ietf.org）。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6. STARTTLS Validation Result Types",
+      "section_title": true,
+      "ja": "6.6。 STARTTLS検証結果タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "This document creates a new registry, \"STARTTLS Validation Result Types\". The initial entries in the registry are:",
+      "ja": "このドキュメントは、新しいレジストリ「STARTTLS Validation Result Types」を作成します。 レジストリの初期エントリは次のとおりです。"
+    },
+    {
+      "indent": 14,
+      "text": "+-----------------------------+--------------+\n| Result Type                 |  Description |\n+-----------------------------+--------------+\n| starttls-not-supported      |  Section 4.3 |\n| certificate-host-mismatch   |  Section 4.3 |\n| certificate-expired         |  Section 4.3 |\n| tlsa-invalid                |  Section 4.3 |\n| dnssec-invalid              |  Section 4.3 |\n| dane-required               |  Section 4.3 |\n| certificate-not-trusted     |  Section 4.3 |\n| sts-policy-invalid          |  Section 4.3 |\n| sts-webpki-invalid          |  Section 4.3 |\n| validation-failure          |  Section 4.3 |\n| sts-policy-fetch-error      |  Section 4.3 |\n+-----------------------------+--------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The above entries are described in Section 4.3, \"Result Types\". New result types can be added to this registry using the \"Expert Review\" IANA registration policy.",
+      "ja": "上記のエントリは、4.3項「結果タイプ」で説明されています。 「エキスパートレビュー」IANA登録ポリシーを使用して、このレジストリに新しい結果タイプを追加できます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7.セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "SMTP TLS Reporting provides visibility into misconfigurations or attempts to intercept or tamper with mail between hosts who support STARTTLS. There are several security risks presented by the existence of this reporting channel:",
+      "ja": "SMTP TLSレポートは、STARTTLSをサポートするホスト間で、構成の誤りやメールの傍受や改ざんの試行を可視化します。 このレポートチャネルの存在によって提示されるいくつかのセキュリティリスクがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Flooding of the Aggregate Report URI (rua) endpoint: An attacker could flood the endpoint with excessive reporting traffic and prevent the receiving domain from accepting additional reports. This type of Denial-of-Service attack would limit visibility into STARTTLS failures, leaving the receiving domain blind to an ongoing attack.",
+      "ja": "o集約レポートURI（rua）エンドポイントのフラッディング：攻撃者は、過剰なレポートトラフィックでエンドポイントをフラッディングし、受信ドメインが追加のレポートを受け入れるのを防ぐことができます。 このタイプのサービス拒否攻撃は、STARTTLS障害の可視性を制限し、受信ドメインを進行中の攻撃に対して盲目にします。"
+    },
+    {
+      "indent": 3,
+      "text": "o Untrusted content: An attacker could inject malicious code into the report, exploiting any vulnerabilities in the report-handling systems of the receiving domain. Implementers are advised to take precautions against evaluating the contents of the report.",
+      "ja": "o信頼できないコンテンツ：攻撃者は悪意のあるコードをレポートに挿入し、受信ドメインのレポート処理システムの脆弱性を悪用する可能性があります。 実装者は、レポートの内容を評価しないように注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "o Report snooping: An attacker could create a bogus TLSRPT record to receive statistics about a domain the attacker does not own. Since an attacker that is able to poison DNS is already able to receive counts of SMTP connections (and, absent DANE or MTA-STS policies, actual SMTP message payloads), this does not present a significant new vulnerability.",
+      "ja": "oレポートスヌーピング：攻撃者は、偽のTLSRPTレコードを作成して、攻撃者が所有していないドメインに関する統計情報を受け取る可能性があります。 DNSをポイズニングできる攻撃者はすでにSMTP接続の数（およびDANEまたはMTA-STSポリシー、実際のSMTPメッセージペイロードがない）を受信できるため、これは重大な新しい脆弱性を提示しません。"
+    },
+    {
+      "indent": 3,
+      "text": "o Ignoring HTTPS validation when submitting reports: When reporting benign misconfigurations, it is likely that a misconfigured SMTP server may also mean a misconfigured HTTPS server; as a result, reporters who require HTTPS validity on the reporting endpoint may fail to alert administrators about such misconfigurations. Conversely, in the event of an actual attack, an attacker who wishes to create a gap in reporting and could intercept HTTPS reports could, just as easily, simply thwart the resolution of the TLSRPT TXT record or establishment of the TCP session to the HTTPS endpoint. Furthermore, such a man-in-the-middle attacker could discover most or all of the metadata exposed in a report merely through passive observation. As a result, we consider the risks of failure to deliver reports on misconfigurations to outweigh those of attackers intercepting reports.",
+      "ja": "oレポートの送信時にHTTPS検証を無視する：良性の誤った構成を報告する場合、SMTPサーバーの構成ミスはHTTPSサーバーの構成ミスを意味する可能性があります。 その結果、レポートエンドポイントでHTTPSの有効性を必要とするレポーターは、そのような設定ミスについて管理者に警告できない場合があります。 逆に、実際の攻撃が発生した場合、レポートにギャップを作り、HTTPSレポートを傍受できる攻撃者は、TLSRPT TXTレコードの解決またはHTTPSエンドポイントへのTCPセッションの確立を簡単に妨害できます。 。 さらに、このような中間者攻撃者は、受動的な観察だけでレポートに公開されているメタデータのほとんどまたはすべてを発見する可能性があります。 結果として、レポートを傍受する攻撃者の設定を上回るように、設定の誤りに関するレポートの配信に失敗するリスクを考慮します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Reports as DDoS: TLSRPT allows specifying destinations for the reports that are outside the authority of the Policy Domain, which allows domains to delegate processing of reports to a partner organization. However, an attacker who controls the Policy Domain DNS could also use this mechanism to direct the reports to an unwitting victim, flooding that victim with excessive reports. DMARC [RFC7489] defines a solution for verifying delegation to avoid such attacks; the need for this is greater with DMARC, however, because DMARC allows an attacker to trigger reports to a target from an innocent third party by sending mail to that third party (which triggers a report from the third party to the target). In the case of TLSRPT, the attacker would have to induce the third party to send mail to the attacker in order to trigger reports from the third party to the victim; this reduces the risk of such an attack and the need for a verification mechanism.",
+      "ja": "o DDoSとしてのレポート：TLSRPTでは、ポリシードメインの権限外にあるレポートの宛先を指定できます。これにより、ドメインがレポートの処理をパートナー組織に委任できます。 ただし、ポリシードメインDNSを制御する攻撃者は、このメカニズムを使用して、レポートを意図しない被害者に誘導し、その被害者を過剰なレポートであふれさせる可能性もあります。 DMARC [RFC7489]は、このような攻撃を回避するために委任を検証するためのソリューションを定義しています。 ただし、DMARCを使用すると、攻撃者はその第三者にメールを送信することにより、第三者へのレポートをトリガーすることができます（第三者からターゲットへのレポートがトリガーされます）。 TLSRPTの場合、攻撃者は、第三者から被害者へのレポートをトリガーするために、第三者が攻撃者にメールを送信するよう誘導する必要があります。 これにより、このような攻撃のリスクと検証メカニズムの必要性が軽減されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, because TLSRPT is intended to help administrators discover man-in-the-middle attacks against transport-layer encryption, including attacks designed to thwart negotiation of encrypted connections (by downgrading opportunistic encryption or, in the case of MTA-STS, preventing discovery of a new MTA-STS Policy), we must also consider the risk that an adversary who can induce such a downgrade attack can also prevent discovery of the TLSRPT TXT record (and thus prevent discovery of the successful downgrade attack). Administrators are thus encouraged to deploy TLSRPT TXT records with a large TTL (reducing the window for successful application of transient attacks against DNS resolution of the record) or to deploy DNSSEC on the deploying zone.",
+      "ja": "最後に、TLSRPTは、管理者がトランスポートレイヤー暗号化に対する中間者攻撃を発見することを目的としているため、暗号化された接続のネゴシエーションを妨害するように設計された攻撃を含みます（日和見暗号化のダウングレード、またはMTA-STSの場合、発見の防止） 新しいMTA-STSポリシーの場合）、このようなダウングレード攻撃を引き起こすことができる敵がTLSRPT TXTレコードの発見を防ぐことができる（したがって、ダウングレード攻撃の成功の発見を防ぐ）リスクも考慮する必要があります。 したがって、管理者はTLSRPT TXTレコードを大きなTTLで展開する（レコードのDNS解決に対する一時的な攻撃の成功するウィンドウを減らす）か、展開ゾーンにDNSSECを展開することをお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Privacy Considerations",
+      "section_title": true,
+      "ja": "8.プライバシーに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "MTAs are generally considered public knowledge; however, the internals of how those MTAs are configured and the users of those MTAs may not be as public. It should be noted that providing a receiving site with information about TLS failures may reveal information about the sender's configuration or even information about the senders themselves. For example, sending a report may disclose what TLS implementation the sender uses, as the inability to negotiate a session may be a known incompatibility between two implementations. This may, indirectly, leak information on the reporter's operating system or even region, if, for example, a rare TLS implementation is popular among certain users or in certain locations.",
+      "ja": "MTAは一般に公開知識と見なされます。 ただし、これらのMTAがどのように構成されているか、およびそれらのMTAのユーザーの内部は公開されていない場合があります。 受信サイトにTLS障害に関する情報を提供すると、送信者の構成に関する情報や、送信者自体に関する情報さえ明らかになる可能性があることに注意してください。 たとえば、レポートを送信すると、セッションをネゴシエートできないことが2つの実装間の既知の非互換性である可能性があるため、送信者が使用するTLS実装を開示する場合があります。 たとえば、特定のユーザーや特定の場所でまれなTLS実装が普及している場合、間接的に、レポーターのオペレーティングシステムまたは地域に関する情報が漏洩する可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9.参照"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1。 規範的参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1952] Deutsch, P., \"GZIP file format specification version 4.3\", RFC 1952, DOI 10.17487/RFC1952, May 1996, <https://www.rfc-editor.org/info/rfc1952>.",
+      "ja": "[RFC1952] Deutsch、P。、「GZIPファイル形式仕様バージョン4.3」、RFC 1952、DOI 10.17487 / RFC1952、1996年5月、<https://www.rfc-editor.org/info/rfc1952>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S.、「要件レベルを示すためにRFCで使用するキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ rfc2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3339] Klyne, G. and C. Newman, \"Date and Time on the Internet: Timestamps\", RFC 3339, DOI 10.17487/RFC3339, July 2002, <https://www.rfc-editor.org/info/rfc3339>.",
+      "ja": "[RFC3339] Klyne、G.およびC. Newman、「インターネット上の日付と時刻：タイムスタンプ」、RFC 3339、DOI 10.17487 / RFC3339、2002年7月、<https://www.rfc-editor.org/info/rfc3339 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3492] Costello, A., \"Punycode: A Bootstring encoding of Unicode for Internationalized Domain Names in Applications (IDNA)\", RFC 3492, DOI 10.17487/RFC3492, March 2003, <https://www.rfc-editor.org/info/rfc3492>.",
+      "ja": "[RFC3492] Costello、A。、「Punycode：アプリケーションの国際化ドメイン名（IDNA）のUnicodeのブートストリングエンコーディング」、RFC 3492、DOI 10.17487 / RFC3492、2003年3月、<https://www.rfc-editor.org / info / rfc3492>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3986] Berners-Lee, T., Fielding, R., and L. Masinter, \"Uniform Resource Identifier (URI): Generic Syntax\", STD 66, RFC 3986, DOI 10.17487/RFC3986, January 2005, <https://www.rfc-editor.org/info/rfc3986>.",
+      "ja": "[RFC3986]バーナーズ・リー、T。、フィールディング、R。、およびL.マスインター、「Uniform Resource Identifier（URI）：Generic Syntax」、STD 66、RFC 3986、DOI 10.17487 / RFC3986、2005年1月、<https：/ /www.rfc-editor.org/info/rfc3986>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5234] Crocker, D., Ed. and P. Overell, \"Augmented BNF for Syntax Specifications: ABNF\", STD 68, RFC 5234, DOI 10.17487/RFC5234, January 2008, <https://www.rfc-editor.org/info/rfc5234>.",
+      "ja": "[RFC5234] Crocker、D.、Ed。 およびP. Overell、「構文仕様の拡張BNF：ABNF」、STD 68、RFC 5234、DOI 10.17487 / RFC5234、2008年1月、<https://www.rfc-editor.org/info/rfc5234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5280] Cooper, D., Santesson, S., Farrell, S., Boeyen, S., Housley, R., and W. Polk, \"Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile\", RFC 5280, DOI 10.17487/RFC5280, May 2008, <https://www.rfc-editor.org/info/rfc5280>.",
+      "ja": "[RFC5280] Cooper、D.、Santesson、S.、Farrell、S.、Boeyen、S.、Housley、R.、およびW. Polk、 \"インターネットX.509公開鍵インフラストラクチャ証明書および証明書失効リスト（CRL）プロファイル \"、RFC 5280、DOI 10.17487 / RFC5280、2008年5月、<https://www.rfc-editor.org/info/rfc5280>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5321] Klensin, J., \"Simple Mail Transfer Protocol\", RFC 5321, DOI 10.17487/RFC5321, October 2008, <https://www.rfc-editor.org/info/rfc5321>.",
+      "ja": "[RFC5321] Klensin、J。、「Simple Mail Transfer Protocol」、RFC 5321、DOI 10.17487 / RFC5321、2008年10月、<https://www.rfc-editor.org/info/rfc5321>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5322] Resnick, P., Ed., \"Internet Message Format\", RFC 5322, DOI 10.17487/RFC5322, October 2008, <https://www.rfc-editor.org/info/rfc5322>.",
+      "ja": "[RFC5322] Resnick、P.、Ed。、「インターネットメッセージフォーマット」、RFC 5322、DOI 10.17487 / RFC5322、2008年10月、<https://www.rfc-editor.org/info/rfc5322>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5891] Klensin, J., \"Internationalized Domain Names in Applications (IDNA): Protocol\", RFC 5891, DOI 10.17487/RFC5891, August 2010, <https://www.rfc-editor.org/info/rfc5891>.",
+      "ja": "[RFC5891] Klensin、J.、「アプリケーションの国際化ドメイン名（IDNA）：プロトコル」、RFC 5891、DOI 10.17487 / RFC5891、2010年8月、<https://www.rfc-editor.org/info/rfc5891>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5952] Kawamura, S. and M. Kawashima, \"A Recommendation for IPv6 Address Text Representation\", RFC 5952, DOI 10.17487/RFC5952, August 2010, <https://www.rfc-editor.org/info/rfc5952>.",
+      "ja": "[RFC5952] Kawamura、S. and M. Kawashima、 \"A Recommendation for IPv6 Address Text Representation\"、RFC 5952、DOI 10.17487 / RFC5952、August 2010、<https://www.rfc-editor.org/info/rfc5952> 。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6068] Duerst, M., Masinter, L., and J. Zawinski, \"The 'mailto' URI Scheme\", RFC 6068, DOI 10.17487/RFC6068, October 2010, <https://www.rfc-editor.org/info/rfc6068>.",
+      "ja": "[RFC6068] Duerst、M.、Masinter、L。、およびJ. Zawinski、「「mailto」URIスキーム」、RFC 6068、DOI 10.17487 / RFC6068、2010年10月、<https://www.rfc-editor.org / info / rfc6068>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6376] Crocker, D., Ed., Hansen, T., Ed., and M. Kucherawy, Ed., \"DomainKeys Identified Mail (DKIM) Signatures\", STD 76, RFC 6376, DOI 10.17487/RFC6376, September 2011, <https://www.rfc-editor.org/info/rfc6376>.",
+      "ja": "[RFC6376] Crocker、D.、Ed。、Hansen、T.、Ed。、and M. Kucherawy、Ed。、 \"DomainKeys Identified Mail（DKIM）Signatures\"、STD 76、RFC 6376、DOI 10.17487 / RFC6376、September 2011 、<https://www.rfc-editor.org/info/rfc6376>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6522] Kucherawy, M., Ed., \"The Multipart/Report Media Type for the Reporting of Mail System Administrative Messages\", STD 73, RFC 6522, DOI 10.17487/RFC6522, January 2012, <https://www.rfc-editor.org/info/rfc6522>.",
+      "ja": "[RFC6522] Kucherawy、M.、Ed。、「メールシステム管理メッセージのレポートのためのマルチパート/レポートメディアタイプ」、STD 73、RFC 6522、DOI 10.17487 / RFC6522、2012年1月、<https：//www.rfc -editor.org/info/rfc6522>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6698] Hoffman, P. and J. Schlyter, \"The DNS-Based Authentication of Named Entities (DANE) Transport Layer Security (TLS) Protocol: TLSA\", RFC 6698, DOI 10.17487/RFC6698, August 2012, <https://www.rfc-editor.org/info/rfc6698>.",
+      "ja": "[RFC6698] Hoffman、P。、およびJ. Schlyter、「名前付きエンティティのDNSベース認証（DANE）トランスポート層セキュリティ（TLS）プロトコル：TLSA」、RFC 6698、DOI 10.17487 / RFC6698、2012年8月、<https：/ /www.rfc-editor.org/info/rfc6698>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6713] Levine, J., \"The 'application/zlib' and 'application/gzip' Media Types\", RFC 6713, DOI 10.17487/RFC6713, August 2012, <https://www.rfc-editor.org/info/rfc6713>.",
+      "ja": "[RFC6713] Levine、J。、「 'application / zlib'および 'application / gzip'メディアタイプ」、RFC 6713、DOI 10.17487 / RFC6713、2012年8月、<https://www.rfc-editor.org/info / rfc6713>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7208] Kitterman, S., \"Sender Policy Framework (SPF) for Authorizing Use of Domains in Email, Version 1\", RFC 7208, DOI 10.17487/RFC7208, April 2014, <https://www.rfc-editor.org/info/rfc7208>.",
+      "ja": "[RFC7208] Kitterman、S。、「電子メールでのドメインの使用を許可するための送信者ポリシーフレームワーク（SPF）、バージョン1」、RFC 7208、DOI 10.17487 / RFC7208、2014年4月、<https://www.rfc-editor.org / info / rfc7208>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7231] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content\", RFC 7231, DOI 10.17487/RFC7231, June 2014, <https://www.rfc-editor.org/info/rfc7231>.",
+      "ja": "[RFC7231]フィールディング、R。、エド。 およびJ. Reschke、Ed。、「ハイパーテキスト転送プロトコル（HTTP / 1.1）：セマンティクスとコンテンツ」、RFC 7231、DOI 10.17487 / RFC7231、2014年6月、<https://www.rfc-editor.org/info/rfc7231 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7405] Kyzivat, P., \"Case-Sensitive String Support in ABNF\", RFC 7405, DOI 10.17487/RFC7405, December 2014, <https://www.rfc-editor.org/info/rfc7405>.",
+      "ja": "[RFC7405] Kyzivat、P。、「ABNFの大文字と小文字を区別する文字列のサポート」、RFC 7405、DOI 10.17487 / RFC7405、2014年12月、<https://www.rfc-editor.org/info/rfc7405>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7493] Bray, T., Ed., \"The I-JSON Message Format\", RFC 7493, DOI 10.17487/RFC7493, March 2015, <https://www.rfc-editor.org/info/rfc7493>.",
+      "ja": "[RFC7493]ブレイ、T。、エド、「I-JSONメッセージ形式」、RFC 7493、DOI 10.17487 / RFC7493、2015年3月、<https://www.rfc-editor.org/info/rfc7493>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7671] Dukhovni, V. and W. Hardaker, \"The DNS-Based Authentication of Named Entities (DANE) Protocol: Updates and Operational Guidance\", RFC 7671, DOI 10.17487/RFC7671, October 2015, <https://www.rfc-editor.org/info/rfc7671>.",
+      "ja": "[RFC7671] Dukhovni、V。およびW. Hardaker、「名前付きエンティティのDNSベース認証（DANE）プロトコル：更新と運用ガイダンス」、RFC 7671、DOI 10.17487 / RFC7671、2015年10月、<https：// www。 rfc-editor.org/info/rfc7671>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7672] Dukhovni, V. and W. Hardaker, \"SMTP Security via Opportunistic DNS-Based Authentication of Named Entities (DANE) Transport Layer Security (TLS)\", RFC 7672, DOI 10.17487/RFC7672, October 2015, <https://www.rfc-editor.org/info/rfc7672>.",
+      "ja": "[RFC7672] Dukhovni、V。およびW. Hardaker、「名前付きエンティティの日和見DNSベース認証（DANE）トランスポート層セキュリティ（TLS）によるSMTPセキュリティ」、RFC 7672、DOI 10.17487 / RFC7672、2015年10月、<https：/ /www.rfc-editor.org/info/rfc7672>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8461] Margolis, D., Risher, M., Ramakrishnan, B., Brotman, A., and J. Jones, \"SMTP MTA Strict Transport Security (MTA-STS)\", RFC 8461, DOI 10.17487/RFC8461, September 2018, <https://www.rfc-editor.org/info/rfc8461>.",
+      "ja": "[RFC8461] Margolis、D.、Risher、M.、Ramakrishnan、B.、Brotman、A。、およびJ. Jones、「SMTP MTA Strict Transport Security（MTA-STS）」、RFC 8461、DOI 10.17487 / RFC8461、9月 2018、<https://www.rfc-editor.org/info/rfc8461>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2。 参考資料"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3207] Hoffman, P., \"SMTP Service Extension for Secure SMTP over Transport Layer Security\", RFC 3207, DOI 10.17487/RFC3207, February 2002, <https://www.rfc-editor.org/info/rfc3207>.",
+      "ja": "[RFC3207] Hoffman、P。、「トランスポート層セキュリティを介したセキュアSMTPのSMTPサービス拡張」、RFC 3207、DOI 10.17487 / RFC3207、2002年2月、<https://www.rfc-editor.org/info/rfc3207>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3464] Moore, K. and G. Vaudreuil, \"An Extensible Message Format for Delivery Status Notifications\", RFC 3464, DOI 10.17487/RFC3464, January 2003, <https://www.rfc-editor.org/info/rfc3464>.",
+      "ja": "[RFC3464] Moore、K.およびG. Vaudreuil、「配信ステータス通知用の拡張可能なメッセージ形式」、RFC 3464、DOI 10.17487 / RFC3464、2003年1月、<https://www.rfc-editor.org/info/rfc3464 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3501] Crispin, M., \"INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1\", RFC 3501, DOI 10.17487/RFC3501, March 2003, <https://www.rfc-editor.org/info/rfc3501>.",
+      "ja": "[RFC3501]クリスピン、M。、「インターネットメッセージアクセスプロトコル-バージョン4rev1」、RFC 3501、DOI 10.17487 / RFC3501、2003年3月、<https://www.rfc-editor.org/info/rfc3501>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3864] Klyne, G., Nottingham, M., and J. Mogul, \"Registration Procedures for Message Header Fields\", BCP 90, RFC 3864, DOI 10.17487/RFC3864, September 2004, <https://www.rfc-editor.org/info/rfc3864>.",
+      "ja": "[RFC3864]クライン、G。、ノッティンガム、M。、およびJ.モーグル、「メッセージヘッダーフィールドの登録手順」、BCP 90、RFC 3864、DOI 10.17487 / RFC3864、2004年9月、<https：//www.rfc- editor.org/info/rfc3864>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6533] Hansen, T., Ed., Newman, C., and A. Melnikov, \"Internationalized Delivery Status and Disposition Notifications\", RFC 6533, DOI 10.17487/RFC6533, February 2012, <https://www.rfc-editor.org/info/rfc6533>.",
+      "ja": "[RFC6533]ハンセン、T。、エド、ニューマン、C。、およびA.メルニコフ、「国際化された配信ステータスおよび廃棄通知」、RFC 6533、DOI 10.17487 / RFC6533、2012年2月、<https：//www.rfc- editor.org/info/rfc6533>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7435] Dukhovni, V., \"Opportunistic Security: Some Protection Most of the Time\", RFC 7435, DOI 10.17487/RFC7435, December 2014, <https://www.rfc-editor.org/info/rfc7435>.",
+      "ja": "[RFC7435] Dukhovni、V。、「オポチュニスティックセキュリティ：ほとんどの時間の保護」、RFC 7435、DOI 10.17487 / RFC7435、2014年12月、<https://www.rfc-editor.org/info/rfc7435>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7469] Evans, C., Palmer, C., and R. Sleevi, \"Public Key Pinning Extension for HTTP\", RFC 7469, DOI 10.17487/RFC7469, April 2015, <https://www.rfc-editor.org/info/rfc7469>.",
+      "ja": "[RFC7469] Evans、C.、Palmer、C。、およびR. Sleevi、「HTTPの公開鍵固定拡張」、RFC 7469、DOI 10.17487 / RFC7469、2015年4月、<https://www.rfc-editor.org / info / rfc7469>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7489] Kucherawy, M., Ed. and E. Zwicky, Ed., \"Domain-based Message Authentication, Reporting, and Conformance (DMARC)\", RFC 7489, DOI 10.17487/RFC7489, March 2015, <https://www.rfc-editor.org/info/rfc7489>.",
+      "ja": "[RFC7489] Kucherawy、M.、Ed。 およびE. Zwicky、Ed。、「ドメインベースのメッセージ認証、レポート、および適合性（DMARC）」、RFC 7489、DOI 10.17487 / RFC7489、2015年3月、<https://www.rfc-editor.org/info/ rfc7489>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8098] Hansen, T., Ed. and A. Melnikov, Ed., \"Message Disposition Notification\", STD 85, RFC 8098, DOI 10.17487/RFC8098, February 2017, <https://www.rfc-editor.org/info/rfc8098>.",
+      "ja": "[RFC8098] Hansen、T.、Ed。 およびA.メルニコフ編、「メッセージ処理通知」、STD 85、RFC 8098、DOI 10.17487 / RFC8098、2017年2月、<https://www.rfc-editor.org/info/rfc8098>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCでIANA考慮事項セクションを記述するためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487 / RFC8126、2017年6月、<https：// www .rfc-editor.org / info / rfc8126>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Example Reporting Policy",
+      "ja": "付録A.レポートポリシーの例"
+    },
+    {
+      "indent": 0,
+      "text": "A.1. Report Using MAILTO",
+      "ja": "A.1。 MAILTOを使用したレポート"
+    },
+    {
+      "indent": 12,
+      "text": "_smtp._tls.mail.example.com. IN TXT \\\n        \"v=TLSRPTv1;rua=mailto:reports@example.com\"",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "A.2. Report Using HTTPS",
+      "ja": "A.2。 HTTPSを使用したレポート"
+    },
+    {
+      "indent": 11,
+      "text": "_smtp._tls.mail.example.com. IN TXT \\\n        \"v=TLSRPTv1; \\\n        rua=https://reporting.example.com/v1/tlsrpt\"",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Example JSON Report",
+      "ja": "付録B. JSONレポートの例"
+    },
+    {
+      "indent": 3,
+      "text": "Below is an example JSON report for messages from Company-X to Company-Y, where 100 sessions were attempted to Company-Y servers with an expired certificate, and 200 sessions were attempted to Company-Y servers that did not successfully respond to the \"STARTTLS\" command. Additionally, 3 sessions failed due to \"X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED\".",
+      "ja": "Company-XからCompany-YへのメッセージのJSONレポートの例を以下に示します。ここでは、失効した証明書を使用してCompany-Yサーバーに対して100セッションが試行され、「Y STARTTLS」コマンド。 さらに、「X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED」が原因で3つのセッションが失敗しました。"
+    },
+    {
+      "indent": 3,
+      "text": "{\n  \"organization-name\": \"Company-X\",\n  \"date-range\": {\n    \"start-datetime\": \"2016-04-01T00:00:00Z\",\n    \"end-datetime\": \"2016-04-01T23:59:59Z\"\n  },\n  \"contact-info\": \"sts-reporting@company-x.example\",\n  \"report-id\": \"5065427c-23d3-47ca-b6e0-946ea0e8c4be\",\n  \"policies\": [{\n    \"policy\": {\n      \"policy-type\": \"sts\",\n      \"policy-string\": [\"version: STSv1\",\"mode: testing\",\n            \"mx: *.mail.company-y.example\",\"max_age: 86400\"],\n      \"policy-domain\": \"company-y.example\",\n      \"mx-host\": \"*.mail.company-y.example\"\n    },\n    \"summary\": {\n      \"total-successful-session-count\": 5326,\n      \"total-failure-session-count\": 303\n    },\n    \"failure-details\": [{\n      \"result-type\": \"certificate-expired\",\n      \"sending-mta-ip\": \"2001:db8:abcd:0012::1\",\n      \"receiving-mx-hostname\": \"mx1.mail.company-y.example\",\n      \"failed-session-count\": 100\n    }, {",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "      \"result-type\": \"starttls-not-supported\",\n      \"sending-mta-ip\": \"2001:db8:abcd:0013::1\",\n      \"receiving-mx-hostname\": \"mx2.mail.company-y.example\",\n      \"receiving-ip\": \"203.0.113.56\",\n      \"failed-session-count\": 200,\n      \"additional-information\": \"https://reports.company-x.example/\n        report_info ? id = 5065427 c - 23 d3# StarttlsNotSupported \"\n    }, {\n      \"result-type\": \"validation-failure\",\n      \"sending-mta-ip\": \"198.51.100.62\",\n      \"receiving-ip\": \"203.0.113.58\",\n      \"receiving-mx-hostname\": \"mx-backup.mail.company-y.example\",\n      \"failed-session-count\": 3,\n      \"failure-reason-code\": \"X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED\"\n    }]\n  }]\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Contributors",
+      "ja": "寄稿者"
+    },
+    {
+      "indent": 3,
+      "text": "Laetitia Baudoin Google, Inc. lbaudoin@google.com",
+      "ja": "Laetitia Baudoin Google、Inc. lbaudoin@google.com"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Daniel Margolis Google, Inc.",
+      "ja": "Daniel Margolis Google、Inc."
+    },
+    {
+      "indent": 3,
+      "text": "Email: dmargolis@google.com",
+      "ja": "メール：dmargolis@google.com"
+    },
+    {
+      "indent": 3,
+      "text": "Alexander Brotman Comcast, Inc.",
+      "ja": "アレクサンダーブロットマンコムキャスト株式会社"
+    },
+    {
+      "indent": 3,
+      "text": "Email: alex_brotman@comcast.com",
+      "ja": "メール：alex_brotman@comcast.com"
+    },
+    {
+      "indent": 3,
+      "text": "Binu Ramakrishnan Oath, Inc.",
+      "ja": "Binu Ramakrishnan Oath、Inc."
+    },
+    {
+      "indent": 3,
+      "text": "Email: prbinu@yahoo.com",
+      "ja": "メール：prbinu@yahoo.com"
+    },
+    {
+      "indent": 3,
+      "text": "Janet Jones Microsoft, Inc.",
+      "ja": "ジャネットジョーンズマイクロソフト"
+    },
+    {
+      "indent": 3,
+      "text": "Email: janet.jones@microsoft.com",
+      "ja": "メール：janet.jones@microsoft.com"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Risher Google, Inc.",
+      "ja": "Mark Risher Google、Inc."
+    },
+    {
+      "indent": 3,
+      "text": "Email: risher@google.com",
+      "ja": "メール：risher@google.com"
+    }
+  ]
+}
