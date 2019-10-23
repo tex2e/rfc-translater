@@ -1,0 +1,1052 @@
+{
+  "title": {
+    "text": "RFC 4272 - BGP Security Vulnerabilities Analysis",
+    "ja": "RFC 4272 - BGPセキュリティの脆弱性分析"
+  },
+  "number": 4272,
+  "created_at": "2019-10-22 20:02:48.274438+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          S. Murphy\nRequest for Comments: 4272                                  Sparta, Inc.\nCategory: Informational                                     January 2006",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "BGP Security Vulnerabilities Analysis",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Border Gateway Protocol 4 (BGP-4), along with a host of other infrastructure protocols designed before the Internet environment became perilous, was originally designed with little consideration for protection of the information it carries. There are no mechanisms internal to BGP that protect against attacks that modify, delete, forge, or replay data, any of which has the potential to disrupt overall network routing behavior.",
+      "ja": "ボーダーゲートウェイプロトコル4（BGP-4）は、インターネット環境が危険になる前に設計された他のインフラストラクチャ・プロトコルのホストと一緒に、もともとそれが運ぶ情報の保護のために少し考慮して設計されました。そこ削除、修正する攻撃から保護BGP内部の一切のメカニズムはありません、偽造、またはデータを再生、ネットワーク全体のルーティング動作を妨害する可能性を秘めているそれらのいずれか。"
+    },
+    {
+      "indent": 3,
+      "text": "This document discusses some of the security issues with BGP routing data dissemination. This document does not discuss security issues with forwarding of packets.",
+      "ja": "この文書では、BGPルーティングデータ配布とセキュリティの問題のいくつかを説明します。この文書では、パケットの転送にセキュリティ上の問題について議論しません。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n   1.1. Specification of Requirements ..............................5\n2. Attacks .........................................................6\n3. Vulnerabilities and Risks .......................................7\n   3.1. Vulnerabilities in BGP Messages ............................8\n        3.1.1. Message Header ......................................9\n        3.1.2. OPEN ................................................9\n        3.1.3. KEEPALIVE ..........................................11\n        3.1.4. NOTIFICATION .......................................11\n        3.1.5. UPDATE .............................................11\n               3.1.5.1. Unfeasible Routes Length, Total\n                        Path Attribute Length .....................12\n               3.1.5.2. Withdrawn Routes ..........................13\n               3.1.5.3. Path Attributes ...........................13\n               3.1.5.4. NLRI ......................................16\n   3.2. Vulnerabilities through Other Protocols ...................16\n        3.2.1. TCP Messages .......................................16\n               3.2.1.1. TCP SYN ...................................16\n               3.2.1.2. TCP SYN ACK ...............................17\n               3.2.1.3. TCP ACK ...................................17\n               3.2.1.4. TCP RST/FIN/FIN-ACK .......................17\n               3.2.1.5. DoS and DDos ..............................18\n        3.2.2. Other Supporting Protocols .........................18\n               3.2.2.1. Manual Stop ...............................18\n               3.2.2.2. Open Collision Dump .......................18\n               3.2.2.3. Timer Events ..............................18\n4. Security Considerations ........................................19\n   4.1. Residual Risk .............................................19\n   4.2. Operational Protections ...................................19\n5. References .....................................................21\n   5.1. Normative References ......................................21\n   5.2. Informative References ....................................21",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The inter-domain routing protocol BGP was created when the Internet environment had not yet reached the present, contentious state. Consequently, the BGP design did not include protections against deliberate or accidental errors that could cause disruptions of routing behavior.",
+      "ja": "インターネット環境がまだ存在、論争状態に達していないとき、ドメイン間ルーティングプロトコルBGPが作成されました。そのため、BGPのデザインは、ルーティング動作の混乱を引き起こす可能性があり、意図的または偶発エラーに対する保護が含まれていませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "This document discusses the vulnerabilities of BGP, based on the BGP specification [RFC4271]. Readers are expected to be familiar with the BGP RFC and the behavior of BGP.",
+      "ja": "この文書は、BGP仕様[RFC4271]に基づいて、BGPの脆弱性を論じています。読者は、BGPのRFCとBGPの動作に精通していることが期待されています。"
+    },
+    {
+      "indent": 3,
+      "text": "It is clear that the Internet is vulnerable to attack through its routing protocols and BGP is no exception. Faulty, misconfigured, or deliberately malicious sources can disrupt overall Internet behavior by injecting bogus routing information into the BGP-distributed routing database (by modifying, forging, or replaying BGP packets). The same methods can also be used to disrupt local and overall network behavior by breaking the distributed communication of information between BGP peers. The sources of bogus information can be either outsiders or true BGP peers.",
+      "ja": "インターネットはそのルーティングプロトコルを通じて攻撃に対して脆弱であるとBGPも例外ではありませんことは明らかです。 、不良設定ミス、または意図的に悪意のあるソースは（修正鍛造、又はBGPパケットを再生することによって）BGP-分散ルーティングデータベースに偽のルーティング情報を注入することによって、全体的なインターネットの動作を中断させることができます。同じ方法は、BGPピアとの間の情報の分散通信を破壊することによって、ローカルおよびネットワーク全体の挙動を破壊するために使用することができます。偽の情報源は、外部または真のBGPピアのいずれかになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Cryptographic authentication of peer-peer communication is not an integral part of BGP. As a TCP/IP protocol, BGP is subject to all TCP/IP attacks, e.g., IP spoofing, session stealing, etc. Any outsider can inject believable BGP messages into the communication between BGP peers, and thereby inject bogus routing information or break the peer-peer connection. Any break in the peer-peer communication has a ripple effect on routing that can be widespread. Furthermore, outsider sources can also disrupt communications between BGP peers by breaking their TCP connection with spoofed packets. Outsider sources of bogus BGP information can reside anywhere in the world.",
+      "ja": "ピア - ピア通信の暗号化認証はBGPの不可欠な部分ではありません。 TCP / IPプロトコルとして、BGPは、すべてのTCP / IP攻撃、例えば、IPスプーフィング、セッションの盗難等BGPピア間通信に信じられるBGPメッセージを注入し、それによって偽のルーティング情報を注入または壊すことができる任意の部外者の対象となりますピア・ツー・ピア接続。ピア - ピア通信の任意の中断が普及することができるルーティングに波及効果を有しています。さらに、部外源も偽装されたパケットとのTCP接続を壊すことにより、BGPピア間の通信を妨害することができます。偽のBGP情報のアウトサイダー源は、世界のどこに置くことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Consequently, the current BGP specification requires that a BGP implementation must support the authentication mechanism specified in [TCPMD5]. However, the requirement for support of that authentication mechanism cannot ensure that the mechanism is configured for use. The mechanism of [TCPMD5] is based on a pre-installed, shared secret; it does not have the capability of IPsec [IPsec] to agree on a shared secret dynamically. Consequently, the use of [TCPMD5] must be a deliberate decision, not an automatic feature or a default.",
+      "ja": "したがって、現在のBGP仕様は、BGP実装は[TCPMD5]で指定された認証メカニズムをサポートしなければならないことを要求します。しかし、その認証機構をサポートするための要件は、メカニズムが使用するように構成されていることを確認することはできません。 【TCPMD5]のメカニズムは、プリインストール、共有秘密に基づいています。それは、動的に共有秘密に同意するIPsecの[IPsecの]の機能はありません。その結果、[TCPMD5]の使用は意図的な意思決定ではなく、自動機能またはデフォルトでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The current BGP specification also allows for implementations that would accept connections from \"unconfigured peers\" ([RFC4271] Section 8). However, the specification is not clear as to what an unconfigured peer might be, or how the protections of [TCPMD5] would",
+      "ja": "現在のBGPの仕様は、「未設定ピア」（[RFC4271]セクション8）からの接続を受け入れる実装を可能にします。ただし、仕様は未設定ピアが何であるかについての明確ではない、またはどのように[TCPMD5]の保護を希望"
+    },
+    {
+      "indent": 3,
+      "text": "apply in such a case. Therefore, it is not possible to include an analysis of the security issues of this feature. When a specification that describes this feature more fully is released, a security analysis should be part of that specification.",
+      "ja": "このような場合に適用されます。したがって、この機能のセキュリティ問題の分析を含めることはできません。もっとこの機能を完全に説明仕様がリリースされると、セキュリティ分析は、その仕様の一部でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "BGP speakers themselves can inject bogus routing information, either by masquerading as any other legitimate BGP speaker, or by distributing unauthorized routing information as themselves. Historically, misconfigured and faulty routers have been responsible for widespread disruptions in the Internet. The legitimate BGP peers have the context and information to produce believable, yet bogus, routing information, and therefore have the opportunity to cause great damage. The cryptographic protections of [TCPMD5] and operational protections cannot exclude the bogus information arising from a legitimate peer. The risk of disruptions caused by legitimate BGP speakers is real and cannot be ignored.",
+      "ja": "BGPスピーカ自体は、他の正規のBGPスピーカになりすましによって、又はそれ自体として、不正なルーティング情報を分配することによってのいずれかで、偽のルーティング情報を注入することができます。歴史的に、誤った設定や障害のあるルータは、インターネットで広く混乱を担当してきました。合法的なBGPピアは信じられない、まだ偽の、ルーティング情報を生成するコンテキスト情報を持っているので、大きな被害を発生させる機会を持っています。 【TCPMD5]と動作保護の暗号化保護は正規のピアから生じる偽の情報を除外することはできません。合法的なBGPスピーカによって引き起こされる混乱の危険性は本当であり、無視することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Bogus routing information can have many different effects on routing behavior. If the bogus information removes routing information for a particular network, that network can become unreachable for the portion of the Internet that accepts the bogus information. If the bogus information changes the route to a network, then packets destined for that network may be forwarded by a sub-optimal path, or by a path that does not follow the expected policy, or by a path that will not forward the traffic. Consequently, traffic to that network could be delayed by a path that is longer than necessary. The network could become unreachable from areas where the bogus information is accepted. Traffic might also be forwarded along a path that permits some adversary to view or modify the data. If the bogus information makes it appear that an autonomous system originates a network when it does not, then packets for that network may not be deliverable for the portion of the Internet that accepts the bogus information. A false announcement that an autonomous systems originates a network may also fragment aggregated address blocks in other parts of the Internet and cause routing problems for other networks.",
+      "ja": "偽のルーティング情報は、ルーティング動作上の多くの異なる効果を持つことができます。偽の情報は、特定のネットワークのためのルーティング情報を削除した場合、そのネットワークは、偽の情報を受け付けるインターネットの部分の到達不能になることができます。偽の情報がネットワークへのルートを変更した場合、そのネットワーク宛てのパケット準最適経路によって、または期待される方針に従わない経路によって、またはトラフィックを転送しないであろう経路によって転送することができます。したがって、そのネットワークへのトラフィックは、必要以上に長いパスによって遅延することができます。ネットワークは、偽の情報が受理された領域から到達不能になる可能性があります。トラフィックは、データを表示または変更するには、いくつかの敵を許可するパスに沿って転送される可能性があります。偽の情報が、自律システムがネットワークを発信することを見せる場合はそうでないときは、そのネットワークのためのパケットは、偽の情報を受け付け、インターネットの一部を送達可能でないかもしれません。偽の発表は、自律システムことネットワークは、インターネットの他の部分に集約アドレスブロックを断片化し、他のネットワークのためのルーティング問題を引き起こす可能性が生じます。"
+    },
+    {
+      "indent": 3,
+      "text": "The damages that might result from these attacks include:",
+      "ja": "これらの攻撃に起因するかもしれない損害が含まれます："
+    },
+    {
+      "indent": 6,
+      "text": "starvation: Data traffic destined for a node is forwarded to a part of the network that cannot deliver it.",
+      "ja": "飢餓：ノード宛てのデータトラフィックは、それを配信することはできませんネットワークの一部に転送されます。"
+    },
+    {
+      "indent": 6,
+      "text": "network congestion: More data traffic is forwarded through some portion of the network than would otherwise need to carry the traffic.",
+      "ja": "ネットワークの輻輳：より多くのデータトラフィックは、それ以外のトラフィックを伝送する必要があるよりも、ネットワークの一部を介して転送されます。"
+    },
+    {
+      "indent": 6,
+      "text": "blackhole: Large amounts of traffic are directed to be forwarded through one router that cannot handle the increased level of traffic and drops many/most/all packets.",
+      "ja": "ブラックホール：大量のトラフィックは、トラフィックの増加レベルを処理し、多くの/ほとんど/すべてのパケットをドロップすることはできません1ルータ経由で転送するように指示されています。"
+    },
+    {
+      "indent": 6,
+      "text": "delay: Data traffic destined for a node is forwarded along a path that is in some way inferior to the path it would otherwise take.",
+      "ja": "遅延：ノード宛てのデータトラフィックは、それがそう取るパスに劣って何らかの方法であるパスに沿って転送されます。"
+    },
+    {
+      "indent": 6,
+      "text": "looping: Data traffic is forwarded along a path that loops, so that the data is never delivered.",
+      "ja": "ループ：データトラフィックは、データが配信されることはありませんように、ループの経路に沿って転送されます。"
+    },
+    {
+      "indent": 6,
+      "text": "eavesdrop: Data traffic is forwarded through some router or network that would otherwise not see the traffic, affording an opportunity to see the data.",
+      "ja": "盗聴：データトラフィックはそれ以外のデータを参照する機会を与える、トラフィックは表示されませんいくつかのルータやネットワークを介して転送されます。"
+    },
+    {
+      "indent": 6,
+      "text": "partition: Some portion of the network believes that it is partitioned from the rest of the network, when, in fact, it is not.",
+      "ja": "パーティション：ネットワークのいくつかの部分は、実際には、そうでないとき、それは、ネットワークの他の部分から分割されていると信じています。"
+    },
+    {
+      "indent": 6,
+      "text": "cut: Some portion of the network believes that it has no route to some network to which it is, in fact, connected.",
+      "ja": "カット：ネットワークの一部が、それはそれは、実際には、接続されているいくつかのネットワークへのルートを持っていないと考えています。"
+    },
+    {
+      "indent": 6,
+      "text": "churn: The forwarding in the network changes at a rapid pace, resulting in large variations in the data delivery patterns (and adversely affecting congestion control techniques).",
+      "ja": "チャーン：急速にネットワークの変更に転送、データ配信パターン（及び悪影響を及ぼす輻輳制御技術）の大きな変動をもたらします。"
+    },
+    {
+      "indent": 6,
+      "text": "instability: BGP becomes unstable in such a way that convergence on a global forwarding state is not achieved.",
+      "ja": "不安定性：BGPがグローバルフォワーディング状態に収束が達成されないように不安定になります。"
+    },
+    {
+      "indent": 6,
+      "text": "overload: The BGP messages themselves become a significant portion of the traffic the network carries.",
+      "ja": "過負荷：BGPメッセージ自体はネットワークを伝送するトラフィックの重要な部分になります。"
+    },
+    {
+      "indent": 6,
+      "text": "resource exhaustion: The BGP messages themselves cause exhaustion of critical router resources, such as table space.",
+      "ja": "リソースの枯渇：自身がそのようなテーブルスペースなどの重要なルータ資源の枯渇を引き起こすBGPメッセージ。"
+    },
+    {
+      "indent": 6,
+      "text": "address-spoofing: Data traffic is forwarded through some router or network that is spoofing the legitimate address, thus enabling an active attack by affording the opportunity to modify the data.",
+      "ja": "アドレススプーフィング：データトラフィックは、このようにデータを修正する機会を与えることにより、積極的な攻撃を可能にする、正当なアドレスをスプーフィングされたいくつかのルータやネットワークを介して転送されます。"
+    },
+    {
+      "indent": 3,
+      "text": "These consequences can fall exclusively on one end-system prefix or may effect the operation of the network as a whole.",
+      "ja": "これらの結果は、1エンドシステムの接頭辞だけに落ちることができるか、ネットワーク全体としての動作に影響を与え得ます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Specification of Requirements",
+      "section_title": true,
+      "ja": "1.1。要件の仕様"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC2119 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Attacks",
+      "section_title": true,
+      "ja": "2.攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "BGP, in and of itself, is subject to the following attacks. (The list is taken from the IAB RFC that provides guidelines for the \"Security Considerations\" section of RFCs [SecCons].)",
+      "ja": "BGPは、それ自体が、次の攻撃の対象となります。 （リストは[SecCons] RFCの「セキュリティ上の考慮事項」セクションのためのガイドラインを提供IABのRFCから取得されます。）"
+    },
+    {
+      "indent": 6,
+      "text": "confidentiality violations: The routing data carried in BGP is carried in cleartext, so eavesdropping is a possible attack against routing data confidentiality. (Routing data confidentiality is not a common requirement.)",
+      "ja": "守秘義務違反：BGPで運ばれるルーティングデータは平文で行われるので、盗聴は、ルーティングデータの機密性に対する攻撃の可能性です。 （データの機密性をルーティングすることは一般的な要件ではありません。）"
+    },
+    {
+      "indent": 6,
+      "text": "replay: BGP does not provide for replay protection of its messages.",
+      "ja": "再生：BGPは、そのメッセージの再生保護のために提供されていません。"
+    },
+    {
+      "indent": 6,
+      "text": "message insertion: BGP does not provide protection against insertion of messages. However, because BGP uses TCP, when the connection is fully established, message insertion by an outsider would require accurate sequence number prediction (not entirely out of the question, but more difficult with mature TCP implementations) or session-stealing attacks.",
+      "ja": "メッセージ挿入：BGPメッセージの挿入に対する保護を提供していません。 BGPはTCPを使用しているため、接続が完全に確立されたときしかし、部外によるメッセージの挿入は（ない完全に論外が、成熟したTCPの実装と、より困難な）正確なシーケンス番号予測を必要とするか、セッションを盗む攻撃。"
+    },
+    {
+      "indent": 6,
+      "text": "message deletion: BGP does not provide protection against deletion of messages. Again, this attack is more difficult against a mature TCP implementation, but is not entirely out of the question.",
+      "ja": "メッセージの削除：BGPメッセージの削除に対する保護を提供していません。ここでも、この攻撃は、成熟したTCPの実装に対してより困難であるが、問題外完全ではありません。"
+    },
+    {
+      "indent": 6,
+      "text": "message modification: BGP does not provide protection against modification of messages. A modification that was syntactically correct and did not change the length of the TCP payload would in general not be detectable.",
+      "ja": "メッセージの変更：BGPメッセージの変更に対する保護を提供していません。文法的に正しかったとTCPペイロードの長さを変更していない変更は、一般的には、検出可能ではないでしょう。"
+    },
+    {
+      "indent": 6,
+      "text": "man-in-the-middle: BGP does not provide protection against man-in-the-middle attacks. As BGP does not perform peer entity authentication, a man-in-the-middle attack is child's play.",
+      "ja": "man-in-the-middleは：BGPは、man-in-the-middle攻撃に対する保護を提供していません。 BGPピアエンティティ認証を行いませんので、man-in-the-middle攻撃は、子どもの遊びです。"
+    },
+    {
+      "indent": 6,
+      "text": "denial of service: While bogus routing data can present a denial of service attack on the end systems that are trying to transmit data through the network and on the network infrastructure itself, certain bogus information can represent a denial of service on the BGP routing protocol. For example, advertising large numbers of more specific routes (i.e., longer prefixes) can cause BGP traffic and router table size to increase, even explode.",
+      "ja": "サービス拒否：偽のルーティング情報は、ネットワークを介して、ネットワーク・インフラストラクチャ自体にデータを送信しようとしているエンドシステムにサービス拒否攻撃を提示することができるが、特定の偽の情報は、BGPルーティングプロトコルにサービスの拒否を表すことができます。例えば、より特定のルート（すなわち、長いプレフィックス）を大量に宣伝することはBGPトラフィックとルータテーブルサイズが爆発しても、増加する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The mandatory-to-support mechanism of [TCPMD5] will counter message insertion, deletion, and modification, man-in-the-middle and denial of service attacks from outsiders. The use of [TCPMD5] does not protect against eavesdropping attacks, but routing data confidentiality is not a goal of BGP. The mechanism of [TCPMD5] does",
+      "ja": "【TCPMD5]の必須の対支持機構は、外部からのメッセージの挿入、削除、および修正、のman-in-the-middle及びサービス拒否攻撃に対抗します。 [TCPMD5]を使用すると、盗聴攻撃から保護することはできませんが、ルーティングデータの機密性は、BGPの目標ではありません。 【TCPMD5]のメカニズムはありません"
+    },
+    {
+      "indent": 3,
+      "text": "not protect against replay attacks, so the only protection against replay is provided by the TCP sequence number processing. Therefore, a replay attack could be mounted against a BGP connection protected with [TCPMD5] but only in very carefully timed circumstances. The mechanism of [TCPMD5] cannot protect against bogus routing information that originates from an insider.",
+      "ja": "リプレイに対する唯一の保護はTCPシーケンス番号の処理によって提供されるように、リプレイ攻撃を防ぐことはできませ。従って、リプレイ攻撃は[TCPMD5]とだけ非常に慎重にタイミング状況で保護BGP接続に対して取り付けることができます。 【TCPMD5]のメカニズムは、インサイダー由来する偽のルーティング情報から保護することができません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Vulnerabilities and Risks",
+      "section_title": true,
+      "ja": "3.脆弱性とリスク"
+    },
+    {
+      "indent": 3,
+      "text": "The risks in BGP arise from three fundamental vulnerabilities:",
+      "ja": "BGPでのリスクは3件の基本的な脆弱性に起因します："
+    },
+    {
+      "indent": 3,
+      "text": "(1) BGP has no internal mechanism that provides strong protection of the integrity, freshness, and peer entity authenticity of the messages in peer-peer BGP communications.",
+      "ja": "（1）BGPは、強力な完全性の保護、新鮮さ、及びピア・ツー・ピアのBGP通信におけるメッセージのピアエンティティの真正性を提供しない内部機構を有していません。"
+    },
+    {
+      "indent": 3,
+      "text": "(2) no mechanism has been specified within BGP to validate the authority of an AS to announce NLRI information.",
+      "ja": "（2）メカニズムはNLRI情報を発表するASの権限を検証するために、BGP内に指定されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "(3) no mechanism has been specified within BGP to ensure the authenticity of the path attributes announced by an AS.",
+      "ja": "（3）メカニズムは、ASによって発表パス属性の真正性を保証するために、BGP内に指定されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The first fundamental vulnerability motivated the mandated support of [TCPMD5] in the BGP specification. When the support of [TCPMD5] is employed, message integrity and peer entity authentication are provided. The mechanism of [TCPMD5] assumes that the MD5 algorithm is secure and that the shared secret is protected and chosen to be difficult to guess.",
+      "ja": "最初の基本的な脆弱性はBGP仕様の[TCPMD5]の委任をサポートし動機。 【TCPMD5]のサポートを採用する場合、メッセージの完全性及びピアエンティティ認証が提供されます。 【TCPMD5]のメカニズムは、MD5アルゴリズムは安全で共有される秘密が保護され、推測するのが困難であるように選択されることであることを前提としています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the discussion that follows, the vulnerabilities are described in terms of the BGP Finite State Machine events. The events are defined and discussed in section 8 of [RFC4271]. The events mentioned here are:",
+      "ja": "以下の説明では、脆弱性は、BGP有限状態機械イベントに関して説明されています。イベントが定義され、[RFC4271]のセクション8に記載されています。ここで言及したイベントは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "[Administrative Events]",
+      "ja": "[管理イベント]"
+    },
+    {
+      "indent": 8,
+      "text": "Event 2: ManualStop",
+      "ja": "イベント2：ManualStop"
+    },
+    {
+      "indent": 8,
+      "text": "Event 8: AutomaticStop",
+      "ja": "イベント8：AutomaticStop"
+    },
+    {
+      "indent": 3,
+      "text": "[Timer Events]",
+      "ja": "[タイマーイベント]"
+    },
+    {
+      "indent": 8,
+      "text": "Event 9: ConnectRetryTimer_Expires",
+      "ja": "イベント9：ConnectRetryTimer_Expires"
+    },
+    {
+      "indent": 8,
+      "text": "Event 10: HoldTimer_Expires",
+      "ja": "イベント10：HoldTimer_Expires"
+    },
+    {
+      "indent": 8,
+      "text": "Event 11: KeepaliveTimer_Expires",
+      "ja": "イベント11：KeepaliveTimer_Expires"
+    },
+    {
+      "indent": 8,
+      "text": "Event 12: DelayOpenTimer_Expires",
+      "ja": "イベント12：DelayOpenTimer_Expires"
+    },
+    {
+      "indent": 8,
+      "text": "Event 13: IdleHoldTimer_Expires",
+      "ja": "イベント13：IdleHoldTimer_Expires"
+    },
+    {
+      "indent": 3,
+      "text": "[TCP Connection based Events]",
+      "ja": "[TCPコネクションベースのイベント]"
+    },
+    {
+      "indent": 8,
+      "text": "Event 14: TcpConnection_Valid",
+      "ja": "イベント14：TcpConnection_Valid"
+    },
+    {
+      "indent": 8,
+      "text": "Event 16: Tcp_CR_Acked",
+      "ja": "イベント16：Tcp_CR_Acked"
+    },
+    {
+      "indent": 8,
+      "text": "Event 17: TcpConnectionConfirmed",
+      "ja": "イベント17：TcpConnectionConfirmed"
+    },
+    {
+      "indent": 8,
+      "text": "Event 18: TcpConnectionFails",
+      "ja": "イベント18：TcpConnectionFails"
+    },
+    {
+      "indent": 3,
+      "text": "[BGP Messages based Events]",
+      "ja": "[BGPメッセージベースのイベント]"
+    },
+    {
+      "indent": 8,
+      "text": "Event 19: BGPOpen",
+      "ja": "イベント19：BGPOpen"
+    },
+    {
+      "indent": 8,
+      "text": "Event 20: BGPOpen with DelayOpenTimer running",
+      "ja": "イベント20：DelayOpenTimerが動作しているBGPOpen"
+    },
+    {
+      "indent": 8,
+      "text": "Event 21: BGPHeaderErr",
+      "ja": "イベント21：BGPHeaderErr"
+    },
+    {
+      "indent": 8,
+      "text": "Event 22: BGPOpenMsgErr",
+      "ja": "イベント22：BGPOpenMsgErr"
+    },
+    {
+      "indent": 8,
+      "text": "Event 23: OpenCollisionDump",
+      "ja": "イベント23：OpenCollisionDump"
+    },
+    {
+      "indent": 8,
+      "text": "Event 24: NotifMsgVerErr",
+      "ja": "イベント24：NotifMsgVerErr"
+    },
+    {
+      "indent": 8,
+      "text": "Event 25: NotifMsg",
+      "ja": "イベント25：NotifMsg"
+    },
+    {
+      "indent": 8,
+      "text": "Event 26: KeepAliveMsg",
+      "ja": "イベント26：KeepAliveMsg"
+    },
+    {
+      "indent": 8,
+      "text": "Event 27: UpdateMsg",
+      "ja": "イベント27：UpdateMsg"
+    },
+    {
+      "indent": 8,
+      "text": "Event 28: UpdateMsgErr",
+      "ja": "イベント28：UpdateMsgErr"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Vulnerabilities in BGP Messages",
+      "section_title": true,
+      "ja": "3.1。 BGPメッセージの脆弱性"
+    },
+    {
+      "indent": 3,
+      "text": "There are four different BGP message types - OPEN, KEEPALIVE, NOTIFICATION, and UPDATE. This section contains a discussion of the vulnerabilities arising from each message and the ability of outsiders or BGP peers to exploit the vulnerabilities. To summarize, outsiders can use bogus OPEN, KEEPALIVE, NOTIFICATION, or UPDATE messages to disrupt the BGP peer-peer connections. They can use bogus UPDATE messages to disrupt routing without breaking the peer-peer connection. Outsiders can also disrupt BGP peer-peer connections by inserting bogus TCP packets that disrupt the TCP connection processing. In general, the ability of outsiders to use bogus BGP and TCP messages is limited, but not eliminated, by the TCP sequence number processing. The use of [TCPMD5] can counter these",
+      "ja": "OPEN、KEEPALIVE、通知、およびUPDATE  - 四つの異なるBGPメッセージのタイプがあります。このセクションでは、各メッセージおよび脆弱性を悪用するために外部またはBGPピアの能力に起因する脆弱性の議論を含んでいます。要約すると、部外者には、BGPピア・ピア接続を破壊する偽のOPEN、KEEPALIVE、通知、またはUPDATEメッセージを使用することができます。彼らは、ピア・ツー・ピア接続を壊すことなく、ルーティングを破壊する偽のUPDATEメッセージを使用することができます。部外者はまた、TCP接続処理を破壊偽のTCPパケットを挿入することにより、BGPピア - ピア接続を破壊することができます。一般的に、偽のBGPおよびTCPメッセージを使用する外部の能力は限られているが、TCPシーケンス番号の処理により、除去されません。 [TCPMD5]の使用は、これらに対抗することができます"
+    },
+    {
+      "indent": 3,
+      "text": "outsider attacks. BGP peers themselves are permitted to break peer-peer connections, at any time, using NOTIFICATION messages. Thus, there is no additional risk of broken connections through their use of OPEN, KEEPALIVE, or UPDATE messages. However, BGP peers can disrupt routing (in impermissible ways) by issuing UPDATE messages that contain bogus routing information. In particular, bogus ATOMIC_AGGREGATE, NEXT_HOP and AS_PATH attributes and bogus NLRI in UPDATE messages can disrupt routing. The use of [TCPMD5] will not counter these attacks from BGP peers.",
+      "ja": "部外者の攻撃。 BGPは自身が通知メッセージを使用して、任意の時点で、ピア・ツー・ピア接続を破るために許可されているピア。このように、OPEN、KEEPALIVE、またはUPDATEメッセージの利用突破接続の追加のリスクがありません。しかし、BGPピアは偽のルーティング情報が含まれているUPDATEメッセージを発行することにより、（許されない方法で）ルーティングを混乱させることができます。特に、偽のATOMIC_AGGREGATEでは、UPDATEメッセージでNEXT_HOPとAS_PATH属性と偽のNLRIはルーティングを妨害することができます。 [TCPMD5]を使用すると、BGPピアからこれらの攻撃に対抗しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Each message introduces certain vulnerabilities and risks, which are discussed in the following sections.",
+      "ja": "各メッセージは、以下のセクションで説明される特定の脆弱性とリスクを導入します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. Message Header",
+      "section_title": true,
+      "ja": "3.1.1。メッセージのヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Event 21: Each BGP message starts with a standard header. In all cases, syntactic errors in the message header will cause the BGP speaker to close the connection, release all associated BGP resources, delete all routes learned through that connection, run its decision process to decide on new routes, and cause the state to return to Idle. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. An outsider who could spoof messages with message header errors could cause disruptions in routing over a wide area.",
+      "ja": "イベント21：各BGPメッセージは標準ヘッダで始まります。すべての場合において、メッセージヘッダー内の構文エラーを返すように状態を、接続を閉じ、関連するすべてのBGPリソースを解放し、その接続を通じて学んだすべてのルートを削除し、新しいルートを決定し、その決定プロセスを実行して、原因とBGPスピーカが発生しますアイドルします。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。メッセージヘッダのエラーでメッセージを偽装でき部外は広範囲にルーティングに混乱を引き起こす可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.2. OPEN",
+      "section_title": true,
+      "ja": "3.1.2。開いた"
+    },
+    {
+      "indent": 3,
+      "text": "Event 19: Receipt of an OPEN message in states Connect or Active will cause the BGP speaker to bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted.",
+      "ja": "イベント19：州のOPENメッセージの受信接続またはActiveは、BGPスピーカーは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行して、状態がIdleに復帰させることになります。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In state OpenConfirm or Established, the arrival of an OPEN may indicate a connection collision has occurred. If this connection is to be dropped, then Event 23 will be issued. (Event 23, discussed below, results in the same set of disruptive actions as mentioned above for states Connect or Active.)",
+      "ja": "状態OpenConfirmまたは確立では、OPENの到着は、接続衝突が発生したことを示すことができます。この接続が切断される場合、イベント23が発行されます。 （イベント23、以下に説明する、状態が接続またはアクティブのための上述のような破壊的行動の同じセット内の結果）。"
+    },
+    {
+      "indent": 3,
+      "text": "In state OpenSent, the arrival of an OPEN message will cause the BGP speaker to transition to the OpenConfirm state. If an outsider was able to spoof an OPEN message (requiring very careful timing), then the later arrival of the legitimate peer's OPEN message might lead the BGP speaker to declare a connection collision. The collision detection procedure may cause the legitimate connection to be dropped.",
+      "ja": "状態OpenSentでは、OPENメッセージの到着は、BGPスピーカはOpenConfirm状態に遷移します。部外者が（非常に慎重にタイミングを必要とする）OPENメッセージを偽装することができた場合は、正当なピアのOPENメッセージの後の到着は、接続衝突を宣言するBGPスピーカを導くかもしれません。衝突検出手順は、正当な接続が切断される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 20: If an OPEN message arrives when the DelayOpen timer is running when the connection is in state OpenSent, OpenConfirm or Established, the BGP speaker will bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. However, because the OpenDelay timer should never be running in these states, this effect could only be caused by an error in the implementation (a NOTIFICATION is sent with the error code \"Finite State Machine Error\"). It would be difficult, if not impossible, for an outsider to induce this Finite State Machine error.",
+      "ja": "イベント20：DelayOpenタイマーは、接続が確立された状態OpenSent、OpenConfirmである場合、または動作しているときにOPENメッセージが到着した場合、BGPスピーカは、すべての関連するルートを削除し、関連付けられたすべてのBGPリソースを解放し、接続をダウンさせる、その決定プロセスを実行します、および状態がIdleに復帰させます。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。 OpenDelayタイマーがこれらの状態で実行してはいけませんので、しかし、この効果は（通知がエラーコード「有限状態マシンエラー」で送られる）実装のエラーが原因で発生することができます。部外者がこの有限状態マシンエラーを誘発することは、難しく、不可能ではないだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "In states Connect and Active, this event will cause a transition to the OpenConfirm state. As in Event 19, if an outsider were able to spoof an OPEN, which arrived while the DelayOpen timer was running, then a later arriving OPEN (from the legitimate peer) might be considered a connection collision and the legitimate connection could be dropped.",
+      "ja": "状態は接続して、アクティブでは、このイベントはOpenConfirm状態への遷移が発生します。部外者がDelayOpenタイマーは、その後（正当なピアから）OPEN到着し、実行中に到着したOPENを偽装することができました場合、イベント19のように、接続衝突と見なされる可能性があり、正当な接続がドロップすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 22: Errors in the OPEN message (e.g., unacceptable Hold state, malformed Optional Parameter, unsupported version, etc.) will cause the BGP speaker to bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "イベント22：OPENメッセージ（例えば、許容できないホールド状態、不正な形式の任意パラメータ、サポートされていないバージョンなど）でのエラーは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定を実行するために、BGPスピーカが発生しますプロセス、および状態がIdleに復帰させます。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.3. KEEPALIVE",
+      "section_title": true,
+      "ja": "3.1.3。生き続ける"
+    },
+    {
+      "indent": 3,
+      "text": "Event 26: Receipt of a KEEPALIVE message, when the peering connection is in the Connect, Active, and OpenSent states, would cause the BGP speaker to transition to the Idle state and fail to establish a connection. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. The ability of an outsider to spoof this message can lead to a disruption of routing. To exploit this vulnerability deliberately, the KEEPALIVE must be carefully timed in the sequence of messages exchanged between the peers; otherwise, it causes no damage.",
+      "ja": "イベント26：ピアリング接続は接続、アクティブ、およびOpenSent状態にあるときにKEEPALIVEメッセージの領収書は、BGPスピーカがアイドル状態に移行し、接続を確立するために失敗する原因となります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。このメッセージをスプーフィングする部外者の能力は、ルーティングの破壊につながる可能性があります。故意にこの脆弱性を悪用するには、KEEPALIVEは慎重にピア間で交換されるメッセージの順序でタイミングを合わせなければなりません。それ以外の場合にはダメージを与えません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.4. NOTIFICATION",
+      "section_title": true,
+      "ja": "3.1.4。通知"
+    },
+    {
+      "indent": 3,
+      "text": "Event 25: Receipt of a NOTIFICATION message in any state will cause the BGP speaker to bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, in any state but Established, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "イベント25：どのような状態での通知メッセージの領収書は、BGPスピーカーは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行して、状態がIdleに復帰させることになります。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、どのような状態ではなく設立、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 24: A NOTIFICATION message carrying an error code of \"Version Error\" behaves the same as in Event 25, with the exception that the optional peer oscillation damping is not performed in states OpenSent or OpenConfirm, or in states Connect or Active if the DelayOpen timer is running. Therefore, the damage caused is one small bit less, because restarting the connection is not affected.",
+      "ja": "イベント24：「バージョンエラー」のエラー・コードを運ぶNOTIFICATIONメッセージは、オプションのピア振動減衰が状態OpenSent又はOpenConfirmで行わ、または状態に接続するか、DelayOpen場合にアクティブされていないことを除いて、イベント25と同様に振る舞いますタイマーが実行されています。接続を再起動は影響を受けていないので、そのため、ダメージは、一つの小さなビット以下です。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.5. UPDATE",
+      "section_title": true,
+      "ja": "3.1.5。更新"
+    },
+    {
+      "indent": 3,
+      "text": "Event 8: A BGP speaker may optionally choose to automatically disconnect a BGP connection if the total number of prefixes exceeds a configured maximum. In such a case, an UPDATE may carry a number of prefixes that would result in that maximum being exceeded. The BGP speaker would disconnect the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "イベント8：BGPスピーカは、任意のプレフィックスの合計数が設定された最大を超えた場合に自動的にBGP接続を切断することを選択することができます。このような場合には、UPDATEはその最大値を超えていることになるプレフィックスの数を運ぶことができます。 BGPスピーカは、接続を切断し、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行し、状態はアイドルに戻りしまいます。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 28: If the UPDATE message is malformed, then the BGP speaker will bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. (Here, \"malformed\" refers to improper Withdrawn Routes Length, Total Attribute Length, or Attribute Length, missing mandatory well-known attributes, Attribute Flags that conflict with the Attribute Type Codes, syntactic errors in the ORIGIN, NEXT_HOP or AS_PATH, etc.) The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. Consequently, the ability of an outsider to spoof this message could cause widespread disruption of routing. As a BGP speaker has the authority to close a connection whenever it wants, this message gives BGP speakers no additional opportunity to cause damage.",
+      "ja": "イベント28：UPDATEメッセージが不正な形式である場合には、BGPスピーカは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行し、状態はアイドルに戻り原因となります。 （ここでは、「不正な」は、長さ属性必須のよく知られた属性が欠落している、そのORIGIN、NEXT_HOPまたはAS_PATHなどでの属性タイプコード、構文エラーとの競合のフラグを属性不適切な撤回経路の長さ、総属性長を意味し、または）経路の欠失は、ルーティングの変更が他のピアを介して伝搬するカスケード効果を引き起こすことができます。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。そのため、このメッセージを偽装する部外者の能力は、ルーティングの広範な混乱を引き起こす可能性があります。 BGPスピーカーは、それが望んでいる時はいつでも、接続をクローズする権限を持っているように、このメッセージは、BGPスピーカに損傷を引き起こすために追加の機会を与えません。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 27: An Update message that arrives in any state except Established will cause the BGP speaker to bring down the connection, release all associated BGP resources, delete all associated routes, run its decision process, and cause the state to return to Idle. The deletion of routes can cause a cascading effect in which routing changes propagate through other peers. Also, optionally, an implementation-specific peer oscillation damping may be performed. The peer oscillation damping process can affect how soon the connection can be restarted. Consequently, the ability of an outsider to spoof this message can lead to a severe disruption of routing over a wide area.",
+      "ja": "イベント27：設立以外の任意の状態に到着Updateメッセージは、BGPスピーカは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行して、状態がIdleに復帰させることになります。ルートの削除はルーティングの変更が他のピアを介して伝播したカスケード効果を引き起こす可能性があります。また、必要に応じて、実装固有のピア振動減衰を行うようにしてもよいです。ピア・振動減衰プロセスは、接続が再開することができる方法をすぐに影響を与えることができます。したがって、このメッセージを偽装する部外者の能力は、広い領域にわたってルーティングの厳しい破壊につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the Established state, the Update message carries the routing information. The ability to spoof any part of this message can lead to a disruption of routing, whether the source of the message is an outsider or a legitimate BGP speaker.",
+      "ja": "設立された状態では、Updateメッセージは、ルーティング情報を運びます。このメッセージの任意の部分を偽装する能力は、メッセージのソースが部外者または正規BGPスピーカであるかどうかを、ルーティングの崩壊につながる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.5.1. Unfeasible Routes Length, Total Path Attribute Length",
+      "section_title": true,
+      "ja": "3.1.5.1。実現不可能ルート長、総パス属性の長さ"
+    },
+    {
+      "indent": 3,
+      "text": "There is a vulnerability arising from the ability to modify these fields. If a length is modified, the message is not likely to parse properly, resulting in an error, the transmission of a NOTIFICATION message and the close of the connection (see Event 28, above). As a true BGP speaker is able to close a connection at any time, this vulnerability represents an additional risk only when the source is not the configured BGP peer, i.e., it presents no additional risk from BGP speakers.",
+      "ja": "これらのフィールドを修正する能力に起因する脆弱性があります。長さが変更された場合、メッセージは、通知メッセージの送信と接続のクローズ（上記、イベント28を参照）エラーが発生し、正しく解析しにくいです。真のBGPスピーカは、任意の時点で接続を閉じることができるように、ソースは、構成されたBGPピアではない、すなわち、それはBGPスピーカからの追加的なリスクを提示しない場合にのみ、この脆弱性は、追加的なリスクを表します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.5.2. Withdrawn Routes",
+      "section_title": true,
+      "ja": "3.1.5.2。取り下げルート"
+    },
+    {
+      "indent": 3,
+      "text": "An outsider could cause the elimination of existing legitimate routes by forging or modifying this field. An outsider could also cause the elimination of reestablished routes by replaying this withdrawal information from earlier packets.",
+      "ja": "部外者は、鍛造またはこのフィールドを変更することで、既存の正当なルートの排除を引き起こす可能性があります。部外者はまた、以前のパケットからこの撤退情報を再生することによって再確立ルートの排除を引き起こす可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A BGP speaker could \"falsely\" withdraw feasible routes using this field. However, as the BGP speaker is authoritative for the routes it will announce, it is allowed to withdraw any previously announced routes that it wants. As the receiving BGP speaker will only withdraw routes associated with the sending BGP speaker, there is no opportunity for a BGP speaker to withdraw another BGP speaker's routes. Therefore, there is no additional risk from BGP peers via this field.",
+      "ja": "BGPスピーカは「誤って」このフィールドを使用して実現可能なルートを撤回することができます。 BGPスピーカーは、それが発表する予定のルートに対して権限を持っているようしかし、それは望んで以前に発表されたルートを撤回する許可されています。受信BGPスピーカのみを送信するBGPスピーカに関連したルートを撤回するように、他のBGPスピーカのルートを撤回するBGPスピーカーのための機会はありません。したがって、このフィールドを経由してBGPピアからの追加的なリスクはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.5.3. Path Attributes",
+      "section_title": true,
+      "ja": "3.1.5.3。パスの属性"
+    },
+    {
+      "indent": 3,
+      "text": "The path attributes present many different vulnerabilities and risks.",
+      "ja": "パスが存在する多くの異なる脆弱性とリスクを属性。"
+    },
+    {
+      "indent": 3,
+      "text": "o Attribute Flags, Attribute Type Codes, Attribute Length",
+      "ja": "Oフラグ、属性タイプコード、属性の長さ属性"
+    },
+    {
+      "indent": 6,
+      "text": "A BGP peer or an outsider could modify the attribute length or attribute type (flags and type codes) not to reflect the attribute values that followed. If the flags were modified, the flags and type code could become incompatible (i.e., a mandatory attribute marked as partial), or an optional attribute could be interpreted as a mandatory attribute or vice versa. If the type code were modified, the attribute value could be interpreted as if it were the data type and value of a different attribute.",
+      "ja": "BGPピアまたは部外者は、属性の長さを変更したり、タイプ（フラグとタイプコード）属性続く属性値を反映することができませんでした。フラグが変更された場合、フラグとタイプコード（すなわち、必須属性は、部分マーク）非互換になる可能性があり、またはオプションの属性は、必須属性またはその逆として解釈することができます。タイプコードが変更された場合、それは別の属性のデータ・タイプおよび値であるかのように、属性値を解釈することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "The most likely result from modifying the attribute length, flags, or type code would be a parse error of the UPDATE message. A parse error would cause the transmission of a NOTIFICATION message and the close of the connection (see Event 28, above). As a true BGP speaker is able to close a connection at any time, this vulnerability represents an additional risk only when the source is an outsider, i.e., it presents no additional risk from a BGP peer.",
+      "ja": "属性の長さ、フラグ、またはタイプコードを修正から最も可能性の高い結果がUPDATEメッセージの解析エラーであろう。解析エラーは、通知メッセージの送信と接続（上記、イベント28を参照）の近くを引き起こします。真のBGPスピーカは、いつでも接続を閉じることができるように、この脆弱性は、ソース、すなわち、それは、BGPピアからの追加的なリスクを提示しない、部外者である場合にのみ、追加的なリスクを表します。"
+    },
+    {
+      "indent": 3,
+      "text": "o ORIGIN",
+      "ja": "お おりぎん"
+    },
+    {
+      "indent": 6,
+      "text": "This field indicates whether the information was learned from IGP or EGP information. This field is used in making routing decisions, so there is some small vulnerability of being able to affect the receiving BGP speaker's routing decision by modifying this field.",
+      "ja": "このフィールドは、情報がIGPまたはEGP情報から学習されたかどうかを示します。このフィールドは、ルーティング決定を行う際に使用されているので、このフィールドを変更することで、受信したBGPスピーカのルーティング決定に影響を与えることができるといういくつかの小さな脆弱性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o AS_PATH",
+      "ja": "AS_PATH O"
+    },
+    {
+      "indent": 6,
+      "text": "A BGP peer or outsider could announce an AS_PATH that was not accurate for the associated NLRI.",
+      "ja": "BGPピアまたは部外者は、関連付けられたNLRIのために正確ではありませんでしたAS_PATHを発表する可能性があります。"
+    },
+    {
+      "indent": 6,
+      "text": "Because a BGP peer might not verify that a received AS_PATH begins with the AS number of its peer, a malicious BGP peer could announce a path that begins with the AS of any BGP speaker, with little impact on itself. This could affect the receiving BGP speaker's decision procedure and choice of installed route. The malicious peer could considerably shorten the AS_PATH, which will increase that route's chances of being chosen, possibly giving the malicious peer access to traffic it would otherwise not receive. The shortened AS_PATH also could result in routing loops, as it does not contain the information needed to prevent loops.",
+      "ja": "BGPピアは受信AS_PATHがピアのAS番号で始まることを確認していない可能性があるため、悪意のあるBGPピアは、それ自体にはほとんど影響を与え、すべてのBGPスピーカのASで始まるパスを発表することができます。これは、受信したBGPスピーカの決定手順とインストールルートの選択に影響を与える可能性があります。悪意あるピアはかなり多分それはそう受け取りませんトラフィックに悪意あるピアへのアクセスを与え、選択されているのそのルートのチャンスを増加しますAS_PATHを、短くすることができます。それは、ループを防止するために必要な情報が含まれていないように短縮AS_PATHも、ルーティングループが生じる可能性があります。"
+    },
+    {
+      "indent": 6,
+      "text": "It is possible for a BGP speaker to be configured to accept routes with its own AS number in the AS path. Such operational considerations are defined to be \"outside the scope\" of the BGP specification. But because AS_PATHs can legitimately have loops, implementations cannot automatically reject routes with loops. Each BGP speaker verifies only that its own AS number does not appear in the AS_PATH.",
+      "ja": "BGPスピーカは、ASパスに独自のAS番号を持つルートを受け入れるように構成されることが可能です。そのような動作の考察はBGPの仕様の「範囲外」であると定義されます。 AS_PATHsが合法的にループを持つことができるので、しかし、実装は自動的にループを有するルートを拒否することはできません。各BGPスピーカは、自身のAS番号はAS_PATHに表示されないだけでことを確認します。"
+    },
+    {
+      "indent": 6,
+      "text": "Coupled with the ability to use any value for the NEXT_HOP, this provides a malicious BGP speaker considerable control over the path traffic will take.",
+      "ja": "NEXT_HOPのための任意の値を使用する能力と相まって、これはパストラフィック比べてかなりの制御がかかります悪意のあるBGPスピーカを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Originating Routes",
+      "ja": "O発生するルート"
+    },
+    {
+      "indent": 6,
+      "text": "A special case of announcing a false AS_PATH occurs when the AS_PATH advertises a direct connection to a specific network address. A BGP peer or outsider could disrupt routing to the network(s) listed in the NLRI field by falsely advertising a direct connection to the network. The NLRI would become unreachable to the portion of the network that accepted this false route, unless the ultimate AS on the AS_PATH undertook to tunnel the packets it was forwarded for this NLRI toward their true destination AS by a valid path. But even when the packets are tunneled to the correct destination AS, the route followed may not be optimal, or may not follow the intended policy. Additionally, routing for other networks in the Internet could be affected if the false advertisement fragmented an aggregated address block, forcing the routers to handle (issue UPDATES, store, manage) the multiple fragments rather than the single aggregate. False originations for multiple addresses can result in routers and transit networks along the announced route to become flooded with misdirected traffic.",
+      "ja": "AS_PATHは、特定のネットワークアドレスへの直接接続をアドバタイズする場合はfalse AS_PATHを発表する特別なケースが発生します。 BGPピアまたは部外者が誤ってネットワークへの直接接続を広告することによってNLRIフィールドにリストされたネットワーク（複数可）へのルーティングを破壊する可能性があります。 AS_PATHにAS究極がトンネルにそれが有効なパスによって、それらの真の宛先に向けてこのNLRIのために転送されたパケットを引き受けない限りNLRIは、この偽のルートを受け入れたネットワークの一部に到達不可能になります。しかし、パケットがAS正しい宛先にトンネリングされている場合でも、続くルートが最適ではないかもしれない、または意図ポリシーに従わない場合があります。虚偽の広告を複数の断片ではなく、単一の集約を（、問題の更新、店舗を管理）を処理するためにルータを強制的に、集約されたアドレスブロックを断片化場合はさらに、インターネットで他のネットワークのためのルーティングが影響を受ける可能性があります。複数のアドレスのための偽のオリジネーションは、見当違いのトラフィックが殺到しになることを発表した経路に沿ってルータと輸送網につながることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o NEXT_HOP",
+      "ja": "O NEXT_HOP"
+    },
+    {
+      "indent": 6,
+      "text": "The NEXT_HOP attribute defines the IP address of the border router that should be used as the next hop when forwarding the NLRI listed in the UPDATE message. If the recipient is an external peer, then the recipient and the NEXT_HOP address must share a subnet. It is clear that an outsider who modified this field could disrupt the forwarding of traffic between the two ASes.",
+      "ja": "NEXT_HOP属性は、UPDATEメッセージにリストされたNLRIを転送するとき、次のホップとして使用されるべきである境界ルータのIPアドレスを定義します。受信者が外部ピアである場合には、受信者とNEXT_HOPアドレスは、サブネットを共有しなければなりません。このフィールドを変更部外者が2つのAS間トラフィックの転送を中断する可能性があることは明らかです。"
+    },
+    {
+      "indent": 6,
+      "text": "If the recipient of the message is an external peer of an AS and the route was learned from another peer AS (this is one of two forms of \"third party\" NEXT_HOP), then the BGP speaker advertising the route has the opportunity to direct the recipient to forward traffic to a BGP speaker at the NEXT_HOP address. This affords the opportunity to direct traffic at a router that may not be able to continue forwarding the traffic. A malicious BGP speaker can also use this technique to force another AS to carry traffic it would otherwise not have to carry. In some cases, this could be to the malicious BGP speaker's benefit, as it could cause traffic to be carried long-haul by the victim AS to some other peering point it shared with the victim.",
+      "ja": "メッセージの受信者がASの外部ピアであり、（これは、「第三者」NEXT_HOPの二つの形式の一つである）などのルートが別のピアから学習した場合は、ルートをアドバタイズするBGPスピーカが指示する機会を持っています受信者は、NEXT_HOPアドレスのBGPスピーカにトラフィックを転送します。これは、トラフィックを転送し続けることができない場合があり、ルータでトラフィックを指示する機会を与えます。悪質なBGPスピーカはまた、そうでない場合は運ぶために持っていないトラフィックを運ぶために、別のASを強制するために、この技術を使用することができます。それはトラフィックが、それは被害者と共有するいくつかの他のピアリングポイントにAS被害者が長距離を運ばされる可能性がありますよういくつかのケースでは、これは、悪意のあるBGPスピーカの利益のためである可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o MULTI_EXIT_DISC",
+      "ja": "O MULTI_EXIT_DISC"
+    },
+    {
+      "indent": 6,
+      "text": "The MULTI_EXIT_DISC attribute is used in UPDATE messages transmitted between inter-AS BGP peers. While the MULTI_EXIT_DISC received from an inter-AS peer may be propagated within an AS, it may not be propagated to other ASes. Consequently, this field is only used in making routing decisions internal to one AS. Modifying this field, whether by an outsider or a BGP peer, could influence routing within an AS to be sub-optimal, but the effect should be limited in scope.",
+      "ja": "MULTI_EXIT_DISC属性は、AS間BGPピア間で送信UPDATEメッセージで使用されています。 MULTI_EXIT_DISCはAS内のAS間ピアから受信増殖させることができるが、他のASに伝播されなくてもよいです。したがって、このフィールドは1 AS内部のルーティング決定を行う際にのみ使用されます。部外またはBGPピアによって、準最適であることがAS内のルーティング影響し得るかどうか、このフィールドを変更する、その効果は範囲が限定されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "o LOCAL_PREF",
+      "ja": "O LOCAL_PREF"
+    },
+    {
+      "indent": 6,
+      "text": "The LOCAL_PREF attribute must be included in all messages with internal peers, and excluded from messages with external peers. Consequently, modification of the LOCAL_PREF could effect the routing process within the AS only. Note that there is no requirement in the BGP RFC that the LOCAL_PREF be consistent among the internal BGP speakers of an AS. Because BGP peers are free to choose the LOCAL_PREF, modification of this field is a vulnerability with respect to outsiders only.",
+      "ja": "LOCAL_PREF属性は、内部ピアですべてのメッセージに含まれており、外部のピアとのメッセージから除外されなければなりません。その結果、LOCAL_PREFの変更はAS内でのみルーティングプロセスに影響を与える可能性があります。 LOCAL_PREFはASの内部BGPスピーカーの間で一貫してBGPのRFCにおける要件がないことに注意してください。 BGPピアがLOCAL_PREFを自由に選択できますので、このフィールドの変更は、唯一の部外者に関して脆弱性です。"
+    },
+    {
+      "indent": 3,
+      "text": "o ATOMIC_AGGREGATE",
+      "ja": "O ATOMIC_AGGREGATE"
+    },
+    {
+      "indent": 6,
+      "text": "The ATOMIC_AGGREGATE field indicates that an AS somewhere along the way has aggregated several routes and advertised the aggregate NLRI without the AS_SET being formed as usual from the ASes in the aggregated routes' AS_PATHs. BGP speakers receiving a route with ATOMIC_AGGREGATE are restricted from making the NLRI any more specific. Removing the ATOMIC_AGGREGATE attribute would remove the restriction, possibly causing traffic intended for the more specific NLRI to be routed incorrectly. Adding the ATOMIC_AGGREGATE attribute, when no aggregation was done, would have little effect beyond restricting the un-aggregated NLRI from being made more specific. This vulnerability exists whether the source is a BGP peer or an outsider.",
+      "ja": "ATOMIC_AGGREGATEフィールドは、ASのどこか途中でいくつかの経路を集約し、集約されたルートAS_PATHs内のASから通常通り形成されるAS_SETずに凝集NLRIをアドバタイズしていることを示しています。 ATOMIC_AGGREGATEのルートを受け取るBGPスピーカーは、NLRIは任意のより具体的な作りが制限されています。 ATOMIC_AGGREGATE属性を削除すると、おそらく、より具体的なNLRIを対象としたトラフィックが間違ってルーティングさせる、制限を削除します。 ATOMIC_AGGREGATE属性を追加し、何の集約が行われなかったとき、より具体的な作られているから非集計NLRIを制限を越えてほとんど影響を持っているでしょう。この脆弱性は、ソースは、BGPピアまたは部外者であるかどうかが存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "o AGGREGATOR",
+      "ja": "お あっｇれがとＲ"
+    },
+    {
+      "indent": 6,
+      "text": "This field may be included by a BGP speaker who has computed the routes represented in the UPDATE message by aggregating other routes. The field contains the AS number and IP address of the last aggregator of the route. It is not used in making any routing decisions, so it does not represent a vulnerability.",
+      "ja": "このフィールドは、他の経路を集約することによりUPDATEメッセージ中に示される経路を計算したBGPスピーカによって含まれてもよいです。フィールドには、ルートの最後のアグリゲータのAS番号とIPアドレスが含まれています。これは、任意のルーティング決定を行う際に使用されていないので、脆弱性を表すものではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.5.4. NLRI",
+      "section_title": true,
+      "ja": "3.1.5.4。 NLRI"
+    },
+    {
+      "indent": 3,
+      "text": "By modifying or forging this field, either an outsider or BGP peer source could cause disruption of routing to the announced network, overwhelm a router along the announced route, cause data loss when the announced route will not forward traffic to the announced network, route traffic by a sub-optimal route, etc.",
+      "ja": "部外者やBGPピア源のいずれかが発表されたネットワークへのルーティングの混乱を引き起こす可能性があり、変更またはこのフィールドを鍛造することにより、発表されたルートに沿って、原因のデータの損失をルータを圧倒したときに発表されたルートを転送しませんトラフィックを発表したネットワークに、トラフィックをルーティング準最適な経路によって、等"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Vulnerabilities through Other Protocols",
+      "section_title": true,
+      "ja": "3.2。その他のプロトコルによる脆弱性"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1. TCP Messages",
+      "section_title": true,
+      "ja": "3.2.1。 TCPメッセージ"
+    },
+    {
+      "indent": 3,
+      "text": "BGP runs over TCP, listening on port 179. Therefore, BGP is subject to attack through attacks on TCP.",
+      "ja": "BGPは、そのためのポート179をリッスンし、TCP上で動作し、BGPは、TCPへの攻撃によって攻撃されることがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1.1. TCP SYN",
+      "section_title": true,
+      "ja": "3.2.1.1。 TCP SYN"
+    },
+    {
+      "indent": 3,
+      "text": "SYN flooding: Like other protocols, BGP is subject to the effects on the TCP implementation of SYN flooding attacks, and must rely on the implementation's protections against these attacks.",
+      "ja": "SYNフラッド：他のプロトコルと同様に、BGPは、SYNフラッド攻撃のTCPの実装上の影響を受けており、これらの攻撃に対する実装の保護に頼らなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Event 14: If an outsider were able to send a SYN to the BGP speaker at the appropriate time during connection establishment, then the legitimate peer's SYN would appear to be a second connection. If the outsider were able to continue with a sequence of packets resulting in a BGP connection (guessing the BGP speaker's choice for sequence number on the SYN ACK, for example), then the outsider's connection and the legitimate peer's connection would appear to be a connection collision. Depending on the outcome of the collision detection (i.e., if the outsider chooses a BGP identifier so as to win the race), the legitimate peer's true connection could be destroyed. The use of [TCPMD5] can counter this attack.",
+      "ja": "イベント14：部外者は、接続確立時に適切な時間にBGPスピーカへのSYNを送ることができた場合は、正当なピアのSYNは、第二の接続であるように思われます。部外者がBGP接続（例えば、SYN ACK上のシーケンス番号のBGPスピーカの選択を推測）で得られたパケットのシーケンスを続行することができた場合には、部外者の接続と正当ピアの接続は、接続であるように思われます衝突。衝突検出の結果に応じて、（レースに勝つように、すなわち、部外者がBGP識別子を選択した場合）、正規のピアの真の接続を破壊することができます。 [TCPMD5]を使用すると、この攻撃に対抗することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1.2. TCP SYN ACK",
+      "section_title": true,
+      "ja": "x.2.1.2。 CIS PLUS KLA"
+    },
+    {
+      "indent": 3,
+      "text": "Event 16: If an outsider were able to respond to a BGP speaker's SYN before the legitimate peer, then the legitimate peer's SYN-ACK would receive an empty ACK reply, causing the legitimate peer to issue a RST that would break the connection. The BGP speaker would bring down the connection, release all associated BGP resources, delete all associated routes, and run its decision process. This attack requires that the outsider be able to predict the sequence number used in the SYN. The use of [TCPMD5] can counter this attack.",
+      "ja": "イベント16：部外者が正当な相手の前にBGPスピーカのSYNに応えることができた場合は、正当なピアのSYN-ACKは接続を破るRSTを発行する合法的なピアを引き起こして、空のACK応答を受け取ることになります。 BGPスピーカは、関連付けられたすべてのBGPリソースを解放し、接続をダウンさせる、関連するすべてのルートを削除し、その決定プロセスを実行します。この攻撃は、部外者がSYNで使用されるシーケンス番号を予測できることが必要です。 [TCPMD5]を使用すると、この攻撃に対抗することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1.3. TCP ACK",
+      "section_title": true,
+      "ja": "3.2.1.3。 TCP ACK"
+    },
+    {
+      "indent": 3,
+      "text": "Event 17: If an outsider were able to spoof an ACK at the appropriate time during connection establishment, then the BGP speaker would consider the connection complete, send an OPEN (Event 17), and transition to the OpenSent state. The arrival of the legitimate peer's ACK would not be delivered to the BGP process, as it would look like a duplicate packet. Thus, this message does not present a vulnerability to BGP during connection establishment. Spoofing an ACK after connection establishment requires knowledge of the sequence numbers in use, and is, in general, a very difficult task. The use of [TCPMD5] can counter this attack.",
+      "ja": "イベント17：部外者は、接続の確立中に適切な時間にACKを偽装することができました場合は、BGPスピーカがOPEN（イベント17）、及びOpenSent状態への遷移を送って、完全な接続を検討します。それは重複パケットのようになりますよう、正当なピアのACKの到着は、BGPプロセスに配信されないでしょう。したがって、このメッセージは、接続確立時BGPに対する脆弱性を示しません。接続確立後にACKをスプーフィングすることは、使用中のシーケンス番号の知識を必要とし、一般的には、非常に困難な作業です。 [TCPMD5]を使用すると、この攻撃に対抗することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1.4. TCP RST/FIN/FIN-ACK",
+      "section_title": true,
+      "ja": "3.2.1.4。 TCP RST / FIN / FIN-ACK"
+    },
+    {
+      "indent": 3,
+      "text": "Event 18: If an outsider were able to spoof a RST, the BGP speaker would bring down the connection, release all associated BGP resources, delete all associated routes, and run its decision process. If an outsider were able to spoof a FIN, then data could still be transmitted, but any attempt to receive it would trigger a notification that the connection is closing. In most cases, this results in the connection being placed in an Idle state. But if the connection is in the Connect state or the OpenSent state at the time, the connection will return to an Active state.",
+      "ja": "イベント18：部外者はRSTを偽装することができました場合は、BGPスピーカは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行します。部外者がFINを偽装することができました場合は、データがまだ送信することができるが、それを受信しようとすると、接続がクローズされた通知をトリガします。ほとんどの場合、これは、アイドル状態に置かれる接続をもたらします。接続が同時に接続状態やOpenSent状態にある場合でも、接続がアクティブ状態に戻ります。"
+    },
+    {
+      "indent": 3,
+      "text": "Spoofing a RST in this situation requires an outsider to guess a sequence number that need only be within the receive window [Watson04]. This is generally an easier task than guessing the exact",
+      "ja": "このような状況でRSTを偽装して受信ウィンドウ[Watson04]の範囲内でのみ必要シーケンス番号を推測するために部外者が必要です。これは、一般的に正確に推測するよりも簡単な作業です"
+    },
+    {
+      "indent": 3,
+      "text": "sequence number required to spoof a FIN. The use of [TCPMD5] can counter this attack.",
+      "ja": "シーケンス番号は、FINを偽装するために必要。 [TCPMD5]を使用すると、この攻撃に対抗することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1.5. DoS and DDos",
+      "section_title": true,
+      "ja": "3.2.1.5。 DoS攻撃やDDoS攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "Because the packets directed to TCP port 179 are passed to the BGP process, which potentially resides on a slower processor in the router, flooding a router with TCP port 179 packets is an avenue for DoS attacks against the router. No BGP mechanism can defeat such attacks; other mechanisms must be employed.",
+      "ja": "TCPポート179宛のパケットは、潜在的にTCPポートをルータにあふれ、ルータでの低速のプロセッサ上に存在するBGPプロセスに渡されているので179個のパケットがルータに対するDoS攻撃のための道です。いいえBGPメカニズムは、このような攻撃を打ち負かすことはできません。他のメカニズムを使用しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2. Other Supporting Protocols",
+      "section_title": true,
+      "ja": "3.2.2。その他のサポートプロトコル"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2.1. Manual Stop",
+      "section_title": true,
+      "ja": "3.2.2.1。手動停止"
+    },
+    {
+      "indent": 3,
+      "text": "Event 2: A manual stop event causes the BGP speaker to bring down the connection, release all associated BGP resources, delete all associated routes, and run its decision process. If the mechanism by which a BGP speaker was informed of a manual stop is not carefully protected, the BGP connection could be destroyed by an outsider. Consequently, BGP security is secondarily dependent on the security of the management and configuration protocols that are used to signal this event.",
+      "ja": "イベント2：手動停止イベントは、接続をダウンさせる、関連するすべてのBGPリソースを解放し、関連付けられたすべてのルートを削除し、その決定プロセスを実行するために、BGPスピーカが発生します。 BGPスピーカは、手動停止を知らされたメカニズムは慎重に保護されていない場合は、BGP接続は部外者によって破壊することができます。そのため、BGPのセキュリティは、このイベントを通知するために使用されている管理および設定のプロトコルのセキュリティ上の二次依存しています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2.2. Open Collision Dump",
+      "section_title": true,
+      "ja": "3.2.2.2。オープン衝突ダンプ"
+    },
+    {
+      "indent": 3,
+      "text": "Event 23: The OpenCollisionDump event may be generated administratively when a connection collision event is detected and the connection has been selected to be disconnected. When this event occurs in any state, the BGP connection is dropped, the BGP resources are released, the associated routes are deleted, etc. Consequently, BGP security is secondarily dependent on the security of the management and configuration protocols that are used to signal this event.",
+      "ja": "イベント23：接続の衝突イベントが検出され、接続が切断されるように選択されたときOpenCollisionDumpイベントが管理発生させることができます。このイベントがどのような状態で発生した場合、BGP接続は、ドロップされたBGPリソースが解放され、関連するルートが削除され、等は、結果として、BGPセキュリティは、これを知らせるために使用される管理および構成プロトコルのセキュリティ上の二次依存していますイベント。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2.3. Timer Events",
+      "section_title": true,
+      "ja": "3.2.2.3。タイマーイベント"
+    },
+    {
+      "indent": 3,
+      "text": "Events 9-13: BGP employs five timers (ConnectRetry, Hold, Keepalive, MinASOrigination-Interval, and MinRouteAdvertisementInterval) and two optional timers (DelayOpen and IdleHold). These timers are critical to BGP operation. For example, if the Hold timer value were changed, the remote peer might consider the connection unresponsive and bring the connection down, thus releasing resources, deleting associated routes, etc. Consequently, BGP security is secondarily dependent on the security of the operation, management, and configuration protocols that are used to modify the timers.",
+      "ja": "イベント9-13：BGPは5つのタイマー（ConnectRetry、ホールド、キープアライブ、MinASOrigination-間隔、およびMinRouteAdvertisementInterval）と2つのオプションのタイマ（DelayOpenとIdleHold）を採用しています。これらのタイマーは、BGPの動作に不可欠です。例えばこのため、BGPのセキュリティは、操作、管理のセキュリティ上の二次依存しているなど、関連するルートを削除、ホールドタイマ値が変更された場合、リモートピアが応答しない接続を検討するかもしれないし、リソースを解放するため、ダウン接続をもたらしますタイマーを変更するために使用され、およびコンフィギュレーションプロトコル。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This entire memo is about security, describing an analysis of the vulnerabilities that exist in BGP.",
+      "ja": "この全体のメモは、BGPに存在する脆弱性の分析を説明する、セキュリティに関するものです。"
+    },
+    {
+      "indent": 3,
+      "text": "Use of the mandatory-to-support mechanisms of [TCPMD5] counters the message insertion, deletion, and modification attacks, as well as man-in-the-middle attacks by outsiders. If routing data confidentiality is desired (there is some controversy as to whether it is a desirable security service), the use of IPsec ESP could provide that service.",
+      "ja": "[TCPMD5]カウンタメッセージの挿入、削除、および変更攻撃だけでなく、部外者によるman-in-the-middle攻撃の義務・ツー・支援メカニズムの使用。ルーティングデータの機密性が要求される場合（としてそれが望ましいセキュリティサービスであるかどうかにいくつかの論争がある）、IPsecのESPの使用は、そのサービスを提供することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Residual Risk",
+      "section_title": true,
+      "ja": "4.1。残存リスク"
+    },
+    {
+      "indent": 3,
+      "text": "As cryptographic-based mechanisms, both [TCPMD5] and IPsec [IPsec] assume that the cryptographic algorithms are secure, that secrets used are protected from exposure and are chosen well so as not to be guessable, that the platforms are securely managed and operated to prevent break-ins, etc.",
+      "ja": "暗号ベースのメカニズムとして、両方の[TCPMD5]とIPsecは、[IPsecの】暗号化アルゴリズムは、プラットフォームが安全に管理とに操作されていること、使用される秘密を暴露から保護されていると推測することがないように十分に選択されていること、安全であると仮定侵入を防ぐ、など"
+    },
+    {
+      "indent": 3,
+      "text": "These mechanisms do not prevent attacks that arise from a router's legitimate BGP peers. There are several possible solutions to prevent a BGP speaker from inserting bogus information in its advertisements to its peers (i.e., from mounting an attack on a network's origination or AS-PATH):",
+      "ja": "これらのメカニズムは、ルータの合法的なBGPピアから発生する攻撃を防ぐことはできません。 （すなわち、ネットワークの発信やAS-PATHの攻撃をマウントから）そのピアへの広告に偽の情報を挿入するから、BGPスピーカを防ぐために、いくつかの可能な解決策があります。"
+    },
+    {
+      "indent": 3,
+      "text": "(1) Origination Protection: sign the originating AS.",
+      "ja": "（1）オリジネーションの保護：AS発信元に署名。"
+    },
+    {
+      "indent": 3,
+      "text": "(2) Origination and Adjacency Protection: sign the originating AS and predecessor information ([Smith96])",
+      "ja": "（2）発信および隣接保護：発信署名ASと先行情報（[Smith96]）"
+    },
+    {
+      "indent": 3,
+      "text": "(3) Origination and Route Protection: sign the originating AS, and nest signatures of AS_PATHs to the number of consecutive bad routers you want to prevent from causing damage. ([SBGP00])",
+      "ja": "（3）オリジネーションとルートの保護：あなたが損傷を引き起こすからないようにしたいの連続悪いルータの数にAS_PATHsのASの発信、および巣の署名を署名します。 （[SBGP00]）"
+    },
+    {
+      "indent": 3,
+      "text": "(4) Filtering: rely on a registry to verify the AS_PATH and NLRI originating AS ([RPSL]).",
+      "ja": "（4）フィルター：AS AS_PATHとNLRIの発信元を確認するために、レジストリに依存している（[RPSL]）。"
+    },
+    {
+      "indent": 3,
+      "text": "Filtering is in use near some customer attachment points, but is not effective near the Internet center. The other mechanisms are still controversial and are not yet in common use.",
+      "ja": "フィルタリングは、一部の顧客の取り付け点の近くに使用されているが、インターネットの中心付近では有効ではありません。他のメカニズムはまだ議論の余地があると一般的な使用ではまだありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Operational Protections",
+      "section_title": true,
+      "ja": "4.2。オペレーショナル・プロテクション"
+    },
+    {
+      "indent": 3,
+      "text": "BGP is primarily used as a means to provide reachability information to Autonomous Systems (AS) and to distribute external reachability internally within an AS. BGP is the routing protocol used to distribute global routing information in the Internet. Therefore, BGP is used by all major Internet Service Providers (ISP), as well as many smaller providers and other organizations.",
+      "ja": "BGPは、主に自律システム（AS）への到達可能性情報を提供し、AS内部で外部の到達可能性を配布する手段として使用されます。 BGPは、インターネットのグローバルルーティング情報を配信するために使用されるルーティングプロトコルです。そのため、BGPはすべての主要なインターネットサービスプロバイダー（ISP）、だけでなく、多くの小さいプロバイダや他の組織で使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "BGP's role in the Internet puts BGP implementations in unique conditions, and places unique security requirements on BGP. BGP is operated over interprovider interfaces in which traffic levels push the state of the art in specialized packet forwarding hardware and exceed the performance capabilities of hardware implementation of decryption by many orders of magnitude. The capability of an attacker using a single workstation with high speed interface to generate false traffic for denial of service (DoS) far exceeds the capability of software-based decryption or appropriately-priced cryptographic hardware to detect the false traffic. Under such conditions, one means to protect the network elements from DoS attacks is to use packet-based filtering techniques based on relatively simple inspections of packets. As a result, for an ISP carrying large volumes of traffic, the ability to packet filter on the basis of port numbers is an important protection against DoS attacks, and a necessary adjunct to cryptographic strength in encapsulation.",
+      "ja": "インターネットでのBGPの役割は、独自の条件でBGPの実装を入れ、BGPに固有のセキュリティ要件を課します。 BGPは、トラフィックレベルが特殊なパケット転送ハードウェアで、当該技術分野の状態を押して何桁によって復号のハードウェア実装の性能能力を超えているinterproviderインターフェイス上に操作されます。高速インターフェースを備えた単一のワークステーションを使用して、攻撃者の能力はサービス拒否のために偽のトラフィックを生成する（DoS攻撃）は、はるかに偽のトラフィックを検出するためのソフトウェアベースの復号化または適切価格暗号ハードウェアの能力を超えています。このような条件下で、1は、DoS攻撃からネットワーク要素を保護することを意味するパケットの比較的単純な検査に基づいてパケットベースのフィルタリング技術を使用することです。その結果、大量のトラフィックを運ぶISPため、ポート番号に基づいてフィルタをパケットに能力がDoS攻撃に対する重要な保護、およびカプセル化では、暗号強度に必要な付属物です。"
+    },
+    {
+      "indent": 3,
+      "text": "Current practice in ISP operation is to use certain common filtering techniques to reduce the exposure to attacks from outside the ISP. To protect Internal BGP (IBGP) sessions, filters are applied at all borders to an ISP network. This removes all traffic destined for network elements' internal addresses (typically contained within a single prefix) and the BGP port number (179). If the BGP port number is found, packets from within an ISP are not forwarded from an internal interface to the BGP speaker's address (on which External BGP (EBGP) sessions are supported), or to a peer's EBGP address. Appropriate router design can limit the risk of compromise when a BGP peer fails to provide adequate filtering. The risk can be limited to the peering session on which filtering is not performed by the peer, or to the interface or line card on which the peering is supported. There is substantial motivation, and little effort is required, for ISPs to maintain such filters.",
+      "ja": "ISP操作の現在の慣行は、ISPの外部からの攻撃への露出を減らすために一定の共通フィルタリング技術を使用することです。内部BGP（IBGP）セッションを保護するために、フィルタは、ISPのネットワークにすべての境界に適用されます。これは、ネットワーク要素の内部アドレス宛のすべてのトラフィック（典型的には、単一の接頭辞内に含まれる）およびBGPポート番号（179）を除去します。 BGPポート番号が見つかった場合、ISP内からのパケットは、（外部BGP（EBGP）セッションがサポートされている）BGPスピーカのアドレスへの内部インターフェイスから、またはピアのEBGPアドレスに転送されません。 BGPピアが適切なフィルタリングを提供するために失敗したときに適切なルータの設計は妥協のリスクを制限することができます。リスクは、フィルタリングがピアによって、又はピアリングがサポートされているインターフェイスまたはラインカードに実行されていないピアリングセッションに制限することができます。そこ相当な動機があり、ISPは、このようなフィルタを維持するために少しの努力が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "These operational practices can considerably raise the difficulty for an outsider to launch a DoS attack against an ISP. Prevented from injecting sufficient traffic from outside a network to effect a DoS attack, the attacker would have to undertake more difficult tasks, such as compromising the ISP network elements or undetected tapping into physical media.",
+      "ja": "これらの業務慣行はかなりISPに対してDoS攻撃を起動するために部外者のための難易度を上げることができます。 DoS攻撃を行うためにネットワークの外部から十分なトラフィックを注入することを防止、攻撃者は、このような物理的なメディアを活用ISPのネットワーク要素や、未検出を犠牲にするなど、より困難なタスクを、着手しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. References",
+      "section_title": true,
+      "ja": "5.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Normative References",
+      "section_title": true,
+      "ja": "5.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", RFC 2119, BCP 14, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、RFC 2119、BCP 14、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[TCPMD5] Heffernan, A., \"Protection of BGP Sessions via the TCP MD5 Signature Option\", RFC 2385, August 1998.",
+      "ja": "[TCPMD5] Heffernanの、A.、 \"TCP MD5署名オプションを使用してBGPセッションの保護\"、RFC 2385、1998年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4271] Rekhter, Y., Li, T., and S. Hares, Eds., \"A Border Gateway Protocol 4 (BGP-4)\", RFC 4271, January 2006.",
+      "ja": "[RFC4271] Rekhter、Y.、李、T.、およびS.野兎、編、 \"ボーダーゲートウェイプロトコル4（BGP-4）\"、RFC 4271、2006年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Informative References",
+      "section_title": true,
+      "ja": "5.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[IPsec] Kent, S. and R. Atkinson, \"Security Architecture for the Internet Protocol\", RFC 2401, November 1998.",
+      "ja": "[IPsecの]ケント、S.とR.アトキンソン、 \"インターネットプロトコルのためのセキュリティー体系\"、RFC 2401、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SBGP00] Kent, S., Lynn, C. and Seo, K., \"Secure Border Gateway Protocol (Secure-BGP)\", IEEE Journal on Selected Areas in Communications, Vol. 18, No. 4, April 2000, pp. 582-592.",
+      "ja": "【SBGP00]ケント、S.、リン、C.およびソ、K.は、「セキュアボーダーゲートウェイプロトコル（BGPセキュア）」を、巻通信において、選択分野に関するIEEEジャーナル。 18、第4号、2000年4月、頁582から592。"
+    },
+    {
+      "indent": 3,
+      "text": "[SecCons] Rescorla, E. and B. Korver, \"Guidelines for Writing RFC Text on Security Considerations\", BCP 72, RFC 3552, July 2003.",
+      "ja": "[SecCons]レスコラ、E.とB.コーバー、 \"セキュリティの考慮事項の書き方RFCテキストのためのガイドライン\"、BCP 72、RFC 3552、2003年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Smith96] Smith, B. and Garcia-Luna-Aceves, J.J., \"Securing the Border Gateway Routing Protocol\", Proc. Global Internet '96, London, UK, 20-21 November 1996.",
+      "ja": "[Smith96]スミス、B.およびガルシア - ルナ -  ACEVES、J.J.、「ボーダーゲートウェイルーティングプロトコルの保護」、PROC。グローバルインターネット'96、ロンドン、イギリス、20-21 1996年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RPSL] Villamizar, C., Alaettinoglu, C., Meyer, D., and S. Murphy, \"Routing Policy System Security\", RFC 2725, December 1999.",
+      "ja": "[RPSL] Villamizar、C.、Alaettinoglu、C.、マイヤー、D.、およびS.マーフィー、 \"ルーティングポリシーシステム・セキュリティ\"、RFC 2725、1999年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Watson04] Watson, P., \"Slipping In The Window: TCP Reset Attacks\", CanSecWest 2004, April 2004.",
+      "ja": "[Watson04]ワトソン、P.、 \"ウィンドウでスリップ：TCPリセット攻撃\"、たCanSecWest 2004、2004年4月。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Sandra Murphy Sparta, Inc. 7075 Samuel Morse Drive Columbia, MD 21046",
+      "ja": "サンドラ・マーフィースパルタ株式会社7075サミュエル・モールスドライブコロンビア、MD 21046"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: Sandy@tislabs.com",
+      "ja": "メールアドレス：Sandy@tislabs.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}
