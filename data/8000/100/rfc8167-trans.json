@@ -1,0 +1,727 @@
+{
+  "title": {
+    "text": "RFC 8167 - Bidirectional Remote Procedure Call on RPC-over-RDMA Transports",
+    "ja": "RFC 8167 - RPCオーバーRDMAトランスポートの双方向リモートプロシージャコール"
+  },
+  "number": 8167,
+  "created_at": "2019-10-24 07:12:05.635380+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                          C. Lever\nRequest for Comments: 8167                                        Oracle\nCategory: Standards Track                                      June 2017\nISSN: 2070-1721",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "Bidirectional Remote Procedure Call on RPC-over-RDMA Transports",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Minor versions of Network File System (NFS) version 4 newer than minor version 0 work best when Remote Procedure Call (RPC) transports can send RPC transactions in both directions on the same connection. This document describes how RPC transport endpoints capable of Remote Direct Memory Access (RDMA) convey RPCs in both directions on a single connection.",
+      "ja": "ネットワークファイルシステム（NFS）リモートプロシージャコール（RPC）トランスポートは、同じ接続上で両方向にRPCトランザクションを送ることができる最高のマイナーバージョン0の仕事よりも新しいバージョン4のマイナーバージョン。この文書では、リモートダイレクトメモリアクセス（RDMA）の可能RPCトランスポートエンドポイントは、単一の接続上で両方向のRPCを伝える方法を説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc8167.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc8167で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2017 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2017 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2\n2.  Understanding RPC Direction . . . . . . . . . . . . . . . . .   3\n3.  Immediate Uses of Bidirectional RPC-over-RDMA . . . . . . . .   5\n4.  Flow Control  . . . . . . . . . . . . . . . . . . . . . . . .   6\n5.  Sending and Receiving Operations in the Reverse Direction . .   8\n6.  In the Absence of Support for Reverse-Direction Operation . .  11\n7.  Considerations for ULBs . . . . . . . . . . . . . . . . . . .  11\n8.  Security Considerations . . . . . . . . . . . . . . . . . . .  12\n9.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  12\n10. Normative References  . . . . . . . . . . . . . . . . . . . .  12\nAcknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .  13\nAuthor's Address  . . . . . . . . . . . . . . . . . . . . . . . .  13",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "RPC-over-RDMA transports, introduced in [RFC8166], efficiently convey Remote Procedure Call (RPC) transactions on transport layers capable of Remote Direct Memory Access (RDMA). The purpose of this document is to enable concurrent operation in both directions on a single transport connection using RPC-over-RDMA protocol versions that do not have specific facilities for reverse-direction operation.",
+      "ja": "RPCオーバーRDMAを効率的にリモートダイレクトメモリアクセス（RDMA）の可能なトランスポート層上のリモートプロシージャコール（RPC）トランザクションを伝える、[RFC8166]に導入され、搬送します。この文書の目的は、逆方向動作のための特定の機能を持っていないRPCオーバーRDMAプロトコルバージョンを使用して、単一のトランスポート接続上で両方向に同時操作を可能にすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "Reverse-direction RPC transactions are necessary for the operation of version 4.1 of the Network File System (NFS), and in particular, of Parallel NFS (pNFS) [RFC5661], though any Upper-Layer Protocol (ULP) implementation may make use of them. An Upper-Layer Binding (ULB) for NFS version 4.x callback operation is additionally required (see Section 7) but is not provided in this document.",
+      "ja": "任意の上位層プロトコル（ULP）の実装は、を利用することができるものの、逆方向RPCトランザクションは、ネットワークファイルシステム（NFS）の、特に、パラレルNFS（pNFSの）のバージョン4.1の操作[RFC5661]のために必要ですそれら。 NFSバージョン4.xコールバック動作のために上位レイヤの結合（ULB）がさらに必要とされている（セクション7参照）が、本書で提供されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, using the approach described herein, RPC transactions can be conveyed in both directions on the same RPC-over-RDMA version 1 connection without changes to the RPC-over-RDMA version 1 protocol. This document does not update the protocol specified in [RFC8166].",
+      "ja": "例えば、本明細書に記載のアプローチを用いて、RPCトランザクションはRPCオーバーRDMAバージョン1プロトコルを変更せずに、同じRPCオーバーRDMAバージョン1つの接続上で両方向に搬送することができます。この文書では、[RFC8166]で指定されたプロトコルを更新しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The remainder of this document assumes familiarity with the terminology and concepts contained in [RFC8166], especially Sections 2 and 3.",
+      "ja": "この文書の残りは[RFC8166]に含まれる用語や概念、特にセクション2及び3に精通を想定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、 \"SHALL\"、 \"SHOULD\"、 \"ないもの\"、 \"推奨\" \"ない（SHOULD NOT）\"、 \"MAY\"、 \"推奨NOT\"、および「OPTIONAL BCP 14に記載されているように「この文書に解釈されるべきである[RFC2119]、[RFC8174]と、ここで示されるように、それらは、すべて大文字で表示された場合にのみ。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Understanding RPC Direction",
+      "section_title": true,
+      "ja": "2. RPCの方向性を理解します"
+    },
+    {
+      "indent": 3,
+      "text": "The Open Network Computing Remote Procedure Call (ONC RPC) protocol as described in [RFC5531] is architected as a message-passing protocol between one server and one or more clients. ONC RPC transactions are made up of two types of messages.",
+      "ja": "オープンネットワークコンピューティングリモートプロシージャコール（ONCのRPC）プロトコル[RFC5531]に記載のように、1つのサーバと1つまたは複数のクライアント間のメッセージパッシングプロトコルとして設計されています。 ONC RPCのトランザクションは、メッセージの2種類で構成されています。"
+    },
+    {
+      "indent": 3,
+      "text": "A CALL message, or \"Call\", requests work. A Call is designated by the value CALL in the message's msg_type field. An arbitrary unique value is placed in the message's Transaction ID (XID) field. A host that originates a Call is referred to in this document as a \"Requester\".",
+      "ja": "CALLメッセージ、または「コール」、仕事を依頼します。コールは、メッセージのMSG_TYPEフィールドの値CALLで指定されています。任意のユニークな値は、メッセージのトランザクションID（XID）フィールドに配置されます。コールを発信するホストは、「依頼者」として、この文書で言及されています。"
+    },
+    {
+      "indent": 3,
+      "text": "A REPLY message, or \"Reply\", reports the results of work requested by a Call. A Reply is designated by the value REPLY in the message's msg_type field. The value contained in the message's XID field is copied from the Call whose results are being returned. A host that emits a Reply is referred to as a \"Responder\".",
+      "ja": "REPLYメッセージ、または「返信」、コールによって要求された作業の結果を報告します。返信は、メッセージのMSG_TYPEフィールドの値REPLYによって指定されています。メッセージのXIDフィールドに含まれる値は、その結果が返されるコールからコピーされます。返信を発するホストが「レスポンダ」と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "Typically, a Call results in a corresponding Reply. A Reply is never sent without a corresponding Call.",
+      "ja": "一般的に、対応する応答でのコール結果。返信は、対応するコールせずに送信されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "RPC-over-RDMA is a connection-oriented RPC transport. In all cases, when a connection-oriented transport is used, ONC RPC client endpoints are responsible for initiating transport connections, while ONC RPC service endpoints passively await incoming connection requests.",
+      "ja": "RPC-オーバーRDMAは、接続指向RPCの輸送です。接続指向のトランスポートを使用する場合ONC RPCサービスのエンドポイントが受動的に着信接続要求を待つ間、すべての場合において、ONC RPCクライアントエンドポイントは、交通機関の接続を開始する責任があります。"
+    },
+    {
+      "indent": 3,
+      "text": "RPC direction on connectionless RPC transports is not addressed in this document.",
+      "ja": "コネクションレスRPCのRPC方向は、本書で扱われていないトランスポート。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Forward Direction",
+      "section_title": true,
+      "ja": "2.1。順方向"
+    },
+    {
+      "indent": 3,
+      "text": "Traditionally, an ONC RPC client acts as a Requester, while an ONC RPC service acts as a Responder. This form of message passing is referred to as \"forward-direction\" operation.",
+      "ja": "ONC RPCサービスがレスポンダとして機能しながら、伝統的に、ONC RPCクライアントは、リクエスタとして機能します。メッセージパッシングのこの形態は、「順方向」動作と呼ぶことにします。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Reverse Direction",
+      "section_title": true,
+      "ja": "2.2。逆方向"
+    },
+    {
+      "indent": 3,
+      "text": "The ONC RPC specification [RFC5531] does not forbid passing messages in the other direction. An ONC RPC service endpoint can act as a Requester, in which case, an ONC RPC client endpoint acts as a Responder. This form of message passing is referred to as \"reverse-direction\" operation.",
+      "ja": "ONCのRPC仕様[RFC5531]は、他の方向にメッセージを渡す禁止しません。 ONC RPCサービスのエンドポイントは、ONC RPCクライアントエンドポイントがレスポンダとして機能する場合には、リクエスタとして機能することができます。メッセージパッシングのこの形態は、「逆方向の」動作と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "During reverse-direction operation, the ONC RPC client is responsible for establishing transport connections, even though RPC Call messages come from the ONC RPC server.",
+      "ja": "逆方向動作時には、ONC RPCクライアントがRPCコールメッセージはONCのRPCサーバーから来ていても、交通機関の接続を確立する責任があります。"
+    },
+    {
+      "indent": 3,
+      "text": "ONC RPC clients and servers are optimized to perform and scale well while handling traffic in the forward direction and might not be prepared to handle operation in the reverse direction. Not until NFS version 4.1 [RFC5661] has there been a strong need to handle reverse-direction operation.",
+      "ja": "ONCのRPCクライアントとサーバは、順方向にトラフィックを処理しながら、うまく実行し、拡張するために最適化され、逆方向への操作を処理するために準備されない場合があります。 NFSバージョン4.1 [RFC5661]まで、逆方向の操作を処理するための強い必要性があったわけではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Bidirectional Operation",
+      "section_title": true,
+      "ja": "2.3。双方向動作"
+    },
+    {
+      "indent": 3,
+      "text": "A pair of connected RPC endpoints may choose to use only forward-direction or only reverse-direction operations on a particular transport connection. Or, these endpoints may send Calls in both directions concurrently on the same transport connection.",
+      "ja": "接続されたRPCエンドポイントのペアは、特定のトランスポート接続にのみ順方向のみ逆方向の操作を使用することを選択することができます。または、これらのエンドポイントは、同じトランスポート接続で同時に両方向のコールを送信することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "\"Bidirectional operation\" occurs when both transport endpoints act as a Requester and a Responder at the same time.",
+      "ja": "両方のトランスポート・エンドポイントが同時にリクエスタとレスポンダとして機能する場合、「双方向動作」が発生します。"
+    },
+    {
+      "indent": 3,
+      "text": "Bidirectionality is an extension of RPC transport connection sharing. Two RPC endpoints wish to exchange independent RPC messages over a shared connection, but in opposite directions. These messages may or may not be related to the same workloads or RPC Programs.",
+      "ja": "双方向性は、RPCトランスポート接続の共有を拡張したものです。二つのRPCエンドポイントは、共有接続を介して、しかし反対方向に独立したRPCメッセージを交換したいです。これらのメッセージは、同じワークロードまたはRPCプログラムに関連してもしなくてもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. XID Values",
+      "section_title": true,
+      "ja": "2.4。 XID値"
+    },
+    {
+      "indent": 3,
+      "text": "Section 9 of [RFC5531] introduces the ONC RPC transaction identifier, or \"XID\" for short. The value of an XID is interpreted in the context of the message's msg_type field.",
+      "ja": "[RFC5531]のセクション9は、ONCのRPCトランザクション識別子、又は略して「XID」を導入します。 XIDの値は、メッセージのMSG_TYPEフィールドの文脈で解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o The XID of a Call is arbitrary but is unique among outstanding Calls from that Requester.",
+      "ja": "OコールのXIDは任意であるが、そのリクエスタから優れたコールの中で一意です。"
+    },
+    {
+      "indent": 3,
+      "text": "o The XID of a Reply always matches that of the initiating Call.",
+      "ja": "oを返信のXIDは常に開始コールのそれと一致しました。"
+    },
+    {
+      "indent": 3,
+      "text": "When receiving a Reply, a Requester matches the XID value in the Reply with a Call it previously sent.",
+      "ja": "返信を受信すると、依頼者は、それが以前に送信されたコールと返信してXID値と一致しました。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4.1. XID Generation",
+      "section_title": true,
+      "ja": "2.4.1。 XIDジェネレーション"
+    },
+    {
+      "indent": 3,
+      "text": "During bidirectional operation, forward- and reverse-direction XIDs are typically generated on distinct hosts by possibly different algorithms. There is no coordination between forward- and reverse-direction XID generation.",
+      "ja": "双方向動作の間、順方向および逆方向のXIDは、典型的には、おそらく異なるアルゴリズムによって異なるホスト上に生成されます。順方向および逆方向XID世代間の調整は行われません。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, a forward-direction Requester MAY use the same XID value at the same time as a reverse-direction Requester on the same transport connection. Though such concurrent requests use the same XID value, they represent distinct ONC RPC transactions.",
+      "ja": "したがって、順方向リクエスタは、同じトランスポート接続上で逆方向リクエスタと同時に同じXID値を使用することができます。そのような同時要求が同じXID値を使用していますが、彼らは明確なONCのRPCトランザクションを表します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Immediate Uses of Bidirectional RPC-over-RDMA",
+      "section_title": true,
+      "ja": "双方向RPCオーバーRDMAの3即時使用方法"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. NFS Version 4.0 Callback Operation",
+      "section_title": true,
+      "ja": "3.1。 NFSバージョン4.0コールバック操作"
+    },
+    {
+      "indent": 3,
+      "text": "An NFS version 4.0 client employs a traditional ONC RPC client to send NFS requests to an NFS version 4.0 server's traditional ONC RPC service [RFC7530]. NFS version 4.0 requests flow in the forward direction on a connection established by the client. This connection is referred to as a \"forechannel\" connection.",
+      "ja": "NFSバージョン4.0クライアントは、NFSバージョン4.0サーバーの伝統的なONC RPCサービス[RFC7530]にNFS要求を送信するために、伝統的なONC RPCクライアントを採用しています。 NFSバージョン4.0の要求は、クライアントによって確立された接続に順方向に流れます。この接続は、「forechannel」接続と呼ばれています。"
+    },
+    {
+      "indent": 3,
+      "text": "An NFS version 4.x \"delegation\" is simply a promise made by a server that it will notify a client before another client or program running on the server is allowed access to a file. With this guarantee, that client can operate as sole accessor of the file. In particular, it can manage the file's data and metadata caches aggressively.",
+      "ja": "NFSバージョン4.x「代表団は、」単にそれがファイルへのアクセスを許可されている他のクライアントやプログラムがサーバー上で実行する前に、クライアントに通知するサーバーによって行われた約束です。この保証では、そのクライアントは、ファイルの唯一のアクセサとして動作することができます。特に、それは積極的にファイルのデータおよびメタデータ・キャッシュを管理することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "To administer file delegations, NFS version 4.0 introduces the use of callback operations, or \"callbacks\", in Section 10.2 of [RFC7530]. An NFS version 4.0 server sets up a forward-direction ONC RPC client, and an NFS version 4.0 client sets up a forward-direction ONC RPC service. Callbacks flow in the forward direction on a connection established between the server's callback client and the client's callback service. This connection is distinct from connections being used as forechannels and is referred to as a \"backchannel connection\".",
+      "ja": "ファイルの委任を管理するには、NFSバージョン4.0には、[RFC7530]のセクション10.2で、コールバック操作、または「コールバック」の使用を紹介します。 NFSバージョン4.0サーバーは、順方向ONC RPCクライアントを設定し、NFSバージョン4.0クライアントは、順方向ONC RPCサービスを設定します。コールバックは、サーバーのコールバッククライアントとクライアントのコールバックサービスとの間で確立された接続上の順方向に流れます。この接続はforechannelsとして使用されている接続とは別個であり、「バックチャネル接続」と呼ぶことにします。"
+    },
+    {
+      "indent": 3,
+      "text": "When an RDMA transport is used as a forechannel, an NFS version 4.0 client typically provides a TCP-based callback service. The client's SETCLIENTID operation advertises the callback service endpoint with a \"tcp\" or \"tcp6\" netid. The server then connects to this service using a TCP socket.",
+      "ja": "RDMAトランスポートがforechannelとして使用されている場合は、NFSバージョン4.0クライアントは通常、TCPベースのコールバックサービスを提供します。クライアントのSETCLIENTID操作は、「TCP」または「にtcp6」NETIDとコールバックサービスのエンドポイントをアドバタイズします。その後、サーバは、TCPソケットを使用してこのサービスに接続します。"
+    },
+    {
+      "indent": 3,
+      "text": "NFS version 4.0 implementations can function without a backchannel in place. In this case, the NFS server does not grant file delegations. This might result in a negative performance effect, but correctness is not affected.",
+      "ja": "NFSバージョン4.0の実装は代わりにバックチャネルがなくても機能することができます。この場合、NFSサーバーは、ファイル委任を付与するものではありません。これは、負のパフォーマンスの効果をもたらすかもしれないが、正確には影響しません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. NFS Version 4.1 Callback Operation",
+      "section_title": true,
+      "ja": "3.2。 NFSバージョン4.1コールバック操作"
+    },
+    {
+      "indent": 3,
+      "text": "NFS version 4.1 supports file delegation in a similar fashion to NFS version 4.0 and extends the callback mechanism to manage pNFS layouts, as discussed in Section 12 of [RFC5661].",
+      "ja": "NFSバージョン4.1サポートは、NFSバージョン4.0と同様に委任をファイルと[RFC5661]のセクション12で説明したように、pNFSのレイアウトを管理するためのコールバック機構を拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "NFS version 4.1 transport connections are initiated by NFS version 4.1 clients. Therefore, NFS version 4.1 servers send callbacks to clients in the reverse direction on connections established by NFS version 4.1 clients.",
+      "ja": "NFSバージョン4.1交通機関の接続は、NFSバージョン4.1クライアントによって開始されています。そのため、NFSバージョン4.1のサーバーは、NFSバージョン4.1クライアントによって確立された接続上で逆方向にクライアントにコールバックを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "NFS version 4.1 clients and servers indicate to their peers that a backchannel capability is available on a given transport connection in the arguments and results of the NFS CREATE_SESSION or BIND_CONN_TO_SESSION operations.",
+      "ja": "NFSバージョン4.1のクライアントとサーバーは、バックチャネル能力はNFS CREATE_SESSIONまたはBIND_CONN_TO_SESSION操作の引数と結果内の指定されたトランスポート接続で利用可能であることを仲間に知らせます。"
+    },
+    {
+      "indent": 3,
+      "text": "NFS version 4.1 clients may establish distinct transport connections for forechannel and backchannel operation, or they may combine forechannel and backchannel operation on one transport connection using bidirectional operation.",
+      "ja": "NFSバージョン4.1クライアントはforechannelとバックチャネル動作のための明確な交通機関の接続を確立することができる、またはそれらを双方向動作を使用して、一つのトランスポート接続でforechannelとバックチャネルの操作を組み合わせることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Without a reverse-direction RPC-over-RDMA capability, an NFS version 4.1 client additionally connects using a transport with reverse-direction capability to use as a backchannel. Opening an independent TCP socket is the only choice for an NFS version 4.1 backchannel connection in this case.",
+      "ja": "逆方向RPCオーバーRDMA能力なしで、NFSバージョン4.1クライアントは、さらに、バックチャネルとして使用するために、逆方向機能付きトランスポートを使用して接続します。独立したTCPソケットを開くと、この場合はNFSバージョン4.1バックチャネル接続のための唯一の選択肢です。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations often find it more convenient to use a single combined transport (i.e., a transport that is capable of bidirectional operation). This simplifies connection establishment and recovery during network partitions or when one endpoint restarts. This can also enable better scaling by using fewer transport connections to perform the same work.",
+      "ja": "実装は、多くの場合、単一の複合輸送（双方向動作が可能であり、すなわち、輸送）を使用することがより便利見つけます。これは、ネットワークパーティションまたは1回のエンドポイントの再起動時に接続の確立と復旧を簡素化します。これはまた、同じ作業を実行するために、より少ない交通機関の接続を使用することによって、より良いスケーリングを有効にすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As with NFS version 4.0, if a backchannel is not in use, an NFS version 4.1 server does not grant delegations. Because NFS version 4.1 relies on callbacks to manage pNFS layout state, pNFS operation is not possible without a backchannel.",
+      "ja": "バックチャネルが使用されていない場合はNFSバージョン4.0と同様に、NFSバージョン4.1サーバーは委託を付与しません。 NFSバージョン4.1は、pNFSのレイアウト状態を管理するために、コールバックに依存しているため、pNFSの操作は、バックチャネルなしでは不可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Flow Control",
+      "section_title": true,
+      "ja": "4.フロー制御"
+    },
+    {
+      "indent": 3,
+      "text": "For an RDMA Send operation to work properly, the receiving peer has to have already posted a Receive buffer in which to accept the incoming message. If a receiver hasn't posted enough buffers to accommodate each incoming Send operation, the receiving RDMA provider is allowed to terminate the RDMA connection.",
+      "ja": "RDMAの送信操作が正しく機能するために、受信ピアは、既に持って入ってくるメッセージを受け入れるにおける受信バッファ掲載しています。受信機は、各受信送信操作を収容するのに十分なバッファを投稿していません場合は、RDMA受信プロバイダは、RDMA接続を終了することが許可されています。"
+    },
+    {
+      "indent": 3,
+      "text": "RPC-over-RDMA transport protocols provide built-in send flow control to prevent overrunning the number of pre-posted Receive buffers on a connection's receive endpoint using a \"credit grant\" mechanism. The use of credits in RPC-over-RDMA version 1 is described in Section 3.3.1 of [RFC8166].",
+      "ja": "RPCオーバーRDMAトランスポートプロトコルは、のは「信用助成金」メカニズムを使用してエンドポイントを受け取る接続上で事前に掲載受信バッファの数をオーバーラン防止のために、組み込みの送信フロー制御を提供します。 RPCオーバーRDMAバージョン1におけるクレジットの使用は、[RFC8166]のセクション3.3.1に記載されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Reverse-Direction Credits",
+      "section_title": true,
+      "ja": "4.1。逆方向のクレジット"
+    },
+    {
+      "indent": 3,
+      "text": "RPC-over-RDMA credits work the same way in the reverse direction as they do in the forward direction. However, forward-direction credits and reverse-direction credits on the same connection are accounted separately. Direction-independent credit accounting prevents head-of-line blocking in one direction from impacting operation in the other direction.",
+      "ja": "彼らは順方向にそうであるようにRPC-オーバーRDMAクレジットは逆方向に同じように動作します。しかし、同じ接続上の順方向クレジットと逆方向のクレジットは、個別に会計処理されます。方向に依存しないクレジット会計は、他の方向に操作に影響を与えるから一方向にヘッドオブラインブロッキングを防ぐことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The forward-direction credit value retains the same meaning whether or not there are reverse-direction resources associated with an RPC-over-RDMA transport connection. This is the number of RPC requests the forward-direction Responder (the ONC RPC server) is prepared to receive concurrently.",
+      "ja": "順方向クレジット値は、RPCオーバーRDMAトランスポート接続に関連した逆方向のリソースがあるかどうかと同じ意味を保持します。これは、RPCの数が順方向レスポンダ（ONCのRPCサーバー）が同時に受信する準備が要求されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The reverse-direction credit value is the number of RPC requests the reverse-direction Responder (the ONC RPC client) is prepared to receive concurrently. The reverse-direction credit value MAY be different than the forward-direction credit value.",
+      "ja": "逆方向クレジット値は、RPCの数が逆方向レスポンダ（ONC RPCクライアント）が同時に受信する準備が要求されます。逆方向のクレジット値は、順方向クレジット値とは異なる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "During bidirectional operation, each receiver has to decide whether an incoming message contains a credit request (the receiver is acting as a Responder) or a credit grant (the receiver is acting as a requester) and apply the credit value accordingly.",
+      "ja": "双方向動作中、各受信機は、着信メッセージがクレジット要求（受信機がレスポンダとして動作している）、またはクレジット付与（受信機がリクエスタとして動作している）を含んでいるかどうかを決定し、それに応じてクレジット値を適用しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "When message direction is not fully determined by context (e.g., suggested by the definition of the RPC-over-RDMA version that is in use) or by an accompanying RPC message payload with a call direction field, it is not possible for the receiver to tell with certainty whether the header credit value is a request or grant. In such cases, the receiver MUST ignore the header's credit value.",
+      "ja": "メッセージの方向が完全に文脈によって決定されていない場合（例えば、使用されているRPCオーバーRDMAバージョンの定義によって示唆）または呼び出し方向フィールドに伴うRPCメッセージペイロードことにより、受信機のために不可能ですヘッダクレジット値が要求または許可であるか否かを確実に伝えます。このような場合、受信機は、ヘッダーのクレジット値を無視しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Inline Thresholds",
+      "section_title": true,
+      "ja": "4.2。インラインしきい値"
+    },
+    {
+      "indent": 3,
+      "text": "Forward- and reverse-direction operation on the same connection share the same Receive buffers. Therefore, the inline threshold values for the forward direction and the reverse direction are the same. The call inline threshold for the reverse direction is the same as the reply inline threshold for the forward direction, and vice versa. For more information, see Section 3.3.2 of [RFC8166].",
+      "ja": "同じ接続を共有し、同じに順方向と逆方向の動作は、バッファを受信します。したがって、順方向および逆方向のためのインラインしきい値は同じです。逆方向のコールインライン閾値は、順方向に対する応答インラインしきい値、およびその逆と同じです。詳細については、[RFC8166]のセクション3.3.2を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Managing Receive Buffers",
+      "section_title": true,
+      "ja": "4.3。受信バッファの管理"
+    },
+    {
+      "indent": 3,
+      "text": "An RPC-over-RDMA transport endpoint posts Receive buffers before it can receive and process incoming RPC-over-RDMA messages. If a sender transmits a message for a receiver that has no posted Receive buffer, the RDMA provider is allowed to drop the RDMA connection.",
+      "ja": "それが受信して処理の着信RPCオーバーRDMAメッセージことができます前に、RPCオーバーRDMAトランスポートエンドポイントのポストはバッファを受信します。送信者が投稿していない受信機のためのメッセージを送信する場合は受信バッファ、RDMAプロバイダはRDMA接続をドロップすることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1. Client Receive Buffers",
+      "section_title": true,
+      "ja": "4.3.1。クライアントが受信バッファ"
+    },
+    {
+      "indent": 3,
+      "text": "Typically, an RPC-over-RDMA Requester posts only as many Receive buffers as there are outstanding RPC Calls. Therefore, a client endpoint without reverse-direction support might, at times, have no available Receive buffers.",
+      "ja": "優れたRPC呼び出しがあると一般的に、RPCオーバーRDMAリクエスタポストは数だけではバッファを受信します。そのため、逆方向に対応していないクライアントエンドポイントは、時々、使用可能なバッファを受信しない場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To receive incoming reverse-direction Calls, an RPC-over-RDMA client endpoint posts enough additional Receive buffers to match its advertised reverse-direction credit value. Each outstanding forward-direction RPC requires an additional Receive buffer above this minimum.",
+      "ja": "入ってくる逆方向コールを受信するには、追加の十分なRPCオーバーRDMAクライアントエンドポイントの記事は、その広告を出して逆方向のクレジット値と一致するように、バッファを受信します。各卓越した順方向RPCは、この最小値を超える受信バッファの追加が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "When an RDMA transport connection is lost, all active Receive buffers are flushed and are no longer available to receive incoming messages. When a fresh transport connection is established, a client endpoint posts a Receive buffer to handle the Reply for each retransmitted forward-direction Call, and it posts enough Receive buffers to handle reverse-direction Calls.",
+      "ja": "RDMAトランスポート接続が失われると、すべてのアクティブなバッファがフラッシュされなくなり、着信メッセージを受信するために利用されている受信します。新鮮なトランスポート接続が確立されると、クライアントエンドポイントのポストは、各再送された順方向通話のための返信を処理するためのバッファを受信し、そのポストは十分な逆方向のコールを処理するためのバッファを受信します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2. Server Receive Buffers",
+      "section_title": true,
+      "ja": "4.3.2。サーバーは、受信バッファ"
+    },
+    {
+      "indent": 3,
+      "text": "A forward-direction RPC-over-RDMA service endpoint posts as many Receive buffers as it expects incoming forward-direction Calls. That is, it posts no fewer buffers than the number of credits granted in the rdma_credit field of forward-direction RPC replies.",
+      "ja": "それは順方向通話を着信期待して順方向RPCオーバーRDMAサービスエンドポイントの記事は、多くのバッファを受信します。つまり、順方向のRPC応答のrdma_creditフィールドに付与されたクレジットの数よりも少ない数のバッファをポストしない、です。"
+    },
+    {
+      "indent": 3,
+      "text": "To receive incoming reverse-direction replies, an RPC-over-RDMA server endpoint posts enough additional Receive buffers to handle replies for each reverse-direction Call it sends.",
+      "ja": "入ってくる逆方向の応答を受信するには、十分な追加RPCオーバーRDMAサーバーのエンドポイントのポストはそれぞれ逆方向にはそれが送信呼び出しのための応答を処理するためにバッファを受信します。"
+    },
+    {
+      "indent": 3,
+      "text": "When the existing transport connection is lost, all active Receive buffers are flushed and are no longer available to receive incoming messages. When a fresh transport connection is established, a server endpoint posts a Receive buffer to handle the Reply for each retransmitted reverse-direction Call, and it posts enough Receive buffers to handle incoming forward-direction Calls.",
+      "ja": "既存のトランスポート接続が失われると、すべてのアクティブなバッファがフラッシュされなくなり、着信メッセージを受信するために利用されている受信します。新鮮なトランスポート接続が確立されると、サーバーのエンドポイントのポストは、各再送された逆方向コールに対する応答を処理するためにバッファを受信し、それが十分に投稿順方向通話を着信処理するためにバッファを受信します。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Sending and Receiving Operations in the Reverse Direction",
+      "section_title": true,
+      "ja": "5.逆方向に操作の送信と受信"
+    },
+    {
+      "indent": 3,
+      "text": "The operation of RPC-over-RDMA transports in the forward direction is defined in [RFC5531] and [RFC8166]. In this section, a mechanism for reverse-direction operation on RPC-over-RDMA is defined. Reverse-direction operation used in combination with forward-direction operation enables bidirectional communication on a common RPC-over-RDMA transport connection.",
+      "ja": "RPCオーバーRDMAの動作は、[RFC5531]及び[RFC8166]で定義されている順方向に搬送します。このセクションでは、RPCオーバーRDMA上の逆方向動作のためのメカニズムが定義されています。順方向動作と組み合わせて使用​​される逆方向の動作は、一般的なRPCオーバーRDMAトランスポート接続上での双方向通信を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "Certain fields in the RPC-over-RDMA header have a fixed position in all versions of RPC-over-RDMA. The normative specification of these fields is contained in Section 4 of [RFC8166].",
+      "ja": "RPCオーバーRDMAヘッダにおける特定のフィールドは、RPCオーバーRDMAのすべてのバージョンで固定位置を有しています。これらのフィールドの規範的仕様は、[RFC8166]のセクション4に含まれています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Sending a Call in the Reverse Direction",
+      "section_title": true,
+      "ja": "5.1。逆方向にコールの送信"
+    },
+    {
+      "indent": 3,
+      "text": "To form a reverse-direction RPC-over-RDMA Call message, an ONC RPC service endpoint constructs an RPC-over-RDMA header containing a fresh RPC XID in the rdma_xid field (see Section 2.4 for full requirements).",
+      "ja": "逆方向RPCオーバーRDMAコールメッセージを形成するために、ONC RPCサービスエンドポイントはrdma_xid分野で新鮮RPC XIDを（完全な要件については、セクション2.4を参照）を含むRPCオーバーRDMAのヘッダを構築します。"
+    },
+    {
+      "indent": 3,
+      "text": "The rdma_vers field MUST contain the same value in reverse- and forward-direction Call messages on the same connection.",
+      "ja": "rdma_versフィールドは、同じ接続上の逆と順方向コールメッセージに同じ値を含まなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The number of requested reverse-direction credits is placed in the rdma_credit field (see Section 4).",
+      "ja": "要求された逆方向クレジットの数はrdma_creditフィールドに配置され（セクション4を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Whether presented inline or as a separate chunk, the ONC RPC Call header MUST start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header's msg_type field MUST contain the value CALL.",
+      "ja": "インラインまたは別チャンクとして提示するかどうか、ONC RPCコールヘッダは、RPCオーバーRDMAヘッダに存在する同一のXID値で始まる必要があり、及びRPCヘッダーのMSG_TYPEフィールドが値CALLを含まなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Sending a Reply in the Reverse Direction",
+      "section_title": true,
+      "ja": "5.2。逆方向に応答を送信"
+    },
+    {
+      "indent": 3,
+      "text": "To form a reverse-direction RPC-over-RDMA Reply message, an ONC RPC client endpoint constructs an RPC-over-RDMA header containing a copy of the matching ONC RPC Call's RPC XID in the rdma_xid field (see Section 2.4 for full requirements).",
+      "ja": "逆方向RPCオーバーRDMA Replyメッセージを形成するために、ONC RPCクライアントエンドポイントは、（完全な要件については、セクション2.4を参照）rdma_xidフィールドに一致するONC RPCコールのRPC XIDのコピーを含むRPCオーバーRDMAヘッダを構築します。"
+    },
+    {
+      "indent": 3,
+      "text": "The rdma_vers field MUST contain the same value in a reverse-direction Reply message as in the matching Call message.",
+      "ja": "rdma_versフィールドは、マッチングコールメッセージのような逆方向応答メッセージに同じ値を含まなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The number of granted reverse-direction credits is placed in the rdma_credit field (see Section 4).",
+      "ja": "付与された逆方向クレジットの数はrdma_creditフィールドに配置され（セクション4を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Whether presented inline or as a separate chunk, the ONC RPC Reply header MUST start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header's msg_type field MUST contain the value REPLY.",
+      "ja": "インラインまたは別チャンクとして提示するかどうか、ONC RPC返信ヘッダは、RPCオーバーRDMAヘッダに存在する同一のXID値で始まる必要があり、及びRPCヘッダーのMSG_TYPEフィールドが値REPLYを含まなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Using Chunks in Reverse-Direction Operations",
+      "section_title": true,
+      "ja": "5.3。逆方向操作でのチャンクを使用して"
+    },
+    {
+      "indent": 3,
+      "text": "A \"chunk\" refers to a portion of a message's Payload stream that is DDP-eligible and that is placed directly in the receiver's memory by the transport. Chunk data may be moved by an explicit RDMA operation, for example. Chunks are defined in Section 3.4.4 and DDP-eligibility is covered in Section 6.1 of [RFC8166].",
+      "ja": "「チャンク」は、DDP-対象であるメッセージのペイロード・ストリームの部分を意味し、それは、トランスポートによって受信機のメモリに直接配置されています。チャンクデータは、例えば、明示的なRDMA動作によって移動させることができます。チャンクは、セクション3.4.4で定義され、DDP-適格性は[RFC8166]のセクション6.1で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks MAY be used in the reverse direction. They operate the same way as in the forward direction.",
+      "ja": "チャンクは逆方向に使用されるかもしれません。彼らは、順方向と同じように動作します。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation might support only ULPs that have no DDP-eligible data items. Such ULPs may use only small messages, or they may have a native mechanism for restricting the size of reverse-direction RPC messages, obviating the need to handle Long Messages in the reverse direction.",
+      "ja": "実装にはDDP-適格なデータ項目を持っていないだけのULPをサポートする場合があります。このようなのULPは、わずかなメッセージを使用することができ、またはそれらを逆方向に長いメッセージを処理する必要がなくなり、逆方向のRPCメッセージのサイズを制限するためのネイティブ機構を有していてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "When there is no ULP requirement for chunks in the reverse direction, implementers can choose not to provide support for chunks in the reverse direction. This avoids the complexity of adding support for performing RDMA Reads and Writes in the reverse direction.",
+      "ja": "逆方向へのチャンクのためのULPの必要がない場合、実装は、逆方向のチャンクのためのサポートを提供しないことを選択することができます。これは、RDMA読み取りと逆方向に書いて実行するためのサポートを追加することの複雑さを回避します。"
+    },
+    {
+      "indent": 3,
+      "text": "When chunks are not implemented, RPC messages in the reverse direction are always sent using a Short Message; therefore, they can be no larger than what can be sent inline (that is, without chunks). Sending an inline message larger than the inline threshold can result in loss of connection.",
+      "ja": "チャンクが実装されていない場合は、逆方向のRPCメッセージは常にショートメッセージを使用して送信されます。従って、彼らは（つまり、チャンクなし、である）インラインで送信することができるものよりも大きくなることはできません。インライン閾値より大きいインラインメッセージを送信すると、接続が失われることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a reverse-direction requester provides a non-empty chunk list to a Responder that does not support chunks, the Responder MUST reply with an RDMA_ERROR message with rdma_err field set to ERR_CHUNK.",
+      "ja": "逆方向要求者がチャンクをサポートしていないレスポンダに非空のチャンクのリストを提供する場合、レスポンダはERR_CHUNKに設定rdma_errフィールドとRDMA_ERRORメッセージで応答しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Reverse-Direction Retransmission",
+      "section_title": true,
+      "ja": "5.4。逆方向の再送信"
+    },
+    {
+      "indent": 3,
+      "text": "In rare cases, an ONC RPC service cannot complete an RPC transaction and then send a reply. This can be because the transport connection was lost, because the Call or Reply message was dropped, or because the ULP delayed or dropped the ONC RPC request. Typically, the Requester sends the RPC transaction again, reusing the same RPC XID. This is known as an \"RPC retransmission\".",
+      "ja": "まれに、ONC RPCサービスは、RPCのトランザクションを完了してから応答を送信することはできません。トランスポート接続が失われたため、ULPは、ONCのRPC要求を遅延または損失があるため通話やメッセージを返信を落とし、またはされたため。これは、することができ一般的に、リクエスタは同じRPC XIDを再利用し、再度、RPCのトランザクションを送信します。これは、「RPC再送」として知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the forward direction, the Requester is the ONC RPC client. The client is always responsible for establishing a transport connection before sending again.",
+      "ja": "順方向では、リクエスタは、ONC RPCクライアントです。クライアントは常に再送信する前にトランスポート接続を確立する責任があります。"
+    },
+    {
+      "indent": 3,
+      "text": "With reverse-direction operation, the Requester is the ONC RPC server. Because an ONC RPC server does not establish transport connections with clients, it cannot retransmit if there is no transport connection. It is forced to wait for the ONC RPC client to re-establish a transport connection before it can retransmit ONC RPC transactions in the reverse direction.",
+      "ja": "逆方向動作では、リクエスタは、ONCのRPCサーバです。 ONCのRPCサーバーは、クライアントとの交通機関の接続を確立していないので何のトランスポート接続がない場合、それは再送信することはできません。それが逆方向にONCのRPCトランザクションを再送信することができる前に、トランスポート接続を再確立するためにONC RPCクライアントを待つことを余儀なくされます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the ONC RPC client peer has no work to do, it can be some time before it re-establishes a transport connection. A waiting reverse-direction ONC RPC Call may time out to avoid waiting indefinitely for a connection to be established.",
+      "ja": "ONC RPCクライアントピアが行うには仕事を持っていない場合は、トランスポート接続を確立し直す前に、それはいくつかの時間がかかる場合があります。待って逆方向ONCのRPCコールを確立するために接続するために無期限に待機して回避するために、タイムアウトになることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, forward-direction Requesters SHOULD maintain a transport connection as long as there is the possibility that the connection peer can send reverse-direction requests. For example, while an NFS version 4.1 client has open delegated files or active pNFS layouts, it maintains one or more transport connections to enable the NFS server to perform callback operations.",
+      "ja": "したがって、順方向リクエスタであれば、接続ピアが逆方向要求を送信できる可能性があるように、トランスポート接続を維持しなければなりません。 NFSバージョン4.1クライアントが委任されたファイルまたはアクティブのpNFSレイアウトを開いていながら、例えば、それはコールバック操作を実行するためにNFSサーバーを有効にするには、1つのまたは複数のトランスポート接続を維持します。"
+    },
+    {
+      "indent": 0,
+      "text": "6. In the Absence of Support for Reverse-Direction Operation",
+      "section_title": true,
+      "ja": "逆方向操作のサポートの欠如6."
+    },
+    {
+      "indent": 3,
+      "text": "An RPC-over-RDMA transport endpoint might not support reverse-direction operation (and thus it does not support bidirectional operation). There might be no mechanism in the transport implementation to do so. Or in an implementation that can support operation in the reverse direction, the ULP might not yet have configured or enabled the transport to handle reverse-direction traffic.",
+      "ja": "RPCオーバーRDMAトランスポートエンドポイントは、逆方向の操作をサポートしていない可能性があります（したがって、それは双方向動作をサポートしていません）。これを行うには、トランスポートの実装にはメカニズムが存在しないかもしれません。あるいは逆方向に操作をサポートすることができ、実装では、ULPはまだ構成または逆方向のトラフィックを処理するために、トランスポートを有効にしていない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If an endpoint is not prepared to receive an incoming reverse-direction message, loss of the RDMA connection might result. Thus, denial of service could result if a sender continues to send reverse-direction messages after every transport reconnect to an endpoint that is not prepared to receive them.",
+      "ja": "エンドポイントが入ってくる逆方向メッセージを受信するために用意されていない場合は、RDMA接続の損失が生じる可能性があります。このように、サービス拒否は、送信者は、すべてのトランスポートは、それらを受信する準備ができていないエンドポイントに再接続した後、逆方向メッセージを送信し続けた場合に発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When dealing with the possibility that the remote peer has no transport-level support for reverse-direction operation, the ULP becomes responsible for informing peers when reverse-direction operation is supported. Otherwise, even a simple reverse-direction RPC NULL procedure from a peer could result in a lost connection.",
+      "ja": "リモートピアが逆方向動作のためのトランスポートレベルのサポートを持っていないという可能性を扱う場合、ULPは逆方向の動作がサポートされている場合、ピアに通知する責任となります。そうでない場合、ピアからも簡単な逆方向のRPC NULL手順は、失われた接続をもたらし得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, a ULP MUST NOT perform reverse-direction ONC RPC operations until the peer has indicated it is prepared to handle them. A description of ULP mechanisms used for this indication is outside the scope of this document.",
+      "ja": "ピアは、それらを処理する準備が指示されるまでそのため、ULPは逆方向ONC RPC操作を実行してはいけません。この指示のために使用さULPメカニズムの説明は、この文書の範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, an NFS version 4.1 server does not send backchannel messages to an NFS version 4.1 client before the NFS version 4.1 client has sent a CREATE_SESSION or a BIND_CONN_TO_SESSION operation. As long as an NFS version 4.1 client has prepared appropriate resources to receive reverse-direction operations before sending one of these NFS operations, denial of service is avoided.",
+      "ja": "たとえば、NFSバージョン4.1サーバーは、4.1クライアントがCREATE_SESSIONまたはBIND_CONN_TO_SESSION操作を送信したNFSバージョンの前にNFSバージョン4.1クライアントへのバックチャネルメッセージを送信しません。 NFSバージョン4.1クライアントは、これらのNFS操作の1つを送信する前に逆方向の操作を受けるために適切なリソースを準備している限り、サービス拒否が回避されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Considerations for ULBs",
+      "section_title": true,
+      "ja": "ULBs 7.留意事項"
+    },
+    {
+      "indent": 3,
+      "text": "A ULP that operates on RPC-over-RDMA transports may have procedures that include DDP-eligible data items. DDP-eligibility is specified in an Upper-Layer Binding (ULB). Direction of operation does not obviate the need for DDP-eligibility statements.",
+      "ja": "RPCオーバーRDMAトランスポートで動作ULPはDDP-適格なデータ項目を含める手順を有することができます。 DDP-資格は、バインディング上位層（ULB）に指定されています。操作の方向は、DDP-適格文の必要性を除去しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Reverse-direction-only operation requires the client endpoint to establish a fresh connection. The ULB can specify appropriate RPC binding parameters for such connections.",
+      "ja": "逆方向のみの動作では、新鮮な接続を確立するためにクライアントエンドポイントが必要です。 ULBは、このような接続のための適切なRPCバインドパラメータを指定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Bidirectional operation occurs on an already-established connection. Specification of RPC binding parameters is usually not necessary in this case.",
+      "ja": "双方向動作は、すでに確立された接続で発生します。 RPC結合パラメータの仕様は、この場合には、通常は必要ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "For bidirectional operation, other considerations may apply when distinct RPC Programs share an RPC-over-RDMA transport connection concurrently. Consult Section 6 of [RFC8166] for details about what else may be contained in a ULB.",
+      "ja": "異なるRPCプログラムが同時にRPCオーバーRDMA転送接続を共有する場合、双方向動作のために、他の考慮事項が適用されてもよいです。 ULBに含有させることができる他に何の詳細については、[RFC8166]のセクション6を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "RPC security is handled in the RPC layer, which is above the transport layer where RPC-over-RDMA operates.",
+      "ja": "RPCセキュリティは、RPCオーバーRDMAが動作するトランスポート層の上にあるRPC層で処理されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Reverse-direction operations make use of an authentication mechanism and credentials that are independent of forward-direction operation but otherwise operate in the same fashion as outlined in Section 8.2 of [RFC8166].",
+      "ja": "逆方向動作は、順方向動作とは無関係であるが、[RFC8166]のセクション8.2に概説されるようにそうでなければ同じ方法で動作する認証メカニズムと資格情報を利用します。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not require any IANA actions.",
+      "ja": "このドキュメントは、IANAのアクションを必要としません。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Normative References",
+      "section_title": true,
+      "ja": "10.引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <http://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<http://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5531] Thurlow, R., \"RPC: Remote Procedure Call Protocol Specification Version 2\", RFC 5531, DOI 10.17487/RFC5531, May 2009, <http://www.rfc-editor.org/info/rfc5531>.",
+      "ja": "[RFC5531] Thurlow、R.、 \"RPC：リモートプロシージャコールプロトコル仕様バージョン2\"、RFC 5531、DOI 10.17487 / RFC5531、2009年5月、<http://www.rfc-editor.org/info/rfc5531>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5661] Shepler, S., Ed., Eisler, M., Ed., and D. Noveck, Ed., \"Network File System (NFS) Version 4 Minor Version 1 Protocol\", RFC 5661, DOI 10.17487/RFC5661, January 2010, <http://www.rfc-editor.org/info/rfc5661>.",
+      "ja": "[RFC5661] Shepler、S.編、アイスラー、M.、編、及びD. Noveck編、 \"ネットワークファイルシステム（NFS）バージョン4マイナーバージョン1つのプロトコル\"、RFC 5661、DOI 10.17487 / RFC5661、 2010年1月、<http://www.rfc-editor.org/info/rfc5661>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7530] Haynes, T., Ed. and D. Noveck, Ed., \"Network File System (NFS) Version 4 Protocol\", RFC 7530, DOI 10.17487/RFC7530, March 2015, <http://www.rfc-editor.org/info/rfc7530>.",
+      "ja": "[RFC7530]ヘインズ、T.、エド。そして、D. Noveck、エド。、 \"ネットワークファイルシステム（NFS）バージョン4プロトコル\"、RFC 7530、DOI 10.17487 / RFC7530、2015年3月、<http://www.rfc-editor.org/info/rfc7530>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8166] Lever, C., Ed., Simpson, W., and T. Talpey, \"Remote Direct Memory Access Transport for Remote Procedure Call Version 1\", RFC 8166, DOI 10.17487/RFC8166, June 2017, <http://www.rfc-editor.org/info/rfc8166>.",
+      "ja": "[RFC8166]レバー、C.、エド、シンプソン、W.、およびT. Talpey、 \"リモートプロシージャコールバージョン1用のリモートダイレクトメモリアクセス交通\"、RFC 8166、DOI 10.17487 / RFC8166、2017年6月、<HTTP：/ /www.rfc-editor.org/info/rfc8166>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <http://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B.、 \"RFC 2119個のキーワードに小文字VS大文字の曖昧さ\"、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<http://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Tom Talpey was an indispensable resource, in addition to creating the foundation upon which this work is based. The author's warmest regards go to him for his help and support.",
+      "ja": "トムTalpeyは、この作業の基礎となる土台を作成するだけで、必要不可欠な資源でした。著者の暖かいに関しては、彼のヘルプとサポートのために彼に行きます。"
+    },
+    {
+      "indent": 3,
+      "text": "Dave Noveck provided excellent review, constructive suggestions, and navigational guidance throughout the process of drafting this document.",
+      "ja": "デーブNoveckは、この文書を起草の過程を通じて優れた見直し、建設的な提案、およびナビゲーション案内を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "Dai Ngo was a solid partner and collaborator. Together we constructed and tested independent prototypes of the changes described in this document.",
+      "ja": "大NGOが固体のパートナーと協力者でした。一緒に私たちは、この文書で説明する変更の独立したプロトタイプを構築し、テストしました。"
+    },
+    {
+      "indent": 3,
+      "text": "The author wishes to thank Bill Baker and Greg Marsden for their unwavering support of this work. In addition, the author gratefully acknowledges the expert contributions of Karen Deitke, Chunli Zhang, Mahesh Siddheshwar, Steve Wise, and Tom Tucker.",
+      "ja": "作者はこの作品の彼らの揺るぎない支援のためのビル・ベイカーとグレッグ・マースデンに感謝したいです。また、著者は感謝カレンDeitke、春麗張、マヘシュシッドゥシュワー、スティーブ・ワイズ、そしてトム・タッカーの専門家の貢献を認めています。"
+    },
+    {
+      "indent": 3,
+      "text": "Special thanks go to Transport Area Director Spencer Dawkins, NFSV4 Working Group Chair and Document Shepherd Spencer Shepler, and NFSV4 Working Group Secretary Tom Haynes for their support.",
+      "ja": "特別な感謝は彼らのサポートのための交通エリアディレクタースペンサードーキンスのNFSv4ワーキンググループの議長およびドキュメントシェパードスペンサーShepler、とのNFSv4ワーキンググループ長官トム・ヘインズに行きます。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Charles Lever Oracle Corporation 1015 Granger Avenue Ann Arbor, MI 48104 United States of America",
+      "ja": "チャールズ・レバーオラクル・コーポレーション1015グレンジャーアベニューアナーバー、ミシガンアメリカの48104米国"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 248 816 6463 Email: chuck.lever@oracle.com",
+      "ja": "電話：+1 248 816 6463 Eメール：chuck.lever@oracle.com"
+    }
+  ]
+}
