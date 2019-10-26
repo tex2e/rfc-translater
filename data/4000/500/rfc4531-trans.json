@@ -1,0 +1,468 @@
+{
+  "title": {
+    "text": "RFC 4531 - Lightweight Directory Access Protocol (LDAP) Turn Operation",
+    "ja": "RFC 4531 - LDAP（Lightweight Directory Access Protocol）は運転を回し"
+  },
+  "number": 4531,
+  "created_at": "2019-10-22 05:03:48.725197+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                        K. Zeilenga\nRequest for Comments: 4531                           OpenLDAP Foundation\nCategory: Experimental                                         June 2006",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Lightweight Directory Access Protocol (LDAP)\n               Turn Operation",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo defines an Experimental Protocol for the Internet community. It does not specify an Internet standard of any kind. Discussion and suggestions for improvement are requested. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのためにExperimentalプロトコルを定義します。それはどんな種類のインターネット標準を指定しません。改善のための議論や提案が要求されています。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This specification describes a Lightweight Directory Access Protocol (LDAP) extended operation to reverse (or \"turn\") the roles of client and server for subsequent protocol exchanges in the session, or to enable each peer to act as both client and server with respect to the other.",
+      "ja": "この仕様は、ライトウェイトディレクトリアクセスプロトコル（LDAP）が（または「オン」）逆動作を拡張セッションにおける後続のプロトコル交換のために、クライアントとサーバの役割を説明し、又は各々がに関してクライアントとサーバの両方として作用するピア有効にしますその他。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Background and Intent of Use ....................................2\n   1.1. Terminology ................................................2\n2. Turn Operation ..................................................2\n   2.1. Turn Request ...............................................3\n   2.2. Turn Response ..............................................3\n3. Authentication ..................................................3\n   3.1. Use with TLS and Simple Authentication .....................4\n   3.2. Use with TLS and SASL EXTERNAL .............................4\n   3.3. Use of Mutual Authentication and SASL EXTERNAL .............4\n4. TLS and SASL Security Layers ....................................5\n5. Security Considerations .........................................6\n6. IANA Considerations .............................................6\n   6.1. Object Identifier ..........................................6\n   6.2. LDAP Protocol Mechanism ....................................7\n7. References ......................................................7\n   7.1. Normative References .......................................7\n   7.2. Informative References .....................................8",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Background and Intent of Use",
+      "section_title": true,
+      "ja": "1.背景と利用意向"
+    },
+    {
+      "indent": 3,
+      "text": "The Lightweight Directory Access Protocol (LDAP) [RFC4510][RFC4511] is a client-server protocol that typically operates over reliable octet-stream transports, such as the Transport Control Protocol (TCP). Generally, the client initiates the stream by connecting to the server's listener at some well-known address.",
+      "ja": "ライトウェイトディレクトリアクセスプロトコル（LDAP）[RFC4510] [RFC4511]は、通常、伝送制御プロトコル（TCP）などの信頼性のオクテットストリームのトランスポート上で動作し、クライアント・サーバ・プロトコルです。一般的に、クライアントは、いくつかのよく知られているアドレスでサーバーのリスナーに接続することにより、ストリームを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "There are cases where it is desirable for the server to initiate the stream. Although it certainly is possible to write a technical specification detailing how to implement server-initiated LDAP sessions, this would require the design of new authentication and other security mechanisms to support server-initiated LDAP sessions.",
+      "ja": "サーバは、ストリームを開始することが望ましい場合があります。それは確かにサーバー開始LDAPセッションを実装する方法を詳述技術仕様を記述することは可能ですが、これはサーバー開始LDAPセッションをサポートするために、新しい認証およびその他のセキュリティメカニズムの設計が必要となります。"
+    },
+    {
+      "indent": 3,
+      "text": "Instead, this document introduces an operation, the Turn operation, which may be used to reverse the client-server roles of the protocol peers. This allows the initiating protocol peer to become the server (after the reversal).",
+      "ja": "代わりに、この文書は、プロトコルピアのクライアント - サーバーの役割を逆転するために使用することができる操作、電源を入れ操作を、紹介します。これは、開始プロトコルピアが（反転後）サーバーになることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As an additional feature, the Turn operation may be used to allow both peers to act in both roles. This is useful where both peers are directory servers that desire to request, as LDAP clients, that operations be performed by the other. This may be useful in replicated and/or distributed environments.",
+      "ja": "追加機能として、電源を入れ操作は、両方のピアが両方の役割で行動できるようにするために使用することができます。両方のピアは、操作が他で実行されることを、LDAPクライアントとして、要求することを望むのディレクトリサーバーである場合に有用です。これは、複製および/または分散環境において有用であり得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "This operation is intended to be used between protocol peers that have established a mutual agreement, by means outside of the protocol, that requires reversal of client-server roles, or allows both peers to act both as client and server.",
+      "ja": "この操作は、相互の合意を確立したプロトコルのピアとの間で使用されるように意図され、プロトコルの外部手段によって、それは、クライアント・サーバの役割の逆転を必要とする、または両方のピアは、クライアントとサーバの両方として作用することを可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Terminology",
+      "section_title": true,
+      "ja": "1.1。用語"
+    },
+    {
+      "indent": 3,
+      "text": "Protocol elements are described using ASN.1 [X.680] with implicit tags. The term \"BER-encoded\" means the element is to be encoded using the Basic Encoding Rules [X.690] under the restrictions detailed in Section 5.1 of [RFC4511].",
+      "ja": "プロトコル要素は、暗黙的なタグでASN.1 [X.680]を使用して記載されています。用語「BERエンコードは」要素は[RFC4511]のセクション5.1に詳述制約下基本符号化規則[X.690]を使用して符号化されるべきであることを意味します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Turn Operation",
+      "section_title": true,
+      "ja": "2.電源を入れ操作"
+    },
+    {
+      "indent": 3,
+      "text": "The Turn operation is defined as an LDAP-Extended Operation [Protocol, Section 4.12] identified by the 1.3.6.1.1.19 OID. The function of the Turn Operation is to request that the client-server roles be reversed, or, optionally, to request that both protocol peers be able to act both as client and server in respect to the other.",
+      "ja": "ターン動作は1.3.6.1.1.19 OIDによって識別LDAP拡張動作[プロトコル、4.12]のように定義されます。ターン動作の機能は、両方のプロトコルピアが、他の点でクライアントとサーバの両方として作用することができることを要求するために、必要に応じて、クライアント - サーバーの役割が逆転するように要求、又はすることです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Turn Request",
+      "section_title": true,
+      "ja": "2.1。リクエストを回し"
+    },
+    {
+      "indent": 3,
+      "text": "The Turn request is an ExtendedRequest where the requestName field contains the 1.3.6.1.1.19 OID and the requestValue field is a BER-encoded turnValue:",
+      "ja": "ターンリクエストはrequestNameフィールドが1.3.6.1.1.19 OIDとrequestValueフィールドが含まれているのExtendedRequestあるBERエンコードさturnValueです。"
+    },
+    {
+      "indent": 8,
+      "text": "turnValue ::= SEQUENCE {\n     mutual         BOOLEAN DEFAULT FALSE,\n     identifier     LDAPString\n}",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "A TRUE mutual field value indicates a request to allow both peers to act both as client and server. A FALSE mutual field value indicates a request to reserve the client and server roles.",
+      "ja": "TRUE相互フィールドの値は、両方のピアは、クライアントとサーバーの両方として作用させるための要求を示します。 FALSE相互フィールドの値は、クライアントとサーバーの役割を予約する要求を示します。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of the identifier field is a locally defined policy identifier (typically associated with a mutual agreement for which this turn is be executed as part of).",
+      "ja": "識別子フィールドの値は、（典型的には、このターンの一部として実行されているため、相互の合意に関連する）ローカルに定義されたポリシーの識別子です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Turn Response",
+      "section_title": true,
+      "ja": "2.2。レスポンスを回し"
+    },
+    {
+      "indent": 3,
+      "text": "A Turn response is an ExtendedResponse where the responseName and responseValue fields are absent. A resultCode of success is returned if and only if the responder is willing and able to turn the session as requested. Otherwise, a different resultCode is returned.",
+      "ja": "ターン応答はresponseNameとresponseValueフィールドが存在しないExtendedResponseです。成功のresultCodeががあれば返され、応答者は喜んで、要求されたように、セッションをオンにすることが可能である場合にのみ。そうでない場合は、別のresultCodeがが返されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Authentication",
+      "section_title": true,
+      "ja": "3.認証"
+    },
+    {
+      "indent": 3,
+      "text": "This extension's authentication model assumes separate authentication of the peers in each of their roles. A separate Bind exchange is expected between the peers in their new roles to establish identities in these roles.",
+      "ja": "この拡張機能の認証モデルは、その役割の各ピアの別々の認証を前提としています。別のバインド交換は、これらの役割にアイデンティティを確立するために、彼らの新たな役割でピア間で期待されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon completion of the Turn, the responding peer in its new client role has an anonymous association at the initiating peer in its new server role. If the turn was mutual, the authentication association of the initiating peer in its pre-existing client role is left intact at the responding peer in its pre-existing server role. If the turn was not mutual, this association is void.",
+      "ja": "ターンの終了時に、その新しいクライアント役割の応答するピアは、その新しいサーバーの役割で開始するピアで匿名組合を持っています。ターンは相互だった場合は、その既存のクライアント役割の開始ピアの認証協会は、その既存のサーバーの役割で応答するピアにそのまま残されています。ターンは相互なかった場合は、この関連付けは無効となります。"
+    },
+    {
+      "indent": 3,
+      "text": "The responding peer may establish its identity in its client role by requesting and successfully completing a Bind operation.",
+      "ja": "応答側のピアは、要求し、正常にバインド操作を完了することによって、そのクライアントの役割でそのアイデンティティを確立することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The remainder of this section discusses some authentication scenarios. In the protocol exchange illustrations, A refers to the initiating peer (the original client) and B refers to the responding peer (the original server).",
+      "ja": "このセクションの残りの部分では、いくつかの認証シナリオについて説明します。プロトコル交換イラストにおいて、Aは、開始ピア（元のクライアント）を意味し、Bが応答をピア（元のサーバー）を指します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Use with TLS and Simple Authentication",
+      "section_title": true,
+      "ja": "3.1。 TLSおよび簡易認証を使用します"
+    },
+    {
+      "indent": 7,
+      "text": "A->B: StartTLS Request\nB->A: StartTLS(success) Response\nA->B: Bind(Simple(cn=B,dc=example,dc=net,B's secret)) Request\nB->A: Bind(success) Response\nA->B: Turn(TRUE,\"XXYYZ\") Request\nB->A: Turn(success) Response\nB->A: Bind(Simple(cn=A,dc=example,dc=net,A's secret)) Request\nA->B: Bind(success) Response",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "In this scenario, TLS (Transport Layer Security) [RFC4346] is started and the initiating peer (the original client) establishes its identity with the responding peer prior to the Turn using the DN/password mechanism of the Simple method of the Bind operation. After the turn, the responding peer, in its new client role, establishes its identity with the initiating peer in its new server role.",
+      "ja": "このシナリオでは、TLS（トランスポート層セキュリティ）[RFC4346]は開始され、開始ピア（元のクライアント）がバインド操作の簡単な方法のDN /パスワードメカニズムを使用して電源を入れる前に応答するピアとのアイデンティティを確立します。ターンの後、応答するピアは、その新しいクライアントの役割で、その新しいサーバーの役割で開始ピアとのアイデンティティを確立します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Use with TLS and SASL EXTERNAL",
+      "section_title": true,
+      "ja": "3.2。 TLSとSASL EXTERNALを使用します"
+    },
+    {
+      "indent": 7,
+      "text": "A->B: StartTLS Request\nB->A: StartTLS(success) Response\nA->B: Bind(SASL(EXTERNAL)) Request\nB->A: Bind(success) Response\nA->B: Turn(TRUE,\"XXYYZ\") Request\nB->A: Turn(success) Response\nB->A: Bind(SASL(EXTERNAL)) Request\nA->B: Bind(success) Response",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "In this scenario, TLS is started (with each peer providing a valid certificate), and the initiating peer (the original client) establishes its identity through the use of the EXTERNAL mechanism of the SASL (Simple Authentication and Security Layer) [RFC4422] method of the Bind operation prior to the Turn. After the turn, the responding peer, in its new client role, establishes its identity with the initiating peer in its new server role.",
+      "ja": "このシナリオでは、TLSは、（各ピアは有効な証明書を提供して）開始し、開始ピア（元のクライアント）はSASL（簡易認証セキュリティー層）[RFC4422]方法の外部メカニズムを使用してのアイデンティティを確立します電源を入れる前にバインド操作の。ターンの後、応答するピアは、その新しいクライアントの役割で、その新しいサーバーの役割で開始ピアとのアイデンティティを確立します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Use of Mutual Authentication and SASL EXTERNAL",
+      "section_title": true,
+      "ja": "3.3。相互認証とSASL EXTERNALの利用"
+    },
+    {
+      "indent": 3,
+      "text": "A number of SASL mechanisms, such as GSSAPI [SASL-K5], support mutual authentication. The initiating peer, in its new server role, may use the identity of the responding peer, established by a prior authentication exchange, as its source for \"external\" identity in subsequent EXTERNAL exchange.",
+      "ja": "そのようなGSSAPI [SASL-K5]としてSASL機構の数は、相互認証をサポートします。開始ピアは、その新しいサーバーの役割には、それに続くEXTERNAL引き換えに「外部」のアイデンティティのソースとして、事前認証交換によって確立応答するピアのアイデンティティを使用することができます。"
+    },
+    {
+      "indent": 7,
+      "text": "A->B: Bind(SASL(GSSAPI)) Request\n<intermediate messages>",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "B->A: Bind(success) Response A->B: Turn(TRUE,\"XXYYZ\") Request B->A: Turn(success) Response B->A: Bind(SASL(EXTERNAL)) Request A->B: Bind(success) Response",
+      "ja": "B-> A：バインド（成功）応答A-> B：電源を入れます（TRUE、 \"XXYYZ\"）要求B-> A：電源を入れます（成功）応答B-> A：バインド（SASL（EXTERNAL））リクエストA-> B：バインド（成功）応答"
+    },
+    {
+      "indent": 3,
+      "text": "In this scenario, a GSSAPI mutual-authentication exchange is completed between the initiating peer (the original client) and the responding server (the original server) prior to the turn. After the turn, the responding peer, in its new client role, requests that the initiating peer utilize an \"external\" identity to establish its LDAP authorization identity.",
+      "ja": "このシナリオでは、GSSAPI相互認証交換は、開始ピア（元のクライアント）とターン前に応答サーバ（元のサーバ）との間に完了する。ターンの後、応答するピアは、その新しいクライアントの役割では、開始ピアがそのLDAP認可アイデンティティを確立するために、「外部」のアイデンティティを利用することを要求します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. TLS and SASL Security Layers",
+      "section_title": true,
+      "ja": "4. TLSとSASLセキュリティ層"
+    },
+    {
+      "indent": 3,
+      "text": "As described in [RFC4511], LDAP supports both Transport Layer Security (TLS) [RFC4346] and Simple Authentication and Security Layer (SASL) [RFC4422] security frameworks. The following table illustrates the relationship between the LDAP message layer, SASL layer, TLS layer, and transport connection within an LDAP session.",
+      "ja": "[RFC4511]で説明したように、LDAPは、トランスポート層セキュリティ（TLS）[RFC4346]と簡易認証セキュリティー層（SASL）[RFC4422]のセキュリティフレームワークの両方をサポートしています。次の表は、LDAPメッセージ層、SASL層、TLS層、およびLDAPセッション内輸送の接続関係を示す図です。"
+    },
+    {
+      "indent": 6,
+      "text": "            +----------------------+\n            |  LDAP message layer  |\n            +----------------------+ > LDAP PDUs\n            +----------------------+ < data\n            |      SASL layer      |\n            +----------------------+ > SASL-protected data\n            +----------------------+ < data\n            |       TLS layer      |\nApplication +----------------------+ > TLS-protected data\n------------+----------------------+ < data\n  Transport | transport connection |\n            +----------------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "This extension does not alter this relationship, nor does it remove the general restriction against multiple TLS layers, nor does it remove the general restriction against multiple SASL layers.",
+      "ja": "この拡張は、この関係を変更しません。また、複数のTLS層に対する一般的な制限を取り除くん。また、複数のSASL層に対する一般的な制限を削除しません。"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in [RFC4511], the StartTLS operation is used to initiate negotiation of a TLS layer. If a TLS is already installed, the StartTLS operation must fail. Upon establishment of the TLS layer, regardless of which peer issued the request to start TLS, the peer that initiated the LDAP session (the original client) performs the \"server identity check\", as described in Section 3.1.5 of [RFC4513], treating itself as the \"client\" and its peer as the \"server\".",
+      "ja": "[RFC4511]で指定されるように、StartTLSを動作はTLS層のネゴシエーションを開始するために使用されます。 TLSがすでにインストールされている場合は、StartTLSを操作が失敗しなければなりません。ピアがTLS、LDAPセッションを開始し、ピア（元のクライアント）「サーバIDチェック」を実行を開始する要求を発行したどちらのTLS層の確立の際に、[RFC4513]のセクション3.1.5に記載したように、 「クライアント」と「サーバ」としてそのピアとしての地位を処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in [RFC4422], a newly negotiated SASL security layer replaces the installed SASL security layer. Though the client/server roles in LDAP, and hence SASL, may be reversed in subsequent exchanges, only one SASL security layer may be installed at any instance.",
+      "ja": "[RFC4422]で指定されるように、新たにネゴシエートSASLセキュリティレイヤがインストールSASLセキュリティレイヤを置き換えます。したがって、クライアント/サーバーのLDAPでの役割、およびSASLけれども、一つだけSASLセキュリティ層は、任意のインスタンスにインストールされてもよいし、その後の交流に逆にしてもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Implementors should be aware that the reversing of client/server roles and/or allowing both peers to act as client and server likely introduces security considerations not foreseen by the authors of this document. In particular, the security implications of the design choices made in the authentication and data security models for this extension (discussed in Sections 3 and 4, respectively) are not fully studied. It is hoped that experimentation with this extension will lead to better understanding of the security implications of these models and other aspects of this extension, and that appropriate considerations will be documented in a future document. The following security considerations are apparent at this time.",
+      "ja": "実装者は、クライアント/サーバーの役割の逆転および/または両方のピアがクライアントとサーバとして動作することができますが、おそらくこの文書の著者によって予見ないセキュリティ上の考慮事項を紹介することに注意する必要があります。具体的には、この拡張のための認証およびデータセキュリティモデルで行われた設計上の選択のセキュリティへの影響は十分に研究されていない（セクションはそれぞれ3および4に説明します）。この拡張子を持つ実験は、これらのモデルとこの拡張機能の他の側面、のセキュリティへの影響をよりよく理解し、適切な配慮が将来の文書に記載されますことを導くことが期待されています。次のセキュリティの考慮事項は、現時点では明らかです。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementors should take special care to process LDAP, SASL, TLS, and other events in the appropriate roles for the peers. Note that while the Turn reverses the client/server roles with LDAP, and in SASL authentication exchanges, it does not reverse the roles within the TLS layer or the transport connection.",
+      "ja": "実装者は、LDAP、SASL、TLS、およびピアの適切な役割の他のイベントを処理するために特別な注意を払う必要があります。電源を入れますが、LDAPを使用してクライアント/サーバーの役割を逆転させ、かつSASL認証交換にいる間、それはTLS層やトランスポート接続での役割が逆転しないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The responding server (the original server) should restrict use of this operation to authorized clients. Client knowledge of a valid identifier should not be the sole factor in determining authorization to turn.",
+      "ja": "応答サーバー（元のサーバー）が承認されたクライアントに、この操作の使用を制限する必要があります。有効な識別子のクライアントの知識がオンする権限を決定する唯一の要因ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Where the peers except to establish TLS, TLS should be started prior to the Turn and any request to authenticate via the Bind operation.",
+      "ja": "除くピアがTLSを確立する場合は、TLSは、電源を入れて、バインド操作を経由して認証するためのあらゆる要求に先立って開始する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "LDAP security considerations [RFC4511][RFC4513] generally apply to this extension.",
+      "ja": "LDAPセキュリティの考慮事項[RFC4511] [RFC4513]は、一般的に、この拡張機能に適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The following values [RFC4520] have been registered by the IANA.",
+      "ja": "次の値[RFC4520]はIANAによって登録されています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Object Identifier",
+      "section_title": true,
+      "ja": "6.1。オブジェクト識別子"
+    },
+    {
+      "indent": 3,
+      "text": "The IANA has assigned an LDAP Object Identifier to identify the LDAP Turn Operation, as defined in this document.",
+      "ja": "この文書で定義されるようにIANAは、LDAPターン動作を識別するために、LDAPオブジェクト識別子が割り当てられています。"
+    },
+    {
+      "indent": 7,
+      "text": "Subject: Request for LDAP Object Identifier Registration\nPerson & email address to contact for further information:\n     Kurt Zeilenga <kurt@OpenLDAP.org>\nSpecification: RFC 4531\nAuthor/Change Controller: Author\nComments:\n     Identifies the LDAP Turn Operation",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "6.2. LDAP Protocol Mechanism",
+      "section_title": true,
+      "ja": "6.2。 LDAPプロトコルメカニズム"
+    },
+    {
+      "indent": 3,
+      "text": "The IANA has registered the LDAP Protocol Mechanism described in this document.",
+      "ja": "IANAは、この文書で説明するLDAPプロトコルメカニズムを登録しています。"
+    },
+    {
+      "indent": 7,
+      "text": "Subject: Request for LDAP Protocol Mechanism Registration\nObject Identifier: 1.3.6.1.1.19\nDescription: LDAP Turn Operation\nPerson & email address to contact for further information:\n     Kurt Zeilenga <kurt@openldap.org>\nUsage: Extended Operation\nSpecification: RFC 4531\nAuthor/Change Controller: Author\nComments: none",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7.参考"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4346] Dierks, T. and, E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.1\", RFC 4346, April 2006.",
+      "ja": "[RFC4346]ダークス、T.と、E.レスコラ、 \"トランスポート層セキュリティ（TLS）プロトコルバージョン1.1\"、RFC 4346、2006年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4422] Melnikov, A., Ed. and K. Zeilenga, Ed., \"Simple Authentication and Security Layer (SASL)\", RFC 4422, June 2006.",
+      "ja": "[RFC4422]メルニコフ、A.編。そして、K. Zeilenga、エド。、 \"簡易認証セキュリティー層（SASL）\"、RFC 4422、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4510] Zeilenga, K., Ed., \"Lightweight Directory Access Protocol (LDAP): Technical Specification Road Map\", RFC 4510, June 2006.",
+      "ja": "[RFC4510] Zeilenga、K.、エド、 \"ライトウェイトディレクトリアクセスプロトコル（LDAP）：技術仕様ロードマップ\"。、RFC 4510、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4511] Sermersheim, J., Ed., \"Lightweight Directory Access Protocol (LDAP): The Protocol\", RFC 4511, June 2006.",
+      "ja": "[RFC4511] Sermersheim、J.、エド、 \"ライトウェイトディレクトリアクセスプロトコル（LDAP）：プロトコル\"、RFC 4511、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4513] Harrison, R., Ed., \"Lightweight Directory Access Protocol (LDAP): Authentication Methods and Security Mechanisms\", RFC 4513, June 2006.",
+      "ja": "[RFC4513]ハリソン、R.、エド、 \"ライトウェイトディレクトリアクセスプロトコル（LDAP）：認証方法とセキュリティメカニズム\"。、RFC 4513、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[X.680] International Telecommunication Union - Telecommunication Standardization Sector, \"Abstract Syntax Notation One (ASN.1) - Specification of Basic Notation\", X.680(2002) (also ISO/IEC 8824-1:2002).",
+      "ja": "[X.680]国際電気通信連合 - 電気通信標準化部門、 \"抽象構文記法1（ASN.1） - 基本的な記法の仕様\"、X.680（2002）（また、ISO / IEC 8824から1：2002）。"
+    },
+    {
+      "indent": 3,
+      "text": "[X.690] International Telecommunication Union - Telecommunication Standardization Sector, \"Specification of ASN.1 encoding rules: Basic Encoding Rules (BER), Canonical Encoding Rules (CER), and Distinguished Encoding Rules (DER)\", X.690(2002) (also ISO/IEC 8825-1:2002).",
+      "ja": "[X.690]国際電気通信連合 - 電気通信標準化部門、 \"ASN.1エンコーディング規則の仕様：基本符号化規則（BER）、Canonicalの符号化規則（CER）、および顕著な符号化規則（DER）\"、X.690（2002 ）（また、ISO / IEC 8825から1：2002）。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4520] Zeilenga, K., \"Internet Assigned Numbers Authority (IANA) Considerations for the Lightweight Directory Access Protocol (LDAP)\", BCP 64, RFC 4520, June 2006.",
+      "ja": "[RFC4520] Zeilenga、K.、 \"IANA（Internet Assigned Numbers Authority）のライトウェイトディレクトリアクセスプロトコル（LDAP）に関する考慮事項\"、BCP 64、RFC 4520、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SASL-K5] Melnikov, A., Ed., \"The Kerberos V5 (\"GSSAPI\") SASL Mechanism\", Work in Progress, May 2006.",
+      "ja": "[SASL-K5]メルニコフ、A.編、 \"ケルベロスV5（\" GSSAPI \"）SASLメカニズム\"、進歩、2006年5月での作業。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Kurt D. Zeilenga OpenLDAP Foundation",
+      "ja": "クルトD. ZeilengaのOpenLDAP財団"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: Kurt@OpenLDAP.org",
+      "ja": "メールアドレス：Kurt@OpenLDAP.org"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}

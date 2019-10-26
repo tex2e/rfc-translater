@@ -1,0 +1,1404 @@
+{
+  "title": {
+    "text": "RFC 4551 - IMAP Extension for Conditional STORE Operation or Quick Flag Changes Resynchronization",
+    "ja": "RFC 4551 - 条件付きSTORE操作やクイックフラグの変更を再同期化のためのIMAP拡張"
+  },
+  "number": 4551,
+  "created_at": "2019-10-22 12:40:14.342385+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                        A. Melnikov\nRequest for Comments: 4551                                    Isode Ltd.\nUpdates: 3501                                                    S. Hole\nCategory: Standards Track                  ACI WorldWide/MessagingDirect\n                                                               June 2006",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "IMAP Extension for Conditional STORE Operation\n   or Quick Flag Changes Resynchronization",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Often, multiple IMAP (RFC 3501) clients need to coordinate changes to a common IMAP mailbox. Examples include different clients working on behalf of the same user, and multiple users accessing shared mailboxes. These clients need a mechanism to synchronize state changes for messages within the mailbox. They must be able to guarantee that only one client can change message state (e.g., message flags) at any time. An example of such an application is use of an IMAP mailbox as a message queue with multiple dequeueing clients.",
+      "ja": "多くの場合、複数のIMAP（RFC 3501）のクライアントは、共通のIMAPメールボックスへの変更を調整する必要があります。例としては、同じユーザーに代わって作業を異なるクライアント、および共有メールボックスにアクセスする複数のユーザーが含まれます。これらのクライアントは、メールボックス内のメッセージの状態の変更を同期するためのメカニズムを必要とします。彼らは1つのクライアントだけは、いつでもメッセージの状態（例えば、メッセージフラグを）変えることができることを保証できなければなりません。そのようなアプリケーションの例は、複数のデキュークライアントとメッセージ・キューなどのIMAPメールボックスの使用です。"
+    },
+    {
+      "indent": 3,
+      "text": "The Conditional Store facility provides a protected update mechanism for message state information that can detect and resolve conflicts between multiple writing mail clients.",
+      "ja": "条件付きストア機能を検出し、複数の書き込みメールクライアント間の競合を解決することができますメッセージ状態情報の保護更新メカニズムを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "The Conditional Store facility also allows a client to quickly resynchronize mailbox flag changes.",
+      "ja": "条件付きストア機能は、クライアントがすぐにメールボックスのフラグ変更を再同期することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an extension to IMAP (RFC 3501).",
+      "ja": "この文書は、IMAP（RFC 3501）への拡張を定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction and Overview ................................. 3\n2.  Conventions Used in This Document ......................... 5\n3.  IMAP Protocol Changes ..................................... 6\n3.1. New OK untagged responses for SELECT and EXAMINE ......... 6\n3.1.1. HIGHESTMODSEQ response code ............................ 6\n3.1.2. NOMODSEQ response code ................................. 7\n3.2. STORE and UID STORE Commands ............................. 7\n3.3 FETCH and UID FETCH Commands ..............................13\n3.3.1. CHANGEDSINCE FETCH modifier ............................13\n3.3.2. MODSEQ message data item in FETCH Command ..............14\n3.4. MODSEQ search criterion in SEARCH ........................16\n3.5. Modified SEARCH untagged response ........................17\n3.6. HIGHESTMODSEQ status data items ..........................17\n3.7. CONDSTORE parameter to SELECT and EXAMINE ................18\n3.8. Additional quality of implementation issues ..............18\n4.  Formal Syntax .............................................19\n5.  Server implementation considerations ......................21\n6.  Security Considerations ...................................22\n7.  IANA Considerations .......................................22\n8.  References ................................................23\n8.1. Normative References .....................................23\n8.2. Informative References ...................................23\n9.  Acknowledgements ..........................................23",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction and Overview",
+      "section_title": true,
+      "ja": "1.はじめにと概要"
+    },
+    {
+      "indent": 3,
+      "text": "The Conditional STORE extension is present in any IMAP4 implementation that returns \"CONDSTORE\" as one of the supported capabilities in the CAPABILITY command response.",
+      "ja": "条件付きストア拡張は、CAPABILITYコマンド応答でサポートされる機能の一つとして「CONDSTORE」を返す任意IMAP4の実装で存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "An IMAP server that supports this extension MUST associate a positive unsigned 64-bit value called a modification sequence (mod-sequence) with every IMAP message. This is an opaque value updated by the server whenever a metadata item is modified. The server MUST guarantee that each STORE command performed on the same mailbox (including simultaneous stores to different metadata items from different connections) will get a different mod-sequence value. Also, for any two successful STORE operations performed in the same session on the same mailbox, the mod-sequence of the second completed operation MUST be greater than the mod-sequence of the first completed. Note that the latter rule disallows the use of the system clock as a mod-sequence, because if system time changes (e.g., an NTP [NTP] client adjusting the time), the next generated value might be less than the previous one.",
+      "ja": "この拡張機能をサポートしているIMAPサーバは、すべてのIMAPメッセージを修正・シーケンス（MOD-シーケンス）と呼ばれる正の符号なし64ビット値を関連付ける必要があります。これは、メタデータ項目が変更されるたびにサーバーによって更新不透明な値です。サーバは、（異なる接続は異なるメタデータ項目への同時店舗を含む）同じメールボックス上で実行される各STOREコマンドが異なるMOD-シーケンス値を取得することを保証しなければなりません。また、同じメールボックスに同じセッションで行う任意の二つの成功STORE操作のために、第二の完了操作のMOD-シーケンスが完了した第一のMOD-配列よりも大きくなければなりません。システム時刻の変更（例えば、NTP [NTP]クライアントが時間を調整する）場合、次の生成された値が前のものよりも小さい可能性があるため、後者のルールは、MOD-シーケンスなどのシステム・クロックの使用を禁止することに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Mod-sequences allow a client that supports the CONDSTORE extension to determine if a message metadata has changed since some known moment. Whenever the state of a flag changes (i.e., the flag is added where previously it wasn't set, or the flag is removed and before it was set) the value of the modification sequence for the message MUST be updated. Adding the flag when it is already present or removing when it is not present SHOULD NOT change the mod-sequence.",
+      "ja": "モッズ・シーケンスは、メッセージメタデータがいくつか知られている瞬間以降に変更された場合CONDSTORE拡張をサポートするクライアントを決定することができます。メッセージの修正・シーケンスの値が更新されなければならないたびに、フラグ変化の状態が（以前に設定されていないし、またはフラグが除去され、それが設定される前場合、すなわち、フラグが付加されます）。それが存在しない場合、それが既に存在するか又は除去するときにフラグを追加すると、MOD-配列を変更しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "When a message is appended to a mailbox (via the IMAP APPEND command, COPY to the mailbox, or using an external mechanism) the server generates a new modification sequence that is higher than the highest modification sequence of all messages in the mailbox and assigns it to the appended message.",
+      "ja": "メッセージは、サーバーは、メールボックス内のすべてのメッセージの最高修飾配列よりも高い新たな変形シーケンスを生成し、それを割り当てる（IMAPのAPPENDコマンドを使用してメールボックスにコピーし、または外部機構を使用して）メールボックスに追加されたとき追加のメッセージへ。"
+    },
+    {
+      "indent": 3,
+      "text": "The server MAY store separate (per-message) modification sequence values for different metadata items. If the server does so, per-message mod-sequence is the highest mod-sequence of all metadata items for the specified message.",
+      "ja": "サーバは、異なるメタデータアイテムのための別個の（メッセージごとの）修正シーケンス値を格納することができます。サーバがそうする場合は、メッセージごとのMOD-シーケンスは、指定されたメッセージのすべてのメタデータ項目の最高のMOD-シーケンスです。"
+    },
+    {
+      "indent": 3,
+      "text": "The server that supports this extension is not required to be able to store mod-sequences for every available mailbox. Section 3.1.2 describes how the server may act if a particular mailbox doesn't support the persistent storage of mod-sequences.",
+      "ja": "この拡張をサポートするサーバは、使用可能なすべてのメールボックスのMOD-シーケンスを記憶できるようにする必要はありません。 3.1.2項では、特定のメールボックスがモッズ系列の永続ストレージをサポートしていない場合は、サーバーが動作することができる方法を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "This extension makes the following changes to the IMAP4 protocol:",
+      "ja": "この拡張は、IMAP4プロトコルを次のように変更します"
+    },
+    {
+      "indent": 6,
+      "text": "a) adds UNCHANGEDSINCE STORE modifier.",
+      "ja": "A）STORE修飾子SINCE UNCHANGED、広告が表示されます。"
+    },
+    {
+      "indent": 6,
+      "text": "b) adds the MODIFIED response code which should be used with an OK response to the STORE command. (It can also be used in a NO response.)",
+      "ja": "B）STOREコマンドへOKレスポンスとともに使用されるべき変更した応答コードを付加します。 （また、応答なしで使用することができます。）"
+    },
+    {
+      "indent": 6,
+      "text": "c) adds a new MODSEQ message data item for use with the FETCH command.",
+      "ja": "C）FETCHコマンドで使用する新しいMODSEQメッセージデータ項目を追加します。"
+    },
+    {
+      "indent": 6,
+      "text": "d) adds CHANGEDSINCE FETCH modifier.",
+      "ja": "D）修飾子をFETCH CHANGEDSINCE追加されます。"
+    },
+    {
+      "indent": 6,
+      "text": "e) adds a new MODSEQ search criterion.",
+      "ja": "e）の新しいMODSEQ検索条件を追加します。"
+    },
+    {
+      "indent": 6,
+      "text": "f) extends the syntax of untagged SEARCH responses to include mod-sequence.",
+      "ja": "F）MOD-配列を含むようタグなしSEARCH応答の構文を拡張します。"
+    },
+    {
+      "indent": 6,
+      "text": "g) adds new OK untagged responses for the SELECT and EXAMINE commands.",
+      "ja": "G）SELECTのための新しいOKタグなしの応答を追加し、コマンドを調べます。"
+    },
+    {
+      "indent": 6,
+      "text": "h) defines an additional parameter to SELECT/EXAMINE commands.",
+      "ja": "H）/ EXAMINEコマンドを選択するために、追加のパラメータを定義します。"
+    },
+    {
+      "indent": 6,
+      "text": "i) adds the HIGHESTMODSEQ status data item to the STATUS command.",
+      "ja": "ⅰ）STATUSコマンドにHIGHESTMODSEQステータスデータ項目を追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "A client supporting CONDSTORE extension indicates its willingness to receive mod-sequence updates in all untagged FETCH responses by issuing:",
+      "ja": "CONDSTORE拡張をサポートするクライアントが発行してすべてのタグなしFETCH応答でMOD-シーケンスの更新を受信する意思を示しています。"
+    },
+    {
+      "indent": 6,
+      "text": "- a SELECT or EXAMINE command with the CONDSTORE parameter, - a STATUS (HIGHESTMODSEQ) command, - a FETCH or SEARCH command that includes the MODSEQ message data item, - a FETCH command with the CHANGEDSINCE modifier, or - a STORE command with the UNCHANGEDSINCE modifier.",
+      "ja": " -  STATUS（HIGHESTMODSEQ）コマンド、 -   -  MODSEQメッセージデータ項目を含むFETCHまたはSEARCHコマンド、 -  CHANGEDSINCE改質剤とFETCHコマンド、または -  UNCHANGEDSINCEとSTOREコマンドCONDSTOREパラメータとSELECTまたはEXAMINEコマンド修飾子。"
+    },
+    {
+      "indent": 3,
+      "text": "The server MUST include mod-sequence data in all subsequent untagged FETCH responses (until the connection is closed), whether they were caused by a regular STORE, a STORE with UNCHANGEDSINCE modifier, or an external agent.",
+      "ja": "（接続が閉じられるまで）サーバは、それらが正規店、UNCHANGEDSINCE改質剤とSTORE、または外部エージェントによって引き起こされたかどうか、それ以降のすべてのタグなしのFETCH応答におけるMOD系列データを含まなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses the term \"CONDSTORE-aware client\" to refer to a client that announces its willingness to receive mod-sequence updates as described above. The term \"CONDSTORE enabling command\" will refer any of the commands listed above. A future extension to this document may extend the list of CONDSTORE enabling commands. A first CONDSTORE enabling command executed in the session MUST cause the server to return HIGHESTMODSEQ (Section 3.1.1) unless the server has sent NOMODSEQ (Section 3.1.2) response code when the currently selected mailbox was selected.",
+      "ja": "この文書では、上記のようなMOD-シーケンスの更新を受信するためにその意欲を発表し、クライアントを参照するために用語「CONDSTORE対応クライアント」を使用しています。用語「コマンドを有効にするCONDSTOREは、」上記のコマンドのいずれかを参照します。このドキュメントの将来の拡張はCONDSTORE可能なコマンドのリストを拡張することができます。セッションで実行される最初のCONDSTOREイネーブルコマンドは、現在選択されたメールボックスが選択されたときに、サーバーがHIGHESTMODSEQサーバがNOMODSEQ（3.1.2項）を送信していない限り、（セクション3.1.1）レスポンスコードを返すことが原因しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The rest of this document describes the protocol changes more rigorously.",
+      "ja": "このドキュメントの残りの部分は、より厳密に、プロトコルの変更について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions Used in This Document",
+      "section_title": true,
+      "ja": "この文書で使用される2.表記"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [KEYWORDS].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [KEYWORDS]で説明されるように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In examples, lines beginning with \"S:\" are sent by the IMAP server, and lines beginning with \"C:\" are sent by the client. Line breaks may appear in example commands solely for editorial clarity; when present in the actual message, they are represented by \"CRLF\".",
+      "ja": "例では、で始まる行「S：」はIMAPサーバによって送信され、そして始まる行「C：」は、クライアントによって送信されます。改行は編集上明確にするためだけにコマンドを例に表示される場合があります。とき実際のメッセージに存在し、それらは「CRLF」で表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Formal syntax is defined using ABNF [ABNF].",
+      "ja": "正式な構文はABNF [ABNF]を使用して定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The term \"metadata\" or \"metadata item\" is used throughout this document. It refers to any system or user-defined keyword. Future documents may extend \"metadata\" to include other dynamic message data.",
+      "ja": "用語「メタデータ」または「メタデータ項目は、」この文書全体で使用されます。これは、任意のシステムまたはユーザー定義のキーワードを指します。将来の文書は、他の動的なメッセージ・データが含まれるように、「メタデータ」を延長することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Some IMAP mailboxes are private, accessible only to the owning user. Other mailboxes are not, either because the owner has set an Access Control List [ACL] that permits access by other users, or because it is a shared mailbox. Let's call a metadata item \"shared\" for the mailbox if any changes to the metadata items are persistent and visible to all other users accessing the mailbox. Otherwise, the metadata item is called \"private\". Note that private metadata items are still visible to all sessions accessing the mailbox as the same user. Also note that different mailboxes may have different metadata items as shared.",
+      "ja": "いくつかのIMAPメールボックスのみが所有するユーザに対して、プライベートアクセス可能です。他のメールボックスではなく、どちらかの所有者が設定されているので、他のユーザーによるアクセスを許可するか、それが共有メールボックスであるため、アクセス制御リスト[ACL]。メタデータ項目への変更は、メールボックスにアクセスするすべての他のユーザーへの持続的かつ表示されている場合のメールボックスの「共有」メタデータ項目を呼ぶことにしましょう。そうでない場合は、メタデータ項目は、「プライベート」と呼ばれています。プライベートメタデータ項目は、まだ同じユーザーとしてメールボックスにアクセスするすべてのセッションに表示されていることに注意してください。また、共有と異なるメールボックスが異なるメタデータ項目を有することができることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "See Section 1 for the definition of a \"CONDSTORE-aware client\" and a \"CONDSTORE enabling command\".",
+      "ja": "「CONDSTORE対応クライアント」と「CONDSTORE可能コマンド」の定義については、セクション1を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3. IMAP Protocol Changes",
+      "section_title": true,
+      "ja": "3. IMAPプロトコルの変更"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. New OK Untagged Responses for SELECT and EXAMINE",
+      "section_title": true,
+      "ja": "3.1。 SELECTとEXAMINEのための新しいOKタグ無し応答"
+    },
+    {
+      "indent": 3,
+      "text": "This document adds two new response codes, HIGHESTMODSEQ and NOMODSEQ. One of those response codes MUST be returned in the OK untagged response for a successful SELECT/EXAMINE command.",
+      "ja": "この文書では、2つの新しい応答コード、HIGHESTMODSEQとNOMODSEQを追加します。これらの応答コードの一つが成功したSELECT / EXAMINEコマンドのOKタグなし応答で返さなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "When opening a mailbox, the server must check if the mailbox supports the persistent storage of mod-sequences. If the mailbox supports the persistent storage of mod-sequences and the mailbox open operation succeeds, the server MUST send the OK untagged response including HIGHESTMODSEQ response code. If the persistent storage for the mailbox is not supported, the server MUST send the OK untagged response including NOMODSEQ response code instead.",
+      "ja": "メールボックスを開くと、メールボックスがモッズ系列の永続ストレージをサポートしている場合、サーバがチェックする必要があります。メールボックスがMOD-系列の永続ストレージをサポートし、メールボックスのオープン操作が成功した場合、サーバはHIGHESTMODSEQ応答コードを含むOKタグなし応答を送らなければなりません。メールボックスの永続的なストレージがサポートされていない場合、サーバーではなくNOMODSEQ応答コードを含むOKタグなし応答を送らなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. HIGHESTMODSEQ Response Code",
+      "section_title": true,
+      "ja": "3.1.1。 HIGHESTMODSEQレスポンスコード"
+    },
+    {
+      "indent": 3,
+      "text": "This document adds a new response code that is returned in the OK untagged response for the SELECT and EXAMINE commands. A server supporting the persistent storage of mod-sequences for the mailbox MUST send the OK untagged response including HIGHESTMODSEQ response code with every successful SELECT or EXAMINE command:",
+      "ja": "この文書では、SELECTのためのOKタグなし応答で返されたコマンドを調べている新しい応答コードを追加します。メールボックスのMOD-系列の永続ストレージをサポートするサーバは、すべて成功したSELECTでHIGHESTMODSEQ応答コードを含むOKタグなし応答を送信したり、コマンドを調べる必要があります："
+    },
+    {
+      "indent": 6,
+      "text": "OK [HIGHESTMODSEQ <mod-sequence-value>]",
+      "ja": "OK [HIGHESTMODSEQ <MOD-シーケンス値>]"
+    },
+    {
+      "indent": 6,
+      "text": "where <mod-sequence-value> is the highest mod-sequence value of all messages in the mailbox. When the server changes UIDVALIDITY for a mailbox, it doesn't have to keep the same HIGHESTMODSEQ for the mailbox.",
+      "ja": "ここで、<MOD-シーケンス-value>は、メールボックス内のすべてのメッセージの最高MOD-シーケンス値です。サーバーは、メールボックスのUIDVALIDITYを変更すると、それがメールボックスに同じHIGHESTMODSEQを維持する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "A disconnected client can use the value of HIGHESTMODSEQ to check if it has to refetch metadata from the server. If the UIDVALIDITY value has changed for the selected mailbox, the client MUST delete the cached value of HIGHESTMODSEQ. If UIDVALIDITY for the mailbox is the same, and if the HIGHESTMODSEQ value stored in the client's cache is less than the value returned by the server, then some metadata items on the server have changed since the last synchronization, and the client needs to update its cache. The client MAY use SEARCH MODSEQ (Section 3.4) to find out exactly which metadata items have changed. Alternatively, the client MAY issue FETCH with the CHANGEDSINCE modifier (Section 3.3.1) in order to fetch data for all messages that have metadata items changed since some known modification sequence.",
+      "ja": "切断されたクライアントは、サーバーからメタデータを再フェッチするために持っているかどうかを確認するためにHIGHESTMODSEQの値を使用することができます。 UIDVALIDITY値が選択されたメールボックスのために変更された場合、クライアントはHIGHESTMODSEQのキャッシュされた値を削除しなければなりません。メールボックスのUIDVALIDITYは同じであり、クライアントのキャッシュに保存されているHIGHESTMODSEQ値がサーバから返された値より小さい場合は、サーバー上のいくつかのメタデータ項目は、前回の同期以降に変更された、およびクライアントが更新する必要がある場合は、そのキャッシュ。クライアントは、アイテムが変更されているメタデータを正確に調べるために検索MODSEQ（3.4節）を使用することができます。また、クライアントは、いくつかの既知の修正シーケンスため、メタデータの項目を変更したすべてのメッセージのためのデータをフェッチするためにCHANGEDSINCE修飾子（3.3.1）でFETCH発行することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 1:",
+      "ja": "例1："
+    },
+    {
+      "indent": 6,
+      "text": "C: A142 SELECT INBOX S: * 172 EXISTS",
+      "ja": "C：A142 SELECT INBOX S：* 172はEXISTS"
+    },
+    {
+      "indent": 6,
+      "text": "S: * 1 RECENT S: * OK [UNSEEN 12] Message 12 is first unseen S: * OK [UIDVALIDITY 3857529045] UIDs valid S: * OK [UIDNEXT 4392] Predicted next UID S: * FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft) S: * OK [PERMANENTFLAGS (\\Deleted \\Seen \\*)] Limited S: * OK [HIGHESTMODSEQ 715194045007] S: A142 OK [READ-WRITE] SELECT completed",
+      "ja": "S：* 1最近のS：* OK [UNSEEN 12]メッセージ12最初の目に見えないSです：* OK [UIDVALIDITY 3857529045] UIDを有効S：* OK [UIDNEXT 4392]は次のUID S予測：* FLAGS（\\回答\\フラグ付き\\削除されたが\\見\\案）S：* OKを[PERMANENTFLAGS（\\削除された\\見\\ *）]限定S：* OK [HIGHESTMODSEQ 715194045007] S：A142のOK [READ-WRITE]を選択して完了します"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.2. NOMODSEQ Response Code",
+      "section_title": true,
+      "ja": "3.1.2。 NOMODSEQレスポンスコード"
+    },
+    {
+      "indent": 3,
+      "text": "A server that doesn't support the persistent storage of mod-sequences for the mailbox MUST send the OK untagged response including NOMODSEQ response code with every successful SELECT or EXAMINE command. A server that returned NOMODSEQ response code for a mailbox, which subsequently receives one of the following commands while the mailbox is selected:",
+      "ja": "メールボックスのMOD-系列の永続ストレージをサポートしていないサーバが成功するたびにSELECTまたはEXAMINEコマンドでNOMODSEQ応答コードを含むOKタグなし応答を送らなければなりません。 ：メールボックスが選択されている間、その後、次のいずれかのコマンドを受信したメールボックス用NOMODSEQ応答コードを返したサーバ"
+    },
+    {
+      "indent": 6,
+      "text": "- a FETCH command with the CHANGEDSINCE modifier, - a FETCH or SEARCH command that includes the MODSEQ message data item, or - a STORE command with the UNCHANGEDSINCE modifier",
+      "ja": " -  UNCHANGEDSINCE修飾子とSTOREコマンド -  MODSEQメッセージデータ項目、またはを含むFETCHまたはSEARCHコマンド -  CHANGEDSINCE修飾子とFETCHコマンド"
+    },
+    {
+      "indent": 3,
+      "text": "MUST reject any such command with the tagged BAD response.",
+      "ja": "タグ付けされたBAD応答で、そのようなコマンドを拒絶しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 2:",
+      "ja": "例2："
+    },
+    {
+      "indent": 6,
+      "text": "C: A142 SELECT INBOX S: * 172 EXISTS S: * 1 RECENT S: * OK [UNSEEN 12] Message 12 is first unseen S: * OK [UIDVALIDITY 3857529045] UIDs valid S: * OK [UIDNEXT 4392] Predicted next UID S: * FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft) S: * OK [PERMANENTFLAGS (\\Deleted \\Seen \\*)] Limited S: * OK [NOMODSEQ] Sorry, this mailbox format doesn't support modsequences S: A142 OK [READ-WRITE] SELECT completed",
+      "ja": "C：A142 SELECT INBOX S：* 1 RECENT S：* 172 SをEXISTS * OK [UNSEEN 12]メッセージ12である第一見えないS：* OK [UIDVALIDITY 3857529045]のUID有効S：* OK [UIDNEXT 4392]予測された次のUID Sを：* FLAGS（\\回答\\フラグ付き\\削除された\\見\\案）S：* OK [PERMANENTFLAGS（\\削除された\\ \\ *み）]限定S：OK [NOMODSEQ]申し訳ありませんが、このメールボックス形式はmodsequences Sをサポートしていません*： A142 OK [READ-WRITE]を完了SELECT"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. STORE and UID STORE Commands",
+      "section_title": true,
+      "ja": "3.2。 STOREとUID STOREコマンド"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines the following STORE modifier (see Section 2.5 of [IMAPABNF]):",
+      "ja": "この文書は次のストア修飾子を定義する（[IMAPABNF]のセクション2.5を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "UNCHANGEDSINCE <mod-sequence>",
+      "ja": "UNCHANGEDSINCE <MOD-シーケンス>"
+    },
+    {
+      "indent": 6,
+      "text": "For each message specified in the message set, the server performs the following. If the mod-sequence of any metadata item of the message is equal or less than the specified UNCHANGEDSINCE value, then the requested operation (as described by the message data item) is performed. If the operation is successful, the server MUST update the mod-sequence attribute of the message. An untagged FETCH response MUST be sent, even if the .SILENT suffix is specified, and the response MUST include the MODSEQ message data item. This is required to update the client's cache with the correct mod-sequence values. See Section 3.3.2 for more details.",
+      "ja": "メッセージ・セットで指定された各メッセージに対して、サーバは以下のことを行います。メッセージのいずれかのメタデータ項目のMOD-シーケンスが指定UNCHANGEDSINCE値より等しいか小さい場合、（メッセージデータ項目によって記載されているように）、次に要求された動作が行われます。操作が成功した場合、サーバーはメッセージのMOD-sequence属性を更新する必要があります。タグ無しFETCH応答は.SILENTサフィックスが指定されていても、送らなければなりません、そして応答はMODSEQメッセージデータ項目を含まなければなりません。これは正しいMOD-シーケンス値を持つクライアントのキャッシュを更新するために必要とされます。詳細は、3.3.2項を参照してください。"
+    },
+    {
+      "indent": 6,
+      "text": "However, if the mod-sequence of any metadata item of the message is greater than the specified UNCHANGEDSINCE value, then the requested operation MUST NOT be performed. In this case, the mod-sequence attribute of the message is not updated, and the message number (or unique identifier in the case of the UID STORE command) is added to the list of messages that failed the UNCHANGESINCE test.",
+      "ja": "しかし、メッセージの任意のメタデータ項目のMOD-配列は、次いで、要求された操作を実行してはいけません、指定されたUNCHANGEDSINCE値よりも大きい場合。この場合、メッセージのMOD-シーケンス属性は更新されず、メッセージ番号（UID又はストア命令の場合に一意の識別子）UNCHANGESINCEテストに失敗したメッセージのリストに追加されます。"
+    },
+    {
+      "indent": 6,
+      "text": "When the server finished performing the operation on all the messages in the message set, it checks for a non-empty list of messages that failed the UNCHANGESINCE test. If this list is non-empty, the server MUST return in the tagged response a MODIFIED response code. The MODIFIED response code includes the message set (for STORE) or set of UIDs (for UID STORE) of all messages that failed the UNCHANGESINCE test.",
+      "ja": "サーバがメッセージ・セット内のすべてのメッセージに対して操作を実行が終了したら、それはUNCHANGESINCE試験に失敗したメッセージの非空のリストをチェックします。このリストが空でない場合、サーバはタグ付けされた応答変形応答コードに返さなければなりません。変更した応答コードセット（STORE）またはUNCHANGESINCEテストに失敗したすべてのメッセージの（UIDストア用）のUIDの設定されたメッセージを含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 3:",
+      "ja": "例3："
+    },
+    {
+      "indent": 6,
+      "text": "All messages pass the UNCHANGESINCE test.",
+      "ja": "すべてのメッセージはUNCHANGESINCE試験に合格します。"
+    },
+    {
+      "indent": 6,
+      "text": "C: a103 UID STORE 6,4,8 (UNCHANGEDSINCE 12121230045) +FLAGS.SILENT (\\Deleted) S: * 1 FETCH (UID 4 MODSEQ (12121231000)) S: * 2 FETCH (UID 6 MODSEQ (12121230852)) S: * 4 FETCH (UID 8 MODSEQ (12121130956)) S: a103 OK Conditional Store completed",
+      "ja": "C：A103 UIDストア6,4,8（UNCHANGEDSINCE 12121230045）+ FLAGS.SILENT（\\削除）S *（UID 4 MODSEQ（12121231000））をFETCH 1 S：* 2（UID 6 MODSEQ（12121230852））SをFETCH * 4 FETCH（UID 8 MODSEQ（12121130956））S：A103はOK条件付きストアが完成します"
+    },
+    {
+      "indent": 3,
+      "text": "Example 4:",
+      "ja": "例4："
+    },
+    {
+      "indent": 6,
+      "text": "C: a104 STORE * (UNCHANGEDSINCE 12121230045) +FLAGS.SILENT (\\Deleted $Processed) S: * 50 FETCH (MODSEQ (12111230047)) S: a104 OK Store (conditional) completed",
+      "ja": "C：A104 STORE※（UNCHANGEDSINCE 12121230045）+ FLAGS.SILENT（\\ $加工削除された）S：* 50 FETCH（MODSEQ（12111230047））S：A104 OKストア（条件付き）完成"
+    },
+    {
+      "indent": 3,
+      "text": "Example 5:",
+      "ja": "例5："
+    },
+    {
+      "indent": 6,
+      "text": "C: c101 STORE 1 (UNCHANGEDSINCE 12121230045) -FLAGS.SILENT (\\Deleted) S: * OK [HIGHESTMODSEQ 12111230047]",
+      "ja": "C：C101ストア1（UNCHANGEDSINCE 12121230045）-FLAGS.SILENT（\\削除）S：* OK [HIGHESTMODSEQ 12111230047]"
+    },
+    {
+      "indent": 6,
+      "text": "S: * 50 FETCH (MODSEQ (12111230048)) S: c101 OK Store (conditional) completed",
+      "ja": "S：* 50 FETCH（MODSEQ（12111230048））S：OKストア（条件付き）C101完成"
+    },
+    {
+      "indent": 6,
+      "text": "HIGHESTMODSEQ response code was sent by the server presumably because this was the first CONDSTORE enabling command.",
+      "ja": "このコマンドを有効に最初CONDSTOREたのでHIGHESTMODSEQ応答コードは、おそらくサーバから送信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 6:",
+      "ja": "例6："
+    },
+    {
+      "indent": 6,
+      "text": "In spite of the failure of the conditional STORE operation for message 7, the server continues to process the conditional STORE in order to find all messages that fail the test.",
+      "ja": "メッセージ7の条件付きストア動作の失敗にもかかわらず、サーバーは、テストに失敗したすべてのメッセージを見つけるために、条件付きストアを処理し続けます。"
+    },
+    {
+      "indent": 6,
+      "text": "C: d105 STORE 7,5,9 (UNCHANGEDSINCE 320162338) +FLAGS.SILENT (\\Deleted) S: * 5 FETCH (MODSEQ (320162350)) S: d105 OK [MODIFIED 7,9] Conditional STORE failed",
+      "ja": "C：D105ストア7,5,9（UNCHANGEDSINCE 320162338）+ FLAGS.SILENT（\\削除）S：※5 FETCH（MODSEQ（320162350））S：D105のOK [MODIFIED 7,9]条件付きストアに失敗しました"
+    },
+    {
+      "indent": 3,
+      "text": "Example 7:",
+      "ja": "例7："
+    },
+    {
+      "indent": 6,
+      "text": "Same as above, but the server follows the SHOULD recommendation in Section 6.4.6 of [IMAP4].",
+      "ja": "上記と同様、サーバーは、[IMAP4]のセクション6.4.6でSHOULD勧告に従います。"
+    },
+    {
+      "indent": 6,
+      "text": "C: d105 STORE 7,5,9 (UNCHANGEDSINCE 320162338) +FLAGS.SILENT (\\Deleted) S: * 7 FETCH (MODSEQ (320162342) FLAGS (\\Seen \\Deleted)) S: * 5 FETCH (MODSEQ (320162350)) S: * 9 FETCH (MODSEQ (320162349) FLAGS (\\Answered)) S: d105 OK [MODIFIED 7,9] Conditional STORE failed",
+      "ja": "C：D105ストア7,5,9（UNCHANGEDSINCE 320162338）+ FLAGS.SILENT（\\削除）S：* 7 FETCH（MODSEQ（320162342）FLAGS（\\見\\削除））S *（MODSEQ（320162350））をFETCH 5 S：* 9 FETCH（MODSEQ（320162349）FLAGS（\\回答））S：D105のOK [7,9を変形]条件付きSTORE失敗"
+    },
+    {
+      "indent": 6,
+      "text": "Use of UNCHANGEDSINCE with a modification sequence of 0 always fails if the metadata item exists. A system flag MUST always be considered existent, whether it was set or not.",
+      "ja": "メタデータ項目が存在する場合は0の修正配列とUNCHANGEDSINCEの使用は常に失敗します。システムフラグは常にそれが設定されたかどうか、存在しない考えなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 8:",
+      "ja": "例8："
+    },
+    {
+      "indent": 6,
+      "text": "C: a102 STORE 12 (UNCHANGEDSINCE 0) +FLAGS.SILENT ($MDNSent) S: a102 OK [MODIFIED 12] Conditional STORE failed",
+      "ja": "C：A102 STORE 12（UNCHANGEDSINCE 0）+ FLAGS.SILENT（$ MDNSent）S：A102 OK [MODIFIED 12]条件付きストアに障害が発生し"
+    },
+    {
+      "indent": 6,
+      "text": "The client has tested the presence of the $MDNSent user-defined keyword.",
+      "ja": "クライアントは$ MDNSentユーザー定義キーワードの存在をテストしています。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: A client trying to make an atomic change to the state of a particular metadata item (or a set of metadata items) should be prepared to deal with the case when the server returns the MODIFIED response code if the state of the metadata item being watched hasn't changed (but the state of some other metadata item has). This is necessary, because some servers don't store separate mod-sequences for different metadata items. However, a server implementation SHOULD avoid generating spurious MODIFIED responses for +FLAGS/-FLAGS STORE operations, even when the server stores a single mod-sequence per message. Section 5 describes how this can be achieved.",
+      "ja": "注：メタデータ項目の状態がある場合、特定のメタデータアイテム（又はメタデータアイテムのセット）の状態にアトミック変更をしようと、クライアントは、サーバが変更した応答コードを返す場合に対処するために準備されるべき見ては、変更されていない（ただし、いくつかの他のメタデータ項目の状態を持っています）。一部のサーバが異なるメタデータ項目のための独立したMOD-シーケンスを記憶していないので、これは、必要です。しかし、サーバの実装では、サーバがメッセージごとに単一のMOD-シーケンスを記憶する場合でも、+ FLAGS / -FLAGS STORE操作のためスプリアスMODIFIED応答の発生を回避すべきです。第5節ではこれを実現する方法について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Unless the server has included an unsolicited FETCH to update client's knowledge about messages that have failed the UNCHANGEDSINCE test, upon receipt of the MODIFIED response code, the client SHOULD try to figure out if the required metadata items have indeed changed by issuing FETCH or NOOP command. It is RECOMMENDED that the server avoids the need for the client to do that by sending an unsolicited FETCH response (Examples 9 and 10).",
+      "ja": "サーバが要請されていないが、変更した応答コードの受信時に、UNCHANGEDSINCEテストに失敗したメッセージに関するクライアントの知識を更新するために、FETCH含まれていない限り、必要なメタデータ項目が実際にFETCHまたはNOOPコマンドの発行によって変更されている場合、クライアントが把握するようにしてください。サーバーが迷惑FETCH応答（実施例9および10）を送信することによって、それを行うには、クライアントの必要性を回避することが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the required metadata items haven't changed, the client SHOULD retry the command with the new mod-sequence. The client SHOULD allow for a configurable but reasonable number of retries (at least 2).",
+      "ja": "必要なメタデータ項目が変更されていない場合は、クライアントは新しいMOD-シーケンスを使用してコマンドを再試行する必要があります。クライアントは、再試行の設定が、妥当な数（少なくとも2つ）を可能にすべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 9:",
+      "ja": "例9："
+    },
+    {
+      "indent": 6,
+      "text": "In the example below, the server returns the MODIFIED response code without sending information describing why the STORE UNCHANGEDSINCE operation has failed.",
+      "ja": "以下の例では、サーバは、店舗UNCHANGEDSINCE操作が失敗した理由を示す情報を送信することなく、変更レスポンスコードを返します。"
+    },
+    {
+      "indent": 6,
+      "text": "C: a106 STORE 100:150 (UNCHANGEDSINCE 212030000000) +FLAGS.SILENT ($Processed) S: * 100 FETCH (MODSEQ (303181230852)) S: * 102 FETCH (MODSEQ (303181230852)) ... S: * 150 FETCH (MODSEQ (303181230852)) S: a106 OK [MODIFIED 101] Conditional STORE failed",
+      "ja": "C：A106ストア100：150（UNCHANGEDSINCE 212030000000）+ FLAGS.SILENT（加工$）S：* 100 FETCH（MODSEQ（303181230852））S：* 102 FETCH（MODSEQ（303181230852））... Sは：* 150（FETCH MODSEQ（303181230852））S：A106 OK [MODIFIED 101]条件付きストアに失敗しました"
+    },
+    {
+      "indent": 6,
+      "text": "The flag $Processed was set on the message 101...",
+      "ja": "処理済フラグ$は、メッセージ101に設定されました..."
+    },
+    {
+      "indent": 6,
+      "text": "C: a107 NOOP S: * 101 FETCH (MODSEQ (303011130956) FLAGS ($Processed)) S: a107 OK",
+      "ja": "C：A107のNOOPのS：* 101（MODSEQ（303011130956）FLAGS（$加工））SをFETCH：A107 OK"
+    },
+    {
+      "indent": 6,
+      "text": "Or the flag hasn't changed, but another has (note that this server behaviour is discouraged. Server implementers should also see Section 5)...",
+      "ja": "または（このサーバーの動作が推奨されていることに注意してください。サーバーの実装も第5節を参照のこと）フラグが変更されていないが、別のは持ってい..."
+    },
+    {
+      "indent": 6,
+      "text": "C: b107 NOOP S: * 101 FETCH (MODSEQ (303011130956) FLAGS (\\Deleted \\Answered)) S: b107 OK",
+      "ja": "C：B107のNOOPのS：* 101（MODSEQ（303011130956）FLAGSを（\\削除された\\が回答））S FETCH：B107 OK"
+    },
+    {
+      "indent": 6,
+      "text": "...and the client retries the operation for the message 101 with the updated UNCHANGEDSINCE value",
+      "ja": "...と、クライアントは、更新されUNCHANGEDSINCE値とのメッセージ101に対する操作を再試行"
+    },
+    {
+      "indent": 6,
+      "text": "C: b108 STORE 101 (UNCHANGEDSINCE 303011130956) +FLAGS.SILENT ($Processed) S: * 101 FETCH (MODSEQ (303181230852)) S: b108 OK Conditional Store completed",
+      "ja": "C：B108ストア101（UNCHANGEDSINCE 303011130956）+ FLAGS.SILENT（加工$）S：* 101 FETCH（MODSEQ（303181230852））S：B108はOK条件付きストアが完成します"
+    },
+    {
+      "indent": 3,
+      "text": "Example 10:",
+      "ja": "例10："
+    },
+    {
+      "indent": 6,
+      "text": "Same as above, but the server avoids the need for the client to poll for changes.",
+      "ja": "上記と同じですが、サーバーは、クライアントが変更をポーリングする必要性を回避することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "The flag $Processed was set on the message 101 by another client...",
+      "ja": "処理済フラグ$は、別のクライアントでメッセージ101に設定されました..."
+    },
+    {
+      "indent": 6,
+      "text": "C: a106 STORE 100:150 (UNCHANGEDSINCE 212030000000) +FLAGS.SILENT ($Processed) S: * 100 FETCH (MODSEQ (303181230852)) S: * 101 FETCH (MODSEQ (303011130956) FLAGS ($Processed)) S: * 102 FETCH (MODSEQ (303181230852)) ... S: * 150 FETCH (MODSEQ (303181230852)) S: a106 OK [MODIFIED 101] Conditional STORE failed",
+      "ja": "C：A106ストア100：150（UNCHANGEDSINCE 212030000000）+ FLAGS.SILENT（加工$）S：* 100 FETCH（MODSEQ（303181230852））（S）* 101（MODSEQ（303011130956）FLAGS（$処理された））SをFETCH：* 102 * 150 FETCH（MODSEQ（303181230852））S：（MODSEQ（303181230852））... S FETCH A106 OK [変形101]条件付きSTOREを失敗しました"
+    },
+    {
+      "indent": 6,
+      "text": "Or the flag hasn't changed, but another has (note that this server behaviour is discouraged. Server implementers should also see Section 5)...",
+      "ja": "または（このサーバーの動作が推奨されていることに注意してください。サーバーの実装も第5節を参照のこと）フラグが変更されていないが、別のは持ってい..."
+    },
+    {
+      "indent": 6,
+      "text": "C: a106 STORE 100:150 (UNCHANGEDSINCE 212030000000) +FLAGS.SILENT ($Processed) S: * 100 FETCH (MODSEQ (303181230852)) S: * 101 FETCH (MODSEQ (303011130956) FLAGS (\\Deleted \\Answered)) S: * 102 FETCH (MODSEQ (303181230852)) ... S: * 150 FETCH (MODSEQ (303181230852)) S: a106 OK [MODIFIED 101] Conditional STORE failed",
+      "ja": "C：A106ストア100：150（UNCHANGEDSINCE 212030000000）+ FLAGS.SILENT（加工$）S：* 100 FETCH（MODSEQ（303181230852））S：* 101（MODSEQ（303011130956）FLAGSを（\\削除された\\が回答））FETCH S： * 150はFETCH（MODSEQ（303181230852））S：* 102（MODSEQ（303181230852））... S FETCH A106 OK [変形101]条件付きストアに失敗しました"
+    },
+    {
+      "indent": 6,
+      "text": "...and the client retries the operation for the message 101 with the updated UNCHANGEDSINCE value",
+      "ja": "...と、クライアントは、更新されUNCHANGEDSINCE値とのメッセージ101に対する操作を再試行"
+    },
+    {
+      "indent": 6,
+      "text": "C: b108 STORE 101 (UNCHANGEDSINCE 303011130956) +FLAGS.SILENT ($Processed) S: * 101 FETCH (MODSEQ (303181230852)) S: b108 OK Conditional Store completed",
+      "ja": "C：B108ストア101（UNCHANGEDSINCE 303011130956）+ FLAGS.SILENT（加工$）S：* 101 FETCH（MODSEQ（303181230852））S：B108はOK条件付きストアが完成します"
+    },
+    {
+      "indent": 6,
+      "text": "Or the flag hasn't changed, but another has (nice server behaviour. Server implementers should also see Section 5)...",
+      "ja": "またはフラグが変更されていないが、別のは持っている（素敵なサーバーの動作。サーバーの実装も第5節を参照してください必要があります）..."
+    },
+    {
+      "indent": 6,
+      "text": "C: a106 STORE 100:150 (UNCHANGEDSINCE 212030000000) +FLAGS.SILENT ($Processed)",
+      "ja": "C：A106 STORE 100：150（UNCHANGEDSINCE 212030000000）+ FLAGS.SILENT（$加工）"
+    },
+    {
+      "indent": 6,
+      "text": "S: * 100 FETCH (MODSEQ (303181230852)) S: * 101 FETCH (MODSEQ (303011130956) FLAGS ($Processed \\Deleted \\Answered)) S: * 102 FETCH (MODSEQ (303181230852)) ... S: * 150 FETCH (MODSEQ (303181230852)) S: a106 OK Conditional STORE completed",
+      "ja": "S：* 100 FETCH（MODSEQ（303181230852））S：* 101 FETCH（MODSEQ（303011130956）FLAGS（$は\\削除された\\が回答処理される））S：* 102 FETCH（MODSEQ（303181230852））... S：* 150 FETCH （MODSEQ（303181230852））S：完成A106 OK条件付きSTORE"
+    },
+    {
+      "indent": 3,
+      "text": "Example 11:",
+      "ja": "例11："
+    },
+    {
+      "indent": 6,
+      "text": "The following example is based on the example from the Section 4.2.3 of [RFC-2180] and demonstrates that the MODIFIED response code may be also returned in the tagged NO response.",
+      "ja": "以下の例は、[RFC-2180]のセクション4.2.3から、実施例に基づいて変更した応答コードはまた、タグ付けされたNO応答で返されてもよいことを実証しています。"
+    },
+    {
+      "indent": 6,
+      "text": "Client tries to conditionally STORE flags on a mixture of expunged and non-expunged messages; one message fails the UNCHANGEDSINCE test.",
+      "ja": "クライアントが抹消と非消去されたメッセージの混合物上の条件付きSTOREフラグしようとします。一つのメッセージはUNCHANGEDSINCEテストを失敗しました。"
+    },
+    {
+      "indent": 6,
+      "text": "C: B001 STORE 1:7 (UNCHANGEDSINCE 320172338) +FLAGS (\\SEEN) S: * 1 FETCH (MODSEQ (320172342) FLAGS (\\SEEN)) S: * 3 FETCH (MODSEQ (320172342) FLAGS (\\SEEN)) S: B001 NO [MODIFIED 2] Some of the messages no longer exist.",
+      "ja": "C：B001ストア1：7（UNCHANGEDSINCE 320172338）+ FLAGS（\\ SEEN）S：（MODSEQ（320172342）FLAGS（\\ SEEN））SをFETCH 3 *：*は、（MODSEQ（320172342）FLAGS（\\ SEEN））SをFETCH 1 ：B001 NO [変形2]メッセージのいくつかは、もはや存在しません。"
+    },
+    {
+      "indent": 6,
+      "text": "C: B002 NOOP S: * 4 EXPUNGE S: * 4 EXPUNGE S: * 4 EXPUNGE S: * 4 EXPUNGE S: * 2 FETCH (MODSEQ (320172340) FLAGS (\\Deleted \\Answered)) S: B002 OK NOOP Completed.",
+      "ja": "C：B002 NOOP S：* 4 EXPUNGE S：* 4 EXPUNGEのS * 4 EXPUNGE S：* 4 EXPUNGE S：* FETCH 2 S（MODSEQ（320172340）フラグ（\\削除\\）が回答）：B002 OK NOOPが完了します。"
+    },
+    {
+      "indent": 6,
+      "text": "By receiving FETCH responses for messages 1 and 3, and EXPUNGE responses that indicate that messages 4 through 7 have been expunged, the client retries the operation only for the message 2. The updated UNCHANGEDSINCE value is used.",
+      "ja": "メッセージ1及び3に対する応答をFETCH、および7を介してメッセージ4が消去されたことを示す応答をEXPUNGE受信することにより、クライアントは、更新されたUNCHANGEDSINCE値が使用されている2.メッセージのための操作を再試行します。"
+    },
+    {
+      "indent": 6,
+      "text": "C: b003 STORE 2 (UNCHANGEDSINCE 320172340) +FLAGS (\\Seen) S: * 2 FETCH (MODSEQ (320180050)) S: b003 OK Conditional Store completed",
+      "ja": "C：B003ストア2（UNCHANGEDSINCE 320172340）+ FLAGS（\\見て）S：完成B003 OK条件付きストア：*は（MODSEQ（320180050））SをFETCH 2"
+    },
+    {
+      "indent": 3,
+      "text": "Note: If a message is specified multiple times in the message set, and the server doesn't internally eliminate duplicates from the message set, it MUST NOT fail the conditional STORE operation for the second (or subsequent) occurrence of the message if the operation completed successfully for the first occurrence. For example, if the client specifies:",
+      "ja": "注：メッセージがメッセージ・セットで複数回指定され、サーバは、内部メッセージ・セットから重複を排除していない場合、それが動作する場合、メッセージの第二（またはそれ以降）の発生のための条件付きストア操作を失敗してはいけません最初に出現したため正常に完了しました。例えば、クライアントが指定した場合："
+    },
+    {
+      "indent": 9,
+      "text": "e105 STORE 7,3:9 (UNCHANGEDSINCE 12121230045)\n +FLAGS.SILENT (\\Deleted)",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "the server must not fail the operation for message 7 as part of processing \"3:9\" if it succeeded when message 7 was processed the first time.",
+      "ja": "それはメッセージ7が最初に処理されたとき成功した場合：「9 3」サーバーは、処理の一部として、メッセージ7のための操作を失敗してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the client specified the UNCHANGEDSINCE modifier in a STORE command, the server MUST include the MODSEQ fetch response data items in all subsequent unsolicited FETCH responses.",
+      "ja": "クライアントは、STOREコマンドでUNCHANGEDSINCE修飾子を指定すると、サーバはMODSEQが、後続のすべてのFETCH迷惑応答で応答データ項目をフェッチ含まなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document also changes the behaviour of the server when it has performed a STORE or UID STORE command and the UNCHANGEDSINCE modifier is not specified. If the operation is successful for a message, the server MUST update the mod-sequence attribute of the message. The server is REQUIRED to include the mod-sequence value whenever it decides to send the unsolicited FETCH response to all CONDSTORE-aware clients that have opened the mailbox containing the message.",
+      "ja": "この文書はまた、STOREまたはUID STOREコマンドを実行し、UNCHANGEDSINCE修飾子が指定されていないサーバーの動作を変更します。操作は、メッセージのために成功すると、サーバーは、メッセージのMOD-sequence属性を更新する必要があります。サーバーは、それがメッセージを含むメールボックスを開いているすべてのCONDSTORE対応クライアントに迷惑FETCH応答を送信することを決定したときにMOD-シーケンス値を含めるために必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Server implementers should also see Section 3.8 for additional quality of implementation issues related to the STORE command.",
+      "ja": "サーバーの実装も、STOREコマンドに関連した実装上の問題の追加の品質については、セクション3.8を参照してくださいする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. FETCH and UID FETCH Commands",
+      "section_title": true,
+      "ja": "3.3。 FETCHおよびUIDは、コマンドをFETCH"
+    },
+    {
+      "indent": 0,
+      "text": "3.3.1. CHANGEDSINCE FETCH Modifier",
+      "section_title": true,
+      "ja": "3.3.1。 CHANGEDSINCEは修飾子をFETCH"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines the following FETCH modifier (see Section 2.4 of [IMAPABNF]):",
+      "ja": "この文書では、（[IMAPABNF]のセクション2.4を参照）は、以下の修飾子をFETCH定義します："
+    },
+    {
+      "indent": 3,
+      "text": "CHANGEDSINCE <mod-sequence>",
+      "ja": "CHANGEDSINCE <MOD-シーケンス>"
+    },
+    {
+      "indent": 6,
+      "text": "CHANGEDSINCE FETCH modifier allows to create a further subset of the list of messages described by sequence set. The information described by message data items is only returned for messages that have mod-sequence bigger than <mod-sequence>.",
+      "ja": "CHANGEDSINCEは、修飾子は、シーケンスセットによって記述されるメッセージのリストのさらなるサブセットを作成することができFETCH。メッセージデータ項目によって記述された情報は、<MOD-シーケンス>よりMOD-シーケンス大きなを持っているメッセージに対してのみ返されます。"
+    },
+    {
+      "indent": 6,
+      "text": "When CHANGEDSINCE FETCH modifier is specified, it implicitly adds MODSEQ FETCH message data item (Section 3.3.2).",
+      "ja": "CHANGEDSINCE FETCH修飾子が指定されている場合、それは暗黙的にMODSEQはメッセージデータ項目（3.3.2）をFETCH追加されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 12:",
+      "ja": "例12："
+    },
+    {
+      "indent": 6,
+      "text": "C: s100 UID FETCH 1:* (FLAGS) (CHANGEDSINCE 12345) S: * 1 FETCH (UID 4 MODSEQ (65402) FLAGS (\\Seen)) S: * 2 FETCH (UID 6 MODSEQ (75403) FLAGS (\\Deleted)) S: * 4 FETCH (UID 8 MODSEQ (29738) FLAGS ($NoJunk $AutoJunk $MDNSent)) S: s100 OK FETCH completed",
+      "ja": "C：S100 UIDはFETCH 1：*（FLAGS）（CHANGEDSINCE 12345）S *（UID 4 MODSEQ（65402）フラグ（\\見られる））FETCH 1 S：* FETCH 2（UID 6 MODSEQ（75403）FLAGS（\\削除済み） ）S：* 4 FETCH（UID 8 MODSEQ（29738）FLAGS（$ NoJunk $ AutoJunk $ MDNSent））Sは：S100 OK完成FETCH"
+    },
+    {
+      "indent": 0,
+      "text": "3.3.2. MODSEQ Message Data Item in FETCH Command",
+      "section_title": true,
+      "ja": "3.3.2。 FETCHコマンドでMODSEQメッセージデータ項目"
+    },
+    {
+      "indent": 3,
+      "text": "This extension adds a MODSEQ message data item to the FETCH command. The MODSEQ message data item allows clients to retrieve mod-sequence values for a range of messages in the currently selected mailbox.",
+      "ja": "この拡張は、FETCHコマンドにMODSEQメッセージデータ項目を追加します。 MODSEQメッセージデータ項目は、クライアントが現在選択されているメールボックス内のメッセージの範囲のためのMOD-シーケンス値を取得することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the client specified the MODSEQ message data item in a FETCH request, the server MUST include the MODSEQ fetch response data items in all subsequent unsolicited FETCH responses.",
+      "ja": "クライアントがFETCH要求にMODSEQメッセージデータ項目を指定すると、サーバはMODSEQが、後続のすべてのFETCH迷惑応答で応答データ項目をフェッチ含まなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Syntax: MODSEQ",
+      "ja": "構文：MODSEQ"
+    },
+    {
+      "indent": 6,
+      "text": "The MODSEQ message data item causes the server to return MODSEQ fetch response data items.",
+      "ja": "MODSEQメッセージデータ項目はMODSEQは、応答データ項目をフェッチ返すようにサーバーが発生します。"
+    },
+    {
+      "indent": 3,
+      "text": "Syntax: MODSEQ ( <permsg-modsequence> )",
+      "ja": "構文：MODSEQ（<permsg-modsequence>）"
+    },
+    {
+      "indent": 6,
+      "text": "MODSEQ response data items contain per-message mod-sequences.",
+      "ja": "MODSEQ応答データ項目は、メッセージごとのMOD-配列を含有します。"
+    },
+    {
+      "indent": 6,
+      "text": "The MODSEQ response data item is returned if the client issued FETCH with MODSEQ message data item. It also allows the server to notify the client about mod-sequence changes caused by conditional STOREs (Section 3.2) and/or changes caused by external sources.",
+      "ja": "発行したクライアントがMODSEQメッセージデータ項目とFETCH場合MODSEQ応答データ項目が返されます。また、サーバーは、条件付きストア（3.2節）および/または外部ソースによって引き起こされる変化によって引き起こされるMOD-シーケンスの変更についてクライアントに通知することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 13:",
+      "ja": "実施例13："
+    },
+    {
+      "indent": 6,
+      "text": "C: a FETCH 1:3 (MODSEQ) S: * 1 FETCH (MODSEQ (624140003)) S: * 2 FETCH (MODSEQ (624140007)) S: * 3 FETCH (MODSEQ (624140005)) S: a OK Fetch complete",
+      "ja": "C：OKが完了フェッチ：（MODSEQ（624140005））S FETCH 3 *：（MODSEQ（624140007））SをFETCH 2 *（MODSEQ（624140003））SをFETCH * 1：3（MODSEQ）S：1 FETCH"
+    },
+    {
+      "indent": 6,
+      "text": "In this example, the client requests per-message mod-sequences for a set of messages.",
+      "ja": "この例では、メッセージのセットに対するクライアント要求メッセージごとのMOD-シーケンス。"
+    },
+    {
+      "indent": 3,
+      "text": "When a flag for a message is modified in a different session, the server sends an unsolicited FETCH response containing the mod-sequence for the message.",
+      "ja": "メッセージのフラグが別のセッションで変更された場合、サーバは、メッセージのためのMOD-配列を含む迷惑フェッチ応答を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 14:",
+      "ja": "実施例14："
+    },
+    {
+      "indent": 6,
+      "text": "(Session 1, authenticated as a user \"alex\"). The user adds a shared flag \\Deleted:",
+      "ja": "（セッション1、ユーザ「アレックス」として認証されました）。ユーザーが削除された共有フラグ\\を追加します。"
+    },
+    {
+      "indent": 9,
+      "text": "C: A142 SELECT INBOX ... S: * FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft) S: * OK [PERMANENTFLAGS (\\Answered \\Deleted \\Seen \\*)] Limited",
+      "ja": "C：A142 SELECT INBOX ... S：* FLAGS（\\回答\\フラグ付き\\削除された\\見\\案）S：* OK [PERMANENTFLAGS（\\回答\\削除された\\ * \\見られる）]リミテッド"
+    },
+    {
+      "indent": 9,
+      "text": "...",
+      "ja": "。。。"
+    },
+    {
+      "indent": 9,
+      "text": "C: A160 STORE 7 +FLAGS.SILENT (\\Deleted) S: * 7 FETCH (MODSEQ (2121231000)) S: A160 OK Store completed",
+      "ja": "C：A160ストア7 + FLAGS.SILENT（\\削除済み）S：* 7 FETCH（MODSEQ（2121231000））S：A160 OKストアが完了"
+    },
+    {
+      "indent": 6,
+      "text": "(Session 2, also authenticated as the user \"alex\"). Any changes to flags are always reported to all sessions authenticated as the same user as in the session 1.",
+      "ja": "（セッション2、また、ユーザ「アレックス」として認証されました）。フラグへの変更は、常にセッション1と同じユーザとして認証されたすべてのセッションに報告されています。"
+    },
+    {
+      "indent": 9,
+      "text": "C: C180 NOOP S: * 7 FETCH (FLAGS (\\Deleted \\Answered) MODSEQ (12121231000)) S: C180 OK Noop completed",
+      "ja": "C：C180 NOOP S：*（FLAGS（\\削除された\\が回答）MODSEQ（12121231000））SをFETCH 7：C180 OK NOOPが完成します"
+    },
+    {
+      "indent": 6,
+      "text": "(Session 3, authenticated as a user \"andrew\"). As \\Deleted is a shared flag, changes in session 1 are also reported in session 3:",
+      "ja": "（セッション3、ユーザ「アンドリュー」として認証されました）。 \\削除、共有フラグであるように、セッション1の変化は、セッション3に報告されています。"
+    },
+    {
+      "indent": 9,
+      "text": "C: D210 NOOP S: * 7 FETCH (FLAGS (\\Deleted \\Answered) MODSEQ (12121231000)) S: D210 OK Noop completed",
+      "ja": "C：D210 NOOPのS：D210 OK NOOPが完了：*は（FLAGS（\\削除された\\が回答）MODSEQ（12121231000））SをFETCH 7"
+    },
+    {
+      "indent": 6,
+      "text": "The user modifies a private flag \\Seen in session 1...",
+      "ja": "ユーザーはセッション1に示すプライベートフラグ\\を修正します..."
+    },
+    {
+      "indent": 9,
+      "text": "C: A240 STORE 7 +FLAGS.SILENT (\\Seen) S: * 7 FETCH (MODSEQ (12121231777)) S: A240 OK Store completed",
+      "ja": "C：A240ストア7 + FLAGS.SILENT（\\見て）S：A240 OKストアが完了：*は（MODSEQ（12121231777））SをFETCH 7"
+    },
+    {
+      "indent": 6,
+      "text": "...which is only reported in session 2...",
+      "ja": "...のみセッション2で報告されています..."
+    },
+    {
+      "indent": 9,
+      "text": "C: C270 NOOP S: * 7 FETCH (FLAGS (\\Deleted \\Answered \\Seen) MODSEQ (12121231777)) S: C270 OK Noop completed",
+      "ja": "C：C270 NOOP S：* FETCH 7（FLAGS（\\削除された\\回答\\見られる）MODSEQ（12121231777））S：C270 OK NOOPが完成します"
+    },
+    {
+      "indent": 6,
+      "text": "...but not in session 3.",
+      "ja": "...ではなく、セッション3インチ"
+    },
+    {
+      "indent": 9,
+      "text": "C: D300 NOOP S: D300 OK Noop completed",
+      "ja": "C：D300 NOOPのS：D300 OK NOOPが完成"
+    },
+    {
+      "indent": 6,
+      "text": "And finally, the user removes flags \\Answered (shared) and \\Seen (private) in session 1.",
+      "ja": "そして最後に、ユーザーがフラグがセッション1で（プライベート）回答（共有）と見、\\ \\削除されます。"
+    },
+    {
+      "indent": 9,
+      "text": "C: A330 STORE 7 -FLAGS.SILENT (\\Answered \\Seen) S: * 7 FETCH (MODSEQ (12121245160)) S: A330 OK Store completed",
+      "ja": "C：A330 STORE 7 -FLAGS.SILENT（\\回答\\見た）S：A330 OKストアが完了：*（MODSEQ（12121245160））SをFETCH 7"
+    },
+    {
+      "indent": 6,
+      "text": "Both changes are reported in the session 2...",
+      "ja": "両方の変更は、セッション2で報告されています..."
+    },
+    {
+      "indent": 9,
+      "text": "C: C360 NOOP S: * 7 FETCH (FLAGS (\\Deleted) MODSEQ (12121245160)) S: C360 OK Noop completed",
+      "ja": "C：C360 NOOP S：* 7 FETCH（FLAGS（\\削除済み）MODSEQ（12121245160））S：C360 OK NOOPが完成"
+    },
+    {
+      "indent": 6,
+      "text": "...and only changes to shared flags are reported in session 3.",
+      "ja": "...と共有フラグへの唯一の変更は、セッション3で報告されています。"
+    },
+    {
+      "indent": 9,
+      "text": "C: D390 NOOP S: * 7 FETCH (FLAGS (\\Deleted) MODSEQ (12121245160)) S: D390 OK Noop completed",
+      "ja": "C：D390のNOOPのS：* 7 FETCH（FLAGS（\\削除済み）MODSEQ（12121245160））S：D390 OK NOOPが完成"
+    },
+    {
+      "indent": 3,
+      "text": "Server implementers should also see Section 3.8 for additional quality of implementation issues related to the FETCH command.",
+      "ja": "サーバーの実装もFETCHコマンドに関連した実装上の問題の追加の品質については、セクション3.8を参照してくださいする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. MODSEQ Search Criterion in SEARCH",
+      "section_title": true,
+      "ja": "3.4。検索でMODSEQ検索条件"
+    },
+    {
+      "indent": 3,
+      "text": "The MODSEQ criterion for the SEARCH command allows a client to search for the metadata items that were modified since a specified moment.",
+      "ja": "SEARCHコマンドのためのMODSEQ基準は、クライアントが指定した時点以降に変更されたメタデータ項目を検索することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Syntax: MODSEQ [<entry-name> <entry-type-req>] <mod-sequence-valzer>",
+      "ja": "構文：MODSEQ [<エントリ名> <エントリ型-REQ> <MOD-配列valzer>"
+    },
+    {
+      "indent": 6,
+      "text": "Messages that have modification values that are equal to or greater than <mod-sequence-valzer>. This allows a client, for example, to find out which messages contain metadata items that have changed since the last time it updated its disconnected cache. The client may also specify <entry-name> (name of metadata item) and <entry-type-req> (type of metadata item) before <mod-sequence-valzer>. <entry-type-req> can be one of \"shared\", \"priv\" (private), or \"all\". The latter means that the server should use the biggest value among \"priv\" and \"shared\" mod-sequences for the metadata item. If the server doesn't store internally separate mod-sequences for different metadata items, it MUST ignore <entry-name> and <entry-type-req>. Otherwise, the server should use them to narrow down the search.",
+      "ja": "<MOD-配列valzer>以上である修正値を持つメッセージ。これにより、クライアントは、例えば、最後の時間は、その切断キャッシュを更新以降に変更されたメタデータ項目が含まれているメッセージを見つけることができます。また、クライアントは、<MOD-配列valzer>の前に<エントリー名>（メタデータ項目の名前）と<エントリー型-REQ>（メタデータ項目のタイプ）を指定することができます。 <エントリー型-REQ> \"共有\"、 \"PRIV\"（プライベート）、または \"すべて\" のいずれかになります。後者は、サーバが「PRIV」とメタデータ項目の「共有」MOD-配列間の最大値を使用しなければならないことを意味します。サーバが別のメタデータ項目のために内部の別々のmod-シーケンスを記憶していない場合、それは<エントリー名>と<エントリー型-REQ>を無視しなければなりません。そうしないと、サーバーは、検索を絞り込むためにそれらを使用する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "For a flag <flagname>, the corresponding <entry-name> has a form \"/flags/<flagname>\" as defined in [IMAPABNF]. Note that the leading \"\\\" character that denotes a system flag has to be escaped as per Section 4.3 of [IMAP4], as the <entry-name> uses syntax for quoted strings.",
+      "ja": "フラグ<flagname>のために、対応する<エントリ名>は、[IMAPABNF]で定義されるようにフォーム「/フラグ/ <flagname>」を有します。 <エントリー名>は、引用符で囲まれた文字列の構文を使用して、システムフラグを表し、先頭の「\\」文字は、[IMAP4]のセクション4.3あたりのようにエスケープする必要があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If client specifies a MODSEQ criterion in a SEARCH command and the server returns a non-empty SEARCH result, the server MUST also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See also Section 3.5.",
+      "ja": "クライアントはSEARCHコマンドでMODSEQ基準を指定し、サーバが非空の検索結果を返す場合、サーバーは、すべてのメッセージのための最高のmod-シーケンスが返される（タグなし検索応答の最後に）追加する必要があります。また、3.5節を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 15:",
+      "ja": "実施例15："
+    },
+    {
+      "indent": 6,
+      "text": "C: a SEARCH MODSEQ \"/flags/\\\\draft\" all 620162338 S: * SEARCH 2 5 6 7 11 12 18 19 20 23 (MODSEQ 917162500) S: a OK Search complete",
+      "ja": "C：検索MODSEQ \"/フラグ/ \\\\ドラフト\" 全620162338 S：* SEARCH 2 5 6 7 11 12 18 19 20 23（MODSEQ 917162500）S：完全OK検索"
+    },
+    {
+      "indent": 6,
+      "text": "In the above example, the message numbers of any messages containing the string \"IMAP4\" in the \"value\" attribute of the \"/comment\" entry and having a mod-sequence equal to or greater than 620162338 for the \"\\Draft\" flag are returned in the search results.",
+      "ja": "上記の例では、「/コメント」エントリの「値」属性の文字列「IMAP4」を含み、「\\ドラフト」のために等しいか620162338より大きいMOD-配列を有する任意のメッセージのメッセージ番号フラグであります検索結果に返さ。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 16:",
+      "ja": "実施例16："
+    },
+    {
+      "indent": 6,
+      "text": "C: t SEARCH OR NOT MODSEQ 720162338 LARGER 50000 S: * SEARCH S: t OK Search complete, nothing found",
+      "ja": "C：*検索S：T OK検索が完了し、何も見つからなかっトンの検索や、NOTは720162338のLARGER 50000のSをMODSEQ"
+    },
+    {
+      "indent": 0,
+      "text": "3.5. Modified SEARCH Untagged Response",
+      "section_title": true,
+      "ja": "3.5。修正された検索タグなし応答"
+    },
+    {
+      "indent": 3,
+      "text": "Data: zero or more numbers mod-sequence value (omitted if no match)",
+      "ja": "データ：ゼロ以上の数字MOD-シーケンス値（不一致場合は省略）"
+    },
+    {
+      "indent": 3,
+      "text": "This document extends syntax of the untagged SEARCH response to include the highest mod-sequence for all messages being returned.",
+      "ja": "この文書では、すべてのメッセージが返されるため、最高のmod-配列を含むようタグなし検索レスポンスの構文を拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "If a client specifies a MODSEQ criterion in a SEARCH (or UID SEARCH) command and the server returns a non-empty SEARCH result, the server MUST also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See Section 3.4 for examples.",
+      "ja": "クライアントはSEARCH（またはUID検索）コマンドでMODSEQ基準を指定し、サーバが非空の検索結果を返す場合、サーバーは、すべてのメッセージのための最高のMOD-シーケンス（タグなし検索応答の最後に）追加する必要があります返されます。例については、3.4節を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3.6. HIGHESTMODSEQ Status Data Items",
+      "section_title": true,
+      "ja": "3.6。 HIGHESTMODSEQステータスデータ項目"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a new status data item:",
+      "ja": "この文書は、新しいステータスデータ項目を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "HIGHESTMODSEQ",
+      "ja": "HIGHESTMODSEQ"
+    },
+    {
+      "indent": 6,
+      "text": "The highest mod-sequence value of all messages in the mailbox. This is the same value that is returned by the server in the HIGHESTMODSEQ response code in an OK untagged response (see Section 3.1.1). If the server doesn't support the persistent storage of mod-sequences for the mailbox (see Section 3.1.2), the server MUST return 0 as the value of HIGHESTMODSEQ status data item.",
+      "ja": "メールボックス内のすべてのメッセージの最高MOD-シーケンス値。これはOKタグ無し応答（セクション3.1.1を参照）HIGHESTMODSEQ応答コードにサーバによって返される値と同じです。サーバーは、メールボックスのMOD-系列の永続ストレージをサポートしていない場合は、サーバーがHIGHESTMODSEQステータスデータ項目の値として0を返さなければならない、（セクション3.1.2を参照してください）。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 17:",
+      "ja": "実施例17："
+    },
+    {
+      "indent": 6,
+      "text": "C: A042 STATUS blurdybloop (UIDNEXT MESSAGES HIGHESTMODSEQ) S: * STATUS blurdybloop (MESSAGES 231 UIDNEXT 44292 HIGHESTMODSEQ 7011231777) S: A042 OK STATUS completed",
+      "ja": "C：A042のSTATUSのblurdybloop（UIDNEXT・メッセージHIGHESTMODSEQ）S：* STATUSのblurdybloop（MESSAGES 231 UIDNEXT 44292 HIGHESTMODSEQ 7011231777）S：A042 OK STATUSが完成します"
+    },
+    {
+      "indent": 0,
+      "text": "3.7. CONDSTORE Parameter to SELECT and EXAMINE",
+      "section_title": true,
+      "ja": "3.7。 CONDSTOREパラメータは、SELECTと検討すること"
+    },
+    {
+      "indent": 3,
+      "text": "The CONDSTORE extension defines a single optional select parameter, \"CONDSTORE\", which tells the server that it MUST include the MODSEQ fetch response data items in all subsequent unsolicited FETCH responses.",
+      "ja": "CONDSTORE拡張は、それがMODSEQは、後続のすべての未承諾のFETCH応答で応答データ項目をフェッチ含まなければならないサーバに指示単一任意選択のパラメータ、「CONDSTORE」を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "The CONDSTORE parameter to SELECT/EXAMINE helps avoid a race condition that might arise when one or more metadata items are modified in another session after the server has sent the HIGHESTMODSEQ response code and before the client was able to issue a CONDSTORE enabling command.",
+      "ja": "EXAMINE /選択するためにCONDSTOREパラメーターは、サーバーがHIGHESTMODSEQ応答コードを送信し、クライアントの前にCONDSTORE可能コマンドを発行することができたした後に1つ以上のメタデータ項目は、別のセッションで変更されたときに発生する可能性のある競合状態を避けることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example 18:",
+      "ja": "実施例18："
+    },
+    {
+      "indent": 6,
+      "text": "C: A142 SELECT INBOX (CONDSTORE) S: * 172 EXISTS S: * 1 RECENT S: * OK [UNSEEN 12] Message 12 is first unseen S: * OK [UIDVALIDITY 3857529045] UIDs valid S: * OK [UIDNEXT 4392] Predicted next UID S: * FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft) S: * OK [PERMANENTFLAGS (\\Deleted \\Seen \\*)] Limited S: * OK [HIGHESTMODSEQ 715194045007] S: A142 OK [READ-WRITE] SELECT completed, CONDSTORE is now enabled",
+      "ja": "C：A142 SELECTトレイ（CONDSTORE）S * 172 SをEXISTS：* 1 RECENT S：* OK [UNSEEN 12]メッセージ12最初の目に見えないSである：* OK [UIDVALIDITY 3857529045]のUID有効S：* OK [UIDNEXT 4392]が予測次のUID S：* FLAGS（\\回答\\フラグ付き\\削除された\\見\\案）S：* OK [PERMANENTFLAGS（\\削除された\\ * \\見られる）]限定S：* OK [HIGHESTMODSEQ 715194045007] S：A142 OK [読み書き]完成し、CONDSTOREが有効になりましたを選択"
+    },
+    {
+      "indent": 0,
+      "text": "3.8. Additional Quality-of-Implementation Issues",
+      "section_title": true,
+      "ja": "3.8。追加の品質・オブ・インプリメンテーションの問題"
+    },
+    {
+      "indent": 3,
+      "text": "Server implementations should follow the following rule, which applies to any successfully completed STORE/UID STORE (with and without UNCHANGEDSINCE modifier), as well as to a FETCH command that implicitly sets \\Seen flag:",
+      "ja": "サーバ実装は、どの正常に完了しSTORE / UIDストア（ととUNCHANGEDSINCE修飾子なし）に、だけでなく、暗黙のうちに\\見フラグを設定するFETCHコマンドに適用される次のルールに従う必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "Adding the flag when it is already present or removing when it is not present SHOULD NOT change the mod-sequence.",
+      "ja": "それが存在しない場合、それが既に存在するか又は除去するときにフラグを追加すると、MOD-配列を変更しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "This will prevent spurious client synchronization requests.",
+      "ja": "これは、偽のクライアントの同期要求を防ぐことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "However, note that client implementers MUST NOT rely on this server behavior. A client can't distinguish between the case when a server has violated the SHOULD mentioned above, and that when one or more clients set and unset (or unset and set) the flag in another session.",
+      "ja": "しかし、クライアントの実装は、このサーバーの動作に依存してはならないことに注意してください。サーバはSHOULDは上述したように、その違反した場合、クライアントは、ケースを区別することができない1つ以上のクライアントが別のセッション内のフラグを設定し、未設定（または設定解除と設定）します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Formal Syntax",
+      "section_title": true,
+      "ja": "4.正式な構文"
+    },
+    {
+      "indent": 3,
+      "text": "The following syntax specification uses the Augmented Backus-Naur Form (ABNF) [ABNF] notation. Elements not defined here can be found in the formal syntax of the ABNF [ABNF], IMAP [IMAP4], and IMAP ABNF extensions [IMAPABNF] specifications.",
+      "ja": "次の構文仕様は、拡張バッカス・ナウアフォーム（ABNF）[ABNF]表記を使用します。ここで定義されていない要素はABNF [ABNF]、IMAP [IMAP4]の正式な構文で見つけることができ、およびIMAPのABNFの拡張子は[IMAPABNF]仕様。"
+    },
+    {
+      "indent": 3,
+      "text": "Except as noted otherwise, all alphabetic characters are case-insensitive. The use of upper- or lowercase characters to define token strings is for editorial clarity only. Implementations MUST accept these strings in a case-insensitive fashion.",
+      "ja": "特記しないものを除いて、すべての英字は大文字と小文字を区別しません。トークン文字列を定義するための大文字と小文字の使用は、編集上明確にするためです。実装は大文字と小文字を区別しないやり方で、これらの文字列を受け入れなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "capability =/ \"CONDSTORE\"",
+      "ja": "機能= / \"CONDSTORE\""
+    },
+    {
+      "indent": 3,
+      "text": "status-att =/ \"HIGHESTMODSEQ\" ;; extends non-terminal defined in RFC 3501.",
+      "ja": "状況-ATT = / \"HIGHESTMODSEQ\" ;; RFC 3501で定義された非末端を拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "status-att-val =/ \"HIGHESTMODSEQ\" SP mod-sequence-valzer ;; extends non-terminal defined in [IMAPABNF]. ;; Value 0 denotes that the mailbox doesn't ;; support persistent mod-sequences ;; as described in Section 3.1.2",
+      "ja": "状況-ATT-VAL = / \"HIGHESTMODSEQ\" SP-MOD配列valzer ;; 【IMAPABNF]で定義された非末端延びています。 ;;値0は、メールボックスがないことを示し;;永続的なMOD-シーケンスをサポート;; 3.1.2項で説明したように"
+    },
+    {
+      "indent": 3,
+      "text": "store-modifier =/ \"UNCHANGEDSINCE\" SP mod-sequence-valzer ;; Only a single \"UNCHANGEDSINCE\" may be ;; specified in a STORE operation",
+      "ja": "店舗修飾子= / \"UNCHANGEDSINCE\" SP-MOD配列valzer ;;唯一のシングル「UNCHANGEDSINCEは」かもしれ;; STORE操作で指定"
+    },
+    {
+      "indent": 3,
+      "text": "fetch-modifier =/ chgsince-fetch-mod ;; conforms to the generic \"fetch-modifier\" ;; syntax defined in [IMAPABNF].",
+      "ja": "フェッチ-修飾子= / chgsinceフェッチ-MOD ;;一般的な「フェッチ-修飾子」に準拠;; [IMAPABNF]で定義された構文。"
+    },
+    {
+      "indent": 3,
+      "text": "chgsince-fetch-mod = \"CHANGEDSINCE\" SP mod-sequence-value ;; CHANGEDSINCE FETCH modifier conforms to ;; the fetch-modifier syntax",
+      "ja": "chgsinceフェッチ-MOD = \"CHANGEDSINCE\" SP MOD-シーケンス値;; CHANGEDSINCEは修飾子をFETCH ;;に準拠フェッチ修飾子を構文"
+    },
+    {
+      "indent": 3,
+      "text": "fetch-att =/ fetch-mod-sequence ;; modifies original IMAP4 fetch-att",
+      "ja": "フェッチ-ATT = /フェッチ-MOD-シーケンスを;;元IMAP4フェッチ-ATTを修正"
+    },
+    {
+      "indent": 3,
+      "text": "fetch-mod-sequence = \"MODSEQ\"",
+      "ja": "フェッチ-MOD-シーケンス= \"MODSEQ\""
+    },
+    {
+      "indent": 3,
+      "text": "fetch-mod-resp = \"MODSEQ\" SP \"(\" permsg-modsequence \")\"",
+      "ja": "フェッチ-MOD-RESP = \"MODSEQ\" SP \"（\" permsg-modsequence \"）\""
+    },
+    {
+      "indent": 3,
+      "text": "msg-att-dynamic =/ fetch-mod-resp search-key =/ search-modsequence ;; modifies original IMAP4 search-key ;; ;; This change applies to all commands ;; referencing this non-terminal, in ;; particular SEARCH.",
+      "ja": "MSG-ATT-動的= /フェッチ-MOD-RESP検索キー= /検索modsequence ;;元IMAP4の検索キーを;;修正;;この変更は、すべてのコマンドに適用されます;;で、この非ターミナルを参照;;特定の検索。"
+    },
+    {
+      "indent": 3,
+      "text": "search-modsequence = \"MODSEQ\" [search-modseq-ext] SP mod-sequence-valzer",
+      "ja": "検索modsequence = \"MODSEQ\" [検索modseq-EXT] SPのmodsequence-valzer"
+    },
+    {
+      "indent": 3,
+      "text": "search-modseq-ext = SP entry-name SP entry-type-req",
+      "ja": "検索modseq-EXT = SPエントリ名SPエントリー型-REQ"
+    },
+    {
+      "indent": 3,
+      "text": "resp-text-code =/ \"HIGHESTMODSEQ\" SP mod-sequence-value / \"NOMODSEQ\" / \"MODIFIED\" SP set",
+      "ja": "RESPテキストコード= / \"HIGHESTMODSEQ\" SPのMOD-シーケンス値/ \"NOMODSEQ\" / \"修飾\" SPセット"
+    },
+    {
+      "indent": 3,
+      "text": "entry-name = entry-flag-name",
+      "ja": "エントリ名=エントリフラグ名"
+    },
+    {
+      "indent": 3,
+      "text": "entry-flag-name = DQUOTE \"/flags/\" attr-flag DQUOTE ;; each system or user defined flag <flag> ;; is mapped to \"/flags/<flag>\". ;; ;; <entry-flag-name> follows the escape rules ;; used by \"quoted\" string as described in ;; Section 4.3 of [IMAP4], e.g., for the flag ;; \\Seen the corresponding <entry-name> is ;; \"/flags/\\\\seen\", and for the flag ;; $MDNSent, the corresponding <entry-name> ;; is \"/flags/$mdnsent\".",
+      "ja": "エントリフラグ名= DQUOTE「/フラグ/」ATTRフラグDQUOTE ;;各システムまたはユーザー定義フラグ<フラグ> ;; 「/フラグ/ <フラグ>」にマッピングされます。 ;; ;; <エントリーフラグ名>はエスケープ規則に従います;;で説明したように、「引用符で囲まれた」文字列で使用される;;フラグの[IMAP4]のセクション4.3、例えば、;;対応の<entry-name>を見\\です;; 「/フラグ/ \\\\見」、およびフラグの;; $ MDNSent、対応する<エントリー名> ;; \"/旗/ $のmdnsent\" です。"
+    },
+    {
+      "indent": 3,
+      "text": "entry-type-resp = \"priv\" / \"shared\" ;; metadata item type",
+      "ja": "エントリー型-RESP = \"privの\" / \"共有\" ;;メタデータ項目タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "entry-type-req = entry-type-resp / \"all\" ;; perform SEARCH operation on private ;; metadata item, shared metadata item or both",
+      "ja": "エントリー型-REQ =エントリー型-RESP / \"すべて\" ;;プライベート;;上の検索操作を実行メタデータ項目、共有メタデータ項目またはその両方"
+    },
+    {
+      "indent": 3,
+      "text": "permsg-modsequence = mod-sequence-value ;; per message mod-sequence",
+      "ja": "permsg-modsequence = modsequence値;;メッセージMOD-シーケンスあたり"
+    },
+    {
+      "indent": 3,
+      "text": "mod-sequence-value = 1*DIGIT ;; Positive unsigned 64-bit integer ;; (mod-sequence) ;; (1 <= n < 18,446,744,073,709,551,615)",
+      "ja": "MOD-シーケンス値= 1 * DIGIT ;;正の符号なし64ビット整数;; （MOD-配列）;; （1 <= N <18,446,744,073,709,551,615）"
+    },
+    {
+      "indent": 3,
+      "text": "mod-sequence-valzer = \"0\" / mod-sequence-value",
+      "ja": "MOD-シーケンス-valzer = \"0\" / MOD-シーケンス値"
+    },
+    {
+      "indent": 3,
+      "text": "search-sort-mod-seq = \"(\" \"MODSEQ\" SP mod-sequence-value \")\" select-param =/ condstore-param ;; conforms to the generic \"select-param\" ;; non-terminal syntax defined in [IMAPABNF].",
+      "ja": "検索ソート-MOD-SEQ = \"（\" \"MODSEQ\" SP-MODシーケンス値 \"）\" を選択し-PARAM = / condstore-PARAM ;;ジェネリック「を選択-PARAM」に準拠;; 【IMAPABNF]で定義された非末端構文。"
+    },
+    {
+      "indent": 3,
+      "text": "condstore-param = \"CONDSTORE\"",
+      "ja": "condstore-PARAM = \"CONDSTORE\""
+    },
+    {
+      "indent": 3,
+      "text": "mailbox-data =/ \"SEARCH\" [1*(SP nz-number) SP search-sort-mod-seq]",
+      "ja": "メールボックスデータ= / \"SEARCH\" [1 *（SP NZ-数）SP検索・ソート-MOD-seqの]"
+    },
+    {
+      "indent": 3,
+      "text": "attr-flag = \"\\\\Answered\" / \"\\\\Flagged\" / \"\\\\Deleted\" / \"\\\\Seen\" / \"\\\\Draft\" / attr-flag-keyword / attr-flag-extension ;; Does not include \"\\\\Recent\"",
+      "ja": "ATTRフラグ= \"\\\\答える\" / \"\\\\フラグ付き\" / \"\\\\削除\" / \"\\\\見られる\" / \"\\\\ドラフト\" / ATTR-FLAG-キーワード/ ATTR-FLAG-拡張;; 「\\\\最近」は含まれていません"
+    },
+    {
+      "indent": 3,
+      "text": "attr-flag-extension = \"\\\\\" atom ;; Future expansion. Client implementations ;; MUST accept flag-extension flags. Server ;; implementations MUST NOT generate ;; flag-extension flags except as defined by ;; future standard or standards-track ;; revisions of [IMAP4].",
+      "ja": "ATTR-FLAG-拡張= \"\\\\\" 原子;;将来の拡張。クライアント実装;;フラグ拡張フラグを受け入れなければなりません。サーバー;;実装は、発生させてはいけません;;定義される以外フラグ拡張フラグ;;将来の標準または標準トラック;; [IMAP4]の改訂。"
+    },
+    {
+      "indent": 3,
+      "text": "attr-flag-keyword = atom",
+      "ja": "ATTR-FLAG-キーワード=原子"
+    },
+    {
+      "indent": 0,
+      "text": "5. Server Implementation Considerations",
+      "section_title": true,
+      "ja": "5.サーバの実装に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes how a server implementation that doesn't store separate per-metadata mod-sequences for different metadata items can avoid sending the MODIFIED response to any of the following conditional STORE operations:",
+      "ja": "このセクションでは、さまざまなメタデータ項目のために別々の単位のメタデータMOD-シーケンスを記憶しないサーバの実装は、以下の条件STORE動作のいずれかに変更した応答を送信しないことができます方法について説明します。"
+    },
+    {
+      "indent": 6,
+      "text": "+FLAGS -FLAGS +FLAGS.SILENT -FLAGS.SILENT",
+      "ja": "+ FLAGS -FLAGS + FLAGS.SILENT -FLAGS.SILENT"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the optimization described in this section can't be performed in case of a conditional STORE FLAGS operation.",
+      "ja": "このセクションで説明する最適化は、条件付きストアフラグ操作の場合に行うことができないことに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Let's use the following example. The client has issued",
+      "ja": "のは、次の例を使ってみましょう。クライアントが発行しています"
+    },
+    {
+      "indent": 6,
+      "text": "C: a106 STORE 100:150 (UNCHANGEDSINCE 212030000000) +FLAGS.SILENT ($Processed)",
+      "ja": "C：A106 STORE 100：150（UNCHANGEDSINCE 212030000000）+ FLAGS.SILENT（$加工）"
+    },
+    {
+      "indent": 3,
+      "text": "When the server receives the command and parses it successfully, it iterates through the message set and tries to execute the conditional STORE command for each message.",
+      "ja": "サーバーがコマンドを受信し、正常に解析するとき、それはメッセージ・セットを反復処理し、各メッセージの条件付きストア命令を実行しよう。"
+    },
+    {
+      "indent": 3,
+      "text": "Each server internally works as a client, i.e., it has to cache the current state of all IMAP flags as it is known to the client. In order to report flag changes to the client, the server compares the cached values with the values in its database for IMAP flags.",
+      "ja": "各サーバが内部のクライアントとして動作し、すなわち、それがクライアントに知られているように、すべてのIMAPフラグの現在の状態をキャッシュする必要があります。クライアントへのフラグの変更を報告するためには、サーバはIMAP旗のためにそのデータベース内の値でキャッシュされた値を比較します。"
+    },
+    {
+      "indent": 3,
+      "text": "Imagine that another client has changed the state of a flag \\Deleted on the message 101 and that the change updated the mod-sequence for the message. The server knows that the mod-sequence for the mailbox has changed; however, it also knows that:",
+      "ja": "別のクライアントがフラグの状態を変更したことを想像\\メッセージ101におよびメッセージのMOD-シーケンスを更新変更することを削除しました。サーバーは、メールボックスのMOD-順序が変更されたことを知っています。しかし、それはまたのことを知っています："
+    },
+    {
+      "indent": 3,
+      "text": "a) the client is not interested in \\Deleted flag, as it hasn't included it in +FLAGS.SILENT operation; and",
+      "ja": "それは+ FLAGS.SILENT操作でそれを含めていないとして、a）のクライアントは、\\ Deletedフラグに興味がありません。そして"
+    },
+    {
+      "indent": 3,
+      "text": "b) the state of the flag $Processed hasn't changed (the server can determine this by comparing cached flag state with the state of the flag in the database).",
+      "ja": "B）処理済フラグ$の状態は、（サーバがデータベース内のフラグの状態と、キャッシュされたフラグの状態を比較することによって、これを決定することができる）変更されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, the server doesn't have to report MODIFIED to the client. Instead, the server may set $Processed flag, update the mod-sequence for the message 101 once again and send an untagged FETCH response with new mod-sequence and flags:",
+      "ja": "そのため、サーバはクライアントに変更したレポートする必要はありません。代わりに、サーバは、$加工フラ​​グを設定して、再びメッセージ101用MOD-シーケンスを更新し、新しいMOD-シーケンスとフラグとタグなしのFETCH応答を送信します。"
+    },
+    {
+      "indent": 6,
+      "text": "S: * 101 FETCH (MODSEQ (303011130956) FLAGS ($Processed \\Deleted \\Answered))",
+      "ja": "S：* 101 FETCH（MODSEQ（303011130956）FLAGS（$が処理\\削除された\\が回答））"
+    },
+    {
+      "indent": 3,
+      "text": "See also Section 3.8 for additional quality-of-implementation issues.",
+      "ja": "また、追加の質の実装の問題については、セクション3.8を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "It is believed that the Conditional STORE extension doesn't raise any new security concerns that are not already discussed in [IMAP4]. However, the availability of this extension may make it possible for IMAP4 to be used in critical applications it could not be used for previously, making correct IMAP server implementation and operation even more important.",
+      "ja": "条件付きSTORE拡張子が既に[IMAP4]で議論されていない任意の新しいセキュリティ上の懸念を提起しないと考えられています。 IMAP4が正しいIMAPサーバの実装と、さらに重要な操作を行うことが以前に使用することができなかった重要なアプリケーションで使用されるのが、この拡張機能の可用性は、それを可能にすることがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IANA Considerations",
+      "section_title": true,
+      "ja": "7. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IMAP4 capabilities are registered by publishing a standards track or IESG approved experimental RFC. The registry is currently located at:",
+      "ja": "IMAP4機能は標準化過程を公開することによって登録されているかIESGは実験的なRFCを承認しました。レジストリは、現在の場所にあります。"
+    },
+    {
+      "indent": 9,
+      "text": "http://www.iana.org/assignments/imap4-capabilities",
+      "ja": "ｈっｔｐ：／／ｗっｗ。いあな。おｒｇ／あっしｇんめんｔｓ／いまｐ４ーかぱびぃちえｓ"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines the CONDSTORE IMAP capability. IANA has added it to the registry accordingly.",
+      "ja": "この文書では、CONDSTORE IMAP機能を定義します。 IANAはそれに応じて、レジストリに追加しました。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8.参照文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[KEYWORDS] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[キーワード]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ABNF] Crocker, D. and P. Overell, \"Augmented BNF for Syntax Specifications: ABNF\", RFC 4234, October 2005.",
+      "ja": "[ABNF]クロッカー、D.、およびP. Overell、 \"構文仕様のための増大しているBNF：ABNF\"、RFC 4234、2005年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IMAP4] Crispin, M., \"INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1\", RFC 3501, March 2003.",
+      "ja": "[IMAP4]クリスピン、M.、 \"インターネットメッセージアクセスプロトコル - バージョン4rev1\"、RFC 3501、2003年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IMAPABNF] Melnikov, A. and C. Daboo, \"Collected Extensions to IMAP4 ABNF\", RFC 4466, April 2006.",
+      "ja": "[IMAPABNF]メルニコフ、A.およびC. Dabooは、RFC 4466、2006年4月 \"IMAP4 ABNFへの拡張を集めました\"。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ACAP] Newman, C. and J. Myers, \"ACAP -- Application Configuration Access Protocol\", RFC 2244, November 1997.",
+      "ja": "[ACAP]ニューマン、C.及びJ.マイヤーズ、 \"ACAP  - アプリケーション構成アクセスプロトコル\"、RFC 2244、1997年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ACL] Melnikov, A., \"IMAP4 Access Control List (ACL) Extension\", RFC 4314, December 2005.",
+      "ja": "[ACL]メルニコフ、A.、 \"IMAP4アクセス制御リスト（ACL）拡張\"、RFC 4314、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ANN] Daboo, C. and R. Gellens, \"IMAP ANNOTATE Extension\", Work in Progress, March 2006.",
+      "ja": "[ANN] Daboo、C.とR. Gellensは、 \"IMAP ANNOTATE拡張\"、進歩、2006年3月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[NTP] Mills, D., \"Network Time Protocol (Version 3) Specification, Implementation and Analysis\", RFC 1305, March 1992.",
+      "ja": "[NTP]ミルズ、D.、 \"ネットワーク時間プロトコル（バージョン3）仕様、実装と分析\"、RFC 1305、1992年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC-2180] Gahrns, M., \"IMAP4 Multi-Accessed Mailbox Practice\", RFC 2180, July 1997.",
+      "ja": "[RFC-2180] Gahrns、M.、 \"IMAP4マルチアクセスされるメールボックスの実践\"、RFC 2180、1997年7月。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Acknowledgements",
+      "section_title": true,
+      "ja": "9.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Some text was borrowed from \"IMAP ANNOTATE Extension\" [ANN] by Randall Gellens and Cyrus Daboo and from \"ACAP -- Application Configuration Access Protocol\" [ACAP] by Chris Newman and John Myers.",
+      "ja": "クリスニューマンとジョン・マイヤーズ[ACAP]  - いくつかのテキストは、ランドールGellensとサイラスDabooによっておよび「アプリケーション設定アクセスプロトコルACAP」から「IMAP ANNOTATE拡張」[ANN]から借りました。"
+    },
+    {
+      "indent": 3,
+      "text": "Many thanks to Randall Gellens for his thorough review of the document.",
+      "ja": "文書の彼の徹底的な見直しのためのRandall Gellensに感謝します。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors also acknowledge the feedback provided by Cyrus Daboo, Larry Greenfield, Chris Newman, Harrie Hazewinkel, Arnt Gulbrandsen, Timo Sirainen, Mark Crispin, Ned Freed, Ken Murchison, and Dave Cridland.",
+      "ja": "著者らはまたサイラスDaboo、ラリー・グリーンフィールド、クリス・ニューマン、Harrie Hazewinkel、ARNT Gulbrandsenの、ティモ・シレーヌン、マーク・クリスピン、ネッドフリード、ケンマーチソン、とDave Cridlandによって提供されるフィードバックを認めます。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Alexey Melnikov Isode Limited 5 Castle Business Village 36 Station Road Hampton, Middlesex TW12 2BX, United Kingdom",
+      "ja": "アレクセイ・メルニコフISODE限定5キャッスルビジネス村の36の駅道ハンプトン、ミドルTW12 2BX、イギリス"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: Alexey.Melnikov@isode.com",
+      "ja": "メールアドレス：Alexey.Melnikov@isode.com"
+    },
+    {
+      "indent": 3,
+      "text": "Steve Hole ACI WorldWide/MessagingDirect #1807, 10088 102 Ave Edmonton, AB T5J 2Z1 Canada",
+      "ja": "スティーブホールACIワールドワイド/ MessagingDirectの＃1807、10088 102アベニューエドモントン、AB T5J 2Z1カナダ"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: Steve.Hole@messagingdirect.com",
+      "ja": "メールアドレス：Steve.Hole@messagingdirect.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}
