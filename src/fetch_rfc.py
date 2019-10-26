@@ -32,6 +32,8 @@ class Paragraph:
         return (text.find('---') >= 0 # figure and table
                 or text.find('___') >= 0 # figure
                 or text.find('~~~') >= 0 # figure
+                or text.find('+++') >= 0 # figure
+                or text.find('***') >= 0 # figure
                 or text.find('+-+-+-+') >= 0 # figure
                 or text.find('.........') >= 0 # TOC
                 or text.find('. . . . . . . ') >= 0 # TOC
