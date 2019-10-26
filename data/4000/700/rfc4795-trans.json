@@ -1,0 +1,1373 @@
+{
+  "title": {
+    "text": "RFC 4795 - Link-local Multicast Name Resolution (LLMNR)",
+    "ja": "RFC 4795 - リンクローカルマルチキャスト名前解決（LLMNR）"
+  },
+  "number": 4795,
+  "created_at": "2019-10-26 18:19:35.411681+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                           B. Aboba\nRequest for Comments: 4795                                     D. Thaler\nCategory: Informational                                        L. Esibov\n                                                   Microsoft Corporation\n                                                            January 2007",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Link-Local Multicast Name Resolution (LLMNR)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 0,
+      "text": "IESG Note",
+      "ja": "IESG注意"
+    },
+    {
+      "indent": 3,
+      "text": "This document was originally intended for advancement as a Proposed Standard, but the IETF did not achieve consensus on the approach. The document has had significant review and input. At time of publication, early versions were implemented and deployed.",
+      "ja": "この文書は、元々のProposed Standardとしての進歩のために意図されていたが、IETFはアプローチについて合意に達しありませんでした。文書は、重要なレビューと入力がありました。公開時点で、初期のバージョンでは実装され、配備されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The goal of Link-Local Multicast Name Resolution (LLMNR) is to enable name resolution in scenarios in which conventional DNS name resolution is not possible. LLMNR supports all current and future DNS formats, types, and classes, while operating on a separate port from DNS, and with a distinct resolver cache. Since LLMNR only operates on the local link, it cannot be considered a substitute for DNS.",
+      "ja": "リンクローカルマルチキャスト名前解決（LLMNR）の目標は、従来のDNS名前解決が不可能であるシナリオで名前解決を有効にすることです。 LLMNRはDNSとは別のポート上で動作している間、現在および将来のすべてのDNS形式、タイプ、およびクラスをサポートしており、個別のリゾルバキャッシュを持ちます。 LLMNRは、ローカルリンク上で動作するので、それはDNSの代用と考えることはできません。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n   1.1. Requirements ...............................................3\n   1.2. Terminology ................................................4\n2. Name Resolution Using LLMNR .....................................4\n   2.1. LLMNR Packet Format ........................................5\n        2.1.1. LLMNR Header Format .................................5\n   2.2. Sender Behavior ............................................8\n   2.3. Responder Behavior .........................................9\n   2.4. Unicast Queries and Responses .............................11\n   2.5. \"Off-Link\" Detection ......................................11\n   2.6. Responder Responsibilities ................................12\n   2.7. Retransmission and Jitter .................................13\n   2.8. RR TTL ....................................................14\n   2.9. Use of the Authority and Additional Sections ..............14\n3. Usage Model ....................................................15\n   3.1. LLMNR Configuration .......................................17\n4. Conflict Resolution ............................................18\n   4.1. Uniqueness Verification ...................................19\n   4.2. Conflict Detection and Defense ............................20\n   4.3. Considerations for Multiple Interfaces ....................21\n   4.4. API Issues ................................................22\n5. Security Considerations ........................................23\n   5.1. Denial of Service .........................................23\n   5.2. Spoofing ..................................................24\n   5.3. Authentication ............................................25\n   5.4. Cache and Port Separation .................................25\n6. IANA Considerations ............................................26\n7. Constants ......................................................26\n8. References .....................................................27\n   8.1. Normative References ......................................27\n   8.2. Informative References ....................................27\n9. Acknowledgments ................................................29",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This document discusses Link-Local Multicast Name Resolution (LLMNR), which is based on the DNS packet format and supports all current and future DNS formats, types, and classes. LLMNR operates on a separate port from the Domain Name System (DNS), with a distinct resolver cache.",
+      "ja": "この文書では、DNSパケットのフォーマットに基づいており、現在および将来のすべてのDNS形式、タイプ、およびクラスをサポートしているリンクローカルマルチキャスト名前解決（LLMNR）を、説明します。 LLMNRは異なるレゾルバのキャッシュと、ドメインネームシステム（DNS）とは別のポート上で動作します。"
+    },
+    {
+      "indent": 3,
+      "text": "Since LLMNR only operates on the local link, it cannot be considered a substitute for DNS. Link-scope multicast addresses are used to prevent propagation of LLMNR traffic across routers, potentially flooding the network. LLMNR queries can also be sent to a unicast address, as described in Section 2.4.",
+      "ja": "LLMNRは、ローカルリンク上で動作するので、それはDNSの代用と考えることはできません。リンクスコープのマルチキャストアドレスは、潜在的にネットワークをフラッディング、ルータ間でLLMNRトラフィックの伝播を防ぐために使用されています。セクション2.4で説明したようにLLMNRクエリはまた、ユニキャストアドレスに送信することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Propagation of LLMNR packets on the local link is considered sufficient to enable name resolution in small networks. In such networks, if a network has a gateway, then typically the network is able to provide DNS server configuration. Configuration issues are discussed in Section 3.1.",
+      "ja": "ローカルリンク上のLLMNRパケットの伝播は、小規模なネットワークでの名前解決を可能にするために十分であると考えられます。ネットワークはゲートウェイを有している場合、このようなネットワークでは、次いで、通常、ネットワークは、DNSサーバーの構成を提供することができます。構成の問題は、3.1節で議論されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the future, it may be desirable to consider use of multicast name resolution with multicast scopes beyond the link-scope. This could occur if LLMNR deployment is successful, the need arises for multicast name resolution beyond the link-scope, or multicast routing becomes ubiquitous. For example, expanded support for multicast name resolution might be required for mobile ad-hoc networks.",
+      "ja": "将来的には、リンク範囲を超えてマルチキャストスコープを持つマルチキャスト名前解決の使用を検討することが望ましい場合があります。 LLMNRの展開が成功した場合、これが発生する可能性があり、必要性は、リンク範囲を超えてマルチキャスト名前解決のために生じた、またはマルチキャストルーティングがユビキタスになります。たとえば、マルチキャスト名前解決のためのサポートは、モバイルアドホックネットワークのために必要となる場合があります拡大しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Once we have experience in LLMNR deployment in terms of administrative issues, usability, and impact on the network, it will be possible to reevaluate which multicast scopes are appropriate for use with multicast name resolution. IPv4 administratively scoped multicast usage is specified in \"Administratively Scoped IP Multicast\" [RFC2365].",
+      "ja": "我々は管理上の問題、使いやすさ、およびネットワークへの影響という点でLLMNRの展開の経験を持っていたら、マルチキャスト名前解決での使用に適しているどのマルチキャストスコープ再評価することが可能となります。 IPv4の管理スコープマルチキャスト用法は、「管理用スコープのIPマルチキャスト」[RFC2365]で指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Service discovery in general, as well as discovery of DNS servers using LLMNR in particular, is outside the scope of this document, as is name resolution over non-multicast capable media.",
+      "ja": "非マルチキャスト対応のメディア経由の名前解決であるとして、サービス、一般的に発見、ならびに特定にLLMNRを使用してDNSサーバの発見は、この文書の範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Requirements",
+      "section_title": true,
+      "ja": "1.1。必要条件"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, several words are used to signify the requirements of the specification. The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "このドキュメントでは、いくつかの単語は、仕様の要件を意味するために使用されています。この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Terminology",
+      "section_title": true,
+      "ja": "1.2。用語"
+    },
+    {
+      "indent": 3,
+      "text": "This document assumes familiarity with DNS terminology defined in [RFC1035]. Other terminology used in this document includes:",
+      "ja": "この文書では、[RFC1035]で定義されたDNSの用語に精通している前提としています。このドキュメントで使用される他の用語が含まれています："
+    },
+    {
+      "indent": 3,
+      "text": "Routable Address An address other than a link-local address. This includes globally routable addresses, as well as private addresses.",
+      "ja": "ルーティング可能なアドレスリンクローカルアドレス以外のアドレス。これは、グローバルにルーティング可能なアドレスだけでなく、プライベートアドレスが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Reachable An LLMNR responder considers one of its addresses reachable over a link if it will respond to an Address Resolution Protocol (ARP) or Neighbor Discovery query for that address received on that link.",
+      "ja": "それはアドレス解決プロトコル（ARP）またはそのリンク上で受信したアドレスの近隣探索クエリに応答するかどうか到達可能なアンLLMNR応答者は、リンク上でそのアドレスのいずれかが到達可能と見なします。"
+    },
+    {
+      "indent": 3,
+      "text": "Responder A host that listens to LLMNR queries, and responds to those for which it is authoritative.",
+      "ja": "クエリをLLMNRに耳を傾け、そしてそれが権限を持っているものに対応したホストレスポンダ。"
+    },
+    {
+      "indent": 3,
+      "text": "Sender A host that sends an LLMNR query.",
+      "ja": "LLMNRクエリを送信し、送信側ホスト。"
+    },
+    {
+      "indent": 3,
+      "text": "UNIQUE There are some scenarios when multiple responders may respond to the same query. There are other scenarios when only one responder may respond to a query. Names for which only a single responder is anticipated are referred to as UNIQUE. Name uniqueness is configured on the responder, and therefore uniqueness verification is the responder's responsibility.",
+      "ja": "UNIQUE複数のレスポンダは、同じクエリに応答することができるいくつかのシナリオがあります。唯一の応答者がクエリに応答することができる他のシナリオがあります。ただ一つの応答者が予想されている名前は、UNIQUEと呼ばれています。名前の一意性は、応答に設定されているので、一意性の検証は、応答者の責任です。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Name Resolution Using LLMNR",
+      "section_title": true,
+      "ja": "LLMNRを使用した2名の解決"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR queries are sent to and received on port 5355. The IPv4 link-scope multicast address a given responder listens to, and to which a sender sends queries, is 224.0.0.252. The IPv6 link-scope multicast address a given responder listens to, and to which a sender sends all queries, is FF02:0:0:0:0:0:1:3.",
+      "ja": "LLMNRクエリはに送信され、IPv4リンクスコープが与えられた応答が待機し、送信者がクエリを送信するために、224.0.0.252されたアドレスマルチキャストポート5355.上で受信されます。 FF02であり、所与の応答に対処するマルチキャストIPv6リンクスコープをリッスンし、送信者は、すべてのクエリを送信するためにどの：0：0：0：0：0：1：3。"
+    },
+    {
+      "indent": 3,
+      "text": "Typically, a host is configured as both an LLMNR sender and a responder. A host MAY be configured as a sender, but not a responder. However, a host configured as a responder MUST act as a sender, if only to verify the uniqueness of names as described in Section 4. This document does not specify how names are chosen or configured. This may occur via any mechanism, including DHCPv4 [RFC2131] or DHCPv6 [RFC3315].",
+      "ja": "典型的には、ホストはLLMNR送信者と応答者の両方として構成されています。ホストは、送信者ではなく、レスポンダーとして構成してもよいです。この文書では、名前を選択または設定されている方法を指定していない第4節で説明したように名前だけの一意性を確認する場合は、レスポンダーとして構成されたホストは、送信者として行動しなければなりません。これは、DHCPv4の[RFC2131]またはDHCPv6の[RFC3315]を含む、任意のメカニズムを介して起こり得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "A typical sequence of events for LLMNR usage is as follows:",
+      "ja": "次のようにLLMNRの使用のためのイベントの典型的な順序は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "(a) An LLMNR sender sends an LLMNR query to the link-scope multicast address(es), unless a unicast query is indicated, as specified in Section 2.4.",
+      "ja": "（A）アンLLMNR送付者はセクション2.4で指定されるようにユニキャストクエリが、示されていない限り、リンク範囲マルチキャストアドレス（ES）にLLMNRクエリを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) A responder responds to this query only if it is authoritative for the name in the query. A responder responds to a multicast query by sending a unicast UDP response to the sender. Unicast queries are responded to as indicated in Section 2.4.",
+      "ja": "（b）はレスポンダは、クエリ内の名前に対して権威である場合にのみ、このクエリに応答します。応答者は、送信者へのユニキャストUDP応答を送信することにより、マルチキャストクエリーに応答します。ユニキャストクエリは、セクション2.4に示すように反応しています。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) Upon reception of the response, the sender processes it.",
+      "ja": "（C）応答を受信すると、送信者はそれを処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "The sections that follow provide further details on sender and responder behavior.",
+      "ja": "以下のセクションでは、送信者と応答者の行動の詳細を提供しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. LLMNR Packet Format",
+      "section_title": true,
+      "ja": "2.1。 LLMNRパケットフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR is based on the DNS packet format defined in [RFC1035] Section 4 for both queries and responses. LLMNR implementations SHOULD send UDP queries and responses only as large as are known to be permissible without causing fragmentation. When in doubt, a maximum packet size of 512 octets SHOULD be used. LLMNR implementations MUST accept UDP queries and responses as large as the smaller of the link MTU or 9194 octets (Ethernet jumbo frame size of 9KB (9216) minus 22 octets for the header, VLAN tag and Cyclic Redundancy Check (CRC)).",
+      "ja": "LLMNRは、クエリと応答の両方のために[RFC1035]セクション4で定義されたDNSパケットフォーマットに基づいています。 LLMNR実装は断片化を引き起こすことなく、許容であることが知られているだけのような大きなUDPクエリと応答を送信すべきです。疑いで、512オクテットの最大パケットサイズを使用すべきである場合。 LLMNR実装は、（ヘッダ、VLANタグと巡回冗長検査（CRC）のためのイーサネット（登録商標）ジャンボフレーム9キロバイトのサイズ（9216）マイナス22オクテット）リンクMTUまたは9194オクテットの小さいような大きなとしてUDPクエリおよび応答を受け入れなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1.1. LLMNR Header Format",
+      "section_title": true,
+      "ja": "2.1.1。 LLMNRヘッダー形式"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR queries and responses utilize the DNS header format defined in [RFC1035] with exceptions noted below:",
+      "ja": "LLMNRクエリと応答は、以下に述べる例外を除いて、[RFC1035]で定義されたDNSヘッダフォーマットを利用します。"
+    },
+    {
+      "indent": 6,
+      "text": "                                1  1  1  1  1  1\n  0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|                      ID                       |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|QR|   Opcode  | C|TC| T| Z| Z| Z| Z|   RCODE   |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|                    QDCOUNT                    |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|                    ANCOUNT                    |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|                    NSCOUNT                    |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+\n|                    ARCOUNT                    |\n+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "where:",
+      "ja": "どこ："
+    },
+    {
+      "indent": 3,
+      "text": "ID A 16-bit identifier assigned by the program that generates any kind of query. This identifier is copied from the query to the response and can be used by the sender to match responses to outstanding queries. The ID field in a query SHOULD be set to a pseudo-random value. For advice on generation of pseudo-random values, please consult [RFC4086].",
+      "ja": "クエリのいずれかの種類を生成するプログラムによって割り当てられたIDの16ビットの識別子。この識別子は、応答にクエリからコピーされ、未処理のクエリーに対する応答を一致させるために、送信者によって使用することができます。クエリ内のIDフィールドは、擬似ランダムな値に設定する必要があります。擬似乱数値の生成に関するアドバイスについては、[RFC4086]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "QR Query/Response. A 1-bit field, which, if set, indicates that the message is an LLMNR response; if clear, then the message is an LLMNR query.",
+      "ja": "QRクエリ/レスポンス。設定した場合、1ビットのフィールドは、メッセージがLLMNR応答であることを示しています。明確な場合は、そのメッセージはLLMNRクエリです。"
+    },
+    {
+      "indent": 3,
+      "text": "OPCODE A 4-bit field that specifies the kind of query in this message. This value is set by the originator of a query and copied into the response. This specification defines the behavior of standard queries and responses (opcode value of zero). Future specifications may define the use of other opcodes with LLMNR. LLMNR senders and responders MUST support standard queries (opcode value of zero). LLMNR queries with unsupported OPCODE values MUST be silently discarded by responders.",
+      "ja": "OPCODEこのメッセージでは、クエリの種類を指定する4ビットのフィールド。この値は、クエリの創始者によって設定され、応答にコピーされます。この仕様は、標準的な質問と応答（ゼロのオペコード値）の挙動を定義します。将来の仕様は、LLMNRと他のオペコードの使用を定義することもできます。 LLMNR送信者と応答者は、標準的なクエリ（ゼロのオペコード値）をサポートしなければなりません。サポートされていないOPCODE値とのLLMNRクエリは黙って応答によって捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "C Conflict. When set within a query, the 'C'onflict bit indicates that a sender has received multiple LLMNR responses to this query. In an LLMNR response, if the name is considered UNIQUE, then the 'C' bit is clear; otherwise, it is set. LLMNR senders do not retransmit queries with the 'C' bit set. Responders MUST NOT respond to LLMNR queries with the 'C' bit set, but may start the uniqueness verification process, as described in Section 4.2.",
+      "ja": "C対立。クエリ内で設定すると、「C'onflictビットは、送信者がこのクエリに複数のLLMNR応答を受信したことを示しています。名前がUNIQUEであると考えられる場合LLMNR応答で、次いで「C」ビットがクリアされています。それ以外の場合は、設定されています。 LLMNRの送信者は、「C」ビットがセットされたクエリを再送信しません。レスポンダは、「C」ビットが設定されたクエリをLLMNRに応答してはいけませんが、4.2節で説明したように、一意性検証プロセスを開始してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "TC TrunCation. The 'TC' bit specifies that this message was truncated due to length greater than that permitted on the transmission channel. The 'TC' bit MUST NOT be set in an LLMNR query and, if set, is ignored by an LLMNR responder. If the 'TC' bit is set in an LLMNR response, then the sender SHOULD resend the LLMNR query over TCP using the unicast address of the responder as the destination address. If the sender receives a response to the TCP query, then it SHOULD discard the UDP response with the TC bit set. See [RFC2181] and Section 2.4 of this specification for further discussion of the 'TC' bit.",
+      "ja": "TCの切り捨て。 「TC」ビットは、このメッセージは、伝送チャネル上許容さよりも大きい長さに切り捨てられたことを指定します。 「TC」ビットLLMNRクエリに設定されてはならないと、設定されている場合、LLMNR応答者によって無視されます。 「TC」ビットがLLMNR応答に設定されている場合、送信者は、宛先アドレスとして応答者のユニキャストアドレスを使用して、TCP上LLMNRクエリを再送信すべきです。送信者がTCPクエリに対する応答を受信した場合、それはTCビットがセットされたUDP応答を破棄すべきです。 [RFC2181]と「TC」ビットのさらなる議論については、この仕様書の2.4節を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "T Tentative. The 'T'entative bit is set in a response if the responder is authoritative for the name, but has not yet verified the uniqueness of the name. A responder MUST ignore the 'T' bit in a query, if set. A response with the 'T' bit set is silently discarded by the sender, except if it is a uniqueness query, in which case, a conflict has been detected and a responder MUST resolve the conflict as described in Section 4.1.",
+      "ja": "Tの暫定。応答者は、名前に対して権限を持っているが、まだ名前の一意性を検証していない場合は、「T'entativeビットが対応して設定されています。設定されている場合、レスポンダは、クエリで「T」ビットを無視しなければなりません。 「T」ビットが設定された応答は、静かにそれは、一意のクエリである場合には、競合が検出され、セクション4.1で説明したように応答が競合を解決する必要がある場合を除き、送信側によって破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Z Reserved for future use. Implementations of this specification MUST set these bits to zero in both queries and responses. If these bits are set in a LLMNR query or response, implementations of this specification MUST ignore them. Since reserved bits could conceivably be used for different purposes than in DNS, implementers are advised not to enable processing of these bits in an LLMNR implementation starting from a DNS code base.",
+      "ja": "Zは、将来の使用のために予約されています。この仕様の実装は、クエリと応答の両方でゼロにこれらのビットを設定しなければなりません。これらのビットはLLMNRクエリまたは応答に設定されている場合、この仕様の実装は、それらを無視しなければなりません。予約ビットは、おそらくDNSとは異なる目的のために使用することができるので、実装がDNSコードベースから出発LLMNR実装では、これらのビットの処理を有効にしないことをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "RCODE Response code. This 4-bit field is set as part of LLMNR responses. In an LLMNR query, the sender MUST set RCODE to zero; the responder ignores the RCODE and assumes it to be zero. The response to a multicast LLMNR query MUST have RCODE set to zero. A sender MUST silently discard an LLMNR response with a non-zero RCODE sent in response to a multicast query.",
+      "ja": "RCODEレスポンスコード。この4ビットのフィールドは、LLMNR応答の一部として設定されています。 LLMNRクエリでは、送信者はゼロにRCODEを設定しなければなりません。レスポンダはRCODEを無視し、ゼロにすることを前提としています。マルチキャストLLMNRクエリに対する応答はゼロに設定RCODEを持たなければなりません。送信者が黙って、マルチキャストクエリに応答して送信された非ゼロRCODEとLLMNR応答を捨てなければなりません。"
+    },
+    {
+      "indent": 11,
+      "text": "If an LLMNR responder is authoritative for the name in a\nmulticast query, but an error is encountered, the responder\nSHOULD send an LLMNR response with an RCODE of zero, no RRs\nin the answer section, and the TC bit set.  This will cause\nthe query to be resent using TCP, and allow the inclusion of\na non-zero RCODE in the response to the TCP query.\nResponding with the TC bit set is preferable to not sending a\nresponse, since it enables errors to be diagnosed.  This may\nbe required, for example, when an LLMNR query includes a TSIG\nRR in the additional section, and the responder encounters a\nproblem that requires returning a non-zero RCODE.  TSIG error\nconditions defined in [RFC2845] include a TSIG RR in an\nunacceptable position (RCODE=1) or a TSIG RR that does not\nvalidate (RCODE=9 with TSIG ERROR 17 (BADKEY) or 16\n(BADSIG)).",
+      "raw": true
+    },
+    {
+      "indent": 11,
+      "text": "Since LLMNR responders only respond to LLMNR queries for names for which they are authoritative, LLMNR responders MUST NOT respond with an RCODE of 3; instead, they should not respond at all.",
+      "ja": "LLMNR応答者は、彼らだけが権威であるため名前に対するクエリをLLMNRに応答するので、LLMNR応答者は3のRCODEに応じてはいけません。代わりに、彼らはまったく応答してはなりません。"
+    },
+    {
+      "indent": 11,
+      "text": "LLMNR implementations MUST support EDNS0 [RFC2671] and extended RCODE values.",
+      "ja": "LLMNR実装はEDNS0 [RFC2671]と拡張RCODE値をサポートしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "QDCOUNT An unsigned 16-bit integer specifying the number of entries in the question section. A sender MUST place only one question into the question section of an LLMNR query. LLMNR responders MUST silently discard LLMNR queries with QDCOUNT not equal to one. LLMNR senders MUST silently discard LLMNR responses with QDCOUNT not equal to one.",
+      "ja": "質問セクション内のエントリの数を指定する符号なし16ビット整数をQDCOUNT。送信者はLLMNRクエリの質問セクションに一つだけ質問を置かなければなりません。 LLMNR応答者は静かに1に等しくないQDCOUNTでLLMNRクエリを捨てなければなりません。 LLMNRの送信者は静かに1に等しくないQDCOUNTとのLLMNR応答を捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "ANCOUNT An unsigned 16-bit integer specifying the number of resource records in the answer section. LLMNR responders MUST silently discard LLMNR queries with ANCOUNT not equal to zero.",
+      "ja": "ANCOUNT回答セクションのリソース・レコードの数を指定する符号なし16ビット整数。 LLMNR応答者は静かにゼロに等しくないANCOUNTとLLMNRクエリを捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "NSCOUNT An unsigned 16-bit integer specifying the number of name server resource records in the authority records section. Authority record section processing is described in Section 2.9. LLMNR responders MUST silently discard LLMNR queries with NSCOUNT not equal to zero.",
+      "ja": "NSCOUNT典拠レコードセクションのネームサーバのリソースレコードの数を指定する符号なし16ビット整数。権威記録部の処理は、2.9節に記述されています。 LLMNR応答者は静かにゼロに等しくないNSCOUNTとLLMNRクエリを捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "ARCOUNT An unsigned 16-bit integer specifying the number of resource records in the additional records section. Additional record section processing is described in Section 2.9.",
+      "ja": "追加レコードセクションのリソース・レコードの数を指定する符号なし16ビット整数をARCOUNT。追加記録部の処理は、2.9節に記述されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Sender Behavior",
+      "section_title": true,
+      "ja": "2.2。送信者の行動"
+    },
+    {
+      "indent": 3,
+      "text": "A sender MAY send an LLMNR query for any legal resource record type (e.g., A, AAAA, PTR, SRV) to the link-scope multicast address. As described in Section 2.4, a sender MAY also send a unicast query.",
+      "ja": "送信者は、リンクスコープマルチキャストアドレスに法的リソースレコードタイプ（例えば、A、AAAA、PTR、SRV）のためのLLMNRクエリを送信することができます。 2.4節で述べたように、送信者は、ユニキャストクエリを送信することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The sender MUST anticipate receiving no responses to some LLMNR queries, in the event that no responders are available within the link-scope. If no response is received, a resolver treats it as a response that the name does not exist (RCODE=3 is returned). A sender can handle duplicate responses by discarding responses with a source IP address and ID field that duplicate a response already received.",
+      "ja": "送信者は何の応答はリンク範囲内で利用できない場合には、いくつかのLLMNRクエリに何の応答を受信しない予期しなければなりません。応答が受信されない場合、リゾルバは名前が存在しない旨の応答（RCODE = 3が返される）として扱い。送信者は、既に受信した応答を複製元のIPアドレスとIDフィールドでの応答を廃棄することにより重複した応答を処理することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When multiple valid LLMNR responses are received with the 'C' bit set, they SHOULD be concatenated and treated in the same manner that multiple RRs received from the same DNS server would be. However, responses with the 'C' bit set SHOULD NOT be concatenated with responses with the 'C' bit clear; instead, only the responses with the 'C' bit set SHOULD be returned. If valid LLMNR response(s) are received along with error response(s), then the error responses are silently discarded.",
+      "ja": "複数の有効なLLMNR応答が「C」ビットがセットで受信される場合、それらは連結し、複数のRRは次のようになり、同じDNSサーバーから受信した同じ方法で扱われるべきです。しかし、「C」ビットがセットされた応答は、「C」ビットクリアでレスポンスと連結すべきではありません。代わりに、「C」ビットがセットされた応答のみが返されます。有効なLLMNR応答（s）はエラー応答（複数可）と一緒に受信された場合は、エラー応答は黙って破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the responder may order the RRs in the response so as to indicate preference, the sender SHOULD preserve ordering in the response to the querying application.",
+      "ja": "選好を示すように、応答は、応答にRRを命ずることができるため、送信者は、照会アプリケーションに応じて、順序を維持すべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Responder Behavior",
+      "section_title": true,
+      "ja": "2.3。レスポンダ行動"
+    },
+    {
+      "indent": 3,
+      "text": "An LLMNR response MUST be sent to the sender via unicast.",
+      "ja": "LLMNR応答は、ユニキャストを経由して送信者に送らなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon configuring an IP address, responders typically will synthesize corresponding A, AAAA and PTR RRs so as to be able to respond to LLMNR queries for these RRs. An SOA RR is synthesized only when a responder has another RR in addition to the SOA RR; the SOA RR MUST NOT be the only RR that a responder has. However, in general, whether RRs are manually or automatically created is an implementation decision.",
+      "ja": "これらのRRのためのクエリをLLMNRに応答することができるようにIPアドレスを設定すると、応答は通常、A、AAAAとPTR RRを対応する合成されます。 SOA RRは、応答者がSOA RRに加えて、他のRRを有する場合にのみ合成されます。 SOA RRは、応答者が持っている唯一のRRにすることはできません。しかし、一般的には、RRのは、手動または自動で作成されるかどうかは実装決定です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, a host configured to have computer name \"host1\" and to be a member of the \"example.com\" domain, with IPv4 address 192.0.2.1 and IPv6 address 2001:0DB8::1:2:3:FF:FE:4:5:6, might be authoritative for the following records:",
+      "ja": "0DB8 :: 1：3：2：FF：FE例えば、ホストは、IPv4アドレス192.0.2.1とIPv6アドレス2001、コンピュータ名「HOST1」を有すると「example.com」ドメインのメンバであるように構成します：4：5：6には、以下のレコードに対する権限を持つようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "host1. IN A 192.0.2.1 IN AAAA 2001:0DB8::1:2:3:FF:FE:4:5:6",
+      "ja": "HOST1。 AAAA 2001年192.0.2.1 IN：0DB8 :: 1：2：3：FF：FE：4：5：6"
+    },
+    {
+      "indent": 3,
+      "text": "host1.example.com. IN A 192.0.2.1 IN AAAA 2001:0DB8::1:2:3:FF:FE:4:5:6",
+      "ja": "host1.example.com。 AAAA 2001年192.0.2.1 IN：0DB8 :: 1：2：3：FF：FE：4：5：6"
+    },
+    {
+      "indent": 3,
+      "text": "1.2.0.192.in-addr.arpa. IN PTR host1. IN PTR host1.example.com.",
+      "ja": "1.2.0.192.in-addr.arpa。 PTR host1に、IN。 PTR host1.example.com、IN。"
+    },
+    {
+      "indent": 3,
+      "text": "6.0.5.0.4.0.E.F.F.F.3.0.2.0.1.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2. ip6.arpa IN PTR host1. (line split for formatting reasons) IN PTR host1.example.com.",
+      "ja": "6.0.5.0.4.0.E.F.F.F.3.0.2.0.1.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2。 ip6.arpa、IN PTR HOST1。 （書式設定の理由のためにライン分割）ではPTR host1.example.com。"
+    },
+    {
+      "indent": 3,
+      "text": "An LLMNR responder might be further manually configured with the name of a local mail server with an MX RR included in the \"host1.\" and \"host1.example.com.\" records.",
+      "ja": "LLMNR応答者は、さらに手動でMX RRを持つローカルメールサーバーの名前を使用して設定される可能性がありますに含まれる「HOST1。」そして \"host1.example.com。\"記録。"
+    },
+    {
+      "indent": 3,
+      "text": "In responding to queries:",
+      "ja": "問い合わせに応答するには："
+    },
+    {
+      "indent": 3,
+      "text": "(a) Responders MUST listen on UDP port 5355 on the link-scope multicast address(es) defined in Section 2, and on TCP port 5355 on the unicast address(es) that could be set as the source address(es) when the responder responds to the LLMNR query.",
+      "ja": "（a）は、レスポンダは、セクション2で定義されたリンク範囲マルチキャストアドレス（ES）上のUDPポート5355をリッスンし、送信元アドレス（ES）として設定することができたユニキャストアドレス（ES）上のTCPポート5355でなければならない場合レスポンダはLLMNRクエリに応答します。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) Responders MUST direct responses to the port from which the query was sent. When queries are received via TCP, this is an inherent part of the transport protocol. For queries received by UDP, the responder MUST take note of the source port and use that as the destination port in the response. Responses MUST always be sent from the port to which they were directed.",
+      "ja": "（b）は、レスポンダは、クエリを送信したポートへの応答を指示しなければなりません。クエリはTCPを介して受信されたとき、これは、トランスポートプロトコルの固有の部分です。 UDPで受信したクエリの場合、応答は送信元ポートのノートを取る必要があり、応答の宛先ポートとしてそれを使用します。応答は常にそれらが指示された先のポートから送らなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) Responders MUST respond to LLMNR queries for names and addresses for which they are authoritative. This applies to both forward and reverse lookups, with the exception of queries with the 'C' bit set, which do not elicit a response.",
+      "ja": "（C）レスポンダは、彼らは権威であるために名前とアドレスのためのクエリをLLMNRに応答する必要があります。これは、応答を誘発しない「C」ビットがセットとクエリの例外を除いて、前方の両方に適用され、逆引き参照を。"
+    },
+    {
+      "indent": 3,
+      "text": "(d) Responders MUST NOT respond to LLMNR queries for names for which they are not authoritative.",
+      "ja": "（d）の応答者は、彼らは権威のないものの名前のクエリをLLMNRに応答してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "(e) Responders MUST NOT respond using data from the LLMNR or DNS resolver cache.",
+      "ja": "（e）はレスポンダはLLMNRまたはDNSリゾルバキャッシュからのデータを使用して応じてはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "(f) If a responder is authoritative for a name, it MUST respond with RCODE=0 and an empty answer section, if the type of query does not match an RR that the responder has.",
+      "ja": "クエリのタイプは、応答者が持っているRRと一致しない場合（f）の応答者は、名前の権限も持っている場合は、それは、RCODE = 0と空の回答セクションで応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "As an example, a host configured to respond to LLMNR queries for the name \"foo.example.com.\" is authoritative for the name \"foo.example.com.\". On receiving an LLMNR query for an A RR with the name \"foo.example.com.\", the host authoritatively responds with an A RR(s) that contain IP address(es) in the RDATA of the resource record. If the responder has an AAAA RR, but no A RR, and an A RR query is received, the responder would respond with RCODE=0 and an empty answer section.",
+      "ja": "例として、ホストは「foo.example.com。」名前のクエリをLLMNRに応答するように設定しました名前に対して権限のある「foo.example.com。」。名前のA RRのためのLLMNRクエリを受け取る「foo.example.com。」で、ホストが正式リソースレコードのRDATAにおけるIPアドレス（複数可）を含有するA RR（S）で応答します。応答者がAAAA RRを持っていませんが、何のA RRと、A RRの問い合わせを受信した場合、応答者はRCODE = 0と空の解答セクションに応答することになります。"
+    },
+    {
+      "indent": 3,
+      "text": "In conventional DNS terminology, a DNS server authoritative for a zone is authoritative for all the domain names under the zone apex except for the branches delegated into separate zones. Contrary to conventional DNS terminology, an LLMNR responder is authoritative only for the zone apex.",
+      "ja": "従来のDNSの用語では、ゾーンのDNSサーバの権威は別のゾーンに委任支店を除き、ゾーン頂点の下のすべてのドメイン名の権威です。従来のDNSの用語に反して、LLMNR応答者は、ゾーンの頂点のための権威です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the host \"foo.example.com.\" is not authoritative for the name \"child.foo.example.com.\" unless the host is configured with multiple names, including \"foo.example.com.\" and \"child.foo.example.com.\". As a result, \"foo.example.com.\" cannot respond to an LLMNR query for \"child.foo.example.com.\" with RCODE=3 (authoritative name error). The purpose of limiting the name authority scope of a responder is to prevent complications that could be caused by coexistence of two or more hosts with the names representing child and parent (or grandparent) nodes in the DNS tree, for example, \"foo.example.com.\" and \"child.foo.example.com.\".",
+      "ja": "たとえば、ホスト「foo.example.com。」名前に対して権限のない「child.foo.example.com。」ホストは、以下を含む複数の名前、で構成されていない限り、「foo.example.com。」そして \"child.foo.example.com。\"。その結果、「foo.example.com。」以下のためのLLMNRクエリに応答することができない「child.foo.example.com。」 RCODE = 3（正式の名前エラー）を有します。応答者の名前の権限の範囲を限定する目的は、例えば、「foo.example、DNSツリー内の子と親（または祖父母）のノードを表す名前を持つ2つの以上のホストの共存が原因である可能性があり、合併症を予防することです.COM。」そして \"child.foo.example.com。\"。"
+    },
+    {
+      "indent": 3,
+      "text": "Without the restriction on authority, an LLMNR query for an A resource record for the name \"child.foo.example.com.\" would result in two authoritative responses: RCODE=3 (authoritative name error) received from \"foo.example.com.\", and a requested A record from \"child.foo.example.com.\". To prevent this ambiguity, LLMNR-enabled hosts could perform a dynamic update of the parent (or grandparent) zone with a delegation to a child zone; for example, a host",
+      "ja": "権限の制限なく、名前のリソースレコードのLLMNRクエリ「child.foo.example.com。」からから受信RCODE = 3（正式の名前エラー）、及び要求されたレコード「foo.example.com。」2つの権威応答をもたらす「child.foo.example.com。」。この曖昧さを防ぐために、LLMNR対応のホストは、子ゾーンへの委任を持つ親（または祖父母）のゾーンの動的更新を行うことができ、例えば、ホスト"
+    },
+    {
+      "indent": 3,
+      "text": "\"child.foo.example.com.\" could send a dynamic update for the NS and glue A record to \"foo.example.com.\". However, this approach significantly complicates implementation of LLMNR and would not be acceptable for lightweight hosts.",
+      "ja": "\"child.foo.example.com。\" NSの動的更新を送信してにレコードを接着可能性「foo.example.com。」。しかし、このアプローチは大幅にLLMNRの実装が複雑になり、軽量のホストのために許容されないであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Unicast Queries and Responses",
+      "section_title": true,
+      "ja": "2.4。ユニキャストクエリと応答"
+    },
+    {
+      "indent": 3,
+      "text": "Unicast queries SHOULD be sent when:",
+      "ja": "ユニキャストクエリが送信されたときにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "(a) A sender repeats a query after it received a response with the TC bit set to the previous LLMNR multicast query, or",
+      "ja": "（a）は、送信側は、それが以前LLMNRマルチキャストクエリに設定TCビットで応答を受信した後、クエリを繰り返す、または"
+    },
+    {
+      "indent": 3,
+      "text": "(b) The sender queries for a PTR RR of a fully formed IP address within the \"in-addr.arpa\" or \"ip6.arpa\" zones.",
+      "ja": "（B）「in-addr.arpa」または「ip6.arpa」ゾーン内に完全に形成されたIPアドレスのPTR RRの送信者クエリを。"
+    },
+    {
+      "indent": 3,
+      "text": "Unicast LLMNR queries MUST be done using TCP and the responses MUST be sent using the same TCP connection as the query. Senders MUST support sending TCP queries, and responders MUST support listening for TCP queries. If the sender of a TCP query receives a response to that query not using TCP, the response MUST be silently discarded.",
+      "ja": "ユニキャストLLMNRクエリは、TCPを使用して行われなければならないとの応答がクエリと同じTCP接続を使用させなければなりません。送信者は、TCPクエリを送信しサポートしなければならない、と応答がTCPクエリのリッスンをサポートしなければなりません。 TCPクエリの送信者がTCPを使用していない、そのクエリに対する応答を受信した場合、応答は黙って捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Unicast UDP queries MUST be silently discarded.",
+      "ja": "ユニキャストUDPクエリは静かに捨てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A unicast PTR RR query for an off-link address will not elicit a response, but instead, an ICMP Time to Live (TTL) or Hop Limit exceeded message will be received. An implementation receiving an ICMP message in response to a TCP connection setup attempt can return immediately, treating this as a response that no such name exists (RCODE=3 is returned). An implementation that cannot process ICMP messages MAY send multicast UDP queries for PTR RRs. Since TCP implementations will not retransmit prior to RTOmin, a considerable period will elapse before TCP retransmits multiple times, resulting in a long timeout for TCP PTR RR queries sent to an off-link destination.",
+      "ja": "オフリンクアドレスのユニキャストPTR RRのクエリは応答を誘発せず、その代わりに、ライブにICMP時間（TTL）またはホップ制限は、メッセージが受信される超え。 TCP接続設定の試みに応答してICMPメッセージを受信する実装は、そのような名前が存在しないことを応答としてこれを治療する、直ちに返すことができる（RCODE = 3が返されます）。 ICMPメッセージを処理することはできません実装はPTR RRのためのマルチキャストUDPクエリを送信することができます。 TCP実装前RTOminに再送信しないので、TCPは、オフリンク宛先へ送信されるTCP PTR RRのクエリの長​​いタイムアウトになり、複数回再送信する前に、かなりの時間が経過します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. \"Off-Link\" Detection",
+      "section_title": true,
+      "ja": "2.5。 「オフリンク」検出"
+    },
+    {
+      "indent": 3,
+      "text": "A sender MUST select a source address for LLMNR queries that is assigned on the interface on which the query is sent. The destination address of an LLMNR query MUST be a link-scope multicast address or a unicast address.",
+      "ja": "送信者は、クエリが送信されているインターフェイスに割り当てられたLLMNRクエリの送信元アドレスを選択する必要があります。 LLMNRクエリの宛先アドレスは、リンクスコープマルチキャストアドレス又はユニキャストアドレスでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A responder MUST select a source address for responses that is assigned on the interface on which the query was received. The destination address of an LLMNR response MUST be a unicast address.",
+      "ja": "レスポンダは、クエリを受信したインターフェイスに割り当てられた応答の送信元アドレスを選択しなければなりません。 LLMNR応答の宛先アドレスがユニキャストアドレスでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "On receiving an LLMNR query, the responder MUST check whether it was sent to an LLMNR multicast addresses defined in Section 2. If it was sent to another multicast address, then the query MUST be silently discarded.",
+      "ja": "LLMNRクエリを受信すると、応答者は、それがその後、クエリが静かに捨てなければなりません、別のマルチキャストアドレスに送信された場合、それは、第2節で定義されたLLMNRマルチキャストアドレスに送信されたかどうかをチェックしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 2.4 discusses use of TCP for LLMNR queries and responses. In composing an LLMNR query using TCP, the sender MUST set the Hop Limit field in the IPv6 header and the TTL field in the IPv4 header of the response to one (1). The responder SHOULD set the TTL or Hop Limit settings on the TCP listen socket to one (1) so that SYN-ACK packets will have TTL (IPv4) or Hop Limit (IPv6) set to one (1). This prevents an incoming connection from off-link since the sender will not receive a SYN-ACK from the responder.",
+      "ja": "LLMNRクエリと応答のためのTCPの2.4節を議論使用。 TCPを用いたLLMNRクエリを構成するには、送信側が1応答のIPv4ヘッダ内のIPv6ヘッダーのホップ制限フィールドとTTLフィールドを設定しなければならない（1）。応答はTTLを設定すべきであるか、TCP上のホップ制限の設定は、一（1）SYN-ACKパケットが有するように、TTL（IPv4）の又はホップ限界いずれかに設定（IPv6）のにソケットを聞く（1）。送信者が応答者からSYN-ACKを受信しませんので、これはオフリンクからの着信接続を防ぐことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "For UDP queries and responses, the Hop Limit field in the IPv6 header and the TTL field in the IPV4 header MAY be set to any value. However, it is RECOMMENDED that the value 255 be used for compatibility with early implementations of [RFC3927].",
+      "ja": "UDP質問と応答のために、IPv4ヘッダ内のIPv6ヘッダーのホップ制限フィールドとTTLフィールドは、任意の値に設定することができます。しかし、値255は、[RFC3927]の初期の実装との互換性を保つために使用することを推奨されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementation note:",
+      "ja": "実装上の注意："
+    },
+    {
+      "indent": 6,
+      "text": "In the sockets API for IPv4 [POSIX], the IP_TTL and IP_MULTICAST_TTL socket options are used to set the TTL of outgoing unicast and multicast packets. The IP_RECVTTL socket option is available on some platforms to retrieve the IPv4 TTL of received packets with recvmsg(). [RFC3542] specifies similar options for setting and retrieving the IPv6 Hop Limit.",
+      "ja": "IPv4のソケットAPI [POSIX]において、IP_TTLとIP_MULTICAST_TTLソケットオプションは、発信ユニキャストおよびマルチキャストパケットのTTLを設定するために使用されています。 IP_RECVTTLソケットオプションは）（のrecvmsgで受信したパケットのIPv4のTTLを取得するために、いくつかのプラットフォームで利用可能です。 [RFC3542]はIPv6のホップ制限を設定し、取得するための同様のオプションを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. Responder Responsibilities",
+      "section_title": true,
+      "ja": "2.6。レスポンダの責任"
+    },
+    {
+      "indent": 3,
+      "text": "It is the responsibility of the responder to ensure that RRs returned in LLMNR responses MUST only include values that are valid on the local interface, such as IPv4 or IPv6 addresses valid on the local link or names defended using the mechanism described in Section 4. IPv4 Link-Local addresses are defined in [RFC3927]. IPv6 Link-Local addresses are defined in [RFC4291]. In particular:",
+      "ja": "これは、第4節のIPv4で説明するメカニズムを使用して擁護IPv4またはIPv6がローカルリンクまたは名前に有効なアドレスなど、のRRはLLMNR応答で返されることを保証するために、応答者の責任であるだけローカルインターフェイス上で有効な値を含まなければなりませんリンクローカルアドレスは、[RFC3927]で定義されています。 IPv6のリンクローカルアドレスは、[RFC4291]で定義されています。特に："
+    },
+    {
+      "indent": 3,
+      "text": "(a) If a link-scope IPv6 address is returned in a AAAA RR, that address MUST be valid on the local link over which LLMNR is used.",
+      "ja": "リンクスコープのIPv6アドレスがAAAAのRRに返された場合（A）、そのアドレスはLLMNRが使用される上、ローカルリンク上で有効でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) If an IPv4 address is returned, it MUST be reachable through the link over which LLMNR is used.",
+      "ja": "IPv4アドレスが返された場合（B）、これは、LLMNRが使用される上リンクを介して到達可能でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) If a name is returned (for example in a CNAME, MX, or SRV RR), the name MUST be resolvable on the local link over which LLMNR is used.",
+      "ja": "（c）の名前は（CNAME、MX、またはSRV RRの中など）が返された場合、名前がLLMNRが使用される上、ローカルリンク上で解決可能である必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Where multiple addresses represent valid responses to a query, the order in which the addresses are returned is as follows:",
+      "ja": "複数のアドレスは、クエリへの有効回答を表し、次のように、アドレスが返される順序は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "(d) If the source address of the query is a link-scope address, then the responder SHOULD include a link-scope address first in the response, if available.",
+      "ja": "クエリの送信元アドレスは、リンクスコープアドレスである場合に利用可能な場合（D）、次いでレスポンダは、応答して第1のリンクスコープアドレスを含むべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "(e) If the source address of the query is a routable address, then the responder MUST include a routable address first in the response, if available.",
+      "ja": "クエリの送信元アドレスがルーティング可能なアドレスである場合に利用可能な場合、（E）、次いでレスポンダは、応答して第1のルーティング可能なアドレスを含まなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.7. Retransmission and Jitter",
+      "section_title": true,
+      "ja": "2.7。再送信およびジッタ"
+    },
+    {
+      "indent": 3,
+      "text": "An LLMNR sender uses the timeout interval LLMNR_TIMEOUT to determine when to retransmit an LLMNR query. An LLMNR sender SHOULD either estimate the LLMNR_TIMEOUT for each interface or set a reasonably high initial timeout. Suggested constants are described in Section 7.",
+      "ja": "LLMNRの送信者はLLMNRクエリを再送するタイミングを決定するために、タイムアウト間隔LLMNR_TIMEOUTを使用しています。 LLMNRの送信者は、各インタフェースのLLMNR_TIMEOUTを推定または適度に高い初期タイムアウトを設定すべきであるいずれか。推奨定数は、第7節で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "If an LLMNR query sent over UDP is not resolved within LLMNR_TIMEOUT, then a sender SHOULD repeat the transmission of the query in order to ensure that it was received by a host capable of responding to it. An LLMNR query SHOULD NOT be sent more than three times.",
+      "ja": "UDP経由で送信されるLLMNRクエリがLLMNR_TIMEOUT以内に解決しなかった場合、送信者は、それに対応できるホストによって受信されたことを確実にするために、クエリの送信を繰り返す必要があります。 LLMNRクエリは、以上の3倍を送るべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Where LLMNR queries are sent using TCP, retransmission is handled by the transport layer. Queries with the 'C' bit set MUST be sent using multicast UDP and MUST NOT be retransmitted.",
+      "ja": "LLMNRクエリはTCPを使用して送信されている場合、再送はトランスポート層で処理されます。 「C」ビットがセットされたクエリは、マルチキャストUDPを使用して送信されなければならないと再送信してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "An LLMNR sender cannot know in advance if a query sent using multicast will receive no response, one response, or more than one response. An LLMNR sender MUST wait for LLMNR_TIMEOUT if no response has been received, or if it is necessary to collect all potential responses, such as if a uniqueness verification query is being made. Otherwise, an LLMNR sender SHOULD consider a multicast query answered after the first response is received, if that response has the 'C' bit clear.",
+      "ja": "マルチキャストを使用して送信されたクエリが応答、1つの応答、または複数の応答を受信しない場合はLLMNRの送信者は事前に知ることはできません。 LLMNRの送信者は、応答が受信されなかった場合LLMNR_TIMEOUTのを待たなければならない、または必要であれば、このようなユニークさの検証クエリが行われているかのようにすべての潜在的応答を収集します。それ以外の場合は、LLMNRの送信者は、最初の応答が受信された後、その応答が「C」ビットがクリアされている場合、マルチキャストクエリーに、答えを検討してください。"
+    },
+    {
+      "indent": 3,
+      "text": "However, if the first response has the 'C' bit set, then the sender SHOULD wait for LLMNR_TIMEOUT + JITTER_INTERVAL in order to collect all possible responses. When multiple valid answers are received, they may first be concatenated, and then treated in the same manner that multiple RRs received from the same DNS server would. A unicast query sender considers the query answered after the first response is received.",
+      "ja": "最初の応答は「C」ビットがセットされている場合は、送信者は、すべての可能な応答を収集するためにLLMNR_TIMEOUT + JITTER_INTERVALを待つべき。複数の有効な回答が受信されたとき、それらは最初に連結され、その後複数のRRが同じDNSサーバーから受信した場合と同様に処理してもよいです。ユニキャストクエリ送信者は、最初の応答が受信された後答えクエリを考えています。"
+    },
+    {
+      "indent": 3,
+      "text": "Since it is possible for a response with the 'C' bit clear to be followed by a response with the 'C' bit set, an LLMNR sender SHOULD be prepared to process additional responses for the purposes of conflict detection, even after it has considered a query answered.",
+      "ja": "それは「C」ビットが設定された応答が続くことが明らか「C」ビットとの対応が可能であるので、LLMNR送付者は、それを考慮した後でも、競合検出の目的のための追加の応答を処理するために準備する必要がありますクエリが答えました。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to avoid synchronization, the transmission of each LLMNR query and response SHOULD be delayed by a time randomly selected from the interval 0 to JITTER_INTERVAL. This delay MAY be avoided by responders responding with names that they have previously determined to be UNIQUE (see Section 4 for details).",
+      "ja": "同期化を避けるために、各LLMNRクエリと応答の送信をランダムJITTER_INTERVALに間隔0から選択された時間だけ遅延されるべきです。この遅延は、彼らが以前にUNIQUE（詳細はセクション4を参照）であることを決定した名前で応答応答することによって回避することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.8. RR TTL",
+      "section_title": true,
+      "ja": "2.8。 RR TTL"
+    },
+    {
+      "indent": 3,
+      "text": "The responder should insert a pre-configured TTL value in the records returned in an LLMNR response. A default value of 30 seconds is RECOMMENDED. In highly dynamic environments (such as mobile ad-hoc networks), the TTL value may need to be reduced.",
+      "ja": "レスポンダはLLMNR応答で返されたレコードに予め構成されたTTL値を挿入しなければなりません。 30秒のデフォルト値が推奨されます。 （モバイルアドホックネットワークのような）非常に動的な環境では、TTL値を小さくする必要があるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "Due to the TTL minimalization necessary when caching an RRset, all TTLs in an RRset MUST be set to the same value.",
+      "ja": "必要TTLのminimalizationに資源レコード集合をキャッシュするとき、RRセット内のすべてのTTLは、同じ値に設定しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.9. Use of the Authority and Additional Sections",
+      "section_title": true,
+      "ja": "2.9。権威と追加セクションの使用"
+    },
+    {
+      "indent": 3,
+      "text": "Unlike the DNS, LLMNR is a peer-to-peer protocol and does not have a concept of delegation. In LLMNR, the NS resource record type may be stored and queried for like any other type, but it has no special delegation semantics as it does in the DNS. Responders MAY have NS records associated with the names for which they are authoritative, but they SHOULD NOT include these NS records in the authority sections of responses.",
+      "ja": "DNSとは異なり、LLMNRはピアツーピアプロトコルであり、委任の概念がありません。 LLMNRでは、NSリソースレコードのタイプが格納されていてもよいし、他のタイプなどのために照会が、それはDNSの場合と同様に、特別な委任意味を持っていません。レスポンダは、彼らが権威であるため名前に関連付けられたNSレコードを持っているかもしれないが、彼らは応答の権限セクションでは、これらのNSレコードを含めるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Responders SHOULD insert an SOA record into the authority section of a negative response, to facilitate negative caching as specified in [RFC2308]. The TTL of this record is set from the minimum of the MINIMUM field of the SOA record and the TTL of the SOA itself, and indicates how long a resolver may cache the negative answer. The owner name of the SOA record (MNAME) MUST be set to the query name. The RNAME, SERIAL, REFRESH, RETRY, and EXPIRE values MUST be ignored by senders. Negative responses without SOA records SHOULD NOT be cached.",
+      "ja": "レスポンダは、[RFC2308]で指定されるように、負のキャッシュを容易にするために、否定応答の権限セクションにSOAレコードを挿入する必要があります。このレコードのTTLは、SOAレコードとSOA自身のTTLの最小フィールドの最小値から設定し、リゾルバが否定的な答えをキャッシュすることができる期間を示しています。 SOAレコード（MNAME）の所有者名は、クエリ名に設定しなければなりません。 RNAME、SERIAL、REFRESH、RETRY、および値を期限切れには、送信者によって無視されなければなりません。 SOAレコードのない負の応答がキャッシュされるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "In LLMNR, the additional section is primarily intended for use by EDNS0, TSIG, and SIG(0). As a result, unless the 'C' bit is set, senders MAY only include pseudo RR-types in the additional section of a query; unless the 'C' bit is set, responders MUST ignore the additional section of queries containing other RR types.",
+      "ja": "LLMNRでは、追加のセクションは、主EDNS0、TSIGとSIG（0）による使用のために意図されています。 「C」ビットが設定されていない限り、その結果、送信者は、クエリの追加セクションにおける擬似RR-タイプを含むかもしれません。 「C」ビットが設定されていない限り、応答は、他のRR型を含むクエリの追加の部分を無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In queries where the 'C' bit is set, the sender SHOULD include the conflicting RRs in the additional section. Since conflict notifications are advisory, responders SHOULD log information from the additional section, but otherwise MUST ignore the additional section.",
+      "ja": "「C」ビットがセットされているクエリでは、送信者が追加のセクションで競合RRを含むべきです。競合通知が助言しているので、応答が追加セクションからの情報をログに記録する必要がありますが、そうでない場合は、追加のセクションを無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Senders MUST NOT cache RRs from the authority or additional section of a response as answers, though they may be used for other purposes, such as negative caching.",
+      "ja": "彼らは、このようなネガティブキャッシュなどの他の目的のために使用されてもよい送信者は、権威や解答として応答の追加セクションからRRをキャッシュしてはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Usage Model",
+      "section_title": true,
+      "ja": "3.使用モデル"
+    },
+    {
+      "indent": 3,
+      "text": "By default, an LLMNR sender SHOULD send LLMNR queries only for single-label names. Stub resolvers supporting both DNS and LLMNR SHOULD avoid sending DNS queries for single-label names, in order to reduce unnecessary DNS queries. An LLMNR sender SHOULD NOT be enabled to send a query for any name, except where security mechanisms (described in Section 5.3) can be utilized. An LLMNR query SHOULD only be sent for the originally requested name; a searchlist is not used to form additional LLMNR queries.",
+      "ja": "デフォルトでは、LLMNR送信者は単一ラベル名のLLMNRクエリを送信すべきです。 DNSとLLMNRの両方をサポートするスタブリゾルバは、不要なDNSクエリを減らすためには、単一ラベル名のDNSクエリを送信することは避けてください。 LLMNRの送信者は、（5.3節で説明）セキュリティメカニズムを利用することができる場合を除いて、任意の名前のクエリを送信するために有効にしないでください。 LLMNRクエリは、もともと要求された名前のために送られるべきです。 SEARCHLISTを追加LLMNRクエリを形成するために使用されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR is a peer-to-peer name resolution protocol that is not intended as a replacement for DNS; rather, it enables name resolution in scenarios in which conventional DNS name resolution is not possible. Where LLMNR security is not enabled as described in Section 5.3, if LLMNR is given higher priority than DNS among the enabled name resolution mechanisms, this would allow the LLMNR cache, once poisoned, to take precedence over the DNS cache. As a result, use of LLMNR as a primary name resolution mechanism is NOT RECOMMENDED.",
+      "ja": "LLMNRはDNSの代替として意図されていないピアツーピア名前解決プロトコルです。むしろ、それは従来のDNS名前解決が不可能であるシナリオで名前解決を可能にします。 LLMNRが有効になって名前解決メカニズムの中でDNSよりも高い優先順位を与えられている場合は、5.3節で説明したようにLLMNRのセキュリティが有効でない場合、これはLLMNRキャッシュ、一度毒は、DNSキャッシュよりも優先することができるようになります。その結果、主要な名前解決メカニズムとしてLLMNRの使用は推奨されません。"
+    },
+    {
+      "indent": 3,
+      "text": "Instead, it is recommended that LLMNR be utilized as a secondary name resolution mechanism, for use in situations where hosts are not configured with the address of a DNS server, where the DNS server is unavailable or unreachable, where there is no DNS server authoritative for the name of a host, or where the authoritative DNS server does not have the desired RRs.",
+      "ja": "代わりに、LLMNRは、ホストがありませんDNSサーバ権限のあるDNSサーバが使用不能または到達不能であるDNSサーバのアドレス、で構成されていない状況で使用するために、二次名前解決メカニズムとして利用することが推奨されますホストの名前、またはどこ権威DNSサーバが必要なRRを持っていません。"
+    },
+    {
+      "indent": 3,
+      "text": "When LLMNR is configured as a secondary name resolution mechanism, LLMNR queries SHOULD only be sent when all of the following conditions are met: (1) No manual or automatic DNS configuration has been performed. If DNS server address(es) have been configured, a host SHOULD attempt to reach DNS servers over all protocols on which DNS server address(es) are configured, prior to sending LLMNR queries. For dual-stack hosts configured with DNS server address(es) for one protocol but not another, this implies that DNS queries SHOULD be sent over the protocol configured with a DNS server, prior to sending LLMNR queries.",
+      "ja": "LLMNRがセカンダリ名前解決機構として構成されている場合、以下の条件の全てが満たされた場合、LLMNRクエリは、送信すべきである：（1）いいえ手動または自動DNS設定が行われていません。 DNSサーバーのアドレス（複数可）が設定されている場合は、ホストが前LLMNRクエリを送信するDNSサーバーのアドレス（複数可）が設定されているすべてのプロトコル、上のDNSサーバに到達しようとすべきです。あるプロトコルではなく、別のDNSサーバアドレス（ES）で構成デュアルスタックホストの場合、これは、DNSクエリが前LLMNRクエリを送信し、DNSサーバで設定されたプロトコルを介して送信されるべきであることを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "(2) All attempts to resolve the name via DNS on all interfaces have failed after exhausting the searchlist. This can occur because DNS servers did not respond, or because they responded to DNS queries with RCODE=3 (Authoritative Name Error) or RCODE=0, and an empty answer section. Where a single resolver call generates DNS queries for A and AAAA RRs, an implementation MAY choose not to send LLMNR queries if any of the DNS queries is successful.",
+      "ja": "（2）すべてのインターフェイス上でDNS経由で名前を解決するためのすべての試みは、検索リストを排出した後に失敗しています。 DNSサーバが応答しなかったため、または、彼らはRCODE = 3（権威名エラー）またはRCODE = 0、および空の応答セクションでDNSクエリに応答したので、これが発生する可能性があります。単一リゾルバコールはAとAAAA RRのためのDNSクエリを生成する場合、実装は、DNSクエリのいずれかが成功した場合LLMNRクエリを送信しないこともできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Where LLMNR is used as a secondary name resolution mechanism, its usage is in part determined by the behavior of DNS resolver implementations; robust resolver implementations are more likely to avoid unnecessary LLMNR queries.",
+      "ja": "LLMNRがセカンダリ名前解決メカニズムとして使用する場合、その使用量は、部分的にはDNSリゾルバの実装の挙動によって決定されます。堅牢なリゾルバの実装では、不要なLLMNRクエリを避ける可能性が高くなります。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1536] describes common DNS implementation errors and fixes. If the proposed fixes are implemented, unnecessary LLMNR queries will be reduced substantially, so implementation of [RFC1536] is recommended.",
+      "ja": "[RFC1536]は一般的なDNSの実装エラーと修正について説明します。提案された修正が実装されている場合、不要なLLMNRクエリが実質的に低減されるので、[RFC1536]の実装が推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, [RFC1536] Section 1 describes issues with retransmission and recommends implementation of a retransmission policy based on round trip estimates, with exponential back-off. [RFC1536] Section 4 describes issues with failover, and recommends that resolvers try another server when they don't receive a response to a query. These policies are likely to avoid unnecessary LLMNR queries.",
+      "ja": "例えば、[RFC1536]セクション1は、再送信の問題について説明し、指数バックオフで、往復の見積もりに基づいて再送政策の実施を推奨しています。 [RFC1536]第4章では、フェールオーバーの問題について説明し、リゾルバは、彼らがクエリに対する応答を受信しない別のサーバを試してみてくださいすることをお勧めします。これらのポリシーは、不要なLLMNRクエリを避ける可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1536] Section 3 describes zero answer bugs, which if addressed will also reduce unnecessary LLMNR queries.",
+      "ja": "[RFC1536]第3節では対処した場合、ゼロ回答のバグは、また、不要なLLMNRクエリを削減しますについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1536] Section 6 describes name error bugs and recommended searchlist processing that will reduce unnecessary RCODE=3 (authoritative name) errors, thereby also reducing unnecessary LLMNR queries.",
+      "ja": "[RFC1536]セクション6は、名前エラーバグについて説明し、それによって不要なLLMNRクエリを低減、不要RCODE = 3（正式な名前）の誤差を低減するSEARCHLIST処理をお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "As noted in [DNSPerf], a significant fraction of DNS queries do not receive a response, or result in negative responses due to missing inverse mappings or NS records that point to nonexistent or inappropriate hosts. Therefore, a reduction in missing records can prevent many unnecessary LLMNR queries.",
+      "ja": "[DNSPerf]で述べたように、DNSクエリのかなりの部分は、応答を受信し、または欠落逆のマッピングのために否定的な反応につながるか、NSは、ホストの存在しない、または不適切なために、その点を記録しません。そのため、不足している記録の減少は、多くの不要なLLMNRクエリを防ぐことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. LLMNR Configuration",
+      "section_title": true,
+      "ja": "3.1。 LLMNR設定"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR usage MAY be configured manually or automatically on a per-interface basis. By default, LLMNR responders SHOULD be enabled on all interfaces, at all times. Where this is considered undesirable, LLMNR SHOULD be disabled, so that hosts will neither listen on the link-scope multicast address, nor will they send queries to that address.",
+      "ja": "LLMNRの使用は、インターフェイスごとに手動で、または自動的に設定されるかもしれません。デフォルトでは、LLMNR応答者は、すべての回で、すべてのインターフェイス上で有効にする必要があります。これは望ましくないと考えられる場合は、ホストはどちらもリンク範囲のマルチキャストアドレスをリッスンしませんようにLLMNRは、無効にする必要があり、また彼らは、そのアドレスにクエリを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "Where DHCPv4 or DHCPv6 is implemented, DHCP options can be used to configure LLMNR on an interface. The LLMNR Enable Option, described in [LLMNREnable], can be used to explicitly enable or disable use of LLMNR on an interface. The LLMNR Enable Option does not determine whether, or in which order, DNS itself is used for name resolution. The order in which various name resolution mechanisms should be used can be specified using the Name Service Search Option (NSSO) for DHCP [RFC2937], using the LLMNR Enable Option code carried in the NSSO data.",
+      "ja": "DHCPv4またはDHCPv6のが実装されている場合は、DHCPオプションは、インターフェイス上でLLMNRを構成するために使用することができます。 LLMNRは[LLMNREnable]に記載のオプションを有効に、明示的インターフェイスにLLMNRの使用を有効または無効にするために使用することができます。 LLMNR有効オプションは、DNS自体が名前解決に使用されているかどうか、またはどの順序で決定するものではありません。様々な名前解決メカニズムが使用されるべき順序はLLMNRはNSSOデータで運ばオプションコードを有効に使用して、DHCP [RFC2937]のためのネームサービス検索オプション（NSSO）を使用して指定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In situations where LLMNR is configured as a secondary name resolution protocol on a dual-stack host, behavior will be governed by both IPv4 and IPv6 configuration mechanisms. Since IPv4 and IPv6 utilize distinct configuration mechanisms, it is possible for a dual-stack host to be configured with the address of a DNS server over IPv4, while remaining unconfigured with a DNS server suitable for use over IPv6.",
+      "ja": "LLMNRは、デュアルスタックホストのセカンダリ名前解決プロトコルとして構成されている状況では、動作は、IPv4とIPv6の両方のコンフィギュレーションメカニズムによって支配されるであろう。 IPv4とIPv6は異なる構成メカニズムを利用するためのIPv6上の使用に適したDNSサーバと未設定のままデュアルスタックホストが、IPv4の上のDNSサーバのアドレスを設定するために、それが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "In these situations, a dual-stack host will send AAAA queries to the configured DNS server over IPv4. However, an IPv6-only host unconfigured with a DNS server suitable for use over IPv6 will be unable to resolve names using DNS. Automatic IPv6 DNS configuration mechanisms (such as [RFC3315] and [DNSDisc]) are not yet widely deployed, and not all DNS servers support IPv6. Therefore, lack of IPv6 DNS configuration may be a common problem in the short term, and LLMNR may prove useful in enabling link-local name resolution over IPv6.",
+      "ja": "このような状況では、デュアルスタックホストは、IPv4の上に構成されたDNSサーバにAAAAクエリを送信します。しかし、IPv6のみのIPv6を介し用いるのに適したDNSサーバで未設定のホストは、DNSを使って名前を解決することができません。まだ広く配備されていない、としないすべてのDNSサーバ（例えば、[RFC3315]と[DNSDisc]など）自動のIPv6 DNS構成メカニズムは、IPv6をサポートします。そのため、IPv6のDNSの設定の欠如は、短期的には共通の問題であってもよく、LLMNRは、IPv6上でリンクローカルの名前解決を可能にするのに有用であろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Where a DHCPv4 server is available but not a DHCPv6 server [RFC3315], IPv6-only hosts may not be configured with a DNS server. Where there is no DNS server authoritative for the name of a host or the authoritative DNS server does not support dynamic client update over IPv6 or DHCPv6-based dynamic update, then an IPv6-only host will not be able to do DNS dynamic update, and other hosts will not be able to resolve its name.",
+      "ja": "DHCPv4サーバがDHCPv6サーバ[RFC3315]は使用できなくなる場合、IPv6のみのホストはDNSサーバで構成されなくてもよいです。ホストの名前や権威DNSサーバーに対して権限なしDNSサーバがIPv6またはDHCPv6のベースの動的更新を介して動的クライアントの更新をサポートしていません、そして、IPv6のみのホストがDNS動的更新を行うことはできませんがある場合、および他のホストは、その名前を解決することができません。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the configured DNS server responds to an AAAA RR query sent over IPv4 or IPv6 with an authoritative name error (RCODE=3) or RCODE=0 and an empty answer section, then an AAAA RR query sent using LLMNR over IPv6 may be successful in resolving the name of an IPv6-only host on the local link.",
+      "ja": "例えば、設定されたDNSサーバが権限名エラー（RCODE = 3）またはRCODE = 0と空の答え部でIPv4またはIPv6を介して送信されるAAAA RRのクエリに応答する場合、IPv6の上LLMNRを使用して送信され、その後のAAAA RRを照会することができますローカルリンク上のIPv6のみのホストの名前を解決するのに成功します。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, if a DHCPv4 server is available providing DNS server configuration, and DNS server(s) exist which are authoritative for the A RRs of local hosts and support either dynamic client update over IPv4 or DHCPv4-based dynamic update, then the names of local IPv4 hosts can be resolved over IPv4 without LLMNR. However, if no DNS server is authoritative for the names of local hosts, or the authoritative DNS server(s) do not support dynamic update, then LLMNR enables link-local name resolution over IPv4.",
+      "ja": "同様に、DHCPv4サーバは、DNSサーバーの構成、およびDNSサーバ（複数可）を提供利用可能である場合、ローカルホストのAのRRに対して権限のあるが存在すると、動的クライアントのIPv4上の更新またはDHCPv4のベースの動的更新、ローカルの次に名のいずれかをサポートIPv4ホストはLLMNRなしでIPv4の上で解決することができます。何のDNSサーバーは動的更新をサポートしていないローカルホスト、または権威DNSサーバ（複数可）の名前に対して権限がない場合しかし、その後、LLMNRは、IPv4オーバーリンクローカルの名前解決を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible that DNS configuration mechanisms will go in and out of service. In these circumstances, it is possible for hosts within an administrative domain to be inconsistent in their DNS configuration.",
+      "ja": "DNS構成メカニズムが中に行くとサービスの外になる可能性があります。管理ドメイン内のホストが自分のDNS設定で矛盾するためにこのような状況で、それが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, where DHCP is used for configuring DNS servers, one or more DHCP servers can fail. As a result, hosts configured prior to the outage will be configured with a DNS server, while hosts configured after the outage will not. Alternatively, it is possible for the DNS configuration mechanism to continue functioning while configured DNS servers fail.",
+      "ja": "DHCPは、DNSサーバを設定するために使用された場合例えば、1つのまたは複数のDHCPサーバーが失敗する可能性があります。停止はしません後にホストが設定したまま、前停止するように構成されたホストは、DNSサーバを使用して設定されます。また、DNSの設定メカニズムが設定されたDNSサーバに障害が発生している間に機能し続けることが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "An outage in the DNS configuration mechanism may result in hosts continuing to use LLMNR even once the outage is repaired. Since LLMNR only enables link-local name resolution, this represents a degradation in capabilities. As a result, hosts without a configured DNS server may wish to periodically attempt to obtain DNS configuration if permitted by the configuration mechanism in use. In the absence of other guidance, a default retry interval of one (1) minute is RECOMMENDED.",
+      "ja": "DNS設定機構における停止は障害が修復されていても一度LLMNRを使用し続けるホストをもたらし得ます。 LLMNRのみリンクローカル名前解決を可能にするので、これは能力の低下を表します。その結果、設定されたDNSサーバなしのホストは、定期的に使用されているコンフィギュレーション機構によって許可されている場合、DNS設定を取得しようとすることを望むかもしれません。他の誘導の非存在下で、1分のデフォルトの再試行間隔が推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Conflict Resolution",
+      "section_title": true,
+      "ja": "4.紛争解決"
+    },
+    {
+      "indent": 3,
+      "text": "By default, a responder SHOULD be configured to behave as though its name is UNIQUE on each interface on which LLMNR is enabled. However, it is also possible to configure multiple responders to be authoritative for the same name. For example, multiple responders MAY respond to a query for an A or AAAA type record for a cluster name (assigned to multiple hosts in the cluster).",
+      "ja": "デフォルトでは、応答者は、その名前がLLMNRが有効にされている各インターフェイス上で一意であるかのように振る舞うように設定する必要があります。しかし、同じ名前のための信頼できると複数の応答を設定することも可能です。例えば、複数の応答者（クラスタ内の複数のホストに割り当てられた）クラスタ名のAまたはAAAAタイプレコードのクエリに応答することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "To detect duplicate use of a name, an administrator can use a name resolution utility that employs LLMNR and lists both responses and responders. This would allow an administrator to diagnose behavior and potentially intervene and reconfigure LLMNR responders that should not be configured to respond to the same name.",
+      "ja": "名前の重複使用を検出するには、管理者はLLMNRを採用し、応答と応答の両方を示しています名前解決ユーティリティを使用することができます。これにより、管理者は行動を診断し、潜在的に介入し、同じ名前に応答するように構成すべきではないLLMNRレスポンダを再構成することができるようになります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Uniqueness Verification",
+      "section_title": true,
+      "ja": "4.1。一意性の検証"
+    },
+    {
+      "indent": 3,
+      "text": "Prior to sending an LLMNR response with the 'T' bit clear, a responder configured with a UNIQUE name MUST verify that there is no other host within the scope of LLMNR query propagation that is authoritative for the same name on that interface.",
+      "ja": "「T」ビットクリアとLLMNR応答を送信する前に、一意の名前で設定応答は、そのインターフェイス上で同じ名前に対して権限のあるLLMNRクエリ伝播の範囲内の他のホストが存在しないことを確認しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Once a responder has verified that its name is UNIQUE, if it receives an LLMNR query for that name with the 'C' bit clear, it MUST respond with the 'T' bit clear. Prior to verifying that its name is UNIQUE, a responder MUST set the 'T' bit in responses.",
+      "ja": "レスポンダは、その名前が一意であることを確認したら、それは「C」ビットをクリアして、その名前のためのLLMNRクエリを受信した場合、それは「T」ビットクリアで応じなければなりません。その名前が一意であることを検証する前に、応答者は応答で「T」ビットを設定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Uniqueness verification is carried out when the host:",
+      "ja": "一意性の検証をする際のホストに行われます。"
+    },
+    {
+      "indent": 5,
+      "text": "- starts up or is rebooted",
+      "ja": " - 起動時または再起動されます"
+    },
+    {
+      "indent": 5,
+      "text": "- wakes from sleep (if the network interface was inactive during sleep)",
+      "ja": " - （ネットワーク・インタフェースは、睡眠中に不活性であった場合）、スリープ状態から復帰し"
+    },
+    {
+      "indent": 5,
+      "text": "- is configured to respond to LLMNR queries on an interface enabled for transmission and reception of IP traffic",
+      "ja": " -  IPトラフィックの送受信に対応インターフェイス上でクエリをLLMNRに応答するように構成されて"
+    },
+    {
+      "indent": 5,
+      "text": "- is configured to respond to LLMNR queries using additional UNIQUE resource records",
+      "ja": " - 追加のUNIQUEリソースレコードを使用してLLMNRクエリに応答するように構成されています"
+    },
+    {
+      "indent": 5,
+      "text": "- verifies the acquisition of a new IP address and configuration on an interface",
+      "ja": " - インターフェイス上の新しいIPアドレスおよびコンフィギュレーションの取得を確認します"
+    },
+    {
+      "indent": 3,
+      "text": "To verify uniqueness, a responder MUST send an LLMNR query with the 'C' bit clear, over all protocols on which it responds to LLMNR queries (IPv4 and/or IPv6). It is RECOMMENDED that responders verify uniqueness of a name by sending a query for the name with type='ANY'.",
+      "ja": "一意性を確認するために、応答は、クエリをLLMNRに応答するすべてのプロトコル（IPv4および/またはIPv6）で、「C」ビットクリアでLLMNRクエリを送信しなければなりません。応答がタイプ=「ANY」で名前のクエリを送信することにより、名前の一意性を確認することが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If no response is received, the sender retransmits the query, as specified in Section 2.7. If a response is received, the sender MUST check if the source address matches the address of any of its interfaces; if so, then the response is not considered a conflict, since it originates from the sender. To avoid triggering conflict detection, a responder that detects that it is connected to the same link on multiple interfaces SHOULD set the 'C' bit in responses.",
+      "ja": "応答がない場合は、セクション2.7で指定されるように、送信者は、クエリを再送信します。応答が受信された場合、ソースアドレスは、そのインターフェイスの任意のアドレスに一致する場合、送信側は確認しなければなりません。もしそうなら、それは、送信者から発信するので、その応答は、競合を考慮されていません。競合検出をトリガ避けるために、それは複数のインターフェイス上で同じリンクに接続されたことを検出応答者は応答で「C」ビットを設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a response is received with the 'T' bit clear, the responder MUST NOT use the name in response to LLMNR queries received over any protocol (IPv4 or IPv6). If a response is received with the 'T' bit set, the responder MUST check if the source IP address in the response is lexicographically smaller than the source IP address in the query. If so, the responder MUST NOT use the name in response to LLMNR queries received over any protocol (IPv4 or IPv6). For the purpose of uniqueness verification, the contents of the answer section in a response is irrelevant.",
+      "ja": "応答は「T」ビットクリアで受信された場合、応答は、任意のプロトコル（IPv4またはIPv6）を介して受信したクエリをLLMNRに応答して名前を使用してはいけません。応答は「T」ビットセットで受信された場合、応答内のソースIPアドレスが、クエリ内のソースIPアドレスよりも辞書小さい場合、応答者は確認しなければなりません。そうである場合、応答者は任意のプロトコル（IPv4またはIPv6）を介して受信したクエリをLLMNRに応答して名前を使用してはいけません。一意性検証の目的のために、応答で応答セクションの内容は無関係です。"
+    },
+    {
+      "indent": 3,
+      "text": "Periodically carrying out uniqueness verification in an attempt to detect name conflicts is not necessary, wastes network bandwidth, and may actually be detrimental. For example, if network links are joined only briefly, and are separated again before any new communication is initiated, temporary conflicts are benign and no forced reconfiguration is required. LLMNR responders SHOULD NOT periodically attempt uniqueness verification.",
+      "ja": "定期的に名前の競合を検出するための試みで一意性の検証を行うことが、廃棄物のネットワーク帯域幅不要であり、実際に有害である可能性があります。ネットワークリンクが短時間だけ結合され、そして任意の新しい通信が開始される前に再び分離された場合、一時的な競合が良性であり、何の強制再設定は必要ありません。 LLMNR応答者は、定期的に一意性の検証を試みるべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Conflict Detection and Defense",
+      "section_title": true,
+      "ja": "4.2。競合の検出と防衛"
+    },
+    {
+      "indent": 3,
+      "text": "Hosts on disjoint network links may configure the same name for use with LLMNR. If these separate network links are later joined or bridged together, then there may be multiple hosts that are now on the same link, trying to use the same name.",
+      "ja": "互いに素ネットワークリンク上のホストはLLMNRを使用するために同じ名前を設定することができます。これらの別々のネットワークリンクが後に参加したり一緒にブリッジされている場合は、同じ名前を使用しようと、同じリンク上に今ある複数のホストがあるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to enable ongoing detection of name conflicts, when an LLMNR sender receives multiple LLMNR responses to a query, it MUST check if the 'C' bit is clear in any of the responses. If so, the sender",
+      "ja": "「C」ビットは、応答のいずれかでクリアされている場合LLMNRの送信者がクエリに複数のLLMNR応答を受信したときに、名前の衝突の継続的な検出を可能にするためには、チェックしなければなりません。そうであれば、送信者"
+    },
+    {
+      "indent": 3,
+      "text": "SHOULD send another query for the same name, type, and class, this time with the 'C' bit set, with the potentially conflicting resource records included in the additional section.",
+      "ja": "追加セクションに含まれて潜在的に矛盾するリソースレコードで、同じ名前、タイプ、およびクラス、「C」ビットがセットされたこの時のために別のクエリを送信すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Queries with the 'C' bit set are considered advisory, and responders MUST verify the existence of a conflict before acting on it. A responder receiving a query with the 'C' bit set MUST NOT respond.",
+      "ja": "「C」ビットがセットされたクエリは顧問とみなされ、そして応答は、それに作用する前に、紛争の存在を確かめなければなりません。 「C」ビットが設定されたクエリを受信レスポンダは応じてはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "If the query is for a UNIQUE name, then the responder MUST send its own query for the same name, type, and class, with the 'C' bit clear. If a response is received, the sender MUST check if the source address matches the address of any of its interfaces; if so, then the response is not considered a conflict, since it originates from the sender. To avoid triggering conflict detection, a responder that detects that it is connected to the same link on multiple interfaces SHOULD set the 'C' bit in responses.",
+      "ja": "クエリは一意の名前のためであれば、応答者は、「C」ビットをクリアして、同じ名前、タイプ、およびクラスのために、独自のクエリを送らなければなりません。応答が受信された場合、ソースアドレスは、そのインターフェイスの任意のアドレスに一致する場合、送信側は確認しなければなりません。もしそうなら、それは、送信者から発信するので、その応答は、競合を考慮されていません。競合検出をトリガ避けるために、それは複数のインターフェイス上で同じリンクに接続されたことを検出応答者は応答で「C」ビットを設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An LLMNR responder MUST NOT ignore conflicts once detected, and SHOULD log them. Upon detecting a conflict, an LLMNR responder MUST immediately stop using the conflicting name in response to LLMNR queries received over any supported protocol, if the source IP address in the response is lexicographically smaller than the source IP address in the uniqueness verification query.",
+      "ja": "LLMNR応答者は、検出された後、競合を無視してはいけませんし、それらをログインする必要があります。競合を検出すると、LLMNR応答者は直ちに応答して送信元IPアドレスが一意性検証クエリの送信元IPアドレスよりも辞書小さい場合、サポートされている任意のプロトコルを介して受信したクエリをLLMNRに応答して、競合する名前の使用を停止しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "After stopping the use of a name, the responder MAY elect to configure a new name. However, since name reconfiguration may be disruptive, this is not required, and a responder may have been configured to respond to multiple names so that alternative names may already be available. A host that has stopped the use of a name may attempt uniqueness verification again after the expiration of the TTL of the conflicting response.",
+      "ja": "名前の使用を停止した後、応答者は、新しい名前を設定することを選択するかもしれません。しかし、名前の再構成が破壊される可能性があるので、これは必須ではありませんし、代替名はすでに利用可能となるように、応答者は、複数の名前に応答するように構成されている場合があります。名前の使用を停止しているホストは、競合応答のTTLが満了した後、再び一意性の検証を試みることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Considerations for Multiple Interfaces",
+      "section_title": true,
+      "ja": "4.3。複数のインタフェースのための考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "A multi-homed host may elect to configure LLMNR on only one of its active interfaces. In many situations, this will be adequate. However, should a host need to configure LLMNR on more than one of its active interfaces, there are some additional precautions it MUST take. Implementers who are not planning to support LLMNR on multiple interfaces simultaneously may skip this section.",
+      "ja": "マルチホームホストは、アクティブインターフェイスの一方のみにLLMNRを構成することを選択することができます。多くの状況では、これで十分でしょう。しかし、ホストがそのアクティブインターフェイスの複数の上でLLMNRを設定する必要がありますする必要があり、それがなければならないいくつかの追加の注意事項があります。同時に複数のインターフェイスでLLMNRをサポートする予定がない実装者は、このセクションをスキップできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Where a host is configured to issue LLMNR queries on more than one interface, each interface maintains its own independent LLMNR resolver cache, containing the responses to LLMNR queries.",
+      "ja": "ホストが複数のインターフェイス上でLLMNRクエリを発行するように構成されている場合、各インターフェイスは、クエリをLLMNRへの応答を含む、独自の独立したLLMNRリゾルバキャッシュを維持します。"
+    },
+    {
+      "indent": 3,
+      "text": "A multi-homed host checks the uniqueness of UNIQUE records as described in Section 4. The situation is illustrated in Figure 1.",
+      "ja": "セクション4で説明したようにマルチホームホストは、状況は図1に示されている固有のレコードの一意性をチェックします。"
+    },
+    {
+      "indent": 23,
+      "text": "----------  ----------\n |      |    |      |\n[A]    [myhost]   [myhost]",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Figure 1. Link-scope name conflict",
+      "ja": "図1.リンク・スコープの名前の競合"
+    },
+    {
+      "indent": 3,
+      "text": "In this situation, the multi-homed myhost will probe for, and defend, its host name on both interfaces. A conflict will be detected on one interface, but not the other. The multi-homed myhost will not be able to respond with a host RR for \"myhost\" on the interface on the right (see Figure 1). The multi-homed host may, however, be configured to use the \"myhost\" name on the interface on the left.",
+      "ja": "このような状況では、マルチホームのmyhostはをプローブし、両方のインターフェイスで、そのホスト名を守ります。競合が1つのインターフェイスで検出されたが、他のではないであろう。マルチホームmyhostの右側のインターフェイス上の「myhostの」のための宿主RRで応答することができません（図1参照）。マルチホームホストは、しかし、左のインターフェイスの「myhostの」名前を使用するように構成されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Since names are only unique per link, hosts on different links could be using the same name. If an LLMNR client sends queries over multiple interfaces, and receives responses from more than one, the result returned to the client is defined by the implementation. The situation is illustrated in Figure 2.",
+      "ja": "名前がリンクあたりだけユニークであるので、異なるリンク上のホストは、同じ名前を使用することができます。 LLMNRクライアントが複数のインタフェースを介してクエリを送信し、複数の応答を受信した場合、クライアントに返された結果は、実装によって定義されます。状況は図2に示されています。"
+    },
+    {
+      "indent": 23,
+      "text": "----------  ----------\n |      |    |     |\n[A]    [myhost]   [A]",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Figure 2. Off-segment name conflict",
+      "ja": "図2.オフセグメント名の競合"
+    },
+    {
+      "indent": 3,
+      "text": "If host myhost is configured to use LLMNR on both interfaces, it will send LLMNR queries on both interfaces. When host myhost sends a query for the host RR for name \"A\", it will receive a response from hosts on both interfaces.",
+      "ja": "ホストmyhostが両方のインターフェイス上でLLMNRを使用するように設定されている場合は、両方のインターフェイスでLLMNRクエリを送信します。ホストmyhostが名前「A」のホストRRのクエリを送信すると、それは両方のインターフェイス上のホストからの応答を受信します。"
+    },
+    {
+      "indent": 3,
+      "text": "Host myhost cannot distinguish between the situation shown in Figure 2, and that shown in Figure 3, where no conflict exists.",
+      "ja": "myhostのは、図2に示す状況を区別することができないホスト、それは競合が存在しない図3に示します。"
+    },
+    {
+      "indent": 27,
+      "text": "     [A]\n    |   |\n-----   -----\n    |   |\n   [myhost]",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Figure 3. Multiple paths to same host",
+      "ja": "同じホストに3.複数のパスを図"
+    },
+    {
+      "indent": 3,
+      "text": "This illustrates that the proposed name conflict-resolution mechanism does not support detection or resolution of conflicts between hosts on different links. This problem can also occur with DNS when a multi-homed host is connected to two different networks with separated name spaces. It is not the intent of this document to address the issue of uniqueness of names within DNS.",
+      "ja": "これは、提案された名前の競合解決メカニズムが異なるリンク上のホスト間の衝突の検出や解像度をサポートしていないことを示しています。マルチホームホストを分離名前空間を持つ2つの異なるネットワークに接続されている場合、この問題は、DNSで発生することができます。 DNS内の名前の一意性の問題に対処するには、このドキュメントの意図ではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. API Issues",
+      "section_title": true,
+      "ja": "4.4。 APIの問題"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3493] provides an API that can partially solve the name ambiguity problem for applications written to use this API, since the sockaddr_in6 structure exposes the scope within which each scoped address exists, and this structure can be used for both IPv4 (using v4-mapped IPv6 addresses) and IPv6 addresses.",
+      "ja": "[RFC3493]はsockaddr_in6構造体は、それぞれアドレスが存在スコープその内部スコープを公開するので、部分的に、このAPIを使用するために作成されたアプリケーション名の曖昧さの問題を解決することができるAPIを提供し、この構造はV4マッピングされたを使用してIPv4の（両方のために使用することができますIPv6アドレス）とIPv6アドレス。"
+    },
+    {
+      "indent": 3,
+      "text": "Following the example in Figure 2, an application on 'myhost' issues the request getaddrinfo(\"A\", ...) with ai_family=AF_INET6 and ai_flags=AI_ALL|AI_V4MAPPED. LLMNR queries will be sent from both interfaces, and the resolver library will return a list containing multiple addrinfo structures, each with an associated sockaddr_in6 structure. This list will thus contain the IPv4 and IPv6 addresses of both hosts responding to the name 'A'. Link-local addresses will have a sin6_scope_id value that disambiguates which interface is used to reach the address. Of course, to the application, Figures 2 and 3 are still indistinguishable, but this API allows the application to communicate successfully with any address in the list.",
+      "ja": "AI_V4MAPPED |図2の例に続き、 'myhostの' 上のアプリケーションは、ai_familyがAF_INET6 =とai_flags = AI_ALLと要求のgetaddrinfo（ \"A\"、...）を発行します。 LLMNRクエリは、両方のインターフェイスから送信され、リゾルバライブラリは、複数のaddrinfo構造体、関連sockaddr_in6構造体とのそれぞれを含むリストを返します。このリストには、このように名「A」への応答両方のホストのIPv4アドレスとIPv6アドレスが含まれています。リンクローカルアドレスは、アドレスに到達するために使用されているインタフェース曖昧性を除去ではsin6_scope_id値を持つことになります。もちろん、アプリケーションに、図2及び3は、まだ区別できないが、このAPIは、アプリケーションがリスト内の任意のアドレスと正常に通信することを可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR is a peer-to-peer name resolution protocol designed for use on the local link. While LLMNR limits the vulnerability of responders to off-link senders, it is possible for an off-link responder to reach a sender.",
+      "ja": "LLMNRは、ローカルリンク上で使用するために設計されたピアツーピア名前解決プロトコルです。 LLMNRはオフリンクの送信者への応答の脆弱性を制限しながら、オフリンク応答が送信者に到達することが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "In scenarios such as public \"hotspots\", attackers can be present on the same link. These threats are most serious in wireless networks, such as IEEE 802.11, since attackers on a wired network will require physical access to the network, while wireless attackers may mount attacks from a distance. Link-layer security, such as [IEEE-802.11i], can be of assistance against these threats if it is available.",
+      "ja": "こうした公共の「ホットスポット」などのシナリオでは、攻撃者は、同じリンク上に存在することができます。ワイヤレス攻撃者は距離からの攻撃をマウントするかもしれないが、有線ネットワーク上の攻撃者は、ネットワークへの物理的なアクセスが必要になりますので、これらの脅威は、IEEE802.11などの無線ネットワークで最も深刻です。それが利用可能な場合、このような[IEEE-802.11i規格]などのリンク層のセキュリティは、これらの脅威に対する助けになることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This section details security measures available to mitigate threats from on and off-link attackers.",
+      "ja": "このセクションでは、攻撃者のオンとオフリンクから脅威を緩和するために利用できるセキュリティ対策について詳しく説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Denial of Service",
+      "section_title": true,
+      "ja": "5.1。サービス拒否"
+    },
+    {
+      "indent": 3,
+      "text": "Attackers may take advantage of LLMNR conflict detection by allocating the same name, denying service to other LLMNR responders, and possibly allowing an attacker to receive packets destined for other hosts. By logging conflicts, LLMNR responders can provide forensic evidence of these attacks.",
+      "ja": "攻撃者は、同じ名前を割り当てる他のLLMNR応答者へのサービスを拒否し、おそらく攻撃者が他のホスト宛のパケットを受信できるようにすることで、LLMNRの競合検出を利用することができます。競合をロギングすることで、LLMNR応答者は、これらの攻撃の法医学的証拠を提供することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An attacker may spoof LLMNR queries from a victim's address in order to mount a denial of service attack. Responders setting the IPv6 Hop Limit or IPv4 TTL field to a value larger than one in an LLMNR UDP response may be able to reach the victim across the Internet.",
+      "ja": "攻撃者がサービス拒否攻撃をマウントするために、被害者のアドレスからLLMNRクエリを偽装することがあります。 LLMNR UDP応答の値よりも大きいいずれかのIPv6ホップ制限またはIPv4 TTLフィールドを設定レスポンダは、インターネットを介して被害者に到達することができるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "While LLMNR responders only respond to queries for which they are authoritative, and LLMNR does not provide wildcard query support, an LLMNR response may be larger than the query, and an attacker can generate multiple responses to a query for a name used by multiple responders. A sender may protect itself against unsolicited responses by silently discarding them.",
+      "ja": "LLMNR応答者は、彼らだけが権威であるためにクエリーに応答し、LLMNRは、ワイルドカードクエリのサポートを提供していませんが、LLMNR応答は、クエリよりも大きくてもよいし、攻撃者が複数の応答者によって使用される名前のクエリに複数の応答を生成することができます。送信者は静かにそれらを捨てることによって、迷惑応答に対して自らを保護することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Spoofing",
+      "section_title": true,
+      "ja": "5.2。なりすまし"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR is designed to prevent reception of queries sent by an off-link attacker. LLMNR requires that responders receiving UDP queries check that they are sent to a link-scope multicast address. However, it is possible that some routers may not properly implement link-scope multicast, or that link-scope multicast addresses may leak into the multicast routing system. To prevent successful setup of TCP connections by an off-link sender, responders receiving a TCP SYN reply with a TCP SYN-ACK with TTL set to one (1).",
+      "ja": "LLMNRは、オフリンク攻撃者によって送信されたクエリの受信を防ぐように設計されています。 LLMNRはUDPクエリを受信応答が、彼らはリンクスコープのマルチキャストアドレスに送信されていることを確認する必要があります。しかしながら、いくつかのルータが適切にリンクスコープマルチキャストを実装しなくてもよく、またはそのリンク範囲マルチキャストアドレスがマルチキャストルーティングシステムに漏れる可能性があります。オフリンク送信者によってTCP接続の成功したセットアップを防止するために、一つにTTLを設定したTCP SYN-ACKとTCP SYN応答を受信する応答者（1）。"
+    },
+    {
+      "indent": 3,
+      "text": "While it is difficult for an off-link attacker to send an LLMNR query to a responder, it is possible for an off-link attacker to spoof a response to a query (such as an A or AAAA query for a popular Internet host), and by using a TTL or Hop Limit field larger than one (1), for the forged response to reach the LLMNR sender. Since the forged response will only be accepted if it contains a matching ID field, choosing a pseudo-random ID field within queries provides some protection against off-link responders.",
+      "ja": "オフリンク攻撃者がレスポンダにLLMNRクエリを送信することは困難ですが、オフリンク攻撃者が（そのような一般的なインターネットホストのAまたはAAAAクエリとして）クエリに対する応答を偽装することが可能であり、そしてTTL又はホップ限界フィールド1より大きい（1）を用いて、偽造応答をLLMNR送信者に到達します。それは、クエリ内の擬似ランダムIDフィールドを選択し、一致したIDフィールドが含まれている場合、偽造応答のみが受け入れられますので、オフリンク応答に対するいくつかの保護を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "When LLMNR is utilized as a secondary name resolution service, queries can be sent when DNS server(s) do not respond. An attacker can execute a denial of service attack on the DNS server(s), and then poison the LLMNR cache by responding to an LLMNR query with incorrect information. As noted in \"Threat Analysis of the Domain Name System (DNS)\" [RFC3833], these threats also exist with DNS, since DNS-response spoofing tools are available that can allow an attacker to respond to a query more quickly than a distant DNS server. However, while switched networks or link-layer security may make it difficult for an on-link attacker to snoop unicast DNS queries, multicast LLMNR queries are propagated to all hosts on the link, making it possible for an on-link attacker to spoof LLMNR responses without having to guess the value of the ID field in the query.",
+      "ja": "LLMNRがセカンダリ名前解決サービスとして利用されている場合、DNSサーバ（s）は応答しないとき、クエリを送信することができます。攻撃者は、DNSサーバ（複数可）にサービス拒否攻撃を実行した後、間違った情報でLLMNRクエリに応答することによって、LLMNRキャッシュをポイズニングできます。 [RFC3833]「ドメインネームシステム（DNS）の脅威分析」で述べたように、これらの脅威はまた、DNS応答スプーフィングツールが利用可能であるため、それは、攻撃者が遠方のDNSよりも早くクエリに応答できるようにすることができ、DNSに存在しますサーバ。オンリンク攻撃者は、ユニキャストDNSクエリをスヌープするためしかし、一方でスイッチドネットワークまたはリンク層のセキュリティは、それが困難になったり、マルチキャストLLMNRクエリはLLMNRを偽装するために、リンク攻撃者のためにそれが可能となる、リンク上のすべてのホストに伝播されますクエリでIDフィールドの値を推測することなく応答。"
+    },
+    {
+      "indent": 3,
+      "text": "Since LLMNR queries are sent and responded to on the local link, an attacker will need to respond more quickly to provide its own response prior to arrival of the response from a legitimate responder. If an LLMNR query is sent for an off-link host, spoofing a response in a timely way is not difficult, since a legitimate response will never be received.",
+      "ja": "LLMNRクエリが送信され、ローカルリンク上に応えているので、攻撃者は正当な応答者からの応答が到着する前に、独自の応答を提供するために、より迅速に対応する必要があります。 LLMNRクエリがオフリンクのホストに対して送信された場合、正当な応答が受信されることはありませんから、タイムリーな方法で応答を偽装することは、難しいことではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This vulnerability can be reduced by limiting use of LLMNR to resolution of single-label names as described in Section 3, or by implementation of authentication (see Section 5.3).",
+      "ja": "この脆弱性は、セクション3で説明したように、単一ラベル名の解決にLLMNRの使用を制限することにより低減、または認証の実装によって（セクション5.3を参照）することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Authentication",
+      "section_title": true,
+      "ja": "5.3。認証"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR is a peer-to-peer name resolution protocol and, as a result, is often deployed in situations where no trust model can be assumed. Where a pre-arranged security configuration is possible, the following security mechanisms may be used:",
+      "ja": "LLMNR結果として、多くの場合、全く信頼モデルを想定することができない状況で配備される、ピアツーピア名前解決プロトコルであり、。事前配置されたセキュリティ設定が可能であり、以下のセキュリティ・メカニズムを使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "(a) LLMNR implementations MAY support TSIG [RFC2845] and/or SIG(0) [RFC2931] security mechanisms. \"DNS Name Service based on Secure Multicast DNS for IPv6 Mobile Ad Hoc Networks\" [LLMNRSec] describes the use of TSIG to secure LLMNR, based on group keys. While group keys can be used to demonstrate membership in a group, they do not protect against forgery by an attacker that is a member of the group.",
+      "ja": "（a）はLLMNR実装はTSIG [RFC2845]及び/又はSIG（0）[RFC2931]のセキュリティメカニズムをサポートするかもしれません。 「IPv6のモバイルアドホックネットワークのためのセキュアマルチキャストDNSに基づいてDNSネームサービス」[LLMNRSec]は、グループキーに基づいて、LLMNRを確保するTSIGの使用を記載しています。グループキーは、グループのメンバーシップを証明するために使用することができますが、彼らはグループのメンバーである攻撃者によって偽造を防ぐことはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) IPsec Encapsulating Security Payload (ESP) with a NULL encryption algorithm MAY be used to authenticate unicast LLMNR queries and responses, or LLMNR responses to multicast queries. In a small network without a certificate authority, this can be most easily accomplished through configuration of a group pre-shared key for trusted hosts. As with TSIG, this does not protect against forgery by an attacker with access to the group pre-shared key.",
+      "ja": "（b）はNULL暗号化アルゴリズムとのIPsecカプセル化セキュリティペイロード（ESP）は、マルチキャストクエリにユニキャストLLMNRクエリと応答、またはLLMNR応答を認証するために使用されるかもしれません。認証局のない小規模なネットワークでは、これが最も簡単に信頼できるホストのグループ事前共有キーの設定により達成することができます。 TSIGと同じように、これはグループ事前共有キーへのアクセス権を持つ攻撃者によって偽造を防ぐことはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) LLMNR implementations MAY support DNSSEC [RFC4033]. In order to support DNSSEC, LLMNR implementations MAY be configured with trust anchors, or they MAY make use of keys obtained from DNS queries. Since LLMNR does not support \"delegated trust\" (CD or AD bits), LLMNR implementations cannot make use of DNSSEC unless they are DNSSEC-aware and support validation. Unlike approaches [a] or [b], DNSSEC permits a responder to demonstrate ownership of a name, not just membership within a trusted group. As a result, it enables protection against forgery.",
+      "ja": "（C）LLMNR実装はDNSSEC [RFC4033]をサポートするかもしれません。 DNSSECをサポートするために、LLMNR実装は信頼アンカーを用いて構成することができる、またはそれらをDNSクエリから取得した鍵を利用することができます。 LLMNRは「委任信託」（CDまたはADビット）をサポートしていないので、LLMNR実装は、彼らがDNSSEC対応でない限り、DNSSECを利用すると検証をサポートすることはできません。アプローチとは異なり[A]または[B]、DNSSECは、名前の所有権、信頼されるグループ内だけでなく、メンバーシップを実証するための応答が可能になります。その結果、偽造に対する保護を可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Cache and Port Separation",
+      "section_title": true,
+      "ja": "5.4。キャッシュとポートの分離"
+    },
+    {
+      "indent": 3,
+      "text": "In order to prevent responses to LLMNR queries from polluting the DNS cache, LLMNR implementations MUST use a distinct, isolated cache for LLMNR on each interface. LLMNR operates on a separate port from DNS, reducing the likelihood that a DNS server will unintentionally respond to an LLMNR query.",
+      "ja": "DNSキャッシュを汚染からクエリをLLMNRへの応答を防止するために、LLMNR実装は、各インターフェイスにLLMNRための別個の、単離されたキャッシュを使用しなければなりません。 LLMNRはDNSサーバーが意図せずLLMNRクエリに応答する可能性を減らし、DNSとは別のポートで動作します。"
+    },
+    {
+      "indent": 3,
+      "text": "If a DNS server is running on a host that supports LLMNR, the LLMNR responder on that host MUST respond to LLMNR queries only for the RRSets relating to the host on which the server is running, but MUST NOT respond for other records for which the DNS server is authoritative. DNS servers MUST NOT send LLMNR queries in order to resolve DNS queries.",
+      "ja": "DNSサーバがLLMNRをサポートするホスト上で実行されている場合は、そのホスト上のLLMNR応答者は、サーバーが動作しているホストに関連するRRセットのクエリをLLMNRに応答する必要がありますが、ためにDNS、他のレコードに応じてはいけませんサーバーは、権威あります。 DNSサーバは、DNSクエリを解決するために、LLMNRクエリを送ってはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This specification creates a new namespace: the LLMNR namespace.",
+      "ja": "LLMNR名前空間：この仕様は新しい名前空間を作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to avoid creating any new administrative procedures, administration of the LLMNR namespace will piggyback on the administration of the DNS namespace.",
+      "ja": "新たな行政手続きを作成しないようにするためには、LLMNR名前空間の管理は、DNS名前空間の管理に便乗します。"
+    },
+    {
+      "indent": 3,
+      "text": "The rights to use a fully qualified domain name (FQDN) within LLMNR are obtained by acquiring the rights to use that name within DNS. Those wishing to use an FQDN within LLMNR should first acquire the rights to use the corresponding FQDN within DNS. Using an FQDN within LLMNR without ownership of the corresponding name in DNS creates the possibility of conflict and therefore is discouraged.",
+      "ja": "LLMNRの中に完全修飾ドメイン名（FQDN）を使用する権利は、DNS内にその名前を使用する権利を取得することによって得られます。 LLMNR内FQDNを使用するように希望される方は、まずDNS内の対応するFQDNを使用する権利を取得する必要があります。 DNS内の対応する名前の所有権なしLLMNR内のFQDNを使用すると、衝突の可能性を作成し、したがって、推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "LLMNR responders may self-allocate a name within the single-label namespace first defined in [RFC1001]. Since single-label names are not unique, no registration process is required.",
+      "ja": "LLMNR応答者は、最初の[RFC1001]で定義された単一ラベルの名前空間内の名前を自己割り当ててもよいです。単一ラベル名は一意ではありませんので、何も登録処理が必要とされません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Constants",
+      "section_title": true,
+      "ja": "7.定数"
+    },
+    {
+      "indent": 3,
+      "text": "The following timing constants are used in this protocol; they are not intended to be user configurable.",
+      "ja": "以下のタイミング定数は、このプロトコルで使用されています。それらは、ユーザ設定可能であることを意図していません。"
+    },
+    {
+      "indent": 3,
+      "text": "JITTER_INTERVAL 100 ms LLMNR_TIMEOUT 1 second (if set statically on all interfaces) 100 ms (IEEE 802 media, including IEEE 802.11)",
+      "ja": "（すべてのインターフェイス上で静的に設定した場合）JITTER_INTERVAL 100ミリ秒、100ミリ秒（IEEE 802.11を含むIEEE 802メディア）1秒LLMNR_TIMEOUT"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8.参照文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1001] NetBIOS Working Group in the Defense Advanced Research Projects Agency, Internet Activities Board, and End-to-End Services Task Force, \"Protocol standard for a NetBIOS service on a TCP/UDP transport: Concepts and methods\", STD 19, RFC 1001, March 1987.",
+      "ja": "[RFC1001]米国防総省の国防高等研究計画庁内のNetBIOSワーキンググループ、インターネット活動委員会、およびエンドツーエンドサービスタスクフォース、「TCP / UDPトランスポート上のNetBIOSサービスのためのプロトコル標準：概念と方法」、STD 19は、 RFC 1001、1987年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, November 1987.",
+      "ja": "[RFC1035] Mockapetris、P.、 \"ドメイン名 - 実装及び仕様\"、STD 13、RFC 1035、1987年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2181] Elz, R. and R. Bush, \"Clarifications to the DNS Specification\", RFC 2181, July 1997.",
+      "ja": "\"DNS仕様の明確化\" [RFC2181]エルツ、R.とR.ブッシュ、RFC 2181、1997年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2308] Andrews, M., \"Negative Caching of DNS Queries (DNS NCACHE)\", RFC 2308, March 1998.",
+      "ja": "[RFC2308]アンドリュース、M.、 \"DNSクエリのネガティブキャッシュ（DNS NCACHE）\"、RFC 2308、1998年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2671] Vixie, P., \"Extension Mechanisms for DNS (EDNS0)\", RFC 2671, August 1999.",
+      "ja": "[RFC2671]いるVixie、P.、 \"DNS用拡張メカニズム（EDNS0）\"、RFC 2671、1999年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2845] Vixie, P., Gudmundsson, O., Eastlake 3rd, D., and B. Wellington, \"Secret Key Transaction Authentication for DNS (TSIG)\", RFC 2845, May 2000.",
+      "ja": "[RFC2845]いるVixie、P.、グドムンソン、O.、イーストレイク3日、D.、およびB.ウェリントン、 \"DNSのための秘密鍵トランザクション認証（TSIG）\"、RFC 2845、2000年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2931] Eastlake 3rd, D., \"DNS Request and Transaction Signatures ( SIG(0)s )\", RFC 2931, September 2000.",
+      "ja": "[RFC2931]イーストレイク3日、D.、 \"DNS要求とトランザクション署名（SIG（0）S）\"、RFC 2931、2000年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4291] Hinden, R. and S. Deering, \"IP Version 6 Addressing Architecture\", RFC 4291, February 2006.",
+      "ja": "[RFC4291] HindenとR.とS.デアリング、 \"IPバージョン6アドレッシング体系\"、RFC 4291、2006年2月。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[DNSPerf] Jung, J., et al., \"DNS Performance and the Effectiveness of Caching\", IEEE/ACM Transactions on Networking, Volume 10, Number 5, pp. 589, October 2002.",
+      "ja": "【DNSPerf]ユング、J.ら、 \"DNSパフォーマンスとキャッシュの有効性\"、ネットワーキング、10巻、ナンバー5、頁589、2002年10月にIEEE / ACMトランザクション。"
+    },
+    {
+      "indent": 3,
+      "text": "[DNSDisc] Durand, A., Hagino, I., and D. Thaler, \"Well known site local unicast addresses to communicate with recursive DNS servers\", Work in Progress, October 2002.",
+      "ja": "[DNSDisc]デュラン、A.、萩野、I.、およびD.ターラー、進歩、2002年10月に作品「再帰的なDNSサーバと通信するために、よく知られているサイトローカルユニキャストアドレス」。"
+    },
+    {
+      "indent": 3,
+      "text": "[IEEE-802.11i] Institute of Electrical and Electronics Engineers, \"Supplement to Standard for Telecommunications and Information Exchange Between Systems - LAN/MAN Specific Requirements - Part 11: Wireless LAN Medium Access Control (MAC) and Physical Layer (PHY) Specifications: Specification for Enhanced Security\", IEEE 802.11i, July 2004.",
+      "ja": "電気電子技術者の[IEEE-802.11i規格]研究所、「電気通信及びシステム間情報交換のための標準への補足 -  LAN / MAN具体的な要件 - パート11：無線LAN媒体アクセス制御（MAC）および物理層（PHY）仕様：セキュリティ強化」、IEEE 802.11i規格、2004年7月のための仕様。"
+    },
+    {
+      "indent": 3,
+      "text": "[LLMNREnable] Guttman, E., \"DHCP LLMNR Enable Option\", Work in Progress, April 2002.",
+      "ja": "[LLMNREnable]グットマン、E.は、 \"DHCP LLMNRは、オプションを有効にする\" 進歩、2002年4月に作業します。"
+    },
+    {
+      "indent": 3,
+      "text": "[LLMNRSec] Jeong, J., Park, J. and H. Kim, \"DNS Name Service based on Secure Multicast DNS for IPv6 Mobile Ad Hoc Networks\", ICACT 2004, Phoenix Park, Korea, February 9-11, 2004.",
+      "ja": "、ICACT 2004、フェニックスパーク、韓国、2月9-11、2004年の \"IPv6モバイルアドホックネットワークのためのセキュアマルチキャストDNSに基づいてDNSネームサービス\" [LLMNRSec]チョン、J.、公園、J.とH.キム、。"
+    },
+    {
+      "indent": 3,
+      "text": "[POSIX] IEEE Std. 1003.1-2001 Standard for Information Technology -- Portable Operating System Interface (POSIX). Open Group Technical Standard: Base Specifications, Issue 6, December 2001. ISO/IEC 9945:2002. http://www.opengroup.org/austin",
+      "ja": "[POSIX] IEEE STD。 1003.1-2001規格情報技術 - ポータブルオペレーティングシステムインタフェース（POSIX）。 Open Groupの技術標準：基本仕様、6号、2001年12月ISO / IEC 9945：2002。 http://www.opengroup.org/austin"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1536] Kumar, A., Postel, J., Neuman, C., Danzig, P., and S. Miller, \"Common DNS Implementation Errors and Suggested Fixes\", RFC 1536, October 1993.",
+      "ja": "[RFC1536]クマー、A.、ポステル、J.、ニューマン、C.、ダンツィヒ、P.、およびS. Millerの \"一般的なDNS実装エラーおよび推奨修正\"、RFC 1536、1993年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2131] Droms, R., \"Dynamic Host Configuration Protocol\", RFC 2131, March 1997.",
+      "ja": "[RFC2131] Droms、R.、 \"動的ホスト構成プロトコル\"、RFC 2131、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2365] Meyer, D., \"Administratively Scoped IP Multicast\", BCP 23, RFC 2365, July 1998.",
+      "ja": "[RFC2365]マイヤー、D.、 \"管理スコープのIPマルチキャスト\"、BCP 23、RFC 2365、1998年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2937] Smith, C., \"The Name Service Search Option for DHCP\", RFC 2937, September 2000.",
+      "ja": "[RFC2937]スミス、C.、 \"DHCPのためのネームサービス検索オプション\"、RFC 2937、2000年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3315] Droms, R., Bound, J., Volz, B., Lemon, T., Perkins, C., and M. Carney, \"Dynamic Host Configuration Protocol for IPv6 (DHCPv6)\", RFC 3315, July 2003.",
+      "ja": "[RFC3315] Droms、R.、バウンド、J.、フォルツ、B.、レモン、T.、パーキンス、C.、およびM.カーニー、 \"IPv6のための動的ホスト構成プロトコル（DHCPv6）\"、RFC 3315、2003年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3493] Gilligan, R., Thomson, S., Bound, J., McCann, J., and W. Stevens, \"Basic Socket Interface Extensions for IPv6\", RFC 3493, February 2003.",
+      "ja": "[RFC3493]ギリガン、R.、トムソン、S.、バウンド、J.、マッキャン、J.、およびW.スティーブンス、 \"IPv6の基本的なソケットインタフェース拡張\"、RFC 3493、2003年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3542] Stevens, W., Thomas, M., Nordmark, E., and T. Jinmei, \"Advanced Sockets Application Program Interface (API) for IPv6\", RFC 3542, May 2003.",
+      "ja": "\"IPv6用の拡張ソケットアプリケーション・プログラム・インターフェース（API）\" [RFC3542]スティーブンス、W.、トーマス、M.、Nordmarkと、E.、およびT.神明、RFC 3542、2003年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3833] Atkins, D. and R. Austein, \"Threat Analysis of the Domain Name System (DNS)\", RFC 3833, August 2004.",
+      "ja": "[RFC3833]アトキンス、D.とR. Austeinと、RFC 3833 \"ドメインネームシステム（DNS）の脅威分析\"、2004年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3927] Cheshire, S., Aboba, B., and E. Guttman, \"Dynamic Configuration of IPv4 Link-Local Addresses\", RFC 3927, May 2005.",
+      "ja": "[RFC3927]チェシャー、S.、Aboba、B.、およびE.ガットマン、 \"IPv4のリンクローカルアドレスの動的構成\"、RFC 3927、2005年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4033] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"DNS Security Introduction and Requirements\", RFC 4033, March 2005.",
+      "ja": "[RFC4033]アレンズ、R.、Austeinと、R.、ラーソン、M.、マッシー、D.、およびS.ローズ、 \"DNSセキュリティ序論と要件\"、RFC 4033、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake, D., 3rd, Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, June 2005.",
+      "ja": "[RFC4086]イーストレーク、D.、3、シラー、J.、およびS.クロッカー、 \"セキュリティのためのランダム要件\"、BCP 106、RFC 4086、2005年6月。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Acknowledgments",
+      "section_title": true,
+      "ja": "9.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This work builds upon original work done on multicast DNS by Bill Manning and Bill Woodcock. Bill Manning's work was funded under DARPA grant #F30602-99-1-0523. The authors gratefully acknowledge their contribution to the current specification. Constructive input has also been received from Mark Andrews, Rob Austein, Randy Bush, Stuart Cheshire, Ralph Droms, Robert Elz, James Gilroy, Olafur Gudmundsson, Andreas Gustafsson, Erik Guttman, Myron Hattig, Christian Huitema, Olaf Kolkman, Mika Liljeberg, Keith Moore, Tomohide Nagashima, Thomas Narten, Erik Nordmark, Markku Savela, Mike St. Johns, Sander van Valkenburg, and Brian Zill.",
+      "ja": "この作品は、ビル・マニングとビル・ウッドコックにより、マルチキャストDNSで行われ、元の仕事上に構築されています。ビル・マニングの仕事は、DARPA助成金＃1 F30602-99-1-0523の下で賄われていました。作者は感謝して、現在の仕様への貢献を認めます。建設的な入力もマーク・アンドリュース、ロブAusteinと、ランディブッシュ、スチュアートチェシャー、ラルフDroms、ロバート・エルツ、ジェームズ・ギルロイ、オラフルグドムンソン、アンドレアス・グスタフソン、エリック・ガットマン、マイロンHattig、クリスチャンのHuitema、オラフKolkman、ミカLiljeberg、キースから受信されていますムーア、Tomohide長島、トーマスNarten氏、エリックNordmarkと、マルックSavela、マイク・セントジョンズ、サンダーバンケンブルグ、およびブライアンZill。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Bernard Aboba Microsoft Corporation One Microsoft Way Redmond, WA 98052",
+      "ja": "バーナードAbobaマイクロソフト社1マイクロソフト道、レッドモンド、ワシントン98052"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 425 706 6605 EMail: bernarda@microsoft.com",
+      "ja": "電話：+1 425 706 6605 Eメール：bernarda@microsoft.com"
+    },
+    {
+      "indent": 3,
+      "text": "Dave Thaler Microsoft Corporation One Microsoft Way Redmond, WA 98052",
+      "ja": "デーブターラーマイクロソフト社1マイクロソフト道、レッドモンド、ワシントン98052"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 425 703 8835 EMail: dthaler@microsoft.com",
+      "ja": "電話：+1 425 703 8835 Eメール：dthaler@microsoft.com"
+    },
+    {
+      "indent": 3,
+      "text": "Levon Esibov Microsoft Corporation One Microsoft Way Redmond, WA 98052",
+      "ja": "レヴォンEsibovマイクロソフト社1マイクロソフト道、レッドモンド、ワシントン98052"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: levone@microsoft.com",
+      "ja": "メールアドレス：levone@microsoft.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}
