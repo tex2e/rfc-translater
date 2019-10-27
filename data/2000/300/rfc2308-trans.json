@@ -1,0 +1,763 @@
+{
+  "title": {
+    "text": "RFC 2308 - Negative Caching of DNS Queries (DNS NCACHE)",
+    "ja": "RFC 2308 - DNSクエリのネガティブキャッシュ（DNS NCACHE）"
+  },
+  "number": 2308,
+  "created_at": "2019-10-23 00:36:14.536787+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          M. Andrews\nRequest for Comments: 2308                                          CSIRO\nUpdates: 1034, 1035                                            March 1998\nCategory: Standards Track",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Negative Caching of DNS Queries (DNS NCACHE)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1998). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1998）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034] provided a description of how to cache negative responses. It however had a fundamental flaw in that it did not allow a name server to hand out those cached responses to other resolvers, thereby greatly reducing the effect of the caching. This document addresses issues raise in the light of experience and replaces [RFC1034 Section 4.3.4].",
+      "ja": "[RFC1034]は、負の応答をキャッシュする方法についての説明を提供します。それが大幅キャッシュの影響を低減、ネームサーバは、他のリゾルバにそれらのキャッシュされた応答を配ることができませんでしたという点で、しかしそれは根本的な欠陥を持っていました。この文書では、問題は経験に照らして高めに対処し、[RFC1034セクション4.3.4]を置き換えます。"
+    },
+    {
+      "indent": 3,
+      "text": "Negative caching was an optional part of the DNS specification and deals with the caching of the non-existence of an RRset [RFC2181] or domain name.",
+      "ja": "ネガティブキャッシングは、RRセット[RFC2181]またはドメイン名の非存在のキャッシングDNSの仕様やお得な情報のオプションの一部でした。"
+    },
+    {
+      "indent": 3,
+      "text": "Negative caching is useful as it reduces the response time for negative answers. It also reduces the number of messages that have to be sent between resolvers and name servers hence overall network traffic. A large proportion of DNS traffic on the Internet could be eliminated if all resolvers implemented negative caching. With this in mind negative caching should no longer be seen as an optional part of a DNS resolver.",
+      "ja": "それは否定応答の応答時間を減少させるので、負のキャッシュは有効です。また、したがって、全体的なネットワークトラフィックリゾルバとネームサーバとの間で送信する必要があるメッセージの数を減らします。すべてのリゾルバがネガティブキャッシュを実装する場合は、インターネット上のDNSトラフィックの大部分を排除することができます。これを念頭に置いてネガティブキャッシュは、もはやDNSリゾルバのオプションの一部として見られてはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "1 - Terminology",
+      "ja": "1  - 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "\"Negative caching\" - the storage of knowledge that something does not exist. We can store the knowledge that a record has a particular value. We can also do the reverse, that is, to store the knowledge that a record does not exist. It is the storage of knowledge that something does not exist, cannot or does not give an answer that we call negative caching.",
+      "ja": "「ネガティブキャッシング」 - 何かが存在していない知識の保管。私たちは、レコードが特定の値を持っている知識を格納することができます。また、レコードが存在しないという知識を保存するために、つまり、逆を行うことができます。それは、何かが存在していないという知識の保存ができない場合、または我々はネガティブキャッシュを呼び出す答えを与えるものではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "\"QNAME\" - the name in the query section of an answer, or where this resolves to a CNAME, or CNAME chain, the data field of the last CNAME. The last CNAME in this sense is that which contains a value which does not resolve to another CNAME. Implementations should note that including CNAME records in responses in order, so that the first has the label from the query section, and then each in sequence has the label from the data section of the previous (where more than one CNAME is needed) allows the sequence to be processed in one pass, and considerably eases the task of the receiver. Other relevant records (such as SIG RRs [RFC2065]) can be interspersed amongst the CNAMEs.",
+      "ja": "「QNAME」 - その答えのクエリセクション内の名前、またはこれはCNAME、またはCNAMEチェーン、最後のCNAMEのデータ・フィールドに解決されます。この意味での最後のCNAMEは別のCNAMEに解決しない値が含まれているものです。実装では、最初のクエリ部からラベルを有するように、順に応答におけるCNAMEレコードを含めて、各シーケンスでは前のデータ部からラベルを有することに注意すべきである（複数のCNAMEが必要とされる）ことができ配列は、一つのパスで処理され、かなり受信機のタスクを容易にすることができます。 （例えばSIG資源レコード[RFC2065]のような）他の関連レコードがのCNAMEの間に散在させることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "\"NXDOMAIN\" - an alternate expression for the \"Name Error\" RCODE as described in [RFC1035 Section 4.1.1] and the two terms are used interchangeably in this document.",
+      "ja": "「NXDOMAIN」 -  [RFC1035のセクション4.1.1] 2つの用語で説明したように「名前エラー」RCODEの代替表現は、本書では互換的に使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "\"NODATA\" - a pseudo RCODE which indicates that the name is valid, for the given class, but are no records of the given type. A NODATA response has to be inferred from the answer.",
+      "ja": "「NODATA」 - 名前が指定されたクラスのために、有効ですが、特定のタイプのレコードがないことを示し疑似RCODE。 NODATA応答が答えから推測する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "\"FORWARDER\" - a nameserver used to resolve queries instead of directly using the authoritative nameserver chain. The forwarder typically either has better access to the internet, or maintains a bigger cache which may be shared amongst many resolvers. How a server is identified as a FORWARDER, or knows it is a FORWARDER is outside the scope of this document. However if you are being used as a forwarder the query will have the recursion desired flag set.",
+      "ja": "「FORWARDER」 - ではなく、直接権限ネームサーバのチェーンを使用してのクエリを解決するために使用さネームサーバ。フォワーダは、一般的にどちらかはインターネットへのより良いアクセスを持っている、または多くのリゾルバの間で共有することができる大きなキャッシュを保持します。サーバはFORWARDERとして識別、または知っているどのようにそれがFORWARDERは、このドキュメントの範囲外です。あなたがフォワーダとして使用されている場合は、クエリは、再帰希望フラグが設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "An understanding of [RFC1034], [RFC1035] and [RFC2065] is expected when reading this document.",
+      "ja": "この文書を読むとき、[RFC1034]、[RFC1035]と[RFC2065]の理解が期待されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2 - Negative Responses",
+      "ja": "2  - 否定応答"
+    },
+    {
+      "indent": 3,
+      "text": "The most common negative responses indicate that a particular RRset does not exist in the DNS. The first sections of this document deal with this case. Other negative responses can indicate failures of a nameserver, those are dealt with in section 7 (Other Negative Responses).",
+      "ja": "最も一般的な否定的な反応は、特定のRRセットがDNSに存在しないことを示しています。この場合、この文書の契約の最初のセクション。ネームサーバの障害を示すことができる他の否定応答は、それらは、セクション7（他の否定応答）で扱われています。"
+    },
+    {
+      "indent": 3,
+      "text": "A negative response is indicated by one of the following conditions:",
+      "ja": "否定応答は、以下の条件のいずれかによって示されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1 - Name Error",
+      "section_title": true,
+      "ja": "2.1  - 名エラー"
+    },
+    {
+      "indent": 3,
+      "text": "Name errors (NXDOMAIN) are indicated by the presence of \"Name Error\" in the RCODE field. In this case the domain referred to by the QNAME does not exist. Note: the answer section may have SIG and CNAME RRs and the authority section may have SOA, NXT [RFC2065] and SIG RRsets.",
+      "ja": "RCODEフィールドで「名エラー」の存在によって示されたエラー（NXDOMAIN）の名前。この場合、QNAMEが参照するドメインが存在しません。注：回答セクションには、SIGとCNAME RRを有していてもよく、権威セクションはSOA、NXT [RFC2065]やSIG RRセットを有することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to distinguish between a referral and a NXDOMAIN response by the presense of NXDOMAIN in the RCODE regardless of the presence of NS or SOA records in the authority section.",
+      "ja": "関係なく、権限セクションにNS又はSOAレコードの存在のRコードでNXDOMAINの存在によって紹介とNXDOMAIN応答を区別することが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "NXDOMAIN responses can be categorised into four types by the contents of the authority section. These are shown below along with a referral for comparison. Fields not mentioned are not important in terms of the examples.",
+      "ja": "NXDOMAIN応答は権威セクションの内容によって4種類に分類することができます。これらは、比較のための紹介とともに以下に示します。言及されていないフィールドは例の観点から重要ではありません。"
+    },
+    {
+      "indent": 11,
+      "text": "NXDOMAIN RESPONSE: TYPE 1.",
+      "ja": "NXDOMAIN応答：TYPE 1。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NXDOMAIN Query: AN.EXAMPLE. A Answer: AN.EXAMPLE. CNAME TRIPPLE.XX. Authority: XX. SOA NS1.XX. HOSTMASTER.NS1.XX. .... XX. NS NS1.XX. XX. NS NS2.XX. Additional: NS1.XX. A 127.0.0.2 NS2.XX. A 127.0.0.3",
+      "ja": "ヘッダ：RDCODE = NXDOMAINクエリ：AN.EXAMPLE。回答：AN.EXAMPLE。 CNAME TRIPPLE.XX。機関：XX。 SOA NS1.XX. HOSTMASTER.NS1.XX。 .... XX。 NS NS1.XX. XX。 NS NS2.XX.追加：NS1.XX. 127.0.0.2 NS2.XX. 127.0.0.3"
+    },
+    {
+      "indent": 11,
+      "text": "NXDOMAIN RESPONSE: TYPE 2.",
+      "ja": "NXDOMAIN応答：TYPE 2。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NXDOMAIN Query: AN.EXAMPLE. A",
+      "ja": "ヘッダ：RDCODE = NXDOMAINクエリ：AN.EXAMPLE。 A"
+    },
+    {
+      "indent": 11,
+      "text": "Answer: AN.EXAMPLE. CNAME TRIPPLE.XX. Authority: XX. SOA NS1.XX. HOSTMASTER.NS1.XX. .... Additional: <empty>",
+      "ja": "回答：AN.EXAMPLEを。 CNAME TRIPPLE.XX。機関：XX。 SOA NS1.XX. HOSTMASTER.NS1.XX。 ....追加：<空>"
+    },
+    {
+      "indent": 11,
+      "text": "NXDOMAIN RESPONSE: TYPE 3.",
+      "ja": "NXDOMAIN応答：TYPE 3。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NXDOMAIN Query: AN.EXAMPLE. A Answer: AN.EXAMPLE. CNAME TRIPPLE.XX. Authority: <empty> Additional: <empty>",
+      "ja": "ヘッダ：RCODE = NXDOMAINクエリ：AN.EXAMPLE。回答：AN.EXAMPLE。 CNAME TRIPLE.X。 XAUTHORITY：<空>追加：<空>"
+    },
+    {
+      "indent": 11,
+      "text": "NXDOMAIN RESPONSE: TYPE 4",
+      "ja": "NXDOMAIN応答：TYPE 4"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NXDOMAIN Query: AN.EXAMPLE. A Answer: AN.EXAMPLE. CNAME TRIPPLE.XX. Authority: XX. NS NS1.XX. XX. NS NS2.XX. Additional: NS1.XX. A 127.0.0.2 NS2.XX. A 127.0.0.3",
+      "ja": "ヘッダ：RDCODE = NXDOMAINクエリ：AN.EXAMPLE。回答：AN.EXAMPLE。 CNAME TRIPPLE.XX。機関：XX。 NS NS1.XX. XX。 NS NS2.XX.追加：NS1.XX. 127.0.0.2 NS2.XX. 127.0.0.3"
+    },
+    {
+      "indent": 11,
+      "text": "REFERRAL RESPONSE.",
+      "ja": "紹介応答。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NOERROR Query: AN.EXAMPLE. A Answer: AN.EXAMPLE. CNAME TRIPPLE.XX. Authority: XX. NS NS1.XX. XX. NS NS2.XX. Additional: NS1.XX. A 127.0.0.2",
+      "ja": "ヘッダ：RDCODE = NOERRORクエリ：AN.EXAMPLE。回答：AN.EXAMPLE。 CNAME TRIPPLE.XX。機関：XX。 NS NS1.XX. XX。 NS NS2.XX.追加：NS1.XX. 127.0.0.2"
+    },
+    {
+      "indent": 15,
+      "text": "NS2.XX. A 127.0.0.3",
+      "ja": "NS2.XX. 127.0.0.3"
+    },
+    {
+      "indent": 3,
+      "text": "Note, in the four examples of NXDOMAIN responses, it is known that the name \"AN.EXAMPLE.\" exists, and has as its value a CNAME record. The NXDOMAIN refers to \"TRIPPLE.XX\", which is then known not to exist. On the other hand, in the referral example, it is shown that \"AN.EXAMPLE\" exists, and has a CNAME RR as its value, but nothing is known one way or the other about the existence of \"TRIPPLE.XX\", other than that \"NS1.XX\" or \"NS2.XX\" can be consulted as the next step in obtaining information about it.",
+      "ja": "注、NXDOMAIN応答の4つの例では、それは名前ことが知られている「AN.EXAMPLE。」存在し、その値としてCNAMEレコードを持っています。 NXDOMAINは、次に存在しないことが知られている「TRIPPLE.XX」を指します。一方、紹介例では、「AN.EXAMPLE」が存在し、その値としてCNAME RRを有しているが、何も一つの方法または他の、「TRIPPLE.XX」の存在について他の知られていないことが示されていますその「NS1.XX」または「NS2.XX」よりも、それについての情報を取得するための次のステップとして、相談することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Where no CNAME records appear, the NXDOMAIN response refers to the name in the label of the RR in the question section.",
+      "ja": "何のCNAMEレコードが表示されない場合は、NXDOMAIN応答は、質問セクション内のRRのラベルに名前を指します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1.1 Special Handling of Name Error",
+      "section_title": true,
+      "ja": "2.1.1名エラーの特別な処理"
+    },
+    {
+      "indent": 3,
+      "text": "This section deals with errors encountered when implementing negative caching of NXDOMAIN responses.",
+      "ja": "NXDOMAIN応答のネガティブキャッシュを実装する際に発生したエラーこのセクションでは扱っています。"
+    },
+    {
+      "indent": 3,
+      "text": "There are a large number of resolvers currently in existence that fail to correctly detect and process all forms of NXDOMAIN response. Some resolvers treat a TYPE 1 NXDOMAIN response as a referral. To alleviate this problem it is recommended that servers that are authoritative for the NXDOMAIN response only send TYPE 2 NXDOMAIN responses, that is the authority section contains a SOA record and no NS records. If a non- authoritative server sends a type 1 NXDOMAIN response to one of these old resolvers, the result will be an unnecessary query to an authoritative server. This is undesirable, but not fatal except when the server is being used a FORWARDER. If however the resolver is using the server as a FORWARDER to such a resolver it will be necessary to disable the sending of TYPE 1 NXDOMAIN response to it, use TYPE 2 NXDOMAIN instead.",
+      "ja": "正しく検出に失敗すると、NXDOMAIN応答のすべてのフォームを処理し、現在存在でリゾルバの大多数あります。いくつかのリゾルバは、紹介としてTYPE 1 NXDOMAIN応答を処理します。 NXDOMAIN応答に対して権限のあるサーバーのみTYPE 2 NXDOMAINの応答を送信することが推奨され、この問題を軽減するために、それは権威セクションはSOAレコードなしNSレコードが含まれています。非権威サーバはこれらの古いリゾルバのいずれかにタイプ1 NXDOMAIN応答を送信した場合、その結果は、権限のあるサーバーへの不要なクエリになります。これは望ましくないが、サーバーがフォワーダを使用している場合を除き、致命的ではありません。しかし、レゾルバは、レゾルバにFORWARDERとしてサーバを使用している場合は、代わりにTYPE 2 NXDOMAINを使用し、それにTYPE 1 NXDOMAIN応答の送信を無効にすることが必要であろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Some resolvers incorrectly continue processing if the authoritative answer flag is not set, looping until the query retry threshold is exceeded and then returning SERVFAIL. This is a problem when your nameserver is listed as a FORWARDER for such resolvers. If the nameserver is used as a FORWARDER by such resolver, the authority flag will have to be forced on for NXDOMAIN responses to these resolvers. In practice this causes no problems even if turned on always, and has been the default behaviour in BIND from 4.9.3 onwards.",
+      "ja": "公式の答えフラグがクエリの再試行しきい値を超えるまでループし、その後、SERVFAILを返し、設定されていない場合、一部のリゾルバは間違って処理を継続します。これは、あなたのネームサーバは、そのようなリゾルバのためのFORWARDERとしてリストされている問題です。ネームサーバは、そのようなリゾルバでFORWARDERとして使用されている場合、権限フラグは、これらのリゾルバにNXDOMAIN応答のために強制的にする必要があります。実際には、これは常にオンになっていても問題ない、以降4.9.3からBINDのデフォルトの動作となっています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2 - No Data",
+      "section_title": true,
+      "ja": "2.2  - データなし"
+    },
+    {
+      "indent": 3,
+      "text": "NODATA is indicated by an answer with the RCODE set to NOERROR and no relevant answers in the answer section. The authority section will contain an SOA record, or there will be no NS records there.",
+      "ja": "NODATAはNOERRORに設定RCODEと回答セクションで該当の答えと答えによって示されています。権威セクションはSOAレコードが含まれています、またはそこにはNSレコードは存在しません。"
+    },
+    {
+      "indent": 3,
+      "text": "NODATA responses have to be algorithmically determined from the response's contents as there is no RCODE value to indicate NODATA. In some cases to determine with certainty that NODATA is the correct response it can be necessary to send another query.",
+      "ja": "NODATA回答はNODATAを示すために、何のRCODE値が存在しないようアルゴリズム応答の内容から判断する必要があります。いくつかの場合においてNODATAは、別のクエリを送信するために必要であることができる正しい応答であることを確実に決定します。"
+    },
+    {
+      "indent": 3,
+      "text": "The authority section may contain NXT and SIG RRsets in addition to NS and SOA records. CNAME and SIG records may exist in the answer section.",
+      "ja": "権威セクションはNSとSOAレコードのに加えて、NXTとSIG RRセットが含まれていてもよいです。 CNAMEとSIGレコードが解答セクションに存在してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to distinguish between a NODATA and a referral response by the presence of a SOA record in the authority section or the absence of NS records in the authority section.",
+      "ja": "権威セクションや権威セクションのNSレコードが存在しない場合にSOAレコードの存在によってNODATAと紹介応答を区別することが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "NODATA responses can be categorised into three types by the contents of the authority section. These are shown below along with a referral for comparison. Fields not mentioned are not important in terms of the examples.",
+      "ja": "NODATA回答は権威セクションの内容によって3種類に分類することができます。これらは、比較のための紹介とともに以下に示します。言及されていないフィールドは例の観点から重要ではありません。"
+    },
+    {
+      "indent": 11,
+      "text": "NODATA RESPONSE: TYPE 1.",
+      "ja": "NODATA応答：TYPE 1。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NOERROR Query: ANOTHER.EXAMPLE. A Answer: <empty> Authority: EXAMPLE. SOA NS1.XX. HOSTMASTER.NS1.XX. .... EXAMPLE. NS NS1.XX. EXAMPLE. NS NS2.XX. Additional: NS1.XX. A 127.0.0.2 NS2.XX. A 127.0.0.3",
+      "ja": "ヘッダ：RDCODE = NOERRORクエリ：ANOTHER.EXAMPLE。回答：<空>機関：例。 SOA NS1.XX. HOSTMASTER.NS1.XX。 ....例。 NS NS1.XX.例。 NS NS2.XX.追加：NS1.XX. 127.0.0.2 NS2.XX. 127.0.0.3"
+    },
+    {
+      "indent": 11,
+      "text": "NO DATA RESPONSE: TYPE 2.",
+      "ja": "NOデータ応答：TYPE 2。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NOERROR Query: ANOTHER.EXAMPLE. A Answer: <empty> Authority: EXAMPLE. SOA NS1.XX. HOSTMASTER.NS1.XX. .... Additional: <empty>",
+      "ja": "ヘッダ：RDCODE = NOERRORクエリ：ANOTHER.EXAMPLE。回答：<空>機関：例。 SOA NS1.XX. HOSTMASTER.NS1.XX。 ....追加：<空>"
+    },
+    {
+      "indent": 11,
+      "text": "NO DATA RESPONSE: TYPE 3.",
+      "ja": "NOデータ応答：TYPE 3。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NOERROR Query: ANOTHER.EXAMPLE. A Answer: <empty> Authority: <empty> Additional: <empty>",
+      "ja": "ヘッダ：RDCODE = NOERRORクエリ：ANOTHER.EXAMPLE。回答：<空>機関：<空>追加：<空>"
+    },
+    {
+      "indent": 11,
+      "text": "REFERRAL RESPONSE.",
+      "ja": "紹介応答。"
+    },
+    {
+      "indent": 11,
+      "text": "Header: RDCODE=NOERROR Query: ANOTHER.EXAMPLE. A Answer: <empty> Authority: EXAMPLE. NS NS1.XX. EXAMPLE. NS NS2.XX. Additional: NS1.XX. A 127.0.0.2 NS2.XX. A 127.0.0.3",
+      "ja": "ヘッダ：RDCODE = NOERRORクエリ：ANOTHER.EXAMPLE。回答：<空>機関：例。 NS NS1.XX.例。 NS NS2.XX.追加：NS1.XX. 127.0.0.2 NS2.XX. 127.0.0.3"
+    },
+    {
+      "indent": 3,
+      "text": "These examples, unlike the NXDOMAIN examples above, have no CNAME records, however they could, in just the same way that the NXDOMAIN examples did, in which case it would be the value of the last CNAME (the QNAME) for which NODATA would be concluded.",
+      "ja": "これらの例は、上記NXDOMAINの例とは異なり、CNAMEレコードを持っていない、しかし彼らできた、それはNODATAになると思われるため、最後のCNAME（QNAME）の値となり、その場合にはNXDOMAIN例がやったことをちょうど同じ方法で結論付けました。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2.1 - Special Handling of No Data",
+      "section_title": true,
+      "ja": "2.2.1  - データなしの特別な処理"
+    },
+    {
+      "indent": 3,
+      "text": "There are a large number of resolvers currently in existence that fail to correctly detect and process all forms of NODATA response. Some resolvers treat a TYPE 1 NODATA response as a referral. To alleviate this problem it is recommended that servers that are authoritative for the NODATA response only send TYPE 2 NODATA responses, that is the authority section contains a SOA record and no NS records. Sending a TYPE 1 NODATA response from a non-authoritative server to one of these resolvers will only result in an unnecessary query. If a server is listed as a FORWARDER for another resolver it may also be necessary to disable the sending of TYPE 1 NODATA response for non-authoritative NODATA responses.",
+      "ja": "正しくNODATA応答の全ての形態を検出し、処理に失敗現在、現存するリゾルバが多数あります。いくつかのリゾルバは、紹介としてTYPE 1 NODATA応答を処理します。 NODATA応答に対して権限のあるサーバーのみTYPE 2 NODATAの応答を送信することが推奨され、この問題を軽減するために、それは権威セクションはSOAレコードなしNSレコードが含まれています。これらのリゾルバの1に非権威サーバからTYPE 1 NODATA応答を送信するだけで、不要なクエリになります。サーバが別のレゾルバ用FORWARDERとして表示されている場合、また、非権威NODATA応答のタイプ1 NODATA応答の送信を無効にする必要があるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "Some name servers fail to set the RCODE to NXDOMAIN in the presence of CNAMEs in the answer section. If a definitive NXDOMAIN / NODATA answer is required in this case the resolver must query again using the QNAME as the query label.",
+      "ja": "いくつかのネームサーバーが応答セクション内のCNAMEの存在下でNXDOMAINにRCODEを設定することができません。決定的なNXDOMAIN / NODATAの答えが、この場合に必要とされている場合は、リゾルバは、クエリのラベルとしてQNAMEを使用して再度照会する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3 - Negative Answers from Authoritative Servers",
+      "ja": "3  - 権威サーバからの負の回答"
+    },
+    {
+      "indent": 3,
+      "text": "Name servers authoritative for a zone MUST include the SOA record of the zone in the authority section of the response when reporting an NXDOMAIN or indicating that no data of the requested type exists. This is required so that the response may be cached. The TTL of this record is set from the minimum of the MINIMUM field of the SOA record and the TTL of the SOA itself, and indicates how long a resolver may cache the negative answer. The TTL SIG record associated with the SOA record should also be trimmed in line with the SOA's TTL.",
+      "ja": "NXDOMAINを報告したり、要求された種類のデータが存在しないことを示すとき、ゾーンの権限ネームサーバは、応答の権限セクションで、ゾーンのSOAレコードを含まなければなりません。レスポンスがキャッシュできるようにするために必要とされます。このレコードのTTLは、SOAレコードとSOA自身のTTLの最小フィールドの最小値から設定し、リゾルバが否定的な答えをキャッシュすることができる期間を示しています。 SOAレコードに関連付けられたTTL SIGレコードはまた、SOAのTTLに合わせてトリミングする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the containing zone is signed [RFC2065] the SOA and appropriate NXT and SIG records MUST be added.",
+      "ja": "含むゾーンが署名されている場合は[RFC2065]はSOAと適切なNXTとSIGレコードが追加されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4 - SOA Minimum Field",
+      "ja": "4  -  SOA最小フィールド"
+    },
+    {
+      "indent": 3,
+      "text": "The SOA minimum field has been overloaded in the past to have three different meanings, the minimum TTL value of all RRs in a zone, the default TTL of RRs which did not contain a TTL value and the TTL of negative responses.",
+      "ja": "SOA最小フィールドは、3つの異なる意味を、ゾーン内のすべてのRRの最小TTL値、TTL値と負の応答のTTLが含まれていなかったRRのデフォルトのTTLを持つように、過去にオーバーロードされています。"
+    },
+    {
+      "indent": 3,
+      "text": "Despite being the original defined meaning, the first of these, the minimum TTL value of all RRs in a zone, has never in practice been used and is hereby deprecated.",
+      "ja": "オリジナルの定義された意味であるにもかかわらず、ゾーン内のすべてのRRの最小TTL値、これらの最初は、使用されていない実際にしており、ここに推奨されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The second, the default TTL of RRs which contain no explicit TTL in the master zone file, is relevant only at the primary server. After a zone transfer all RRs have explicit TTLs and it is impossible to determine whether the TTL for a record was explicitly set or derived from the default after a zone transfer. Where a server does not require RRs to include the TTL value explicitly, it should provide a mechanism, not being the value of the MINIMUM field of the SOA record, from which the missing TTL values are obtained. How this is done is implementation dependent.",
+      "ja": "第二は、マスターゾーンファイルに明示的なTTLを含まないRRのデフォルトのTTLは、唯一のプライマリサーバに関連しています。ゾーン転送の後、すべてのRRは、明示的なTTLを持っており、レコードのTTLを明示的に設定するか、ゾーン転送後のデフォルトに由来するものであったかどうかを判断することは不可能です。サーバーが明示的にTTL値を含めるためにRRを必要としない場合は、それが欠けているTTL値が得られるから、SOAレコードの最小フィールドの値がされていない、メカニズムを提供する必要があります。これはどのように行われている実装依存です。"
+    },
+    {
+      "indent": 3,
+      "text": "The Master File format [RFC 1035 Section 5] is extended to include the following directive:",
+      "ja": "マスターファイルフォーマット[RFC 1035のセクション5]は次のディレクティブを含むように拡張されています。"
+    },
+    {
+      "indent": 27,
+      "text": "$TTL <TTL> [comment]",
+      "ja": "$ TTL <TTL> [コメント]"
+    },
+    {
+      "indent": 3,
+      "text": "All resource records appearing after the directive, and which do not explicitly include a TTL value, have their TTL set to the TTL given in the $TTL directive. SIG records without a explicit TTL get their TTL from the \"original TTL\" of the SIG record [RFC 2065 Section 4.5].",
+      "ja": "明示的にTTL値が含まれていないすべてのリソースのディレクティブの後に現れるレコード、およびは、そのTTLは、$ TTLディレクティブで指定したTTLに設定されています。明示的なTTLなしSIGレコードはSIGレコード[RFC 2065のセクション4.5]の「オリジナルTTL」から自分のTTLを取得します。"
+    },
+    {
+      "indent": 3,
+      "text": "The remaining of the current meanings, of being the TTL to be used for negative responses, is the new defined meaning of the SOA minimum field.",
+      "ja": "否定応答に使用されるTTLであるから、現在の意味の残り、SOA最小フィールドの新しい定義された意味です。"
+    },
+    {
+      "indent": 0,
+      "text": "5 - Caching Negative Answers",
+      "ja": "5  - 否定応答をキャッシュ"
+    },
+    {
+      "indent": 3,
+      "text": "Like normal answers negative answers have a time to live (TTL). As there is no record in the answer section to which this TTL can be applied, the TTL must be carried by another method. This is done by including the SOA record from the zone in the authority section of the reply. When the authoritative server creates this record its TTL is taken from the minimum of the SOA.MINIMUM field and SOA's TTL. This TTL decrements in a similar manner to a normal cached answer and upon reaching zero (0) indicates the cached negative answer MUST NOT be used again.",
+      "ja": "通常の回答のように、負の答えが生存時間（TTL）を持っています。このTTLを適用可能な解答セクションにレコードがないように、TTLは、別の方法で実施しなければなりません。これは、応答の権限セクションのゾーンからのSOAレコードを含むことによって行われます。権威サーバは、このレコードを作成するときにそのTTLはSOA.MINIMUMフィールドの最小値とSOAのTTLから取得されます。通常のキャッシュされた応答にゼロ（0）にキャッシュされた負の答えが再度使用してはいけません示し達すると同様に、このTTLをデクリメント。"
+    },
+    {
+      "indent": 3,
+      "text": "A negative answer that resulted from a name error (NXDOMAIN) should be cached such that it can be retrieved and returned in response to another query for the same <QNAME, QCLASS> that resulted in the cached negative response.",
+      "ja": "名前エラー（NXDOMAIN）から生じた負の答えは、それが取得され、キャッシュされた否定応答の結果と同じ<QNAME、QCLASS>のために別のクエリに応答して返すことができるようにキャッシュされる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A negative answer that resulted from a no data error (NODATA) should be cached such that it can be retrieved and returned in response to another query for the same <QNAME, QTYPE, QCLASS> that resulted in the cached negative response.",
+      "ja": "データなしエラー（NODATA）から生じた負の答えは、それが取得され、キャッシュされた否定応答をもたらした同じ<QNAME、QTYPE、QCLASS>のための別のクエリに応答して返すことができるようにキャッシュされるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "The NXT record, if it exists in the authority section of a negative answer received, MUST be stored such that it can be be located and returned with SOA record in the authority section, as should any SIG records in the authority section. For NXDOMAIN answers there is no \"necessary\" obvious relationship between the NXT records and the QNAME. The NXT record MUST have the same owner name as the query name for NODATA responses.",
+      "ja": "権威セクションのいずれかのSIGレコードが必要としてNXTレコードは、それが否定の権威セクションに存在する場合に受信、それが位置しており、権限セクションにSOAレコードを返すことができるような格納されなければなりません。 NXDOMAINのためにNXTレコードとQNAMEの間には「必要」明白な関係はありません答えます。 NXTレコードはNODATA応答のためのクエリ名と同じ所有者名を持たなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Negative responses without SOA records SHOULD NOT be cached as there is no way to prevent the negative responses looping forever between a pair of servers even with a short TTL.",
+      "ja": "でも、短いTTLとサーバーのペアの間で永遠にループする否定的な反応を防止するための方法がないとしてSOAレコードのない負の応答がキャッシュされるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Despite the DNS forming a tree of servers, with various mis-configurations it is possible to form a loop in the query graph, e.g. two servers listing each other as forwarders, various lame server configurations. Without a TTL count down a cache negative response when received by the next server would have its TTL reset. This negative indication could then live forever circulating between the servers involved.",
+      "ja": "種々の誤構成のサーバーのツリーを形成するDNSにもかかわらず、例えば、クエリグラフでループを形成することが可能ですフォワーダー、様々なラメサーバー構成としてお互いをリスト2台のサーバー。そのTTLをリセットする必要があります次のサーバが受信したときにTTLせずにキャッシュ否定応答をカウントダウン。この負の表示はその後、関係するサーバーとの間を循環永遠に生きることができました。"
+    },
+    {
+      "indent": 3,
+      "text": "As with caching positive responses it is sensible for a resolver to limit for how long it will cache a negative response as the protocol supports caching for up to 68 years. Such a limit should not be greater than that applied to positive answers and preferably be tunable. Values of one to three hours have been found to work well and would make sensible a default. Values exceeding one day have been found to be problematic.",
+      "ja": "キャッシング陽性反応と同じように、それは、プロトコルは、最大68年間のキャッシュをサポートしていて、それが負の応答をキャッシュする時間のために制限するために、リゾルバのために賢明です。そのような制限は、肯定回答に適用さよりも大きく、好ましくは調整可能であってはなりません。 1〜3時間の値がうまく動作することが分かっていると賢明なデフォルトになるだろう。 1日を超える値は問題があることが判明しています。"
+    },
+    {
+      "indent": 0,
+      "text": "6 - Negative answers from the cache",
+      "ja": "6  - キャッシュから否定の回答"
+    },
+    {
+      "indent": 3,
+      "text": "When a server, in answering a query, encounters a cached negative response it MUST add the cached SOA record to the authority section of the response with the TTL decremented by the amount of time it was stored in the cache. This allows the NXDOMAIN / NODATA response to time out correctly.",
+      "ja": "サーバは、クエリに答えるには、キャッシュされた負の応答を検出すると、それがキャッシュに格納されていた時間の量だけ減少TTLと応答の権限セクションにキャッシュされたSOAレコードを追加しなければなりません。これは正しく時間にNXDOMAIN / NODATA応答を行うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a NXT record was cached along with SOA record it MUST be added to the authority section. If a SIG record was cached along with a NXT record it SHOULD be added to the authority section.",
+      "ja": "NXTレコードはSOAレコードと一緒にキャッシュされていた場合には、権限のセクションに追加する必要があります。 SIGレコードがNXTレコードと一緒にキャッシュされていた場合には、権限のセクションに追加する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "As with all answers coming from the cache, negative answers SHOULD have an implicit referral built into the answer. This enables the resolver to locate an authoritative source. An implicit referral is characterised by NS records in the authority section referring the resolver towards a authoritative source. NXDOMAIN types 1 and 4 responses contain implicit referrals as does NODATA type 1 response.",
+      "ja": "キャッシュからすべての答えと同じように、負の答えが答えに組み込まれた暗黙の紹介を持っているべきです。これは信頼できるソースを見つけるためにリゾルバを可能にします。暗黙的な照会は、信頼できるソースに向かっリゾルバを参照する権限セクションにNSレコードを特徴とします。 NODATAタイプ1応答を行うようにNXDOMAINタイプ1と4の応答が暗黙の紹介が含まれています。"
+    },
+    {
+      "indent": 0,
+      "text": "7 - Other Negative Responses",
+      "ja": "7  - 他の否定応答"
+    },
+    {
+      "indent": 3,
+      "text": "Caching of other negative responses is not covered by any existing RFC. There is no way to indicate a desired TTL in these responses. Care needs to be taken to ensure that there are not forwarding loops.",
+      "ja": "他の否定的な反応のキャッシングは、既存のRFCに覆われていません。これらの反応で所望のTTLを示すための方法はありません。ケアは、転送ループが存在しないように注意する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1 Server Failure (OPTIONAL)",
+      "section_title": true,
+      "ja": "7.1サーバ障害（オプション）"
+    },
+    {
+      "indent": 3,
+      "text": "Server failures fall into two major classes. The first is where a server can determine that it has been misconfigured for a zone. This may be where it has been listed as a server, but not configured to be a server for the zone, or where it has been configured to be a server for the zone, but cannot obtain the zone data for some reason. This can occur either because the zone file does not exist or contains errors, or because another server from which the zone should have been available either did not respond or was unable or unwilling to supply the zone.",
+      "ja": "サーバーの障害は、2つの主要なクラスに分類されます。サーバはそれがゾーンに間違って設定されたと判断できる場所最初です。これは、サーバーとして記載されている場合であってもよいが、ゾーンのサーバ、またはどこにゾーンのサーバになるように構成されているが、何らかの理由でゾーンデータを取得できないことが設定されていないことがあります。ゾーンファイルが存在しないか、エラーが含まれている、またはゾーンが利用されている必要があり、そこから別のサーバーが応答またはゾーンを供給することができませんでしまたは不本意していなかったのいずれかのためにしないので、これはどちらか発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The second class is where the server needs to obtain an answer from elsewhere, but is unable to do so, due to network failures, other servers that don't reply, or return server failure errors, or similar.",
+      "ja": "第二のクラスは、サーバが別の場所からの回答を得ることが必要であるところであるが、原因ネットワーク障害、返信、またはサーバー障害エラー、または類似を返さない他のサーバーに、そうすることができません。"
+    },
+    {
+      "indent": 3,
+      "text": "In either case a resolver MAY cache a server failure response. If it does so it MUST NOT cache it for longer than five (5) minutes, and it MUST be cached against the specific query tuple <query name, type, class, server IP address>.",
+      "ja": "いずれの場合も、リゾルバはサーバ障害応答をキャッシュしてもよいです。それがない場合はそれより長い5分のためにそれをキャッシュしてはならない、そしてそれは、特定のクエリタプル<クエリ名、タイプ、クラス、サーバーのIPアドレス>に対してキャッシュする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2 Dead / Unreachable Server (OPTIONAL)",
+      "section_title": true,
+      "ja": "7.2デッド/到達不能サーバ（オプション）"
+    },
+    {
+      "indent": 3,
+      "text": "Dead / Unreachable servers are servers that fail to respond in any way to a query or where the transport layer has provided an indication that the server does not exist or is unreachable. A server may be deemed to be dead or unreachable if it has not responded to an outstanding query within 120 seconds.",
+      "ja": "デッド/到達不能のサーバーがクエリまたはどこトランスポート層は、サーバが存在するか到達不能でいないという指示を提供しているにどのような方法で応答しないサーバーです。それが120秒以内に優れたクエリに応答しなかった場合、サーバーは、死んでいるか到達不能と見なされる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Examples of transport layer indications are:",
+      "ja": "トランスポート層の表示の例は以下のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "ICMP error messages indicating host, net or port unreachable. TCP resets IP stack error messages providing similar indications to those above.",
+      "ja": "ホスト、ネットまたはポート到達不能を示すICMPエラーメッセージ。 TCPは、上記と同様の指標を提供するIPスタックのエラーメッセージをリセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "A server MAY cache a dead server indication. If it does so it MUST NOT be deemed dead for longer than five (5) minutes. The indication MUST be stored against query tuple <query name, type, class, server IP address> unless there was a transport layer indication that the server does not exist, in which case it applies to all queries to that specific IP address.",
+      "ja": "サーバが死んで、サーバー表示をキャッシュすることができます。それがない場合はそれより長い5（5）分間死んだとみなされてはなりません。それは特定のIPアドレスへのすべてのクエリに適用される場合には、サーバが存在しないこと輸送層指示は、存在しない限り、指示は、問合せタプル<クエリ名、タイプ、クラス、サーバのIPアドレス>に対して保存しなければなりません。"
+    },
+    {
+      "indent": 1,
+      "text": "8 - Changes from",
+      "ja": "8  - からの変更点は、"
+    },
+    {
+      "indent": 3,
+      "text": "Negative caching in resolvers is no-longer optional, if a resolver caches anything it must also cache negative answers.",
+      "ja": "リゾルバが、それはまた、負の応答をキャッシュしなければならない何かをキャッシュする場合リゾルバでネガティブキャッシングは、無もはやオプションではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-authoritative negative answers MAY be cached.",
+      "ja": "権限のない負の回答がキャッシュされる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The SOA record from the authority section MUST be cached. Name error indications must be cached against the tuple <query name, QCLASS>. No data indications must be cached against <query name, QTYPE, QCLASS> tuple.",
+      "ja": "権威セクションからSOAレコードをキャッシュする必要があります。名称エラー表示はタプル<クエリ名、QCLASS>に対してキャッシュする必要があります。データなし表示は<クエリ名、QTYPE、QCLASS>タプルに対してキャッシュされてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A cached SOA record must be added to the response. This was explicitly not allowed because previously the distinction between a normal cached SOA record, and the SOA cached as a result of a negative response was not made, and simply extracting a normal cached SOA and adding that to a cached negative response causes problems.",
+      "ja": "キャッシュされたSOAレコードが応答に追加する必要があります。これは、以前に否定応答の結果としてキャッシュ通常のキャッシュされたSOAレコードの区別、およびSOAがなされていなかったため、明示的に許可されていない、と単純に通常のキャッシュされたSOAを抽出し、キャッシュされた否定応答に問題を引き起こすことを追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The $TTL TTL directive was added to the master file format.",
+      "ja": "$ TTL TTLディレクティブは、マスターファイル形式に追加されました。"
+    },
+    {
+      "indent": 0,
+      "text": "9 - History of Negative Caching",
+      "ja": "9  - ネガティブキャッシュの歴史"
+    },
+    {
+      "indent": 3,
+      "text": "This section presents a potted history of negative caching in the DNS and forms no part of the technical specification of negative caching.",
+      "ja": "このセクションでは、DNSにネガティブキャッシュの鉢植えの歴史を提示し、ネガティブキャッシュの技術仕様書の一部を形成しません。"
+    },
+    {
+      "indent": 3,
+      "text": "It is interesting to note that the same concepts were re-invented in both the CHIVES and BIND servers.",
+      "ja": "同じ概念がCHIVESとBINDサーバーの両方で再発明されたことは興味深いです。"
+    },
+    {
+      "indent": 3,
+      "text": "The history of the early CHIVES work (Section 9.1) was supplied by Rob Austein <sra@epilogue.com> and is reproduced here in the form in which he supplied it [MPA].",
+      "ja": "初期のCHIVESワーク（セクション9.1）の歴史は、ロブAusteinと<sra@epilogue.com>によって供給されたと彼は[MPA]それを供給した形でここに再現されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Sometime around the spring of 1985, I mentioned to Paul Mockapetris that our experience with his JEEVES DNS resolver had pointed out the need for some kind of negative caching scheme. Paul suggested that we simply cache authoritative errors, using the SOA MINIMUM value for the zone that would have contained the target RRs. I'm pretty sure that this conversation took place before RFC-973 was written, but it was never clear to me whether this idea was something that Paul came up with on the spot in response to my question or something he'd already been planning to put into the document that became RFC-973. In any case, neither of us was entirely sure that the SOA MINIMUM value was really the right metric to use, but it was available and was under the control of the administrator of the target zone, both of which seemed to us at the time to be important feature.",
+      "ja": "いつか1985年の春の周りに、私は彼のジーブスのDNSリゾルバと私たちの経験はネガティブキャッシュ・スキームのいくつかの種類の必要性を指摘していたことをポール・モカペトリスに言及しました。ポールは、ターゲットRRを含んでいただろうゾーンのSOAの最小値を使用して、我々は単に権威エラーをキャッシュすることが示唆されました。私は、RFC-973が書かれていた前にこの会話が行われたが、このアイデアは、彼がすでに計画されたいポールは私の質問か何かに反応してその場で思い付いたものだったかどうか、それは私には明らかではなかったことをかなり確信していますRFC-973になったドキュメントに配置します。いずれにせよ、私たちのどちらもに一度私たちに見えたどちらも、SOAの最小値が、実際に使用する権利メートルだったが、それが利用可能で、ターゲットゾーンの管理者の管理下にあったことを完全に確信していました重要な特徴です。"
+    },
+    {
+      "indent": 3,
+      "text": "Late in 1987, I released the initial beta-test version of CHIVES, the DNS resolver I'd written to replace Paul's JEEVES resolver. CHIVES included a search path mechanism that was used pretty heavily at several sites (including my own), so CHIVES also included a negative caching mechanism based on SOA MINIMUM values. The basic strategy was to cache authoritative error codes keyed by the exact query parameters (QNAME, QCLASS, and QTYPE), with a cache TTL equal to the SOA MINIMUM value. CHIVES did not attempt to track down SOA RRs if they weren't supplied in the authoritative response, so it never managed to completely eliminate the gratuitous DNS error message traffic, but it did help considerably. Keep in mind that this was happening at about the same time as the near-collapse of the ARPANET due to congestion caused by exponential growth and the the \"old\" (pre-VJ) TCP retransmission algorithm, so negative caching resulted in drasticly better DNS response time for our users, mailer daemons, etcetera.",
+      "ja": "後期1987年に、私はCHIVES、私はポールのJeevesのリゾルバを置き換えるために書いたDNSリゾルバの初期ベータテストバージョンをリリースしました。 CHIVESはCHIVESもSOAの最小値に基づいて、負のキャッシュ機構を含めて、（私自身を含む）いくつかの部位でかなり頻繁に使用された検索パスのメカニズムが含まれていました。基本的な戦略は、SOAの最小値に等しいキャッシュTTLと、正確なクエリパラメータ（QNAME、QCLASSとQTYPE）をキー権限のエラー・コードをキャッシュすることでした。 CHIVESは、彼らが権威ある応答で提供されていなかった場合はSOA RRを追跡しようとしていなかったので、それは完全に無償DNSエラーメッセージトラフィックを排除することはできなかったが、それはかなり助けませんでした。これが原因指数関数的成長と「古い」（前VJ）TCP再送アルゴリズムによって引き起こされる輻輳にARPANETの近い崩壊とほぼ同時に起こっていたことを覚えておいてください、そうネガティブキャッシュはdrasticly良くDNSの結果ユーザーの皆様、メーラーデーモン、エトセトラの応答時間。"
+    },
+    {
+      "indent": 3,
+      "text": "As far as I know, CHIVES was the first resolver to implement negative caching. CHIVES was developed during the twilight years of TOPS-20, so it never ran on very many machines, but the few machines that it did run on were the ones that were too critical to shut down quickly no matter how much it cost to keep them running. So what few users we did have tended to drive CHIVES pretty hard. Several interesting bits of DNS technology resulted from that, but the one that's relevant here is the MAXTTL configuration parameter.",
+      "ja": "私の知る限りでは、CHIVESはネガティブキャッシュを実装するための第1レゾルバでした。 TOPS-20の晩年の間にCHIVESを開発しましたので、それは非常に多くのマシン上走ったことはありませんが、それは上で動作なかった数台のマシンはすぐに、それらを保つためにコストどんなにをシャットダウンするにはあまりにも批判したものでしたランニング。だから、いくつかのものをユーザーたちはかなり難しいCHIVESを駆動する傾向がなかったです。 DNS技術のいくつかの興味深いビットは、その起因が、ここでは関係あります一つはMAXTTLの設定パラメータです。"
+    },
+    {
+      "indent": 3,
+      "text": "Experience with JEEVES had already shown that RRs often showed up with ridiculously long TTLs (99999999 was particularly popular for many years, due to bugs in the code and documentation of several early versions of BIND), and that robust software that blindly believed such TTLs could create so many strange failures that it was often necessary to reboot the resolver frequently just to clear this garbage out of the cache. So CHIVES had a configuration parameter \"MAXTTL\", which specified the maximum \"reasonable\" TTL in a received RR. RRs with TTLs greater than MAXTTL would either have their TTLs reduced to MAXTTL or would be discarded entirely, depending on the setting of another configuration parameter.",
+      "ja": "Jeevesの経験はすでにのRRはしばしば途方もなく長いのTTL（99999999が原因BINDのいくつかの初期のバージョンのコードとドキュメントのバグに、長年に特に人気があった）、と盲目的なTTLを信じている堅牢なソフトウェアに現れたことを示していた可能性それだけでキャッシュからこのゴミをクリアするために頻繁にリゾルバを再起動することが必要だったので、多くの奇妙な失敗を作成します。そうCHIVESは、受信したRRに最大「合理的な」TTLを指定した設定パラメータ「MAXTTL」を有していました。 MAXTTLより大きなTTLを持つRRはどちらか自分のTTLはMAXTTLに減少しているだろうか、別の構成パラメータの設定に応じて、完全に廃棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When we started getting field experience with CHIVES's negative caching code, it became clear that the SOA MINIMUM value was often large enough to cause the same kinds of problems for negative caching as the huge TTLs in RRs had for normal caching (again, this was in part due to a bug in several early versions of BIND, where a secondary server would authoritatively deny all knowledge of its zones if it couldn't contact the primaries on reboot). So we started running the negative cache TTLs through the MAXTTL check too, and continued to experiment.",
+      "ja": "我々はCHIVESのネガティブキャッシュコードとフィールドでの経験を取得し始めたとき、それは（再び、これはにあったSOAの最小値は、多くの場合、RRの中の巨大なのTTLは、通常のキャッシュのために持っていたとしてネガティブキャッシュのために問題の同じ種類を引き起こすのに十分な大きさであることが明らかとなりましたそれは再起動時に原色を連絡することができなかった場合は、セカンダリサーバが正式に）そのゾーンのすべての知識を否定するBIND、いくつかの初期のバージョンのバグに起因する部分。だから我々はあまりにもMAXTTLチェックを通じてネガティブキャッシュのTTLを実行し始め、実験を続けました。"
+    },
+    {
+      "indent": 3,
+      "text": "The configuration that seemed to work best on WSMR-SIMTEL20.ARMY.MIL (last of the major Internet TOPS-20 machines to be shut down, thus the last major user of CHIVES, thus the place where we had the longest experimental baseline) was to set MAXTTL to about three days. Most of the traffic initiated by SIMTEL20 in its last years was mail-related, and the mail queue timeout was set to one week, so this gave a \"stuck\" message several tries at complete DNS resolution, without bogging down the system with a lot of useless queries. Since (for reasons that now escape me) we only had the single MAXTTL parameter rather than separate ones for positive and negative caching, it's not clear how much effect this setting of MAXTTL had on the negative caching code.",
+      "ja": "WSMR-SIMTEL20.ARMY.MIL上で最適に動作するように見えたコンフィギュレーション（シャットダウンする主要なインターネットTOPS-20機、CHIVESのため、最後の主要なユーザー、我々は最長の実験的なベースラインを持っていたので、場所の最後でした）約3日間にMAXTTLを設定します。その最後の年にsimtel20のによって開始されたトラフィックの大半は、メール関連で、メールキューのタイムアウトは1週間に設定したので、これは大きなシステムを停滞せずに、完全なDNSの解像度で、いくつかの試み「スタック」というメッセージを与えました無用のクエリ。 （今私を逃れるの理由で）我々は唯一の正と負のキャッシュのための単一のMAXTTLパラメータではなく、別のものを持っていたので、それはMAXTTLのこの設定はネガティブキャッシュコードの上に持っていたどのくらいの効果は明ら​​かではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "CHIVES also included a second, somewhat controversial mechanism which took the place of negative caching in some cases. The CHIVES resolver daemon could be configured to load DNS master files, giving it the ability to act as what today would be called a \"stealth secondary\". That is, when configured in this way, the resolver had direct access to authoritative information for heavily-used zones. The search path mechanisms in CHIVES reflected this: there were actually two separate search paths, one of which only searched local authoritative zone data, and one which could generate normal iterative queries. This cut down on the need for negative caching in cases where usage was predictably heavy (e.g., the resolver on XX.LCS.MIT.EDU always loaded the zone files for both LCS.MIT.EDU and AI.MIT.EDU and put both of these suffixes into the \"local\" search path, since between them the hosts in these two zones accounted for the bulk of the DNS traffic). Not all sites running CHIVES chose to use this feature; C.CS.CMU.EDU, for example, chose to use the \"remote\" search path for everything because there were too many different sub-zones at CMU for zone shadowing to be practical for them, so they relied pretty heavily on negative caching even for local traffic.",
+      "ja": "CHIVESはまた、いくつかのケースではネガティブキャッシュの行われた第二、やや物議メカニズムが含まれています。 CHIVESリゾルバデーモンはそれを今日は「ステルス二次」と呼ばれるものとして作用する能力を与えて、DNSマスターファイルをロードするように構成することができます。このように構成されたときつまり、リゾルバは、使用頻度の高いゾーンの正式な情報に直接アクセスしていました。 CHIVESにおける探索経路メカニズムはこれを反映：のみローカル権限ゾーンデータ、および通常の反復クエリを生成することができるものを検索一方が2つの別個のサーチパスは、実際にありました。これは、（例えば、XX.LCS.MIT.EDU上のリゾルバは常にLCS.MIT.EDUとAI.MIT.EDUの両方のゾーンファイルをロードし、両方を入れて使用量が予想通り重かった場合にはネガティブキャッシュの必要性を削減しました「ローカル」検索パスにこれらの接尾辞で、それらの間のため、これらの二つのゾーン内のホスト）は、DNSトラフィックの大部分を占めました。 CHIVESを実行していないすべてのサイトが、この機能を使用することにしました。 C.CS.CMU.EDUは、例えば、彼らのために実用的でシャドーイングゾーンのCMUであまりにも多くの異なるサブゾーンがあったので、すべてのために、「リモート」の検索パスを使用することを選択したので、彼らはネガティブキャッシュにかなり大きく依存していましたでも、ローカルトラフィックのため。"
+    },
+    {
+      "indent": 3,
+      "text": "Overall, I still think the basic design we used for negative caching was pretty reasonable: the zone administrator specified how long to cache negative answers, and the resolver configuration chose the actual cache time from the range between zero and the period specified by the zone administrator. There are a lot of details I'd do differently now (like using a new SOA field instead of overloading the MINIMUM field), but after more than a decade, I'd be more worried if we couldn't think of at least a few improvements.",
+      "ja": "全体的に、私はまだ私達がネガティブキャッシュのために使用される基本的なデザインはかなり合理的だったと思う：ゾーン管理者は、負の応答をキャッシュする時間を指定し、リゾルバの設定がゼロとゾーン管理者が指定した期間の間の範囲から実際のキャッシュ時間を選びました。我々は、少なくとも考えることができなかった場合、私は（新しいSOAのフィールドを使用して代わりに、最小のフィールドに過負荷をかけるように）変わりまし行いたい内容がたくさんありますが、以上十年後、私はもっと心配するだろういくつかの改善点。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2 BIND",
+      "section_title": true,
+      "ja": "9.2 BIND"
+    },
+    {
+      "indent": 3,
+      "text": "While not the first attempt to get negative caching into BIND, in July 1993, BIND 4.9.2 ALPHA, Anant Kumar of ISI supplied code that implemented, validation and negative caching (NCACHE). This code had a 10 minute TTL for negative caching and only cached the indication that there was a negative response, NXDOMAIN or NOERROR_NODATA. This is the origin of the NODATA pseudo response code mentioned above.",
+      "ja": "BINDにネガティブキャッシュを取得する最初の試みではないが、1993年7月、BIND 4.9.2はALPHA、ISIのAnant Kumarが、検証およびネガティブキャッシュ（NCACHE）に実装されたコードを供給する。このコードは、ネガティブキャッシュのための10分のTTLを有し、唯一の否定応答、NXDOMAINまたはNOERROR_NODATAあったという指示をキャッシュ。これは、上述したNODATA疑似応答コードの起源です。"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Andrews of CSIRO added code (RETURNSOA) that stored the SOA record such that it could be retrieved by a similar query. UUnet complained that they were getting old answers after loading a new zone, and the option was turned off, BIND 4.9.3-alpha5, April 1994. In reality this indicated that the named needed to purge the space the zone would occupy. Functionality to do this was added in BIND 4.9.3 BETA11 patch2, December 1994.",
+      "ja": "CSIROのマークアンドリュースは、それが同様のクエリによって取得することができるように、SOAレコードを格納されたコード（RETURNSOA）を加えました。 UUNETは、彼らが新しいゾーンをロードした後、古い答えを取得し、オプションをオフにして、BIND 4.9.3-ALPHA5、1994年4月には実際には、これは名前のゾーンが占めるスペースをパージするために必要なことを示していることを訴えました。これを行うための機能は、BIND 4.9.3 BETA11 PATCH2、1994年12月に追加されました。"
+    },
+    {
+      "indent": 3,
+      "text": "RETURNSOA was re-enabled by default, BIND 4.9.5-T1A, August 1996.",
+      "ja": "RETURNSOAは、デフォルトで再度有効に、BIND 4.9.5-T1A、1996年8月でした。"
+    },
+    {
+      "indent": 0,
+      "text": "10 Example",
+      "ja": "10例"
+    },
+    {
+      "indent": 3,
+      "text": "The following example is based on a signed zone that is empty apart from the nameservers. We will query for WWW.XX.EXAMPLE showing initial response and again 10 minutes later. Note 1: during the intervening 10 minutes the NS records for XX.EXAMPLE have expired. Note 2: the TTL of the SIG records are not explicitly set in the zone file and are hence the TTL of the RRset they are the signature for.",
+      "ja": "以下の実施例は、ネームサーバーから離れ空で署名されたゾーンに基づいています。私たちは、WWW.XX.EXAMPLEは10分後に再び初期応答を示すとのクエリを実行します。注1：中間10分の間にXX.EXAMPLEのためのNSレコードの期限が切れています。注2：SIGレコードのTTLは、明示的にゾーンファイルに設定され、したがって、彼らはのために署名しているRRセットのTTLですされていません。"
+    },
+    {
+      "indent": 8,
+      "text": "Zone File:",
+      "ja": "ゾーンファイル："
+    },
+    {
+      "indent": 8,
+      "text": "$TTL 86400 $ORIGIN XX.EXAMPLE. @ IN SOA NS1.XX.EXAMPLE. HOSTMATER.XX.EXAMPLE. ( 1997102000 ; serial 1800 ; refresh (30 mins) 900 ; retry (15 mins) 604800 ; expire (7 days) 1200 ) ; minimum (20 mins) IN SIG SOA ... 1200 IN NXT NS1.XX.EXAMPLE. A NXT SIG SOA NS KEY IN SIG NXT ... XX.EXAMPLE. ... 300 IN NS NS1.XX.EXAMPLE. 300 IN NS NS2.XX.EXAMPLE. IN SIG NS ... XX.EXAMPLE. ... IN KEY 0x4100 1 1 ... IN SIG KEY ... XX.EXAMPLE. ... IN SIG KEY ... EXAMPLE. ... NS1 IN A 10.0.0.1 IN SIG A ... XX.EXAMPLE. ... 1200 IN NXT NS2.XX.EXAMPLE. A NXT SIG IN SIG NXT ... NS2 IN A 10.0.0.2 IN SIG A ... XX.EXAMPLE. ... 1200 IN NXT XX.EXAMPLE. A NXT SIG IN SIG NXT ... XX.EXAMPLE. ...",
+      "ja": "$ TTL 86400 $ ORIGIN XX.EXAMPLE。 @ SOA NS1.XX.EXAMPLE、IN。 HOSTMATER.XX.EXAMPLE。 （1997102000;シリアル1800;（30分）900を更新する（15分）604800を再試行し、（7日）1200期限切れ）。 NXT NS1.XX.EXAMPLE、IN SIG SOA ... 1200の最小（20分）。 SIG NXT、IN NXT SIG SOA NSのKEY ... XX.EXAMPLE。 ... NS NS1.XX.EXAMPLE 300。 NS NS2.XX.EXAMPLE 300。 SIG NS、IN ... XX.EXAMPLE。 ... SIG KEY ... XX.EXAMPLE ... IN 0x4100 1 1キーに。 ... SIG KEY ...例では。 ... SIG A ... XX.EXAMPLEに10.0.0.1、IN NS1。 ... 1200 NXT NS2.XX.EXAMPLE、IN。 SIG Aでは10.0.0.2、IN SIG NXT ... NS2、IN NXT SIG ... XX.EXAMPLE。 ... 1200 NXT XX.EXAMPLE、IN。 SIG NXT、IN NXT SIG ... XX.EXAMPLE。 ..."
+    },
+    {
+      "indent": 8,
+      "text": "Initial Response:",
+      "ja": "初期対応："
+    },
+    {
+      "indent": 8,
+      "text": "Header: RDCODE=NXDOMAIN, AA=1, QR=1, TC=0 Query: WWW.XX.EXAMPLE. IN A Answer: <empty> Authority: XX.EXAMPLE. 1200 IN SOA NS1.XX.EXAMPLE. ... XX.EXAMPLE. 1200 IN SIG SOA ... XX.EXAMPLE. ...",
+      "ja": "ヘッダ：RDCODE = NXDOMAIN、AA = 1、QR = 1、TC = 0クエリ：WWW.XX.EXAMPLE。 <空>機関：：XX.EXAMPLEの回答で。 1200 SOA NS1.XX.EXAMPLE。 ... XX.EXAMPLE。 SIG SOA 1200 ... XX.EXAMPLE。 ..."
+    },
+    {
+      "indent": 8,
+      "text": " NS2.XX.EXAMPLE. 1200 IN NXT XX.EXAMPLE. NXT A NXT SIG NS2.XX.EXAMPLE. 1200 IN SIG NXT ... XX.EXAMPLE. ... XX.EXAMPLE. 86400 IN NS NS1.XX.EXAMPLE. XX.EXAMPLE. 86400 IN NS NS2.XX.EXAMPLE. XX.EXAMPLE. 86400 IN SIG NS ... XX.EXAMPLE. ... Additional XX.EXAMPLE. 86400 IN KEY 0x4100 1 1 ... XX.EXAMPLE. 86400 IN SIG KEY ... EXAMPLE. ... NS1.XX.EXAMPLE. 86400 IN A 10.0.0.1 NS1.XX.EXAMPLE. 86400 IN SIG A ... XX.EXAMPLE. ... NS2.XX.EXAMPLE. 86400 IN A 10.0.0.2 NS3.XX.EXAMPLE. 86400 IN SIG A ... XX.EXAMPLE. ...",
+      "ja": "NS2.XX.EXAMPLE。 1200 NXT XX.EXAMPLE。 NXT A NXT SIG NS2.XX.EXAMPLE。 SIG NXT 1200 ... XX.EXAMPLE。 ... XX.EXAMPLE。 86400、IN NS NS1.XX.EXAMPLE。 XX.EXAMPLE。 86400、IN NS NS2.XX.EXAMPLE。 XX.EXAMPLE。 SIG NS ... XX.EXAMPLE、IN 86400。 ...追加XX.EXAMPLE。 0x4100 1 1キーに86400 ... XX.EXAMPLE。 SIG KEY ...例では86400。 ... NS1.XX.EXAMPLE。 10.0.0.1 NS1.XX.EXAMPLE、IN 86400。 SIG Aでは86400 ... XX.EXAMPLE。 ... NS2.XX.EXAMPLE。 10.0.0.2 NS3.XX.EXAMPLE、IN 86400。 SIG Aでは86400 ... XX.EXAMPLE。 ..."
+    },
+    {
+      "indent": 9,
+      "text": "After 10 Minutes:",
+      "ja": "10分後："
+    },
+    {
+      "indent": 9,
+      "text": "Header: RDCODE=NXDOMAIN, AA=0, QR=1, TC=0 Query: WWW.XX.EXAMPLE. IN A Answer: <empty> Authority: XX.EXAMPLE. 600 IN SOA NS1.XX.EXAMPLE. ... XX.EXAMPLE. 600 IN SIG SOA ... XX.EXAMPLE. ... NS2.XX.EXAMPLE. 600 IN NXT XX.EXAMPLE. NXT A NXT SIG NS2.XX.EXAMPLE. 600 IN SIG NXT ... XX.EXAMPLE. ... EXAMPLE. 65799 IN NS NS1.YY.EXAMPLE. EXAMPLE. 65799 IN NS NS2.YY.EXAMPLE. EXAMPLE. 65799 IN SIG NS ... XX.EXAMPLE. ... Additional XX.EXAMPLE. 65800 IN KEY 0x4100 1 1 ... XX.EXAMPLE. 65800 IN SIG KEY ... EXAMPLE. ... NS1.YY.EXAMPLE. 65799 IN A 10.100.0.1 NS1.YY.EXAMPLE. 65799 IN SIG A ... EXAMPLE. ... NS2.YY.EXAMPLE. 65799 IN A 10.100.0.2 NS3.YY.EXAMPLE. 65799 IN SIG A ... EXAMPLE. ... EXAMPLE. 65799 IN KEY 0x4100 1 1 ... EXAMPLE. 65799 IN SIG KEY ... . ...",
+      "ja": "ヘッダ：RDCODE = NXDOMAIN、AA = 0、QR = 1、TC = 0クエリ：WWW.XX.EXAMPLE。 <空>機関：：XX.EXAMPLEの回答で。 SOA NS1.XX.EXAMPLE 600。 ... XX.EXAMPLE。 SIG SOA 600 ... XX.EXAMPLE。 ... NS2.XX.EXAMPLE。 NXT XX.EXAMPLE 600。 NXT A NXT SIG NS2.XX.EXAMPLE。 SIG NXT 600 ... XX.EXAMPLE。 ...例。 65799、IN NS NS1.YY.EXAMPLE。例。 65799、IN NS NS2.YY.EXAMPLE。例。 SIG NS ... XX.EXAMPLE、IN 65799。 ...追加XX.EXAMPLE。 0x4100 1 1キーに65800 ... XX.EXAMPLE。 SIG KEY ...例では65800。 ... NS1.YY.EXAMPLE。 10.100.0.1 NS1.YY.EXAMPLE、IN 65799。 SIG A ...例では65799。 ... NS2.YY.EXAMPLE。 10.100.0.2 NS3.YY.EXAMPLE、IN 65799。 SIG A ...例では65799。 ...例。 KEY 0x4100 1 1 ...例では65799。 SIGキーに65799 ...。 ..."
+    },
+    {
+      "indent": 0,
+      "text": "11 Security Considerations",
+      "ja": "11のセキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "It is believed that this document does not introduce any significant additional security threats other that those that already exist when using data from the DNS.",
+      "ja": "この文書はDNSからのデータを使用した場合、既に存在するもの、他の任意の大幅な追加のセキュリティ上の脅威を導入していないと考えられています。"
+    },
+    {
+      "indent": 3,
+      "text": "With negative caching it might be possible to propagate a denial of service attack by spreading a NXDOMAIN message with a very high TTL. Without negative caching that would be much harder. A similar effect could be achieved previously by spreading a bad A record, so that the server could not be reached - which is almost the same. It has the same effect as far as what the end user is able to do, but with a different psychological effect. With the bad A, I feel \"damn the network is broken again\" and try again tomorrow. With the \"NXDOMAIN\" I feel \"Oh, they've turned off the server and it doesn't exist any more\" and probably never bother trying this server again.",
+      "ja": "ネガティブキャッシュで、非常に高いTTLでNXDOMAINメッセージを広めることにより、サービス拒否攻撃を伝播させることができるかもしれません。はるかに困難だろうネガティブキャッシュなし。ほぼ同じである - サーバに到達することができませんでしたように、同様の効果が、不正なレコードを広めることで、以前に達成することができました。それは限り、エンドユーザーが行うことができるが、異なる心理的効果であるものと同じ効果があります。悪いAで、私は「ネットワークが再び壊れているいまいましい」と明日もう一度試して感じます。 「NXDOMAIN」と私は感じて「ああ、彼らは、サーバーをオフにしたのだが、もはや存在しません」と、おそらく再びこのサーバをしようと気にしませんが。"
+    },
+    {
+      "indent": 3,
+      "text": "A practical example of this is a SMTP server where this behaviour is encoded. With a NXDOMAIN attack the mail message would bounce immediately, where as with a bad A attack the mail would be queued and could potentially get through after the attack was suspended.",
+      "ja": "この実施例は、この動作が符号化されたSMTPサーバです。 NXDOMAIN攻撃でメールメッセージが悪い攻撃と同じようにメールがキューに入れられる場合は、すぐにバウンスなり、攻撃が中断された後、潜在的に通じ得ることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "For such an attack to be successful, the NXDOMAIN indiction must be injected into a parent server (or a busy caching resolver). One way this might be done by the use of a CNAME which results in the parent server querying an attackers server. Resolvers that wish to prevent such attacks can query again the final QNAME ignoring any NS data in the query responses it has received for this query.",
+      "ja": "このような攻撃を成功させるために、NXDOMAINのインディクティオは、親サーバ（またはビジー状態のキャッシュリゾルバ）に注入しなければなりません。一つの方法これは、攻撃者がサーバーを照会親サーバーになりCNAMEを使用することによって行うことがあります。このような攻撃を防ぐことを望むリゾルバは再びそれがこのクエリのために受信したクエリ応答における任意のNSデータを無視して、最終的なQNAMEを照会することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementing TTL sanity checking will reduce the effectiveness of such an attack, because a successful attack would require re-injection of the bogus data at more frequent intervals.",
+      "ja": "成功した攻撃がより頻繁な間隔で偽のデータの再注入を必要とするため、TTLの健全性チェックを実装することは、このような攻撃の有効性が低下します。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS Security [RFC2065] provides a mechanism to verify whether a negative response is valid or not, through the use of NXT and SIG records. This document supports the use of that mechanism by promoting the transmission of the relevant security records even in a non security aware server.",
+      "ja": "DNSセキュリティ[RFC2065]は否定応答はNXTとSIGレコードを使用して、有効かどうかを検証するメカニズムを提供します。この文書では、さらに非セキュリティ意識のサーバーに関連するセキュリティレコードの伝達を促進することにより、そのメカニズムの使用をサポートしています。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "I would like to thank Rob Austein for his history of the CHIVES nameserver. The DNSIND working group, in particular Robert Elz for his valuable technical and editorial contributions to this document.",
+      "ja": "私はCHIVESネームサーバの彼の歴史のためのロブAusteinとに感謝したいと思います。 DNSINDワーキンググループ、特にロバート・エルツこのドキュメントへの彼の貴重な技術的および編集上の貢献のために。"
+    },
+    {
+      "indent": 0,
+      "text": "References",
+      "ja": "リファレンス"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034] Mockapetris, P., \"DOMAIN NAMES - CONCEPTS AND FACILITIES,\" STD 13, RFC 1034, November 1987.",
+      "ja": "[RFC1034] Mockapetris、P.、 \"ドメイン名 - 概念とアメニティ、\" STD 13、RFC 1034、1987年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"DOMAIN NAMES - IMPLEMENTATION AND SPECIFICATION,\" STD 13, RFC 1035, November 1987.",
+      "ja": "[RFC1035] Mockapetris、P.、 \"ドメイン名 - 実装と仕様、\" STD 13、RFC 1035、1987年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2065] Eastlake, D., and C. Kaufman, \"Domain Name System Security Extensions,\" RFC 2065, January 1997.",
+      "ja": "[RFC2065]イーストレイク、D.、およびC.カウフマン、 \"ドメインネームシステムのセキュリティ拡張機能、\" RFC 2065、1997年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels,\" BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためのRFCsにおける使用のためのキーワード、\" BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2181] Elz, R., and R. Bush, \"Clarifications to the DNS Specification,\" RFC 2181, July 1997.",
+      "ja": "[RFC2181]エルツ、R.、およびR.ブッシュ大統領、 \"DNS仕様の明確化、\" RFC 2181、1997年7月。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Andrews CSIRO - Mathematical and Information Sciences Locked Bag 17 North Ryde NSW 2113 AUSTRALIA",
+      "ja": "マーク・アンドリュースCSIRO  - 数理・情報科学ロックされたバッグ17ノースライドNSW 2113 AUSTRALIA"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +61 2 9325 3148 EMail: Mark.Andrews@cmis.csiro.au",
+      "ja": "電話：+61 2 9325 3148 Eメール：Mark.Andrews@cmis.csiro.au"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1998). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1998）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    }
+  ]
+}

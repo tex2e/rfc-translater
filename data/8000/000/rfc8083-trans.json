@@ -1,0 +1,883 @@
+{
+  "title": {
+    "text": "RFC 8083 - Multimedia Congestion Control: Circuit Breakers for Unicast RTP Sessions",
+    "ja": "RFC 8083 - マルチメディアの輻輳制御：ユニキャストRTPセッションのためのサーキットブレーカ"
+  },
+  "number": 8083,
+  "created_at": "2019-10-23 02:29:31.112349+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        C. Perkins\nRequest for Comments: 8083                         University of Glasgow\nUpdates: 3550                                                   V. Singh\nCategory: Standards Track                                   callstats.io\nISSN: 2070-1721                                               March 2017",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Multimedia Congestion Control: Circuit Breakers for Unicast RTP Sessions",
+      "ja": "マルチメディアの輻輳制御：ユニキャストRTPセッションのためのサーキットブレーカ"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The Real-time Transport Protocol (RTP) is widely used in telephony, video conferencing, and telepresence applications. Such applications are often run on best-effort UDP/IP networks. If congestion control is not implemented in these applications, then network congestion can lead to uncontrolled packet loss and a resulting deterioration of the user's multimedia experience. The congestion control algorithm acts as a safety measure by stopping RTP flows from using excessive resources and protecting the network from overload. At the time of this writing, however, while there are several proprietary solutions, there is no standard algorithm for congestion control of interactive RTP flows.",
+      "ja": "リアルタイム転送プロトコル（RTP）が広く、電話、ビデオ会議、およびテレプレゼンスアプリケーションで使用されています。このようなアプリケーションは、多くの場合、ベストエフォート型のUDP / IPネットワーク上で実行されています。輻輳制御は、これらのアプリケーションに実装されていない場合は、ネットワークの輻輳が制御されていないパケット損失や、ユーザーのマルチメディア体験の結果の悪化につながることができます。輻輳制御アルゴリズムは、RTPを停止することにより安全対策として作用する過剰なリソースを使用して過負荷からネットワークを保護するから流れます。いくつかの独自のソリューションがありますが、この記事の執筆時点では、しかし、インタラクティブRTPフローの輻輳制御のための標準的なアルゴリズムはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not propose a congestion control algorithm. It instead defines a minimal set of RTP circuit breakers: conditions under which an RTP sender needs to stop transmitting media data to protect the network from excessive congestion. It is expected that, in the absence of long-lived excessive congestion, RTP applications running on best-effort IP networks will be able to operate without triggering these circuit breakers. To avoid triggering the RTP circuit breaker, any Standards Track congestion control algorithms defined for RTP will need to operate within the envelope set by these RTP circuit breaker algorithms.",
+      "ja": "この文書では、輻輳制御アルゴリズムを提案していません。 RTP送信機が過剰混雑からネットワークを保護するために、メディアデータの送信を停止する必要条件：これは、代わりにRTP回路遮断器の最小セットを定義します。これらの回路ブレーカをトリガすることなく動作することができるようになります長寿命の過度の輻輳が存在しない場合に、RTPアプリケーションは、ベストエフォート型のIPネットワーク上で実行されている、ことが期待されます。 RTP回路ブレーカをトリガしないようにするには、RTPのために定義された任意の標準化過程輻輳制御アルゴリズムは、これらのRTP回路ブレーカのアルゴリズムによって設定されたエンベロープ内で動作する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc8083.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc8083で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2017 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2017 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3\n2.  Background  . . . . . . . . . . . . . . . . . . . . . . . . .   3\n3.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   6\n4.  RTP Circuit Breakers for Systems Using the RTP/AVP Profile  .   8\n  4.1.  RTP/AVP Circuit Breaker #1: RTCP Timeout  . . . . . . . .  10\n  4.2.  RTP/AVP Circuit Breaker #2: Media Timeout . . . . . . . .  11\n  4.3.  RTP/AVP Circuit Breaker #3: Congestion  . . . . . . . . .  12\n  4.4.  RTP/AVP Circuit Breaker #4: Media Usability . . . . . . .  16\n  4.5.  Ceasing Transmission  . . . . . . . . . . . . . . . . . .  17\n5.  RTP Circuit Breakers and the RTP/AVPF and RTP/SAVPF Profiles   18\n6.  Impact of RTCP Extended Reports (XR)  . . . . . . . . . . . .  19\n7.  Impact of Explicit Congestion Notification (ECN)  . . . . . .  19\n8.  Impact of Bundled Media and Layered Coding  . . . . . . . . .  20\n9.  Security Considerations . . . . . . . . . . . . . . . . . . .  20\n10. References  . . . . . . . . . . . . . . . . . . . . . . . . .  21\n  10.1.  Normative References . . . . . . . . . . . . . . . . . .  21\n  10.2.  Informative References . . . . . . . . . . . . . . . . .  22\nAcknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .  25\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  25",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The Real-time Transport Protocol (RTP) [RFC3550] is widely used in voice-over-IP, video teleconferencing, and telepresence systems. Many of these systems run over best-effort UDP/IP networks and can suffer from packet loss and increased latency if network congestion occurs. Designing effective RTP congestion control algorithms to adapt the transmission of RTP-based media to match the available network capacity while also maintaining the user experience is a difficult but important problem. Many such congestion control and media adaptation algorithms have been proposed, but to date there is no consensus on the correct approach or even that a single standard algorithm is desirable.",
+      "ja": "リアルタイムトランスポートプロトコル（RTP）[RFC3550]は広くボイスオーバーIP、テレビ会議、およびテレプレゼンスシステムで使用されています。これらのシステムの多くは、オーバーベストエフォート型のUDP / IPネットワークを実行し、ネットワークの輻輳が発生した場合、パケットロスや待ち時間の増加に苦しむことができます。また、ユーザーエクスペリエンスを維持しながら、利用可能なネットワーク容量に合わせて、RTPベースのメディアの伝送を適応させるために効果的なRTP輻輳制御アルゴリズムを設計することは難しいが、重要な課題です。多くのこのような輻輳制御およびメディア適応アルゴリズムが提案されているが、現在までに正しいアプローチで、あるいは単一の標準アルゴリズムが望ましいというコンセンサスは存在しません。"
+    },
+    {
+      "indent": 3,
+      "text": "This memo does not attempt to propose a new RTP congestion control algorithm. Instead, we propose a small set of RTP circuit breakers: mechanisms that terminate RTP flows in conditions under which there is general agreement that serious network congestion is occurring. The RTP circuit breakers proposed in this memo are a specific instance of the general class of network transport circuit breakers [RFC8084] designed to act as a protection mechanism of last resort to avoid persistent excessive congestion. To avoid triggering the RTP circuit breaker, any Standards Track congestion control algorithms defined for RTP will need to operate within the envelope set by the RTP circuit breaker algorithms defined by this memo.",
+      "ja": "このメモは、新しいRTP輻輳制御アルゴリズムを提案しようとしません。 RTPは、深刻なネットワークの輻輳が発生していることを一般的な合意がある際の条件に流れる終了メカニズム：代わりに、私たちはRTP回路ブレーカの小さなセットを提案します。このメモで提案されているRTP回路ブレーカは、永続的な過度の混雑を避けるために、最後の保護メカニズムとして機能するように設計されたネットワークトランスポート回路ブレーカ[RFC8084]の一般的なクラスの特定のインスタンスです。 RTP回路ブレーカをトリガしないようにするには、RTPのために定義された任意の標準化過程輻輳制御アルゴリズムは、このメモで定義されたRTP回路ブレーカのアルゴリズムによって設定されたエンベロープ内で動作する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Background",
+      "section_title": true,
+      "ja": "2.背景"
+    },
+    {
+      "indent": 3,
+      "text": "We consider congestion control for unicast RTP traffic flows. This is the problem of adapting the transmission of an audio/visual data flow, encapsulated within an RTP transport session, from one sender to one receiver so that it does not use more capacity than is available along the network path. Such adaptation needs to be done in a way that limits the disruption to the user experience caused by both packet loss and excessive rate changes. Congestion control for multicast flows is outside the scope of this memo. Multicast traffic needs different solutions since the available capacity estimator for a group of receivers will differ from that for a single receiver, and because multicast congestion control has to consider issues of fairness across groups of receivers that do not apply to unicast flows.",
+      "ja": "私たちは、ユニキャストRTPトラフィックフローの輻輳制御を考えます。これは、ネットワーク経路に沿って利用可能であるよりも多くの容量を使用しないように、1人の送信者からの1つの受信機に、RTPトランスポート・セッション内に封入されたオーディオ/ビジュアルデータフローの送信を適応の問題です。このような適応は、パケット損失や過剰率の変化の両方によって引き起こさユーザー体験の混乱を制限した方法で行われる必要があります。マルチキャストフローの輻輳制御は、このメモの範囲外です。マルチキャストトラフィックは、受信機のグループのために利用可能な容量の推定は、単一の受信機のためのものとは異なりますので、さまざまなソリューションを必要とし、マルチキャスト輻輳制御は、ユニキャストフローに適用されない受信機のグループ間公平性の問題を考慮しなければならないからです。"
+    },
+    {
+      "indent": 3,
+      "text": "Congestion control for unicast RTP traffic can be implemented in one of two places in the protocol stack. One approach is to run the RTP traffic over a congestion-controlled transport protocol (for example, over TCP), and to adapt the media encoding to match the dictates of the transport-layer congestion control algorithm. This is safe for the network but can be suboptimal for the media quality unless the transport protocol is designed to support real-time media flows. We do not consider this class of applications further in this memo, as their network safety is guaranteed by the underlying transport.",
+      "ja": "ユニキャストRTPトラフィックの輻輳制御は、プロトコル・スタック内の2つの場所のいずれかで実施することができます。一つのアプローチは、（例えば、TCP上）輻輳制御トランスポートプロトコルを介してRTPトラフィックを実行し、トランスポート層の輻輳制御アルゴリズムのおもむくと一致するように、メディアエンコーディングを適応させることです。これは、ネットワークのために安全であるが、トランスポートプロトコルがリアルタイムメディアフローをサポートするように設計されていない限り、メディアの品質のための次善のことができます。彼らのネットワークの安全性は、基礎となるトランスポートによって保証されているよう私たちは、このメモで、さらにこのクラスのアプリケーションを考慮していません。"
+    },
+    {
+      "indent": 3,
+      "text": "Alternatively, RTP flows can be run over a non-congestion-controlled transport protocol (for example, UDP) performing rate adaptation at the application layer based on RTP Control Protocol (RTCP) feedback. With a well-designed, network-aware application, this allows highly effective media quality adaptation, but there is potential to cause persistent congestion in the network if the application does not adapt its sending rate in a timely and effective manner. We consider this class of applications in this memo.",
+      "ja": "代替的に、RTPフローは、RTP制御プロトコル（RTCP）のフィードバックに基づいて、アプリケーション層での非輻輳制御トランスポートプロトコル（例えば、UDP）を実行レート適応上で実行することができます。うまく設計された、ネットワーク対応アプリケーションでは、これは非常に効果的なメディア品質の適応を可能にするが、アプリケーションがタイムリーかつ効果的な方法で、その送信レートを適応しない場合は、ネットワーク内の永続的な混雑を引き起こす可能性があります。私たちは、このメモでこのクラスのアプリケーションを検討してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Congestion control relies on monitoring the delivery of a media flow and responding to adapt the transmission of that flow when there are signs that the network path is congested. Network congestion can be detected in one of three ways:",
+      "ja": "輻輳制御は、メディアフローの配信を監視し、ネットワークパスが輻輳している兆候がある場合、そのフローの送信を適応させるために、応答に依存しています。ネットワークの混雑は、3つの方法のいずれかで検出することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "1) a receiver can infer the onset of congestion by observing an increase in one-way delay caused by queue build-up within the network;",
+      "ja": "1）受信機は、ネットワーク内のキューのビルドアップによる一方向遅延の増加を観察することによって、輻輳の発生を推測することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "2) if Explicit Congestion Notification (ECN) [RFC3168] is supported, the network can signal the presence of congestion by marking packets using ECN Congestion Experienced (CE) marks (this could potentially be augmented by mechanisms such as Congestion Exposure (ConEx) [RFC7713] or other future protocol extensions for network signaling of congestion); or",
+      "ja": "明示的輻輳通知場合2）（ECN）[RFC3168]がサポートされ、ネットワークが（これは潜在的にそのような輻輳曝露などのメカニズム（CONEXによって増強することができるECN輻輳が経験（CE）マークを使用してパケットをマーキングすることによって、輻輳の存在を知らせることができます） RFC7713]又は輻輳のネットワークシグナリング）のための他の将来のプロトコル拡張。または"
+    },
+    {
+      "indent": 3,
+      "text": "3) in the extreme case, congestion will cause packet loss that can be detected by observing a gap in the received RTP sequence numbers.",
+      "ja": "3）極端な場合には、輻輳が受信したRTPシーケンス番号のギャップを観察することによって検出することができるパケットロスの原因となります。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the onset of congestion is observed, the receiver has to send feedback to the sender to indicate that the transmission rate needs to be reduced. How the sender reduces the transmission rate is highly dependent on the media codec being used and is outside the scope of this memo.",
+      "ja": "輻輳の発生が観察されると、受信機は、伝送速度が低下する必要があることを示すために、送信者にフィードバックを送信する必要があります。どのように送信者は送信レートが使用されているメディアコーデックに大きく依存している削減し、このメモの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "There are several ways in which a receiver can send feedback to a media sender within the RTP framework:",
+      "ja": "受信機は、RTPフレームワーク内のメディアの送信者にフィードバックを送信することが可能ないくつかの方法があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o The base RTP specification [RFC3550] defines RTCP Receiver Report (RR) packets to convey reception quality feedback information and Sender Report (SR) packets to convey information about the media transmission. RTCP SR packets contain data that can be used to reconstruct media timing at a receiver along with a count of the total number of octets and packets sent. RTCP RR packets report on the fraction of packets lost in the last reporting interval, the cumulative number of packets lost, the highest sequence number received, and the inter-arrival jitter. The RTCP RR packets also contain timing information that allows the sender to estimate the network Round-Trip Time (RTT) to the receivers. RTCP reports are sent periodically, with the reporting interval being determined by the number of Synchronization Sources (SSRCs) used in the session and a configured session bandwidth estimate (the number of SSRCs) used is usually two in a unicast session, one for each participant, but can be greater if the participants send multiple media streams). The interval between reports sent from each receiver is on the order of a few seconds on average; although it varies with the session bandwidth, it is randomized to avoid synchronization of reports from multiple receivers. The interval can be less than a second in a high-bandwidth session. RTCP RR packets allow a receiver to report ongoing network congestion to the sender. However, if a receiver detects the onset of congestion part way through a reporting interval, the base RTP specification contains no provision for sending the RTCP RR packet early, and the receiver has to wait until the next scheduled reporting interval.",
+      "ja": "oをベースRTP仕様[RFC3550]は、メディア送信に関する情報を伝達するために受信品質フィードバック情報と送信者レポート（SR）パケットを伝達するためにRTCPレシーバレポート（RR）パケットを定義します。 RTCP SRパケットが送信されたオクテットとパケットの合計数のカウントと一緒に受信機にメディアタイミングを再構成するために使用することができるデータを含みます。 RTCPのRRパケットは、最後のレポート間隔で失われたパケットの割合を報告し、パケットの累積数は、失われた最大のシーケンス番号が受信し、到着間ジッタ。 RTCP RRパケットはまた、送信者が受信者にネットワークラウンドトリップ時間（RTT）を推定することを可能にするタイミング情報を含みます。 RTCPレポートは、レポート間隔は同期ソースの数（SSRCs）によって決定されると、定期的に送信されるセッションで使用され、使用される構成セッション帯域幅推定値（SSRCsの数）は、通常のユニキャスト・セッションに2つ、各参加者のためのものであるれていますしかし、参加者が複数のメディアストリームを送信する場合、大きくすることができます）。各受信機から送信されたレポートの間の間隔は、平均で数秒のオーダーです。それはセッション帯域幅によって異なりますが、複数の受信機からのレポートの同期を避けるために、ランダム化されています。間隔は、高帯域幅のセッションで二未満とすることができます。 RTCP RRパケットは、受信者が送信者への継続的なネットワークの輻輳を報告することができます。受信機は、報告間隔によって輻輳途中の発症を検出した場合は、ベースRTP仕様は、初期のRTCP RRパケットを送信するための規定が含まれていない、と受信機は、次のスケジュールされたレポート間隔まで待たなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o The RTCP Extended Reports (XR) [RFC3611] allow reporting of more complex and sophisticated reception quality metrics but do not change the RTCP timing rules. RTCP extended reports of potential interest for congestion control purposes are the extended packet loss, discard, and burst metrics [RFC3611] [RFC7002] [RFC7097] [RFC7003] [RFC6958] as well as the extended delay metrics [RFC6843] [RFC6798]. Other RTCP Extended Reports that could be helpful for congestion control purposes might be developed in future.",
+      "ja": "RTCP拡張レポート（XR）O [RFC3611]より複雑で洗練された受信品質指標の報告を可能にするが、RTCPタイミング規則を変更しないでください。 RTCPは、拡張パケット損失が、破棄され、および輻輳制御の目的のために潜在的に関心のあるレポートを拡張バーストメトリック[RFC3611]、[RFC7002]、[RFC7097]、[RFC7003]、[RFC6958]と同様に、拡張遅延メトリック[RFC6843]、[RFC6798]。輻輳制御の目的のために役立つことができ、他のRTCP拡張レポートは、将来開発される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Rapid feedback about the occurrence of congestion events can be achieved using the Extended RTP Profile for RTCP-Based Feedback (RTP/AVPF) [RFC4585] (or its secure variant, RTP/SAVPF [RFC5124]) in place of the RTP/AVP profile [RFC3551]. This modifies the RTCP timing rules to allow RTCP reports to be sent early, in some cases immediately, provided the RTCP transmission rate keeps within its bandwidth allocation. It also defines transport-layer feedback messages, including Negative Acknowledgements (NACKs), that can be used to report on specific congestion events. RTP Codec Control Messages [RFC5104] extend the RTP/AVPF profile with additional feedback messages that can be used to influence the way in which rate adaptation occurs but do not further change the dynamics of how rapidly feedback can be sent. Use of the RTP/AVPF profile is dependent on signaling.",
+      "ja": "O輻輳イベントの発生についての迅速なフィードバックは、RTP / AVPの代わりに、RTCPベースのフィードバック（RTP / AVPF）の拡張RTPプロファイル[RFC4585]（またはそのセキュアバリアント、RTP / SAVPF [RFC5124]）を使用して達成することができますプロフィール[RFC3551]。これは、RTCPはすぐにいくつかのケースでは、早期に送信することが報告できるように、RTCPタイミング規則を変更し、RTCPの伝送速度がその帯域幅の割り当ての中に保持します提供。また、特定の輻輳イベントを報告するために使用することができます負の謝辞（NACKの）、などのトランスポート層フィードバックメッセージを、定義されています。 RTPコーデック制御メッセージ[RFC5104]レート適応がなく、さらに送信することができますどのように急速にフィードバックのダイナミクスを変更しない発生する方法に影響を与えるために使用することができ、追加のフィードバックメッセージとRTP / AVPFプロファイルを拡張します。 RTP / AVPFプロファイルの使用は、シグナリングに依存しています。"
+    },
+    {
+      "indent": 3,
+      "text": "o Finally, ECN for RTP over UDP [RFC6679] can be used to provide feedback on the number of packets that received an ECN-CE mark. This RTCP extension builds on the RTP/AVPF profile to allow rapid congestion feedback when ECN is supported.",
+      "ja": "O最後に、UDP上のRTP用ECN [RFC6679]はECN-CEマークを受信したパケットの数にフィードバックを提供するために使用することができます。このRTCP拡張は、ECNがサポートされている時に迅速な輻輳フィードバックを可能にするためにRTP / AVPFプロファイルに基づいています。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to these mechanisms for providing feedback, the sender can include an RTP header extension in each packet to record packet transmission times [RFC5450]. Accurate transmission timestamps can be helpful for estimating queuing delays to get an early indication of the onset of congestion.",
+      "ja": "フィードバックを提供するためのこれらの機構に加えて、送信側はパケット送信時間[RFC5450]を記録するために各パケット内のRTPヘッダ拡張を含むことができます。正確な伝送のタイムスタンプは、輻輳の発生を早期に表示を取得するためにキューイング遅延を推定するための参考にすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Taken together, these various mechanisms allow receivers to provide feedback on the senders when congestion events occur, with varying degrees of timeliness and accuracy. The key distinction is between systems that use only the basic RTCP mechanisms, without RTP/AVPF rapid feedback, and those that use the RTP/AVPF extensions to respond to congestion more rapidly.",
+      "ja": "まとめると、これらの様々な機構は、輻輳イベントが発生したときに受信機が適時性と精度の様々な程度で、送信者にフィードバックを提供することを可能にします。キーの区別はRTP / AVPF迅速なフィードバックなしで、基本的なRTCPメカニズムを使用するシステムの間で、RTP / AVPFの拡張機能を使用するものは、より迅速に、輻輳に応答します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Terminology",
+      "section_title": true,
+      "ja": "3.用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119]. This interpretation of these key words applies only when written in ALL CAPS. Mixed- or lower-case uses of these key words are not to be interpreted as carrying special significance in this memo.",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。これらのキーワードのこの解釈はすべて大文字で書かれた場合にのみ適用されます。混在または小文字は、これらのキーワードを使用して、このメモで特別な意味を運ぶものとして解釈されるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The definition of the RTP circuit breaker is specified in terms of the following variables:",
+      "ja": "RTP回路ブレーカの定義は、以下の変数の観点で指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o Td is the deterministic RTCP reporting interval, as defined in Section 6.3.1 of [RFC3550].",
+      "ja": "[RFC3550]のセクション6.3.1で定義されるようにO Tdは、決定論的RTCPレポート間隔です。"
+    },
+    {
+      "indent": 3,
+      "text": "o Tdr is the sender's estimate of the deterministic RTCP reporting interval, Td, calculated by a receiver of the data it is sending. Tdr is not known at the sender but can be estimated by executing the algorithm in Section 6.2 of [RFC3550] using the average RTCP packet size seen at the sender, the number of members reported in the receiver's SR/RR report blocks, and whether the receiver is sending SR or RR packets. Tdr is recalculated when each new RTCP SR/RR report is received, but the media timeout circuit breaker (see Section 4.2) is only reconsidered when Tdr increases.",
+      "ja": "O TDRは、それが送信されたデータの受信機で計算、確定RTCPのレポート間隔、Tdを、の送信者の推定値です。 TDRは、送信者に知られていないが、送信側で見られる平均RTCPパケットサイズを使用して、[RFC3550]のセクション6.2でアルゴリズムを実行することによって推定することができ、部材の数は、受信機のSR / RRレポートブロックに報告され、か受信機はSRやRRパケットを送信しています。 TDRは、場合TDR増加のみ再検討される（セクション4.2を参照）は、各新しいRTCP SR / RRのレポートを受信したときに再計算が、メディアタイムアウト回路ブレーカれます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Tr is the network round-trip time, which is calculated by the sender using the algorithm in Section 6.4.1 of [RFC3550] and is smoothed using an exponentially weighted moving average as Tr = (0.8 * Tr) + (0.2 * Tr_new) where Tr_new is the latest RTT estimate obtained from an RTCP report. The weight is chosen so old estimates decay over k intervals.",
+      "ja": "O Trは[RFC3550]のセクション6.4.1にアルゴリズムを使用センダによって計算され、指数関数的に重み付けTrの=（0.8 * TR）+（0.2 * Tr_newとして移動平均を用いて平滑化されたネットワークラウンドトリップ時間であります）ここでTr_newは、RTCPレポートから得られた最新のRTT推定値です。重量は、k個の間隔にわたってので、古い見積もりの​​減衰を選択されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o k is the non-reporting threshold (see Section 4.2).",
+      "ja": "O kは、非報告閾値（4.2節を参照します）。"
+    },
+    {
+      "indent": 3,
+      "text": "o Tf is the media framing interval at the sender. For applications sending at a constant frame rate, Tf is the inter-frame interval. For applications that switch between a small set of possible frame rates (for example, when sending speech with comfort noise, such that comfort noise frames are sent less often than speech frames), Tf is set to the longest of the inter-frame intervals of the different frame rates. For applications that send periodic frames but dynamically vary their frame rate, Tf is set to the largest inter-frame interval used in the last 10 seconds. For applications that send less than one frame every 10 seconds, or that have no concept of periodic frames (e.g., text conversation [RFC4103], or pointer events [RFC2862]), when each frame is sent, Tf is set to the time interval since the previous frame.",
+      "ja": "O Tfは送信側のメディアフレーミングの間隔です。一定のフレームレートで送信するアプリケーションのために、Tfはフレーム間間隔です。可能なフレームレートの小さなセットを切り替える用途に（例えば、快適雑音フレームがあまり音声フレームより送信されるように、快適ノイズと音声を送信する場合）、TFはのフレーム間間隔の最長に設定されています異なるフレームレート。定期的にフレームを送信するが、動的にフレームレートを変更するアプリケーションの場合、TFは、最後の10秒で使用される最大のフレーム間の間隔に設定されています。各フレームが送信されたときに、10秒ごと、またはその定期的なフレーム（例えば、テキストの会話[RFC4103]、またはポインタイベント[RFC2862]）の概念はありません未満のフレームを送信するアプリケーションの場合、TFは時間間隔に設定されています前のフレームからです。"
+    },
+    {
+      "indent": 3,
+      "text": "o G is the frame group size. That is, the number of frames that are coded together based on a particular sending rate setting. If the codec used by the sender can change its rate on each frame, then G = 1; otherwise, G is set to the number of frames before the codec can adjust to the new rate. For codecs that have the concept of a Group of Pictures (GOP), G is likely the GOP length.",
+      "ja": "O Gは、フレーム群サイズです。すなわち、特定の送信レートの設定に基づいて一緒に符号化されるフレームの数です。送信者によって使用されるコーデックは、各フレーム上のレートを変更することができる場合は、G = 1。コーデックは、新しいレートに調整することができる前に、それ以外の場合は、Gは、フレームの数に設定されています。画像のグループ（GOP）の概念を持っているコーデックについては、GはGOP長そうです。"
+    },
+    {
+      "indent": 3,
+      "text": "o T_rr_interval is the minimal interval between RTCP reports, as defined in Section 3.4 of [RFC4585]; it is only meaningful for implementations of RTP/AVPF profile [RFC4585] or the RTP/SAVPF profile [RFC5124].",
+      "ja": "[RFC4585]のセクション3.4で定義されるようにO T_rr_intervalは、RTCPレポート間の最小間隔です。それは[RFC4585]またはRTP / SAVPFプロファイル[RFC5124] RTP / AVPFプロファイルの実装のためにのみ意味があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o X is the estimated throughput a TCP connection would achieve over a path, in bytes per second.",
+      "ja": "O Xは、秒あたりのバイト数でTCP接続が経路上に達成する推定スループットは、です。"
+    },
+    {
+      "indent": 3,
+      "text": "o s is the size of RTP packets being sent, in bytes. If the RTP packets being sent vary in size, then the average size over the packet comprising the last 4 * G frames MUST be used (this is intended to be comparable to the four loss intervals used in [RFC5348]).",
+      "ja": "O Sは、RTPパケットのサイズはバイト単位で、送信されています。送信されるRTPパケットはサイズが異なる場合には、最後の4つの* Gフレームを含むパケットの平均サイズは、（これは[RFC5348]で使用される4つの損失間隔と同等であることが意図されている）を使用しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o p is the loss event rate, between 0.0 and 1.0, that would be seen by a TCP connection over a particular path. When used in the RTP congestion circuit breaker, this is approximated as described in Section 4.3.",
+      "ja": "O pは特定のパス上のTCP接続によって見られる0.0と1.0との間の損失イベント率、です。 RTP輻輳回路遮断器に使用される場合、セクション4.3で説明したように、これは近似されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o t_RTO is the retransmission timeout value that would be used by a TCP connection over a particular path, in seconds. This MUST be approximated using t_RTO = 4 * Tr when used as part of the RTP congestion circuit breaker.",
+      "ja": "O t_RTOは秒単位で、特定のパス上のTCP接続で使用される再送タイムアウト値です。 RTP輻輳回路遮断器の一部として使用される場合、これはt_RTO = 4 * Trとを用いて近似しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o b is the number of packets that are acknowledged by a single TCP acknowledgement. Following [RFC5348], it is RECOMMENDED that the value b = 1 is used as part of the RTP congestion circuit breaker.",
+      "ja": "O bは、単一のTCP受信確認によって確認されたパケットの数です。 [RFC5348]以下には、値b = 1は、RTP輻輳回路遮断器の一部として使用することが推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. RTP Circuit Breakers for Systems Using the RTP/AVP Profile",
+      "section_title": true,
+      "ja": "RTP / AVPプロファイルを使用しているシステムの場合4. RTPサーキットブレーカ"
+    },
+    {
+      "indent": 3,
+      "text": "The feedback mechanisms defined in [RFC3550] and available under the RTP/AVP profile [RFC3551] are the minimum that can be assumed for a baseline circuit breaker mechanism that is suitable for all unicast applications of RTP. Accordingly, for an RTP circuit breaker to be useful, it needs to be able to detect that an RTP flow is causing excessive congestion using only basic RTCP features without needing RTCP XR feedback or the RTP/AVPF profile for rapid RTCP reports.",
+      "ja": "RTP / AVPプロファイル[RFC3551]の[RFC3550]を使用可能で定義されたフィードバック機構は、RTPのすべてのユニキャスト用途に適している基準回路遮断器機構のために仮定することができる最小値です。従って、有用であるRTP回路遮断器に対しては、RTPフローが急速RTCPレポートのためのRTCP XRフィードバックまたはRTP / AVPFプロファイルを必要とすることなく、基本的なRTCPの機能を用いて、過度の輻輳を引き起こしていることを検出できる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "RTCP is a fundamental part of the RTP protocol, and the mechanisms described here rely on the implementation of RTCP. Implementations that claim to support RTP, but that do not implement RTCP, will be unable to use the circuit breaker mechanisms described in this memo. Such implementations SHOULD NOT be used on networks that might be subject to congestion unless equivalent mechanisms are defined using some non-RTCP feedback channel to report congestion and signal circuit breaker conditions.",
+      "ja": "RTCPは、RTPプロトコルの基本的な部分であり、ここで説明されたメカニズムは、RTCPの実装に依存しています。 RTPをサポートしていると主張するが、それはRTCPを実装していない実装は、このメモで説明した回路ブレーカのメカニズムを使用することができません。そのような実装は、同等のメカニズムは、輻輳及び信号回路ブレーカ条件を報告するためにいくつかの非RTCPフィードバックチャネルを使用して定義されない限り、混雑を受けるかもしれないネットワーク上で使用されるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTCP timeout circuit breaker (Section 4.1) will trigger if an implementation of this memo attempts to interwork with an endpoint that does not support RTCP. Implementations that sometimes need to interwork with endpoints that do not support RTCP need to disable the RTP circuit breakers if they don't receive some confirmation via signaling that the remote endpoint implements RTCP (the presence of a Session Description Protocol (SDP) \"a=rtcp:\" attribute in an answer might be such an indication). The RTP circuit breaker SHOULD NOT be disabled on networks that might be subject to congestion unless equivalent mechanisms are defined using some non-RTCP feedback channel to report congestion and signal circuit breaker conditions [RFC8084].",
+      "ja": "このメモの実装はRTCPをサポートしていないエンドポイントと相互作用しようとした場合RTCPタイムアウト回路ブレーカ（4.1節）をトリガします。彼らは、リモートエンドポイントがRTCP（セッション記述プロトコル（SDP）の存在を実装することをシグナリングを介して、いくつかの確認を受信しない場合、時にはRTCPをサポートしていないエンドポイントと相互作用する必要がある実装はRTP回路ブレーカを無効にする必要があります「= RTCP：」答え内の属性は、そのような兆候かもしれません）。同等のメカニズムは、輻輳及び信号回路ブレーカ条件[RFC8084]を報告するためにいくつかの非RTCPフィードバックチャネルを使用して定義されない限り、RTP回路遮断器は、混雑を受けるかもしれないネットワークで無効にされるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Three potential congestion signals are available from the basic RTCP SR/RR packets and are reported for each SSRC in the RTP session:",
+      "ja": "3つの潜在的な輻輳信号は、基本的なRTCP SR / RRパケットから利用可能であり、RTPセッションの各SSRCについて報告されています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The sender can estimate the network round-trip time once per RTCP reporting interval based on the contents and timing of RTCP SR and RR packets.",
+      "ja": "1.送信者は、RTCP SRとRRパケットの内容やタイミングに基づいてRTCPのレポート間隔ごとに一度のネットワークラウンドトリップ時間を推定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Receivers report a jitter estimate (the statistical variance of the RTP data packet inter-arrival time) calculated over the RTCP reporting interval. Due to the nature of the jitter calculation (Section 6.4.4. of [RFC3550]), the jitter is only meaningful for RTP flows that send a single data packet for each RTP timestamp value (i.e., audio flows, or video flows where each packet comprises one video frame).",
+      "ja": "2.受信機はRTCPレポート間隔にわたって計算されたジッタの推定値（RTPデータパケット間到着時間の統計的分散）を報告しています。ジッタ計算（セクション6.4.4。[RFC3550]の）の性質のために、ジッタは、各RTPタイムスタンプ値の単一のデータパケット（すなわち、オーディオフローを送信するRTPフローに対してのみ意味があり、又はここで、各ビデオフローパケットは）一つのビデオフレームを備えます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Receivers report the fraction of RTP data packets lost during the RTCP reporting interval and the cumulative number of RTP packets lost over the entire RTP session.",
+      "ja": "3.受信機は、RTCP報告間隔と全体のRTPセッションを介して失われたRTPパケットの累積数の間に失われたRTPデータパケットの割合を報告しています。"
+    },
+    {
+      "indent": 3,
+      "text": "These congestion signals limit the possible circuit breakers since they give only limited visibility into the behavior of the network.",
+      "ja": "彼らはネットワークの挙動に限ら可視性を与えるので、これらの混雑信号は、可能な回路ブレーカを制限します。"
+    },
+    {
+      "indent": 3,
+      "text": "RTT estimates are widely used in congestion control algorithms as a proxy for queuing delay measures in delay-based congestion control or to determine connection timeouts. RTT estimates derived from RTCP SR and RR packets sent according to the RTP/AVP timing rules are too infrequent to be useful for congestion control and don't give enough information to distinguish a delay change due to routing updates from queuing delay caused by congestion. Accordingly, we cannot use the RTT estimate alone as an RTP circuit breaker.",
+      "ja": "RTT推定値は広く遅延ベースの輻輳制御の遅延対策をキューイングするためのプロキシとして輻輳制御アルゴリズムで使用されるか、または接続タイムアウトを決定します。 RTP / AVPタイミング規則に従って送信RTCP SRとRRパケットから導出さRTT推定値は、輻輳制御のために有用であるには余りにもまれであり、輻輳による遅延キューイングからルーティングアップデートに遅延変動を区別するのに十分な情報を与えません。したがって、我々は、RTP回路ブレーカとして単独でRTT推定値を使用することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Increased jitter can be a signal of transient network congestion, but in the highly aggregated form reported in RTCP RR packets, it offers insufficient information to estimate the extent or persistence of congestion. Jitter reports are a useful early warning of potential network congestion but provide an insufficiently strong signal to be used as a circuit breaker.",
+      "ja": "ジッタの増加は、一時的なネットワークの輻輳の信号とすることができるが、RTCPのRRパケットで報告された高度に凝集した形態では、渋滞の程度または持続性を推定するために十分な情報を提供しています。ジッタレポートは、潜在的なネットワークの輻輳の便利な早期警告ですが、サーキットブレーカーとして使用されるように十分に強いシグナルを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "The remaining congestion signals are the packet loss fraction and the cumulative number of packets lost. If considered carefully, and over an appropriate time frame to distinguish transient problems from long term issues [RFC8084], these can be effective indicators that persistent excessive congestion is occurring in networks where packet loss is primarily due to queue overflows, although loss caused by non-congestive packet corruption can distort the result in some networks. TCP congestion control [RFC5681] intentionally tries to fill the router queues and uses the resulting packet loss as congestion feedback. An RTP flow competing with TCP traffic will therefore expect to see a non-zero packet loss fraction, and some variation in queuing latency, in normal operation when sharing a path with other flows, which needs to be accounted for when determining the circuit breaker threshold [RFC8084]. This behavior of TCP is reflected in the congestion circuit breaker below and will affect the design of any RTP congestion control protocol.",
+      "ja": "残りの混雑信号は、パケット損失分数および失われたパケットの累積数です。慎重に検討し、適切な時間枠にわたり長期的な問題[RFC8084]からの一時的な問題を区別する場合は損失が非によって引き起こされるが、これらは、持続的な過度の輻輳がパケットロスがオーバーフローをキューに主な原因であるネットワークで発生している効果的な指標であることができ-congestiveパケットの破損が一部のネットワークでは、結果を歪めることができます。 TCP輻輳制御[RFC5681]は、意図的にルータキューを充填しようと輻輳フィードバックとして得られたパケット損失を使用します。通常動作時のRTP TCPトラフィックと競合する流れは、従って、非ゼロパケット損失の割合を見ることを期待し、待ち時間をキューイングにおけるいくらかの変動は、回路遮断器の閾値を決定する際に考慮される必要がある他のフローのパスを共有する場合[RFC8084]。 TCPのこの動作は以下の混雑回路ブレーカに反映され、任意のRTP輻輳制御プロトコルの設計に影響を与えます。"
+    },
+    {
+      "indent": 3,
+      "text": "Two packet loss regimes can be observed: 1) RTCP RR packets show a non-zero packet loss fraction while the extended highest sequence number received continues to increment; and 2) RR packets show a loss fraction of zero, but the extended highest sequence number received does not increment even though the sender has been transmitting RTP data packets. The former corresponds to the TCP congestion avoidance state and indicates a congested path that is still delivering data; the latter corresponds to a TCP timeout and is most likely due to a path failure. A third condition is that data is being sent but no RTCP feedback is received at all, corresponding to a failure of the reverse path. We derive circuit breaker conditions for these loss regimes in the following.",
+      "ja": "2つのパケット損失レジームを観察することができる：受信拡張最高シーケンス番号をインクリメントし続ける1）RTCP RRパケットは、非ゼロのパケット損失割合を示す図です。 2）RRパケットは、ゼロの損失の割合を示しているが、受信した拡張最高シーケンス番号は、送信者がRTPデータパケットを送信されてきたにもかかわらず、インクリメントしません。前者TCP輻輳回避状態に対応し、静止画データを配信された輻輳経路を示しています。後者は、TCPのタイムアウトに対応して起因するパスの障害による可能性が最も高いです。第三の条件は、データが送信されているが、何のRTCPフィードバックが全く受信されない、逆パスの故障に対応することです。当社は、以下では、これらの損失体制のための回路ブレーカ条件を導き出します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. RTP/AVP Circuit Breaker #1: RTCP Timeout",
+      "section_title": true,
+      "ja": "4.1。 RTP / AVPサーキットブレーカー＃1：RTCPタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "An RTCP timeout can occur when RTP data packets are being sent, but there are no RTCP reports returned from the receiver. This is either due to a failure of the receiver to send RTCP reports or a failure of the return path that is preventing those RTCP reporting from being delivered. In either case, it is not safe to continue transmission since the sender has no way of knowing if it is causing congestion.",
+      "ja": "RTPデータパケットが送信される際にRTCPのタイムアウトが発生する可能性がありますが、受信側から返された何RTCPレポートはありません。これは、どちらかのRTCPレポートまたは配信されてから報告したものRTCPを妨げているリターンパスの失敗を送信するために受信機の故障によるものです。いずれの場合も、送信者が、それは混雑を引き起こしているかどうかを知る方法がないので、送信を継続することは安全ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "An RTP sender that has not received any RTCP SR or RTCP RR packets reporting on the SSRC it is using, for a time period of at least three times its deterministic RTCP reporting interval, Td (where Td is calculated without the randomization factor and using the fixed minimum interval of Tmin=5 seconds), SHOULD cease transmission (see Section 4.5). The rationale for this choice of timeout is as described in Section 6.2 of [RFC3550] (\"so that implementations which do not use the reduced value for transmitting RTCP packets are not timed out by other participants prematurely\") and has been updated by Section 6.1.4 of [RFC8108] to account for the use of the RTP/AVPF profile [RFC4585] or the RTP/SAVPF profile [RFC5124].",
+      "ja": "それは少なくとも3倍、その決定的RTCPレポート間隔の時間期間の間、使用される任意のRTCP SRまたはSSRCに報告RTCP RRパケットを受信して​​いないRTP送信機、Tdを（Tdはランダム化因子なしで計算され、使用されています= 5秒Tminとの一定の最小間隔）は、送信を停止すべきである（4.5節を参照してください）。タイムアウトのこの選択のための理論的根拠は、[RFC3550]のセクション6.2に記載されているように（「RTCPパケットを送信するための換算値を使用しない実装が早期他の参加者がタイムアウトしないように」）であり、6.1節によって更新されました[RFC8108]の0.4は、RTP / AVPFプロフィール[RFC4585]またはRTP / SAVPFプロファイル[RFC5124]を使用することを考慮します。"
+    },
+    {
+      "indent": 3,
+      "text": "To reduce the risk of premature timeout, implementations SHOULD NOT configure the RTCP bandwidth such that Td is larger than 5 seconds. Similarly, implementations that use the RTP/AVPF profile [RFC4585] or the RTP/SAVPF profile [RFC5124] SHOULD NOT configure T_rr_interval to values larger than 4 seconds (the reduced limit for T_rr_interval follows Section 6.1.3 of [RFC8108]).",
+      "ja": "時期尚早タイムアウトのリスクを軽減するために、実装はTdが5秒よりも大きくなるようにRTCP帯域幅を設定しないでください。同様に、RTP / AVPFプロフィール[RFC4585]またはRTP / SAVPFプロファイル[RFC5124]を使用する実装は4秒よりも大きい値にT_rr_intervalを設定しないでください（T_rr_interval用縮小限界は[RFC8108]のセクション6.1.3に従います）。"
+    },
+    {
+      "indent": 3,
+      "text": "The choice of three RTCP reporting intervals as the timeout is made following Section 6.3.5 of RFC 3550 [RFC3550]. This specifies that participants in an RTP session will timeout and remove an RTP sender from the list of active RTP senders if no RTP data packets have been received from that RTP sender within the last two RTCP reporting intervals. Using a timeout of three RTCP reporting intervals is therefore large enough that the other participants will have timed out the sender if a network problem stops the data packets it is sending from reaching the receivers, even allowing for loss of some RTCP packets.",
+      "ja": "タイムアウトがRFC 3550 [RFC3550]の6.3.5項に従って製造されたような間隔を報告3 RTCPの選択。これは何のRTPデータパケットが最後の二つのRTCP報告間隔以内にそのRTPの送信者から受信されていない場合はRTPセッションの参加者は、タイムアウト、アクティブRTP送信者のリストからRTPの送信者を削除することを指定します。 3つのRTCP報告間隔のタイムアウトを使用すると、ネットワークの問題は、さらにいくつかのRTCPパケットの損失を考慮して、それが受信機に到達するのを送信しているデータパケットを停止した場合、他の参加者が送信者をタイムアウトしてしまうに十分なことが大きいです。"
+    },
+    {
+      "indent": 3,
+      "text": "If a sender is transmitting a large number of RTP media streams, such that the corresponding RTCP SR or RR packets are too large to fit into the network MTU, the receiver will generate RTCP SR or RR packets in a round-robin manner. In this case, the sender SHOULD treat receipt of an RTCP SR or RR packet corresponding to any SSRC it sent on the same 5-tuple of source and destination IP address, port, and protocol as an indication that the receiver and return path are working and thus preventing the RTCP timeout circuit breaker from triggering.",
+      "ja": "送信者は、RTPメディアストリームの多数を送信している場合、対応するRTCP SRまたはRRパケットがネットワークMTUに収まるには大きすぎるように、受信機は、ラウンドロビン方式でRTCP SRまたはRRパケットを生成します。この場合、送信側は、受信機とパスを返すが動作していることを示すものとして、送信元および宛先IPアドレス、ポート、およびプロトコルの同じ5タプルに送信されるSSRCに対応するRTCP SRまたはRRパケットの受信を扱うべきですしたがって、トリガからRTCPタイムアウト回路ブレーカを防止します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. RTP/AVP Circuit Breaker #2: Media Timeout",
+      "section_title": true,
+      "ja": "4.2。 RTP / AVPサーキットブレーカー＃2：メディアのタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "If RTP data packets are being sent but the RTCP SR or RR packets reporting on that SSRC indicate a non-increasing extended highest sequence number received, this is an indication that those RTP data packets are not reaching the receiver. This could be a short-term issue affecting only a few RTP packets, perhaps caused by a slow-to-open firewall or a transient connectivity problem, but if the issue persists, it is a sign of a more ongoing and significant problem (a \"media timeout\").",
+      "ja": "RTPデータパケットが送信されているが、RTCP SRまたはRRパケットはSSRCは非増加延長最高シーケンス番号が受信示すことに報告した場合、これは、これらのRTPデータパケットが受信機に到達していないことを示しています。これはおそらく、スロー・ツー・オープンファイアウォールまたは一時接続の問題によって引き起こされるわずか数RTPパケットに影響を与える短期的な問題、かもしれないが、問題が解決しない場合は、それがより継続的かつ重大な問題の兆候である（A 「メディアのタイムアウト」）。"
+    },
+    {
+      "indent": 3,
+      "text": "The time needed to declare a media timeout depends on the parameters Tdr, Tr, Tf, and on the non-reporting threshold k. The value of k is chosen so that when Tdr is large compared to Tr and Tf, receipt of at least k RTCP reports with non-increasing extended highest sequence number received gives reasonable assurance that the forward path has failed and that the RTP data packets have not been lost by chance. The RECOMMENDED value for k is 5 reports.",
+      "ja": "メディアのタイムアウトを宣言するために必要な時間はパラメータTdrを、Trを、Tfの上、および非報告閾値kに依存します。 kの値は、TDRがTrとTfとに比べて大きい場合、非増加延長最高シーケンス番号が受信されたと少なくともk個のRTCPレポートの受信がフォワードパスに障害が発生したこと及びRTPデータパケットが持っていることを合理的な保証を与えるように選択されます偶然に失われていません。 kの推奨値は5つのレポートです。"
+    },
+    {
+      "indent": 3,
+      "text": "When Tdr < Tf, then RTP data packets are being sent at a rate less than one per RTCP reporting interval of the receiver, so the extended highest sequence number received can be expected to be non-increasing for some receiver RTCP reporting intervals. Similarly, when Tdr < Tr, some receiver RTCP reporting intervals might pass before the RTP data packets arrive at the receiver, also leading to reports where the extended highest sequence number received is non-increasing. Both issues require the media timeout interval to be scaled relative to the threshold, k.",
+      "ja": "拡張最高シーケンス番号が受信されたようにTdrのは、<Tfは、次にRTPデータパケットは、受信機のRTCPレポート間隔あたり1未満のレートで送信されるときの間隔を報告するいくつかの受信機RTCPのための非増加であると予想することができます。 RTPデータパケットは、受信した拡張最高シーケンス番号が非増加しているレポートにつながる、受信機に到達する前に、同様に、TDRは<TR、いくつかの受信機RTCPレポート間隔が通る可能性があります。両方の問題は、閾値、Kに対してスケーリングするメディアタイムアウト間隔を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The media timeout RTP circuit breaker is therefore as follows. When starting sending, calculate MEDIA_TIMEOUT using:",
+      "ja": "次のようにメディアタイムアウトRTP回路遮断器は、したがって、です。送信開始する際に、使用してMEDIA_TIMEOUTを計算します。"
+    },
+    {
+      "indent": 6,
+      "text": "MEDIA_TIMEOUT = ceil(k * max(Tf, Tr, Tdr) / Tdr)",
+      "ja": "MEDIA_TIMEOUT = CEIL（K *マックス（TF、TR、TDR）/ TDR）"
+    },
+    {
+      "indent": 3,
+      "text": "When a sender receives an RTCP packet that indicates reception of the media it has been sending, then it cancels the media timeout circuit breaker. If it is still sending, then it MUST calculate a new value for MEDIA_TIMEOUT and set a new media timeout circuit breaker.",
+      "ja": "送信者は、それが送信されたメディアの受信を示すRTCPパケットを受信すると、それはメディアタイムアウト回路ブレーカを解除します。それはまだ送信している場合、それはMEDIA_TIMEOUTの新しい値を計算し、新しいメディアのタイムアウト回路ブレーカを設定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "If a sender receives an RTCP packet indicating that its media was not received, it MUST calculate a new value for MEDIA_TIMEOUT. If the new value is larger than the previous, it replaces MEDIA_TIMEOUT with the new value, extending the media timeout circuit breaker; otherwise, it keeps the original value of MEDIA_TIMEOUT. This process is known as reconsidering the media timeout circuit breaker.",
+      "ja": "送信者はそのメディアが受信されなかったことを示すRTCPパケットを受信した場合、それはMEDIA_TIMEOUTの新しい値を計算しなければなりません。新しい値が前回よりも大きい場合には、メディアタイムアウト回路ブレーカを拡張、新しい値とMEDIA_TIMEOUTに取って代わります。それ以外の場合は、MEDIA_TIMEOUTの元の値を保持します。このプロセスは、メディアタイムアウト回路ブレーカを再考として知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "If MEDIA_TIMEOUT consecutive RTCP packets are received indicating that the media being sent was not received, and the media timeout circuit breaker has not been canceled, then the media timeout circuit breaker triggers. When the media timeout circuit breaker triggers, the sender SHOULD cease transmission (see Section 4.5).",
+      "ja": "MEDIA_TIMEOUT連続するRTCPパケットが受信されると送信されるメディアが受信されなかったことを示す、メディアタイムアウト回路遮断器は、キャンセルされていない場合、メディアタイムアウト回路ブレーカトリガー。メディアタイムアウト回路ブレーカがトリガすると、送信者は（セクション4.5を参照）の送信を中止すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "When stopping sending an RTP stream, a sender MUST cancel the corresponding media timeout circuit breaker.",
+      "ja": "RTPストリームを送信停止するとき、送信者は、対応するメディアタイムアウト回路ブレーカをキャンセルしなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. RTP/AVP Circuit Breaker #3: Congestion",
+      "section_title": true,
+      "ja": "4.3。 RTP / AVPサーキットブレーカー＃3：輻輳"
+    },
+    {
+      "indent": 3,
+      "text": "If RTP data packets are being sent and the corresponding RTCP SR or RR packets show non-zero packet loss fraction and increasing extended highest sequence number received, then those RTP data packets are arriving at the receiver, but some degree of congestion is occurring. The RTP/AVP profile [RFC3551] states that:",
+      "ja": "RTPデータパケットが送信され、対応するRTCP SRまたはRRパケットが受信された非ゼロパケット損失割合と増加延長最高のシーケンス番号を示している場合、それらのRTPデータパケットが受信機に到着しているが、混雑のある程度が発生しています。 RTP / AVPプロフィール[RFC3551]はと述べています："
+    },
+    {
+      "indent": 6,
+      "text": "If best-effort service is being used, RTP receivers SHOULD monitor packet loss to ensure that the packet loss rate is within acceptable parameters. Packet loss is considered acceptable if a TCP flow across the same network path and experiencing the same network conditions would achieve an average throughput, measured on a reasonable timescale, that is not less than [the throughput] the RTP flow is achieving. This condition can be satisfied by implementing congestion control mechanisms to adapt the transmission rate (or the number of layers subscribed for a layered multicast session), or by arranging for a receiver to leave the session if the loss rate is unacceptably high.",
+      "ja": "ベストエフォート型のサービスが使用されている場合は、RTP受信機は、パケット損失率が許容パラメータの範囲内であることを保証するために、パケット損失を監視する必要があります。パケット損失は、同じネットワーク・パスを横切るTCPフローあれば許容されるとみなされ、同じネットワーク条件を経験する平均スループットを達成する、合理的な時間スケールで測定し、それは、RTPフローが達成される[スループット]以上です。この条件は、伝送速度（又は層状マルチキャストセッションのために加入層数）を適合させるために、輻輳制御メカニズムを実装することで、または損失率が許容できないほど高い場合にセッションを終了するための受信機のために配置することによって満たすことができます。"
+    },
+    {
+      "indent": 6,
+      "text": "The comparison to TCP cannot be specified exactly, but is intended as an \"order-of-magnitude\" comparison in timescale and throughput. The timescale on which TCP throughput is measured is the round-trip time of the connection. In essence, this requirement states that it is not acceptable to deploy an application (using RTP or any other transport protocol) on the best-effort Internet which consumes bandwidth arbitrarily and does not compete fairly with TCP within an order of magnitude.",
+      "ja": "TCPとの比較を正確に特定することはできないが、タイムスケールとスループットの「桁違い」の比較として意図されています。 TCPのスループットが測定されているタイムスケールは、接続のラウンドトリップ時間です。本質的には、この要件は、任意の帯域幅を消費し、桁以内TCPと公平に競合しないベストエフォート型のインターネット上（RTPまたは任意の他のトランスポートプロトコルを使用して）アプリケーションをデプロイすることは受け入れられないと述べています。"
+    },
+    {
+      "indent": 3,
+      "text": "The phase \"order of magnitude\" in the above means within a factor of ten, approximately. In order to implement this, it is necessary to estimate the throughput a bulk TCP connection would achieve over the path. For a long-lived TCP Reno connection, it has been shown that the TCP throughput, X, in bytes per second, can be estimated as follows [Padhye]:",
+      "ja": "約10倍以内上記手段で位相「桁」、。これを実現するためには、バルクTCP接続が経路を通じて達成するであろうスループットを推定する必要があります。長寿命TCPリノ接続のために、それは、TCPスループットが示されている[Padhye]以下のように、Xは、1秒あたりのバイト数を推定することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "                            s\nX = -------------------------------------------------------------\n    Tr*sqrt(2*b*p/3)+(t_RTO * (3*sqrt(3*b*p/8) * p * (1+32*p*p)))",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "This is the same approach to estimated TCP throughput that is used in [RFC5348]. Under conditions of low packet loss, the second term on the denominator is small, so this formula can be approximated with reasonable accuracy as follows [Mathis]:",
+      "ja": "これは[RFC5348]で使用される推定TCPスループットに同じアプローチです。低パケット損失の条件下で、分母上の第二項は小さいので、次のように、この式は、合理的な精度で近似することができる[マティス]："
+    },
+    {
+      "indent": 6,
+      "text": "          s\nX = ----------------\n    Tr*sqrt(2*b*p/3)",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "It is RECOMMENDED that this simplified throughput equation be used since the reduction in accuracy is small, and it is much simpler to calculate than the full equation. Measurements have shown that the simplified TCP throughput equation is effective as an RTP circuit breaker for multimedia flows sent to hosts on residential networks using Asymmetric Digital Subscriber Line (ADSL) and cable modem links [Singh]. The data shows that the full TCP throughput equation tends to be more sensitive to packet loss and triggers the RTP circuit breaker earlier than the simplified equation. Implementations that desire this extra sensitivity MAY use the full TCP throughput equation in the RTP circuit breaker. Initial measurements in LTE networks have shown that the extra sensitivity is helpful in that environment, with the full TCP throughput equation giving a more balanced circuit breaker response than the simplified TCP equation [Sarker]; other networks might see similar behavior.",
+      "ja": "精度の低下が小さいので、この単純化されたスループットの方程式を使用することをお勧めし、完全な式より計算するためにはるかに簡単です。測定は、マルチメディアのためのRTP回路遮断器は、住宅非対称デジタル加入者線（ADSL）を使用してネットワーク及びケーブルモデムリンク[シン]をホストに送信フロー簡略化TCPスループット方程式が有効であることを示しています。データは、完全なTCPスループット方程式はパケット損失に対してより敏感である傾向があり、単純化された方程式より前RTP回路遮断器をトリガすることを示しています。この余分な感度を望む実装はRTP回路ブレーカでフルTCPスループット方程式を使用するかもしれません。 LTEネットワークにおける初期測定は、余分な感度を簡略化TCP式[Sarker]よりも平衡回路ブレーカの応答を与え、完全なTCPスループット方程式を用いて、その環境で有用であることが示されています。他のネットワークは、同様の現象が表示される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "No matter what TCP throughput equation is chosen, two parameters need to be estimated and reported to the sender in order to calculate the throughput: the round-trip time, Tr, and the loss event rate, p (the packet size, s, is known to the sender). The round-trip time can be estimated from RTCP SR and RR packets. This is done too infrequently for accurate statistics but is the best that can be done with the standard RTCP mechanisms.",
+      "ja": "どんなにスループット方程式が選択されているものをTCP、2つのパラメータは、スループットを計算するために推定し、送信者に報告する必要がありますラウンドトリップ時間、Trと、損失イベント率、P（パケットサイズ、S、さ送信者に知られています）。往復時間は、RTCP SRとRRパケットから推定することができます。これは、正確な統計のためにあまりにもまれにしか行われますが、標準的なRTCPメカニズムで行うことができるよう最善です。"
+    },
+    {
+      "indent": 3,
+      "text": "Report blocks in RTCP SR or RR packets contain the packet loss fraction, rather than the loss event rate, so p cannot be reported (TCP typically treats the loss of multiple packets within a single RTT as one loss event, but RTCP RR packets report the overall fraction of packets lost and do not report when the packet losses occurred). Using the loss fraction in place of the loss event rate can overestimate the loss. We believe that this overestimate will not be significant given that we are only interested in order of magnitude comparison (Section 3.2.1 of [Floyd] shows that the difference is small for steady-state conditions and random loss, but using the loss fraction is more conservative in the case of bursty loss).",
+      "ja": "TCPは、典型的には、1つの損失事象のような単一のRTT内の複数のパケットの損失を扱いますが、RTCP RRパケットが報告（RTCP SRまたはRRパケットのレポートブロックではなく、損失イベント率よりも、パケットロスの割合が含まれているので、pは報告できませんパケットの全体の割合）が失われ、パケットロスが発生したときに報告していません。損失イベント率の代わりに、損失の割合を使用すると、損失を過大評価することができます。私たちは、（[フロイド]のセクション3.2.1は差が定常状態とランダム損失のために小さいことを示しているが、損失の割合を使用することがあり、この過大評価は、我々は大きさ比較のためにのみ関心があることは重要で与えられることはないだろうと信じています）バースト損失の場合には、より保守的。"
+    },
+    {
+      "indent": 3,
+      "text": "The congestion circuit breaker is therefore as follows. When a sender that is transmitting at least one RTP packet every max(Tdr, Tr) seconds receives an RTCP SR or RR packet that contains a report block for an SSRC it is using, the sender MUST record the value of the fraction lost field from the report block, and the time since the last report block was received, for that SSRC. If more than CB_INTERVAL (see below) report blocks have been received for that SSRC, the sender MUST calculate the average fraction lost over the last CB_INTERVAL reporting intervals and then estimate the TCP throughput that would be achieved over the path using the chosen TCP throughput equation and the measured values of the round-trip time, Tr, the loss event rate, p (approximated by the average fraction lost, as is described below), and the packet size, s. The estimate of the TCP throughput, X, is then compared with the actual sending rate of the RTP stream. If the actual sending rate of the RTP stream is more than 10 * X, then the congestion circuit breaker is triggered.",
+      "ja": "次のように輻輳回路遮断器は、したがって、です。少なくとも1つのRTPパケットごとに最大（TDR、TR）秒を送信している送信者は、それが使用されるSSRCのレポートブロックを含むRTCP SRやRRパケットを受信すると、送信者は喪失分フィールドの値からを記録しなければなりませんそのSSRCのレポートブロック、および最後のレポートブロックを受信して​​からの時間、。 （下記参照）CB_INTERVALよりも多くのレポートブロックは、そのSSRCのために受信されている場合は、送信者は間隔を報告し、最後CB_INTERVAL上で失われた平均割合を計算して、選択したTCPスループット方程式を使用してパスを介して達成されるTCPスループットを推定しなければなりませんラウンドトリップ時間の測定値は、TR、損失イベント率、P（後述するように、失われた平均分数で近似）、およびパケットサイズ、S。 TCPスループットの推定値、Xは、RTPストリームの実際の送信レートと比較さです。 RTPストリームの実際の送信率が10以上の* Xである場合、輻輳回路遮断器がトリガされます。"
+    },
+    {
+      "indent": 3,
+      "text": "The average fraction lost is calculated based on the sum (over the last CB_INTERVAL reporting intervals) of the fraction lost in each reporting interval that is then multiplied by the duration of the corresponding reporting interval and then divided by the total duration of the last CB_INTERVAL reporting intervals. The CB_INTERVAL parameter is set to:",
+      "ja": "失われた平均フラクションは、対応する報告間隔の持続時間を乗じ、次いで最後CB_INTERVALは、報告の全持続時間で割って、各報告間隔で失われた分画の（最後CB_INTERVAL報告間隔で）和に基づいて算出されます間隔。 CB_INTERVALパラメータがに設定されています："
+    },
+    {
+      "indent": 6,
+      "text": "CB_INTERVAL = ceil(3*min(max(10*G*Tf, 10*Tr, 3*Tdr), max(15, 3*Td))/(3*Tdr))",
+      "ja": "CB_INTERVAL = CEIL（3 *分（MAX（10 * G * Tfと、10 * Trと、3 * TDR）、MAX（15、3 * TD））/（3 * TDR））"
+    },
+    {
+      "indent": 3,
+      "text": "The parameters that feed into CB_INTERVAL are chosen to give the congestion control algorithm time to react to congestion. They give at least three RTCP reports, ten round trip times, and ten groups of frames to adjust the rate to reduce the congestion to a reasonable level. It is expected that a responsive congestion control algorithm will begin to respond with the next group of frames after it receives indication of congestion, so CB_INTERVAL ought to be a much longer interval than the congestion response.",
+      "ja": "CB_INTERVALに供給パラメータは、輻輳に反応する輻輳制御アルゴリズムの時間を与えるように選択されます。彼らは合理的なレベルに輻輳を軽減するレートを調整するために、少なくとも3つのRTCPレポート、10往復時間、およびフレームの10グループを与えます。応答性の輻輳制御アルゴリズムは、それが輻輳の兆候を受信した後のフレームの次のグループに対応するために開始されますので、CB_INTERVALが輻輳応答よりもはるかに長い間隔であるべきことが期待されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the RTP/AVPF profile [RFC4585] or the RTP/SAVPF [RFC5124] is used, and the T_rr_interval parameter is used to reduce the frequency of regular RTCP reports, then the value of Tdr in the above expression for the CB_INTERVAL parameter MUST be replaced by max(T_rr_interval, Tdr).",
+      "ja": "RTP / AVPFプロフィール[RFC4585]またはRTP / SAVPF [RFC5124]が使用され、そしてT_rr_intervalパラメータが正規のRTCPレポートの頻度を減少させるために使用される場合、CB_INTERVALパラメータの上記式におけるTdrの値でなければなりませんMAX（T_rr_interval、TDR）に置き換えられました。"
+    },
+    {
+      "indent": 3,
+      "text": "The CB_INTERVAL parameter is calculated on joining the session, and recalculated on receipt of each RTCP packet, after checking whether the media timeout circuit breaker or the congestion circuit breaker has been triggered.",
+      "ja": "CB_INTERVALパラメータは、セッションに参加して算出、及びメディアタイムアウト回路遮断器又は輻輳回路遮断器がトリガされたかどうかを確認した後、各RTCPパケットの受信時に再計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "To ensure a timely response to persistent congestion, implementations SHOULD NOT configure the RTCP bandwidth such that Tdr is larger than 5 seconds. Similarly, implementations that use the RTP/AVPF profile [RFC4585] or the RTP/SAVPF profile [RFC5124] SHOULD NOT configure T_rr_interval to values larger than 4 seconds (the reduced limit for T_rr_interval follows Section 6.1.3 of [RFC8108]).",
+      "ja": "永続的な混雑にタイムリーな応答を確保するために、実装はTDRは5秒よりも大きくなるようにRTCP帯域幅を設定しないでください。同様に、RTP / AVPFプロフィール[RFC4585]またはRTP / SAVPFプロファイル[RFC5124]を使用する実装は4秒よりも大きい値にT_rr_intervalを設定しないでください（T_rr_interval用縮小限界は[RFC8108]のセクション6.1.3に従います）。"
+    },
+    {
+      "indent": 3,
+      "text": "The rationale for enforcing a minimum sending rate below which the congestion circuit breaker will not trigger is to avoid spurious circuit breaker triggers when the number of packets sent per RTCP reporting interval is small, and hence, the fraction lost samples are subject to measurement artifacts. The bound of at least one packet every max(Tdr, Tr) seconds is derived from the one packet per RTT minimum sending rate of TCP [RFC8085], which is adapted for use with RTP where the RTCP reporting interval is decoupled from the network RTT.",
+      "ja": "輻輳回路遮断器がトリガされませんそれ以下の最小送信レートを強制するための理論的根拠は、RTCPレポート間隔ごとに送信されるパケットの数が少ない場合スプリアス回路遮断器は、トリガーを回避することであり、従って、画分失われたサンプルは、アーチファクトを測定する対象です。少なくとも1つのパケット毎に最大（TDR、TR）RTCPレポート間隔がRTTネットワークから切り離されRTPで使用するために適合されているTCP [RFC8085]のレートを送信RTTごとに最低一つのパケットから導出された秒結合。"
+    },
+    {
+      "indent": 3,
+      "text": "When the congestion circuit breaker is triggered, the sender SHOULD cease transmission (see Section 4.5). However, if the sender is able to reduce its sending rate by a factor of (approximately) ten, then it MAY first reduce its sending rate by this factor (or some larger amount) to see if that resolves the congestion. If the sending rate is reduced in this way and the congestion circuit breaker triggers again after the next CB_INTERVAL RTCP reporting intervals, the sender MUST then cease transmission. An example of such a rate reduction might be a video conferencing system that backs off to sending audio only before completely dropping the call. If such a reduction in sending rate resolves the congestion problem, the sender MAY gradually increase the rate at which it sends data after a reasonable amount of time has passed, provided it takes care not to cause the problem to recur (\"reasonable\" is intentionally not defined here since it depends on the application, media codec, and congestion control algorithm).",
+      "ja": "混雑回路ブレーカがトリガされると、送信者は（セクション4.5を参照）の送信を中止すべきです。送信者は（約）10倍の送信レートを低減することができる場合は、それが最初にこの因子（またはいくつかの大きな量）によって、その送信レートを下げることが輻輳を解決するかどうかを確認します。送信レートがこのように減少し、渋滞回路ブレーカは、次のCB_INTERVAL RTCP報告間隔の後に再びトリガされた場合、送信者は、送信を停止しなければなりません。そのような速度低下の例は、完全にコールをドロップする前に、音声送信に後退したビデオ会議システムであるかもしれません。率を送信中に、このような減少は、輻輳問題が解決した場合は、送信者が徐々に妥当な時間が経過した後に、それがデータを送信する速度を増大させることができる、それは問題は「合理的」（再発させないように注意を要して意図的ですそれはアプリケーション、メディアコーデック、および輻輳制御アルゴリズム）に依存するため、ここで定義されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTCP reporting interval of the media sender does not affect how quickly the congestion circuit breaker can trigger. The timing is based on the RTCP reporting interval of the receiver that generates the SR/RR packets from which the loss rate and RTT estimate are derived (note that RTCP requires all participants in a session to have similar reporting intervals, else the participant timeout rules in [RFC3550] will not work, so this interval is likely similar to that of the sender). If the incoming RTCP SR or RR packets are using a reduced minimum RTCP reporting interval (as specified in Section 6.2 of RFC 3550 [RFC3550] or the RTP/AVPF profile [RFC4585]), then that reduced RTCP reporting interval is used when determining if the circuit breaker is triggered.",
+      "ja": "メディア送信元のRTCPのレポート間隔は混雑回路ブレーカをトリガすることができますどのように迅速には影響しません。タイミングは、（参加者のタイムアウトルールほか、RTCPは、同様の報告間隔を有するように、セッションのすべての参加を必要とすることに注意損失率とRTT推定値が由来するSR / RRパケットを生成する受信機のRTCPレポート間隔に基づいています[RFC3550]で作業するので、この間隔）は、送信者と同様の可能性がありません。 （RFC 3550 [RFC3550]のセクション6.2で指定された、またはRTP / AVPFプロフィール[RFC4585]として）受信RTCP SRまたはRRパケットが減少最小RTCPレポート間隔を使用している場合は、かどうかを決定する際にRTCPレポート間隔が使用されて減少していますサーキットブレーカーがトリガされます。"
+    },
+    {
+      "indent": 3,
+      "text": "If there are more media streams that can be reported in a single RTCP SR or RR packet, or if the size of a complete RTCP SR or RR packet exceeds the network MTU, then the receiver will report on a subset of sources in each reporting interval with the subsets selected round-robin across multiple intervals so that all sources are eventually reported [RFC3550]. When generating such round-robin RTCP reports, priority SHOULD be given to reports on sources that have high packet loss rates to ensure that senders are aware of network congestion they are causing (this is an update to [RFC3550]).",
+      "ja": "単一のRTCP SRまたはRRパケットに報告することができる複数のメディアストリームがある場合、完全なRTCP SRまたはRRパケットのサイズは、ネットワークMTUを超えた場合、または、受信機は、各報告間隔にソースのサブセットに報告しますサブセットは複数の間隔を横切ってラウンドロビン方式を選択してすべてのソースは、最終的に[RFC3550]を報告するように。このようなラウンドロビンRTCPレポートを生成する際に、優先度の送信者は、彼らが原因となっているネットワークの輻輳を認識していることを保証するために、高いパケット損失率を有するソースのレポートに与えられるべきである（これは[RFC3550]に更新です）。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. RTP/AVP Circuit Breaker #4: Media Usability",
+      "section_title": true,
+      "ja": "4.4。 RTP / AVPサーキットブレーカー＃4：メディアユーザビリティ"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that use RTP are generally tolerant to some amount of packet loss. How much packet loss can be tolerated will depend on the application, media codec, and the amount of error correction and packet loss concealment that is applied. There is an upper bound on the amount of loss that can be corrected, however, beyond which the media becomes unusable. Similarly, many applications have some upper bound on the media capture to play-out latency that can be tolerated before the application becomes unusable. The latency bound will depend on the application, but typical values can range from the order of a few hundred milliseconds for voice telephony and interactive conferencing applications up to several seconds for some video-on-demand systems.",
+      "ja": "RTPを使用するアプリケーションは、パケット損失のいくつかの量に一般的に寛容です。パケット損失がどのくらいを許容することができるアプリケーション、メディアコーデック、およびエラー訂正および適用されるパケット損失隠蔽の量に依存します。メディアが使用できなくなり、それを超えるただし、修正することができる損失の量に上限があります。同様に、多くのアプリケーションは、メディアキャプチャにいくつかの上限がプレイアウトするためにアプリケーションが使用不能になる前に許容できる待ち時間を有します。バインドの待ち時間は、アプリケーションに依存するが、典型的な値は、いくつかのビデオ・オン・デマンドシステムのための音声電話やインタラクティブな会議アプリケーションアップのために数百ミリ秒のオーダーから数秒の範囲とすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As a final circuit breaker, RTP senders SHOULD monitor the reported packet loss and delay to estimate whether the media is likely to be suitable for the intended purpose. If the packet loss rate and/or latency is such that the media has become unusable and has remained unusable for a significant time period, then the application SHOULD cease transmission. Similarly, receivers SHOULD monitor the quality of the media they receive, and if the quality is unusable for a significant time period, they SHOULD terminate the session. This memo intentionally does not define a bound on the packet loss rate or latency that will result in unusable media, as these are highly application dependent. Similarly, the time period that is considered significant is application dependent but is likely on the order of seconds, or tens of seconds.",
+      "ja": "最終的な回路遮断器として、RTP送信者は、メディアが意図した目的に適している可能性があるかどうかを推定することが報告パケット損失と遅延を監視する必要があります。パケット損失率および/または待ち時間がメディアが使用できなくなってきたし、大幅な時間の間、使用できなく残っているようなものである場合、アプリケーションは送信を停止すべきです。同様に、受信機は、彼らが受け取るメディアの品質を監視する必要があり、品質はかなりの時間の期間のため使用できない場合、彼らはセッションを終了する必要があります。これらは非常にアプリケーションに依存しているとして、このメモは、意図的に、使用不可能なメディアになり、パケット損失率や待ち時間にバインドを定義していません。同様に、有意であると考えられる期間は、アプリケーションに依存するが、秒、あるいは数十秒のオーダー可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Sending media that suffers from such high packet loss or latency that it is unusable at the receiver is both wasteful of resources and is of no benefit to the user of the application. It also is highly likely to be congesting the network and disrupting other applications. As such, the congestion circuit breaker will almost certainly trigger to stop flows where the media would be unusable due to high packet loss or latency. However, in pathological scenarios where the congestion circuit breaker does not stop the flow, it is desirable to prevent the application sending unnecessary traffic that might disrupt other uses of the network. The role of the media usability circuit breaker is to protect the network in such cases.",
+      "ja": "それは、受信機で使用できないような高いパケットロス又は待ち時間に罹患しているメディアを送信するリソースの両方無駄であり、アプリケーションのユーザにない利点です。また、ネットワークの輻輳やその他のアプリケーションを中断する可能性が高いです。このように、輻輳回路遮断器は、ほぼ確実にメディアが高いパケットロス又は待ち時間に使用できなくなる流れを停止するようにトリガします。しかし、混雑回路ブレーカが流れを停止しない病理学的なシナリオでは、ネットワークの他の用途を妨害する可能性がある不要なトラフィックを送信するアプリケーションを防止することが望ましいです。メディアユーザビリティ回路ブレーカの役割は、そのような場合にネットワークを保護することです。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Ceasing Transmission",
+      "section_title": true,
+      "ja": "4.5。送信を中止"
+    },
+    {
+      "indent": 3,
+      "text": "What it means to cease transmission depends on the application. This could mean stopping a single RTP flow or it could mean that multiple bundled RTP flows are stopped. The intention is that the application will stop sending RTP data packets on a particular 5-tuple (transport protocol, source and destination ports, source and destination IP addresses) until whatever network problem that triggered the RTP circuit breaker has dissipated. RTP flows halted by the circuit breaker SHOULD NOT be restarted automatically unless the sender has received information that the congestion has dissipated or can reasonably be expected to have dissipated. What could trigger this expectation is necessarily application dependent, but could be, for example, an indication that a competing flow has finished and freed up some capacity, or for an application running on a mobile device it could indicate that the device moved to a new location so the flow would traverse a different path if it were restarted. Ideally, a human user will be involved in the decision to try to restart the flow since that user will eventually give up if the flows repeatedly trigger the circuit breaker. This will help avoid problems with automatic redial systems from congesting the network.",
+      "ja": "何それが送信を停止することを意味することは、アプリケーションに依存します。これは、単一のRTPの流れを止める意味するかもしれませんか、それは、複数のバンドルされたRTPフローが停止していることを意味するかもしれません。意図は、アプリケーションがRTP回路遮断器は、消失したトリガ何らかのネットワークの問題まで、特に5タプル（トランスポートプロトコル、送信元ポートと宛先ポート、送信元および宛先IPアドレス）にRTPデータパケットの送信を停止することです。送信者は輻輳が消失したか、合理的に消費されていることが予想されるという情報を受信した場合を除き、回路ブレーカによって停止RTPフローが自動的に再起動されるべきではありません。何この期待を引き起こす可能性は必ずしもアプリケーションに依存するが、可能性があり、例えば、競合フローを終了し、いくつかの能力を解放、またはモバイルデバイス上で動作するアプリケーションのために、それはデバイスが新しいに移動することを示している可能性がありましたことを示す指標場所それは再起動された場合ので、流れが別のパスを横断することになります。理想的には、人間のユーザは、フローが繰り返し回路ブレーカをトリガした場合、そのユーザーが最終的にあきらめますので、流れを再起動しようとする意思決定に関与することになります。これにより、ネットワークの輻輳からの自動リダイヤルシステムの問題を回避できます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is recognized that the RTP implementation in some systems might not be able to determine if a flow setup request was initiated by a human user or automatically by some scripted higher-level component of the system. These implementations MUST rate limit attempts to restart a flow on the same 5-tuple as used by a flow that triggered the circuit breaker so that the reaction to a triggered circuit breaker lasts for at least the triggering interval [RFC8084].",
+      "ja": "フロー設定要求が人間のユーザによって、または自動的にシステムの一部スクリプトより高いレベルのコンポーネントによって開始された場合、いくつかのシステムでRTPの実装が決定することができないかもしれないことが認識されます。これらの実装は制限がトリガ回路遮断器の反応は、少なくともトリガ間隔[RFC8084]の間続くように回路遮断器をトリガ流れによって使用されるのと同じ5タプルのフローを再起動しようとし評価しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTP circuit breaker will only trigger, and cease transmission, for media flows subject to long-term persistent congestion. Such flows are likely to have poor quality and usability for some time before the circuit breaker triggers. Implementations can monitor RTCP Receiver Report blocks being returned for their media flows and might find it beneficial to use this information to provide a user interface cue that problems are occurring in advance of the circuit breaker triggering.",
+      "ja": "RTP回路遮断器は、メディアの長期持続性の混雑にさらさ流れ、トリガ、送信を停止します。このような流れは、回路遮断器のトリガー前にいくつかの時間のための低品質と使いやすさを持っている可能性があります。実装は、RTCP受信レポートブロックは、そのメディアフローのために返されると、それは有益な問題がトリガー回路ブレーカの前に発生しているユーザー・インターフェース・キューを提供するために、この情報を使用して見つけるかもしれない監視することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. RTP Circuit Breakers and the RTP/AVPF and RTP/SAVPF Profiles",
+      "section_title": true,
+      "ja": "5. RTPサーキットブレーカおよびRTP / AVPFおよびRTP / SAVPFプロファイル"
+    },
+    {
+      "indent": 3,
+      "text": "Use of the Extended RTP Profile for RTCP-based Feedback (RTP/AVPF) [RFC4585] allows receivers to send early RTCP reports, in some cases, to inform the sender about particular events in the media stream. There are several use cases for such early RTCP reports, including providing rapid feedback to a sender about the onset of congestion. The RTP/SAVPF Profile [RFC5124] is a secure variant of the RTP/AVPF profile that is treated the same in the context of the RTP circuit breaker. These feedback profiles are often used with non-compound RTCP reports [RFC5506] to reduce the reporting overhead.",
+      "ja": "RTCPベースのフィードバック（RTP / AVPF）[RFC4585]の拡張RTPプロファイルを使用すると、受信機は、早期RTCPは、メディアストリーム内の特定のイベントについての送信者に通知するために、いくつかのケースでは、レポートを送信することができます。輻輳の発生について送信者に迅速なフィードバックを提供することを含む、このような早期のRTCPレポートのいくつかのユースケースがあります。 RTP / SAVPFプロフィール[RFC5124]はRTP回路遮断器の文脈で同様に処理されているRTP / AVPFプロファイルの安全な変異体です。これらのフィードバックプロファイルは、多くの場合、報告オーバーヘッドを減らすために非複合RTCPレポート[RFC5506]で使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Receiving rapid feedback about congestion events potentially allows congestion control algorithms to be more responsive and to better adapt the media transmission to the limitations of the network. It is expected that many RTP congestion control algorithms will adopt the RTP/AVPF profile or the RTP/SAVPF profile for this reason and thus define new transport-layer feedback reports that suit their requirements. Since these reports are not yet defined, and likely very specific to the details of the congestion control algorithm chosen, they cannot be used as part of the generic RTP circuit breaker.",
+      "ja": "輻輳イベントについての迅速なフィードバックを受けて、潜在的に輻輳制御アルゴリズムは、より反応するように、より良いネットワークの制限にメディア伝送を適応させることができます。多くのRTP輻輳制御アルゴリズムは、このような理由のためにRTP / AVPFプロファイルまたはRTP / SAVPFプロファイルを採用し、従って、それらの要件に合う新しいトランスポート層フィードバック・レポートを定義することが期待されます。これらのレポートはまだ定義、および選択した輻輳制御アルゴリズムの詳細にそう非常に特定されていないので、彼らは汎用のRTP遮断器の一部として使用することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Reduced-size RTCP reports sent under the RTP/AVPF early feedback rules that do not contain an RTCP SR or RR packet MUST be ignored by the congestion circuit breaker (they do not contain the information needed by the congestion circuit breaker algorithm) but MUST be counted as received packets for the RTCP timeout circuit breaker. Reduced-size RTCP reports sent under the RTP/AVPF early feedback rules that contain RTCP SR or RR packets MUST be processed by the congestion circuit breaker as if they were sent as regular RTCP reports and counted towards the circuit breaker conditions specified in Section 4 of this memo. This will potentially make the RTP circuit breaker trigger earlier than it would if the RTP/AVPF profile was not used.",
+      "ja": "RTCP SRやRRパケットを含まないRTP / AVPF早期フィードバックルールの下で送られた縮小サイズのRTCPレポートは（彼らは混雑回路ブレーカーアルゴリズムが必要とする情報が含まれていない）なければならないが、混雑回路ブレーカによって無視されなければなりませんRTCPタイムアウト遮断器の受信パケットとして数えます。彼らは通常のRTCPレポートとして送信され、第4条で指定された回路ブレーカ条件にカウントされたかのようにRTCPのSRやRRパケットを含むRTP / AVPF早期フィードバックルールの下で送られた縮小サイズのRTCPレポートは混雑回路ブレーカーで処理しなければなりませんこのメモ。 RTP / AVPFプロファイルが使用されなかった場合、これは潜在的に、以前のそれは希望よりもRTP回路ブレーカのトリガーを行います。"
+    },
+    {
+      "indent": 3,
+      "text": "When using ECN with RTP (see Section 7), early RTCP feedback packets can contain ECN feedback reports. The count of ECN-CE-marked packets contained in those ECN feedback reports is counted towards the number of lost packets reported if the ECN Feedback Report is sent in a compound RTCP packet along with an RTCP SR/RR report packet. Reports of ECN-CE packets sent as reduced-size RTCP ECN feedback packets without an RTCP SR/RR packet MUST be ignored.",
+      "ja": "RTP（セクション7を参照）とECNを使用する場合は、初期のRTCPフィードバックパケットがECNフィードバックレポートを含めることができます。これらのECNフィードバックレポートに含まれているECN-CEマーク付きパケットのカウントはECNフィードバックレポートは、RTCP SR / RR報告パケットとともに複合RTCPパケットで送信された場合に報告し、失われたパケットの数にカウントされます。 RTCP SR / RRパケットなしに縮小RTCP ECNフィードバックパケットとして送信されたECN-CEパケットのレポートは無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "These rules are intended to allow the use of low-overhead RTP/AVPF feedback for generic NACK messages without triggering the RTP circuit breaker. This is expected to make such feedback suitable for RTP congestion control algorithms that need to quickly report loss events in between regular RTCP reports. The reaction to reduced-size RTCP SR/RR packets is to allow such algorithms to send feedback that can trigger the circuit breaker when desired.",
+      "ja": "これらの規則は、RTP回路ブレーカをトリガすることなく、一般的なNACKメッセージ用の低オーバーヘッドのRTP / AVPFフィードバックの使用を許可することを意図しています。これは、すぐに通常のRTCPレポートの間での損失事象を報告する必要がRTP輻輳制御アルゴリズムのために、このようなフィードバックは、適切なことが期待されます。縮小サイズのRTCP SR / RRパケットに対する反応は、そのようなアルゴリズムは、所望の場合、回路ブレーカをトリガすることができるフィードバックを送信することを可能にすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTP/AVPF and RTP/SAVPF profiles include the T_rr_interval parameter that can be used to adjust the regular RTCP reporting interval. The use of the T_rr_interval parameter changes the behavior of the RTP circuit breaker, as described in Section 4.",
+      "ja": "RTP / AVPFおよびRTP / SAVPFプロファイルは、通常のRTCP報告間隔を調整するために使用することができT_rr_intervalパラメータを含めます。セクション4で説明したようにT_rr_intervalパラメータの使用は、RTP回路遮断器の動作を変更します。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Impact of RTCP Extended Reports (XR)",
+      "section_title": true,
+      "ja": "6.インパクトRTCPの拡張レポート（XR）"
+    },
+    {
+      "indent": 3,
+      "text": "RTCP Extended Report (XR) blocks provide additional reception quality metrics, but do not change the RTCP timing rules. Some of the RTCP XR blocks provide information that might be useful for congestion control purposes, others provide non-congestion-related metrics. With the exception of RTCP XR ECN Summary Reports (see Section 7), the presence of RTCP XR blocks in a compound RTCP packet does not affect the RTP circuit breaker algorithm. For consistency and ease of implementation, only the receiver report blocks contained in RTCP SR packets, RTCP RR packets, or RTCP XR ECN Summary Report packets are used by the RTP circuit breaker algorithm.",
+      "ja": "RTCP拡張レポート（XR）のブロックは、追加の受信品質メトリクスを提供しますが、RTCPタイミング規則を変更しないでください。 RTCP XRブロックのいくつかは他の人が非輻輳関連のメトリックを提供し、輻輳制御の目的のために有用であるかもしれない情報を提供します。 RTCP XR ECNの概要レポート（セクション7を参照）を除き、複合RTCPパケット内のRTCP XRブロックの存在は、RTP回路ブレーカアルゴリズムには影響を与えません。実装の一貫性と使いやすさのために、RTCP SRパケット、RTCPのRRパケット、またはRTCP XR ECN要約レポートパケットに含まれる唯一の受信レポートブロックは、RTP回路ブレーカーアルゴリズムによって使用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Impact of Explicit Congestion Notification (ECN)",
+      "section_title": true,
+      "ja": "明示的輻輳通知の7インパクト（ECN）"
+    },
+    {
+      "indent": 3,
+      "text": "The use of ECN for RTP flows does not affect the RTCP timeout circuit breaker (Section 4.1) or the media timeout circuit breaker (Section 4.2) since these are both connectivity checks that simply determinate if any packets are being received.",
+      "ja": "RTPフローのECNの使用は、任意のパケットが単に確定受信されている場合、両方の接続性チェックがあるRTCPタイムアウト回路ブレーカ（セクション4.1）またはこれら以来メディアタイムアウト回路ブレーカ（セクション4.2）に影響を及ぼしません。"
+    },
+    {
+      "indent": 3,
+      "text": "At the time of this writing, there's no consensus on how the receipt of ECN feedback will impact the congestion circuit breaker (Section 4.3) or indeed whether the congestion circuit breaker ought to take ECN feedback into account. A future replacement of this memo is expected to provide guidance for implementers.",
+      "ja": "これを書いている時点では、ECNフィードバックの受信が混雑回路ブレーカにどのような影響を与えるかについてコンセンサス（4.3節）またはがありません確かに混雑回路ブレーカは、アカウントにECNフィードバックを取るべきかどうか。このメモの将来の交換を実装するためのガイダンスを提供することが期待されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For the media usability circuit breaker (Section 4.4), ECN-CE-marked packets arrive at the receiver, and if they arrive in time, they will be decoded and rendered as normal. Accordingly, receipt of such packets ought not affect the usability of the media, and the arrival of RTCP feedback indicating their receipt is not expected to impact the operation of the media usability circuit breaker.",
+      "ja": "メディアユーザビリティ回路遮断器（セクション4.4）のために、ECN-CE-マークされたパケットが受信機に到達し、それらが時間内に到着した場合、それらは復号され、通常のようにレンダリングされます。従って、そのようなパケットの受信は、メディアの利便性、およびそれらの領収書がメディアユーザビリティ回路遮断器の動作に影響を与えないと予想される示すRTCPフィードバックの到着に影響を及ぼさないはずです。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Impact of Bundled Media and Layered Coding",
+      "section_title": true,
+      "ja": "同梱のメディアと階層符号化の影響8."
+    },
+    {
+      "indent": 3,
+      "text": "The RTP circuit breaker operates on a per-RTP session basis. An RTP sender that participates in several RTP sessions MUST treat each RTP session independently with regards to the RTP circuit breaker.",
+      "ja": "RTP回路ブレーカーごとのRTPセッションに基づいて動作します。いくつかのRTPセッションに参加してRTPの送信者は、RTP回路ブレーカに関して独立した各RTPセッションを扱わなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "An RTP sender can generate several media streams within a single RTP session, with each stream using a different SSRC. This can happen if bundled media are in use when using simulcast or when using layered media coding. By default, each SSRC will be treated independently by the RTP circuit breaker. However, the sender MAY choose to treat the flows (or a subset thereof) as a group such that a circuit breaker trigger for one flow applies to the group of flows as a whole and either causes the entire group to cease transmission or causes the sending rate of the group to reduce by a factor of ten, depending on the RTP circuit breaker triggered. Grouping flows in this way is expected to be especially useful for layered flows sent using multiple SSRCs as it allows the layered flow to react as a whole, thus ceasing transmission on the enhancement layers first to reduce sending rate, if necessary, rather than treating each layer independently. Care needs to be taken if the different media streams sent on a single transport-layer flow use different Differentiated Services Code Point (DSCP) values [RFC7657] [WebRTC-QoS] since congestion could be experienced differently depending on the DSCP marking. Accordingly, RTP media streams with different DSCP values SHOULD NOT be considered as a group when evaluating the RTP circuit breaker conditions.",
+      "ja": "RTP送信機は、異なるSSRCを使用して、各ストリームと、単一のRTPセッション内の複数のメディアストリームを生成することができます。同時放送使用しているとき又は層状メディア符号化を使用する場合、バンドルのメディアを使用している場合に発生することができます。デフォルトでは、各SSRCはRTP回路遮断器によって独立して処理されるであろう。しかし、送信者が一つのフローのための回路ブレーカトリガ全体としてフローのグループに適用され、いずれかの送信を停止するために、グループ全体を引き起こす、または送信を引き起こすように、グループとして流れ（またはそのサブセット）を治療するために選ぶかもしれRTP遮断器がトリガに応じて、10倍減少させる基の割合。このように、フローをグループ化は、それがこのように必要に応じて、速度を送信低減するために、第1エンハンスメントレイヤに送信を停止ではなく、各治療、層状の流れが全体として反応することを可能にするように複数SSRCsを使用して送信された層状の流れのために特に有用であると期待されています独立層。ケアは、単一のトランスポート層のフローに送信され、異なるメディアストリームが異なる差別化サービスコードポイント（DSCP）値を使用する場合は注意が必要[RFC7657] [のWebRTC-のQoS]輻輳がマーキングDSCPに応じて異なる経験する可能性があるため。 RTP回路ブレーカ条件を評価する際に、異なるDSCP値を有するRTPメディアストリームはグループとして考えるべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations of [RFC3550] apply.",
+      "ja": "[RFC3550]のセキュリティ上の考慮事項が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the RTP/AVPF profile is used to provide rapid RTCP feedback, the security considerations of [RFC4585] apply. If ECN feedback for RTP over UDP/IP is used, the security considerations of [RFC6679] apply.",
+      "ja": "RTP / AVPFプロファイルは、迅速なRTCPフィードバックを提供するために使用されている場合は、[RFC4585]のセキュリティ上の考慮事項が適用されます。 UDP / IP上のRTPのためのECNフィードバックが使用されている場合は、[RFC6679]のセキュリティ上の考慮事項が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If non-authenticated RTCP reports are used, an on-path attacker can trivially generate fake RTCP packets that indicate high packet loss rates and thus cause the circuit breaker to trigger and disrupt an RTP session. This is somewhat more difficult for an off-path attacker due to the need to guess the randomly chosen RTP SSRC value and the RTP sequence number. This attack can be avoided if RTCP packets are authenticated; authentication options are discussed in [RFC7201].",
+      "ja": "非認証RTCPレポートが使用されている場合は、上のパス攻撃者は、自明の高いパケット損失率を示しているので、回路ブレーカが引き金とRTPセッションを破壊する原因となる偽のRTCPパケットを生成することができます。これは、ランダムに選択されたRTP SSRC値とRTPシーケンス番号を推測する必要性に起因するオフ・パス攻撃者のために幾分より困難です。 RTCPパケットが認証されている場合は、この攻撃を回避することができます。認証オプションは、[RFC7201]で議論されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Timely operation of the RTP circuit breaker depends on the choice of RTCP reporting interval. If the receiver has a reporting interval that is overly long, then the responsiveness of the circuit breaker decreases. In the limit, the RTP circuit breaker can be disabled for all practical purposes by configuring an RTCP reporting interval that has a duration of many minutes. This issue is not specific to the circuit breaker: long RTCP reporting intervals also prevent reception quality reports, feedback messages, codec control messages, etc., from being used. Implementations are expected to impose an upper limit on the RTCP reporting interval they are willing to negotiate (based on the session bandwidth and RTCP bandwidth fraction) when using the RTP circuit breaker, as discussed in Section 4.3.",
+      "ja": "RTP回路ブレーカのタイムリーな操作は、RTCPのレポート間隔の選択に依存します。受信機が過度に長いレポート間隔がある場合、回路ブレーカの応答性が低下します。制限では、RTP遮断器は、多くの分の持続時間を有するRTCPのレポート間隔を設定することにより、すべての実用的な目的のために無効にすることができます。この問題は、回路ブレーカに固有ではない：長いRTCP報告間隔も使用されてから、受信品質報告、フィードバックメッセージ、コーデック制御メッセージなどを防ぎます。セクション4.3で議論するような実装は、それらが交渉して喜んでであるRTCPレポート間隔に上限を課すことが期待される、RTP回路遮断器を使用して（セッション帯域幅及びRTCP帯域幅の割合に基づいて）。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <http://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<http://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3550] Schulzrinne, H., Casner, S., Frederick, R., and V. Jacobson, \"RTP: A Transport Protocol for Real-Time Applications\", STD 64, RFC 3550, DOI 10.17487/RFC3550, July 2003, <http://www.rfc-editor.org/info/rfc3550>.",
+      "ja": "[RFC3550] Schulzrinneと、H.、Casner、S.、フレデリック、R.、およびV.ヤコブソン、 \"RTP：リアルタイムアプリケーションのためのトランスポートプロトコル\"、STD 64、RFC 3550、DOI 10.17487 / RFC3550、2003年7月、 <http://www.rfc-editor.org/info/rfc3550>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3551] Schulzrinne, H. and S. Casner, \"RTP Profile for Audio and Video Conferences with Minimal Control\", STD 65, RFC 3551, DOI 10.17487/RFC3551, July 2003, <http://www.rfc-editor.org/info/rfc3551>.",
+      "ja": "[RFC3551] Schulzrinneと、H.とS. Casner、 \"最小量のコントロールがあるオーディオとビデオ会議システムのためのRTPプロフィール\"、STD 65、RFC 3551、DOI 10.17487 / RFC3551、2003年7月、<のhttp：//www.rfc-editor。組織/情報/ RFC3551>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3611] Friedman, T., Ed., Caceres, R., Ed., and A. Clark, Ed., \"RTP Control Protocol Extended Reports (RTCP XR)\", RFC 3611, DOI 10.17487/RFC3611, November 2003, <http://www.rfc-editor.org/info/rfc3611>.",
+      "ja": "[RFC3611]フリードマン、T.、エド。、カセレス、R.、エド。、およびA.クラーク、エド。、 \"RTP制御プロトコル拡張レポート（RTCP XR）\"、RFC 3611、DOI 10.17487 / RFC3611、2003年11月、 <http://www.rfc-editor.org/info/rfc3611>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4585] Ott, J., Wenger, S., Sato, N., Burmeister, C., and J. Rey, \"Extended RTP Profile for Real-time Transport Control Protocol (RTCP)-Based Feedback (RTP/AVPF)\", RFC 4585, DOI 10.17487/RFC4585, July 2006, <http://www.rfc-editor.org/info/rfc4585>.",
+      "ja": "[RFC4585]オット、J.、ウェンガー、S.、佐藤、N.、Burmeister、C.、およびJ.レイ「ベースのフィードバック（RTP / AVPF）リアルタイムトランスポート制御プロトコル（RTCP）の拡張RTPプロファイル」、RFC 4585、DOI 10.17487 / RFC4585、2006年7月、<http://www.rfc-editor.org/info/rfc4585>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5348] Floyd, S., Handley, M., Padhye, J., and J. Widmer, \"TCP Friendly Rate Control (TFRC): Protocol Specification\", RFC 5348, DOI 10.17487/RFC5348, September 2008, <http://www.rfc-editor.org/info/rfc5348>.",
+      "ja": "[RFC5348]フロイド、S.、ハンドリー、M.、Padhye、J.、およびJ.ウィトマー、 \"TCPフレンドリーレート制御（TFRC）：プロトコル仕様\"、RFC 5348、DOI 10.17487 / RFC5348、2008年9月、<のhttp： //www.rfc-editor.org/info/rfc5348>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6679] Westerlund, M., Johansson, I., Perkins, C., O'Hanlon, P., and K. Carlberg, \"Explicit Congestion Notification (ECN) for RTP over UDP\", RFC 6679, DOI 10.17487/RFC6679, August 2012, <http://www.rfc-editor.org/info/rfc6679>.",
+      "ja": "[RFC6679]ウェスター、M.、ヨハンソン、I.、パーキンス、C.、オハンロン、P.、およびK.カールバーグ、 \"明示的輻輳通知UDP上のRTPのための（ECN）\"、RFC 6679、DOI 10.17487 / RFC6679 、2012年8月、<http://www.rfc-editor.org/info/rfc6679>。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[Floyd] Floyd, S., Handley, M., Padhye, J., and J. Widmer, \"Equation-Based Congestion Control for Unicast Applications\", ACM SIGCOMM Computer Communication Review, Volume 30, Issue 4, pages 43-56, DOI 10.1145/347059.347397, August 2000.",
+      "ja": "[フロイド]フロイド、S.、ハンドリー、M.、Padhye、J.、およびJ.ウィトマー、 \"ユニキャストアプリケーションのための方程式ベースの輻輳制御\"、ACM SIGCOMMコンピュータコミュニケーションレビュー、30巻、4号、ページ43-56 、DOI 10.1145 / 347059.347397、2000年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Mathis] Mathis, M., Semke, J., Mahdavi, J., and T. Ott, \"The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm\", ACM SIGCOMM Computer Communication Review, Volume 27, Issue 3, pages 67-82, DOI 10.1145/263932.264023, July 1997.",
+      "ja": "[マティス]マシス、M.、Semke、J.、Mahdavi、J.、およびT.オット、 \"TCPの輻輳回避アルゴリズムの巨視的挙動\"、ACM SIGCOMMコンピュータコミュニケーションレビュー、27巻、3号、ページ67- 82、DOI 10.1145 / 263932.264023、1997年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Padhye] Padhye, J., Firoiu, V., Towsley, D., and J. Kurose, \"Modeling TCP Throughput: A Simple Model and its Empirical Validation\", ACM SIGCOMM Computer Communication Review Volume 30, Issue 4, pages 303-314, DOI 10.1145/285237.285291, August 1998.",
+      "ja": "[Padhye] Padhye、J.、Firoiu、V.、Towsley、D.、およびJ.黒瀬、 \"モデルTCPスループット：簡単なモデルとその実証的検証\"、ACM SIGCOMMコンピュータコミュニケーションレビュー30巻、4号、頁303 -314、DOI 10.1145 / 285237.285291、1998年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2862] Civanlar, M. and G. Cash, \"RTP Payload Format for Real-Time Pointers\", RFC 2862, DOI 10.17487/RFC2862, June 2000, <http://www.rfc-editor.org/info/rfc2862>.",
+      "ja": "[RFC2862] Civanlar、M.およびG.現金、DOI 10.17487 / RFC2862、2000年6月、<http://www.rfc-editor.org/info/rfc2862、RFC 2862、 \"リアルタイムポインタのためのRTPペイロードフォーマット\" >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3168] Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition of Explicit Congestion Notification (ECN) to IP\", RFC 3168, DOI 10.17487/RFC3168, September 2001, <http://www.rfc-editor.org/info/rfc3168>.",
+      "ja": "\"IPへの明示的輻輳通知の追加（ECN）\" [RFC3168]ラマクリシュナン、K.、フロイド、S.、およびD.ブラック、RFC 3168、DOI 10.17487 / RFC3168、2001年9月、<のhttp：// WWW。 rfc-editor.org/info/rfc3168>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4103] Hellstrom, G. and P. Jones, \"RTP Payload for Text Conversation\", RFC 4103, DOI 10.17487/RFC4103, June 2005, <http://www.rfc-editor.org/info/rfc4103>.",
+      "ja": "[RFC4103]ヘルストローム、G.とP.ジョーンズ、 \"テキストの会話のためのRTPペイロード\"、RFC 4103、DOI 10.17487 / RFC4103、2005年6月、<http://www.rfc-editor.org/info/rfc4103>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5104] Wenger, S., Chandra, U., Westerlund, M., and B. Burman, \"Codec Control Messages in the RTP Audio-Visual Profile with Feedback (AVPF)\", RFC 5104, DOI 10.17487/RFC5104, February 2008, <http://www.rfc-editor.org/info/rfc5104>.",
+      "ja": "[RFC5104]ウェンガー、S.、チャンドラ、U.、ウェスター、M.、およびB.ビルマ、RFC 5104 \"フィードバック（AVPF）とRTPオーディオビジュアルプロファイルにおけるコーデック制御メッセージ\"、DOI 10.17487は/ RFC5104 2月2008年、<http://www.rfc-editor.org/info/rfc5104>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5124] Ott, J. and E. Carrara, \"Extended Secure RTP Profile for Real-time Transport Control Protocol (RTCP)-Based Feedback (RTP/SAVPF)\", RFC 5124, DOI 10.17487/RFC5124, February 2008, <http://www.rfc-editor.org/info/rfc5124>.",
+      "ja": "[RFC5124]オット、J.およびE.カララ、RFC 5124、DOI 10.17487 / RFC5124、2008年2月、<HTTP \"リアルタイムトランスポート制御プロトコル（RTCP）ベースのフィードバック（RTP / SAVPF）にSecure RTPプロファイル拡張\" ：//www.rfc-editor.org/info/rfc5124>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5450] Singer, D. and H. Desineni, \"Transmission Time Offsets in RTP Streams\", RFC 5450, DOI 10.17487/RFC5450, March 2009, <http://www.rfc-editor.org/info/rfc5450>.",
+      "ja": "[RFC5450]歌手、D.およびH. Desineni、 \"RTPストリームで伝送時間オフセット\"、RFC 5450、DOI 10.17487 / RFC5450、2009年3月、<http://www.rfc-editor.org/info/rfc5450>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5506] Johansson, I. and M. Westerlund, \"Support for Reduced-Size Real-Time Transport Control Protocol (RTCP): Opportunities and Consequences\", RFC 5506, DOI 10.17487/RFC5506, April 2009, <http://www.rfc-editor.org/info/rfc5506>.",
+      "ja": "[RFC5506]ヨハンソン、I.およびM.ウェスター、 \"縮小リアルタイムトランスポート制御プロトコル（RTCP）のサポート：機会と帰結\"、RFC 5506、DOI 10.17487 / RFC5506、2009年4月、<のhttp：// WWW .rfc-editor.org /情報/ rfc5506>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5681] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, DOI 10.17487/RFC5681, September 2009, <http://www.rfc-editor.org/info/rfc5681>.",
+      "ja": "[RFC5681]オールマン、M.、パクソン、V.、およびE.ブラントン、 \"TCP輻輳制御\"、RFC 5681、DOI 10.17487 / RFC5681、2009年9月、<http://www.rfc-editor.org/info/ rfc5681>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6798] Clark, A. and Q. Wu, \"RTP Control Protocol (RTCP) Extended Report (XR) Block for Packet Delay Variation Metric Reporting\", RFC 6798, DOI 10.17487/RFC6798, November 2012, <http://www.rfc-editor.org/info/rfc6798>.",
+      "ja": "[RFC6798]クラーク、A.およびQ.呉、 \"RTP制御プロトコル（RTCP）パケット遅延変動メトリックを報告するための報告書（XR）ブロック拡張\"、RFC 6798、DOI 10.17487 / RFC6798を、2012年11月、<のhttp：// WWW .rfc-editor.org /情報/ rfc6798>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6843] Clark, A., Gross, K., and Q. Wu, \"RTP Control Protocol (RTCP) Extended Report (XR) Block for Delay Metric Reporting\", RFC 6843, DOI 10.17487/RFC6843, January 2013, <http://www.rfc-editor.org/info/rfc6843>.",
+      "ja": "[RFC6843]クラーク、A.、グロス、K.、およびQ.呉、 \"拡張レポート（XR）ブロック遅延・メトリックのレポートのためのRTP制御プロトコル（RTCP）\"、RFC 6843、DOI 10.17487 / RFC6843、2013年1月、<HTTP ：//www.rfc-editor.org/info/rfc6843>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6958] Clark, A., Zhang, S., Zhao, J., and Q. Wu, Ed., \"RTP Control Protocol (RTCP) Extended Report (XR) Block for Burst/Gap Loss Metric Reporting\", RFC 6958, DOI 10.17487/RFC6958, May 2013, <http://www.rfc-editor.org/info/rfc6958>.",
+      "ja": "[RFC6958]クラーク、A.、張、S.、趙、J.、およびQ.ウー、エド。、RFC 6958 \"RTP制御プロトコル（RTCP）バースト/ギャップ損失メトリックレポートの報告（XR）ブロック拡張\" 、DOI 10.17487 / RFC6958、2013年5月、<http://www.rfc-editor.org/info/rfc6958>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7002] Clark, A., Zorn, G., and Q. Wu, \"RTP Control Protocol (RTCP) Extended Report (XR) Block for Discard Count Metric Reporting\", RFC 7002, DOI 10.17487/RFC7002, September 2013, <http://www.rfc-editor.org/info/rfc7002>.",
+      "ja": "[RFC7002]クラーク、A.、ツォルン、G.、およびQ.呉、 \"RTP制御プロトコル（RTCP）・メトリックのレポートをカウント破棄のレポート（XR）ブロック拡張\" RFC 7002、DOI 10.17487 / RFC7002、2013年9月、< http://www.rfc-editor.org/info/rfc7002>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7003] Clark, A., Huang, R., and Q. Wu, Ed., \"RTP Control Protocol (RTCP) Extended Report (XR) Block for Burst/Gap Discard Metric Reporting\", RFC 7003, DOI 10.17487/RFC7003, September 2013, <http://www.rfc-editor.org/info/rfc7003>.",
+      "ja": "[RFC7003]クラーク、A.、黄、R.、およびQ.呉編、 \"RTP制御プロトコル（RTCP）拡張レポート（XR）ブロックバースト/ギャップ廃棄・メトリックのレポートについて\"、RFC 7003、DOI 10.17487 / RFC7003 、2013年9月、<http://www.rfc-editor.org/info/rfc7003>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7097] Ott, J., Singh, V., Ed., and I. Curcio, \"RTP Control Protocol (RTCP) Extended Report (XR) for RLE of Discarded Packets\", RFC 7097, DOI 10.17487/RFC7097, January 2014, <http://www.rfc-editor.org/info/rfc7097>.",
+      "ja": "[RFC7097]オット、J.、シン、V.、エド。、およびI. Curcio、RFC 7097、DOI 10.17487 / RFC7097、2014年1月 \"RTP制御プロトコル（RTCP）は廃棄されたパケットのRLEのための報告書（XR）の拡張\" 、<http://www.rfc-editor.org/info/rfc7097>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7201] Westerlund, M. and C. Perkins, \"Options for Securing RTP Sessions\", RFC 7201, DOI 10.17487/RFC7201, April 2014, <http://www.rfc-editor.org/info/rfc7201>.",
+      "ja": "[RFC7201]ウェスター、M.とC.パーキンス、 \"RTPセッションを確保するためのオプション\"、RFC 7201、DOI 10.17487 / RFC7201、2014年4月、<http://www.rfc-editor.org/info/rfc7201>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7657] Black, D., Ed. and P. Jones, \"Differentiated Services (Diffserv) and Real-Time Communication\", RFC 7657, DOI 10.17487/RFC7657, November 2015, <http://www.rfc-editor.org/info/rfc7657>.",
+      "ja": "[RFC7657]ブラック、D.、エド。そして、P.ジョーンズ、 \"差別化サービス（DiffServ）のリアルタイムコミュニケーション\"、RFC 7657、DOI 10.17487 / RFC7657、2015年11月、<http://www.rfc-editor.org/info/rfc7657>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7713] Mathis, M. and B. Briscoe, \"Congestion Exposure (ConEx) Concepts, Abstract Mechanism, and Requirements\", RFC 7713, DOI 10.17487/RFC7713, December 2015, <http://www.rfc-editor.org/info/rfc7713>.",
+      "ja": "[RFC7713]マティス、M.及びB.ブリスコウ、 \"輻輳露光（CONEX）概念、抽象メカニズム、および要件\"、RFC 7713、DOI 10.17487 / RFC7713、2015年12月、<http://www.rfc-editor.org /情報/ rfc7713>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8084] Fairhurst, G., \"Network Transport Circuit Breakers\", BCP 208, RFC 8084, DOI 10.17487/RFC8084, March 2017, <http://www.rfc-editor.org/info/rfc8084>.",
+      "ja": "[RFC8084] Fairhurst、G.、 \"ネットワーク・トランスポートサーキットブレーカー\"、BCP 208、RFC 8084、DOI 10.17487 / RFC8084、2017年3月、<http://www.rfc-editor.org/info/rfc8084>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8085] Eggert, L., Fairhurst, G., and G. Shepherd, \"UDP Usage Guidelines\", BCP 145, RFC 8085, DOI 10.17487/RFC8085, March 2017, <http://www.rfc-editor.org/info/rfc8085>.",
+      "ja": "[RFC8085]エッゲルト、L.、Fairhurst、G.、およびG.シェパード、 \"UDP使用上の注意事項\"、BCP 145、RFC 8085、DOI 10.17487 / RFC8085、2017年3月、<http://www.rfc-editor.org /情報/ rfc8085>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8108] Lennox, J., Westerlund, M., Wu, Q., and C. Perkins, \"Sending Multiple RTP Streams in a Single RTP Session\", RFC 8108, DOI 10.17487/RFC8108, March 2017, <http://www.rfc-editor.org/info/rfc8108>.",
+      "ja": "[RFC8108]レノックス、J.、ウェスター、M.、ウー、Q.、およびC.パーキンス、 \"シングルRTPセッションで複数のRTPストリームの送信\"、RFC 8108、DOI 10.17487 / RFC8108、2017年3月、<HTTP：/ /www.rfc-editor.org/info/rfc8108>。"
+    },
+    {
+      "indent": 3,
+      "text": "[Sarker] Sarker, Z., Singh, V., and C. Perkins, \"An Evaluation of RTP Circuit Breaker Performance on LTE Networks\", Proceedings of the IEEE INFOCOM Workshop on Communication and Networking Techniques for Contemporary Video, DOI 10.1109/INFCOMW.2014.6849240, April 2014.",
+      "ja": "[Sarker] Sarker、Z.、シン、V.、およびC.パーキンス、「LTEネットワーク上のRTPサーキットブレーカー性能の評価」、コミュニケーションに関するIEEE INFOCOMワークショップの議事録および現代のビデオのためのネットワーキング技術、DOI 10.1109 / INFCOMW .2014.6849240、2014年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Singh] Singh, V., McQuistin, S., Ellis, M., and C. Perkins, \"Circuit Breakers for Multimedia Congestion Control\", Proceedings of the 2013 20th International Packet Video Workshop (PV), DOI 10.1109/PV.2013.6691439, December 2013.",
+      "ja": "[シン]シン、V.、McQuistin、S.、エリス、M.、およびC.パーキンス、 \"サーキットブレーカマルチメディアのための輻輳制御\" 2013年第20回国際ワークショップパケットビデオ（PV）の議事録、DOI 10.1109 / PV。 2013.6691439、2013年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[WebRTC-QoS] Jones, P., Dhesikan, S., Jennings, C., and D. Druta, \"DSCP Packet Markings for WebRTC QoS\", Work in Progress, draft-ietf-tsvwg-rtcweb-qos-18, August 2016.",
+      "ja": "【のWebRTC-のQoS]ジョーンズ、P.、Dhesikan、S.、ジェニングス、C.、およびD. Druta \"のWebRTC QoSのDSCPパケットマーキング\"、進行中で働いて、ドラフトIETF-TSVWG-rtcweb-QOS-18、 2016年8月。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Bernard Aboba, Harald Alvestrand, Ben Campbell, Alissa Cooper, Spencer Dawkins, Gorry Fairhurst, Stephen Farrell, Nazila Fough, Kevin Gross, Cullen Jennings, Randell Jesup, Mirja Kuehlewind, Jonathan Lennox, Matt Mathis, Stephen McQuistin, Simon Perreault, Eric Rescorla, Abheek Saha, Meral Shirazipour, Fabio Verdicchio, and Magnus Westerlund for their valuable feedback.",
+      "ja": "作者はバーナードAboba、ハラルドAlvestrand、ベン・キャンベル、アリッサ・クーパー、スペンサードーキンスGorry Fairhurst、スティーブン・ファレル、Nazila Fough、ケビン・グロス、カレン・ジェニングス、ランデルジェサップ、Mirja Kuehlewind、ジョナサン・レノックス、マット・マシス、スティーブンMcQuistinに感謝したいと思います、彼らの貴重なフィードバックのためのサイモン・ペロー、エリックレスコラ、Abheekサハ、Meral Shirazipour、ファビオヴェルディッキオ、およびマグヌスウェスター。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Colin Perkins University of Glasgow School of Computing Science Glasgow G12 8QQ United Kingdom",
+      "ja": "コンピューティング科学グラスゴーG12 8QQイギリスのグラスゴー大学のコリン・パーキンス大学"
+    },
+    {
+      "indent": 3,
+      "text": "Email: csp@csperkins.org",
+      "ja": "メール：csp@csperkins.org"
+    },
+    {
+      "indent": 3,
+      "text": "Varun Singh CALLSTATS I/O Oy Runeberginkatu 4c A 4 Helsinki 00100 Finland",
+      "ja": "VARUNシンCALLSTATS I / OオイRuneberginkatu 4C A 4 00100ヘルシンキフィンランド"
+    },
+    {
+      "indent": 3,
+      "text": "Email: varun@callstats.io URI: https://www.callstats.io/about",
+      "ja": "メール：varun@callstats.io URI：https://www.callstats.io/about"
+    }
+  ]
+}
