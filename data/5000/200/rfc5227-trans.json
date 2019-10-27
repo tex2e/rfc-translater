@@ -1,0 +1,719 @@
+{
+  "title": {
+    "text": "RFC 5227 - IPv4 Address Conflict Detection",
+    "ja": "RFC 5227 - IPv4アドレスの競合検出"
+  },
+  "number": 5227,
+  "created_at": "2019-10-25 01:17:46.500474+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                        S. Cheshire\nRequest for Comments: 5227                                    Apple Inc.\nUpdates: 826                                                   July 2008\nCategory: Standards Track",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "IPv4 Address Conflict Detection",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "When two hosts on the same link attempt to use the same IPv4 address at the same time (except in rare special cases where this has been arranged by prior coordination), problems ensue for one or both hosts. This document describes (i) a simple precaution that a host can take in advance to help prevent this misconfiguration from happening, and (ii) if this misconfiguration does occur, a simple mechanism by which a host can passively detect, after the fact, that it has happened, so that the host or administrator may respond to rectify the problem.",
+      "ja": "（これは前の配位によって配置されている稀な特殊な場合を除いて）同時に同じIPv4アドレスを使用する同一のリンクの試みにときに、2つのホストが、問題は、一方または両方のホストの結果として起きます。この文書は、（i）ホストが起きてから、この設定ミスを防ぐために、事前に取ることができ、および（ii）この設定ミスが発生した場合、ホストは受動的事実の後に、検出することができることにより、簡単なメカニズム、そのことを簡単な予防措置を説明しますホストまたは管理者が問題を修正するために応答することができるように、それは、起こっています。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n   1.1. Conventions and Terminology Used in This Document ..........4\n   1.2. Relationship to RFC 826 ....................................5\n        1.2.1. Broadcast ARP Replies ...............................7\n   1.3. Applicability ..............................................7\n2. Address Probing, Announcing, Conflict Detection, and Defense ....9\n   2.1. Probing an Address ........................................10\n        2.1.1. Probe Details ......................................10\n   2.2. Shorter Timeouts on Appropriate Network Technologies ......11\n   2.3. Announcing an Address .....................................12\n   2.4. Ongoing Address Conflict Detection and Address Defense ....12\n   2.5. Continuing Operation ......................................14\n   2.6. Broadcast ARP Replies .....................................14\n3. Why Are ARP Announcements Performed Using ARP Request\n   Packets and Not ARP Reply Packets? .............................15\n4. Historical Note ................................................17\n5. Security Considerations ........................................17\n6. Acknowledgments ................................................18\n7. References .....................................................18\n   7.1. Normative References ......................................18\n   7.2. Informative References ....................................19",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Historically, accidentally configuring two Internet hosts with the same IP address has often been an annoying and hard-to-diagnose problem.",
+      "ja": "歴史的に、偶然に同じIPアドレスを持つ2つのインターネットホストを設定することは、多くの場合、迷惑とハードツー診断問題となっています。"
+    },
+    {
+      "indent": 3,
+      "text": "This is unfortunate, because the existing Address Resolution Protocol (ARP) provides an easy way for a host to detect this kind of misconfiguration and report it to the user. The DHCP specification [RFC2131] briefly mentions the role of ARP in detecting misconfiguration, as illustrated in the following three excerpts from RFC 2131:",
+      "ja": "既存のアドレス解決プロトコル（ARP）は、ホストが設定ミスのこの種を検出し、ユーザーにそれを報告するための簡単な方法を提供しますので、これは、残念なことです。 RFC 2131からの次の三つの抜粋に示すように、DHCP仕様[RFC2131]は簡単に、設定ミスを検出するARPの役割に言及しています："
+    },
+    {
+      "indent": 3,
+      "text": "o the client SHOULD probe the newly received address, e.g., with ARP",
+      "ja": "クライアントは、ARPで、例えば、新たに受信したアドレスを調べるべきであるoを"
+    },
+    {
+      "indent": 3,
+      "text": "o The client SHOULD perform a final check on the parameters (e.g., ARP for allocated network address)",
+      "ja": "Oクライアントは、パラメータの最終チェックを行う必要があり（例えば、ARP割り当てられたネットワークアドレス用）"
+    },
+    {
+      "indent": 3,
+      "text": "o If the client detects that the address is already in use (e.g., through the use of ARP), the client MUST send a DHCPDECLINE message to the server",
+      "ja": "クライアントがアドレス（例えば、ARPを使用して）すでに使用されていることを検出した場合には、O、クライアントはサーバーにDHCPDECLINEメッセージを送らなければなりません"
+    },
+    {
+      "indent": 3,
+      "text": "Unfortunately, the DHCP specification does not give any guidance to implementers concerning the number of ARP packets to send, the interval between packets, the total time to wait before concluding that an address may safely be used, or indeed even which kinds of packets a host should be listening for, in order to make this determination. It leaves unspecified the action a host should take if, after concluding that an address may safely be used, it subsequently discovers that it was wrong. It also fails to specify what precautions a DHCP client should take to guard against pathological failure cases, such as a DHCP server that repeatedly OFFERs the same address, even though it has been DECLINEd multiple times.",
+      "ja": "残念ながら、DHCP仕様は、送信するARPパケットの数、パケットの間隔、アドレスは安全に使用することができることを結論付けるまでの待機時間の合計、または実際のパケットさえ種類のホストに関する実装者への任意のガイダンスを与えるものではありませんこの決意をするために、リスニングのためにする必要があります。これは、アドレスは安全に使用することができると結論した後、それはその後、それは間違っていたことを発見した場合、ホストが取るべきアクションを未指定のままに。また、DHCPクライアントは、それが複数回辞退されているにもかかわらず、そのような繰り返し同じアドレスを提供していますDHCPサーバとして、病理学的失敗例から保護するために取るべき注意事項を指定することができません。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors of the DHCP specification may have been justified in thinking at the time that the answers to these questions seemed too simple, obvious, and straightforward to be worth mentioning, but unfortunately this left some of the burden of protocol design to each individual implementer. This document seeks to remedy this omission by clearly specifying the required actions for:",
+      "ja": "DHCP仕様の著者は、これらの質問に対する答えは、言及する価値があるには余りにも単純明白な、と簡単なように見えた時点で思考に正当化されている可能性があり、残念ながらこれは、個々の実装にプロトコル設計の負担の一部を残しました。この文書では、明確にするために必要なアクションを指定することで、この漏れを是正しよう："
+    },
+    {
+      "indent": 3,
+      "text": "1. Determining whether use of an address is likely to lead to an addressing conflict. This includes (a) the case where the address is already actively in use by another host on the same link, and (b) the case where two hosts are inadvertently about to begin using the same address, and both are simultaneously in the process of probing to determine whether the address may safely be used (Section 2.1.).",
+      "ja": "1.アドレスの使用が取り組む紛争につながる可能性があるかどうかを決定します。これは、2つのホストが同じアドレスを使用して開始する誤っについては、（a）アドレスが活発同じリンク上の他のホストによって既に使用中である場合、及び（b）はケースを含み、両方とものプロセスで同時にありますアドレスは安全に使用することができるかどうかを決定するためにプロービング（セクション2.1）。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Subsequent passive detection that another host on the network is inadvertently using the same address. Even if all hosts observe precautions to avoid using an address that is already in use, conflicts can still occur if two hosts are out of communication at the time of initial interface configuration. This could occur with wireless network interfaces if the hosts are temporarily out of range, or with Ethernet interfaces if the link between two Ethernet hubs is not functioning at the time of address configuration. A well-designed host will handle not only conflicts detected during interface configuration, but also conflicts detected later, for the entire duration of the time that the host is using the address (Section 2.4.).",
+      "ja": "ネットワーク上の別のホストが誤って同じアドレスを使用している2以降の受動検出。すべてのホストが既に使用されているアドレスを使用しないように注意事項を守っていても、2つのホストが最初のインターフェイス設定時に通信の外にある場合、競合がまだ発生する可能性があります。 2つのイーサネット・ハブとの間のリンクは、アドレス設定時に機能していない場合にホストが範囲外、またはイーサネットインターフェイスを一時的である場合、これは、無線ネットワークインターフェースで発生する可能性があります。うまく設計されたホストは、ホストがアドレス使用している時間の全期間のために、後で検出されないだけインターフェース構成中に検出競合だけでなく、競合処理する（セクション2.4）。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Rate-limiting of address acquisition attempts in the case of an excessive number of repeated conflicts (Section 2.1.).",
+      "ja": "3.繰り返し衝突（セクション2.1）の過剰な数の場合にはアドレス取得試行の律速。"
+    },
+    {
+      "indent": 3,
+      "text": "The utility of IPv4 Address Conflict Detection (ACD) is not limited to DHCP clients. No matter how an address was configured, whether via manual entry by a human user, via information received from a DHCP server, or via any other source of configuration information, detecting conflicts is useful. Upon detecting a conflict, the configuring agent should be notified of the error. In the case where the configuring agent is a human user, that notification may take the form of an error message on a screen, a Simple Network Management Protocol (SNMP) notification, or an error message sent via text message to a mobile phone. In the case of a DHCP server, that notification takes the form of a DHCP DECLINE message sent to the server. In the case of configuration by some other kind of software, that notification takes the form of an error indication to the software in question, to inform it that the address it selected is in conflict with some other host on the network. The configuring software may choose to cease network operation, or it may automatically select a new address so that the host may re-establish IP connectivity as soon as possible.",
+      "ja": "IPv4アドレス競合検出（ACD）の有用性は、DHCPクライアントに限定されるものではありません。どんなにアドレスが競合を検出することに有用である、人間のユーザによって手動入力を介してかどうかをDHCPサーバから受信した情報を介して、または構成情報の他のソースを介して、構成された方法。衝突を検出すると、設定エージェントはエラーを通知しなければなりません。構成エージェントは、人間のユーザである場合に、その通知は、画面上にエラーメッセージ、簡易ネットワーク管理プロトコル（SNMP）通知、または携帯電話にテキストメッセージを介して送信されるエラーメッセージの形態をとることができます。 DHCPサーバの場合には、その通知をサーバに送信したDHCP DECLINEメッセージの形態をとります。ソフトウェアのいくつかの他の種類によって構成する場合に、その通知は、選択されたアドレスは、ネットワーク上の他のホストと競合していることを知らせるために、当該ソフトウェアにエラー表示の形をとります。設定ソフトウェアは、ネットワークの動作を停止することを選択したり、ホストはできるだけ早くIP接続を再確立することができるように、それは自動的に新しいアドレスを選択することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Allocation of IPv4 Link-Local Addresses [RFC3927] can be thought of as a special case of this mechanism, where the configuring agent is a pseudo-random number generator, and the action it takes upon being notified of a conflict is to pick a different random number and try again. In fact, this is exactly how IPv4 Link-Local Addressing was implemented in Mac OS 9 back in 1998. If the DHCP client failed to get a response from any DHCP server, it would simply make up a fake response containing a random 169.254.x.x address. If the ARP module reported a conflict for that address, then the DHCP client would try again, making up a new random 169.254.x.x address as many times as was necessary until it succeeded. Implementing ACD as a standard feature of the networking stack has the side effect that it means that half the work for IPv4 Link-Local Addressing is already done.",
+      "ja": "IPv4のリンクローカルアドレス[RFC3927]の割り当ては、構成エージェントは、擬似乱数発生器であり、この機構の特別な場合と考え、それは競合が通知される際に実行するアクションは、別を選択することができます乱数、再試行してください。実際には、これはDHCPクライアントが任意のDHCPサーバからの応答を取得するのに失敗した場合、バック1998年にはMac OS 9に実装されたアドレッシング正確にどのようにIPv4のリンクローカルで、それは単にランダムに169.254.xxを含む偽の応答を作るだろう住所。 ARPモジュールは、そのアドレスの競合を報告した場合、DHCPクライアントは、それが成功するまで必要だったような回数の新しいランダム169.254.x.xアドレスを構成する、もう一度しようとするだろう。ネットワークスタックの標準機能としてACDを実装することはアドレッシングのIPv4リンクローカルのための半分の作業が既に行われていることを意味していることの副作用を持っています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Conventions and Terminology Used in This Document",
+      "section_title": true,
+      "ja": "1.1。このドキュメントの表記規則と用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in \"Key words for use in RFCs to Indicate Requirement Levels\" [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります「要求レベルを示すためのRFCsにおける使用のためのキーワード」[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Wherever this document uses the term 'sender IP address' or 'target IP address' in the context of an ARP packet, it is referring to the fields of the ARP packet identified in the ARP specification [RFC826] as 'ar$spa' (Sender Protocol Address) and 'ar$tpa' (Target Protocol Address), respectively. For the usage of ARP described in this document, each of these fields always contains an IPv4 address.",
+      "ja": "このドキュメントでは、用語「送信元IPアドレス」やARPパケットの文脈における「ターゲットIPアドレス」を使用していますどこに、それは（「ARの$スパ」としてARP仕様[RFC826]で特定されたARPパケットのフィールドを参照しています送信者のプロトコルアドレス）と「ARます$ TPA」（対象プロトコル・アドレス）、それぞれ。 ARPの使用方法については、これらのフィールドのそれぞれは、常にIPv4アドレスが含まれ、このドキュメントで説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, the term 'ARP Probe' is used to refer to an ARP Request packet, broadcast on the local link, with an all-zero 'sender IP address'. The 'sender hardware address' MUST contain the hardware address of the interface sending the packet. The 'sender IP address' field MUST be set to all zeroes, to avoid polluting ARP caches in other hosts on the same link in the case where the address turns out to be already in use by another host. The 'target hardware address' field is ignored and SHOULD be set to all zeroes. The 'target IP address' field MUST be set to the address being probed. An ARP Probe conveys both a question (\"Is anyone using this address?\") and an implied statement (\"This is the address I hope to use.\").",
+      "ja": "この文書では、用語「ARPプローブは、」すべてゼロ「送信者のIPアドレス」で、ローカルリンクで放送ARP Requestパケットを意味するために使用されます。 「送信者のハードウェアアドレス」パケットを送信するインターフェイスのハードウェアアドレスを含まなければなりません。 「送信元IPアドレス」フィールドは、アドレスが別のホストによってすでに使用中であることが判明した場合、同じリンク上の他のホストにARPキャッシュを汚染を避けるために、すべてゼロに設定しなければなりません。 「ターゲットハードウェアアドレス」フィールドは、無視され、すべてゼロに設定する必要があります。 「ターゲットIPアドレス」フィールドは、プローブさのアドレスに設定しなければなりません。 ARPプローブは、質問（「このアドレスを使用して誰か？」）と暗黙の声明（「これは私が使用したいと考えていたアドレスである。」）の両方を伝えます。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, the term 'ARP Announcement' is used to refer to an ARP Request packet, broadcast on the local link, identical to the ARP Probe described above, except that both the sender and target IP address fields contain the IP address being announced. It conveys a stronger statement than an ARP Probe, namely, \"This is the address I am now using.\"",
+      "ja": "この文書では、用語「ARPの発表は、」ローカルリンク上のブロードキャスト、ARP Requestパケットを参照するために使用され、ARPプローブと同一の両方の送信者とターゲットIPアドレスフィールドが発表されているIPアドレスが含まれていることを除いて、上記の。これは、ARPプローブよりも強い声明を伝え、すなわち、「これは私が今使っているアドレスです。」"
+    },
+    {
+      "indent": 3,
+      "text": "The following timing constants used in this protocol are referenced in Section 2, which describes the operation of the protocol in detail. (Note that the values listed here are fixed constants; they are not intended to be modifiable by implementers, operators, or end users. These constants are given symbolic names here to facilitate the writing of future standards that may want to reference this document with different values for these named constants; however, at the present time no such future standards exist.)",
+      "ja": "このプロトコルで使用される以下のタイミング定数は詳細にプロトコルの動作を説明する第2、で参照されています。 （ここに記載されている値は、定数を固定していることに注意してください。これらは、実装、事業者、またはエンドユーザーによって変更することを意図していないこれらの定数が異なると、この文書を参照することもできます将来の規格の書き込みを容易にするために、ここにシンボリック名を与えられています。これらの名前付き定数の値であるが、現時点ではそのような将来の規格は存在しません）。"
+    },
+    {
+      "indent": 0,
+      "text": " PROBE_WAIT 1 second (initial random delay) PROBE_NUM 3 (number of probe packets) PROBE_MIN 1 second (minimum delay until repeated probe) PROBE_MAX 2 seconds (maximum delay until repeated probe) ANNOUNCE_WAIT 2 seconds (delay before announcing) ANNOUNCE_NUM 2 (number of Announcement packets) ANNOUNCE_INTERVAL 2 seconds (time between Announcement packets) MAX_CONFLICTS 10 (max conflicts before rate-limiting) RATE_LIMIT_INTERVAL 60 seconds (delay between successive attempts) DEFEND_INTERVAL 10 seconds (minimum interval between defensive ARPs) 1.2. Relationship to",
+      "ja": "PROBE_MIN 1秒（繰り返しプローブまでの最小遅延）PROBE_MAX 2秒（繰り返しプローブまでの最大遅延）ANNOUNCE_WAIT 2秒（発表前に遅延）ANNOUNCE_NUM発表2（数PROBE_WAIT 1秒（初期ランダム遅延）PROBE_NUM 3（プローブパケットの数）パケット）ANNOUNCE_INTERVAL 2秒（告知パケット間の時間）が10（律速前に最大の競合）RATE_LIMIT_INTERVAL 60秒（連続する試行間の遅延）DEFEND_INTERVAL 10秒（防御のARP間の最小間隔）1.2 MAX_CONFLICTS。との関係"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not modify any of the protocol rules in RFC 826. It does not modify the packet format, or the meaning of any of the fields. The existing rules for \"Packet Generation\" and \"Packet Reception\" still apply exactly as specified in RFC 826.",
+      "ja": "この文書では、それは、パケットフォーマット、またはフィールドのいずれかの意味を変更しないRFC 826で、プロトコルルールのいずれかを変更しません。 RFC 826に指定されている「パケット・ジェネレーション」と「パケット受信」のための既存のルールがまだ正確に適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document expands on RFC 826 by specifying:",
+      "ja": "この文書では、指定することにより、RFC 826に展開されます。"
+    },
+    {
+      "indent": 3,
+      "text": "(1) that a specific ARP Request should be generated when an interface is configured, to discover if the address is already in use, and",
+      "ja": "（1）インターフェースが設定されている場合、特定のARP要求が生成されるべきであることを、アドレスが既に使用中である場合に発見し、及び"
+    },
+    {
+      "indent": 3,
+      "text": "(2) an additional trivial test that should be performed on each received ARP packet, to facilitate passive ongoing conflict detection. This additional test creates no additional packet overhead on the network (no additional packets are sent) and negligible additional CPU burden on hosts, since every host implementing ARP is *already* required to process every received ARP packet according to the Packet Reception rules specified in RFC 826. These rules already include checking to see if the 'sender IP address' of the ARP packet appears in any of the entries in the host's ARP cache; the additional test is simply to check to see if the 'sender IP address' is the host's *own* IP address, potentially as little as a single additional machine instruction on many architectures.",
+      "ja": "（2）それぞれの上で実行されなければならない追加の些細な試験は、受動進行中の競合の検出を容易にするために、ARPパケットを受信しました。 ARPを実装するすべてのホストが*既に*で指定されたパケット受信ルールに従って、すべての受信したARPパケットを処理する必要があるので、この追加のテストは、ネットワーク上の追加パケットのオーバーヘッドを作成しない（追加のパケットが送信されていない）とホスト上無視できる追加のCPU負荷RFC 826これらのルールは、すでにARPパケットの送信元のIPアドレスが「ホストのARPキャッシュ内のエントリのいずれかで表示されるかどうかを確認するためにチェックが含まれ;追加のテストでは、単に「送信元IPアドレスが」ホストの*独自の* IPアドレス、多くのアーキテクチャ上の単一の追加マシン命令として潜在的にわずかであるかどうかを確認することです。"
+    },
+    {
+      "indent": 3,
+      "text": "As already specified in RFC 826, an ARP Request packet serves two functions, an assertion and a question:",
+      "ja": "すでにRFC 826で指定されているように、ARP Requestパケットは2つの機能、アサーションと質問を提供しています："
+    },
+    {
+      "indent": 3,
+      "text": "* Assertion: The fields 'ar$sha' (Sender Hardware Address) and 'ar$spa' (Sender Protocol Address) together serve as an assertion of a fact: that the stated Protocol Address is mapped to the stated Hardware Address.",
+      "ja": "*アサーション：フィールド「ARます$ SHA」（送信者のハードウェアアドレス）と「ARの$スパ」（送信者プロトコルアドレス）を一緒に事実の主張として機能：定められたプロトコルアドレスが明記ハードウェアアドレスにマッピングされていること。"
+    },
+    {
+      "indent": 3,
+      "text": "* Question: The fields 'ar$tha' (Target Hardware Address, zero) and 'ar$tpa' (Target Protocol Address) serve as a question, asking, for the stated Protocol Address, to which Hardware Address it is mapped.",
+      "ja": "*質問：フィールド「のar $股関節」（ターゲットハードウェアアドレス、ゼロ）と「ARます$ TPA」（ターゲットプロトコルアドレス）は、それがマッピングされているハードウェアアドレスこれに、規定のプロトコル・アドレスのために、尋ねる、質問としての役割を果たす。"
+    },
+    {
+      "indent": 3,
+      "text": "This document clarifies what it means to have one without the other.",
+      "ja": "この文書は、それが他のないものを持っていることの意味を明確にしています。"
+    },
+    {
+      "indent": 3,
+      "text": "Some readers pointed out that it is probably impossible to ask any truly pure question; asking any question necessarily invites speculation about why the interrogator wants to know the answer. Just as someone pointing to an empty seat and asking, \"Is anyone sitting here?\" implies an unspoken \"... because if not then I will,\" the same is true here. An ARP Probe with an all-zero 'sender IP address' may ostensibly be merely asking an innocent question (\"Is anyone using this address?\"), but an intelligent implementation that knows how IPv4 Address Conflict Detection works should be able to recognize this question as the precursor to claiming the address.",
+      "ja": "一部の読者は、どんな本当に純粋な質問をすることはおそらく不可能であることを指摘しました。どんな質問をしても、必ずしも、質問は答えを知りたい理由について憶測を誘います。ただ、誰かが空いている席を指していると尋ねると、「ここに座っ誰か？」暗黙の意味「...そして私は、するかどうかではないので、」同じことがここに真です。オールゼロ「送信者のIPアドレス」を持つARPプローブは、表向きは、単に（「誰がこのアドレスを使用していますか？」）無実の質問をすることができるが、競合の検出がどのように動作するかIPv4のアドレスを知っているインテリジェントな実装では、これを認識することができるはずですアドレスを主張する前駆体として質問。"
+    },
+    {
+      "indent": 3,
+      "text": "Consequently, if that implementation is also, at that exact moment, in the process of asking the very same question, it should recognize that they can't both sit in the same seat, so it would be prudent to ask about some other seat.",
+      "ja": "その実装は非常に同じ質問をする過程で、その正確な瞬間に、またある場合には結果的に、それは彼らの両方が同じ席に座ることができないことを認識すべきであるので、他のいくつかの座席について質問するのが賢明だろう。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2.1. Broadcast ARP Replies",
+      "section_title": true,
+      "ja": "1.2.1。ブロードキャストARPの回答"
+    },
+    {
+      "indent": 3,
+      "text": "In some applications of IPv4 Address Conflict Detection (ACD), it may be advantageous to deliver ARP Replies using broadcast instead of unicast because this allows address conflicts to be detected sooner than might otherwise happen. For example, \"Dynamic Configuration of IPv4 Link-Local Addresses\" [RFC3927] uses ACD exactly as specified here, but additionally specifies that ARP Replies should be sent using broadcast, because in that context the trade-off of increased broadcast traffic in exchange for improved reliability and fault-tolerance was deemed to be an appropriate one. There may be other future specifications where the same trade-off is appropriate. Additional details are given in Section 2.6, \"Broadcast ARP Replies\".",
+      "ja": "競合検出（ACD）のアドレスこれは、アドレスの競合が早くそうでなければ起こるかもしれないより検出されることを可能にするためのIPv4のいくつかの用途では、ARPブロードキャストの代わりにユニキャストを使用して行なう送達することが有利であり得ます。たとえば、「IPv4のリンクローカルアドレスの動的構成」[RFC3927]は、ここで指定したとおりにACDを使用していますが、さらに引き換えに増加したブロードキャストトラフィックの文脈におけるトレードオフのため、ARPは、ブロードキャストを使用して送信されなければならない返信ことを指定します改善された信頼性および耐障害性は、適切なものであるとみなされました。同じトレードオフが適切である他の将来の仕様があるかもしれません。その他の詳細は、「ブロードキャストARPは返信」のセクション2.6に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 826 implies that replies to ARP Requests are usually delivered using unicast, but it is also acceptable to deliver ARP Replies using broadcast. The Packet Reception rules in RFC 826 specify that the content of the 'ar$spa' field should be processed *before* examining the 'ar$op' field, so any host that correctly implements the Packet Reception algorithm specified in RFC 826 will correctly handle ARP Replies delivered via link-layer broadcast.",
+      "ja": "RFC 826は、ARP要求に応答が通常のユニキャストを使用して配信されていることを意味し、ARPブロードキャストを使用して返信提供することも可能です。 RFC 826でパケット受信の規則は、前*「のar $スパ」フィールドの内容が処理されるべきであることを指定*正しく正しくRFC 826で指定されたパケット受信アルゴリズムを実装「AR $ OP」フィールドなので、任意のホストをします調べますリンク層ブロードキャストを介して配信ARP応答を処理します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Applicability",
+      "section_title": true,
+      "ja": "1.3。適用性"
+    },
+    {
+      "indent": 3,
+      "text": "This specification applies to all IEEE 802 Local Area Networks (LANs) [802], including Ethernet [802.3], Token-Ring [802.5], and IEEE 802.11 wireless LANs [802.11], as well as to other link-layer technologies that operate at data rates of at least 1 Mb/s, have a round-trip latency of at most one second, and use ARP [RFC826] to map from IP addresses to link-layer hardware addresses. Wherever this document uses the term \"IEEE 802\", the text applies equally to any of these network technologies.",
+      "ja": "この仕様は、イーサネット[802.3]、トークンリング[802.5]、およびIEEE 802.11無線LAN [802.11]と同様に動作する他のリンク層技術を含むすべてのIEEE 802ローカルエリアネットワーク（LAN）[802]、に適用されます少なくとも1 Mb / sのデータレートで、最大1秒のラウンドトリップ遅延を持っている、とリンク層のハードウェアアドレスにIPアドレスからマッピングするためにARP [RFC826]を使用します。この文書は、用語「IEEE 802」を使用してどこ、テキストは、これらのネットワーク技術のいずれにも同様に適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Link-layer technologies that support ARP but operate at rates below 1 Mb/s or latencies above one second will still work correctly with this protocol, but more often may have to handle late conflicts detected after the Probing phase has completed. On these kinds of links, it may be desirable to specify different values for the following parameters:",
+      "ja": "ARPをサポートしますが、1秒以上1メガビット/秒またはレイテンシ以下の速度で動作するリンク層技術は、まだこのプロトコルで正常に動作しますが、より頻繁にプロービングフェーズが完了した後に検出されたレイト競合を処理する必要があります。リンクのこれらの種類には、次のパラメータの異なる値を指定することが望ましい場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "(a) PROBE_NUM, PROBE_MIN, and PROBE_MAX, the number of, and interval between, ARP Probes, explained in Section 2.1.",
+      "ja": "（A）PROBE_NUM、PROBE_MIN、及びPROBE_MAX、数、およびARPプローブ間の間隔は、2.1節で説明しました。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) ANNOUNCE_NUM and ANNOUNCE_INTERVAL, the number of, and interval between, ARP Announcements, explained in Section 2.3.",
+      "ja": "（B）ANNOUNCE_NUMとANNOUNCE_INTERVAL、ARPお知らせ、の間の数、及び間隔は、2.3節で説明しました。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) RATE_LIMIT_INTERVAL and MAX_CONFLICTS, controlling the maximum rate at which address claiming may be attempted, explained in Section 2.1.",
+      "ja": "主張アドレスを試行することができる最大速度を制御する（C）RATE_LIMIT_INTERVALとMAX_CONFLICTSは、セクション2.1で説明しました。"
+    },
+    {
+      "indent": 3,
+      "text": "(d) DEFEND_INTERVAL, the time interval between conflicting ARPs below which a host MUST NOT attempt to defend its address, explained in Section 2.4.",
+      "ja": "（d）にDEFEND_INTERVAL、ホストはそのアドレスを守るのを試みてはいけません、それ以下矛盾のARP間の時間間隔は、2.4節で説明しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Link-layer technologies that do not support ARP may be able to use other techniques for determining whether a particular IP address is currently in use. However, implementing Address Conflict Detection for such networks is outside the scope of this document.",
+      "ja": "ARPは、特定のIPアドレスが現在使用中であるかどうかを決定するための他の技術を使用することができる可能性がサポートされていないリンク層技術。しかしながら、そのようなネットワークのアドレス競合検出を実現することは、この文書の範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "For the protocol specified in this document to be effective, it is not necessary that all hosts on the link implement it. For a given host implementing this specification to be protected against accidental address conflicts, all that is required is that the peers on the same link correctly implement the ARP protocol as given in RFC 826. To be specific, when a peer host receives an ARP Request where the Target Protocol Address of the ARP Request matches (one of) that host's IP address(es) configured on that interface, then as long as it properly responds with a correctly-formatted ARP Reply, the querying host will be able to detect that the address is already in use.",
+      "ja": "この文書で指定されたプロトコルが有効であるためには、リンク上のすべてのホストがそれを実装している必要はありません。必要とされる偶発アドレスの競合から保護するために、この仕様を実装する特定のホスト、すべてのために具体的にはRFC 826で与えられるよう、ピアホストはARP要求を受信すると、同じリンク上のピアが正しく、ARPプロトコルを実装することですそのインターフェイス上に設定されたARP要求と一致することをホストのIPアドレス（複数可）（の1つ）の対象プロトコル・アドレスは、その後であれば適切に正しくフォーマットされたARP応答で応答して、クエリのホストがあることを検出することができます場所アドレスは既に使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The specifications in this document allow hosts to detect conflicts between two hosts using the same address on the same physical link. ACD does not detect conflicts between two hosts using the same address on different physical links, and indeed it should not. For example, the address 10.0.0.1 [RFC1918] is in use by countless devices on countless private networks throughout the world, and this is not a conflict, because they are on different links. It would only be a conflict if two such devices were to be connected to the same link, and when this happens (as it sometimes does), this is a perfect example of a situation where ACD is extremely useful to detect and report (and/or automatically correct) this error.",
+      "ja": "この文書に記載されている仕様は、ホストが同じ物理リンク上で同じアドレスを使用して2つのホスト間の競合を検出することができます。 ACDは、異なる物理リンク上で同じアドレスを使用して2つのホスト間の競合を検出していない、と確かにそれはいけません。たとえば、アドレス10.0.0.1 [RFC1918]は、世界中の無数のプライベートネットワーク上の無数のデバイスで使用されている、と彼らは異なるリンク上にあるので、これは、競合ではありません。 2つのこのようなデバイスは、同じリンクに接続されていた、と（それが時々ように）この問題が発生したとき、これはACDを検出するのに非常に有用である状況の完璧な例であると報告（及び場合/それは唯一の競合になりますまたは、自動的に正しい）このエラー。"
+    },
+    {
+      "indent": 3,
+      "text": "For the purposes of this document, a set of hosts is considered to be \"on the same link\" if:",
+      "ja": "このドキュメントの目的のために、ホストのセットがあれば、「同じリンク上」とみなされます。"
+    },
+    {
+      "indent": 3,
+      "text": "- when any host, A, from that set, sends a packet to any other host, B, in that set, using unicast, multicast, or broadcast, the entire link-layer packet payload arrives unmodified, and",
+      "ja": " - 任意のホスト、Aは、そのセットから、他のホストにパケットを送信するとき、Bは、そのセット内の、ユニキャスト、マルチキャスト、またはブロードキャストを使用して、全体のリンク層パケットのペイロードは、未修飾の到着と"
+    },
+    {
+      "indent": 3,
+      "text": "- a broadcast sent over that link by any host from that set of hosts can be received by every other host in that set.",
+      "ja": " - ホストの集合から任意のホストでそのリンクを介して送信される放送は、そのセット内のすべての他のホストで受信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The link-layer *header* may be modified, such as in Token Ring Source Routing [802.5], but not the link-layer *payload*. In particular, if any device forwarding a packet modifies any part of the IP header or IP payload, then the packet is no longer considered to be on the same link. This means that the packet may pass through devices such as repeaters, bridges, hubs, or switches and still be considered to be on the same link for the purpose of this document, but not through a device such as an IP router that decrements the TTL or otherwise modifies the IP header.",
+      "ja": "リンク・レイヤ・ヘッダ*は、トークンリングソースルーティング[802.5]のように、改変することができるがないリンク層*ペイロード*。パケットを転送する任意のデバイスは、IPヘッダとIPペイロードの任意の部分を変更した場合、特に、そのパケットは、もはや同じリンク上にあるとみなされていません。これは、パケットは、TTLをデクリメントIPルータとしてではなく、装置を介して、そのような中継器、ブリッジ、ハブ、またはスイッチなどのデバイスを通過することができ、なお、この文書の目的のために、同じリンク上にあるとみなされることを意味しますまたはそうでなければ、IPヘッダを修正します。"
+    },
+    {
+      "indent": 3,
+      "text": "Where this document uses the term \"host\", it applies equally to interfaces on routers or other multi-homed hosts, regardless of whether the host/router is currently forwarding packets. In many cases a router will be critical network infrastructure with an IP address that is locally well known and assumed to be relatively constant. For example, the address of the default router is one of the parameters that a DHCP server typically communicates to its clients, and (at least until mechanisms like DHCP Reconfigure [RFC3203] become widely implemented) there isn't any practical way for the DHCP server to inform clients if that address changes. Consequently, for such devices, handling conflicts by picking a new IP address is not a good option. In those cases, option (c) in Section 2.4 (\"Ongoing Address Conflict Detection and Address Defense\") applies.",
+      "ja": "この文書は、用語「ホスト」を使用する場合、それは関係なく、ホスト/ルータは、現在のパケットを転送しているかどうか、ルータまたは他のマルチホームホスト上のインターフェイスにも同様に適用されます。多くの場合、ルータはローカルによく知られており、比較的一定であると仮定されたIPアドレスを持つ重要なネットワークインフラストラクチャとなります。例えば、デフォルトルータのアドレスは、DHCPサーバは、典型的には、DHCPのための任意の実用的な方法がない（DHCP再構成[RFC3203]のようなメカニズムが広く実装なる少なくともまで）、そのクライアントと通信し、およびパラメータの一つでありますサーバーは、そのアドレスが変更された場合、クライアントに通知します。したがって、このようなデバイスのために、新しいIPアドレスを選択することにより競合を処理することは良いオプションではありません。これらの例では、2.4節でのオプション（c）は（「継続的なアドレス競合の検出とアドレス防衛」）が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "However, even when a device is manually configured with a fixed address, having some other device on the network claiming to have the same IP address will pollute peer ARP caches and prevent reliable communication, so it is still helpful to inform the operator. If a conflict is detected at the time the operator sets the fixed manual address, then it is helpful to inform the operator immediately; if a conflict is detected subsequently, it is helpful to inform the operator via some appropriate asynchronous communication channel. Even though reliable communication via the conflicted address is not possible, it may still be possible to inform the operator via some other communication channel that is still operating, such as via some other interface on the router, via a dynamic IPv4 link-local address, via a working IPv6 address, or even via some completely different non-IP technology such as a locally-attached screen or serial console.",
+      "ja": "しかし、デバイスを手動ピアのARPキャッシュを汚染し、信頼性の高い通信を防ぐことができます、同じIPアドレスを持っていると主張し、ネットワーク上の他の装置を備え、固定アドレスが設定されている場合でも、オペレータに通知することが有用です。競合が、オペレータが固定手動アドレスを設定時に検出された場合、すぐにオペレータに通知するために有用です。競合が続いて検出された場合、いくつかの適切な非同期通信チャネルを介してオペレータに通知することが有用です。競合アドレスを介して信頼性の高い通信が不可能であるにもかかわらず、まだ、動的IPv4リンクローカルアドレスを介して、ルータ上のいくつかの他のインタフェースを介してのように、まだ動作しているいくつかの他の通信チャネルを介してオペレータに通知することが可能です、作業IPv6アドレスを経由して、あるいはいくつかの完全に異なる非IP技術によって、このようなローカル接続画面またはシリアルコンソールとして。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Address Probing, Announcing, Conflict Detection, and Defense",
+      "section_title": true,
+      "ja": "2.発表、競合検出をプロービングアドレス、および防衛"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes initial probing to safely determine whether an address is already in use, announcing the chosen address, ongoing conflict checking, and optional use of broadcast ARP Replies to provide faster conflict detection.",
+      "ja": "このセクションでは、安全にアドレスがARPが速く競合の検出を提供するために、返信放送の選択したアドレス、継続的な紛争のチェック、およびオプションの使用を発表し、すでに使用されているかどうかを判断するためのプロービング初期について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Probing an Address",
+      "section_title": true,
+      "ja": "2.1。住所をプロービング"
+    },
+    {
+      "indent": 3,
+      "text": "Before beginning to use an IPv4 address (whether received from manual configuration, DHCP, or some other means), a host implementing this specification MUST test to see if the address is already in use, by broadcasting ARP Probe packets. This also applies when a network interface transitions from an inactive to an active state, when a computer awakes from sleep, when a link-state change signals that an Ethernet cable has been connected, when an 802.11 wireless interface associates with a new base station, or when any other change in connectivity occurs where a host becomes actively connected to a logical link.",
+      "ja": "（手動設定、DHCP、またはいくつかの他の手段から受信したかどうか）IPv4アドレスを使用することを開始する前に、この仕様を実装するホストは、アドレスがブロードキャストARPプローブパケットによって、すでに使用されているかどうかを確認するためにテストする必要があります。これは、アクティブ状態に非アクティブの場合、ネットワークインターフェース遷移を適用し、コンピュータがスリープから目覚めたとき、場合イーサネットケーブルが接続されたリンク状態変化は信号、新しい基地局と802.11無線インターフェースアソシエイツ接続の他の変更が発生した場合、またはホストが論理リンクに積極的に接続されているとなっところ。"
+    },
+    {
+      "indent": 3,
+      "text": "A host MUST NOT perform this check periodically as a matter of course. This would be a waste of network bandwidth, and is unnecessary due to the ability of hosts to passively discover conflicts, as described in Section 2.4.",
+      "ja": "ホストは、当然のこととして、定期的にこのチェックを実行してはなりません。これは、ネットワーク帯域幅の浪費であり、2.4節で説明したように、受動的に起因する紛争を発見するホストの能力を必要としないでしょう。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1.1. Probe Details",
+      "section_title": true,
+      "ja": "2.1.1。プローブ詳細"
+    },
+    {
+      "indent": 3,
+      "text": "A host probes to see if an address is already in use by broadcasting an ARP Request for the desired address. The client MUST fill in the 'sender hardware address' field of the ARP Request with the hardware address of the interface through which it is sending the packet. The 'sender IP address' field MUST be set to all zeroes; this is to avoid polluting ARP caches in other hosts on the same link in the case where the address turns out to be already in use by another host. The 'target hardware address' field is ignored and SHOULD be set to all zeroes. The 'target IP address' field MUST be set to the address being probed. An ARP Request constructed this way, with an all-zero 'sender IP address', is referred to as an 'ARP Probe'.",
+      "ja": "アドレスが所望のアドレスのためのARP要求をブロードキャストすることによってすでに使用されているかどうかを確認するために、ホストのプローブ。クライアントは、それがパケットを送信するためのインターフェイスのハードウェアアドレスを持つARPリクエストの送信元のハードウェアアドレス]フィールドに入力する必要があります。 「送信元IPアドレス」フィールドは、すべてゼロに設定しなければなりません。これは、アドレスが別のホストですでに使用中であることが判明した場合に、同じリンク上の他のホストにARPキャッシュを汚染しないようにすることです。 「ターゲットハードウェアアドレス」フィールドは、無視され、すべてゼロに設定する必要があります。 「ターゲットIPアドレス」フィールドは、プローブさのアドレスに設定しなければなりません。 ARP要求はすべてゼロ「送信元IPアドレス」で、この方法を構築し、「ARPプローブ」と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "When ready to begin probing, the host should then wait for a random time interval selected uniformly in the range zero to PROBE_WAIT seconds, and should then send PROBE_NUM probe packets, each of these probe packets spaced randomly and uniformly, PROBE_MIN to PROBE_MAX seconds apart. This initial random delay helps ensure that a large number of hosts powered on at the same time do not all send their initial probe packets simultaneously.",
+      "ja": "場合プロービングを開始する準備ができ、ホストは次に秒PROBE_WAITする範囲ゼロに一様に選択されたランダムな時間間隔を待つ必要があり、その後PROBE_NUMプローブパケットを送信する必要があり、これらのプローブパケットの各々は、離間PROBE_MAX秒に、ランダムかつ均一PROBE_MIN離間しました。この最初のランダムな遅延が同時に電源を投入多数のホストがすべて同時に彼らの初期のプローブパケットを送信しないことを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "If during this period, from the beginning of the probing process until ANNOUNCE_WAIT seconds after the last probe packet is sent, the host receives any ARP packet (Request *or* Reply) on the interface where the probe is being performed, where the packet's 'sender IP address' is the address being probed for, then the host MUST treat this address as being in use by some other host, and should indicate to the configuring agent (human operator, DHCP server, etc.) that the proposed address is not acceptable.",
+      "ja": "プロービング・プロセスの最初からANNOUNCE_WAIT秒まで、この期間中であれば、最後のプローブ・パケットが送信された後、ホストはプローブは、パケットの「実行されているインターフェイス上のすべてのARPパケット（リクエスト*または* Reply）を受け取り、送信元のIPアドレスはのプローブさアドレス、ホストは、提案のアドレスではないことがいくつかの他のホストが使用しているとして、このアドレスを扱わなければならない、と設定エージェント（人間のオペレータ、DHCPサーバなど）に示すべきです許容できます。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, if during this period the host receives any ARP Probe where the packet's 'target IP address' is the address being probed for, and the packet's 'sender hardware address' is not the hardware address of any of the host's interfaces, then the host SHOULD similarly treat this as an address conflict and signal an error to the configuring agent as above. This can occur if two (or more) hosts have, for whatever reason, been inadvertently configured with the same address, and both are simultaneously in the process of probing that address to see if it can safely be used.",
+      "ja": "また、この期間中に、ホストは、次に、パケットの「ターゲットIPアドレスが」についてプローブされるアドレスであり、パケットの「送信元ハードウェアアドレスは、」ホストのインターフェイスの任意のハードウェアアドレスではない任意のARPプローブを受信した場合ホストは同様にアドレスの競合として扱い、上記のように設定するエージェントにエラーを通知すべきです。これが発生した場合、2つ（またはそれ以上）のホストが、何らかの理由で、誤って同じアドレスで構成されていることができ、両者は、それが安全に使用することができるかどうかを確認するために、そのアドレスを探索する過程で同時にあります。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: The check that the packet's 'sender hardware address' is not the hardware address of any of the host's interfaces is important. Some kinds of Ethernet hub (often called a \"buffered repeater\") and many wireless access points may \"rebroadcast\" any received broadcast packets to all recipients, including the original sender itself. For this reason, the precaution described above is necessary to ensure that a host is not confused when it sees its own ARP packets echoed back.",
+      "ja": "注：パケットの「送信元ハードウェアアドレスは、」ホストのインタフェースのいずれかのハードウェアアドレスではないことを確認が重要です。 （多くの場合、「バッファリングリピータ」と呼ばれる）、イーサネットハブと多くのワイヤレスアクセスポイントのいくつかの種類のいずれかが、元の送信者自身を含め、すべての受信者にブロードキャストパケットを受信した「再放送」があります。このため、上記の予防措置は、それ自身のARPパケットがエコーバック見たときに、ホストが混乱しないようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A host implementing this specification MUST take precautions to limit the rate at which it probes for new candidate addresses: if the host experiences MAX_CONFLICTS or more address conflicts on a given interface, then the host MUST limit the rate at which it probes for new addresses on this interface to no more than one attempted new address per RATE_LIMIT_INTERVAL. This is to prevent catastrophic ARP storms in pathological failure cases, such as a defective DHCP server that repeatedly assigns the same address to every host that asks for one. This rate-limiting rule applies not only to conflicts experienced during the initial probing phase, but also to conflicts experienced later, as described in Section 2.4 \"Ongoing Address Conflict Detection and Address Defense\".",
+      "ja": "特定のインターフェイス上のホスト経験のMAX_CONFLICTS以上のアドレスの競合が、その後、ホストはそれが新しいアドレスのためのプローブ速度を制限する必要がある場合：この仕様を実装するホストは、それが新たな候補アドレスのためのプローブ速度を制限するために、予防措置を講じなければなりません。超えないものに、このインタフェースはRATE_LIMIT_INTERVALごとに新しいアドレスを試みました。これは、繰り返し1を要求するすべてのホストに同じアドレスを割り当て、欠陥DHCPサーバのような病理学的障害例で壊滅的なARPストームを防止するためです。このレート制限ルールは、初期プロービングフェーズの間に経験した紛争にするだけでなく、2.4節「継続的なアドレス競合の検出とアドレス防衛」で説明したように、後に経験した競合しないようにのみ適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If, by ANNOUNCE_WAIT seconds after the transmission of the last ARP Probe no conflicting ARP Reply or ARP Probe has been received, then the host has successfully determined that the desired address may be used safely.",
+      "ja": "場合は、最後のARPプローブがないARP応答競合またはARPプローブが受信された送信後ANNOUNCE_WAIT秒により、ホストは正常に所望のアドレスが安全に使用することができると判断しました。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Shorter Timeouts on Appropriate Network Technologies",
+      "section_title": true,
+      "ja": "2.2。適切なネットワーク技術に関する短いタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "Network technologies may emerge for which shorter delays are appropriate than those required by this document. A subsequent IETF publication may be produced providing guidelines for different values for PROBE_WAIT, PROBE_NUM, PROBE_MIN, and PROBE_MAX on those technologies.",
+      "ja": "ネットワーク技術は、短い遅延は、この文書で必要とされるものより適切であるために出てくることがあります。後続IETF刊行物は、これらの技術にPROBE_WAIT、PROBE_NUM、PROBE_MIN、及びPROBE_MAXための異なる値についてのガイドラインを提供製造することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the situation arises where different hosts on a link are using different timing parameters, this does not cause any problems. This protocol is not dependent on all hosts on a link implementing the same version of the protocol; indeed, this protocol is not dependent on all hosts on a link implementing the protocol at all. All that is required is that all hosts implement ARP as specified in RFC 826, and correctly answer ARP Requests they receive. In the situation where different hosts are using different timing parameters, all that will happen is that some hosts will configure their interfaces more quickly than others. In the unlikely event that an address conflict is not detected during the address probing phase, the conflict will still be detected by the Ongoing Address Conflict Detection described below in Section 2.4.",
+      "ja": "リンク上の異なるホストが異なるタイミングパラメータを使用しているという状況が発生した場合、これは問題が発生することはありません。このプロトコルは、プロトコルの同じバージョンを実装するリンク上のすべてのホストに依存しません。確かに、このプロトコルは、すべてのプロトコルを実装し、リンク上のすべてのホストに依存していません。必要とされるすべてのことは、すべてのホストがRFC 826で指定されたARPを実装し、正しくARPは、彼らが受け取る要求に答えることです。異なるホストが異なるタイミングパラメータを使用している状況で、どうなることすべては、いくつかのホストが他の人よりも早く自分のインターフェイスを設定することです。アドレスの競合がアドレス探査フェーズ中に検出されていません万一、競合がまだ競合の検出は、2.4節に説明進行中のアドレスによって検出されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Announcing an Address",
+      "section_title": true,
+      "ja": "2.3。住所を発表"
+    },
+    {
+      "indent": 3,
+      "text": "Having probed to determine that a desired address may be used safely, a host implementing this specification MUST then announce that it is commencing to use this address by broadcasting ANNOUNCE_NUM ARP Announcements, spaced ANNOUNCE_INTERVAL seconds apart. An ARP Announcement is identical to the ARP Probe described above, except that now the sender and target IP addresses are both set to the host's newly selected IPv4 address. The purpose of these ARP Announcements is to make sure that other hosts on the link do not have stale ARP cache entries left over from some other host that may previously have been using the same address. The host may begin legitimately using the IP address immediately after sending the first of the two ARP Announcements; the sending of the second ARP Announcement may be completed asynchronously, concurrent with other networking operations the host may wish to perform.",
+      "ja": "所望のアドレスは、安全に使用することができることを決定するためにプローブした、離れて放送ANNOUNCE_NUM ARPお知らせ、離間ANNOUNCE_INTERVAL秒によって、このアドレスを使用するように開始されたことを発表しなければならないこの仕様を実装するホスト。 ARPの発表は、ARPプローブは今ことを除いて、上記の送信者とターゲットIPアドレスが両方のホストの新たに選択したIPv4アドレスが設定されていると同じです。これらのARP発表の目的は、リンク上の他のホストが以前に同じアドレスを使用している可能性のある他のホストから残された古いARPキャッシュエントリを持っていないことを確認することです。ホストは、2件のARP発表の最初の送信後すぐにIPアドレスを使用して合法的に開始することができ、二ARP発表の送信ホストが実行したいことがあり、他のネットワークオペレーションと同時に、非同期で完了することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Ongoing Address Conflict Detection and Address Defense",
+      "section_title": true,
+      "ja": "2.4。継続的なアドレス競合の検出と防衛住所"
+    },
+    {
+      "indent": 3,
+      "text": "Address Conflict Detection is not limited to only the time of initial interface configuration, when a host is sending ARP Probes. Address Conflict Detection is an ongoing process that is in effect for as long as a host is using an address. At any time, if a host receives an ARP packet (Request *or* Reply) where the 'sender IP address' is (one of) the host's own IP address(es) configured on that interface, but the 'sender hardware address' does not match any of the host's own interface addresses, then this is a conflicting ARP packet, indicating some other host also thinks it is validly using this address. To resolve the address conflict, a host MUST respond to a conflicting ARP packet as described in either (a), (b), or (c) below:",
+      "ja": "競合検出は、ホストがARPプローブを送信している最初のインターフェイスコンフィギュレーションの時間のみに限定されるものではないアドレス。アドレス競合検出は、ホストがアドレスを使用している限り、有効である継続的なプロセスです。任意の時点で、ホストは「送信元IPアドレスが」そのインターフェイス上で設定されたホスト自身のIPアドレス（複数可）（の1つ）が、「送信者のハードウェアアドレス」でARPパケット（リクエスト*または* Reply）を受信した場合ホスト自身のインタフェースアドレスのいずれにも一致しない、これは他のいくつかのホストでも、それはこのアドレスを使用して有効にあると考えて示し、対立するARPパケットです。下のいずれかの（a）、（b）、または（c）で説明したようにアドレスの競合を解決するには、ホストが対立するARPパケットに応答しなければなりません："
+    },
+    {
+      "indent": 3,
+      "text": "(a) Upon receiving a conflicting ARP packet, a host MAY elect to immediately cease using the address, and signal an error to the configuring agent as described above.",
+      "ja": "（a）は、競合ARPパケットを受信すると、ホストは直ちにアドレスを使用して停止することを選択することができる、そして上記のように構成するエージェントにエラーを知らせます。"
+    },
+    {
+      "indent": 3,
+      "text": "(b) If a host currently has active TCP connections or other reasons to prefer to keep the same IPv4 address, and it has not seen any other conflicting ARP packets within the last DEFEND_INTERVAL seconds, then it MAY elect to attempt to defend its address by recording the time that the conflicting ARP packet was received, and then broadcasting one single ARP Announcement, giving its own IP and hardware addresses as the sender addresses of the ARP, with the 'target IP address' set to its own IP address, and the 'target hardware address' set to all zeroes. Having done this, the host can then continue to use the address normally without any further special action. However, if this is not the first conflicting ARP packet the host has seen, and the time recorded for the previous conflicting ARP packet is recent, within DEFEND_INTERVAL seconds, then the host MUST immediately cease using this address and signal an error to the configuring agent as described above. This is necessary to ensure that two hosts do not get stuck in an endless loop with both hosts trying to defend the same address.",
+      "ja": "ホストが現在アクティブなTCP接続または同じIPv4アドレスを維持することを好むために、他の理由があり、それが最後のDEFEND_INTERVAL秒以内に他の競合するARPパケットを見ていない場合は（b）に、それはでそのアドレスを防御しようとすることを選択できます矛盾するARPパケットを受信した時刻を記録し、その後、独自のIPアドレスに設定「ターゲットIPアドレス」で、ARPの送信元アドレスとして自身のIPとハードウェアアドレスを与えて、1つのARP Announcementを放送し、すべてゼロに設定する「ターゲットハードウェアアドレス」。これを行った、ホストは、任意の更なる特別な操作なしで正常にアドレスを使用し続けることができます。これは最初の競合するARPパケットでない場合は、ホストが見ていると、以前の矛盾するARPパケットを記録した時間が最近のものである、DEFEND_INTERVAL秒以内に、ホストはすぐにこのアドレスを使用して中止しなければならないと設定エージェントにエラーを通知します上記のように。これは、2つのホストが両方のホストが同じアドレスを擁護しようとすると無限ループにはまりないようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "(c) If a host has been configured such that it should not give up its address under any circumstances (perhaps because it is the kind of device that needs to have a well-known stable IP address, such as a link's default router or a DNS server) then it MAY elect to defend its address indefinitely. If such a host receives a conflicting ARP packet, then it should take appropriate steps to log useful information such as source Ethernet address from the ARP packet, and inform an administrator of the problem. The number of such notifications should be appropriately controlled to prevent an excessive number of error reports being generated. If the host has not seen any other conflicting ARP packets recently, within the last DEFEND_INTERVAL seconds, then it MUST record the time that the conflicting ARP packet was received, and then broadcast one single ARP Announcement, giving its own IP and hardware addresses. Having done this, the host can then continue to use the address normally without any further special action. However, if this is not the first conflicting ARP packet the host has seen, and the time recorded for the previous conflicting ARP packet is within DEFEND_INTERVAL seconds, then the host MUST NOT send another defensive ARP Announcement. This is necessary to ensure that two misconfigured hosts do not get stuck in an endless loop flooding the network with broadcast traffic while they both try to defend the same address.",
+      "ja": "（c）のホストは、それはそれは、このようなリンクのデフォルトルータまたはとしてよく知られている安定したIPアドレスを、持っている必要があり、デバイスの種類があるかもしれないので、どのような状況下（そのアドレスをあきらめてはならないように構成されている場合DNSサーバ）それは無期限にそのアドレスを守るために選ぶことができます。そのようなホストは矛盾するARPパケットを受信した場合、それは、このようなARPパケットから元のイーサネットアドレスなどの有用な情報をログに記録するための適切な措置を講じ、問題を管理者に通知する必要があります。そのような通知の数を適切に生成されたエラーレポートの過剰な数を防止するように制御されるべきです。ホストが最後DEFEND_INTERVAL秒以内に、最近、他の矛盾ARPパケットを見ていない場合、それは自身のIPアドレスとハードウェアアドレスを与えて、競合ARPパケットを受信した時刻を記録し、その後、1つのARPアナウンスを放送しなければなりません。これを行った、ホストは、任意の更なる特別な操作なしで正常にアドレスを使用し続けることができます。これがない場合は、最初の相反するARPは、ホストが見ていると、以前の矛盾するARPパケットを記録した時間がDEFEND_INTERVAL秒以内である場合、ホストは別の守備のARP Announcementを送ってはいけませんパケット。これは、二つの設定に誤りのホストが、どちらも同じアドレスを擁護しようとしながら、ブロードキャストトラフィックでネットワークをフラッディング無限ループにはまりないようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A host wishing to provide reliable network operation MUST respond to conflicting ARP packets as described in (a), (b), or (c) above. Ignoring conflicting ARP packets results in seemingly random network failures that can be hard to diagnose and very frustrating for human users.",
+      "ja": "信頼性の高いネットワーク動作を提供することを望むホストは、上記（A）、（B）、または（c）で説明したようにARPパケットを競合に応答しなければなりません。人間のユーザのために診断することが難しいと非常にイライラすることができます一見ランダムなネットワーク障害に矛盾するARPパケットの結果を無視します。"
+    },
+    {
+      "indent": 3,
+      "text": "Forced address reconfiguration may be disruptive, causing TCP (and other transport-layer) connections to be broken. However, such disruptions should be exceedingly rare, and if inadvertent address duplication happens, then disruption of communication is inevitable. It is not possible for two different hosts using the same IP address on the same network to operate reliably.",
+      "ja": "強制アドレス再構成が破壊されるTCP（および他のトランスポート層）接続を引き起こし、破壊的であってもよいです。しかし、そのような混乱は極めてまれであるべきであり、不注意によるアドレスの重複が発生した場合、その後、通信の途絶は避けられません。同じネットワーク上に同じIPアドレスを使用して、異なる2つのホストが確実に動作することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Before abandoning an address due to a conflict, hosts SHOULD actively attempt to reset any existing connections using that address. This mitigates some security threats posed by address reconfiguration, as discussed in Section 5.",
+      "ja": "紛争のアドレスを放棄する前に、ホストは、積極的にそのアドレスを使用して、既存の接続をリセットしようとすべきです。これは、第5節で述べたように、アドレスの再構成によってもたらされるいくつかのセキュリティ上の脅威を軽減します。"
+    },
+    {
+      "indent": 3,
+      "text": "For most client machines that do not need a fixed IP address, immediately requesting the configuring agent (human user, DHCP client, etc.) to configure a new address as soon as the conflict is detected is the best way to restore useful communication as quickly as possible. The mechanism described above of broadcasting a single ARP Announcement to defend the address mitigates the problem somewhat, by helping to improve the chance that one of the two conflicting hosts may be able to retain its address.",
+      "ja": "固定IPアドレスを必要としないほとんどのクライアントマシンでは、とすぐに競合が検出されたとして、新しいアドレスを設定するにはエージェント（人間のユーザ、DHCPクライアントなど）を要求するなど迅速に有用通信を復元するための最良の方法ですできるだけ。アドレスを守るために、単一のARPアナウンスを放送の上述の機構は、2つの競合するホストの一つがそのアドレスを保持することができるかもしれないという可能性を改善するのを助けることにより、多少の問題を軽減します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. Continuing Operation",
+      "section_title": true,
+      "ja": "2.5。継続運用"
+    },
+    {
+      "indent": 3,
+      "text": "From the time a host sends its first ARP Announcement, until the time it ceases using that IP address, the host MUST answer ARP Requests in the usual way required by the ARP specification [RFC826]. Specifically, this means that whenever a host receives an ARP Request, that's not a conflicting ARP packet as described above in Section 2.4, where the 'target IP address' of the ARP Request is (one of) the host's own IP address(es) configured on that interface, the host MUST respond with an ARP Reply as described in RFC 826. This applies equally for both standard ARP Requests with non-zero sender IP addresses and Probe Requests with all-zero sender IP addresses.",
+      "ja": "ホストはその最初のARP Announcementを送信した時点から、それがそのIPアドレスを使用して止まるまで、ホストはARP仕様[RFC826]で必要とされる通常の方法でARP要求に応答しなければなりません。具体的には、ARP要求の「ターゲットIPアドレスが」ホスト自身のIPアドレス（複数可）（の1つ）である場合、ホストはARP要求を受信するたびに、セクション2.4で説明したように、それが競合するARPパケットではないことを意味しそのインターフェイス上で設定され、ホストがRFC 826で説明したようにARPは、この非ゼロの送信元IPアドレスおよびプローブは、すべてゼロの送信元のIPアドレスを持つ要求で、標準のARP要求の両方に等しく適用さ返信で応じなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. Broadcast ARP Replies",
+      "section_title": true,
+      "ja": "2.6。ブロードキャストARPの回答"
+    },
+    {
+      "indent": 3,
+      "text": "In a carefully-run network with manually-assigned addresses, or a network with a reliable DHCP server and reliable DHCP clients, address conflicts should occur only in rare failure scenarios, so the passive monitoring described above in Section 2.4 is adequate. If two hosts are using the same IP address, then sooner or later one host or the other will broadcast an ARP Request, which the other will see, allowing the conflict to be detected and consequently resolved.",
+      "ja": "2.4節で述べパッシブモニタリングが十分であるように、手動で割り当てられたアドレスと慎重ランネットワーク、あるいは信頼できるDHCPサーバと信頼性の高いDHCPクライアントとネットワークでは、アドレスの競合は、まれな障害シナリオでのみ発生する必要があります。 2つのホストが同じIPアドレスを使用している場合は、遅かれ早かれつのホストまたは他の競合が検出され、結果的に解決できるように、他に表示されるARPリクエストをブロードキャストします。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible, however, that a conflicting configuration may persist for a short time before it is detected. Suppose that two hosts, A and B, have been inadvertently assigned the same IP address, X. Suppose further that at the time they were both probing to determine whether the address could safely be used, the communication link between them was non-functional for some reason, so neither detected the conflict at interface-configuration time. Suppose now that the communication link is restored, and a third host, C, broadcasts an ARP Request for address X. Unaware of any conflict, both hosts A and B will send unicast ARP Replies to host C. Host C will see both Replies, and may be a little confused, but neither host A nor B will see the other's Reply, and neither will immediately detect that there is a conflict to be resolved. Hosts A and B will continue to be unaware of the conflict until one or other broadcasts an ARP Request of their own.",
+      "ja": "それが検出される前に、競合する設定が短時間持続し得ることが、可能です。 2つのホストA及びBは、誤って同じIPアドレスが割り当てられていると仮定し、X.は、それらが両方のアドレスが安全に使用できるかどうかを決定するためにプロービングされた時に、それらの間の通信リンクがため、非機能的であったことがさらに仮定何らかの理由で、インターフェイス・コンフィギュレーション時に競合が検出さもないので。矛盾を認識しないアドレスXのARP要求をブロードキャストし、ホストA及びBの両方が、ユニキャストARPを送信する通信リンクが復元されていることを今仮定、及び第3のホスト、Cは、C.ホストCが両方の返信を参照するホストに返信少し混乱するかもしれませんが、どちらもホストAやBは、相手の返信が表示され、どちらもすぐに解決すべき競合があることを検出しません。ホストAとBは、どちらか一方の放送、独自のARP要求まで競合に気づかないであり続けるだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "If quicker conflict detection is desired, this may be achieved by having hosts send ARP Replies using link-level broadcast, instead of sending only ARP Requests via broadcast, and Replies via unicast. This is NOT RECOMMENDED for general use, but other specifications building on IPv4 ACD may choose to specify broadcast ARP Replies if appropriate. For example, \"Dynamic Configuration of IPv4 Link-Local Addresses\" [RFC3927] specifies broadcast ARP Replies because in that context, detection of address conflicts using IPv4 ACD is not merely a backup precaution to detect failures of some other configuration mechanism; detection of address conflicts using IPv4 ACD is the sole configuration mechanism.",
+      "ja": "迅速競合検出が望まれる場合、これは、ホストはARPの代わりにブロードキャストを介してのみARP要求を送信する、リンクレベルのブロードキャストを使用して返信し、ユニキャストを介して返信送ることによって達成されてもよいです。これは、一般的な使用にはお勧めしませんが、IPv4のACD上のその他の仕様の建物は、適切な場合にはARP応答をブロードキャストを指定することもできます。たとえば、「IPv4のリンクローカルアドレスの動的構成」[RFC3927]はそのコンテキストで、IPv4のACDを使用してアドレスの競合の検出は、いくつかの他の構成メカニズムの障害を検出するためのバックアップ予防措置は単にではないので、ブロードキャストARP応答を指定します。 IPv4のACDを使用してアドレスの競合の検出が唯一の構成メカニズムです。"
+    },
+    {
+      "indent": 3,
+      "text": "Sending ARP Replies using broadcast does increase broadcast traffic, but in the worst case by no more than a factor of two. In the traditional usage of ARP, a unicast ARP Reply only occurs in response to a broadcast ARP Request, so sending these via broadcast instead means that we generate at most one broadcast Reply in response to each existing broadcast Request. On many networks, ARP traffic is such an insignificant proportion of the total traffic that doubling it makes no practical difference. However, this may not be true of all networks, so broadcast ARP Replies SHOULD NOT be used universally. Broadcast ARP Replies should be used where the benefit of faster conflict detection outweighs the cost of increased broadcast traffic and increased packet processing load on the participant network hosts.",
+      "ja": "ARPブロードキャストを使用して返信送信すると、増加のブロードキャストトラフィックを行いますが、2倍を超えないことにより、最悪の場合インチARPの伝統的な使用法では、ユニキャストARP応答でのみ放送ARP要求に応答して発生し、その放送を経由してこれらを送信する代わりに、我々は既存の各放送の要求に応じて最も1回の放送返信で発生することを意味しています。多くのネットワークでは、ARPトラフィックは、それを2倍にする実用的な違いはないことを、全トラフィックの、このような些細な割合です。しかし、これはすべてのネットワークの真のことなので、普遍的に使用されるべきではないARP応答をブロードキャストしない場合があります。ブロードキャストARPはどこ増加ブロードキャストトラフィックと参加者のネットワークホスト上の増加パケット処理負荷のコストを上回る速い競合検出の利点を使用する必要があります返信。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Why Are ARP Announcements Performed Using ARP Request Packets and Not ARP Reply Packets?",
+      "ja": "3.なぜARPアナウンスがARP要求パケットとないARPパケットを返信を使用して実行されますか？"
+    },
+    {
+      "indent": 3,
+      "text": "During IETF deliberation of IPv4 Address Conflict Detection from 2000 to 2008, a question that was asked repeatedly was, \"Shouldn't ARP Announcements be performed using gratuitous ARP Reply packets?\"",
+      "ja": "2000年から2008年までの競合検出をIPv4アドレスのIETF審議中に、繰り返し尋ねた質問であったが、「ARPないアナウンスが無償ARPを使用して行われるべきパケットを返信？」"
+    },
+    {
+      "indent": 3,
+      "text": "On the face of it, this seems reasonable. A conventional ARP Reply is an answer to a question. If in fact no question had been asked, then it would be reasonable to describe such a reply as gratuitous.",
+      "ja": "その顔には、これは合理的なようです。従来のARP応答は、質問への答えです。実際には何の質問がされなかった場合、根拠のないような返事を記述するのが妥当だろう。"
+    },
+    {
+      "indent": 3,
+      "text": "The term \"gratuitous reply\" would seem to apply perfectly to an ARP Announcement: an answer to an implied question that in fact no one asked.",
+      "ja": "実際には誰も尋ねないことを暗黙の質問への答え：用語「無償の返信は、」ARPの発表に完全に適用するように思われます。"
+    },
+    {
+      "indent": 3,
+      "text": "However reasonable this may seem in principle, in practice there are two reasons that swing the argument in favor of using ARP Request packets. One is historical precedent, and the other is pragmatism.",
+      "ja": "しかし、これは原則的に見えるかもしれませんが、実際にはARP要求パケットを使用しての賛成で引数を振る二つの理由が妥当です。一つは歴史的先例であり、他方はプラグマティズムです。"
+    },
+    {
+      "indent": 3,
+      "text": "The historical precedent is that (as described above in Section 4) Gratuitous ARP is documented in Stevens Networking [Ste94] as using ARP Request packets. BSD Unix, Microsoft Windows, Mac OS 9, Mac OS X, etc., all use ARP Request packets as described in Stevens. At this stage, trying to mandate that they all switch to using ARP Reply packets would be futile.",
+      "ja": "歴史的な先例がある（セクション4で説明したように）無償ARPは、ARP要求パケットを使用するものとしてスティーブンス・ネットワーキング[Ste94]に記載されています。スティーブンスで説明したようになどBSD Unixのは、Microsoft Windows版、Mac OS 9、Mac OS Xは、すべてのARP要求パケットを使用しています。この段階では、彼らはすべてのARP応答パケットの使用に切り替えることを強制しようとすることは無駄になります。"
+    },
+    {
+      "indent": 3,
+      "text": "The practical reason is that ARP Request packets are more likely to work correctly with more existing ARP implementations, some of which may not implement RFC 826 entirely correctly. The Packet Reception rules in RFC 826 state that the opcode is the last thing to check in packet processing, so it really shouldn't matter, but there may be \"creative\" implementations that have different packet processing depending on the 'ar$op' field, and there are several reasons why these are more likely to accept gratuitous ARP Requests than gratuitous ARP Replies:",
+      "ja": "実用的な理由は、ARP要求パケットが完全に正しくRFC 826を実装していないことがあり、そのいくつかのより多くの既存のARPの実装、と正しく動作する可能性が高いということです。オペコードは、パケット処理中にチェックするための最後のことなので、それは本当に問題ではないはずですが、「ARの$オペアンプ」に応じて、異なるパケット処理を持っている「創造」の実装があるかもしれないことをRFC 826状態のパケット受信ルールフィールド、およびこれらが無償ARP応答より無償ARP要求を受け入れる可能性が高い理由はいくつかあります。"
+    },
+    {
+      "indent": 3,
+      "text": "* An incorrect ARP implementation may expect that ARP Replies are only sent via unicast. RFC 826 does not say this, but an incorrect implementation may assume it; the \"principle of least surprise\" dictates that where there are two or more ways to solve a networking problem that are otherwise equally good, the one with the fewest unusual properties is the one likely to have the fewest interoperability problems with existing implementations. An ARP Announcement needs to broadcast information to all hosts on the link. Since ARP Request packets are always broadcast, and ARP Reply packets are not, receiving an ARP Request packet via broadcast is less surprising than receiving an ARP Reply packet via broadcast.",
+      "ja": "*間違ったARPの実装では、ARP応答がユニキャストのみを経由して送信されることを期待します。 RFC 826はこれを言いませんが、間違った実装がそれをとることができます。 「少なくとも驚きの原則は、」それ以外も同様に優れているネットワークの問題を解決するには、2つの以上の方法が存在する場合、最も少ない珍しい性質を持つ1は、既存の実装と最少の相互運用性の問題を持っている可能性が1であることを指示します。 ARPの発表は、リンク上のすべてのホストに情報をブロードキャストする必要があります。 ARP要求パケットを常にブロードキャスト、およびARP応答パケットではないされているので、放送を経由してARP要求パケットを受信すると、ブロードキャストを経由してARP応答パケットを受信未満は驚くべきことです。"
+    },
+    {
+      "indent": 3,
+      "text": "* An incorrect ARP implementation may expect that ARP Replies are only received in response to ARP Requests that have been issued recently by that implementation. Unexpected unsolicited Replies may be ignored.",
+      "ja": "*間違ったARPの実装では、ARP応答が唯一のその実装によって、最近発行されたARP要求に応答して受信されることを期待することがあります。予期しない未承諾の回答は無視することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "* An incorrect ARP implementation may ignore ARP Replies where 'ar$tha' doesn't match its hardware address.",
+      "ja": "*間違ったARPの実装では、「ARの$股関節は、」ハードウェアアドレスと一致しない場合ARP応答を無視することがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "* An incorrect ARP implementation may ignore ARP Replies where 'ar$tpa' doesn't match its IP address.",
+      "ja": "*「$ TPAをAr」はどこARPを無視して、誤ったARPの実装が返信そのIPアドレスと一致していません。"
+    },
+    {
+      "indent": 3,
+      "text": "In summary, there are more ways that an incorrect ARP implementation might plausibly reject an ARP Reply (which usually occurs as a result of being solicited by the client) than an ARP Request (which is already expected to occur unsolicited).",
+      "ja": "要約すると、間違ったARPの実装はもっともらしく（すでに迷惑発生すると予想される）ARP要求よりも（通常はクライアントによって勧誘された結果として起こる）ARP応答を拒否するかもしれない多くの方法があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Historical Note",
+      "section_title": true,
+      "ja": "4.ヒストリカルノート"
+    },
+    {
+      "indent": 3,
+      "text": "Some readers have claimed that \"Gratuitous ARP\", as described in Stevens [Ste94], provides duplicate address detection, making ACD unnecessary. This is incorrect. What Stevens describes as Gratuitous ARP is the exact same packet that this document refers to by the more descriptive term 'ARP Announcement'. This traditional Gratuitous ARP implementation sends only a single ARP Announcement when an interface is first configured. The result is that the victim (the existing address holder) logs an error, and the offender continues operation, often without even detecting any problem. Both machines then typically proceed to try to use the same IP address, and fail to operate properly because they are each constantly resetting the other's TCP connections. The human administrator is expected to notice the log message on the victim machine and repair the damage after the fact. Typically this has to be done by physically going to the machines in question, since in this state neither is able to keep a TCP connection open for long enough to do anything useful over the network.",
+      "ja": "一部の読者は、スティーブンス[Ste94]で説明したように、「無償ARP」と主張したACDが不要になって、重複アドレス検出を提供しています。これは正しくありません。無償ARPは、このドキュメントでは、より説明的な用語「ARPの発表」でを参照していることとまったく同じパケットであるとして何スティーブンスについて説明します。この伝統的な無償ARPの実装では、インターフェイスが最初に設定されている唯一のARP Announcementを送信します。その結果、被害者（既存のアドレス保持者）がエラーを記録していることで、犯罪者は多くの場合でも、すべての問題を検出せず、動作を継続します。両方のマシンは、一般的に、彼らはそれぞれ絶えず相手のTCP接続をリセットされるため、正常に動作するために、同じIPアドレスを使用して、失敗しようと進みます。人間の管理者は、ターゲットマシン上のログメッセージに気づくと事後損傷を修復することが期待されます。通常、これはこの状態であるため、物理的に問題のマシンに行くことによって行われなければならない、どちらもネットワーク上で有益な何かをするのに十分な長さのために開いているTCPコネクションを維持することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Gratuitous ARP does not in fact provide effective duplicate address detection and (as of January 2008) many of the top results for a Google search for the phrase \"Gratuitous ARP\" are articles describing how to disable it.",
+      "ja": "無償ARPは、実際に効果的な重複アドレス検出と（2008年1月のように）提供していない句「無償ARP」のGoogle検索の検索結果の多くは、それを無効にする方法を説明する記事です。"
+    },
+    {
+      "indent": 3,
+      "text": "However, implementers of IPv4 Address Conflict Detection should be aware that, as of this writing, Gratuitous ARP is still widely deployed. The steps described in Sections 2.1 and 2.4 of this document help make a host robust against misconfiguration and address conflicts, even when the other host is *not* playing by the same rules.",
+      "ja": "しかし、IPv4アドレス競合検出の実装者はこれを書いているとして、無償ARPがまだ広く展開されている、ということに注意する必要があります。このドキュメントのセクション2.1と2.4で説明する手順は、他のホストが* *同じルールによって再生されていない場合でも、設定ミスやアドレス競合に対してホストが堅牢に役立ちます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IPv4 Address Conflict Detection (ACD) is based on ARP [RFC826] and it inherits the security vulnerabilities of that protocol. A malicious host may send fraudulent ARP packets on the network, interfering with the correct operation of other hosts. For example, it is easy for a host to answer all ARP Requests with Replies giving its own hardware address, thereby claiming ownership of every address on the network.",
+      "ja": "IPv4アドレス競合検出（ACD）は、ARP [RFC826]に基づいており、そのプロトコルのセキュリティ上の脆弱性を継承しています。悪質なホストが他のホストの正しい動作を妨げる、ネットワーク上の不正なARPパケットを送信することができます。たとえば、ホストは、これにより、ネットワーク上のすべてのアドレスの所有権を主張し、独自のハードウェアアドレスを与えて回答してすべてのARP要求に応答するために簡単です。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification makes this existing ARP vulnerability no worse, and in some ways makes it better: instead of failing silently with no indication why, hosts implementing this specification either attempt to reconfigure automatically, or at least inform the human user of what is happening.",
+      "ja": "この仕様は、この既存のARPの脆弱性は何も悪いこと行うものではありませんし、いくつかの点で良いことになります。代わりに、表示なしで黙って失敗のこの仕様のどちらかの試みを実行するホストは自動的に再構成し、または少なくとも何が起こっているかの人間のユーザに知らせるために、なぜ、。"
+    },
+    {
+      "indent": 3,
+      "text": "If a host willingly selects a new address in response to an ARP conflict, as described in Section 2.4, subsection (a), this potentially makes it easier for malicious attackers on the same link to hijack TCP connections. Having a host actively reset any existing connections before abandoning an address helps mitigate this risk.",
+      "ja": "2.4節で説明したようにホストが喜んで、ARPの競合に応じて、新しいアドレスを選択した場合、サブセクション（a）は、これは潜在的にTCP接続をハイジャックするために、同じリンク上の悪意のある攻撃者のために、それが容易になります。ホストが積極的にアドレスを放棄する前に、既存の接続をリセットしたことは、このリスクを軽減します。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Acknowledgments",
+      "section_title": true,
+      "ja": "6.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document arose as a result of Zeroconf Working Group discussions on IPv4 Link-Local Addressing [RFC3927], where it was not clear to many participants which elements of link-local address management were specific to that particular problem space (e.g., random selection of an address), and which elements were generic and applicable to all IPv4 address configuration mechanisms (e.g., the detection of address conflicts). The following people made valuable comments in the course of that work and/or the subsequent editing of this document: Bernard Aboba, Randy Bush, Jim Busse, James Carlson, Alan Cox, Spencer Dawkins, Pavani Diwanji, Ralph Droms, Donald Eastlake III, Alex Elder, Stephen Farrell, Peter Ford, Spencer Giacalone, Josh Graessley, Erik Guttman, Myron Hattig, Mike Heard, Hugh Holbrook, Richard Johnson, Kim Yong-Woon, Marc Krochmal, Rod Lopez, Rory McGuire, Satish Mundra, Thomas Narten, Erik Nordmark, Randy Presuhn, Howard Ridenour, Pekka Savola, Daniel Senie, Dieter Siegmund, Valery Smyslov, Mark Townsley, Oleg Tychev, and Ryan Troll.",
+      "ja": "この文書では、それがリンクローカルアドレス管理の要素は、その特定の問題空間（の例えば、ランダム選択に特異的であった多くの参加者に明確ではなかったのIPv4リンクローカルアドレス指定[RFC3927]、上のZeroconfワーキンググループでの議論の結果として生じましたアドレス）、及びその要素は、一般的な、すべてのIPv4アドレス設定メカニズム（例えば、アドレス競合の検出）に適用しました。バーナードAboba、ランディブッシュ、ジム・ブッセ、ジェームズ・カールソン、アラン・コックス、スペンサードーキンスPavani Diwanji、ラルフDroms、ドナルドイーストレイクIII、次の人が仕事および/または本文書のその後の編集の過程で貴重なコメントをしましたアレックス・エルダー、スティーブン・ファレル、ピーター・フォード、スペンサーGiacalone、ジョシュGraessley、エリック・ガットマン、マイロンHattig、マイク聞かれた、ヒュー・ホルブルック、リチャード・ジョンソン、キム・ヨン・ウーン、マルク・Krochmal、ロッド・ロペス、ロリー・マクガイア、サティシュムンドラ、トーマスNarten氏、エリックNordmarkと、ランディPresuhn、ハワードRidenour、ペッカSavola、ダニエルSenie、ディーター・ジークムント、ヴァレリーSmyslov、マークTownsley、オレグTychev、とライアントロール。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7.参考"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC826] Plummer, D., \"An Ethernet Address Resolution Protocol -- or -- Converting Network Protocol Addresses to 48.bit Ethernet Address for Transmission on Ethernet Hardware\", STD 37, RFC 826, November 1982.",
+      "ja": "[RFC826]プラマー、D.は、STD 37、RFC 826、1982年11月、「イーサネットアドレス解決プロトコル -   - またはネットワークプロトコルを変換するには、イーサネットハードウェア上での伝送のためのイーサネットアドレスを48ビットにIPアドレス」。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[802] IEEE Standards for Local and Metropolitan Area Networks: Overview and Architecture, ANSI/IEEE Std 802, 1990.",
+      "ja": "[802]ローカルおよびメトロポリタンエリアネットワークのIEEE規格：概要とアーキテクチャ、ANSI / IEEE規格802、1990。"
+    },
+    {
+      "indent": 3,
+      "text": "[802.3] ISO/IEC 8802-3 Information technology - Telecommunications and information exchange between systems - Local and metropolitan area networks - Common specifications - Part 3: Carrier Sense Multiple Access with Collision Detection (CSMA/CD) Access Method and Physical Layer Specifications, (also ANSI/IEEE Std 802.3-1996), 1996.",
+      "ja": "[802.3] ISO / IEC 8802-3情報技術 - 電気通信及びシステム間の情報交換 - 地方とメトロポリタンエリアネットワーク - 共通仕様 - 第3部：キャリアセンス衝突検出（CSMA / CD）アクセス方法および物理層仕様、多重アクセス（また、ANSI / IEEE規格802.​​3から1996）、1996。"
+    },
+    {
+      "indent": 3,
+      "text": "[802.5] ISO/IEC 8802-5 Information technology - Telecommunications and information exchange between systems - Local and metropolitan area networks - Common specifications - Part 5: Token ring access method and physical layer specifications, (also ANSI/IEEE Std 802.5-1998), 1998.",
+      "ja": "[802.5] ISO / IEC 8802から5情報技術 - 電気通信及びシステム間の情報交換 - 地方とメトロポリタンエリアネットワーク - 共通仕様 - 第5部：トークンリングアクセス方式および物理層仕様、（また、ANSI / IEEE規格802.​​5から1998） 1998年。"
+    },
+    {
+      "indent": 3,
+      "text": "[802.11] Information technology - Telecommunications and information exchange between systems - Local and metropolitan area networks - Specific Requirements Part 11: Wireless LAN Medium Access Control (MAC) and Physical Layer (PHY) Specifications, IEEE Std. 802.11-1999, 1999.",
+      "ja": "[802.11]情報技術 - 電気通信及びシステム間の情報交換 - 地方とメトロポリタンエリアネットワーク - 固有の要件パート11：無線LAN媒体アクセス制御（MAC）および物理層（PHY）仕様、IEEE STD。 802.11-1999、1999。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1918] Rekhter, Y., Moskowitz, B., Karrenberg, D., de Groot, G., and E. Lear, \"Address Allocation for Private Internets\", BCP 5, RFC 1918, February 1996.",
+      "ja": "[RFC1918] Rekhter、Y.、モスコウィッツ、B.、Karrenberg、D.、グルート、G.、およびE.リアド、 \"個人的なインターネットのための配分\"、BCP 5、RFC 1918、1996年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2131] Droms, R., \"Dynamic Host Configuration Protocol\", RFC 2131, March 1997.",
+      "ja": "[RFC2131] Droms、R.、 \"動的ホスト構成プロトコル\"、RFC 2131、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3203] T'Joens, Y., Hublet, C., and P. De Schrijver, \"DHCP reconfigure extension\", RFC 3203, December 2001.",
+      "ja": "[RFC3203] T'Joens、Y.、Hublet、C.、およびP.デ・Schrijver、 \"DHCPの再構成の拡張機能\"、RFC 3203、2001年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3927] Cheshire, S., Aboba, B., and E. Guttman, \"Dynamic Configuration of IPv4 Link-Local Addresses\", RFC 3927, May 2005.",
+      "ja": "[RFC3927]チェシャー、S.、Aboba、B.、およびE.ガットマン、 \"IPv4のリンクローカルアドレスの動的構成\"、RFC 3927、2005年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Ste94] W. Stevens, \"TCP/IP Illustrated, Volume 1: The Protocols\", Addison-Wesley, 1994.",
+      "ja": "[Ste94] W.スティーブンス、 \"TCP / IPイラスト、第1巻：プロトコル\"、アディソン・ウェズリー、1994。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Stuart Cheshire Apple Inc. 1 Infinite Loop Cupertino California 95014 USA",
+      "ja": "スチュアートチェシャーれたApple Inc. 1無限ループクパチーノ、カリフォルニア95014 USA"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 408 974 3207 EMail: rfc@stuartcheshire.org",
+      "ja": "電話：+1 408 974 3207 Eメール：rfc@stuartcheshire.org"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2008).",
+      "ja": "著作権（C）IETFトラスト（2008）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}
