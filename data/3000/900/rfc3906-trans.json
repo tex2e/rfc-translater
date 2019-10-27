@@ -1,0 +1,362 @@
+{
+  "title": {
+    "text": "RFC 3906 - Calculating Interior Gateway Protocol (IGP) Routes Over Traffic Engineering Tunnels",
+    "ja": "RFC 3906 - トラフィックエンジニアリングトンネルでインテリアゲートウェイプロトコル（IGP）ルートの計算"
+  },
+  "number": 3906,
+  "created_at": "2019-10-25 00:43:43.542903+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                            N. Shen\nRequest for Comments: 3906                              Redback Networks\nCategory: Informational                                          H. Smit\n                                                            October 2004",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "Calculating Interior Gateway Protocol (IGP) Routes\n          Over Traffic Engineering Tunnels",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2004).",
+      "ja": "著作権（C）インターネット協会（2004）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how conventional hop-by-hop link-state routing protocols interact with new Traffic Engineering capabilities to create Interior Gateway Protocol (IGP) shortcuts. In particular, this document describes how Dijkstra's Shortest Path First (SPF) algorithm can be adapted so that link-state IGPs will calculate IP routes to forward traffic over tunnels that are set up by Traffic Engineering.",
+      "ja": "従来のホップバイホップリンクステートルーティングプロトコルは、内部ゲートウェイプロトコル（IGP）のショートカットを作成するために、新たなトラフィックエンジニアリング機能と対話する方法この文書では説明しています。具体的には、この文書では、リンク状態のIGPは、トラフィックエンジニアリングによって設定されたトンネルを介してトラフィックを転送するためにIPルートを計算するようにダイクストラのSPF（Shortest Path First）アルゴリズムを適用することができる方法を説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Link-state protocols like integrated Intermediate System to Intermediate System (IS-IS) [1] and OSPF [2] use Dijkstra's SPF algorithm to compute a shortest path tree to all nodes in the network. Routing tables are derived from this shortest path tree. The routing tables contain tuples of destination and first-hop information. If a router does normal hop-by-hop routing, the first-hop will be a physical interface attached to the router. New traffic engineering algorithms calculate explicit routes to one or more nodes in the network. At the router that originates explicit routes, such routes can be viewed as logical interfaces which supply Label Switched Paths through the network. In the context of this document, we refer to these Label Switched Paths as Traffic Engineering tunnels (TE-tunnels). Such capabilities are specified in [3] and [4].",
+      "ja": "中間システムに統合された中間システム（IS-IS）のようなリンク状態プロトコル[1]とOSPF [2]ネットワーク内のすべてのノードへの最短経路ツリーを計算するために、ダイクストラのSPFアルゴリズムを使用します。ルーティングテーブルは、この最短経路木に由来しています。ルーティングテーブルは、宛先と最初のホップ情報の組を含みます。ルータは通常、ホップバイホップルーティングを行う場合は、最初のホップルータに接続されている物理インターフェイスであろう。新しいトラフィックエンジニアリングアルゴリズムは、ネットワーク内の1つのまたは複数のノードへの明示的なルートを計算します。明示的なルートを発信するルータにおいて、そのような経路は、ネットワークを介してパスのラベルスイッチを提供する論理インターフェイスと見なすことができます。この文書の文脈では、我々はこれらのラベルを参照するには、トラフィックエンジニアリングトンネル（TE-トンネル）とパスを交換しました。そのような機能が指定されている[3]及び[4]。"
+    },
+    {
+      "indent": 3,
+      "text": "The existence of TE-tunnels in the network and how the traffic in the network is switched over those tunnels are orthogonal issues. A node may define static routes pointing to the TE-tunnels, it may match the recursive route next-hop with the TE-tunnel end-point address, or it may define local policy such as affinity based tunnel selection for switching certain traffic. This document describes a mechanism utilizing link-state IGPs to dynamically install IGP routes over those TE-tunnels.",
+      "ja": "ネットワークとどのようにあるTE-トンネルの存在は、ネットワーク内のトラフィックは、これらのトンネルが直交する問題であるに切り替えられます。ノードは、TE-トンネルを指すスタティックルートを定義することができる、それは、TEトンネルエンドポイントアドレスを持つ再帰ルートのネクストホップをマッチングさせることができる、またはそのような特定のトラフィックを切り替えるための親和性に基づくトンネル選択としてローカルポリシーを定義することができます。この文書では、動的にこれらのTE-トンネルでIGPルートをインストールするには、リンク状態のIGPを利用メカニズムについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The tunnels under consideration are tunnels created explicitly by the node performing the calculation, and with an end-point address known to this node. For use in algorithms such as the one described in this document, it does not matter whether the tunnel itself is strictly or loosely routed. A simple constraint can ensure that the mechanism be loop free. When a router chooses to inject a packet addressed to a destination D, the router may inject the packet into a tunnel where the end-point is closer (according to link-state IGP topology) to the destination D than is the injecting router. In other words, the tail-end of the tunnel has to be a downstream IGP node for the destination D. The algorithms that follow are one way that a router may obey this rule and dynamically make intelligent choices about when to use TE-tunnels for traffic. This algorithm may be used in conjunction with other mechanisms such as statically defined routes over TE-tunnels or traffic flow and QoS based TE-tunnel selection.",
+      "ja": "検討中のトンネルは、計算を行うノードによって明示的に作成されたトンネルであり、このノードに知られたエンドポイントアドレスを持ちます。そのような本文書に記載のものなどのアルゴリズムで使用するためには、トンネル自体は厳密または緩くルーティングされるかどうかは関係ありません。シンプルな制約は、メカニズムがループ自由であることを確認することができます。ルータが宛先D宛のパケットを注入することを選択した場合、ルータは、エンドポイントが注入ルータよりも先Dに（リンクステートIGPトポロジに応じて）近いトンネルにパケットを注入することができます。換言すれば、トンネルのテールエンドは先D.従うアルゴリズムは、ルータがこのルールに従うと、動的ためのTE-トンネルを使用する場合についてインテリジェントな選択を行うことが一つの方法であるため、下流IGPノードでなければなりませんトラフィック。このアルゴリズムは、TE-トンネルまたはトラフィックフローおよびQoSベースのTEトンネル選択にわたって静的に定義されたルートなどの他の機構と共に使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This IGP shortcut mechanism assumes the TE-tunnels have already been setup. The TE-tunnels in the network may be used for QoS, bandwidth, redundancy, or fastreroute reasons. When an IGP shortcut mechanism is applied on those tunnels, or other mechanisms are used in conjunction with an IGP shortcut, the physical traffic switching through those tunnels may not match the initial traffic engineering setup goal. Also the traffic pattern in the network may change with time. Some forwarding plane measurement and feedback into the adjustment of TE-tunnel attributes need to be there to ensure that the network is being traffic engineered efficiently [6].",
+      "ja": "このIGPショートカットメカニズムはTE-トンネルがすでにセットアップされている前提としています。ネットワークにおけるTE-トンネルは、QoS、帯域幅、冗長性、又はfastrerouteの理由のために使用することができます。 IGPショートカット機構は、これらのトンネルに適用され、または他のメカニズムがIGPショートカットと組み合わせて使用​​される場合、これらのトンネルを介してスイッチング物理トラフィックは、初期トラフィックエンジニアリングの設定目標に一致しない場合があります。また、ネットワーク内のトラフィックパターンは時間とともに変化することがあります。 TEトンネル属性の調整にいくつかの転送プレーン測定およびフィードバックは、ネットワークトラフィックを効率的に操作されていることを確実にするために存在する必要がある[6]。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Enhancement to the Shortest Path First Computation",
+      "section_title": true,
+      "ja": "最短パス優先計算2.強化"
+    },
+    {
+      "indent": 3,
+      "text": "During each step of the SPF computation, a router discovers the path to one node in the network. If that node is directly connected to the calculating router, the first-hop information is derived from the adjacency database. If a node is not directly connected to the calculating router, it inherits the first-hop information from the parent(s) of that node. Each node has one or more parents. Each node is the parent of zero or more down-stream nodes.",
+      "ja": "SPF計算の各ステップの間に、ルータは、ネットワーク内の1つのノードへの経路を発見します。そのノードは、計算のルータに直接接続されている場合、最初のホップ情報を隣接データベースに由来します。ノードは、計算のルータに直接接続されていない場合、そのノードの親（S）から最初のホップ情報を継承します。各ノードは、1つまたは複数の親を持っています。各ノードは、ゼロまたはそれ以上のダウンストリームノードの親です。"
+    },
+    {
+      "indent": 3,
+      "text": "For traffic engineering purposes, each router maintains a list of all TE-tunnels that originate at this router. For each of those TE-tunnels, the router at the tail-end is known.",
+      "ja": "トラフィックエンジニアリングの目的で、各ルータはこのルータで発生すべてのTE-トンネルのリストを維持します。これらのTE-トンネルのそれぞれについて、テールエンドのルータが知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "During SPF, when a router finds the path to a new node (in other words, this new node is moved from the TENTative list to the PATHS list), the router must determine the first-hop information. There are three possible ways to do this:",
+      "ja": "ルータが新しいノードへのパスを見つけSPF、中、ルータは、最初のホップ情報を決定しなければならない（換言すれば、この新しいノードは、パスリストに暫定リストから移動されます）。これを実行するには、3つの方法があります。"
+    },
+    {
+      "indent": 6,
+      "text": "- Examine the list of tail-end routers directly reachable via a TE-tunnel. If there is a TE-tunnel to this node, we use the TE-tunnel as the first-hop.",
+      "ja": " -  TEトンネルを介して直接到達可能テールエンドルータのリストを調べ。このノードへTEトンネルが存在する場合、我々は最初のホップとしてTEトンネルを使用します。"
+    },
+    {
+      "indent": 6,
+      "text": "- If there is no TE-tunnel, and the node is directly connected, we use the first-hop information from the adjacency database.",
+      "ja": " - そこにはTEトンネルされず、ノードが直接接続されている場合、我々は隣接データベースから最初のホップ情報を使用します。"
+    },
+    {
+      "indent": 6,
+      "text": "- If the node is not directly connected, and is not directly reachable via a TE-tunnel, we copy the first-hop information from the parent node(s) to the new node.",
+      "ja": " - ノードが直接接続されず、TEトンネルを介して直接に到達できない場合、我々は、新しいノードの親ノード（S）からの第1のホップの情報をコピーします。"
+    },
+    {
+      "indent": 3,
+      "text": "The result of this algorithm is that traffic to nodes that are the tail-end of TE-tunnels, will flow over those TE-tunnels. Traffic to nodes that are downstream of the tail-end nodes will also flow over those TE-tunnels. If there are multiple TE-tunnels to different intermediate nodes on the path to destination node X, traffic will flow over the TE-tunnel whose tail-end node is closest to node X. In certain applications, there is a need to carry both the native adjacency and the TE-tunnel next-hop information for the TE-tunnel tail-end and its downstream nodes. The head-end node may conditionally switch the data traffic onto TE-tunnels based on user defined criteria or events; the head-end node may also split flow of traffic towards either types of the next-hops; the head-end node may install the routes with two different types of next-hops into two separate RIBs. Multicast protocols running over physical links may have to perform RPF checks using the native adjacency next-hops rather than the TE-tunnel next-hops.",
+      "ja": "このアルゴリズムの結果は、TE-トンネルのテールエンドにあるノードへのトラフィックは、これらのTE-トンネルの上を流れということです。テールエンドノードの下流にあるノードへのトラフィックはまた、これらのTE-トンネルの上を流れます。複数のTE-トンネルが宛先ノードXへの経路上の異なる中間ノードに存在する場合、トラフィックは、その末尾のノード特定の用途では、Xノードに最も近い、両方を実行する必要があるTEトンネル上を流れます。 TEトンネルテールエンドとその下流ノードのネイティブ隣接およびTEトンネルネクストホップ情報。ヘッドエンドノードは、条件付きユーザ定義の基準またはイベントに基づいて、TE-トンネル上のデータトラフィックを切り替えることができます。ヘッドエンドノードは、次ホップのいずれかのタイプに向かうトラフィックのフローを分割してもよいです。ヘッドエンドノードは、2つの別個の肋骨に次ホップの二つの異なるタイプのルートをインストールすることができます。物理リンク上で動作するマルチキャストプロトコルは、ネイティブ隣接ネクストホップではなく、TEトンネルの次のホップを使用して、RPFチェックを実行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Special Cases and Exceptions",
+      "section_title": true,
+      "ja": "3.特殊なケースと例外"
+    },
+    {
+      "indent": 3,
+      "text": "The Shortest Path First algorithm will find equal-cost parallel paths to destinations. The enhancement described in this document does not change this. Traffic can be forwarded over one or more native IP paths, over one or more TE-tunnels, or over a combination of native IP paths and TE-tunnels.",
+      "ja": "最短パス優先アルゴリズムは、宛先への等価コストパラレルパスを検索します。この文書で説明する機能拡張は、これを変更しません。トラフィックは、一つ以上のTE-トンネル上に、一つ以上のネイティブIP経路を介して転送され、またはネイティブIP経路とTE-トンネルの組み合わせ上ことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A special situation occurs in the following topology:",
+      "ja": "特殊な状況は、次のトポロジで発生します。"
+    },
+    {
+      "indent": 6,
+      "text": "rtrA -- rtrB -- rtrC | | rtrD -- rtrE",
+      "ja": "RTRA  -  rtrB  -  RTRC | | rtrD  -  rtrE"
+    },
+    {
+      "indent": 3,
+      "text": "Assume all links have the same cost. Assume a TE-tunnel is set up from rtrA to rtrD. When the SPF calculation puts rtrC on the TENTative list, it will realize that rtrC is not directly connected, and thus it will use the first-hop information from the parent, which is rtrB. When the SPF calculation on rtrA moves rtrD from the TENTative list to the PATHS list, it realizes that rtrD is the tail-end of a TE-tunnel. Thus rtrA will install a route to rtrD via the TE-tunnel, and not via rtrB.",
+      "ja": "すべてのリンクが同じコストを持っていると仮定します。 TEトンネルをrtrDにRTRAから設定されていると仮定する。 SPFの計算は、暫定リストにRTRCを置くとき、それはRTRCが直接接続されていないことを理解するであろうし、従ってそれはrtrBある親からの第1のホップ情報を使用します。 RTRA上のSPF計算がパスリストに暫定リストからrtrDを移動したとき、それはrtrDがTEトンネルの末尾であることを実現します。したがってRTRAは、TEトンネルを介して、しないrtrB介しrtrDへのルートがインストールされます。"
+    },
+    {
+      "indent": 3,
+      "text": "When rtrA puts rtrE on the TENTative list, it realizes that rtrE is not directly connected, and that rtrE is not the tail-end of a TE-tunnel. Therefore, rtrA will copy the first-hop information from the parents (rtrC and rtrD) to the first-hop information of rtrE. Traffic to rtrE will now load-balance over the native IP path via rtrA->rtrB->rtrC, and the TE-tunnel rtrA->rtrD.",
+      "ja": "RTRA仮リストにrtrEを置くとき、それはrtrEが直接接続されていないことを認識し、そしてrtrEはTEトンネルのテールエンドではないこと。したがって、RTRAはrtrEの最初のホップ情報を親（RTRCとrtrD）から最初のホップ情報をコピーします。 rtrEへのトラフィック意志今rtrA-> rtrB-> RTRC経由でネイティブIPパスオーバーロードバランス、およびTE-トンネルrtrA-> rtrD。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case where both parallel native IP paths and paths over TE-tunnels are available, implementations can allow the network administrator to force traffic to flow over only TE-tunnels (or only over native IP paths) or both to be used for load sharing.",
+      "ja": "TE-トンネル上平行ネイティブIPパスとパスの両方が利用可能である場合には、実装は、ネットワーク管理者は、（ネイティブIP経路を介してのみ又は）のみTE-トンネル上を流れるトラフィックを強制的に許可することができ、または負荷分散のために使用されるように、両方の。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Metric Adjustment of IP Routes over TE-tunnels",
+      "section_title": true,
+      "ja": "TE-トンネルを介したIPルートの4メートル調整"
+    },
+    {
+      "indent": 3,
+      "text": "When an IGP route is installed in the routing table with a TE-tunnel as the next hop, an interesting question is what should be the cost or metric of this route? The most obvious answer is to assign a metric that is the same as the IGP metric of the native IP path as if the TE-tunnels did not exist. For example, rtrA can reach rtrC over a path with a cost of 20. X is an IP prefix advertised by rtrC. We install the route to X in rtrA's routing table with a cost of 20. When a TE-tunnel from rtrA to rtrC comes up, by default the route is still installed with metric of 20, only the next-hop information for X is changed.",
+      "ja": "IGPルートがネクストホップとしてTEトンネルとルーティングテーブルにインストールされるときに、興味深い問題は、このルートのコスト又はメトリックであるべきである何ですか？最も明白な答えは、TE-トンネルが存在していなかったかのようにネイティブIPパスのIGPメトリックと同じメトリックを割り当てることです。例えば、RTRAは20 Xのコストを有する経路上RTRCに到達することができるRTRCによってアドバタイズIPプレフィックスです。我々RTRCへRTRAからTEトンネルが起動すると、デフォルトではルートはまだ20のメトリックと一緒にインストールされ、20のコストでRTRAのルーティングテーブルにXへのルートをインストールし、唯一のXのネクストホップ情報が変更されました。"
+    },
+    {
+      "indent": 3,
+      "text": "While this scheme works well, in some networks it might be useful to change the cost of the path over a TE-tunnel, to make the route over the TE-tunnel less or more preferred than other routes.",
+      "ja": "この方式はうまく機能するが、いくつかのネットワークでは、他の経路よりも少ない又はより好ましいTEトンネル上の経路を作るために、TEトンネル上のパスのコストを変更することが有用かもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "For instance, when equal cost paths exist over a TE-tunnel and over a native IP path, by adjusting the cost of the path over the TE-tunnel, we can force traffic to prefer the path via the TE-tunnel, to prefer the native IP path, or to load-balance among them. Another example is when multiple TE-tunnels go to the same or different destinations. Adjusting TE-tunnel metrics can force the traffic to prefer some TE-tunnels over others regardless of underlining IGP cost to those destinations.",
+      "ja": "例えば、等コスト・パスがTEトンネル上およびネイティブIP経路上に存在する場合、TEトンネル上のパスのコストを調整することにより、我々は好むために、TEトンネルを介してパスを好むトラフィックを強制することができネイティブIPパス、またはそれらの間の負荷バランスに。複数のTE-トンネルは、同じまたは異なる宛先に行くときに別の例があります。 TEトンネルメトリックを調整すると、関係なく、それらの宛先へのIGPコストを下線の他のものよりいくつかのTE-トンネルを好むために、トラフィックを強制することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Setting a manual metric on a TE-tunnel does not impact the SPF algorithm itself. It only affects the comparison of the new route with existing routes in the routing table. Existing routes can be either IP routes to another router that advertises the same IP prefix, or it can be a path to the same router, but via a different outgoing interface or different TE-tunnel. All routes to IP prefixes advertised by the tail-end router will be affected by the TE-tunnel metric. Also, the metrics of paths to routers that are downstream of the tail-end router will be influenced by the manual TE-tunnel metric.",
+      "ja": "TEトンネルの手動メトリックを設定すると、SPFアルゴリズム自体に影響を与えません。それだけで、ルーティングテーブル内の既存のルートと新ルートの比較に影響を与えます。既存の経路は、IP同じIPプレフィックスを広告、またはそれが同じルータへのパスとすることができる別のルータへのルートが、異なる発信インターフェースまたは異なるTEトンネルを介してのいずれかであり得ます。テールエンドルータによってアドバタイズIPプレフィックスへのすべてのルートは、TEトンネルメトリックによって影響を受けることになります。また、テールエンドルータの下流にあるルータへのパスのメトリックは手動TEトンネルメトリックによって影響されるであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "This mechanism is loop free since the TE-tunnels are source-routed and the tunnel egress is a downstream node to reach the computed destinations. The end result of TE-tunnel metric adjustment is more control over traffic loadsharing. If there is only one way to reach a particular IP prefix through a single TE-tunnel, then no matter what metric is assigned, the traffic has only one path to go.",
+      "ja": "TE-トンネルはソースルートであり、トンネル出口は、計算の目的地に到達する下流ノードであるので、このメカニズムは、ループフリーです。 TEトンネルメトリック調整の最終結果は、トラフィック負荷分担をより細かく制御です。シングルTE-トンネルを通って、特定のIPプレフィックスに到達する唯一の方法がある場合は、関係なく、割り当てられているものメトリック、トラフィックが行くための唯一のパスを持っていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The routing table described in this section can be viewed as the private RIB for the IGP. The metric is an important attribute to the routes in the routing table. A path or paths with lower metric will be selected over other paths for the same route in the routing table.",
+      "ja": "このセクションで説明するルーティング・テーブルは、IGPのプライベートRIBと見なすことができます。メトリックは、ルーティングテーブル内のルートに重要な属性です。低いメトリックを有するパス又は経路は、ルーティングテーブル内の同じ経路の他の経路を介して選択されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Absolute and Relative Metrics",
+      "section_title": true,
+      "ja": "4.1。絶対的および相対的指標"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to represent the TE-tunnel metric in two different ways: an absolute (or fixed) metric or a relative metric, which is merely an adjustment of the dynamic IGP metric as calculated by the SPF computation. When using an absolute metric on a TE-tunnel, the cost of the IP routes in the routing table does not depend on the topology of the network. Note that this fixed metric is not only used to compute the cost of IP routes advertised by the router that is the tail-end of the TE-tunnel, but also for all the routes that are downstream of this tail-end router. For example, if we have TE-tunnels to two core routers in a remote POP, and one of them is assigned with an absolute metric of 1, then all the traffic going to that POP will traverse this low-metric TE-tunnel.",
+      "ja": "2つの異なる方法でTEトンネルメトリックを表現することが可能である：絶対（又は固定）メトリックまたは単にSPF計算によって計算される動的IGPメトリックの調整である、メトリックの相対。 TEトンネル上の絶対メトリックを使用する場合は、ルーティングテーブル内のIPルートのコストは、ネットワークのトポロジに依存しません。しかし、このテールエンドルータの下流にあるすべてのルートのために、この固定されたメトリックのみTEトンネルのテールエンドでルータによってアドバタイズIPルートのコストを計算するために使用されていないことに留意されたいです。我々は、リモートPOP内の2つのコアルータにTE-トンネルを有し、そのうちの一方が1の絶対メトリックが割り当てられている場合、例えば、そのPOPに向かうすべてのトラフィックがこの低メトリックTEトンネルを横断します。"
+    },
+    {
+      "indent": 3,
+      "text": "By setting a relative metric, the cost of IP routes in the routing table is based on the IGP metric as calculated by the SPF computation. This relative metric can be a positive or a negative number. Not configuring a metric on a TE-tunnel is a special case of the relative metric scheme. No metric is the same as a relative metric of 0. The relative metric is bounded by minimum and maximum allowed metric values while the positive metric disables the TE-tunnel in the SPF calculation.",
+      "ja": "相対メトリックを設定することにより、ルーティングテーブル内のIPルートのコストは、SPF計算によって計算されるIGPメトリックに基づいています。この相対的なメトリックは、正または負の数であってもよいです。 TEトンネルにメトリックを設定しないと、相対メトリック方式の特別な場合です。いいえメトリックは、正のメトリックは、SPFの計算にTEトンネルを無効にしながら、相対メトリックが最小値と最大許容メトリック値によって制限される0の相対メトリックと同じではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Examples of Metric Adjustment",
+      "section_title": true,
+      "ja": "4.2。メトリック調整の例"
+    },
+    {
+      "indent": 3,
+      "text": "Assume the following topology. X, Y, and Z are IP prefixes advertised by rtrC, rtrD, and rtrE respectively. T1 is a TE-tunnel from rtrA to rtrC. Each link in the network has an IGP metric of 10.",
+      "ja": "次のトポロジを想定。 X、Y、及びZは、それぞれRTRC、rtrD、及びrtrEによってアドバタイズIPプレフィックスです。 T1はRTRCへRTRAからTEトンネルです。ネットワーク内の各リンクは、10のIGPメトリックを持っています。"
+    },
+    {
+      "indent": 6,
+      "text": " ===== T1 =====> rtrA -- rtrB -- rtrC -- rtrD -- rtrE 10 10 | 10 | 10 | X Y Z",
+      "ja": "===== ===== T1> RTRA  -  RtrB  -  RTRC  -  RtrD  -  RTRE 10月10日| 10 | 10 | X Y Z"
+    },
+    {
+      "indent": 3,
+      "text": "Without TE-tunnel T1, rtrA will install IP routes X, Y, and Z in the routing table with metrics 20, 30, and 40 respectively. When rtrA has brought up TE-tunnel T1 to rtrC, and if rtrA is configured with the relative metric of -5 on tunnel T1, then the routes X, Y, and Z will be installed in the routing table with metrics 15, 25, and 35. If an absolute metric of 5 is configured on tunnel T1, then rtrA will install routes X, Y, and Z all with metrics 5, 15, and 25 respectively.",
+      "ja": "TEトンネルT1なしで、RTRAそれぞれメトリクス20、30、及び40と、ルーティングテーブル内のIPルートのX、Y、及びZがインストールされます。 RTRAがRTRCにTEトンネルT1を育てたときRTRAトンネルT1に-5の相対メトリックが設定されている場合、及び、その後、ルートXは、Y、及びZは、指標15、25とルーティングテーブルにインストールされ、および35 5の絶対メトリックは、トンネルT1に設定されている場合、RTRAそれぞれメトリクス5、15、及び25で経路X、Y、及びZのすべてがインストールされます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not change the security aspects of IS-IS or OSPF. Security considerations specific to each protocol still apply. For more information see [5] and [2].",
+      "ja": "この文書では、IS-ISまたはOSPFのセキュリティ面を変更しません。各プロトコルに固有のセキュリティに関する考慮事項が適用されます。詳細については、[5]及び[2]を参照。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Acknowledgments",
+      "section_title": true,
+      "ja": "6.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Joel Halpern and Christian Hopps for their comments on this document.",
+      "ja": "作者はこのドキュメントの彼らのコメントのためのジョエル・ハルパーンとキリスト教Hoppsが感謝したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Informative References",
+      "section_title": true,
+      "ja": "7.参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[1] ISO. Information Technology - Telecommunications and Information Exchange between Systems - Intermediate System to Intermediate System Routing Exchange Protocol for Use in Conjunction with the Protocol for Providing the Connectionless-Mode Network Service. ISO, 1990.",
+      "ja": "[1] ISO。情報技術 - 電気通信及びシステム間情報交換 - コネクションレスモードのネットワークサービスを提供するためのプロトコルと組み合わせて使用​​する中間システムルーティング交換プロトコルへの中間システム。 ISO 1990。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Moy, J., \"OSPF Version 2\", RFC 2328, April 1998.",
+      "ja": "[2]モイ、J.、 \"OSPFバージョン2\"、RFC 2328、1998年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Awduche, D., Malcolm, J., Agogbua, J., O'Dell, M., and J. McManus, \"Requirements for Traffic Engineering Over MPLS\", RFC 2702, September 1999.",
+      "ja": "[3] Awduche、D.、マルコム、J.、Agogbua、J.、オデル、M.、およびJ.マクマナス、 \"トラフィック過剰性能MPLSのための要件\"、RFC 2702、1999年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Awduche, D., Berger, L., Gan, D., Li, T., Srinivasan, V., and G. Swallow, \"RSVP-TE: Extensions to RSVP for LSP Tunnels\", RFC 3209, December 2001.",
+      "ja": "[4] Awduche、D.、バーガー、L.、ガン、D.、李、T.、スリニヴァサン、V.、およびG.ツバメ、 \"RSVP-TE：LSPトンネルのためのRSVPの拡張\"、RFC 3209年12月2001。"
+    },
+    {
+      "indent": 3,
+      "text": "[5] Li, T. and R. Atkinson, \"Intermediate System to Intermediate System (IS-IS) Cryptographic Authentication\", RFC 3567, July 2003.",
+      "ja": "[5]のLi、T.及びR.アトキンソン、 \"中間システム（IS-IS）暗号化認証に中間システム\"、RFC 3567、2003年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[6] Awduche, D., Chiu, A., Elwalid, A., Widjaja, I., and X. Xiao, \"Overview and Principles of Internet Traffic Engineering\", RFC 3272, May 2002.",
+      "ja": "[6] Awduche、D.、チウ、A.、Elwalid、A.、Widjaja、I.、およびX.シャオ、RFC 3272、2002年5月 \"インターネットトラフィックエンジニアリングの概要と原則\"。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Authors' Addresses",
+      "section_title": true,
+      "ja": "8.著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Naiming Shen Redback Networks, Inc. 300 Holger Way San Jose, CA 95134",
+      "ja": "Naimingシェンレッドバックネットワークス株式会社300ホルガー・ウェイサンノゼ、CA 95134"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: naiming@redback.com",
+      "ja": "メールアドレス：naiming@redback.com"
+    },
+    {
+      "indent": 3,
+      "text": "Henk Smit",
+      "ja": "ヘンクスミット"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: hhwsmit@xs4all.nl",
+      "ja": "メールアドレス：hhwsmit@xs4all.nl"
+    },
+    {
+      "indent": 0,
+      "text": "9. Full Copyright Statement",
+      "section_title": true,
+      "ja": "9.完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2004).",
+      "ja": "著作権（C）インターネット協会（2004）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the IETF's procedures with respect to rights in IETF Documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 IETF文書の権利に関するIETFの手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

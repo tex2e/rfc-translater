@@ -1,0 +1,459 @@
+{
+  "title": {
+    "text": "RFC 4432 - RSA Key Exchange for the Secure Shell (SSH) Transport Layer Protocol",
+    "ja": "RFC 4432 - セキュアシェル（SSH）トランスポート層プロトコル用のRSA鍵交換"
+  },
+  "number": 4432,
+  "created_at": "2019-10-25 00:32:18.494644+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          B. Harris\nRequest for Comments: 4432                                    March 2006\nCategory: Standards Track",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "RSA Key Exchange for the Secure Shell (SSH)\n          Transport Layer Protocol",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This memo describes a key-exchange method for the Secure Shell (SSH) protocol based on Rivest-Shamir-Adleman (RSA) public-key encryption. It uses much less client CPU time than the Diffie-Hellman algorithm specified as part of the core protocol, and hence is particularly suitable for slow client systems.",
+      "ja": "このメモは、リベスト - シャミール・エーデルマン（RSA）公開鍵暗号に基づくセキュアシェル（SSH）プロトコルのための鍵交換方法を説明します。これは、コアプロトコルの一部として指定されたDiffie-Hellmanアルゴリズムよりはるかに少ないクライアントのCPU時間を使用し、したがって遅いクライアントシステムに特に適しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Secure Shell (SSH) [RFC4251] is a secure remote-login protocol. The core protocol uses Diffie-Hellman key exchange. On slow CPUs, this key exchange can take tens of seconds to complete, which can be irritating for the user. A previous version of the SSH protocol, described in [SSH1], uses a key-exchange method based on Rivest-Shamir-Adleman (RSA) public-key encryption, which consumes an order of magnitude less CPU time on the client, and hence is particularly suitable for slow client systems such as mobile devices. This memo describes a key-exchange mechanism for the version of SSH described in [RFC4251] that is similar to that used by the older version, and about as fast, while retaining the security advantages of the newer protocol.",
+      "ja": "セキュアシェル（SSH）[RFC4251]は、安全なリモートログインプロトコルです。コアプロトコルは、ディフィー・ヘルマン鍵交換を使用します。遅いCPU上で、この鍵交換は、完了するまでに数十秒かかることがユーザーのために刺激することができました。 [SSH1]に記載のSSHプロトコルの以前のバージョン、したがってクライアントに桁少ないCPU時間を消費リベスト - シャミア - エイドルマン（RSA）公開鍵暗号に基づく鍵交換法を使用し、そしてモバイル機器などの低速のクライアントシステムに特に適しています。このメモは、新しいプロトコルのセキュリティ上の利点を保持しながら、早く以前のバージョンによって使用されるものと同様の、約ある[RFC4251]に記載のSSHのバージョンのための鍵交換メカニズムを記述する。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions Used in This Document",
+      "section_title": true,
+      "ja": "この文書で使用される2.表記"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\" and \"SHOULD\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "キーワード「MUST」とは、本書では[RFC2119]で説明されるように解釈されるべきである「SHOULD」。"
+    },
+    {
+      "indent": 3,
+      "text": "The data types \"byte\", \"string\", and \"mpint\" are defined in Section 5 of [RFC4251].",
+      "ja": "データ型「バイト」、「文字列」、および「mpintは」[RFC4251]のセクション5で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Other terminology and symbols have the same meaning as in [RFC4253].",
+      "ja": "他の用語と記号は、[RFC4253]と同じ意味を持ちます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Overview",
+      "section_title": true,
+      "ja": "3.概要"
+    },
+    {
+      "indent": 3,
+      "text": "The RSA key-exchange method consists of three messages. The server sends to the client an RSA public key, K_T, to which the server holds the private key. This may be a transient key generated solely for this SSH connection, or it may be re-used for several connections. The client generates a string of random bytes, K, encrypts it using K_T, and sends the result back to the server, which decrypts it. The client and server each hash K, K_T, and the various key-exchange parameters to generate the exchange hash, H, which is used to generate the encryption keys for the session, and the server signs H with its host key and sends the signature to the client. The client then verifies the host key as described in Section 8 of [RFC4253].",
+      "ja": "RSAの鍵交換方式は、3つのメッセージで構成されています。サーバーは、クライアントに送信するサーバは、秘密鍵を保持するにRSA公開鍵、K_T、。これは、このSSH接続のためだけに生成された過渡の鍵であってもよいし、複数の接続のために再使用することができます。クライアントはランダムなバイトの文字列を生成し、Kは、K_Tを使用して暗号化し、戻ってそれを復号化し、サーバーに結果を送信します。クライアントとサーバの各ハッシュK、K_T、および様々な鍵交換パラメータセッションのための暗号鍵を生成するために使用される交換ハッシュ、Hを生成するために、サーバは、ホストキーでHに署名し、署名を送信しますクライアントへ。 [RFC4253]のセクション8で説明したように、クライアントは、ホストキーを検証します。"
+    },
+    {
+      "indent": 3,
+      "text": "This method provides explicit server identification as defined in Section 7 of [RFC4253]. It requires a signature-capable host key.",
+      "ja": "[RFC4253]のセクション7で定義されるように、この方法は、明示的なサーバ識別を提供します。これは、署名可能なホストキーが必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Details",
+      "section_title": true,
+      "ja": "4.詳細"
+    },
+    {
+      "indent": 3,
+      "text": "The RSA key-exchange method has the following parameters:",
+      "ja": "RSAの鍵交換方法は、以下のパラメータがあります。"
+    },
+    {
+      "indent": 7,
+      "text": "HASH     hash algorithm for calculating exchange hash, etc.\nHLEN     output length of HASH in bits\nMINKLEN  minimum transient RSA modulus length in bits",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Their values are defined in Section 5 and Section 6 for the two methods defined by this document.",
+      "ja": "これらの値は、この文書で定義された2つの方法については、第5及び第6節で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The method uses the following messages.",
+      "ja": "この方法は、以下のメッセージを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "First, the server sends:",
+      "ja": "まず、サーバが送信します。"
+    },
+    {
+      "indent": 7,
+      "text": "byte      SSH_MSG_KEXRSA_PUBKEY\nstring    server public host key and certificates (K_S)\nstring    K_T, transient RSA public key",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The key K_T is encoded according to the \"ssh-rsa\" scheme described in Section 6.6 of [RFC4253]. Note that unlike an \"ssh-rsa\" host key, K_T is used only for encryption, and not for signature. The modulus of K_T MUST be at least MINKLEN bits long.",
+      "ja": "鍵K_Tは、[RFC4253]のセクション6.6に記載された「SSH-RSA」方式に従って符号化されます。 「SSH-RSA」ホストキーとは異なり、K_Tは、署名のための暗号化のみに使用し、されていないことに注意してください。 K_Tの弾性率は、少なくともMINKLEN長いビットでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The client generates a random integer, K, in the range 0 <= K < 2^(KLEN-2*HLEN-49), where KLEN is the length of the modulus of K_T, in bits. The client then uses K_T to encrypt:",
+      "ja": "クライアントはKLENはビットで、K_Tの係数の長さ範囲0 <= K <2 ^（KLEN-2 * HLEN-49）、ランダム整数、Kを生成します。次に、クライアントは、暗号化するためにK_Tを使用しています。"
+    },
+    {
+      "indent": 7,
+      "text": "mpint K, the shared secret",
+      "ja": "mpint K、共有秘密"
+    },
+    {
+      "indent": 3,
+      "text": "The encryption is performed according to the RSAES-OAEP scheme of [RFC3447], with a mask generation function of MGF1-with-HASH, a hash of HASH, and an empty label. See Appendix A for a proof that the encoding of K is always short enough to be thus encrypted. Having performed the encryption, the client sends:",
+      "ja": "暗号化は、MGF1-WITH-HASH、HASHのハッシュのマスク生成機能、および空のラベルで、[RFC3447]のRSAES-OAEP方式に従って行われます。 Kのエンコーディングは常に十分に短いため、暗号化されるべきであることを証明するためには、付録Aを参照してください。暗号化を行った、クライアントが送信します。"
+    },
+    {
+      "indent": 7,
+      "text": "byte      SSH_MSG_KEXRSA_SECRET\nstring    RSAES-OAEP-ENCRYPT(K_T, K)",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that the last stage of RSAES-OAEP-ENCRYPT is to encode an integer as an octet string using the I2OSP primitive of [RFC3447]. This, combined with encoding the result as an SSH \"string\", gives a result that is similar, but not identical, to the SSH \"mpint\" encoding applied to that integer. This is the same encoding as is used by \"ssh-rsa\" signatures in [RFC4253].",
+      "ja": "RSAES-OAEP暗号化の最終段階は、[RFC3447]のプリミティブI2OSPを使用してオクテット文字列として整数を符号化することであることに留意されたいです。これは、SSH、「文字列」として結果をコードと組み合わせる、その整数に適用SSH「mpint」符号化に、同様の、しかし同一ではない結果を与えます。これは、[RFC4253]に「SSH-RSA」の署名で使用されるのと同じ符号です。"
+    },
+    {
+      "indent": 3,
+      "text": "The server decrypts K. If a decryption error occurs, the server SHOULD send SSH_MESSAGE_DISCONNECT with a reason code of SSH_DISCONNECT_KEY_EXCHANGE_FAILED and MUST disconnect. Otherwise, the server responds with:",
+      "ja": "サーバーは、復号化エラーが発生した場合、サーバはSSH_DISCONNECT_KEY_EXCHANGE_FAILEDの理由コードでSSH_MESSAGE_DISCONNECTを送るべきであると切り離しなければならKを解読します。そうしないと、サーバはで応答します。"
+    },
+    {
+      "indent": 7,
+      "text": "byte      SSH_MSG_KEXRSA_DONE\nstring    signature of H with host key",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The hash H is computed as the HASH hash of the concatenation of the following:",
+      "ja": "ハッシュHは、以下の連結のハッシュハッシュとして計算されます。"
+    },
+    {
+      "indent": 7,
+      "text": "string    V_C, the client's identification string\n          (CR and LF excluded)\nstring    V_S, the server's identification string\n          (CR and LF excluded)\nstring    I_C, the payload of the client's SSH_MSG_KEXINIT\nstring    I_S, the payload of the server's SSH_MSG_KEXINIT\nstring    K_S, the host key\nstring    K_T, the transient RSA key\nstring    RSAES_OAEP_ENCRYPT(K_T, K), the encrypted secret\nmpint     K, the shared secret",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "This value is called the exchange hash, and it is used to authenticate the key exchange. The exchange hash SHOULD be kept secret.",
+      "ja": "この値は、交換ハッシュと呼ばれ、鍵交換を認証するために使用されます。交換ハッシュは秘密にされるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "The signature algorithm MUST be applied over H, not the original data. Most signature algorithms include hashing and additional padding. For example, \"ssh-dss\" specifies SHA-1 hashing. In such cases, the data is first hashed with HASH to compute H, and H is then hashed again as part of the signing operation.",
+      "ja": "署名アルゴリズムはHではなく、元のデータの上に適用されなければなりません。ほとんどの署名アルゴリズムは、ハッシュと、追加のパディングが含まれます。たとえば、 \"SSH-DSSは、\" SHA-1ハッシュを指定します。このような場合、データは最初にHを計算するハッシュとハッシュされ、そしてHは、その後、署名操作の一部として再ハッシュされます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. rsa1024-sha1",
+      "section_title": true,
+      "ja": "5. RSA1024-SHA1"
+    },
+    {
+      "indent": 3,
+      "text": "The \"rsa1024-sha1\" method specifies RSA key exchange as described above with the following parameters:",
+      "ja": "以下のパラメータを使用して上記のように「RSA1024-SHA1」方法は、RSA鍵交換を指定します。"
+    },
+    {
+      "indent": 7,
+      "text": "HASH     SHA-1, as defined in [RFC3174]\nHLEN     160\nMINKLEN  1024",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "6. rsa2048-sha256",
+      "section_title": true,
+      "ja": "6. rsa2048-SHA256"
+    },
+    {
+      "indent": 3,
+      "text": "The \"rsa2048-sha256\" method specifies RSA key exchange as described above with the following parameters:",
+      "ja": "以下のパラメータを使用して上記のように「rsa2048-SHA256」方法は、RSA鍵交換を指定します。"
+    },
+    {
+      "indent": 7,
+      "text": "HASH     SHA-256, as defined in [FIPS-180-2]\nHLEN     256\nMINKLEN  2048",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "7. Message Numbers",
+      "section_title": true,
+      "ja": "7.メッセージ番号"
+    },
+    {
+      "indent": 3,
+      "text": "The following message numbers are defined:",
+      "ja": "次のメッセージ番号が定義されています。"
+    },
+    {
+      "indent": 7,
+      "text": "SSH_MSG_KEXRSA_PUBKEY  30\nSSH_MSG_KEXRSA_SECRET  31\nSSH_MSG_KEXRSA_DONE    32",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations in [RFC4251] apply.",
+      "ja": "[RFC4251]のセキュリティの考慮事項が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the RSA private key generated by the server is revealed, then the session key is revealed. The server should thus arrange to erase this from memory as soon as it is no longer required. If the same RSA key is used for multiple SSH connections, an attacker who can find the private key (either by factorising the public key or by other means) will gain access to all of the sessions that used that key. As a result, servers SHOULD use each RSA key for as few key exchanges as possible.",
+      "ja": "サーバーによって生成されたRSA秘密鍵が明らかにされている場合は、セッション鍵が明らかにされています。サーバーは、このように、すぐにそれはもはや必要とされないように、メモリからこれを消すように手配すべきです。同じRSAキーは、複数のSSH接続に使用されている場合は、（公開鍵をファクトライズすることにより、または他の手段のいずれかによって）秘密鍵を見つけることができる攻撃者は、そのキーを使用したセッションのすべてにアクセスできるようになります。その結果、サーバはできるだけ少ない鍵交換のための各RSAキーを使用すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3447] recommends that RSA keys used with RSAES-OAEP not be used with other schemes, or with RSAES-OAEP using a different hash function. In particular, this means that K_T should not be used as a host key, or as a server key in earlier versions of the SSH protocol.",
+      "ja": "[RFC3447]は他の方式で使用することはないRSAES-OAEP、またはRSAES-OAEPと一緒に使用するRSAキーは、異なるハッシュ関数を使用することをお勧めします。特に、これはK_Tは、ホストキーとして、またはSSHプロトコルの以前のバージョンのサーバ・キーとして使用すべきではないことを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "Like all key-exchange mechanisms, this one depends for its security on the randomness of the secrets generated by the client (the random number K) and the server (the transient RSA private key). In particular, it is essential that the client use a high-quality cryptographic pseudo-random number generator to generate K. Using a bad random number generator will allow an attacker to break all the encryption and integrity protection of the Secure Shell transport layer. See [RFC4086] for recommendations on random number generation.",
+      "ja": "すべての鍵交換メカニズムと同様に、この1は、クライアント（乱数K）とサーバ（過渡RSA秘密鍵）によって生成された秘密のランダムにそのセキュリティのために依存します。特に、クライアントは、攻撃者がセキュアシェル・トランスポート層のすべての暗号化と整合性の保護を破ることができます悪い乱数ジェネレータを使用してKを生成するために、高品質な暗号擬似乱数ジェネレータを使用することが不可欠です。乱数生成に関する推奨事項については、[RFC4086]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The size of transient key used should be sufficient to protect the encryption and integrity keys generated by the key-exchange method. For recommendations on this, see [RFC3766]. The strength of RSAES-OAEP is in part dependent on the hash function it uses. [RFC3447] suggests using a hash with an output length of twice the security level required, so SHA-1 is appropriate for applications requiring up to 80 bits of security, and SHA-256 for those requiring up to 128 bits.",
+      "ja": "使用一過キーのサイズは、鍵交換法によって生成された暗号化と整合性の鍵を保護するのに十分であるべきです。この上の推奨事項については、[RFC3766]を参照してください。 RSAES-OAEPの強さは、部分的にそれが使用するハッシュ関数に依存しています。 [RFC3447]はSHA-1は、128ビットまで必要とする80セキュリティのビット、およびSHA-256まで必要とするアプリケーションに適しているので、必要な倍セキュリティレベルの出力長を有するハッシュを使用して示唆しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Unlike the Diffie-Hellman key-exchange method defined by [RFC4253], this method allows the client to fully determine the shared secret, K. This is believed not to be significant, since K is only ever used when hashed with data provided in part by the server (usually in the form of the exchange hash, H). If an extension to SSH were to use K directly and to assume that it had been generated by Diffie-Hellman key exchange, this could produce a security weakness. Protocol extensions using K directly should be viewed with extreme suspicion.",
+      "ja": "[RFC4253]で定義されたDiffie-Hellman鍵交換法とは異なり、この方法は、部分的に提供されるデータでハッシュされたときにKのみこれまで使用されているので、K.がこれは、重要ではないと考えられている、クライアントが完全に共有秘密を決定することを可能にします（通常は交換ハッシュ、Hの形で）サーバによって。 SSHへの拡張が直接Kを使用すると、それはのDiffie-Hellman鍵交換によって生成されていたと仮定した場合、これはセキュリティ上の弱点を作り出すことができます。直接Kを使用したプロトコル拡張は、極端な疑いの目で見るべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "This key-exchange method is designed to be resistant to collision attacks on the exchange hash, by ensuring that neither side is able to freely choose its input to the hash after seeing all of the other side's input. The server's last input is in SSH_MSG_KEXRSA_PUBKEY, before it has seen the client's choice of K. The client's last input is K and its RSA encryption, and the one-way nature of RSA encryption should ensure that the client cannot choose K so as to cause a collision.",
+      "ja": "この鍵交換方法は、どちらの側が自由に相手側の入力のすべてを見た後、ハッシュへの入力を選択することができることを確実にすることによって、交換ハッシュの衝突攻撃に対して耐性があるように設計されています。サーバの最後の入力は、それがKのクライアントの選択肢を見ている前に、クライアントの最後の入力はKとそのRSA暗号化され、RSA暗号の一方向の性質が生じるように、クライアントはKを選択することができないことを確認する必要があり、SSH_MSG_KEXRSA_PUBKEYであります衝突。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has assigned the names \"rsa1024-sha1\" and \"rsa2048-sha256\" as Key Exchange Method Names in accordance with [RFC4250].",
+      "ja": "IANAは[RFC4250]に従って鍵交換メソッド名などの名前「RSA1024-SHA1」と「rsa2048-SHA256」が割り当てられています。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Acknowledgements",
+      "section_title": true,
+      "ja": "10.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The author acknowledges the assistance of Simon Tatham with the design of this key exchange method.",
+      "ja": "著者は、この鍵交換方式の設計とサイモンTatham氏の支援を認めています。"
+    },
+    {
+      "indent": 3,
+      "text": "The text of this document is derived in part from [RFC4253].",
+      "ja": "この文書のテキストは、[RFC4253]から部分的に導出されます。"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3174] Eastlake, D. and P. Jones, \"US Secure Hash Algorithm 1 (SHA1)\", RFC 3174, September 2001.",
+      "ja": "[RFC3174]イーストレイク、D.とP.ジョーンズは、 \"米国は、ハッシュアルゴリズム1（SHA1）を確保\"、RFC 3174、2001年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3447] Jonsson, J. and B. Kaliski, \"Public-Key Cryptography Standards (PKCS) #1: RSA Cryptography Specifications Version 2.1\", RFC 3447, February 2003.",
+      "ja": "[RFC3447]ジョンソン、J.とB. Kaliski、 \"公開鍵暗号規格（PKCS）＃1：RSA暗号仕様バージョン2.1\"、RFC 3447、2003年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4251] Ylonen, T. and C. Lonvick, \"The Secure Shell (SSH) Protocol Architecture\", RFC 4251, January 2006.",
+      "ja": "[RFC4251] Ylonenと、T.とC. Lonvick、 \"セキュアシェル（SSH）プロトコルアーキテクチャ\"、RFC 4251、2006年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4253] Ylonen, T. and C. Lonvick, \"The Secure Shell (SSH) Transport Layer Protocol\", RFC 4253, January 2006.",
+      "ja": "[RFC4253] Ylonenと、T.とC. Lonvick、 \"セキュアシェル（SSH）トランスポート層プロトコル\"、RFC 4253、2006年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4250] Lehtinen, S. and C. Lonvick, \"The Secure Shell (SSH) Protocol Assigned Numbers\", RFC 4250, January 2006.",
+      "ja": "[RFC4250]レーティネン、S.とC. Lonvick、 \"セキュアシェル（SSH）プロトコル割り当て番号\"、RFC 4250、2006年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[FIPS-180-2] National Institute of Standards and Technology (NIST), \"Secure Hash Standard (SHS)\", FIPS PUB 180-2, August 2002.",
+      "ja": "[FIPS-180-2]国立標準技術研究所（NIST）、 \"セキュアハッシュ規格（SHS）\"、FIPS PUB 180-2の、2002年8月。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[SSH1] Ylonen, T., \"SSH -- Secure Login Connections over the Internet\", 6th USENIX Security Symposium, pp. 37-42, July 1996.",
+      "ja": "[SSH1] Ylonenと、T.、 \"SSH  - インターネット上でのセキュアログインの接続\"、第六USENIXセキュリティシンポジウム、頁37-42、1996年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3766] Orman, H. and P. Hoffman, \"Determining Strengths For Public Keys Used For Exchanging Symmetric Keys\", BCP 86, RFC 3766, April 2004.",
+      "ja": "[RFC3766]オーマン、H.、およびP.ホフマン、 \"対称鍵を交換するために使用公開鍵の強さを測定\"、BCP 86、RFC 3766、2004年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, June 2005.",
+      "ja": "[RFC4086]イーストレーク、D.、シラー、J.、およびS.クロッカー、 \"セキュリティのためのランダム要件\"、BCP 106、RFC 4086、2005年6月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. On the Size of K",
+      "ja": "Kのサイズに付録A."
+    },
+    {
+      "indent": 3,
+      "text": "The requirements on the size of K are intended to ensure that it is always possible to encrypt it under K_T. The mpint encoding of K requires a leading zero bit, padding to a whole number of bytes, and a four-byte length field, giving a maximum length in bytes, B = (KLEN-2*HLEN-49+1+7)/8 + 4 = (KLEN-2*HLEN-9)/8 (where \"/\" denotes integer division rounding down).",
+      "ja": "Kのサイズに関する要件は、K_Tの下でそれを暗号化することが常に可能であることを保証することを意図しています。 Kのmpint符号化バイトの最大長を与える、先行ゼロビット、バイトの整数にパディング、及び4バイトの長さフィールドを必要とし、B =（KLEN-2 * HLEN-49 + 1 + 7）/ 8 + 4 =（KLEN-2 * HLEN-9）/ 8（ \"/\" 切り捨て整数除算を表します）。"
+    },
+    {
+      "indent": 3,
+      "text": "The maximum length of message that can be encrypted using RSAEP-OAEP is defined by [RFC3447] in terms of the key length in bytes, which is (KLEN+7)/8. The maximum length is thus L = (KLEN+7-2*HLEN-16)/8 = (KLEN-2*HLEN-9)/8. Thus, the encoded version of K is always small enough to be encrypted under K_T.",
+      "ja": "RSAEP-OAEPを用いて暗号化することができるメッセージの最大長さは、あるバイト単位でキーの長さ、（KLEN + 7）/ 8の観点[RFC3447]で定義されます。最大長さは、このようにL =（KLEN + 7-2 * HLEN-16）/ 8 =（KLEN-2 * HLEN-9）/ 8です。従って、Kの符号化されたバージョンは、常にK_Tの下で暗号化されるのに十分小さいです。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Ben Harris 2a Eachard Road CAMBRIDGE CB4 1XA UNITED KINGDOM",
+      "ja": "ベン・ハリス2A Eachard道路ケンブリッジCB4 1XA UNITED KINGDOM"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: bjh21@bjh21.me.uk",
+      "ja": "メールアドレス：bjh21@bjh21.me.uk"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}

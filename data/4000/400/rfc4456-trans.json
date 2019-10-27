@@ -1,0 +1,622 @@
+{
+  "title": {
+    "text": "RFC 4456 - BGP Route Reflection: An Alternative to Full Mesh Internal BGP (IBGP)",
+    "ja": "RFC 4456 - BGPルートリフレクション：フルメッシュ内部BGPへの代替（IBGP）"
+  },
+  "number": 4456,
+  "created_at": "2019-10-25 06:47:47.182289+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                           T. Bates\nRequest for Comments: 4456                                       E. Chen\nObsoletes: 2796, 1966                                      Cisco Systems\nCategory: Standards Track                                     R. Chandra\n                                                           Sonoa Systems\n                                                              April 2006",
+      "raw": true
+    },
+    {
+      "indent": 12,
+      "text": "             BGP Route Reflection:\nAn Alternative to Full Mesh Internal BGP (IBGP)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The Border Gateway Protocol (BGP) is an inter-autonomous system routing protocol designed for TCP/IP internets. Typically, all BGP speakers within a single AS must be fully meshed so that any external routing information must be re-distributed to all other routers within that Autonomous System (AS). This represents a serious scaling problem that has been well documented with several alternatives proposed.",
+      "ja": "ボーダーゲートウェイプロトコル（BGP）は、TCP / IPインターネットのために設計された相互自律システムルーティングプロトコルです。外部ルーティング情報は、その自律システム（AS）内の他のすべてのルータに再配布されなければならないように、典型的には、単一のAS内のすべてのBGPスピーカはフルメッシュしなければなりません。これはよく提案いくつかの選択肢で立証されている深刻なスケーリングの問題を表しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes the use and design of a method known as \"route reflection\" to alleviate the need for \"full mesh\" Internal BGP (IBGP).",
+      "ja": "この文書では、「フルメッシュ」内部BGP（IBGP）の必要性を軽減するために、「ルートリフレクション」として知られている方法の使用とデザインについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes RFC 2796 and RFC 1966.",
+      "ja": "この文書は、RFC 2796およびRFC 1966を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Specification of Requirements ...................................2\n3. Design Criteria .................................................3\n4. Route Reflection ................................................3\n5. Terminology and Concepts ........................................4\n6. Operation .......................................................5\n7. Redundant RRs ...................................................6\n8. Avoiding Routing Information Loops ..............................6\n9. Impact on Route Selection .......................................7\n10. Implementation Considerations ..................................7\n11. Configuration and Deployment Considerations ....................7\n12. Security Considerations ........................................8\n13. Acknowledgements ...............................................9\n14. References .....................................................9\n   14.1. Normative References ......................................9\n   14.2. Informative References ....................................9\nAppendix A: Comparison with RFC 2796 ..............................10\nAppendix B: Comparison with RFC 1966 ..............................10",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Typically, all BGP speakers within a single AS must be fully meshed and any external routing information must be re-distributed to all other routers within that AS. For n BGP speakers within an AS that requires to maintain n*(n-1)/2 unique Internal BGP (IBGP) sessions. This \"full mesh\" requirement clearly does not scale when there are a large number of IBGP speakers each exchanging a large volume of routing information, as is common in many of today's networks.",
+      "ja": "典型的には、単一のAS内のすべてのBGPスピーカは、完全噛合されなければならず、外部ルーティング情報は、AS内の他のすべてのルータに再配布されなければなりません。そのAS内のn個のBGPスピーカ用のn *（n-1）/ 2個のユニークな内部BGP（IBGP）セッションを維持するために必要です。 IBGPスピーカーの数が多い各ルーティング情報の大ボリュームを交換する際に、今日のネットワークの多くで一般的であるように、この「フルメッシュ」要件が明確に、スケールしません。"
+    },
+    {
+      "indent": 3,
+      "text": "This scaling problem has been well documented, and a number of proposals have been made to alleviate this [2,3]. This document represents another alternative in alleviating the need for a \"full mesh\" and is known as \"route reflection\". This approach allows a BGP speaker (known as a \"route reflector\") to advertise IBGP learned routes to certain IBGP peers. It represents a change in the commonly understood concept of IBGP, and the addition of two new optional non-transitive BGP attributes to prevent loops in routing updates.",
+      "ja": "このスケーリングの問題は、十分に文書化されており、多くの提案は、[2,3]、これを軽減するために行われています。この文書では、「フルメッシュ」の必要性を軽減するには、別の選択肢を表し、「ルートリフレクション」として知られています。このアプローチは、（「ルートリフレクタ」としても知られる）BGPスピーカはIBGPは、特定のIBGPピアへのルートを学習したアドバタイズすることを可能にします。これは、IBGPの一般に理解概念の変化、および2つの新しいオプションの非推移BGPのほかルーティングアップデートでループを防ぐための属性を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes RFC 2796 [6] and RFC 1966 [4].",
+      "ja": "この文書は、RFC 2796 [6]およびRFC 1966 [4]を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Specification of Requirements",
+      "section_title": true,
+      "ja": "要件の2仕様"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [7].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119に記載されるように解釈される[7]。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Design Criteria",
+      "section_title": true,
+      "ja": "3.設計基準"
+    },
+    {
+      "indent": 3,
+      "text": "Route reflection was designed to satisfy the following criteria.",
+      "ja": "ルートリフレクションは、次の基準を満たすように設計されました。"
+    },
+    {
+      "indent": 6,
+      "text": "o Simplicity",
+      "ja": "Oのシンプル"
+    },
+    {
+      "indent": 9,
+      "text": "Any alternative must be simple to configure and easy to understand.",
+      "ja": "任意の代替は設定が簡単で、理解しやすいでなければなりません。"
+    },
+    {
+      "indent": 6,
+      "text": "o Easy Transition",
+      "ja": "O簡単に移行"
+    },
+    {
+      "indent": 9,
+      "text": "It must be possible to transition from a full-mesh configuration without the need to change either topology or AS. This is an unfortunate management overhead of the technique proposed in [3].",
+      "ja": "トポロジーやASのいずれかを変更することなく、フルメッシュ構成から移行することが可能でなければなりません。これは、[3]で提案された技術の不幸な管理オーバーヘッドです。"
+    },
+    {
+      "indent": 6,
+      "text": "o Compatibility",
+      "ja": "Oの互換性"
+    },
+    {
+      "indent": 9,
+      "text": "It must be possible for noncompliant IBGP peers to continue to be part of the original AS or domain without any loss of BGP routing information.",
+      "ja": "非準拠IBGPピアがBGPルーティング情報を失うことなく、元のASまたはドメインの一部であり続けることが可能でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "These criteria were motivated by operational experiences of a very large and topology-rich network with many external connections.",
+      "ja": "これらの基準は、多くの外部接続で非常に大規模とトポロジの豊富なネットワークの運用経験によって動機づけられました。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Route Reflection",
+      "section_title": true,
+      "ja": "4.ルートリフレクション"
+    },
+    {
+      "indent": 3,
+      "text": "The basic idea of route reflection is very simple. Let us consider the simple example depicted in Figure 1 below.",
+      "ja": "ルートリフレクションの基本的な考え方は非常に簡単です。私たちは、次の図1に示した簡単な例を考えてみましょう。"
+    },
+    {
+      "indent": 19,
+      "text": "+-------+        +-------+\n|       |  IBGP  |       |\n| RTR-A |--------| RTR-B |\n|       |        |       |\n+-------+        +-------+\n      \\            /\n  IBGP \\   ASX    / IBGP\n        \\        /\n         +-------+\n         |       |\n         | RTR-C |\n         |       |\n         +-------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "Figure 1: Full-Mesh IBGP",
+      "ja": "図1：フルメッシュIBGP"
+    },
+    {
+      "indent": 3,
+      "text": "In ASX, there are three IBGP speakers (routers RTR-A, RTR-B, and RTR-C). With the existing BGP model, if RTR-A receives an external route and it is selected as the best path it must advertise the external route to both RTR-B and RTR-C. RTR-B and RTR-C (as IBGP speakers) will not re-advertise these IBGP learned routes to other IBGP speakers.",
+      "ja": "ASXでは、三個のIBGPスピーカー（ルータRTR-A、RTR-B、およびRTR-C）が存在します。 RTR-Aは、外部ルートを受信し、それが最良パスとして選択された場合、既存のBGPモデルでは、RTR-BおよびRTR-Cの両方の外部ルートをアドバタイズしなければなりません。 RTR-BおよびRTR-C（IBGPスピーカーなど）は、再宣伝これらのIBGPは他のIBGPスピーカーへのルートを学んだことはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "If this rule is relaxed and RTR-C is allowed to advertise IBGP learned routes to IBGP peers, then it could re-advertise (or reflect) the IBGP routes learned from RTR-A to RTR-B and vice versa. This would eliminate the need for the IBGP session between RTR-A and RTR-B as shown in Figure 2 below.",
+      "ja": "このルールが緩和され、RTR-CはIBGPピアをIBGPへのルートを学習し、それを再宣伝（または反射する）可能性が宣伝させる場合IBGPルートは、RTR-B、およびその逆にRTR-Aから学びました。以下、図2に示すように、これは、RTR-AとRTR-Bとの間のIBGPセッションの必要性を排除するであろう。"
+    },
+    {
+      "indent": 18,
+      "text": "+-------+        +-------+\n|       |        |       |\n| RTR-A |        | RTR-B |\n|       |        |       |\n+-------+        +-------+\n      \\            /\n  IBGP \\   ASX    / IBGP\n        \\        /\n         +-------+\n         |       |\n         | RTR-C |\n         |       |\n         +-------+",
+      "raw": true
+    },
+    {
+      "indent": 16,
+      "text": "Figure 2: Route Reflection IBGP",
+      "ja": "図2：ルートリフレクションIBGP"
+    },
+    {
+      "indent": 3,
+      "text": "The route reflection scheme is based upon this basic principle.",
+      "ja": "ルート反射方式では、この基本原理に基づいています。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Terminology and Concepts",
+      "section_title": true,
+      "ja": "5.用語と概念"
+    },
+    {
+      "indent": 3,
+      "text": "We use the term \"route reflection\" to describe the operation of a BGP speaker advertising an IBGP learned route to another IBGP peer. Such a BGP speaker is said to be a \"route reflector\" (RR), and such a route is said to be a reflected route.",
+      "ja": "私たちは、別のIBGPピアへの経路を学んだIBGPを広告するBGPスピーカの動作を説明するために用語「ルートリフレクション」を使用します。そのようなBGPスピーカは、「ルートリフレクタ」（RR）であると言われ、そのような経路は、反射経路であると言われます。"
+    },
+    {
+      "indent": 3,
+      "text": "The internal peers of an RR are divided into two groups:",
+      "ja": "RRの内部ピアは、2つのグループに分けられます："
+    },
+    {
+      "indent": 6,
+      "text": "1) Client peers",
+      "ja": "1）クライアントピア"
+    },
+    {
+      "indent": 6,
+      "text": "2) Non-Client peers",
+      "ja": "2）非クライアントピア"
+    },
+    {
+      "indent": 3,
+      "text": "An RR reflects routes between these groups, and may reflect routes among client peers. An RR along with its client peers form a cluster. The Non-Client peer must be fully meshed but the Client peers need not be fully meshed. Figure 3 depicts a simple example outlining the basic RR components using the terminology noted above.",
+      "ja": "RRは、これらのグループ間のルートを反映し、クライアントピア間のルートを反映することができます。そのクライアントピアと一緒にRRは、クラスタを形成します。非クライアントピアはフルメッシュする必要がありますが、クライアントピアはフルメッシュする必要はありません。図3は、上述の用語を使用して、基本的なRR成分を概説単純な例を示しています。"
+    },
+    {
+      "indent": 17,
+      "text": "/ - - - - - - - - - - - - -  -\n|           Cluster           |\n  +-------+        +-------+\n| |       |        |       |  |\n  | RTR-A |        | RTR-B |\n| |Client |        |Client |  |\n  +-------+        +-------+\n|       \\           /         |\n   IBGP  \\         / IBGP\n|         \\       /           |\n          +-------+\n|         |       |           |\n          | RTR-C |\n|         |  RR   |           |\n          +-------+\n|           /   \\             |\n - - - - - /- - -\\- - - - - - /\n    IBGP  /       \\ IBGP\n +-------+         +-------+\n | RTR-D |  IBGP   | RTR-E |\n |  Non- |---------|  Non- |\n |Client |         |Client |\n +-------+         +-------+",
+      "raw": true
+    },
+    {
+      "indent": 21,
+      "text": "Figure 3: RR Components",
+      "ja": "図3：RRコンポーネント"
+    },
+    {
+      "indent": 0,
+      "text": "6. Operation",
+      "section_title": true,
+      "ja": "6.操作"
+    },
+    {
+      "indent": 3,
+      "text": "When an RR receives a route from an IBGP peer, it selects the best path based on its path selection rule. After the best path is selected, it must do the following depending on the type of peer it is receiving the best path from",
+      "ja": "RRはIBGPピアから経路を受信すると、その経路選択ルールに基づいて、最適な経路を選択します。最適なパスを選択した後、それがから最適なパスを受けているピアの種類に応じて次の操作を行う必要があり"
+    },
+    {
+      "indent": 6,
+      "text": "1) A route from a Non-Client IBGP peer:",
+      "ja": "1）非クライアントIBGPピアからのルート："
+    },
+    {
+      "indent": 9,
+      "text": "Reflect to all the Clients.",
+      "ja": "すべてのクライアントに反映されます。"
+    },
+    {
+      "indent": 6,
+      "text": "2) A route from a Client peer:",
+      "ja": "2）クライアントピアからのルート："
+    },
+    {
+      "indent": 9,
+      "text": "Reflect to all the Non-Client peers and also to the Client peers. (Hence the Client peers are not required to be fully meshed.)",
+      "ja": "すべての非クライアントピアにしても、クライアントピアに反映されます。 （したがって、クライアントピアは完全に噛合する必要はありません。）"
+    },
+    {
+      "indent": 3,
+      "text": "An Autonomous System could have many RRs. An RR treats other RRs just like any other internal BGP speakers. An RR could be configured to have other RRs in a Client group or Non-client group.",
+      "ja": "自律システムは、多くのRRを持つことができます。 RRは、他の内部BGPスピーカのような他のRRを扱います。 RRは、クライアントグループまたは非クライアントグループ内の他のRRを持つように構成することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In a simple configuration, the backbone could be divided into many clusters. Each RR would be configured with other RRs as Non-Client peers (thus all the RRs will be fully meshed). The Clients will be configured to maintain IBGP session only with the RR in their cluster. Due to route reflection, all the IBGP speakers will receive reflected routing information.",
+      "ja": "簡単な構成では、バックボーンは多くのクラスタに分割することができます。各RRは、非クライアントピア（したがって、すべてのRRが完全に噛合される）のような他のRRで構成されることになります。クライアントは唯一彼らのクラスタ内のRRとのIBGPセッションを維持するように構成されます。ルート反射に、すべてのIBGPスピーカーは、ルーティング情報を反映して受信します。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible in an Autonomous System to have BGP speakers that do not understand the concept of route reflectors (let us call them conventional BGP speakers). The route reflector scheme allows such conventional BGP speakers to coexist. Conventional BGP speakers could be members of either a Non-Client group or a Client group. This allows for an easy and gradual migration from the current IBGP model to the route reflection model. One could start creating clusters by configuring a single router as the designated RR and configuring other RRs and their clients as normal IBGP peers. Additional clusters can be created gradually.",
+      "ja": "これは、ルートリフレクタの概念を理解していないBGPスピーカーを持っている自律システムで可能である（私たちは、従来のBGPスピーカーそれらを呼びましょう）。ルートリフレクタ方式は、従来のBGPスピーカが共存することを可能にします。従来のBGPスピーカーは非クライアントグループまたはクライアントグループのいずれかのメンバーである可能性があります。これは、ルート反射モデルに現在のIBGPモデルから簡単かつ漸進的な移行を可能にします。一つは、指定されたRRのような単一のルータを設定すると、通常のIBGPピアとして他のRRとそのクライアントを構成することによって、クラスタの作成を開始することができます。追加のクラスタは徐々に作成することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Redundant RRs",
+      "section_title": true,
+      "ja": "7.冗長のRR"
+    },
+    {
+      "indent": 3,
+      "text": "Usually, a cluster of clients will have a single RR. In that case, the cluster will be identified by the BGP Identifier of the RR. However, this represents a single point of failure so to make it possible to have multiple RRs in the same cluster, all RRs in the same cluster can be configured with a 4-byte CLUSTER_ID so that an RR can discard routes from other RRs in the same cluster.",
+      "ja": "通常、クライアントのクラスタは、単一のRRを持つことになります。この場合、クラスタはRRのBGP識別子によって識別されます。しかしながら、これは、RRは、内の他のRRからのルートを破棄することができるようにように同じクラスタ内の複数のRRを有することを可能にするために、同じクラスタ内のすべてのRRが4バイトCLUSTER_IDで構成することができ、単一障害点を表します同じクラスタ。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Avoiding Routing Information Loops",
+      "section_title": true,
+      "ja": "8.ルーティング情報ループの回避"
+    },
+    {
+      "indent": 3,
+      "text": "When a route is reflected, it is possible through misconfiguration to form route re-distribution loops. The route reflection method defines the following attributes to detect and avoid routing information loops:",
+      "ja": "経路が反射されるとき、それは経路再分配ループを形成するように設定ミスによって可能です。ルート反射法は、次の検出およびループルーティング情報を避けるために、属性を定義します："
+    },
+    {
+      "indent": 3,
+      "text": "ORIGINATOR_ID",
+      "ja": "ORIGINATOR_ID"
+    },
+    {
+      "indent": 3,
+      "text": "ORIGINATOR_ID is a new optional, non-transitive BGP attribute of Type code 9. This attribute is 4 bytes long and it will be created by an RR in reflecting a route. This attribute will carry the BGP Identifier of the originator of the route in the local AS. A BGP speaker SHOULD NOT create an ORIGINATOR_ID attribute if one already exists. A router that recognizes the ORIGINATOR_ID attribute SHOULD ignore a route received with its BGP Identifier as the ORIGINATOR_ID.",
+      "ja": "ORIGINATOR_IDは、タイプ・コード9の新しいオプション、非推移BGP属性この属性は4バイト長であり、それは経路を反映でRRによって作成されています。この属性は、ローカルAS内のルートの発信者のBGP識別子を運ぶでしょう。 1がすでに存在する場合は、BGPスピーカはORIGINATOR_ID属性を作成しないでください。 ORIGINATOR_ID属性を認識ルータはORIGINATOR_IDとしてのBGP識別子と受信したルートを無視すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "CLUSTER_LIST",
+      "ja": "CLUSTER_LIST"
+    },
+    {
+      "indent": 3,
+      "text": "CLUSTER_LIST is a new, optional, non-transitive BGP attribute of Type code 10. It is a sequence of CLUSTER_ID values representing the reflection path that the route has passed.",
+      "ja": "CLUSTER_LISTは、ルートが通過した反射経路を示すCLUSTER_ID値のシーケンスであるタイプコード10の新しいオプション、非推移BGP属性です。"
+    },
+    {
+      "indent": 3,
+      "text": "When an RR reflects a route, it MUST prepend the local CLUSTER_ID to the CLUSTER_LIST. If the CLUSTER_LIST is empty, it MUST create a new one. Using this attribute an RR can identify if the routing information has looped back to the same cluster due to misconfiguration. If the local CLUSTER_ID is found in the CLUSTER_LIST, the advertisement received SHOULD be ignored.",
+      "ja": "RRがルートを反映する場合、それはCLUSTER_LISTローカルCLUSTER_IDを付加しなければなりません。 CLUSTER_LISTが空の場合、それは新しいものを作成する必要があります。ルーティング情報は、バック設定ミスに起因同じクラスタにループバックしている場合、この属性にRRを使用して識別することができます。ローカルCLUSTER_IDがCLUSTER_LISTに発見された場合、受信した広告は無視されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Impact on Route Selection",
+      "section_title": true,
+      "ja": "経路選択に関する9.影響"
+    },
+    {
+      "indent": 3,
+      "text": "The BGP Decision Process Tie Breaking rules (Sect. 9.1.2.2, [1]) are modified as follows:",
+      "ja": "BGP決定過程タイブレイク規則（セクト9.1.2.2、[1]）は、以下のように修正されます。"
+    },
+    {
+      "indent": 6,
+      "text": "If a route carries the ORIGINATOR_ID attribute, then in Step f) the ORIGINATOR_ID SHOULD be treated as the BGP Identifier of the BGP speaker that has advertised the route.",
+      "ja": "経路が発信者ID属性を運ぶ場合は、発信者ID）のステップのルートをアドバタイズしているBGPスピーカのBGP識別子として扱われるべきです。"
+    },
+    {
+      "indent": 6,
+      "text": "In addition, the following rule SHOULD be inserted between Steps f) and g): a BGP Speaker SHOULD prefer a route with the shorter CLUSTER_LIST length. The CLUSTER_LIST length is zero if a route does not carry the CLUSTER_LIST attribute.",
+      "ja": "加えて、以下の規則がステップf）およびg）の間に挿入すべきである：BGPスピーカは、より短いCLUSTER_LIST長のルートを好むべきです。ルートはCLUSTER_LIST属性を運ばない場合CLUSTER_LISTの長さはゼロです。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Implementation Considerations",
+      "section_title": true,
+      "ja": "10.実装に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Care should be taken to make sure that none of the BGP path attributes defined above can be modified through configuration when exchanging internal routing information between RRs and Clients and Non-Clients. Their modification could potentially result in routing loops.",
+      "ja": "ケアは、BGPパスのいずれものRRとクライアントおよび非クライアント間の内部ルーティング情報を交換する際に上記で定義された構成を介して変更することができる属性いないことを確認するために取られるべきです。彼らの変更は、潜在的にルーティングループが生じる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, when a RR reflects a route, it SHOULD NOT modify the following path attributes: NEXT_HOP, AS_PATH, LOCAL_PREF, and MED. Their modification could potentially result in routing loops.",
+      "ja": "NEXT_HOP、AS_PATH、LOCAL_PREF、およびMEDを：RRがルートを反映している時に加えて、それは次のパス属性を変更しないでください。彼らの変更は、潜在的にルーティングループが生じる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "11. Configuration and Deployment Considerations",
+      "section_title": true,
+      "ja": "11.設定と展開に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The BGP protocol provides no way for a Client to identify itself dynamically as a Client of an RR. The simplest way to achieve this is by manual configuration.",
+      "ja": "BGPプロトコルは、クライアントがRRのクライアントとして動的に自身を識別するための方法を提供しません。これを実現する最も簡単な方法は、手動設定です。"
+    },
+    {
+      "indent": 3,
+      "text": "One of the key component of the route reflection approach in addressing the scaling issue is that the RR summarizes routing information and only reflects its best path.",
+      "ja": "スケーリングの問題に対処する上で、ルート反射アプローチの重要な要素の一つは、RRは、ルーティング情報をまとめたものだけが、その最適なパスを反映していることです。"
+    },
+    {
+      "indent": 3,
+      "text": "Both Multi-Exit Discriminators (MEDs) and Interior Gateway Protocol (IGP) metrics may impact the BGP route selection. Because MEDs are not always comparable and the IGP metric may differ for each router, with certain route reflection topologies the route reflection approach may not yield the same route selection result as that of the full IBGP mesh approach. A way to make route selection the same as it would be with the full IBGP mesh approach is to make sure that route reflectors are never forced to perform the BGP route selection based on IGP metrics that are significantly different from the IGP metrics of their clients, or based on incomparable MEDs. The former can be achieved by configuring the intra-cluster IGP metrics to be better than the inter-cluster IGP metrics, and maintaining full mesh within the cluster. The latter can be achieved by",
+      "ja": "マルチ出口ディスクリミネータ（医療検査素子）とインテリアゲートウェイプロトコル（IGP）メトリックの両方がBGPルート選択に影響を与えることができます。医療検査素子は必ずしも同等ではなく、特定のルート反射が完全IBGPメッシュアプ​​ローチと同じ経路選択結果が得られないことがあり、ルート反射アプローチをトポロジーとIGPメトリックは、各ルータごとに異なる可能性があるからです。それは完全なIBGPメッシュアプ​​ローチになりますような方法は、ルートリフレクタは、顧客のIGPメトリックとは大きく異なっているIGPメトリックに基づいてBGPルート選択を行うことを余儀なくされることはありませんことを確認することです同じルート選択を作るためにまたは無類のMEDに基づきます。前者は、クラスタ間のIGPメトリックよりも優れていることが、クラスタ内のIGPメトリックを設定し、クラスタ内でフルメッシュを維持することによって達成することができます。後者は、によって達成することができます"
+    },
+    {
+      "indent": 6,
+      "text": "o setting the local preference of a route at the border router to reflect the MED values, or",
+      "ja": "MED値を反映する境界ルータにおけるルートのローカルプリファレンスを設定する、またはO"
+    },
+    {
+      "indent": 6,
+      "text": "o making sure the AS-path lengths from different ASes are different when the AS-path length is used as a route selection criteria, or",
+      "ja": "ASパス長が経路選択基準として使用される場合など、経路が異なるのASからの長さが異なっていて確認し、又はO"
+    },
+    {
+      "indent": 6,
+      "text": "o configuring community-based policies to influence the route selection.",
+      "ja": "Oルート選択に影響を与えるため、コミュニティベースのポリシーを設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "One could argue though that the latter requirement is overly restrictive, and perhaps impractical in some cases. One could further argue that as long as there are no routing loops, there are no compelling reasons to force route selection with route reflectors to be the same as it would be with the full IBGP mesh approach.",
+      "ja": "一方、後者の要件がある場合には過度に限定的、おそらく実用的でないことも主張できました。一つは、さらに限りないルーティングループが存在しないように、それは完全IBGPメッシュアプ​​ローチであろうと同じになるようにルートリフレクタと経路選択を強制する説得力のある理由が存在しないと主張している可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To prevent routing loops and maintain consistent routing view, it is essential that the network topology be carefully considered in designing a route reflection topology. In general, the route reflection topology should be congruent with the network topology when there exist multiple paths for a prefix. One commonly used approach is the reflection based on Point of Presence (POP), in which each POP maintains its own route reflectors serving clients in the POP, and all route reflectors are fully meshed. In addition, clients of the reflectors in each POP are often fully meshed for the purpose of optimal intra-POP routing, and the intra-POP IGP metrics are configured to be better than the inter-POP IGP metrics.",
+      "ja": "ルーティングループを防止し、一貫性のあるルーティング・ビューを維持するためには、ネットワークトポロジを注意深くルート反射トポロジーを設計する際に考慮することが必須です。プレフィックスの複数のパスが存在する場合、一般に、ルート反射トポロジーは、ネットワークトポロジーと一致すべきです。 1つの一般的に使用されるアプローチは、各POPは、POP内のクライアントにサービスを提供する独自のルートリフレクタを維持し、すべてのルートリフレクタが完全に噛合したプレゼンスのポイント（POP）に基づいて、反射です。加えて、各POPにおけるリフレクタのクライアントはしばしば完全最適イントラ-POPルーティングの目的のために噛合され、イントラPOP IGPメトリックは、インターPOP IGPメトリックよりも優れているように構成されています。"
+    },
+    {
+      "indent": 0,
+      "text": "12. Security Considerations",
+      "section_title": true,
+      "ja": "12.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This extension to BGP does not change the underlying security issues inherent in the existing IBGP [1, 5].",
+      "ja": "BGPへのこの拡張は、既存のIBGP [1、5]に固有の基本的なセキュリティ問題を変更しません。"
+    },
+    {
+      "indent": 0,
+      "text": "13. Acknowledgements",
+      "section_title": true,
+      "ja": "13.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Dennis Ferguson, John Scudder, Paul Traina, and Tony Li for the many discussions resulting in this work. This idea was developed from an earlier discussion between Tony Li and Dimitri Haskin.",
+      "ja": "作者はこの作品ではその結果多くの議論のためのデニスファーガソン、ジョン・スカダー、ポールTrainaの、とトニー李に感謝したいと思います。このアイデアは、トニー・リーとディミトリHaskinの間、以前の議論から開発されました。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, the authors would like to acknowledge valuable review and suggestions from Yakov Rekhter on this document, and helpful comments from Tony Li, Rohit Dube, John Scudder, and Bruce Cole.",
+      "ja": "また、著者は、貴重なレビューと、この文書にヤコフ・レックターからの提案、そしてトニー・リー、のRohitデュベ、ジョン・スカダー、そしてブルース・コールから有益なコメントを承認したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "14. References",
+      "section_title": true,
+      "ja": "14.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "14.1. Normative References",
+      "section_title": true,
+      "ja": "14.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Rekhter, Y., Li, T., and S. Hares, \"A Border Gateway Protocol 4 (BGP-4)\", RFC 4271, January 2006.",
+      "ja": "[1] Rekhter、Y.、李、T.、およびS.野兎、 \"ボーダーゲートウェイプロトコル4（BGP-4）\"、RFC 4271、2006年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "14.2. Informative References",
+      "section_title": true,
+      "ja": "14.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Savola, P., \"Reclassification of RFC 1863 to Historic\", RFC 4223, October 2005.",
+      "ja": "[2] Savola、P.、 \"歴史的にRFC 1863の再分類\"、RFC 4223、2005年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Traina, P., McPherson, D., and J. Scudder, \"Autonomous System Confederations for BGP\", RFC 3065, February 2001.",
+      "ja": "[3] Trainaの、P.、マクファーソン、D.、およびJ.スカダー、 \"BGPのための自律システム同盟\"、RFC 3065、2001年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Bates, T. and R. Chandra, \"BGP Route Reflection An alternative to full mesh IBGP\", RFC 1966, June 1996.",
+      "ja": "[4]ベイツ、T.、およびR.チャンドラ、 \"BGPルートリフレクションフルメッシュIBGPへの代替\"、RFC 1966、1996年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[5] Heffernan, A., \"Protection of BGP Sessions via the TCP MD5 Signature Option\", RFC 2385, August 1998.",
+      "ja": "[5] Heffernanの、A.、 \"TCP MD5署名オプションを使用してBGPセッションの保護\"、RFC 2385、1998年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[6] Bates, T., Chandra, R., and E. Chen, \"BGP Route Reflection - An Alternative to Full Mesh IBGP\", RFC 2796, April 2000.",
+      "ja": "[6]ベイツ、T.、チャンドラ、R.、およびE.チェン、 \"BGPルートリフレクション - フルメッシュIBGPへの代替\"、RFC 2796、2000年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[7] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[7]ブラドナーのは、S.は、BCP 14、RFC 2119、1997年3月の \"RFCsにおける使用のためのレベルを示すために\"。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A: Comparison with RFC 2796",
+      "ja": "付録A：RFC 2796との比較"
+    },
+    {
+      "indent": 3,
+      "text": "The impact on route selection is added.",
+      "ja": "経路選択に影響を添加します。"
+    },
+    {
+      "indent": 3,
+      "text": "The pictorial description of the encoding of the CLUSTER_LIST attribute is removed as the description is redundant to the BGP specification, and the attribute length field is inadvertently described as one octet.",
+      "ja": "説明は、BGP仕様に冗長であるとしてCLUSTER_LIST属性のエンコーディングの絵の説明は除去され、属性長フィールドは誤って1つのオクテットとして記載されています。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B: Comparison with RFC 1966",
+      "ja": "付録B：RFC 1966との比較"
+    },
+    {
+      "indent": 3,
+      "text": "All the changes listed in Appendix A, plus the following.",
+      "ja": "すべての付録Aに記載されている変更に加え、以下の通りです。"
+    },
+    {
+      "indent": 3,
+      "text": "Several terminologies related to route reflection are clarified, and the reference to EBGP routes/peers are removed.",
+      "ja": "ルート反射に関連するいくつかの用語を明確にし、EBGPルート/ピアへの参照が削除されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The handling of a routing information loop (due to route reflection) by a receiver is clarified and made more consistent.",
+      "ja": "受信機によって（これはルート反射に）ルーティング情報ループの取り扱いを明確にし、より一貫なります。"
+    },
+    {
+      "indent": 3,
+      "text": "The addition of a CLUSTER_ID to the CLUSTER_LIST has been changed from \"append\" to \"prepend\" to reflect the deployed code.",
+      "ja": "CLUSTER_LISTにCLUSTER_IDの添加が展開されたコードを反映するために「プリペンド」に「追加」から変更されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The section on \"Configuration and Deployment Considerations\" has been expanded to address several operational issues.",
+      "ja": "「構成と展開に関する考慮事項」のセクションでは、いくつかの運用上の問題に対処するために拡張されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tony Bates Cisco Systems, Inc. 170 West Tasman Drive San Jose, CA 95134",
+      "ja": "トニー・ベイツシスコシステムズ、株式会社170西タスマン・ドライブサンノゼ、CA 95134"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: tbates@cisco.com",
+      "ja": "メールアドレス：tbates@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Ravi Chandra Sonoa Systems, Inc. 3255-7 Scott Blvd. Santa Clara, CA 95054",
+      "ja": "ラヴィチャンドラSonoa Systems、Inc.の3255から7スコット・ブルバードサンタクララ、CA 95054"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: rchandra@sonoasystems.com",
+      "ja": "メールアドレス：rchandra@sonoasystems.com"
+    },
+    {
+      "indent": 3,
+      "text": "Enke Chen Cisco Systems, Inc. 170 West Tasman Drive San Jose, CA 95134",
+      "ja": "エンケ陳シスコシステムズ、株式会社170西タスマン・ドライブサンノゼ、CA 95134"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: enkechen@cisco.com",
+      "ja": "メールアドレス：enkechen@cisco.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}
