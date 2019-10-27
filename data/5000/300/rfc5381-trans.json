@@ -1,0 +1,797 @@
+{
+  "title": {
+    "text": "RFC 5381 - Experience of Implementing NETCONF over SOAP",
+    "ja": "RFC 5381 - SOAP経由の実装NETCONFの経験"
+  },
+  "number": 5381,
+  "created_at": "2019-10-27 04:00:05.337260+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          T. Iijima\nRequest for Comments: 5381                                   Y. Atarashi\nCategory: Informational                                        H. Kimura\n                                                               M. Kitani\n                                                  Alaxala Networks Corp.\n                                                                H. Okita\n                                                           Hitachi, Ltd.\n                                                            October 2008",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Experience of Implementing NETCONF over SOAP",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "IESG Note",
+      "ja": "IESG注意"
+    },
+    {
+      "indent": 3,
+      "text": "This document discusses implementation experience of NETCONF over SOAP. Note that Section 2.4 of RFC 4741 states, \"A NETCONF implementation MUST support the SSH transport protocol mapping\". Therefore, a NETCONF implementation that only supports the SOAP transport described in this document and not (at least) also SSH is not in compliance with the NETCONF standards.",
+      "ja": "この文書では、SOAPの上にNETCONFの実装経験を説明します。 RFC 4741個の状態のセクション2.4に注意してください、「NETCONF実装は、SSHトランスポートプロトコルマッピングをサポートしなければなりません」。したがって、唯一この文書で説明していない（少なくとも）SOAPトランスポートをサポートしているNETCONF実装は、また、SSHは、NETCONFの標準規格に準拠していないです。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how the authors developed a SOAP (Simple Object Access Protocol)-based NETCONF (Network Configuration Protocol) client and server. It describes an alternative SOAP binding for NETCONF that does not interoperate with an RFC 4743 conformant implementation making use of cookies on top of the persistent transport connections of HTTP. When SOAP is used as a transport protocol for NETCONF, various kinds of development tools are available. By making full use of these tools, developers can significantly reduce their workload. The authors developed an NMS (Network Management System) and network equipment that can deal with NETCONF messages sent over SOAP. This document aims to provide NETCONF development guidelines gained from the experience of implementing a SOAP-based NETCONF client and server.",
+      "ja": "この文書では、著者がSOAP（シンプル・オブジェクト・アクセス・プロトコル）ベースのNETCONF（ネットワーク構成プロトコル）クライアントとサーバの開発方法について説明します。これは、HTTPの持続的な交通機関の接続の上にクッキーのRFC 4743準拠の実装を作るの使用との相互運用性はありませんNETCONFのためのバインディングの代替SOAPを説明しています。 SOAPはNETCONFのためのトランスポートプロトコルとして使用する場合、開発ツールの様々な種類が利用可能です。これらのツールを駆使することにより、開発者は大幅に作業負荷を軽減することができます。著者は、SOAP経由で送信されるNETCONFメッセージに対処することができNMS（ネットワーク管理システム）とネットワーク機器を開発しました。この文書では、SOAPベースのNETCONFクライアントとサーバの実装の経験から得られたNETCONFの開発ガイドラインを提供することを目的とします。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n   1.1. NETCONF over SOAP ..........................................3\n   1.2. Motivation .................................................3\n2. NETCONF Development on Web Services Framework ...................4\n   2.1. WSDL as an Interface Description Language ..................5\n   2.2. Generation of APIs .........................................5\n3. Architecture of the NETCONF over SOAP Implementation ............5\n   3.1. SOAP Implementation in NMS .................................6\n        3.1.1. SOAP Parser in NMS ..................................7\n        3.1.2. Session Maintenance in NMS ..........................7\n   3.2. SOAP Implementation in the Network Equipment ...............8\n        3.2.1. SOAP Parser in the Network Equipment ................8\n        3.2.2. Session Maintenance in the Network Equipment ........8\n4. Guidelines for Developing NETCONF Clients and Servers ...........8\n   4.1. Procedures of Development of NETCONF Clients ...............9\n        4.1.1. Developing NETCONF Clients without Eclipse .........10\n        4.1.2. Developing NETCONF Clients Using Eclipse ...........11\n   4.2. Procedures of Development of NETCONF Servers ..............13\n        4.2.1. Developing NETCONF Servers without Eclipse .........14\n        4.2.2. Developing NETCONF Servers Using Eclipse ...........15\n        4.2.3. Developing NETCONF Servers with C\n               Programming Language ...............................18\n5. Security Considerations ........................................18\n6. Acknowledgements ...............................................18\n7. References .....................................................19\n   7.1. Normative References ......................................19\n   7.2. Informative References ....................................19",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. NETCONF over SOAP",
+      "section_title": true,
+      "ja": "1.1。 SOAP経由NETCONF"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not a product from the NETCONF WG but a report on the experience acquired by individual developers.",
+      "ja": "この文書では、NETCONF WGからの製品が、個々の開発者が取得した経験に関する報告書ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "SOAP (Simple Object Access Protocol) was specified in [RFC4743] as one of the transport protocols for NETCONF. It is designed to use XML (eXtensible Markup Language) as its description language, which is a fundamental messaging technology for Web Services. For this reason, SOAP is well suited to the NETCONF protocol and can be deployed widely.",
+      "ja": "SOAP（シンプル・オブジェクト・アクセス・プロトコル）はNETCONFのためのトランスポートプロトコルの一つとして、[RFC4743]で指定されました。 Webサービスのための基本的なメッセージング技術であるその記述言語としてXML（eXtensible Markup Language）を使用するように設計されています。このため、SOAPは、NETCONFプロトコルに適していると広く展開することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "To develop a SOAP-based NETCONF client and server, several development tools are available as open-source software. The authors developed a SOAP-based NETCONF client and server by using available development tools. The SOAP-based NETCONF client was developed by utilizing Java APIs (Application Programming Interfaces) that are automatically generated from the XSD (XML Schema Definition) file and WSDL (Web Services Description Language) file obtained from [RFC4741] and [RFC4743], respectively. The SOAP-based NETCONF client that the authors developed acts as an NMS (Network Management System). The SOAP-based NETCONF server that the authors developed runs on network equipment and accepts NETCONF messages sent from the NETCONF client.",
+      "ja": "SOAPベースのNETCONFクライアントとサーバを開発するには、いくつかの開発ツールは、オープンソースソフトウェアとして利用できます。著者は、利用可能な開発ツールを使って、SOAPベースのNETCONFクライアントとサーバを開発しました。 SOAPベースのNETCONFクライアントが（アプリケーションプログラミングインタフェース）は、Java APIを利用して開発された自動XSD（XMLスキーマ定義）ファイルおよびWSDL（Webサービス記述言語）から生成されている[RFC4741]と[RFC4743]から取得したファイル、それぞれ。著者は、NMS（ネットワーク管理システム）として機能を開発したSOAPベースのNETCONFクライアント。著者らは、ネットワーク機器上で動作を開発し、SOAPベースのNETCONFサーバは、NETCONFクライアントから送信されたNETCONFメッセージを受け付けます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Motivation",
+      "section_title": true,
+      "ja": "1.2。動機"
+    },
+    {
+      "indent": 3,
+      "text": "The aim of this document is to describe why the authors believe SOAP is practical as a transport protocol for NETCONF when an NMS is developed. When developing an NMS that uses SOAP as its transport protocol, development tools and procedures can be used according to the Web Services framework. This document also describes the experience of implementing NETCONF over SOAP so that even those who have little knowledge of SOAP can start developing a SOAP-based NETCONF client and server.",
+      "ja": "このドキュメントの目的は、作者がNMSが開発されたときにSOAPがNETCONFのためのトランスポートプロトコルとして実用的であると思う理由を説明することです。そのトランスポートプロトコルとしてSOAPを使用するNMSを開発する場合、開発ツールおよび手順は、Webサービス・フレームワークに従って使用することができます。この資料はまたしても、SOAPの少し知識を持っている人は、SOAPベースのNETCONFクライアントとサーバの開発を開始できるように、SOAP経由NETCONFを実装の経験を説明しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes an alternative SOAP binding for NETCONF that does not interoperate with an RFC 4743 conformant implementation as it relies on cookies used on top of the persistent transport connections of HTTP. This is provided for information purposes only based on the implementation experience of the authors.",
+      "ja": "この文書では、HTTPの永続的な交通機関の接続の上で使用するクッキーに依存しているとして、RFC 4743準拠の実装との相互運用性はありませんNETCONFのためのバインディングの代替SOAPを説明しています。これが唯一の著者の実装経験に基づいて、情報目的で提供されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. NETCONF Development on Web Services Framework",
+      "section_title": true,
+      "ja": "Webサービスフレームワーク2. NETCONF開発"
+    },
+    {
+      "indent": 3,
+      "text": "SOAP is a fundamental messaging technology for Web Services. Therefore, if SOAP is used as a transport protocol for NETCONF, a network configuration performed by NETCONF is achieved on the Web Services framework. In this section, the overall architecture of Web Services is described.",
+      "ja": "SOAPは、Webサービスのための基本的なメッセージング技術です。 SOAPはNETCONFのためのトランスポートプロトコルとして使用される場合したがって、NETCONFによって行われるネットワーク構成は、Webサービス・フレームワーク上で達成されます。このセクションでは、Webサービスの全体的なアーキテクチャが記述されています。"
+    },
+    {
+      "indent": 4,
+      "text": "+----------------+ +----------------------------+\n|     Format     | |     Register / Search      |\n|                | |                            |\n|      XML       | |           UDDI             |\n|                | |  (Universal Description,   |\n|                | | Discovery and Integration) |\n|                | +----------------------------+\n|                | +----------------------------+ +----------------+\n|                | |    Service Description     | |      API       |\n|                | |                            | |                |\n|                | |           WSDL             | |      JAXM      |\n|                | +----------------------------+ | (Java API for  |\n|                | +----------------------------+ | XML Messaging) |\n|                | |   Fundamental Messaging    | |    JAX-RPC     |\n|                | |                            | | (Java API for  |\n|                | |           SOAP             | |   XML / RPC)   |\n+----------------+ +----------------------------+ +----------------+\n                   +----------------------------+\n                   |        Transport           |\n                   |                            |\n                   |       HTTP, HTTPS...       |\n                   +----------------------------+",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Figure 1: Overall Architecture of Web Services",
+      "ja": "図1：Webサービスの全体的なアーキテクチャ"
+    },
+    {
+      "indent": 3,
+      "text": "As depicted in Figure 1, peripheral technologies around SOAP/HTTP are well developed. Therefore, if SOAP/HTTP is chosen as a transport layer for the NETCONF protocol, the NMS development based on the Web Services framework can choose from different optional services and might be less expensive based on the use of already available services.",
+      "ja": "図1に示すように、SOAP / HTTPの周辺技術が十分に開発されています。 SOAP / HTTPは、Webサービスフレームワークに基づいて、NETCONFプロトコル、NMS開発のためのトランスポート層として選択された場合そのため、さまざまなオプションサービスから選ぶことができ、すでに利用可能なサービスの使用に基づいて安価であるかもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. WSDL as an Interface Description Language",
+      "section_title": true,
+      "ja": "2.1。インタフェース記述言語としてWSDL"
+    },
+    {
+      "indent": 3,
+      "text": "WSDL [WSDL] defines how SOAP messages are exchanged between Web Services entities. Interfaces of Web Services entities are automatically generated by development tools when importing a WSDL file. Interfaces generated in this manner act as APIs. For the development of an NMS, only these APIs are necessary; there is no need to use SOAP directly.",
+      "ja": "WSDL [WSDL]はSOAPメッセージがWebサービスのエンティティ間で交換される方法を定義します。 WSDLファイルをインポートするときにWebサービス実体のインタフェースは、自動的に開発ツールによって生成されます。 APIとして、このように行為に生成されたインタフェース。 NMSの発展のために、唯一のこれらのAPIが必要です。直接SOAPを使用する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Useful tools that can import a WSDL file are available with SOAP. For instance, Apache Axis [Axis] generates an interface from a WSDL file and is a widely used SOAP implementation middleware.",
+      "ja": "WSDLファイルをインポートすることができます便利なツールがSOAPでご利用いただけます。例えば、Apache Axisの[軸]はWSDLファイルからインタフェースを生成し、広く使用されているSOAP実装ミドルウェアです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Generation of APIs",
+      "section_title": true,
+      "ja": "2.2。 APIの生成"
+    },
+    {
+      "indent": 3,
+      "text": "As described in the previous section, APIs are generated from a WSDL file by development tools such as Apache Axis. Such APIs are in the form of a Java library and act as programming interfaces for an NMS. By using these APIs, an NMS can send SOAP messages to Web Services entities.",
+      "ja": "前のセクションで説明したように、APIは、例えばApache Axisのような開発ツールによってWSDLファイルから生成されます。そのようなAPIは、Javaライブラリの形態であり、NMSのためのプログラミングインタフェースとして作用します。これらのAPIを使用することにより、NMSは、WebサービスエンティティにSOAPメッセージを送信することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Architecture of the NETCONF over SOAP Implementation",
+      "section_title": true,
+      "ja": "SOAP実装の上にNETCONFの3アーキテクチャ"
+    },
+    {
+      "indent": 3,
+      "text": "The architecture of the NETCONF over SOAP implementation is shown in Figure 2. A NETCONF implementation residing in an NMS works as a NETCONF client while network equipment acts as a NETCONF server. In this document, we call NETCONF-client and NETCONF-server implementations a NETCONF application and a NETCONF service provider, respectively. A SOAP implementation may be installed on both the NMS and the network equipment. Each instance of the SOAP implementations exchanges SOAP messages based on WSDL, as described in [RFC4743]. If Java libraries generated from the WSDL are provided in the NMS, engineers can develop a NETCONF application, which configures network equipment via the NETCONF protocol, by utilizing the Java library. There is no need for engineers to use XML or SOAP directly.",
+      "ja": "SOAP実装上NETCONFのアーキテクチャは、NMSに存在する2 A NETCONF実装がNETCONFサーバなどのネットワーク機器が作用しながらNETCONFクライアントとして動作し、図に示されています。この文書では、我々はそれぞれ、NETCONFアプリケーションとNETCONFサービスプロバイダNETCONFクライアントとNETCONFサーバの実装を呼び出します。 SOAP実装は、NMSとネットワーク機器の両方にインストールすることができます。 [RFC4743]に記載されているようにSOAP実装を交換するSOAPメッセージの各インスタンスは、WSDLに基づきます。 WSDLから生成されたJavaライブラリは、NMSで提供されている場合は、エンジニアがJavaライブラリを利用することにより、NETCONFプロトコルを介してネットワーク機器を設定するNETCONFアプリケーションを開発することができます。エンジニアが直接XMLやSOAPを使用する必要はありません。"
+    },
+    {
+      "indent": 4,
+      "text": "+---------------------------+   +---------------------------+\n|      NETCONF Client       |   |       NETCONF Server      |\n|           (NMS)           |   |     (Network Equipment)   |\n|  +---------------------+  |   |  +---------------------+  |\n|  | NETCONF application |  |   |  |    NETCONF service  |  |\n|  |                     |  |   |  |       provider      |  |\n|  +---------------------+  |   |  +---------------------+  |\n|  +---------------------+  |   |                           |\n|  |    Java library     |  |   |                           |\n|  +---------------------+  |   |                           |\n|  +---------------------+  |   |  +---------------------+  |\n|  | SOAP Implementation |  |   |  | SOAP Implementation |  |\n|  |    (Apache Axis)    |  |   |  |                     |  |\n|  +---------------------+  |   |  +---------------------+  |\n+-------^----------|--------+   +-------^----------|--------+\n        |          |     rpc-request    |          |\n        |          +-----  /SOAP    ----+          |\n        |                  / HTTP(S)               |\n        |                                          |\n        |                 rpc-reply                |\n        +----------------  /SOAP    ---------------+\n                           / HTTP(S)\n    Figure 2: Architecture of NETCONF Implementation Using SOAP",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The SOAP implementation in both the NMS and network equipment is explained in detail in the following sections.",
+      "ja": "NMSとネットワーク機器の両方でSOAP実装は、以下のセクションで詳細に説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. SOAP Implementation in NMS",
+      "section_title": true,
+      "ja": "3.1。 NMSでのSOAP実装"
+    },
+    {
+      "indent": 3,
+      "text": "Several SOAP implementations appropriate for use in an NMS are available today. Apache Axis is one such widely used implementation.",
+      "ja": "NMSでの使用に適したいくつかのSOAP実装は、今日利用可能です。 Apache Axisのは、そのような広く使われている実装です。"
+    },
+    {
+      "indent": 3,
+      "text": "Axis works as a SOAP implementation and an NMS-development tool. For instance, WSDL2Java, one of Axis' tools, generates Java-class files from a WSDL file. Another tool called Java2WSDL does the opposite: it generates a WSDL file from Java-class files. Consequently, various benefits can be obtained if Axis is introduced as a SOAP implementation.",
+      "ja": "Axisは、SOAP実装とNMS-開発ツールとして機能します。例えば、WSDL2Javaの、Axisのツールの一つは、WSDLファイルからのJavaクラスファイルを生成します。 Java2WSDLのと呼ばれる別のツールでは、反対のことを行います。それは、JavaクラスファイルからWSDLファイルを生成します。軸はSOAP実装として導入された場合にその結果、様々な恩恵を得ることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "To develop a NETCONF application that is capable of various functions such as releasing log messages, Java-class files generated by the Axis tool may be extended by adding more functions. By utilizing these Java libraries, engineers can easily develop NETCONF applications.",
+      "ja": "そのようなログメッセージをリリースするなど、さまざまな機能が可能であるNETCONFアプリケーションを開発するために、軸のツールによって生成されたJavaクラスファイルには、より多くの機能を追加することによって拡張することができます。これらのJavaライブラリを利用することにより、エンジニアは簡単にNETCONFアプリケーションを開発することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. SOAP Parser in NMS",
+      "section_title": true,
+      "ja": "3.1.1。 NMSでのSOAPパーサ"
+    },
+    {
+      "indent": 3,
+      "text": "The SOAP Parser function is performed entirely by a SOAP implementation such as Apache Axis.",
+      "ja": "SOAPパーサー機能は、Apache AxisのようなSOAP実装によって完全に実行されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.2. Session Maintenance in NMS",
+      "section_title": true,
+      "ja": "3.1.2。 NMSでのセッションのメンテナンス"
+    },
+    {
+      "indent": 3,
+      "text": "When exchanging NETCONF messages between an NMS and network equipment, a NETCONF session has to be maintained on both sides, as described in [RFC4741].",
+      "ja": "NMSとネットワーク機器との間でNETCONFメッセージを交換するとき、NETCONFセッションは[RFC4741]に記載されているように、両側で維持されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In [RFC4743], HTTP is specified as an option of an underlying protocol for NETCONF over SOAP. When HTTP is used for that purpose, it is also specified that a NETCONF session state is tied to the state of the underlying transport (TCP) connection (just like in NETCONF over SSH [RFC4742] and NETCONF over BEEP [RFC4744]). However, HTTP itself is a stateless protocol, and many server implementations process user requests independently of previous requests received over the same transport connection. To simplify implementation of the NETCONF service provider, we used the cookie field inside the HTTP header to map incoming requests to NETCONF sessions. Note that this means our implementation actually uses an alternative SOAP binding for NETCONF, which does not interoperate with RFC 4743 compliant implementations.",
+      "ja": "[RFC4743]に、HTTPは、SOAP上NETCONFの基礎となるプロトコルのオプションとして指定されています。 HTTPは、その目的のために使用される場合、またNETCONFセッション状態は、基礎となるトランスポート（TCP）接続の状態（BEEP上SSH [RFC4742]とNETCONF上NETCONFわずか等[RFC4744]）に接続されていることが特定されます。しかし、HTTP自体はステートレスプロトコルであり、独立して、同一のトランスポート接続を介して受信された以前の要求の多くのサーバ実装プロセスユーザー要求。 NETCONFサービスプロバイダーの実装を簡素化するために、我々は、NETCONFセッションへの着信要求をマップするためにHTTPヘッダー内のクッキーフィールドを使用していました。これは私たちの実装は、実際にRFC 4743準拠の実装との相互運用性はありませんNETCONF、バインディング代替SOAPを使用することを意味することに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the implemented NETCONF-session maintenance in the NMS works as follows. After the NMS sends a NETCONF hello message to the network equipment, the NETCONF service provider in the network equipment allocates a session identifier for the NETCONF application in the NMS and writes it inside the <session> element of a replying NETCONF hello message, as described in [RFC4741]. At the same time, the network equipment writes the same value in the cookie field inside an HTTP header. After that, a SOAP message encompassing the replying NETCONF hello message is added. When the NMS receives the newly allocated session identifier from the replying NETCONF hello message, the NETCONF application stores it and writes it inside a <session> element for subsequent NETCONF request messages and in a cookie field for subsequent HTTP headers. By recognizing the session identifier in NETCONF request messages and the cookie field in HTTP headers, the network equipment can maintain both a NETCONF session and the state of an HTTP connection. The NETCONF session is maintained over the maintained state of the HTTP connection. The stored session identifier is erased when the NMS sends a NETCONF close-session message and receives a NETCONF response message from the network equipment.",
+      "ja": "たとえば、次のようにNMSに実装NETCONFセッションのメンテナンスが動作します。 NMSは、ネットワーク機器にNETCONFハローメッセージを送信した後に説明するように、ネットワーク機器でNETCONFサービスプロバイダは、NMSにNETCONFアプリケーションのセッション識別子を割り当てて、返信NETCONFの<セッション>要素ハローメッセージの内側に書き込みます[RFC4741]インチ同時に、ネットワーク装置は、HTTPヘッダー内のクッキーフィールドの同じ値を書き込みます。その後、返信NETCONFのHelloメッセージを包含するSOAPメッセージが追加されます。 NMSは、返信NETCONFハローメッセージから、新たに割り当てられたセッション識別子を受信すると、NETCONFアプリケーション格納すると、後続のNETCONF要求メッセージの<セッション>要素内に、後続のHTTPヘッダーのクッキーフィールドに書き込みます。 NETCONF要求メッセージにセッション識別子及びHTTPヘッダにおけるクッキーフィールドを認識することによって、ネットワーク装置は、NETCONFセッションとHTTP接続の状態の両方を維持することができます。 NETCONFセッションは、HTTP接続の維持状態にわたって維持されます。 NMSがNETCONFクローズセッションメッセージを送信し、ネットワーク装置からNETCONF応答メッセージを受信したときに保存されたセッション識別子が消去されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. SOAP Implementation in the Network Equipment",
+      "section_title": true,
+      "ja": "3.2。ネットワーク機器でのSOAP実装"
+    },
+    {
+      "indent": 3,
+      "text": "To accept SOAP messages sent from the NMS, it is also necessary to provide SOAP in the network equipment. As in the case of NMS, some free SOAP implementations are available today for installation on network equipment. However, the memory capacity of the network equipment might be limited. Therefore, the SOAP implementation may be chosen taking memory capacity into consideration. In some cases, a memory-saving method will be required when implementing SOAP in the network equipment.",
+      "ja": "NMSから送信されたSOAPメッセージを受け入れるには、ネットワーク機器にSOAPを提供することも必要です。 NMSの場合のように、いくつかの無料のSOAP実装は、ネットワーク機器にインストールするため、現在ご利用いただけます。しかし、ネットワーク機器のメモリ容量が制限される可能性があります。したがって、SOAPの実装を考慮にメモリ容量を取って選択することができます。ネットワーク機器にSOAPを実装する際にいくつかのケースでは、メモリを節約する方法が必要となります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1. SOAP Parser in the Network Equipment",
+      "section_title": true,
+      "ja": "3.2.1。ネットワーク機器でのSOAPパーサ"
+    },
+    {
+      "indent": 3,
+      "text": "A SOAP header inside the SOAP envelope is defined as optional. Therefore, the module that processes the SOAP header can be omitted if the memory capacity in the network equipment is insufficient. In this case, a SOAP parser in the network equipment is allowed to parse only mandatory parts of a SOAP envelope.",
+      "ja": "SOAPエンベロープ内のSOAPヘッダは、オプションとして定義されます。ネットワーク機器のメモリ容量が不足している場合したがって、SOAPヘッダを処理するモジュールを省略することができます。この場合、ネットワーク機器におけるSOAPパーサはSOAPエンベロープの唯一の必須の部分を解析するために許可されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2. Session Maintenance in the Network Equipment",
+      "section_title": true,
+      "ja": "3.2.2。ネットワーク機器でのセッションのメンテナンス"
+    },
+    {
+      "indent": 3,
+      "text": "To maintain NETCONF sessions with the NMS, the NETCONF service provider in the network equipment has to provide a session identifier to the NMS, as described in [RFC4741].",
+      "ja": "NMSとのNETCONFセッションを維持するために、ネットワーク機器でNETCONFサービスプロバイダは、[RFC4741]に記載されているように、NMSにセッション識別子を提供しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the implemented NETCONF-session maintenance in the network equipment works as follows. When the network equipment receives a NETCONF hello message from the NMS, the NETCONF service provider in the network equipment sets a session identifier inside the <session> element of a replying NETCONF hello message, as described in [RFC4741]. At the same time, the network equipment also sets the same value in the cookie field inside an HTTP header. After that, a SOAP message encompassing the replying NETCONF hello message is added. The cookie field inside the HTTP header is used for maintaining the state of the HTTP connection over which the NETCONF-session maintenance is ensured. The network equipment then sends an HTTP response message to the NMS. When the network equipment receives a NETCONF close-session message from the NMS, it erases the stored session identifier.",
+      "ja": "たとえば、次のようにネットワーク機器に実装さNETCONFセッションのメンテナンスが動作します。ネットワーク機器は、NMSからNETCONFハローメッセージを受信した場合、[RFC4741]に記載されているように、ネットワーク機器でNETCONFサービスプロバイダは、返信NETCONFの<セッション>要素ハローメッセージ内のセッション識別子を設定します。同時に、ネットワーク装置は、HTTPヘッダー内のクッキーフィールドに同じ値を設定します。その後、返信NETCONFのHelloメッセージを包含するSOAPメッセージが追加されます。 HTTPヘッダー内のクッキーフィールドはNETCONFセッションの維持が確保され、その上のHTTP接続の状態を維持するために使用されます。ネットワーク機器は、NMSへのHTTP応答メッセージを送信します。ネットワーク機器は、NMSからNETCONFクローズセッションメッセージを受信すると、格納されたセッション識別子を消去します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Guidelines for Developing NETCONF Clients and Servers",
+      "section_title": true,
+      "ja": "NETCONFクライアントとサーバーを開発するためのガイドライン4."
+    },
+    {
+      "indent": 3,
+      "text": "In the case of SOAP transport mapping, sharing information on the kinds of development tools that are available would help developers start developing SOAP-based NETCONF clients and servers. That would contribute to the rapid deployment of SOAP-based NETCONF clients and servers.",
+      "ja": "SOAPトランスポートマッピングの場合には、利用可能な開発ツールの種類についての情報を共有することは、開発者がSOAPベースのNETCONFクライアントとサーバの開発を開始役立つだろう。これは、SOAPベースのNETCONFクライアントとサーバの迅速な展開に貢献するであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Procedures of Development of NETCONF Clients",
+      "section_title": true,
+      "ja": "4.1。 NETCONFクライアントの開発の手順"
+    },
+    {
+      "indent": 3,
+      "text": "To develop a SOAP-based NETCONF client, a stub code may be generated. A stub is a library that is generated automatically from WSDL by a Web Services tool and that acts as a group of APIs. When using Apache Axis as a Web Services tool, a generated stub is in the form of Java APIs. These Java APIs display interfaces of a Web Service as if they are methods capable of configuring a local machine.",
+      "ja": "SOAPベースのNETCONFクライアントを開発するには、スタブコードを生成することができます。スタブは、WebサービスツールによってWSDLから自動的に生成されたライブラリであり、それは、APIのグループとして機能します。 Webサービス・ツールとしてApache Axisを使用する場合は、生成されたスタブは、JavaのAPIの形態です。彼らはローカルマシンを構成できる方法があるかのようにこれらのJava APIは、Webサービスのインタフェースを表示します。"
+    },
+    {
+      "indent": 3,
+      "text": "The WSDL file named \"netconf-soap_1.0.wsdl\", which is selected from [RFC4743], specifies NETCONF messages to be exchanged between the NETCONF client and server. These NETCONF messages are the \"hello\" message and \"rpc\" message. Therefore, stub codes for creating the \"hello\" message and \"rpc\" message are generated from \"netconf-soap_1.0.wsdl\". However, the file \"netconf-soap_1.0.wsdl\" is not sufficient because no service element is specified.",
+      "ja": "[RFC4743]から選択され、「NETCONF-soap_1.0.wsdl」という名前のWSDLファイルは、NETCONFメッセージがNETCONFクライアントとサーバ間で交換されるように指定します。これらのNETCONFメッセージは、「ハロー」メッセージと「RPC」のメッセージです。したがって、「ハロー」メッセージと「RPC」メッセージを作成するためのスタブ・コードは、「NETCONF-soap_1.0.wsdl」から生成されます。何のサービス要素が指定されていないためしかし、ファイル「NETCONF-soap_1.0.wsdlは」十分ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "In \"myNetconfService.wsdl\", which is also selected from [RFC4743], a service element is specified and \"netconf-soap_1.0.wsdl\" is imported. Stub codes generated from those WSDL files are found in files such as \"Netconf.java\", \"NetconfLocator.java\", and \"NetconfBindingStub.java\".",
+      "ja": "また、[RFC4743]から選択され、「myNetconfService.wsdl」では、サービス要素が指定され、「NETCONF-soap_1.0.wsdl」がインポートされます。これらのWSDLファイルから生成されたスタブ・コードは、このような「Netconf.java」、「NetconfLocator.java」、および「NetconfBindingStub.java」などのファイルに記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "When interfaces are used to operate the NETCONF protocol in the manner of \"get-config\" and \"edit-config\", for example, an XML schema file named \"netconf.xsd\", which is selected from [RFC4741], is used by being imported into \"netconf-soap_1.0.wsdl\". Using the XML schema, methods of operating the NETCONF protocol are generated in files such as \"GetConfigType.java\" and \"EditConfigType.java\".",
+      "ja": "インタフェースは、「取得・設定」と「編集設定」の方法でNETCONFプロトコルを動作させるために使用される場合、例えば、[RFC4741]から選択され、「netconf.xsd」という名前のXMLスキーマファイルは、で使用され\"NETCONF-soap_1.0.wsdl\" にインポートされています。 XMLスキーマを使用して、NETCONFプロトコルを動作させる方法は、このような「GetConfigType.java」と「EditConfigType.java」などのファイルに生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When interfaces are used to configure network functions at the network equipment, a data model of each network function has to be defined in the style of an XML schema. The XML schema may be imported into \"netconf-soap_1.0.wsdl\" in the same manner as that of the XML schema in [RFC4741].",
+      "ja": "インターフェースは、ネットワーク機器にネットワーク機能を設定するために使用される場合、各ネットワーク機能のデータモデルは、XMLスキーマの形式で定義されなければなりません。 XMLスキーマは、[RFC4741]のXMLスキーマと同様に、「NETCONF-soap_1.0.wsdl」にインポートすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The connection between the NETCONF schema and a data model should be made by inserting the following attribute into elements of each data model. This attribute is defined in the XML schema in [RFC4741].",
+      "ja": "NETCONFスキーマ及びデータモデルの間の接続は、各データモデルの要素に次の属性を挿入することによってなされるべきです。この属性は、[RFC4741]でのXMLスキーマで定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "<xs:attribute name=\"operation\" type=\"editOperationType\" default=\"merge\"/>",
+      "ja": "<XS：属性名= \"操作\" タイプ= \"editOperationType\" デフォルト= \"マージ\" />"
+    },
+    {
+      "indent": 3,
+      "text": "Consequently, using \"myNetconfService.wsdl\" to import \"netconf-soap_1.0.wsdl\", NETCONF schema, and the data model makes it possible to generate stub files containing interfaces to configure network equipment.",
+      "ja": "その結果、「NETCONF-soap_1.0.wsdl」、NETCONFスキーマ、およびデータモデルをインポートするには、「myNetconfService.wsdl」を使用してすることにより、ネットワーク機器を構成するためのインタフェースを含むスタブファイルを生成することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When stub codes are generated, the development environment may be arranged as well. The development of a Java-based NETCONF client may use JDK (Java Development Kit) [JDK] and Apache Axis. In addition, using some IDE (Integrated Development Environment) such as Eclipse [Eclipse] with Apache Ant [Ant] and NetBeans [NetBeans] would reduce the developer workload significantly. When Eclipse is used as an IDE, first, the library (*.jar files) of Axis has to be added to the development project's build path as an external library. The library of Axis acts as a SOAP library, so there is no need to be concerned about SOAP messaging when programming a NETCONF client using the library of Axis.",
+      "ja": "スタブコードが生成されると、開発環境は同様に配置されてもよいです。 JavaベースのNETCONFクライアントの開発は、JDK（Javaの開発キット）[JDK]とApache Axisを使用することができます。加えて、そのようなApache Antを[アリ]とNetBeansとEclipseの[Eclipseの]のようないくつかのIDE（統合開発環境）を使用して[NetBeansは】大幅開発者の作業負荷を減少させるであろう。 Eclipseのは、IDEとして使用する場合、まず、軸のライブラリー（* .jarファイル）は、外部ライブラリなどの開発プロジェクトのビルド・パスに追加する必要があります。軸のライブラリーは、SOAPライブラリとして機能し、その軸のライブラリを使用してNETCONFクライアントをプログラミングするときSOAPメッセージングを心配する必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.1. Developing NETCONF Clients without Eclipse",
+      "section_title": true,
+      "ja": "4.1.1。 EclipseのなしNETCONFクライアントの開発"
+    },
+    {
+      "indent": 3,
+      "text": "Given that development of a NETCONF client is carried out in the environment of a Windows computer without Eclipse, and that \"myNetconfService.wsdl\" is placed in the \"C:\\NetconfClient\" directory, a stub is generated by executing the following command in the command prompt.",
+      "ja": "ディレクトリ、スタブはで次のコマンドを実行することによって生成される：NETCONFクライアントの開発はEclipseのないWindowsコンピュータの環境下で行われ、「myNetconfService.wsdlが」「\\ NetconfClient C」に配置されていることをことを考えますコマンド・プロンプト。"
+    },
+    {
+      "indent": 3,
+      "text": "C:\\NetconfClient>java -classpath .;%AXIS_HOME%\\lib\\axis.jar;% AXIS_HOME%\\lib\\jaxrpc.jar;%AXIS_HOME%\\lib\\saaj.jar;%AXIS_HOME% \\lib\\commons-logging-1.0.4.jar;%AXIS_HOME%\\lib\\commons-discovery-0.2.jar;%AXIS_HOME%\\lib\\wsdl4j-1.5.1.jar org.apache.axis.wsdl.WSDL2Java -p stub myNetconfService.wsdl",
+      "ja": "C：\\ NetconfClient>のjava -classpath;％AXIS_HOME％\\ libに\\ axis.jar;％AXIS_HOME％\\ libに\\ jaxrpc.jar;％AXIS_HOME％\\ libに\\ saaj.jar;％AXIS_HOME％\\ libに\\コモンズ、[ログ。 1.0.4.jar;％AXIS_HOME％\\ libに\\コモンズ発見-0.2.jar;％AXIS_HOME％\\ libに\\ WSDL4J-1.5.1.jar org.apache.axis.wsdl.WSDL2Java -pスタブmyNetconfService.wsdl"
+    },
+    {
+      "indent": 3,
+      "text": "In the directory where the WSDL file is located, the WSDL2Java command is executed. Locations of each Axis library have to be specified. The environment variable of \"AXIS_HOME\" is the directory where Axis is installed. By executing the above command, files with an extension of \"*.java\" are generated in the \"stub\" directory, which is specified by the above command. Inside the stub directory, we can find files such as \"NetconfBindingStub.java\", \"Hello.java\", and \"GetConfigType.java\".",
+      "ja": "WSDLファイルがあるディレクトリでは、WSDL2Javaのコマンドが実行されます。各軸のライブラリの場所を指定する必要があります。 「AXIS_HOME」の環境変数は、Axisがインストールされているディレクトリです。上記のコマンドを実行することで、「* .javaファイル」の拡張子を持つファイルは、上記のコマンドで指定されている「スタブ」ディレクトリに生成されます。スタブディレクトリ内では、我々は、このような「NetconfBindingStub.java」、「Hello.java」、および「GetConfigType.java」などのファイルを見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Next, it is necessary to compile these files by executing the following command in the command prompt.",
+      "ja": "次に、コマンドプロンプトで次のコマンドを実行して、これらのファイルをコンパイルする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "C:\\NetconfClient>javac -classpath .;%AXIS_HOME%\\lib\\axis.jar;%\nAXIS_HOME%\\lib\\jaxrpc.jar stub/*.java",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "After the compilation of those java files, \"*.class\" files are generated. After the compiling is done, the source code of the NETCONF client has to be written. Sample source code of the NETCONF client is shown in Figure 3. This NETCONF client is written by utilizing stub classes and interfaces, which are imported into the local package and referenced.",
+      "ja": "これらのJavaファイルのコンパイル後、「* .classファイル」のファイルが生成されます。コンパイルが完了した後、NETCONFクライアントのソースコードを書くことがあります。 NETCONFクライアントのサンプルソースコードは、このNETCONFクライアントがローカルパッケージにインポートおよび参照されるスタブクラスとインタフェースを利用して書かれている図3に示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "import org.apache.axis.types.UnsignedInt;\nimport org.apache.axis.types.*;",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "public class NetconfClient {\n        /**\n         * @param args\n         */\n        public static void main(String[] args) {\n                // TODO Auto-generated method stub\n                try{\n                        NetconfClient client = new NetconfClient();\n                        java.net.URL url = new java.net.URL(args[0]);\n                        stub.Netconf netconf =\n                                new stub.NetconfLocator();\n                        stub.NetconfPortType stubNetconf =\n                                netconf.getnetconfPort(url);",
+      "raw": true
+    },
+    {
+      "indent": 27,
+      "text": "URI[] uri = new URI[1];\nstub.holders.HelloCapabilitiesHolder\ncapability = new\nstub.holders.HelloCapabilitiesHolder(uri);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "                        UnsignedInt id = new UnsignedInt();\n                        id.setValue(1);\n                        org.apache.axis.holders.UnsignedIntHolder\n                        holder = new\n                        org.apache.axis.holders.UnsignedIntHolder(id)\n                        ;\n                        stubNetconf.hello(capability, holder);\n                }catch(Exception e){\n                        e.printStackTrace();\n                }\n        }\n}",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Figure 3: Sample Source Code of NETCONF Clients",
+      "ja": "図3：NETCONFクライアントのサンプルソースコード"
+    },
+    {
+      "indent": 3,
+      "text": "To add functions such as the release of log messages, these functions have to be incorporated at this stage. Again, the NETCONF client is developed by compiling its source codes.",
+      "ja": "そのようなログメッセージの解除などの機能を追加するには、これらの機能は、この段階で配合する必要があります。ここでも、NETCONFクライアントは、そのソースコードをコンパイルして開発されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.2. Developing NETCONF Clients Using Eclipse",
+      "section_title": true,
+      "ja": "4.1.2。 Eclipseを使用してNETCONFクライアントの開発"
+    },
+    {
+      "indent": 3,
+      "text": "When we use Eclipse and Apache Ant, the procedures described in the previous section are significantly simplified and executed at one time. In this case, files named \"build.xml\" and \"build.properties\" are required for Apache Ant.",
+      "ja": "我々は、EclipseとApache Antのを使用する場合は、前のセクションで説明する手順が大幅に簡略化し、一度に実行されています。この場合は、「build.xmlの」および「build.properties」という名前のファイルは、Apache Antのために必要とされます。"
+    },
+    {
+      "indent": 3,
+      "text": "The file named \"build.xml\" is written in XML and seen by Apache Ant when Apache Ant is running on Eclipse. The file specifies how Apache Ant behaves. According to the descriptions of the file, Apache Ant compiles source codes, generates JAR (Java ARchive) file, and so on. On the other hand, the file named \"build.properties\" specifies properties of the development environment where Apache Ant runs. This file is referred to by the \"build.xml\" file.",
+      "ja": "「のbuild.xml」という名前のファイルがXMLで記述されたとApache AntはEclipseの上で実行されている場合は、Apache Antで見られています。ファイルは、Apache Antがどのように動作するかを指定します。ファイルの記述によれば、ApacheのAntは、ソースコードをコンパイルするようにJAR（Javaアーカイブ）ファイルとを生成します。一方、「build.properties」という名前のファイルには、Apache Antが実行される開発環境のプロパティを指定します。このファイルは「のbuild.xml」ファイルによって参照されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Examples of \"build.xml\" and \"build.properties\" are shown in Figure 4 and Figure 5, respectively.",
+      "ja": "「build.xmlの」および「build.properties」の例としては、それぞれ、図4および図5に示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "<?xml version=\"1.0\"?> <project name=\"NetconfClient\" default=\"all\" basedir=\".\"> <property file=\"build.properties\"/> <path id=\"axis-classpath\"> <fileset dir=\"${axis.libdir}\"> <include name=\"*.jar\"/> </fileset> </path> <target name=\"prepare\"> <mkdir dir=\"${destdir}\"/> </target> <target name=\"stub\" depends=\"prepare\"> <java classname=\"org.apache.axis.wsdl.WSDL2Java\" fork =\"Yes\"> <arg value=\"-o\"/> <arg value=\"${srcdir}\"/> <arg value=\"-p\"/> <arg value=\"${stub.stubdir}\"/> <arg value=\"${stub.wsdlpath}\"/> <classpath refid=\"axis-classpath\"/> </java> </target> <target name=\"compile\" depends=\"stub\"> <javac srcdir=\"${srcdir}\" destdir=\"${destdir}\" encoding=\"UTF-8\"> <classpath refid=\"axis-classpath\"/> </javac> </target> <target name=\"stub-jar\" depends=\"compile\"> <jar jarfile=\"${stub.jar}\" basedir=\"${destdir}\"/> </target> <target name=\"all\" depends=\"stub-jar\"/> </project>",
+      "ja": "<？xml version = \"1.0\"？> <プロジェクト名= \"NetconfClient\" デフォルト= \"すべて\" のbasedir = \" \"> <プロパティファイル=\" build.properties \"/> <パスID =\" 軸-クラスパス\"> <ファイルセットDIR = \"$ {axis.libdirは}\"> <= \"*。JAR\" /> </ファイルセット> </パス> <ターゲット名= \"準備\"> <MKDIR DIR = \"$ {DESTDIR}\" /名前を含みます> </標的> <ターゲット名= \"スタブ\" 依存= \"準備\"> <Javaクラス名= \"org.apache.axis.wsdl.WSDL2Java\" フォーク= \"はい\"> <引数値= \" -  O\" /> < argの値= \"$ {SRCDIR}\" /> <引数値= \" -  P\" /> <引数値= \"$ {stub.stubdir}\" /> <引数値= \"$ {stub.wsdlpath}\" /> <クラスパスは= \"軸クラスパス\" /> </ジャワ> </標的> <ターゲット名をREFID = \"コンパイルする\" = \"スタッブ\"> <のjavac SRCDIR = \"$ {SRCDIR}\" DESTDIR = \"$ {DESTDIR}\" エンコーディング依存します= \"UTF-8\"> <クラスパスREFID = \"軸クラスパス\" /> </ javacの> </標的> <= \"スタブJAR\" 名前をターゲット=>が<ジャーjarファイル= \"$ {スタブを \"コンパイル\" 依存します。瓶}」basedirに= \"$ {DESTDIR}\" /> </ target>を<ターゲット名= \"すべて\" 依存= \"スタブジャー\" /> </プロジェクト>"
+    },
+    {
+      "indent": 18,
+      "text": "Figure 4: build.xml of NETCONF Clients",
+      "ja": "図4：NETCONFクライアントのbuild.xmlを"
+    },
+    {
+      "indent": 3,
+      "text": "axis.libdir=C:/axis-1_4/lib srcdir=src destdir=classes stub.stubdir=stub stub.wsdlpath=myNetconfService.wsdl stub.jar=NETCONF.jar",
+      "ja": "axis.libdir = C：/軸-1_4 / libにSRCDIR = SRC DESTDIR =クラスstub.stubdir =スタブstub.wsdlpath = myNetconfService.wsdl stub.jar = NETCONF.jar"
+    },
+    {
+      "indent": 15,
+      "text": "Figure 5: build.properties of NETCONF Clients",
+      "ja": "図5：NETCONFクライアントのbuild.properties"
+    },
+    {
+      "indent": 3,
+      "text": "The location of the WSDL file should be specified in the \"build.properties\" file. In the case shown in Figure 5, the location of the WSDL file is specified as being under the current directory.",
+      "ja": "WSDLファイルの場所は、「build.properties」ファイルで指定する必要があります。図5に示す場合では、WSDLファイルの場所は、現在のディレクトリの下にあるものとして指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "By running Apache Ant on Eclipse, the steps specified in Figure 4 are taken. First, stub codes are generated. Then, compiling of those stub codes is executed. We were careful about the encoding style used for the compiling. After the compilation, Apache Ant will generate a JAR file, which is the output that compresses all stub files (*.class) and acts as a library. In this example, the name \"NETCONF.jar\" is specified in Figure 5. The \"NETCONF.jar\" file also has to be added to the build path of the development project as an external library.",
+      "ja": "Eclipseの上でApache Antを実行することにより、図4に指定されたステップが取られています。まず、スタブコードが生成されます。次いで、これらのスタブ・コードのコンパイルが実行されます。私たちは、コンパイルするために使用される符号化スタイルについて慎重でした。コンパイル後、Apache Antがすべてのスタブファイル（* .classファイル）を圧縮し、ライブラリとして機能し、出力されるJARファイルを生成します。この例では、名前「NETCONF.jarは」「NETCONF.jar」ファイルは、外部ライブラリとして開発プロジェクトのビルド・パスに追加する必要があり、図5に指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "After the \"NETCONF.jar\" file is added to the build path of the development project, source codes of the NETCONF client can be written by utilizing stub classes and interfaces. Source codes like the one shown in Figure 3 can be written. By running Apache Ant again, the source code of the NETCONF client is compiled. The NETCONF client is developed in this manner.",
+      "ja": "「NETCONF.jar」ファイルが開発プロジェクトのビルド・パスに追加された後、NETCONFクライアントのソースコードは、スタブクラスとインタフェースを利用して書き込むことができます。図3に示すようなソースコードを書くことができます。再びApache Antを実行することにより、NETCONFクライアントのソースコードがコンパイルされます。 NETCONFクライアントは、このように開発されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Procedures of Development of NETCONF Servers",
+      "section_title": true,
+      "ja": "4.2。 NETCONFサーバの開発の手順"
+    },
+    {
+      "indent": 3,
+      "text": "In the Web Services framework, there are two approaches for developing a Web Services provider, namely a NETCONF server. One is called the top-down approach, and the other is called the bottom-up approach. The top-down approach is carried out by first designing a WSDL file. A skeleton source code from the WSDL file is then generated by using a Web Services tool such as Apache Axis. The generated skeleton code is just a template of the Web Services provider's source code. Therefore, even though the Web Services provider's skeleton code works on its own, if additional functions were necessary, the generated skeleton code would require additional source codes. This approach is superior to the bottom-up approach in terms of interoperability because the specification is already defined in the WSDL file. All vendors have to be in compliance with the WSDL file.",
+      "ja": "Webサービスフレームワークでは、Webサービス・プロバイダー、すなわち、NETCONFサーバを開発するための2つの方法があります。一つは、トップダウンアプローチと呼ばれ、他方はボトムアップアプローチと呼ばれています。トップダウンアプローチは、最初にWSDLファイルを設計することにより行われます。 WSDLファイルからスケルトンソースコードは、次いで、Apache AxisのようにWebサービス・ツールを使用して生成されます。生成されたスケルトンコードは、Webサービス・プロバイダーのソースコードの単なるテンプレートです。追加機能が必要であったならばそのため、Webサービス・プロバイダーのスケルトンコードが独自に働くにもかかわらず、生成されたスケルトンコードは、追加のソースコードを必要とします。仕様はすでにWSDLファイルで定義されているので、このアプローチは、相互運用性の点ではボトムアップのアプローチよりも優れています。すべてのベンダーは、WSDLファイルに準拠する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In contrast, the bottom-up approach is carried out by first creating Web Services from source code (e.g., Java bean) and then generating a WSDL file from the source code by using a Web Services tool such as Axis. This approach is faster and easier than the top-down approach. However, in the bottom-up approach, it is difficult to ensure interoperability since implementation of a Web Services becomes vendor-specific.",
+      "ja": "対照的に、ボトムアップアプローチはまず、ソースコード（例えば、Javaの豆）からWebサービスを作成し、そのような軸とWebサービスツールを使用してソースコードからWSDLファイルを生成することによって行われます。このアプローチは、トップダウンのアプローチよりも高速かつ簡単です。しかし、ボトムアップアプローチでは、Webサービスの実装は、ベンダー固有となるため、相互運用性を確保することが困難です。"
+    },
+    {
+      "indent": 3,
+      "text": "When developing a NETCONF server, the WSDL file is already defined in [RFC4743], so there is no choice but to develop the NETCONF server using the top-down approach. The remainder of this section describes the top-down approach for developing a NETCONF server.",
+      "ja": "NETCONFサーバを開発する場合、WSDLファイルがすでに[RFC4743]で定義されたので、トップダウンのアプローチを使用して、NETCONFサーバを開発するしかないです。このセクションの残りの部分は、NETCONFサーバを開発するためのトップダウンアプローチを記載しています。"
+    },
+    {
+      "indent": 3,
+      "text": "To develop a SOAP-based NETCONF server using the top-down approach, a skeleton code is necessary. A skeleton is a library, which is also generated automatically from WSDL by a Web Services tool. When using Axis as a Web Services tool, the generated skeleton is in the form of a Java library. From the same WSDL file as that used for generating the stub code, skeleton codes are generated in files such as \"NetconfBindingSkeleton.java\", \"Hello.java\", and \"GetConfigType.java\".",
+      "ja": "トップダウンアプローチを使用してSOAPベースのNETCONFサーバを開発するために、スケルトンコードが必要です。スケルトンは、WebサービスツールによってWSDLから自動的に生成されたライブラリです。 WebサービスツールとしてAxisを使用する場合は、生成されたスケルトンは、Javaライブラリの形です。スタブ・コードを生成するために用いたものと同じWSDLファイルから、スケルトンコードは、「NetconfBindingSkeleton.java」、「Hello.java」、および「GetConfigType.java」としてファイルに生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When skeleton codes are being generated, the development environment may be arranged as well. Moreover, when a Java-based NETCONF server is being developed, in addition to JDK and Axis, a servlet container such as Apache Tomcat [Tomcat] is necessary. The \"webapps\\axis\" directory under the Axis directory has to be copied to the \"webapps\" directory under the Tomcat directory.",
+      "ja": "スケルトンコードが生成されている場合、開発環境は同様に配置されてもよいです。また、JavaベースのNETCONFサーバが開発されている場合、JDK及び軸、例えばApache Tomcatのようなサーブレットコンテナに加えて、[Tomcatは]が必要です。軸のディレクトリの下の「Webアプリケーションの\\軸」ディレクトリには、Tomcatのディレクトリの下に「Webアプリケーション」ディレクトリにコピーする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. Developing NETCONF Servers without Eclipse",
+      "section_title": true,
+      "ja": "4.2.1。 EclipseのなしNETCONFサーバの開発"
+    },
+    {
+      "indent": 3,
+      "text": "Given that the development environment of a NETCONF server is created in the environment of a Windows computer without Eclipse and \"myNetconfService.wsdl\" is placed in the \"C:\\NetconfServer\" directory, a skeleton is generated by executing the following command in the command prompt.",
+      "ja": "NETCONFサーバの開発環境はEclipseのないWindowsコンピュータの環境で作成されていることを考えると、「myNetconfService.wsdl」を「C：\\ NetconfServer」に置かれているディレクトリ、スケルトンは、コマンドで次のコマンドを実行することによって生成されます促す。"
+    },
+    {
+      "indent": 3,
+      "text": "C:\\NetconfServer>java -classpath .;%AXIS_HOME%\\lib\\axis.jar;% AXIS_HOME%\\lib\\jaxrpc.jar;%AXIS_HOME%\\lib\\saaj.jar;%AXIS_HOME% \\lib\\commons-logging-1.0.4.jar;%AXIS_HOME%\\lib\\commons-discovery-0.2.jar;%AXIS_HOME%\\lib\\wsdl4j-1.5.1.jar org.apache.axis.wsdl.WSDL2Java -p skeleton -s -S true -d Session myNetconfService.wsdl",
+      "ja": "C：\\ NetconfServer>のjava -classpath;％AXIS_HOME％\\ libに\\ axis.jar;％AXIS_HOME％\\ libに\\ jaxrpc.jar;％AXIS_HOME％\\ libに\\ saaj.jar;％AXIS_HOME％\\ libに\\コモンズ、[ログ。 1.0.4.jar;％AXIS_HOME％\\ libに\\コモンズ発見-0.2.jar;％AXIS_HOME％\\ libに\\ WSDL4J-1.5.1.jar org.apache.axis.wsdl.WSDL2Java -pスケルトン-s -S真-dセッションmyNetconfService.wsdl"
+    },
+    {
+      "indent": 3,
+      "text": "In the directory where the WSDL file is located, a WSDL2Java command is executed. Locations of each Axis library should be specified. The environment variable of \"AXIS_HOME\" is a directory where Axis is installed. By executing the above command, files with an extension of \"*.java\" are generated in the \"skeleton\" directory, which is specified in the above command. Inside the skeleton directory, files such as \"NetconfBindingSkeleton.java\", \"Hello.java\", and \"GetConfigType.java\" exist. Furthermore, files named \"deploy.wsdd\" and \"undeploy.wsdd\" are found. \"Deploy.wsdd\" and \"undeploy.wsdd\" are used when deploying a NETCONF server in a servlet container and when undeploying a NETCONF server from a servlet container, respectively.",
+      "ja": "WSDLファイルがあるディレクトリでは、WSDL2Javaのコマンドが実行されます。各軸のライブラリの場所を指定する必要があります。 「AXIS_HOME」の環境変数は、Axisがインストールされているディレクトリです。上記のコマンドを実行することで、「* .javaファイル」の拡張子を持つファイルは、上記のコマンドで指定された「スケルトン」ディレクトリに生成されます。スケルトンディレクトリ内では、そのような「NetconfBindingSkeleton.java」、「Hello.java」、および「GetConfigType.java」などのファイルが存在します。さらに、「のdeploy.wsdd」と「undeploy.wsdd」という名前のファイルが発見されました。サーブレットコンテナからNETCONFサーバをアンデプロイするとき、それぞれ、サーブレットコンテナでNETCONFサーバを展開するとき、「undeploy.wsdd」「のdeploy.wsdd」とが使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Adding source codes of NETCONF server functions to skeleton codes such as \"NetconfBindingImpl.java\" is required as the need arises. Functions such as the release of log messages have to be added at this stage. After that, by executing the following command in the command prompt, compilation of java files is carried out. Doing so will generate \"*.class\" files.",
+      "ja": "必要に応じて、このような「NetconfBindingImpl.java」として符号を骨格にNETCONFサーバ機能のソースコードを追加することが必要です。そのようなログメッセージの解除などの機能は、この段階で追加する必要があります。その後、コマンドプロンプトで次のコマンドを実行して、Javaファイルのコンパイルが行われます。そうすることで「* .classファイル」のファイルを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "C:\\NetconfServer>javac -classpath .;%AXIS_HOME%\\lib\\axis.jar;%\nAXIS_HOME%\\lib\\jaxrpc.jar skeleton/*.java",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "A NETCONF server can be developed by following the above-described procedures. These class files should be copied into the directory \"webapps\\axis\\WEB-INFO\\classes\" of the Apache Tomcat directory. Finally, the NETCONF server is deployed by executing the following command.",
+      "ja": "NETCONFサーバは、上述した手順に従って開発することができます。これらのクラスファイルは、Apache Tomcatのディレクトリの「WEB-INFO \\クラス\\ webappsに\\軸」ディレクトリにコピーする必要があります。最後に、NETCONFサーバは、次のコマンドを実行して展開されます。"
+    },
+    {
+      "indent": 3,
+      "text": "C:\\NetconfServer>java -classpath .;%AXIS_HOME%\\lib\\axis.jar;% AXIS_HOME%\\lib\\jaxrpc.jar;%AXIS_HOME%\\lib\\saaj.jar;%AXIS_HOME% \\lib\\commons-logging-1.0.4.jar;%AXIS_HOME%\\lib\\commons-discovery-0.2.jar org.apache.axis.client.AdminClient -p 832 depoy.wsdd",
+      "ja": "C：\\ NetconfServer>のjava -classpath;％AXIS_HOME％\\ libに\\ axis.jar;％AXIS_HOME％\\ libに\\ jaxrpc.jar;％AXIS_HOME％\\ libに\\ saaj.jar;％AXIS_HOME％\\ libに\\コモンズ、[ログ。 1.0.4.jar;％AXIS_HOME％\\ libに\\コモンズ発見-0.2.jar org.apache.axis.client.AdminClient -p 832 depoy.wsdd"
+    },
+    {
+      "indent": 3,
+      "text": "The command is executed in the directory where \"deploy.wsdd\" is located. The file \"deploy.wsdd\" is generated at the same time the skeleton code is generated. After deployment, the NETCONF server receives NETCONF messages sent from the NETCONF client.",
+      "ja": "コマンドは「のdeploy.wsdd」が配置されているディレクトリで実行されます。ファイル「のdeploy.wsddは、」スケルトンコードが生成され、同時に生成されます。展開後、NETCONFサーバは、NETCONFクライアントから送信されたNETCONFメッセージを受信します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.2. Developing NETCONF Servers Using Eclipse",
+      "section_title": true,
+      "ja": "4.2.2。 Eclipseを使用してNETCONFサーバの開発"
+    },
+    {
+      "indent": 3,
+      "text": "When Eclipse and Apache Ant are used, the procedures described in the previous section are significantly simplified and executed at one time. Files named \"build.xml\" and \"build.properties\" are required for Apache Ant. Examples of \"build.xml\" and \"build.properties\" are shown in Figure 6 and Figure 7, respectively.",
+      "ja": "Eclipseとは、Apache Antが使用される場合、前のセクションに記載された手順を大幅に簡略化されたと同時に実行されます。 「のbuild.xml」と「build.properties」という名前のファイルは、Apache Antのために必要とされます。 「build.xmlの」および「build.properties」の例としては、それぞれ、図6および図7に示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "<?xml version=\"1.0\"?>\n<project name=\"NetconfService\" default=\"all\" basedir=\".\">\n        <property file=\"build.properties\"/>\n        <path id=\"axis-classpath\">\n                <fileset dir=\"${axis.libdir}\">\n                        <include name=\"*.jar\"/>\n                </fileset>\n        </path>\n        <target name=\"prepare\">\n                <mkdir dir=\"${srcdir}\"/>\n                <mkdir dir=\"${destdir}\"/>\n        </target>\n        <target name=\"skeleton\" depends=\"prepare\">\n                <java classname=\"org.apache.axis.wsdl.WSDL2Java\" fork\n                        =\"Yes\">\n                        <arg value=\"-p\"/>\n                        <arg value=\"${skeletondir}\"/>\n                        <arg value=\"-o\"/>\n                        <arg value=\"${srcdir}\"/>\n                        <arg value=\"-s\"/>\n                        <arg value=\"-S\"/>\n                        <arg value=\"true\"/>\n                        <arg value=\"-d\"/>\n                        <arg value=\"Session\"/>\n                        <arg value=\"${wsdlpath}\"/>\n                        <classpath refid=\"axis-classpath\"/>\n                </java>\n        </target>\n        <target name=\"compile\" depends=\"skeleton\">\n                <javac srcdir=\"${srcdir}\" destdir=\"${destdir}\"\n                        encoding=\"UTF-8\">\n                        <classpath refid=\"axis-classpath\"/>\n                </javac>\n        </target>\n        <target name=\"copy2axis\" depends=\"compile\">\n                <copy todir=\"${tomcat.axis.classesdir}\" overwrite=\n                        \"true\">\n                        <fileset dir=\"${destdir}\">\n                                <include name=\"*.class\"/>\n                                <include name=\"*/*.class\"/>\n                                <include name=\"*/*/*.class\"/>\n                        </fileset>\n                </copy>\n        </target>\n        <target name=\"deploy\" depends=\"copy2axis\">\n                <java classname=\"org.apache.axis.client.AdminClient\"\n                        fork=\"Yes\">\n                        <arg value=\"-p\"/>",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": " <arg value=\"${deploy.port}\"/> <arg value=\"${deploy.ddname}\"/> <classpath refid=\"axis-classpath\"/> </java> </target> <target name=\"all\" depends=\"deploy\"/> </project>",
+      "ja": "<引数値= \"$ {deploy.port}\" /> <引数値= \"$ {deploy.ddname}\" /> <クラスパスREFID = \"軸クラスパス\" /> </ジャワ> </ターゲット> <ターゲット名= \"すべて\" 依存= \"展開\" /> </プロジェクト>"
+    },
+    {
+      "indent": 18,
+      "text": "Figure 6: build.xml of NETCONF Servers",
+      "ja": "図6：NETCONFサーバのbuild.xmlを"
+    },
+    {
+      "indent": 3,
+      "text": "axis.libdir=C:/axis-1_4/lib tomcat.axis.classesdir= C:/Program Files/Apache Software Foundation/Tomcat 6.0/ webapps/axis/WEB-INF/classes srcdir=src destdir=classes skeletondir=skeleton wsdlpath=myNetconfService.wsdl deploy.port=832 deploy.ddname=src/skeleton/deploy.wsdd",
+      "ja": "axis.libdir = C：/軸-1_4 / libにtomcat.axis.classesdir = C：/プログラムファイル/ Apache Software Foundationの/ Tomcatの6.0 / webappsに/軸/ WEB-INF /クラスSRCDIR = SRC DESTDIR =クラスskeletondir =スケルトンwsdlpath = myNetconfService.wsdl deploy.port = 832 deploy.ddname = SRC /スケルトン/のdeploy.wsdd"
+    },
+    {
+      "indent": 15,
+      "text": "Figure 7: build.properties of NETCONF Servers",
+      "ja": "図7：NETCONFサーバのbuild.properties"
+    },
+    {
+      "indent": 3,
+      "text": "The locations of the WSDL file and \"deploy.wsdd\" file have to be specified in the \"build.properties\" file. In Figure 7, the location of the WSDL file and \"deploy.wsdd\" file are specified as being under the current directory.",
+      "ja": "WSDLファイルと「のdeploy.wsdd」ファイルの場所は、「build.properties」ファイルで指定する必要があります。図7に、WSDLファイルと「のdeploy.wsdd」ファイルの場所は、現在のディレクトリの下にあるものとして指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "By running Apache Ant on Eclipse, the steps shown in Figure 6 are followed. First, skeleton codes have to be generated. After the skeleton codes are generated, source codes of the NETCONF server functions may be added to the skeleton codes according to the functions that developers intend to add.",
+      "ja": "Eclipseの上でApache Antを実行することにより、図6に示すステップに従います。まず、スケルトンコードが生成されることがあります。スケルトンコードが生成された後、NETCONFサーバ機能のソースコードは、開発者が追加しようとする機能に応じてスケルトン・コードに加えられてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Then, by running Apache Ant again, compiling of the skeleton codes is executed. As a result, class files of the NETCONF server are generated. Apache Ant copies these class files to the directory of Tomcat and deploys the NETCONF server. After that, the NETCONF server becomes accessible by the NETCONF client.",
+      "ja": "その後、再度、Apache Antを実行することにより、スケルトンコードのコンパイルが実行されます。その結果、NETCONFサーバのクラスファイルが生成されます。 Apache AntをTomcatのディレクトリにコピーし、これらのクラスファイルをし、NETCONFサーバをデプロイします。その後、NETCONFサーバは、NETCONFクライアントによってアクセス可能になります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.3. Developing NETCONF Servers with C Programming Language",
+      "section_title": true,
+      "ja": "4.2.3。 Cプログラミング言語でNETCONFサーバの開発"
+    },
+    {
+      "indent": 3,
+      "text": "When the NETCONF server for network equipment is being implemented, memory capacity might be limited, so it might not be possible to install a Java environment on the network equipment. The network-equipment platform might not support a Web Services tool. In that case, it may be necessary to implement SOAP as well as the NETCONF server by using C programming language on the network equipment.",
+      "ja": "ネットワーク機器のNETCONFサーバが実装されている場合は、メモリ容量が制限される可能性がありますので、ネットワーク機器上のJava環境をインストールすることはできないかもしれません。ネットワーク機器のプラットフォームは、Webサービスツールをサポートしていない可能性があります。その場合には、ネットワーク機器上のCプログラミング言語を使用してSOAPならびにNETCONFサーバを実装する必要があるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "To develop a NETCONF server capable of receiving NETCONF messages sent over SOAP/HTTP, the network equipment may have an HTTP daemon and a NETCONF service provider. A commonly used HTTP daemon can be used. A SOAP module may be added to the HTTP daemon as a connector between the HTTP daemon and the NETCONF service provider. The NETCONF service provider for parsing NETCONF messages sent from the NETCONF client and sending reply NETCONF messages toward the NETCONF client may be developed.",
+      "ja": "SOAP / HTTP経由で送信されるNETCONFメッセージを受信できるNETCONFサーバを開発するには、ネットワーク機器は、HTTPデーモンとNETCONFサービスプロバイダを有することができます。一般的に使用されるHTTPデーモンを使用することができます。 SOAPモジュールは、HTTPデーモンとNETCONFサービスプロバイダとの間のコネクタとしてHTTPデーモンに添加してもよいです。 NETCONFクライアントから送信されたNETCONFメッセージを解析し、NETCONFクライアントに向かって返信NETCONFメッセージを送信するためのNETCONFサービスプロバイダは、開発することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When an HTTP daemon receives a SOAP message that is sent over HTTP, the message is handed over to the SOAP module incorporated in the HTTP daemon. Then, the SOAP module removes the SOAP header and passes NETCONF messages to the NETCONF service provider. After that, the NETCONF service provider parses the NETCONF messages and configures the network equipment accordingly.",
+      "ja": "HTTPデーモンはHTTPを介して送信されるSOAPメッセージを受信すると、メッセージがHTTPデーモンに組み込まれたSOAPモジュールに渡されます。次に、SOAPモジュールは、SOAPヘッダを除去し、NETCONFサービスプロバイダにNETCONFメッセージを渡します。その後、NETCONFサービスプロバイダーは、NETCONFメッセージを解析し、それに応じてネットワーク機器を設定します。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations of [RFC4741] and [RFC4743] are applicable in this document. Implementers or users of SOAP-based NETCONF clients and servers should take these considerations into account.",
+      "ja": "[RFC4741]と[RFC4743]のセキュリティ上の考慮事項は、この文書で適用されます。 SOAPベースのNETCONFクライアントとサーバの実装者または利用者のアカウントにこれらの考慮事項を取る必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in the security considerations section of [RFC4743], transport-level security, such as authentication of users and encryption of transport protocol, has to be ensured by TLS (Transport Layer Security) in the case of NETCONF SOAP binding. That is, security has to be provided in the form of NETCONF/SOAP/HTTPS.",
+      "ja": "セキュリティ問題部で指定されるように[RFC4743]は、そのようなユーザの認証およびトランスポートプロトコルの暗号化などのトランスポートレベルのセキュリティは、NETCONF SOAPバインディングの場合にTLS（トランスポート層セキュリティ）によって確保されなければなりません。つまり、セキュリティがNETCONF / SOAP / HTTPSの形で提供されなければならない、です。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Acknowledgements",
+      "section_title": true,
+      "ja": "6.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Extensive input was received from the members of the NETCONF design team, including: Andy Bierman, Simon Leinen, Bert Wijnen, Mehmet Ersue, Ted Goddard, Ray Atarashi, Ron Bonica, and Dan Romascanu. The following people have also reviewed this document and provided valuable input: Jari Arkko, Pasi Eronen, Chris Newman, Tim Polk, David Ward, Magnus Westerlund, and Christian Vogt.",
+      "ja": "アンディBierman、サイモンLeinen、バートWijnen、メフメットErsue、テッド・ゴダード、レイAtarashi、ロンBonica、そしてダンRomascanu：豊富な入力には、NETCONFデザインチームのメンバーから受け取りました。以下の人々はまた、この文書を検討し、貴重な入力を提供してきた：ヤリArkko、パシEronen、クリス・ニューマン、ティムポーク、デビッド・ウォード、マグヌスウェスター、そしてキリスト教のフォークトを。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7.参考"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4741] Enns, R., \"NETCONF Configuration Protocol\", RFC 4741, December 2006.",
+      "ja": "[RFC4741]エンス、R.、 \"NETCONF構成プロトコル\"、RFC 4741、2006年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4743] Goddard, T., \"Using NETCONF over the Simple Object Access Protocol (SOAP)\", RFC 4743, December 2006.",
+      "ja": "[RFC4743]ゴダード、T.、RFC 4743、2006年12月 \"簡易オブジェクトアクセスプロトコル（SOAP）の上にNETCONFを使用します\"。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[Ant] \"Apache Ant\". <http://ant.apache.org/>",
+      "ja": "[あなたは]「あなたは最悪です。」 <薪：//ont.obha.arj/>"
+    },
+    {
+      "indent": 3,
+      "text": "[Axis] \"Web Services - Axis\". <http://ws.apache.org/axis/>",
+      "ja": "[軸] \"Webサービス - アクシス\"。 <http://ws.apache.org/axis/>"
+    },
+    {
+      "indent": 3,
+      "text": "[Eclipse] \"Eclipse\". <http://www.eclipse.org/>",
+      "ja": "[Eclipseは] \"エクリプス\"。 <Http://www.eclipse.org/>"
+    },
+    {
+      "indent": 3,
+      "text": "[JDK] \"Java SE\". <http://java.sun.com/javase/index.jsp>",
+      "ja": "[JDK]の \"Java SE\"。 <Http://java.sun.com/javase/index.jsp>"
+    },
+    {
+      "indent": 3,
+      "text": "[NetBeans] \"NetBeans\". <http://www.netbeans.org/index.html>",
+      "ja": "[NetBeansの] \"NetBeansの\"。 <http://www.netbeans.org/index.html>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4742] Wasserman, M. and T. Goddard, \"Using the NETCONF Configuration Protocol over Secure SHell (SSH)\", RFC 4742, December 2006.",
+      "ja": "[RFC4742]ワッサーマン、M.とT.ゴダード、 \"セキュアシェル上でNETCONF構成プロトコルを使用して（SSH）\"、RFC 4742、2006年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4744] Lear, E. and K. Crozier, \"Using the NETCONF Protocol over the Blocks Extensible Exchange Protocol (BEEP)\", RFC 4744, December 2006.",
+      "ja": "[RFC4744]リア、E.およびK.クロージャー、 \"ブロック拡張可能交換プロトコル（BEEP）の上にNETCONFプロトコルの使用\"、RFC 4744、2006年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Tomcat] \"Apache Tomcat\". <http://tomcat.apache.org/>",
+      "ja": "[Tomcatの] \"Apache Tomcatの\"。 <Http://tomcat.apache.org/>"
+    },
+    {
+      "indent": 3,
+      "text": "[WSDL] \"Web Service Description Language (WSDL) 1.1\". <http://www.w3.org/TR/wsdl>",
+      "ja": "[WSDL] \"Webサービス記述言語（WSDL）1.1\"。 <http://www.w3.org/TR/wsdl>"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Iijima Tomoyuki Alaxala Networks Corp. Shin-Kawasaki Mitsui Bldg. 890 Saiwai-ku Kashimada Kawasaki, Kanagawa 212-0058 Japan",
+      "ja": "いいじま ともゆき あぁぁぁ ねとぉｒｋｓ こｒｐ。 しんーかわさき みつい Ｂｌｄｇ。 ８９０ さいわいーく かしまだ かわさき、 かながわ ２１２ー００５８ じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +81-44-549-1735 Fax: +81-44-549-1272 EMail: tomoyuki.iijima@alaxala.com",
+      "ja": "電話：+ 81-44-549-1735ファックス：+ 81-44-549-1272 Eメール：tomoyuki.iijima@alaxala.com"
+    },
+    {
+      "indent": 3,
+      "text": "Yoshifumi Atarashi Alaxala Networks Corp. Shin-Kawasaki Mitsui Bldg. 890 Saiwai-ku Kashimada Kawasaki, Kanagawa 212-0058 Japan",
+      "ja": "よしふみ あたらし あぁぁぁ ねとぉｒｋｓ こｒｐ。 しんーかわさき みつい Ｂｌｄｇ。 ８９０ さいわいーく かしまだ かわさき、 かながわ ２１２ー００５８ じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +81-44-549-1735 Fax: +81-44-549-1272 EMail: atarashi@alaxala.net",
+      "ja": "電話：+ 81-44-549-1735ファックス：+ 81-44-549-1272 Eメール：atarashi@alaxala.net"
+    },
+    {
+      "indent": 3,
+      "text": "Hiroyasu Kimura Alaxala Networks Corp. Shin-Kawasaki Mitsui Bldg. 890 Saiwai-ku Kashimada Kawasaki, Kanagawa 212-0058 Japan",
+      "ja": "ひろやす きむら あぁぁぁ ねとぉｒｋｓ こｒｐ。 しんーかわさき みつい Ｂｌｄｇ。 ８９０ さいわいーく かしまだ かわさき、 かながわ ２１２ー００５８ じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +81-44-549-1735 Fax: +81-44-549-1272 EMail: h-kimura@alaxala.net",
+      "ja": "電話：+ 81-44-549-1735ファックス：+ 81-44-549-1272 Eメール：h-kimura@alaxala.net"
+    },
+    {
+      "indent": 3,
+      "text": "Makoto Kitani Alaxala Networks Corp. Shin-Kawasaki Mitsui Bldg. 890 Saiwai-ku Kashimada Kawasaki, Kanagawa 212-0058 Japan",
+      "ja": "まこと きたに あぁぁぁ ねとぉｒｋｓ こｒｐ。 しんーかわさき みつい Ｂｌｄｇ。 ８９０ さいわいーく かしまだ かわさき、 かながわ ２１２ー００５８ じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +81-44-549-1735 Fax: +81-44-549-1272 EMail: makoto.kitani@alaxala.com",
+      "ja": "電話：+ 81-44-549-1735ファックス：+ 81-44-549-1272 Eメール：makoto.kitani@alaxala.com"
+    },
+    {
+      "indent": 3,
+      "text": "Hideki Okita Hitachi, Ltd. 1-280 Higashi-Koigakubo Kokubunji, Tokyo 185-8601 Japan",
+      "ja": "ひでき おきた ひたち、 Ｌｔｄ。 １ー２８０ ひがしーこいがくぼ こくぶんじ、 ときょ １８５ー８６０１ じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +81-42-323-1111 Fax: +81-42-327-7868 EMail: hideki.okita.pf@hitachi.com",
+      "ja": "電話：+ 81-42-323-1111ファックス：+ 81-42-327-7868 Eメール：hideki.okita.pf@hitachi.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2008).",
+      "ja": "著作権（C）IETFトラスト（2008）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}

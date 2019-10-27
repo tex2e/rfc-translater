@@ -1,0 +1,996 @@
+{
+  "title": {
+    "text": "RFC 5116 - An Interface and Algorithms for Authenticated Encryption",
+    "ja": "RFC 5116 - 認証された暗号化のためのインタフェースとアルゴリズム"
+  },
+  "number": 5116,
+  "created_at": "2019-10-23 14:55:42.860057+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          D. McGrew\nRequest for Comments: 5116                           Cisco Systems, Inc.\nCategory: Standards Track                                   January 2008",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "An Interface and Algorithms for Authenticated Encryption",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines algorithms for Authenticated Encryption with Associated Data (AEAD), and defines a uniform interface and a registry for such algorithms. The interface and registry can be used as an application-independent set of cryptoalgorithm suites. This approach provides advantages in efficiency and security, and promotes the reuse of crypto implementations.",
+      "ja": "この文書は、関連するデータ（AEAD）で認証暗号化のためのアルゴリズムを定義し、統一されたインタフェースと、そのようなアルゴリズムのためにレジストリを定義します。インタフェースレジストリは、暗号アルゴリズムスイートのアプリケーションに依存しないセットとして使用することができます。このアプローチは、効率性とセキュリティの利点を提供し、暗号化実装の再利用を促進します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction . . . . . . . . . . . . . . . . . . . . . . . . .  3\n  1.1.  Background . . . . . . . . . . . . . . . . . . . . . . . .  3\n  1.2.  Scope  . . . . . . . . . . . . . . . . . . . . . . . . . .  3\n  1.3.  Benefits . . . . . . . . . . . . . . . . . . . . . . . . .  4\n  1.4.  Conventions Used in This Document  . . . . . . . . . . . .  4\n2.  AEAD Interface . . . . . . . . . . . . . . . . . . . . . . . .  5\n  2.1.  Authenticated Encryption . . . . . . . . . . . . . . . . .  5\n  2.2.  Authenticated Decryption . . . . . . . . . . . . . . . . .  7\n  2.3.  Data Formatting  . . . . . . . . . . . . . . . . . . . . .  7\n3.  Guidance on the Use of AEAD Algorithms . . . . . . . . . . . .  8\n  3.1.  Requirements on Nonce Generation . . . . . . . . . . . . .  8\n  3.2.  Recommended Nonce Formation  . . . . . . . . . . . . . . .  9\n    3.2.1.  Partially Implicit Nonces  . . . . . . . . . . . . . . 10\n  3.3.  Construction of AEAD Inputs  . . . . . . . . . . . . . . . 11\n  3.4.  Example Usage  . . . . . . . . . . . . . . . . . . . . . . 11\n4.  Requirements on AEAD Algorithm Specifications  . . . . . . . . 12\n5.  AEAD Algorithms  . . . . . . . . . . . . . . . . . . . . . . . 14\n  5.1.  AEAD_AES_128_GCM . . . . . . . . . . . . . . . . . . . . . 14\n    5.1.1.  Nonce Reuse  . . . . . . . . . . . . . . . . . . . . . 14\n  5.2.  AEAD_AES_256_GCM . . . . . . . . . . . . . . . . . . . . . 15\n  5.3.  AEAD_AES_128_CCM . . . . . . . . . . . . . . . . . . . . . 15\n    5.3.1.  Nonce Reuse  . . . . . . . . . . . . . . . . . . . . . 16\n  5.4.  AEAD_AES_256_CCM . . . . . . . . . . . . . . . . . . . . . 16\n6.  IANA Considerations  . . . . . . . . . . . . . . . . . . . . . 16\n7.  Other Considerations . . . . . . . . . . . . . . . . . . . . . 17\n8.  Security Considerations  . . . . . . . . . . . . . . . . . . . 18\n9.  Acknowledgments  . . . . . . . . . . . . . . . . . . . . . . . 18\n10. References . . . . . . . . . . . . . . . . . . . . . . . . . . 19\n  10.1. Normative References . . . . . . . . . . . . . . . . . . . 19\n  10.2. Informative References . . . . . . . . . . . . . . . . . . 19",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Authenticated encryption [BN00] is a form of encryption that, in addition to providing confidentiality for the plaintext that is encrypted, provides a way to check its integrity and authenticity. Authenticated Encryption with Associated Data, or AEAD [R02], adds the ability to check the integrity and authenticity of some Associated Data (AD), also called \"additional authenticated data\", that is not encrypted.",
+      "ja": "認証された暗号化は、[BN00]は暗号化されて平文の機密性を提供することに加えて、その整合性と信頼性を確認する方法を提供し、暗号化の形式です。関連するデータ、またはAEAD [R02]で認証暗号化は、それが暗号化されていない、また「追加認証されたデータ」と呼ばれるいくつかの関連するデータ（AD）、の完全性と正当性をチェックする機能を追加します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Background",
+      "section_title": true,
+      "ja": "1.1。バックグラウンド"
+    },
+    {
+      "indent": 3,
+      "text": "Many cryptographic applications require both confidentiality and message authentication. Confidentiality is a security service that ensures that data is available only to those authorized to obtain it; usually it is realized through encryption. Message authentication is the service that ensures that data has not been altered or forged by unauthorized entities; it can be achieved by using a Message Authentication Code (MAC). This service is also called data integrity. Many applications use an encryption method and a MAC together to provide both of those security services, with each algorithm using an independent key. More recently, the idea of providing both security services using a single cryptoalgorithm has become accepted. In this concept, the cipher and MAC are replaced by an Authenticated Encryption with Associated Data (AEAD) algorithm.",
+      "ja": "多くの暗号アプリケーションは、機密性とメッセージ認証の両方が必要です。機密性は、データのみを取得する権限を与えたものに利用可能であることを保証するセキュリティサービスです。通常、それは、暗号化によって実現されています。メッセージ認証は、データが変更されたり、不正なエンティティによって偽造されていないことを保証するサービスです。それはメッセージ認証コード（MAC）を使用することによって達成することができます。また、このサービスは、データの整合性と呼ばれています。多くのアプリケーションは独立したキーを使用して、各アルゴリズムでは、これらのセキュリティサービスの両方を提供するために、一緒に暗号化方式とMACを使用しています。さらに最近では、単一暗号アルゴリズムを使用して、両方のセキュリティサービスを提供するという考えは受け入れられなっています。この概念では、暗号化とMACは、関連するデータ（AEAD）アルゴリズムを使用して認証暗号化によって置き換えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "Several crypto algorithms that implement AEAD algorithms have been defined, including block cipher modes of operation and dedicated algorithms. Some of these algorithms have been adopted and proven useful in practice. Additionally, AEAD is close to an 'idealized' view of encryption, such as those used in the automated analysis of cryptographic protocols (see, for example, Section 2.5 of [BOYD]).",
+      "ja": "AEADアルゴリズムを実装するいくつかの暗号化アルゴリズムが動作し、専用のアルゴリズムのブロック暗号モードを含む、定義されています。これらのアルゴリズムのいくつかは、実際に採用し、有用であることが証明されています。また、AEADは（例えば、[ボイド]のセクション2.5を参照）、このような暗号化プロトコルの自動解析に使用されるものとして、暗号化の「理想的な」ビューにあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The benefits of AEAD algorithms, and this interface, are outlined in Section 1.3.",
+      "ja": "AEADアルゴリズム、およびこのインターフェースの利点は、セクション1.3に概説されています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Scope",
+      "section_title": true,
+      "ja": "1.2。範囲"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, we define an AEAD algorithm as an abstraction, by specifying an interface to an AEAD and defining an IANA registry for AEAD algorithms. We populate this registry with four AEAD algorithms based on the Advanced Encryption Standard (AES) in Galois/Counter Mode [GCM] with 128- and 256-bit keys, and AES in Counter and CBC MAC Mode [CCM] with 128- and 256-bit keys.",
+      "ja": "この文書では、我々はAEADへのインターフェイスを指定し、AEADアルゴリズムのためのIANAレジストリを定義することによって、抽象化としてAEADアルゴリズムを定義します。私たちは、128と256とのガロア/カウンタ128および256ビットのキーでモード[GCM]、およびカウンターでのAESおよびCBC MACモード[CCM]でのAdvanced Encryption Standard（AES）に基づいて、4つのAEADアルゴリズムでこのレジストリを読み込みますビットキー。"
+    },
+    {
+      "indent": 3,
+      "text": "In the following, we define the AEAD interface (Section 2), and then provide guidance on the use of AEAD algorithms (Section 3), and outline the requirements that each AEAD algorithm must meet (Section 4). Then we define several AEAD algorithms (Section 5), and establish an IANA registry for AEAD algorithms (Section 6). Lastly, we discuss some other considerations (Section 7).",
+      "ja": "以下では、我々はAEADインタフェース（第2節）を定義し、次にAEADアルゴリズム（第3節）の使用に関するガイダンスを提供し、各AEADアルゴリズムが（セクション4）を満たさなければならない要件の概要を説明します。その後、我々はいくつかのAEADアルゴリズム（第5節）を定義し、AEADアルゴリズム（第6節）のためのIANAレジストリを確立します。最後に、我々はいくつかの他の考慮事項（第7節）を議論します。"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD interface specification does not address security protocol issues such as anti-replay services or access control decisions that are made on authenticated data. Instead, the specification aims to abstract the cryptography away from those issues. The interface, and the guidance about how to use it, are consistent with the recommendations from [EEM04].",
+      "ja": "AEADインタフェース仕様は、認証されたデータに作られていますアンチリプレイサービスやアクセス制御の決定などのセキュリティプロトコルの問題に対処しません。代わりに、仕様は暗号離れてそれらの問題から抽象化することを目指しています。インタフェース、およびそれを使用する方法についてのガイダンスは、[EEM04]からの推薦と一致しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Benefits",
+      "section_title": true,
+      "ja": "1.3。利点"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD approach enables applications that need cryptographic security services to more easily adopt those services. It benefits the application designer by allowing them to focus on important issues such as security services, canonicalization, and data marshaling, and relieving them of the need to design crypto mechanisms that meet their security goals. Importantly, the security of an AEAD algorithm can be analyzed independent from its use in a particular application. This property frees the user of the AEAD of the need to consider security aspects such as the relative order of authentication and encryption and the security of the particular combination of cipher and MAC, such as the potential loss of confidentiality through the MAC. The application designer that uses the AEAD interface need not select a particular AEAD algorithm during the design stage. Additionally, the interface to the AEAD is relatively simple, since it requires only a single key as input and requires only a single identifier to indicate the algorithm in use in a particular case.",
+      "ja": "AEADのアプローチは、より簡単にこれらのサービスを採用する暗号化セキュリティサービスを必要とするアプリケーションを可能にします。それは彼らが、このようなセキュリティサービス、正規化、およびデータのマーシャリングなどの重要な問題に集中することができ、そのセキュリティ目標を満たす暗号メカニズムを設計する必要のそれらを緩和することにより、アプリケーションの設計者に利益をもたらします。重要なのは、AEADアルゴリズムのセキュリティは、特定のアプリケーションでの使用から独立して分析することができます。このプロパティは、このようなMACを通じて機密性の潜在的損失などの認証と暗号化と暗号やMAC、特定の組み合わせのセキュリティの相対的な順序として、セキュリティ面を考慮する必要のAEADのユーザーを解放します。 AEADインタフェースを使用するアプリケーションの設計者は、設計段階で特定のAEADアルゴリズムを選択する必要はありません。それは、入力として単一のキーを必要とし、特定の場合に使用されたアルゴリズムを示すために単一の識別子を必要とするので、さらに、AEADへのインタフェースは、比較的簡単です。"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD approach benefits the implementer of the crypto algorithms by making available optimizations that are otherwise not possible to reduce the amount of computation, the implementation cost, and/or the storage requirements. The simpler interface makes testing easier; this is a considerable benefit for a crypto algorithm implementation. By providing a uniform interface to access cryptographic services, the AEAD approach allows a single crypto implementation to more easily support multiple applications. For example, a hardware module that supports the AEAD interface can easily provide crypto acceleration to any application using that interface, even to applications that had not been designed when the module was built.",
+      "ja": "AEADのアプローチは、そうでない場合は計算量、実装コスト、および/またはストレージ要件を低減することが可能ではありません利用可能な最適化を行うことにより、暗号アルゴリズムの実装に利益をもたらします。シンプルなインターフェイスは、テストが容易になります。これは、暗号アルゴリズム実装のための大きな利点です。暗号化サービスにアクセスする均一なインタフェースを提供することによって、AEADアプローチは、単一の暗号実装はより容易に複数のアプリケーションをサポートすることを可能にします。例えば、AEADインタフェースをサポートするハードウェアモジュールも容易モジュールが構築されたときに設計されていないアプリケーションに、そのインターフェイスを使用して、任意のアプリケーションに暗号化アクセラレーションを提供することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.4. Conventions Used in This Document",
+      "section_title": true,
+      "ja": "1.4。このドキュメントの表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. AEAD Interface",
+      "section_title": true,
+      "ja": "2. AEADインタフェース"
+    },
+    {
+      "indent": 3,
+      "text": "An AEAD algorithm has two operations, authenticated encryption and authenticated decryption. The inputs and outputs of these algorithms are defined below in terms of octet strings.",
+      "ja": "AEADアルゴリズムは、2つの操作、認証された暗号化および認証された復号化されています。これらのアルゴリズムの入力と出力はオクテット文字列の観点から以下に定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MAY accept additional inputs. For example, an input could be provided to allow the user to select between different implementation strategies. However, such extensions MUST NOT affect interoperability with other implementations.",
+      "ja": "実装では、追加の入力を受け入れることができます。例えば、入力は、ユーザが、異なる実装戦略の間で選択することを可能にするために提供され得ます。しかし、そのような拡張は、他の実装との相互運用性に影響してはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Authenticated Encryption",
+      "section_title": true,
+      "ja": "2.1。認証された暗号化"
+    },
+    {
+      "indent": 3,
+      "text": "The authenticated encryption operation has four inputs, each of which is an octet string:",
+      "ja": "認証された暗号化操作は、オクテット文字列で、それぞれが4つの入力を、持っています："
+    },
+    {
+      "indent": 6,
+      "text": "A secret key K, which MUST be generated in a way that is uniformly random or pseudorandom.",
+      "ja": "一様ランダムまたは擬似ランダムであるように生成されなければならない秘密鍵K、。"
+    },
+    {
+      "indent": 6,
+      "text": "A nonce N. Each nonce provided to distinct invocations of the Authenticated Encryption operation MUST be distinct, for any particular value of the key, unless each and every nonce is zero-length. Applications that can generate distinct nonces SHOULD use the nonce formation method defined in Section 3.2, and MAY use any other method that meets the uniqueness requirement. Other applications SHOULD use zero-length nonces.",
+      "ja": "それぞれ、すべてのナンスがゼロ長でない限り各ナンスは、認証された暗号化操作の異なる呼び出しに提供ノンスN.は、キーの任意の特定の値に対して、異なるものでなければなりません。異なるナンスを生成することができるアプリケーションは、セクション3.2で定義されたノンス形成方法を使用する必要があり、一意性の要件を満たす任意の他の方法を使用することができます。他のアプリケーションは、長さゼロのナンスを使用すべきです。"
+    },
+    {
+      "indent": 6,
+      "text": "A plaintext P, which contains the data to be encrypted and authenticated.",
+      "ja": "データが含まれている平文Pは、暗号化および認証されます。"
+    },
+    {
+      "indent": 6,
+      "text": "The associated data A, which contains the data to be authenticated, but not encrypted.",
+      "ja": "データが含まれている関連するデータAは、認証されますが、暗号化されないことにします。"
+    },
+    {
+      "indent": 3,
+      "text": "There is a single output:",
+      "ja": "単一の出力があります："
+    },
+    {
+      "indent": 6,
+      "text": "A ciphertext C, which is at least as long as the plaintext, or",
+      "ja": "平文と少なくとも同じ長さである暗号文C、または"
+    },
+    {
+      "indent": 6,
+      "text": "an indication that the requested encryption operation could not be performed.",
+      "ja": "要求された暗号化操作を実行できませんでした表示。"
+    },
+    {
+      "indent": 3,
+      "text": "All of the inputs and outputs are variable-length octet strings, whose lengths obey the following restrictions:",
+      "ja": "入力と出力のすべては、その長さは、以下の制限に従わ可変長のオクテット文字列を、以下のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "The number of octets in the key K is between 1 and 255. For each AEAD algorithm, the length of K MUST be fixed.",
+      "ja": "鍵Kにおけるオクテットの数は、Kの長さが固定されなければならない、各AEADアルゴリズムについては1と255の間です。"
+    },
+    {
+      "indent": 6,
+      "text": "For any particular value of the key, either 1) each nonce provided to distinct invocations of the Authenticated Encryption operation MUST be distinct, or 2) each and every nonce MUST be zero-length. If zero-length nonces are used with a particular key, then each and every nonce used with that key MUST have a length of zero. Otherwise, the number of octets in the nonce SHOULD be twelve (12). Nonces with different lengths MAY be used with a particular key. Some algorithms cannot be used with zero-length nonces, but others can; see Section 4. Applications that conform to the recommended nonce length will avoid having to construct nonces with different lengths, depending on the algorithm that is in use. This guidance helps to keep algorithm-specific logic out of applications.",
+      "ja": "キーのいずれかの特定の値については、1）認証された暗号化操作の異なる呼び出しに設けられた各ナンスは、別個であるか、または2）一人ひとりナンスがゼロ長のいずれかでなければなりません。ゼロ長のノンスが特定のキーで使用される場合、そのキーと共に使用一人ひとりナンスがゼロの長さでなければなりません。そうでない場合は、ノンスのオクテットの数は、12（12）であるべきです。長さの異なるナンスは、特定のキーと共に使用することができます。いくつかのアルゴリズムは、長さゼロのナンスと一緒に使用することができないが、他のことができ。使用されているアルゴリズムに応じて、異なる長さでナンスを構築する必要がなくなります推奨ナンス長に準拠節4.アプリケーションを参照してください。このガイダンスは、アプリケーションのうちのアルゴリズム固有のロジックを維持するのに役立ちます。"
+    },
+    {
+      "indent": 6,
+      "text": "The number of octets in the plaintext P MAY be zero.",
+      "ja": "平文Pのオクテットの数は0であってもよいです。"
+    },
+    {
+      "indent": 6,
+      "text": "The number of octets in the associated data A MAY be zero.",
+      "ja": "関連するデータAのオクテットの数は0であってもよいです。"
+    },
+    {
+      "indent": 6,
+      "text": "The number of octets in the ciphertext C MAY be zero.",
+      "ja": "暗号文Cのオクテットの数は0であってもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification does not put a maximum length on the nonce, the plaintext, the ciphertext, or the additional authenticated data. However, a particular AEAD algorithm MAY further restrict the lengths of those inputs and outputs. A particular AEAD implementation MAY further restrict the lengths of its inputs and outputs. If a particular implementation of an AEAD algorithm is requested to process an input that is outside the range of admissible lengths, or an input that is outside the range of lengths supported by that implementation, it MUST return an error code and it MUST NOT output any other information. In particular, partially encrypted or partially decrypted data MUST NOT be returned.",
+      "ja": "この仕様は、ナンス、平文、暗号文、または追加の認証されたデータに最大の長さを入れていません。しかし、特定のAEADアルゴリズムは、さらに、それらの入力と出力の長さを制限してもよいです。特定AEAD実装は、さらに、その入力と出力の長さを制限してもよいです。 AEADアルゴリズムの特定の実装を許容長さの範囲外にある入力、又はその実装によってサポートされる長さの範囲外の入力を処理するために要求された場合、それはエラーコードを返す必要があり、任意の出力NOT MUSTその他の情報。具体的には、部分的に暗号化または部分的に復号化されたデータが返されてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Both confidentiality and message authentication are provided on the plaintext P. When the length of P is zero, the AEAD algorithm acts as a Message Authentication Code on the input A.",
+      "ja": "Pの長さがAEADアルゴリズムは、入力Aにメッセージ認証コードとして機能し、ゼロの場合、機密性およびメッセージ認証の両方は、平文P上に設けられています。"
+    },
+    {
+      "indent": 3,
+      "text": "The associated data A is used to protect information that needs to be authenticated, but does not need to be kept confidential. When using an AEAD to secure a network protocol, for example, this input could include addresses, ports, sequence numbers, protocol version numbers, and other fields that indicate how the plaintext or ciphertext should be handled, forwarded, or processed. In many situations, it is desirable to authenticate these fields, though they must be left in the clear to allow the network or system to function properly. When this data is included in the input A, authentication is provided without copying the data into the plaintext.",
+      "ja": "関連するデータAは、認証が必要な情報を保護するために使用されますが、機密を維持する必要はありません。ネットワークプロトコルを確保するAEADを使用する場合、例えば、この入力は、平文または暗号文の取扱い、転送、または処理されるべき方法を示すアドレス、ポート、シーケンス番号、プロトコルバージョン番号、およびその他のフィールドを含むことができます。彼らはネットワークやシステムが適切に機能するように明確に残されなければならないものの、多くの状況では、これらのフィールドを認証することが望ましいです。このデータは、入力Aに含まれている場合、認証は平文にデータをコピーすることなく提供されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The secret key K MUST NOT be included in any of the other inputs (N, P, and A). (This restriction does not mean that the values of those inputs must be checked to ensure that they do not include substrings that match the key; instead, it means that the key must not be explicitly copied into those inputs.)",
+      "ja": "秘密鍵Kは、他の入力（N、P、およびA）のいずれかに含まれてはいけません。 （この制限は、これらの入力の値は、彼らがキーに一致する部分文字列が含まれていないことを確認するためにチェックしなければならないという意味ではありません。その代わり、それはキーが明示的にそれらの入力にコピーされてはならないことを意味します。）"
+    },
+    {
+      "indent": 3,
+      "text": "The nonce is authenticated internally to the algorithm, and it is not necessary to include it in the AD input. The nonce MAY be included in P or A if it is convenient to the application.",
+      "ja": "ノンスは、アルゴリズムの内部で認証され、ADの入力に含める必要はありません。それはアプリケーションに便利である場合にnonceがPまたはAに含まれるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "The nonce MAY be stored or transported with the ciphertext, or it MAY be reconstructed immediately prior to the authenticated decryption operation. It is sufficient to provide the decryption module with enough information to allow it to construct the nonce. (For example, a system could use a nonce consisting of a sequence number in a particular format, in which case it could be inferred from the order of the ciphertexts.) Because the authenticated decryption process detects incorrect nonce values, no security failure will result if a nonce is incorrectly reconstructed and fed into an authenticated decryption operation. Any nonce reconstruction method will need to take into account the possibility of loss or reorder of ciphertexts between the encryption and decryption processes.",
+      "ja": "ナンスは、格納された又は暗号文と輸送、またはそれは認証復号化操作の直前に再構成することができるかもしれません。ナンスを構築できるようにするために十分な情報を復号化モジュールを提供するのに十分です。 （例えば、システムは、それが暗号文の順序から推測することができ、その場合、特定の形式のシーケンス番号からなるノンスを使用することができる。）認証復号処理が正しくないノンス値を検出するので、いかなるセキュリティ障害が発生しませんナンスが誤って認証された復号化操作に再構成し、供給された場合。どれナンス再構成法を考慮に暗号化と復号化のプロセス間の暗号文の喪失または再注文の可能性を取る必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications MUST NOT assume any particular structure or formatting of the ciphertext.",
+      "ja": "アプリケーションは、暗号文の任意の特定の構造や書式設定を仮定してはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Authenticated Decryption",
+      "section_title": true,
+      "ja": "2.2。認証された暗号解読"
+    },
+    {
+      "indent": 3,
+      "text": "The authenticated decryption operation has four inputs: K, N, A, and C, as defined above. It has only a single output, either a plaintext value P or a special symbol FAIL that indicates that the inputs are not authentic. A ciphertext C, a nonce N, and associated data A are authentic for key K when C is generated by the encrypt operation with inputs K, N, P, and A, for some values of N, P, and A. The authenticated decrypt operation will, with high probability, return FAIL whenever the inputs N, P, and A were crafted by a nonce-respecting adversary that does not know the secret key (assuming that the AEAD algorithm is secure).",
+      "ja": "上記で定義した通り、K、N、A、およびC：認証された復号化操作は、4つの入力を有します。これは、入力が本物でないことを示す単一の出力、のいずれかの平文値Pまたは特殊記号FAILを有しています。 CはN、P、およびAのいくつかの値認証復号化のために、入力K、N、P、およびAで暗号化操作によって生成されたときに暗号文C、ノンスN、および関連するデータAは、鍵Kのために本物であります入力N、P、およびAは、（AEADアルゴリズムが安全であると仮定して）秘密鍵を知らないノンス、尊重敵対者によって細工されたときはいつでも動作は、高い確率で、FAILを戻します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Data Formatting",
+      "section_title": true,
+      "ja": "2.3。データフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not specify any particular encoding for the AEAD inputs and outputs, since the encoding does not affect the security services provided by an AEAD algorithm.",
+      "ja": "エンコードはAEADアルゴリズムによって提供されるセキュリティサービスには影響を与えませんので、この文書では、AEADの入力と出力のための特定のエンコーディングを指定しません。"
+    },
+    {
+      "indent": 3,
+      "text": "When choosing the format of application data, an application SHOULD position the ciphertext C so that it appears after any other data that is needed to construct the other inputs to the authenticated decryption operation. For instance, if the nonce and ciphertext both appear in a packet, the former value should precede the latter. This rule facilitates efficient and simple hardware implementations of AEAD algorithms.",
+      "ja": "アプリケーションデータの形式を選択するとき、それは認証復号化操作に他の入力を構築するために必要とされる他の任意のデータの後に表示されるように、アプリケーションは、暗号文Cを配置すべきです。ナンスと暗号文の両方がパケットに現れる場合、例えば、前者の値が後者の前にすべきです。この規則は、AEADアルゴリズムの効率的かつ簡単なハードウェア実装を容易にします。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Guidance on the Use of AEAD Algorithms",
+      "section_title": true,
+      "ja": "AEADアルゴリズムの使用3.ガイダンス"
+    },
+    {
+      "indent": 3,
+      "text": "This section provides advice that must be followed in order to use an AEAD algorithm securely.",
+      "ja": "このセクションでは、しっかりとAEADアルゴリズムを使用するために従わなければならないアドバイスを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "If an application is unable to meet the uniqueness requirement on nonce generation, then it MUST use a zero-length nonce. Randomized or stateful algorithms, which are defined below, are suitable for use with such applications. Otherwise, an application SHOULD use nonces with a length of twelve octets. Since algorithms are encouraged to support that length, applications should use that length to aid interoperability.",
+      "ja": "アプリケーションはノンス生成に一意性要件を満たすことができない場合、それはゼロ長のノンスを使用しなければなりません。以下に定義される無作為またはステートフルなアルゴリズムは、このような用途での使用に適しています。そうでない場合、アプリケーションは12オクテットの長さでナンスを使用すべきです。アルゴリズムはその長さをサポートすることが奨励されているので、アプリケーションは相互運用性を支援するためにその長さを使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Requirements on Nonce Generation",
+      "section_title": true,
+      "ja": "3.1。ノンス生成上の要件"
+    },
+    {
+      "indent": 3,
+      "text": "It is essential for security that the nonces be constructed in a manner that respects the requirement that each nonce value be distinct for each invocation of the authenticated encryption operation, for any fixed value of the key. In this section, we call attention to some consequences of this requirement in different scenarios.",
+      "ja": "これは、ナンスが各ナンス値は、キーの任意の固定値に対して、認証された暗号化オペレーションの各呼び出しのために別個であるという要件を尊重するように構成されたセキュリティのために不可欠です。このセクションでは、さまざまなシナリオでは、この要件のいくつかの結果に注意を喚起する。"
+    },
+    {
+      "indent": 3,
+      "text": "When there are multiple devices performing encryption using a single key, those devices must coordinate to ensure that the nonces are unique. A simple way to do this is to use a nonce format that contains a field that is distinct for each one of the devices, as described in Section 3.2. Note that there is no need to coordinate the details of the nonce format between the encrypter and the decrypter, as long the entire nonce is sent or stored with the ciphertext and is thus available to the decrypter. If the complete nonce is not available to the decrypter, then the decrypter will need to know how the nonce is structured so that it can reconstruct it. Applications SHOULD provide encryption engines with some freedom in choosing their nonces; for example, a nonce could contain both a counter and a field that is set by the encrypter but is not processed by the receiver. This freedom allows a set of encryption devices to more readily coordinate to ensure the distinctness of their nonces.",
+      "ja": "単一のキーを使用して暗号化を行い、複数のデバイスがある場合、これらのデバイスは、ナンスが一意であることを保証するために調整しなければなりません。これを行うための簡単な方法は、3.2節で説明したように、デバイスのそれぞれについて別個であるフィールドが含まれているナンス・フォーマットを使用することです。限り全体ナンスを送信または格納された暗号文とし、解読することが利用可能である、暗号化部及び復号化部との間に一回だけのフォーマットの詳細を調整する必要がないことに留意されたいです。完全なnonceは解読に利用できない場合、解読はそれを再構築することができるようにナンスが構成されている方法を知っておく必要があります。アプリケーションは、そのナンスを選択する際に、いくつかの自由で暗号化エンジンを提供する必要があります。例えば、ナンスは、カウンタ及び暗号化部によって設定されているが、受信機によって処理されていないフィールドの両方を含むことができます。この自由は、暗号化デバイスのセットがより容易に自分のナンスの明瞭さを確保するために調整することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a secret key will be used for a long period of time, e.g., across multiple reboots, then the nonce will need to be stored in non-volatile memory. In such cases, it is essential to use checkpointing of the nonce; that is, the current nonce value should be stored to provide the state information needed to resume encryption in case of unexpected failure. One simple way to provide a high assurance that a nonce value will not be used repeatedly is to wait until the encryption process receives confirmation from the storage process indicating that the succeeding nonce value has already been stored. Because this method may add significant latency, it may be desirable to store a nonce value that is several values ahead in the sequence. As an example, the nonce 100 could be stored, after which the nonces 1 through 99 could be used for encryption. The nonce value 200 could be stored at the same time that nonces 1 through 99 are being used, and so on.",
+      "ja": "秘密鍵を長時間使用する場合は、例えば、複数の再起動しても、その後、ナンスは、不揮発性メモリに格納する必要があります。このような場合には、ナンスのチェックポイントを使用することが不可欠です。つまり、現在のノンス値は、予期しない障害が発生した場合に暗号化を再開するために必要な状態情報を提供するために格納する必要があります。ノンス値が繰り返し使用されないこと高い保証を提供するための一つの簡単な方法は、暗号化プロセスは、後続のノンス値が既に記憶されていることを示す記憶プロセスからの確認を受信するまで待つことです。この方法は、大きな遅延を追加することがありますので、いくつかの値前方のシーケンスであるナンス値を格納することが望ましい場合があります。一例として、ノンス100は、ナンス1〜99は、暗号化に使用することができた後に、記憶することができます。ノンス値200は、これに99を介してノンス1が使用されていると同時に記憶され、そしてすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Many problems with nonce reuse can be avoided by changing a key in a situation in which nonce coordination is difficult.",
+      "ja": "一回だけの再利用には多くの問題は、一回だけの調整が困難な状況でキーを変更することで回避することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm SHOULD describe what security degradation would result from an inadvertent reuse of a nonce value.",
+      "ja": "各AEADアルゴリズムは、セキュリティの劣化がナンス値の不注意な再利用から生じるかを説明すべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Recommended Nonce Formation",
+      "section_title": true,
+      "ja": "3.2。推奨される使節トレーニング"
+    },
+    {
+      "indent": 3,
+      "text": "The following method to construct nonces is RECOMMENDED. The nonce is formatted as illustrated in Figure 1, with the initial octets consisting of a Fixed field, and the final octets consisting of a Counter field. For each fixed key, the length of each of these fields, and thus the length of the nonce, is fixed. Implementations SHOULD support 12-octet nonces in which the Counter field is four octets long.",
+      "ja": "ナンスを構築するには、次の方法が推奨されます。図1に示すように、ノンスは、固定フィールドからなる最初のオクテット、及びカウンタフィールドからなる最終オクテットと、フォーマットされています。各固定キー、これらのフィールドのそれぞれの長さ、ひいては一回だけの長さのために、固定されています。実装は、カウンターフィールドは4つのオクテット長である12オクテットナンスをサポートする必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": " <----- variable ----> <----------- variable ----------->\n+---------------------+----------------------------------+\n|        Fixed        |              Counter             |\n+---------------------+----------------------------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "Figure 1: Recommended nonce format",
+      "ja": "図1：推奨ナンスフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "The Counter fields of successive nonces form a monotonically increasing sequence, when those fields are regarded as unsigned integers in network byte order. The length of the Counter field MUST remain constant for all nonces that are generated for a given encryption device. The Counter part SHOULD be equal to zero for the first nonce, and increment by one for each successive nonce that is generated. However, any particular Counter value MAY be skipped over, and left out of the sequence of values that are used, if it is convenient. For example, an application could choose to skip the initial Counter=0 value, and set the Counter field of the initial nonce to 1. Thus, at most 2^(8*C) nonces can be generated when the Counter field is C octets in length.",
+      "ja": "これらのフィールドは、ネットワークバイト順に符号なし整数とみなされる場合に連続ナンスのカウンタフィールドは、単調に増加するシーケンスを形成します。カウンターフィールドの長さは、与えられた暗号化装置のために生成されたすべてのナンスのために一定のままでなければなりません。カウンタ部は、生成された各連続ナンスするための1つによって第ノンス、及びインクリメントゼロに等しくなければなりません。しかし、いずれの特定のカウンタ値はスキップされ、それが便利であれば、使用されている値のシーケンスの外に残してもよいです。カウンタフィールドがCオクテットである場合したがって、最大で2 ^（8 * C）ナンスを生成することができ、例えば、アプリケーションが初期カウンタ= 0の値をスキップすることを選択することができ、そして1に初期ノンスのカウンタフィールドを設定します長さで。"
+    },
+    {
+      "indent": 3,
+      "text": "The Fixed field MUST remain constant for all nonces that are generated for a given encryption device. If different devices are performing encryption with a single key, then each distinct device MUST use a distinct Fixed field, to ensure the uniqueness of the nonces. Thus, at most 2^(8*F) distinct encrypters can share a key when the Fixed field is F octets in length.",
+      "ja": "固定フィールドは、与えられた暗号化装置のために生成されたすべてのナンスのために一定のままでなければなりません。異なるデバイスは、単一の鍵で暗号化を実行する場合、各別個のデバイスは、一回だけの一意性を保証するために、別個の固定フィールドを使用しなければなりません。このように、最大​​で2 ^（8 * F）固定フィールドの長さがFオクテットであるとき、明確なencryptersが鍵を共有することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1. Partially Implicit Nonces",
+      "section_title": true,
+      "ja": "3.2.1。部分的に暗黙ナンス"
+    },
+    {
+      "indent": 3,
+      "text": "In some cases, it is desirable to not transmit or store an entire nonce, but instead to reconstruct that value from contextual information immediately prior to decryption. As an example, ciphertexts could be stored in sequence on a disk, and the nonce for a particular ciphertext could be inferred from its location, as long as the rule for generating the nonces is known by the decrypter. We call the portion of the nonce that is stored or sent with the ciphertext the explicit part. We call the portion of the nonce that is inferred the implicit part. When part of the nonce is implicit, the following specialization of the above format is RECOMMENDED. The Fixed field is divided into two sub-fields: a Fixed-Common field and a Fixed-Distinct field. This format is shown in Figure 2. If different devices are performing encryption with a single key, then each distinct device MUST use a distinct Fixed-Distinct field. The Fixed-Common field is common to all nonces. The Fixed-Distinct field and the Counter field MUST be in the explicit part of the nonce. The Fixed-Common field MAY be in the implicit part of the nonce. These conventions ensure that the nonce is easy to reconstruct from the explicit data.",
+      "ja": "場合によっては、送信または格納全体nonceを、その代わりに直前の暗号解読にコンテキスト情報から、その値を復元しないことが望ましいです。一例として、暗号文は、ディスク上の配列に格納することができ、特定の暗号文のためのノンスを解読することによって知られているノンスを生成するためのルール限り、その位置から推測することができます。私たちは、保存されたまたは暗号文の明示的な部分で送信されたnonceの部分を呼び出します。私たちは、暗黙の一部を推測されるナンスの部分を呼び出します。ナンスの一部は暗黙的である場合、上記形​​式の次の特殊が推奨されます。固定共通のフィールドと固定個別フィールド：固定フィールドには、二つのサブフィールドに分割されます。異なるデバイスは、各別個のデバイスが異なる固定個別フィールドを使用しなければならない、単一の鍵で暗号化を実行している場合、この形式は、図2に示されています。固定共通のフィールドは、すべてのナンスに共通です。固定個別フィールドとカウンタフィールドは、ナンスの明示的な部分でなければなりません。固定一般的なフィールドは、ナンスの暗黙の一部であってもよいです。これらの規則は、nonceが明示的なデータから再構築することは容易であることを確認してください。"
+    },
+    {
+      "indent": 6,
+      "text": "+-------------------+--------------------+---------------+\n|    Fixed-Common   |   Fixed-Distinct   |    Counter    |\n+-------------------+--------------------+---------------+\n <---- implicit ---> <------------ explicit ------------>",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "Figure 2: Partially implicit nonce format",
+      "ja": "図2：部分的に暗黙ノンスフォーマット"
+    },
+    {
+      "indent": 6,
+      "text": "The rationale for the partially implicit nonce format is as follows. This method of nonce construction incorporates the best known practice; it is used by both GCM Encapuslating Security Payload (ESP) [RFC4106] and CCM ESP [RFC4309], in which the Fixed field contains the Salt value and the lowest eight octets of the nonce are explicitly carried in the ESP packet. In GCM ESP, the Fixed field must be at least four octets long, so that it can contain the Salt value. In CCM ESP, the Fixed field must be at least three octets long for the same reason. This nonce generation method is also used by several counter mode variants including CTR ESP.",
+      "ja": "次のように部分的に暗黙ノンス形式の根拠です。ナンス建設のこの方法は、最もよく知られているプラ​​クティスを取り入れ、それは、固定されたフィールドは、ソルト値とナンスの最低8つのオクテット明示的にESPパケットで運ばれるが含まれている両方のGCM Encapuslatingセキュリティペイロード（ESP）[RFC4106]とCCM ESP [RFC4309]で使用されています。それは、ソルト値を含めることができるようにGCM ESPでは、固定フィールドは、少なくとも4つのオクテット長でなければなりません。 CCM ESPでは、固定フィールドは、同じ理由で、少なくとも3つのオクテットの長さでなければなりません。このノンス生成方法は、変異体はCTR ESPなど、いくつかのカウンタモードで使用されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Construction of AEAD Inputs",
+      "section_title": true,
+      "ja": "3.3。 AEAD入力の構築"
+    },
+    {
+      "indent": 3,
+      "text": "If the AD input is constructed out of multiple data elements, then it is essential that it be unambiguously parseable into its constituent elements, without the use of any unauthenticated data in the parsing process. (In mathematical terms, the AD input must be an injective function of the data elements.) If an application constructs its AD input in such a way that there are two distinct sets of data elements that result in the same AD value, then an attacker could cause a receiver to accept a bogus set by substituting one set for the other. The requirement that the AD be uniquely parseable ensures that this attack is not possible. This requirement is trivially met if the AD is composed of fixed-width elements. If the AD contains a variable-length string, for example, this requirement can be met by also including the length of the string in the AD.",
+      "ja": "AD入力は複数のデータ要素から構成されている場合、解析プロセス中の任意の認証されていないデータを使用せず、その構成要素に明確に解析可能であることが必須です。 （数学的に、AD入力は、データ要素の単射でなければならない。）アプリケーションは、同じAD値をもたらすデータ要素の二つの異なるセットは、攻撃者があるように、そのAD入力を構築する場合他に1セットを代入して偽のセットを受け入れるように受信機を引き起こす可能性があります。 ADは一意に解析可能であるという要件は、この攻撃が不可能であることを保証します。 ADは、固定幅の要素で構成されている場合、この要件は自明満たされます。 ADは、可変長の文字列が含まれている場合、例えば、この要求はまた、AD内の文字列の長さを含むことによって満たすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, if the plaintext is constructed out of multiple data elements, then it is essential that it be unambiguously parseable into its constituent elements, without using any unauthenticated data in the parsing process. Note that data included in the AD may be used when parsing the plaintext, though of course since the AD is not encrypted there is a potential loss of confidentiality when information about the plaintext is included in the AD.",
+      "ja": "平文は、複数のデータ要素から構成されている場合も同様に、それが明確に解析プロセスの任意の認証されていないデータを使用せず、その構成要素に解析可能なことが必須です。平文を解析する際にADが暗号化されていないので、当然のことながら、平文の情報をADに含まれている機密性の潜在的な損失がありますが、ADに含まれるデータは、使用してもよいことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Example Usage",
+      "section_title": true,
+      "ja": "3.4。使用例"
+    },
+    {
+      "indent": 3,
+      "text": "To make use of an AEAD algorithm, an application must define how the encryption algorithm's inputs are defined in terms of application data, and how the ciphertext and nonce are conveyed. The clearest way to do this is to express each input in terms of the data that form it, then to express the application data in terms of the outputs of the AEAD encryption operation.",
+      "ja": "AEADアルゴリズムを使用するには、アプリケーションは、暗号化アルゴリズムの入力はアプリケーションデータに基づいて定義されている方法を定義しなければならない、と暗号文とナンスがどのように伝えています。これを行うための明確な方法はAEAD暗号化操作の出力の点でアプリケーションデータを表現するために、次に、それを構成するデータの観点から各入力を表明することにあります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, AES-GCM ESP [RFC4106] can be expressed as follows. The AEAD inputs are",
+      "ja": "例えば、以下のようにAES-GCM ESP [RFC4106]は表現することができます。 AEAD入力があります"
+    },
+    {
+      "indent": 6,
+      "text": "P = RestOfPayloadData || TFCpadding || Padding || PadLength || NextHeader",
+      "ja": "P = RestOfPayloadData || TFCpadding ||パディング|| PadLength || NextHeader"
+    },
+    {
+      "indent": 6,
+      "text": "N = Salt || IV",
+      "ja": "N =塩|| IV"
+    },
+    {
+      "indent": 6,
+      "text": "A = SPI || SequenceNumber",
+      "ja": "= SPI || SequenceNumberは"
+    },
+    {
+      "indent": 3,
+      "text": "where the symbol \"||\" denotes the concatenation operation, and the fields RestOfPayloadData, TFCpadding, Padding, PadLength, NextHeader, SPI, and SequenceNumber are as defined in [RFC4303], and the fields Salt and IV are as defined in [RFC4106]. The field RestOfPayloadData contains the plaintext data that is described by the NextHeader field, and no other data. (Recall that the PayloadData field contains both the IV and the RestOfPayloadData; see Figure 2 of [RFC4303] for an illustration.)",
+      "ja": "どこのシンボル「||」連結演算を表し、[RFC4303]で定義されるようRestOfPayloadData、TFCpadding、パディング、PadLength、NextHeader、SPI、およびSequenceNumberはでありフィールド、およびフィールド塩及びIVは、[RFC4106]で定義される通りです。フィールドRestOfPayloadDataはNextHeaderフィールドによって記述されている平文データ、及び他のデータを含んでいます。 （リコールPayloadDataフィールドはIVとRestOfPayloadDataの両方が含まれていることを、説明のために[RFC4303]の図2を参照。）"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the ESP packet can be expressed as",
+      "ja": "ESPパケットのフォーマットは次のように表すことができます。"
+    },
+    {
+      "indent": 6,
+      "text": "ESP = SPI || SequenceNumber || IV || C",
+      "ja": "ESPは、SPIを= || SequenceNumberは|| IV || C"
+    },
+    {
+      "indent": 3,
+      "text": "where C is the AEAD ciphertext (which in this case incorporates the authentication tag). Please note that here we have not described the use of the ESP Extended Sequence Number.",
+      "ja": "Cは、（この場合には、認証タグを組み込む）AEAD暗号文です。ここで我々はESP拡張シーケンス番号の使用を記載していないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Requirements on AEAD Algorithm Specifications",
+      "section_title": true,
+      "ja": "AEADアルゴリズムの仕様上の4要件"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm MUST only accept keys with a fixed key length K_LEN, and MUST NOT require any particular data format for the keys provided as input. An algorithm that requires such structure (e.g., one with subkeys in a particular parity-check format) will need to provide it internally.",
+      "ja": "各AEADアルゴリズムは、固定キー長K_LENでキーを受け入れなければなりません、そして入力として提供さキーのいずれかの特定のデータ形式を必要としてはなりません。このような構造を必要とするアルゴリズムが（例えば、特定のパリティチェック形式のサブキーを有するもの）は、内部的に提供する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm MUST accept any plaintext with a length between zero and P_MAX octets, inclusive, where the value P_MAX is specific to that algorithm. The value of P_MAX MUST be larger than zero, and SHOULD be at least 65,536 (2^16) octets. This size is a typical upper limit for network data packets. Other applications may use even larger values of P_MAX, so it is desirable for general-purpose algorithms to support higher values.",
+      "ja": "値P_MAXはそのアルゴリズムに固有であり、各AEADアルゴリズムは、包括的、ゼロとP_MAXオクテットの長さを有する任意の平文を受け入れなければなりません。 P_MAXの値は、ゼロより大きくなければならない、少なくとも65,536（2 ^ 16）のオクテットであるべきです。このサイズは、ネットワーク・データ・パケットのための典型的な上限です。他のアプリケーションは、P_MAXのより大きな値を使用することができるので、汎用アルゴリズムはより高い値をサポートすることが望ましいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm MUST accept any associated data with a length between zero and A_MAX octets, inclusive, where the value A_MAX is specific to that algorithm. The value of A_MAX MUST be larger than zero, and SHOULD be at least 65,536 (2^16) octets. Other applications may use even larger values of A_MAX, so it is desirable for general-purpose algorithms to support higher values.",
+      "ja": "値A_MAXがそのアルゴリズムに固有であり、各AEADアルゴリズムは、包括的、ゼロとA_MAXオクテットの長さと関連するデータを受け入れなければなりません。 A_MAXの値は、ゼロより大きくなければならない、少なくとも65,536（2 ^ 16）のオクテットであるべきです。他のアプリケーションはA_MAXのより大きな値を使用することができるので、汎用アルゴリズムはより高い値をサポートすることが望ましいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm MUST accept any nonce with a length between N_MIN and N_MAX octets, inclusive, where the values of N_MIN and N_MAX are specific to that algorithm. The values of N_MAX and N_MIN MAY be equal. Each algorithm SHOULD accept a nonce with a length of twelve (12) octets. Randomized or stateful algorithms, which are described below, MAY have an N_MAX value of zero.",
+      "ja": "各AEADアルゴリズムはN_MINとN_MAXの値がそのアルゴリズムに固有の包括N_MINとN_MAXオクテット、の間の長さを有する任意のnonceを受け入れなければなりません。 N_MAXとN_MINの値が同じであってもよいです。各アルゴリズムは、12（12）オクテットの長さを持つnonceを受け入れるべきです。以下に記載するランダム化またはステートフルアルゴリズムは、ゼロのN_MAXの値を有することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An AEAD algorithm MAY structure its ciphertext output in any way; for example, the ciphertext can incorporate an authentication tag. Each algorithm SHOULD choose a structure that is amenable to efficient processing.",
+      "ja": "AEADアルゴリズムは、どのような方法でその暗号文の出力を構築してもよい（MAY）。例えば、暗号文は、認証タグを組み込むことができます。各アルゴリズムは、効率的な処理に適している構造を選択する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An Authenticated Encryption algorithm MAY incorporate or make use of a random source, e.g., for the generation of an internal initialization vector that is incorporated into the ciphertext output. An AEAD algorithm of this sort is called randomized; though note that only encryption is random, and decryption is always deterministic. A randomized algorithm MAY have a value of N_MAX that is equal to zero.",
+      "ja": "認証された暗号化アルゴリズムは、暗号文の出力に組み込まれた内部初期化ベクトルを生成するために、例えば、組み込む又はランダムソースを利用することができます。この種のAEADアルゴリズムは、ランダム化と呼ばれています。しかし暗号化のみがランダムである、と復号化が常に決定論的であることに注意してください。無作為化アルゴリズムは、ゼロに等しいN_MAXの値を有することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An Authenticated Encryption algorithm MAY incorporate internal state information that is maintained between invocations of the encrypt operation, e.g., to allow for the construction of distinct values that are used as internal nonces by the algorithm. An AEAD algorithm of this sort is called stateful. This method could be used by an algorithm to provide good security even when the application inputs zero-length nonces. A stateful algorithm MAY have a value of N_MAX that is equal to zero.",
+      "ja": "認証された暗号化アルゴリズムは、アルゴリズムによって内部ナンスとして使用される個別の値の構築を可能にするために、例えば、暗号化オペレーションの呼び出しの間に維持される内部状態情報を組み込むことができます。この種のAEADアルゴリズムは、ステートフルと呼ばれています。この方法は、場合でも、アプリケーション入力ゼロ長ナンス良好なセキュリティを提供するために、アルゴリズムによって使用することができます。ステートフルなアルゴリズムは、ゼロに等しいN_MAXの値を有することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The specification of an AEAD algorithm MUST include the values of K_LEN, P_MAX, A_MAX, N_MIN, and N_MAX defined above. Additionally, it MUST specify the number of octets in the largest possible ciphertext, which we denote C_MAX.",
+      "ja": "AEADアルゴリズムの仕様は、上記で定義されK_LEN、P_MAX、A_MAX、N_MIN、及びN_MAXの値を含まなければなりません。さらに、それは我々がC_MAXを示す可能な最大の暗号文のオクテットの数を指定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm MUST provide a description relating the length of the plaintext to that of the ciphertext. This relation MUST NOT depend on external parameters, such as an authentication strength parameter (e.g., authentication tag length). That sort of dependence would complicate the use of the algorithm by creating a situation in which the information from the AEAD registry was not sufficient to ensure interoperability.",
+      "ja": "各AEADアルゴリズムは、暗号文のそれに平文の長さに関する説明を提供しなければなりません。この関係は、認証強度パラメータ（例えば、認証タグの長さ）のような外部パラメータに依存してはなりません。依存性のその種はAEADレジストリからの情報は、相互運用性を確保するのに十分ではなかった状況を作成することにより、アルゴリズムの使用が複雑になります。"
+    },
+    {
+      "indent": 3,
+      "text": "EACH AEAD algorithm specification SHOULD describe what security degradation would result from an inadvertent reuse of a nonce value.",
+      "ja": "EACH AEADアルゴリズムの仕様では、セキュリティの劣化がナンス値の不注意な再利用から生じるかを説明すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AEAD algorithm specification SHOULD provide a reference to a detailed security analysis. This document does not specify a particular security model, because several different models have been used in the literature. The security analysis SHOULD define or reference a security model.",
+      "ja": "各AEADアルゴリズムの仕様は、詳細なセキュリティ分析への参照を提供する必要があります。いくつかの異なるモデルが文献で使用されているので、この文書では、特定のセキュリティモデルを指定していません。セキュリティ分析は、セキュリティモデルを定義したり、参照する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An algorithm that is randomized or stateful, as defined above, SHOULD describe itself using those terms.",
+      "ja": "無作為またはステートフルであるアルゴリズムは、上記で定義され、これらの用語を使用して自分自身を記述するべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "5. AEAD Algorithms",
+      "section_title": true,
+      "ja": "5. AEADアルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This section defines four AEAD algorithms; two are based on AES GCM, two are based on AES CCM. Each pair includes an algorithm with a key size of 128 bits and one with a key size of 256 bits.",
+      "ja": "このセクションでは、4つのAEADアルゴリズムを定義します。 2は、AES GCMに基づいており、2はAES CCMに基づいています。各ペアは、キー128ビットのサイズと256ビットのキーサイズを有するものとするアルゴリズムを含みます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. AEAD_AES_128_GCM",
+      "section_title": true,
+      "ja": "5.1。 AEAD_AES_128_GCM"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD_AES_128_GCM authenticated encryption algorithm works as specified in [GCM], using AES-128 as the block cipher, by providing the key, nonce, and plaintext, and associated data to that mode of operation. An authentication tag with a length of 16 octets (128 bits) is used. The AEAD_AES_128_GCM ciphertext is formed by appending the authentication tag provided as an output to the GCM encryption operation to the ciphertext that is output by that operation. Test cases are provided in the appendix of [GCM]. The input and output lengths are as follows:",
+      "ja": "AEAD_AES_128_GCM動作のモードの鍵、ナンス、平文、および関連するデータを提供することによって、ブロック暗号としてAES-128を使用して、[GCM]で指定された暗号化アルゴリズムが動作する認証しました。 16個のオクテット（128ビット）の長さとの認証タグが使用されます。 AEAD_AES_128_GCMの暗号文は、その操作によって出力される暗号文にGCM暗号化操作への出力として提供された認証タグを付加することにより形成されています。テストケースは[GCM]のAppendixに設けられています。次のように入力と出力の長さは、次のとおり"
+    },
+    {
+      "indent": 6,
+      "text": "K_LEN is 16 octets,",
+      "ja": "K_LENは16オクテットです、"
+    },
+    {
+      "indent": 6,
+      "text": "P_MAX is 2^36 - 31 octets,",
+      "ja": "、31オクテット -  P_MAXは、2 ^ 36であります"
+    },
+    {
+      "indent": 6,
+      "text": "A_MAX is 2^61 - 1 octets,",
+      "ja": "1オクテット -  A_MAXは2 ^ 61であります"
+    },
+    {
+      "indent": 6,
+      "text": "N_MIN and N_MAX are both 12 octets, and",
+      "ja": "N_MINとN_MAXは両方とも12個のオクテットであり、"
+    },
+    {
+      "indent": 6,
+      "text": "C_MAX is 2^36 - 15 octets.",
+      "ja": "15オクテット -  C_MAXは2 ^ 36です。"
+    },
+    {
+      "indent": 3,
+      "text": "An AEAD_AES_128_GCM ciphertext is exactly 16 octets longer than its corresponding plaintext.",
+      "ja": "AEAD_AES_128_GCMの暗号文は、それに対応する平文より正確に16オクテット長です。"
+    },
+    {
+      "indent": 3,
+      "text": "A security analysis of GCM is available in [MV04].",
+      "ja": "GCMのセキュリティ分析は、[MV04]で利用可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.1. Nonce Reuse",
+      "section_title": true,
+      "ja": "5.1.1。使節リユース"
+    },
+    {
+      "indent": 3,
+      "text": "The inadvertent reuse of the same nonce by two invocations of the GCM encryption operation, with the same key, but with distinct plaintext values, undermines the confidentiality of the plaintexts protected in those two invocations, and undermines all of the authenticity and integrity protection provided by that key. For this reason, GCM should only be used whenever nonce uniqueness can be provided with assurance. The design feature that GCM uses to achieve minimal latency causes the vulnerabilities on the subsequent uses of the key. Note that it is acceptable to input the same nonce value multiple times to the decryption operation.",
+      "ja": "GCM暗号化操作の2つの呼び出し、同じキーを持つが、明確な平文の値を持つことにより、同じナンスの不注意による再利用は、これら二つの呼び出しで保護された平文の機密性を損なう、とによって提供さ真正性と完全性保護のすべてを損ないますそのキー。ナンスの一意性が保証を提供することができるたびに、このような理由から、GCMにのみ使用してください。 GCMは、最小限の待ち時間を達成するために使用する設計上の特徴は、キーの次の使用上の脆弱性の原因となります。それは復号化操作に同じノンス値を複数回入力に許容可能であることに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The security consequences are quite serious if an attacker observes two ciphertexts that were created using the same nonce and key values, unless the plaintext and AD values in both invocations of the encrypt operation were identical. First, a loss of confidentiality ensues because he will be able to reconstruct the bitwise exclusive-or of the two plaintext values. Second, a loss of integrity ensues because the attacker will be able to recover the internal hash key used to provide data integrity. Knowledge of this key makes subsequent forgeries trivial.",
+      "ja": "攻撃者が暗号化操作の両方の呼び出しで平文とAD値が同一であった場合を除き、同じナンスおよびキー値を使用して作成された2つの暗号文を観測した場合、セキュリティ上の影響は非常に深刻です。彼は排他的論理和2つの平文値のビットごとを再構築することができるようになりますので、まず、機密性の損失が続きます。攻撃者は、データの整合性を提供するために使用する内部ハッシュキーを回復することができますので、第二に、完全性の損失が続きます。このキーの知識は、その後の偽造は、些細なことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. AEAD_AES_256_GCM",
+      "section_title": true,
+      "ja": "5.2。 AEAD_AES_256_GCM"
+    },
+    {
+      "indent": 3,
+      "text": "This algorithm is identical to AEAD_AES_128_GCM, but with the following differences:",
+      "ja": "このアルゴリズムは、AEAD_AES_128_GCMと同じですが、次のような違いがあります"
+    },
+    {
+      "indent": 6,
+      "text": "K_LEN is 32 octets, instead of 16 octets, and",
+      "ja": "K_LEN代わりに16個のオクテットで、32個のオクテットであり、そして"
+    },
+    {
+      "indent": 6,
+      "text": "AES-256 GCM is used instead of AES-128 GCM.",
+      "ja": "AES-256 GCMは、AES-128 GCMの代わりに使用されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. AEAD_AES_128_CCM",
+      "section_title": true,
+      "ja": "5.3。 AEAD_AES_128_CCM"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD_AES_128_CCM authenticated encryption algorithm works as specified in [CCM], using AES-128 as the block cipher, by providing the key, nonce, associated data, and plaintext to that mode of operation. The formatting and counter generation function are as specified in Appendix A of that reference, and the values of the parameters identified in that appendix are as follows:",
+      "ja": "AEAD_AES_128_CCM動作のモードの鍵、ナンス、関連するデータ、および平文を提供することによって、ブロック暗号としてAES-128を使用して、[CCM]で指定された暗号化アルゴリズムが動作する認証しました。フォーマッティング及びカウンタ生成関数その基準の付録Aで指定されており、次のようにその付録に識別されたパラメータの値は次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "the nonce length n is 12,",
+      "ja": "ナンス長nは、12であります"
+    },
+    {
+      "indent": 6,
+      "text": "the tag length t is 16, and",
+      "ja": "タグの長さtが16であり、そして"
+    },
+    {
+      "indent": 6,
+      "text": "the value of q is 3.",
+      "ja": "Qの値は3です。"
+    },
+    {
+      "indent": 3,
+      "text": "An authentication tag with a length of 16 octets (128 bits) is used. The AEAD_AES_128_CCM ciphertext is formed by appending the authentication tag provided as an output to the CCM encryption operation to the ciphertext that is output by that operation. Test cases are provided in [CCM]. The input and output lengths are as follows:",
+      "ja": "16個のオクテット（128ビット）の長さとの認証タグが使用されます。 AEAD_AES_128_CCMの暗号文は、その操作によって出力される暗号文にCCM暗号化操作への出力として提供された認証タグを付加することにより形成されています。テストケースは、[CCM]で提供されます。次のように入力と出力の長さは、次のとおり"
+    },
+    {
+      "indent": 6,
+      "text": "K_LEN is 16 octets,",
+      "ja": "K_LENは16オクテットです、"
+    },
+    {
+      "indent": 6,
+      "text": "P_MAX is 2^24 - 1 octets,",
+      "ja": "1オクテット -  P_MAXは2 ^ 24であります"
+    },
+    {
+      "indent": 6,
+      "text": "A_MAX is 2^64 - 1 octets,",
+      "ja": "1オクテット -  A_MAXは2 ^ 64であります"
+    },
+    {
+      "indent": 6,
+      "text": "N_MIN and N_MAX are both 12 octets, and",
+      "ja": "N_MINとN_MAXは両方とも12個のオクテットであり、"
+    },
+    {
+      "indent": 6,
+      "text": "C_MAX is 2^24 + 15 octets.",
+      "ja": "C_MAXは2 ^ 24 + 15オクテットです。"
+    },
+    {
+      "indent": 3,
+      "text": "An AEAD_AES_128_CCM ciphertext is exactly 16 octets longer than its corresponding plaintext.",
+      "ja": "AEAD_AES_128_CCMの暗号文は、それに対応する平文より正確に16オクテット長です。"
+    },
+    {
+      "indent": 3,
+      "text": "A security analysis of AES CCM is available in [J02].",
+      "ja": "AES CCMのセキュリティ分析は、[J02]で利用可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3.1. Nonce Reuse",
+      "section_title": true,
+      "ja": "5.3.1。使節リユース"
+    },
+    {
+      "indent": 3,
+      "text": "Inadvertent reuse of the same nonce by two invocations of the CCM encryption operation, with the same key, undermines the security for the messages processed with those invocations. A loss of confidentiality ensues because an adversary will be able to reconstruct the bitwise exclusive-or of the two plaintext values.",
+      "ja": "CCMの暗号化操作の2つの呼び出しによって、同じナンスの不慮の再利用は、同じキーで、それらの呼び出しで処理されたメッセージのセキュリティを損ないます。敵対者が排他的又は二平文の値のビット単位を再構成できるようになるので、機密性の喪失が続きます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. AEAD_AES_256_CCM",
+      "section_title": true,
+      "ja": "5.4。 AEAD_AES_256_CCM"
+    },
+    {
+      "indent": 3,
+      "text": "This algorithm is identical to AEAD_AES_128_CCM, but with the following differences:",
+      "ja": "このアルゴリズムは、AEAD_AES_128_CCMと同じですが、次のような違いがあります"
+    },
+    {
+      "indent": 6,
+      "text": "K_LEN is 32 octets, instead of 16, and",
+      "ja": "K_LEN代わりに16の、32個のオクテットであり、そして"
+    },
+    {
+      "indent": 6,
+      "text": "AES-256 CCM is used instead of AES-128 CCM.",
+      "ja": "AES-CCM 256は、AES-CCM 128の代わりに使用されています。"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The Internet Assigned Numbers Authority (IANA) has defined the \"AEAD Registry\" described below. An algorithm designer MAY register an algorithm in order to facilitate its use. Additions to the AEAD Registry require that a specification be documented in an RFC or another permanent and readily available reference, in sufficient detail that interoperability between independent implementations is possible. Each entry in the registry contains the following elements:",
+      "ja": "IANA（Internet Assigned Numbers Authority）は、以下に説明する \"AEADレジストリ\" を定義しています。アルゴリズムの設計者は、その使用を容易にするために、アルゴリズムを登録することもできます。 AEADレジストリへの追加仕様は、独立した実装の間の相互運用性が可能であることを十分に詳細に、RFCまたは他の永久的かつ容易に入手可能な文献に文書化されることを必要とします。レジストリ内の各エントリには、次の要素が含まれます。"
+    },
+    {
+      "indent": 6,
+      "text": "a short name, such as \"AEAD_AES_128_GCM\", that starts with the string \"AEAD\",",
+      "ja": "短い名前は、そのような文字列「AEAD」で始まる「AEAD_AES_128_GCM」、として、"
+    },
+    {
+      "indent": 6,
+      "text": "a positive number, and",
+      "ja": "正の数、および"
+    },
+    {
+      "indent": 6,
+      "text": "a reference to a specification that completely defines an AEAD algorithm and provides test cases that can be used to verify the correctness of an implementation.",
+      "ja": "完全AEADアルゴリズムを定義し、実装の正しさを検証するために使用することができるテストケースを提供する仕様を参照します。"
+    },
+    {
+      "indent": 3,
+      "text": "Requests to add an entry to the registry MUST include the name and the reference. The number is assigned by IANA. These number assignments SHOULD use the smallest available positive number. Submitters SHOULD have their requests reviewed by the IRTF Crypto",
+      "ja": "レジストリにエントリを追加するための要求は、名前や参照を含まなければなりません。番号は、IANAによって割り当てられます。これらの番号の割り当ては、利用可能な最小の正の数を使用すべきです。提出者はIRTFの暗号化によって、彼らの要求を検討している必要があります"
+    },
+    {
+      "indent": 3,
+      "text": "Forum Research Group (CFRG) at cfrg@ietf.org. Interested applicants that are unfamiliar with IANA processes should visit http://www.iana.org.",
+      "ja": "cfrg@ietf.orgのフォーラム研究グループ（CFRG）。 IANAプロセスに慣れていない興味応募はhttp://www.iana.orgを訪問するべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "The numbers between 32,768 (binary 1000000000000000) and 65,535 (binary 1111111111111111) inclusive, will not be assigned by IANA, and are reserved for private use; no attempt will be made to prevent multiple sites from using the same value in different (and incompatible) ways [RFC2434].",
+      "ja": "32,768（バイナリ1000000000000000）及び65,535（バイナリ1111111111111111）までの間の数字は、IANAによって割り当てられず、私的使用のために予約されています。試みは、異なる（および互換性のない）方法[RFC2434]に同じ値を使用することから、複数のサイトを防ぐために行われません。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following entries to the AEAD Registry:",
+      "ja": "IANAはAEADレジストリに次のエントリを追加しました："
+    },
+    {
+      "indent": 10,
+      "text": "+------------------+-------------+--------------------+\n| Name             |  Reference  | Numeric Identifier |\n+------------------+-------------+--------------------+\n| AEAD_AES_128_GCM | Section 5.1 |          1         |\n| AEAD_AES_256_GCM | Section 5.2 |          2         |\n| AEAD_AES_128_CCM | Section 5.3 |          3         |\n| AEAD_AES_256_CCM | Section 5.4 |          4         |\n+------------------+-------------+--------------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "An IANA registration of an AEAD does not constitute an endorsement of that algorithm or its security.",
+      "ja": "AEADのIANA登録は、そのアルゴリズムの裏書またはそのセキュリティを構成するものではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Other Considerations",
+      "section_title": true,
+      "ja": "7.その他の注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "Directly testing a randomized AEAD encryption algorithm using test cases with fixed inputs and outputs is not possible, since the encryption process is non-deterministic. However, it is possible to test a randomized AEAD algorithm using the following technique. The authenticated decryption algorithm is deterministic, and it can be directly tested. The authenticated encryption algorithm can be tested by encrypting a plaintext, decrypting the resulting ciphertext, and comparing the original plaintext to the post-decryption plaintext. Combining both of these tests covers both the encryption and decryption algorithms.",
+      "ja": "暗号化プロセスは、非決定論的であるため、直接固定入力と出力とテストケースを使用して、無作為AEAD暗号化アルゴリズムをテストすることは、不可能です。しかし、以下の技術を使用して、ランダム化AEADアルゴリズムをテストすることが可能です。認証された暗号解読アルゴリズムは決定論的であり、それは直接テストすることができます。認証された暗号化アルゴリズムは、平文を暗号化した暗号文を復号し、復号後の平文に元の平文を比較することでテストすることができます。これらのテストの両方を組み合わせることにより、暗号化および復号化アルゴリズムの両方をカバーしています。"
+    },
+    {
+      "indent": 3,
+      "text": "The AEAD algorithms selected reflect those that have been already adopted by standards. It is an open question as to what other AEAD algorithms should be added. Many variations on basic algorithms are possible, each with its own advantages. While it is desirable to admit any algorithms that are found to be useful in practice, it is also desirable to limit the total number of registered algorithms. The current specification requires that a registered algorithm provide a complete specification and a set of validation data; it is hoped that these prerequisites set the admission criteria appropriately.",
+      "ja": "選択AEADアルゴリズムは、すでに標準で採用されているものを反映しています。これは、他のAEADアルゴリズムを追加すべきかに関しては未解決の問題です。基本的なアルゴリズムの多くの変形は、独自の長所と、それぞれ可能です。それは実際に有用であることがわかっている任意のアルゴリズムを認めることが望ましいが、登録アルゴリズムの総数を制限することも望ましいです。現在の仕様では、登録されたアルゴリズムは、完全な仕様と検証データのセットを提供することを要求します。これらの前提条件が適切に入学基準を設定することが期待されています。"
+    },
+    {
+      "indent": 3,
+      "text": "It may be desirable to define an AEAD algorithm that uses the generic composition with the encrypt-then-MAC method [BN00], combining a common encryption algorithm, such as CBC [MODES], with a common message authentication code, such as HMAC-SHA1 [RFC2104] or AES CMAC [CMAC]. An AEAD algorithm of this sort would reflect the best current practice, and might be more easily supported by crypto modules that lack support for other AEAD algorithms.",
+      "ja": "そのようなHMAC-として、共通のメッセージ認証コードを用いて、そのようなCBC [MODES]などの一般的な暗号化アルゴリズムを組み合わせ、暗号-THEN-MAC法[BN00]と汎用組成物を使用AEADアルゴリズムを定義することが望ましいかもしれませんSHA1 [RFC2104]またはAES CMAC [CMAC]。この種のAEADアルゴリズムは、現在のベストプラクティスを反映して、より簡単に他のAEADアルゴリズムをサポートしていない暗号モジュールによってサポートされる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes authenticated encryption algorithms, and provides guidance on their use. While these algorithms make it easier, in some ways, to design a cryptographic application, it should be borne in mind that strong cryptographic security is difficult to achieve. While AEAD algorithms are quite useful, they do nothing to address the issues of key generation [RFC4086] and key management [RFC4107].",
+      "ja": "この文書では、認証された暗号化アルゴリズムを説明し、その使用に関するガイダンスを提供します。これらのアルゴリズムは、それが簡単に、いくつかの方法で、暗号化アプリケーションを設計するために作るが、強力な暗号化セキュリティを達成することは困難であることに留意すべきです。 AEADアルゴリズムは非常に有用であるが、彼らは鍵生成の問題に対処するためには何も[RFC4086]と鍵管理[RFC4107]を行いません。"
+    },
+    {
+      "indent": 3,
+      "text": "AEAD algorithms that rely on distinct nonces may be inappropriate for some applications or for some scenarios. Application designers should understand the requirements outlined in Section 3.1.",
+      "ja": "異なるナンスに頼るAEADアルゴリズムは、いくつかの用途のために、またはいくつかのシナリオのために不適切であってもよいです。アプリケーション設計者は、3.1節で概説した要件を理解する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A software implementation of the AEAD encryption operation in a Virtual Machine (VM) environment could inadvertently reuse a nonce due to a \"rollback\" of the VM to an earlier state [GR05]. Applications are encouraged to document potential issues to help the user of the application and the VM avoid unintentional mistakes of this sort. The possibility exists that an attacker can cause a VM rollback; threats and mitigations in that scenario are an area of active research. For perspective, we note that an attacker who can trigger such a rollback may have already succeeded in subverting the security of the system, e.g., by causing an accounting error.",
+      "ja": "仮想マシン（VM）環境でのAEAD暗号化操作のソフトウェア実装は、不注意による以前の状態[GR05]へのVMの「ロールバック」にナンスを再利用することができます。アプリケーションは、アプリケーションのユーザーとVMは、この種の意図しないミスを避けるために潜在的な問題を文書化することが推奨されています。攻撃者は、VMロールバックを引き起こすことができるという可能性が存在します。そのシナリオでの脅威と緩和策は、活発な研究の分野です。視点のために、私たちは、このようなロールバックをトリガすることができ、攻撃者は、すでに会計エラーを引き起こすことによって、例えば、システムのセキュリティを破壊することに成功している可能性があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "An IANA registration of an AEAD algorithm MUST NOT be regarded as an endorsement of its security. Furthermore, the perceived security level of an algorithm can degrade over time, due to cryptanalytic advances or to \"Moore's Law\", that is, the diminishing cost of computational resources over time.",
+      "ja": "AEADアルゴリズムのIANA登録は、セキュリティの承認とみなされてはなりません。さらに、アルゴリズムの知覚セキュリティレベルが原因暗号解読の進歩にまたはそれに「ムーアの法則」、つまり、時間をかけて計算リソースの漸減コスト、時間の経過とともに低下することがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Acknowledgments",
+      "section_title": true,
+      "ja": "9.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Many reviewers provided valuable comments on earlier drafts of this document. Some fruitful discussions took place on the email list of the Crypto Forum Research Group in 2006.",
+      "ja": "多くのレビュアーは、このドキュメントの以前の草稿に貴重なコメントを提供しました。いくつかの実りの議論は、2006年に暗号フォーラム研究グループの電子メールリストに行われました。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[CCM] Dworkin, M., \"NIST Special Publication 800-38C: The CCM Mode for Authentication and Confidentiality\", U.S. National Institute of Standards and Technology, <http://csrc.nist.gov/publications/nistpubs/800-38C/ SP800-38C.pdf>.",
+      "ja": "[CCM] Dworkin、M.、「NIST特別出版800-38C：認証および機密保持のためのCCMモード」、米国立標準技術研究所、<http://csrc.nist.gov/publications/nistpubs/800- 38C / SP800-38C.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[GCM] Dworkin, M., \"NIST Special Publication 800-38D: Recommendation for Block Cipher Modes of Operation: Galois/Counter Mode (GCM) and GMAC.\", U.S. National Institute of Standards and Technology, November 2007, <http://csrc.nist.gov/publications/nistpubs/800-38D/ SP-800-38D.pdf>.",
+      "ja": "[GCM] Dworkin、M.、 \"は、NIST Special Publication 800-38D：動作のブロック暗号モードのための推奨事項：ガロア/カウンタモード（GCM）とGMAC\"、米国立標準技術研究所、2007年11月、<のhttp： //csrc.nist.gov/publications/nistpubs/800-38D/ SP-800-38D.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[BN00] Bellare, M. and C. Namprempre, \"Authenticated encryption: Relations among notions and analysis of the generic composition paradigm\", Proceedings of ASIACRYPT 2000, Springer-Verlag, LNCS 1976, pp. 531-545, 2002.",
+      "ja": "[BN00]ベラー、M.とC. Namprempre、「認証暗号化：概念と一般的な組成パラダイムの分析間の関係」、ASIACRYPT 2000の議事録、シュプリンガー・フェアラーク、LNCS 1976、頁531から545、2002。。"
+    },
+    {
+      "indent": 3,
+      "text": "[BOYD] Boyd, C. and A. Mathuria, \"Protocols for Authentication and Key Establishment\", Springer 2003.",
+      "ja": "[BOYD]ボイド、C.とA. Mathuria、スプリンガー2003 \"の認証と鍵確立のためのプロトコル\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[CMAC] \"NIST Special Publication 800-38B\", <http://csrc.nist.gov/ publications/nistpubs/800-38B/SP_800-38B.pdf>.",
+      "ja": "[CMAC] \"は、NIST Special Publication 800-38B\"、<http://csrc.nist.gov/出版/ nistpubs / 800-38B / SP_800-38B.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[EEM04] Bellare, M., Namprempre, C., and T. Kohno, \"Breaking and provably repairing the SSH authenticated encryption scheme: A case study of the Encode-then-Encrypt-and-MAC paradigm\", ACM Transactions on Information and System Security, <http://www-cse.ucsd.edu/users/tkohno/papers/TISSEC04/>.",
+      "ja": "【EEM04]ベラー、M.、Namprempre、C.、およびT.河野、「ブレイキングと証明可能SSH認証された暗号化方式修理：エンコード-次いで暗号化・アンド・MACパラダイムのケーススタディ」、情報に関するACMトランザクションおよびシステムセキュリティ、<http://www-cse.ucsd.edu/users/tkohno/papers/TISSEC04/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[GR05] Garfinkel, T. and M. Rosenblum, \"When Virtual is Harder than Real: Security Challenges in Virtual Machine Based Computing Environments\", Proceedings of the 10th Workshop on Hot Topics in Operating Systems, <http://www.stanford.edu/~talg/papers/HOTOS05/ virtual-harder-hotos05.pdf>.",
+      "ja": "[GR05] Garfinkel、T.およびM.ローゼンブラム、「いつ仮想レアルよりも硬い：仮想マシンベースのコンピューティング環境におけるセキュリティの課題」、オペレーティングシステムのホットな話題第10回ワークショップの議事録、<のhttp：//www.stanford .eduの/〜talg /論文/ HOTOS05 /仮想難しく-hotos05.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[J02] Jonsson, J., \"On the Security of CTR + CBC-MAC\", Proceedings of the 9th Annual Workshop on Selected Areas on Cryptography, 2002, <http://csrc.nist.gov/groups/ST/ toolkit/BCM/documents/proposedmodes/ccm/ccm-ad1.pdf>.",
+      "ja": "「CTR + CBC-MACのセキュリティについて」[J02]ヨンソン、J.、暗号化、2002年に選択された領域上の第9回ワークショップの議事録、<http://csrc.nist.gov/groups/ST/ツールキット/BCM/documents/proposedmodes/ccm/ccm-ad1.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[MODES] Dworkin, M., \"NIST Special Publication 800-38: Recommendation for Block Cipher Modes of Operation\", U.S. National Institute of Standards and Technology, <http://csrc.nist.gov/publications/nistpubs/800-38a/ sp800-38a.pdf>.",
+      "ja": "[MODES] Dworkin、M.、 \"は、NIST Special Publication 800から38：オペレーションのブロック暗号モードのための勧告\"、米国立標準技術研究所、<http://csrc.nist.gov/publications/nistpubs/800- 38A / sp800-38a.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[MV04] McGrew, D. and J. Viega, \"The Security and Performance of the Galois/Counter Mode (GCM)\", Proceedings of INDOCRYPT '04, December 2004, <http://eprint.iacr.org/2004/193>.",
+      "ja": "[MV04]マグリュー、D.とJ. Viega、 \"セキュリティとガロア/カウンタモード（GCM）の性能\"、INDOCRYPT '04の議事録、2004年12月、<http://eprint.iacr.org/2004/ 193>。"
+    },
+    {
+      "indent": 3,
+      "text": "[R02] Rogaway, P., \"Authenticated encryption with Associated-Data\", ACM Conference on Computer and Communication Security (CCS'02), pp. 98-107, ACM Press, 2002, <http://www.cs.ucdavis.edu/~rogaway/papers/ad.html>.",
+      "ja": "[R02] Rogaway、P.、 \"関連-データを使用した認証暗号化\"、コンピュータと通信のセキュリティ（CCS'02）、頁上のACM会議98から107、ACMプレス、2002年、<のhttp：。//www.csは。 > ucdavis.edu/~rogaway/papers/ad.html。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2104] Krawczyk, H., Bellare, M., and R. Canetti, \"HMAC: Keyed-Hashing for Message Authentication\", RFC 2104, February 1997.",
+      "ja": "[RFC2104] Krawczyk、H.、ベラー、M.、およびR.カネッティ、 \"HMAC：メッセージ認証のための鍵付きハッシュ化\"、RFC 2104、1997年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2434] Narten, T. and H. Alvestrand, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 2434, October 1998.",
+      "ja": "[RFC2434] Narten氏、T.とH. Alvestrand、 \"RFCsにIANA問題部に書くためのガイドライン\"、BCP 26、RFC 2434、1998年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, June 2005.",
+      "ja": "[RFC4086]イーストレーク、D.、シラー、J.、およびS.クロッカー、 \"セキュリティのためのランダム要件\"、BCP 106、RFC 4086、2005年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4106] Viega, J. and D. McGrew, \"The Use of Galois/Counter Mode (GCM) in IPsec Encapsulating Security Payload (ESP)\", RFC 4106, June 2005.",
+      "ja": "[RFC4106] Viega、J.とD.マグリュー、 \"IPsecのカプセル化セキュリティペイロード（ESP）におけるガロア/カウンタモード（GCM）の使用\"、RFC 4106、2005年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4107] Bellovin, S. and R. Housley, \"Guidelines for Cryptographic Key Management\", BCP 107, RFC 4107, June 2005.",
+      "ja": "[RFC4107] Bellovin氏、S.とR. Housley氏、 \"暗号鍵管理のためのガイドライン\"、BCP 107、RFC 4107、2005年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4303] Kent, S., \"IP Encapsulating Security Payload (ESP)\", RFC 4303, December 2005.",
+      "ja": "[RFC4303]ケント、S.、 \"IPカプセル化セキュリティペイロード（ESP）\"、RFC 4303、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4309] Housley, R., \"Using Advanced Encryption Standard (AES) CCM Mode with IPsec Encapsulating Security Payload (ESP)\", RFC 4309, December 2005.",
+      "ja": "[RFC4309] Housley氏、R.、RFC 4309、2005年12月 \"IPsecのカプセル化セキュリティペイロード（ESP）でのAdvanced Encryption Standard（AES）CCMモードを使用しました\"。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "David A. McGrew Cisco Systems, Inc. 510 McCarthy Blvd. Milpitas, CA 95035 US",
+      "ja": "デビッド・A.マグリューシスコシステムズ社510マッカーシーブルバードミルピタス、CA 95035米国"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: (408) 525 8651 EMail: mcgrew@cisco.com URI: http://www.mindspring.com/~dmcgrew/dam.htm",
+      "ja": "電話：（408）525 8651 Eメール：mcgrew@cisco.com URI：http://www.mindspring.com/~dmcgrew/dam.htm"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2008).",
+      "ja": "著作権（C）IETFトラスト（2008）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}
