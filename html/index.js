@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
     listGroup = document.getElementById("RFCs");
     listItem = listGroup.getElementsByTagName('a');
 
-    console.log(filter + ', ' + listItem.length);
+    console.log(filter);
 
     // Loop through all list items, and hide those who don't match the search query
     for (i = 0; i < listItem.length; i++) {
