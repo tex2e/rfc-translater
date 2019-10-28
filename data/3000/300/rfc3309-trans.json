@@ -1,0 +1,689 @@
+{
+  "title": {
+    "text": "RFC 3309 - Stream Control Transmission Protocol (SCTP) Checksum Change",
+    "ja": "RFC 3309 - ストリーム制御伝送プロトコル（SCTP）チェックサムの変更"
+  },
+  "number": 3309,
+  "created_at": "2019-10-26 16:08:35.676376+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                           J. Stone\nRequest for Comments: 3309                                      Stanford\nUpdates: 2960                                                 R. Stewart\nCategory: Standards                                        Cisco Systems\n                                                                 D. Otis\n                                                                SANlight\n                                                          September 2002",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "Stream Control Transmission Protocol (SCTP) Checksum Change",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2002). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2002）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Stream Control Transmission Protocol (SCTP) currently uses an Adler-32 checksum. For small packets Adler-32 provides weak detection of errors. This document changes that checksum and updates SCTP to use a 32 bit CRC checksum.",
+      "ja": "ストリーム制御伝送プロトコル（SCTP）は、現在アドラー-32チェックサムを使用します。小さなパケットのためアドラー-32は、エラーの弱い検出を提供します。この文書では、32ビットのCRCチェックサムを使用するために、そのチェックサムと更新SCTPを変更します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1 Introduction ...................................................  2\n2 Checksum Procedures ............................................  3\n3 Security Considerations.........................................  6\n4 IANA Considerations.............................................  6\n5 Acknowledgments ................................................  6\n6 References .....................................................  7\nAppendix .........................................................  9\nAuthors' Addresses ............................................... 16\nFull Copyright Statement ......................................... 17",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1 Introduction",
+      "ja": "1はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "A fundamental weakness has been detected in SCTP's current Adler-32 checksum algorithm [STONE]. This document updates and replaces the Adler-32 checksum definition in [RFC 2960]. Note that there is no graceful transition mechanism for migrating to the new checksum. Implementations are expected to immediately switch to the new algorithm; use of the old algorithm is deprecated.",
+      "ja": "基本的な弱点は、SCTPの現在アドラー-32チェックサムアルゴリズム[STONE]で検出されています。このドキュメントの更新と[RFC 2960]でアドラー-32チェックサムの定義を置き換えます。新しいチェックサムへの移行のための優雅な移行メカニズムが存在しないことに注意してください。実装は、直ちに新しいアルゴリズムに切り替えることが期待されています。古いアルゴリズムの使用が推奨されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "One requirement of an effective checksum is that it evenly and smoothly spreads its input packets over the available check bits.",
+      "ja": "有効なチェックサムの一つの要件は、それが均一かつ円滑に利用可能なチェック・ビット上の入力パケットを拡散することです。"
+    },
+    {
+      "indent": 3,
+      "text": "From an email from Jonathan Stone, who analyzed the Adler-32 as part of his doctoral thesis:",
+      "ja": "彼の博士論文の一部としてアドラー-32を分析したジョナサン・ストーン、からのメールから："
+    },
+    {
+      "indent": 3,
+      "text": "\"Briefly, the problem is that, for very short packets, Adler32 is guaranteed to give poor coverage of the available bits. Don't take my word for it, ask Mark Adler. :-)",
+      "ja": "「簡単に言えば、この問題は非常に短いパケットに対して、Adler32チェックが利用可能なビットの貧弱なカバレッジを与えることが保証されることである。マーク・アドラーを、それは私の言葉を取ること聞かないでください。:-)"
+    },
+    {
+      "indent": 3,
+      "text": "Adler-32 uses two 16-bit counters, s1 and s2. s1 is the sum of the input, taken as 8-bit bytes. s2 is a running sum of each value of s1. Both s1 and s2 are computed mod-65521 (the largest prime less than 2^16). Consider a packet of 128 bytes. The *most* that each byte can be is 255. There are only 128 bytes of input, so the greatest value which the s1 accumulator can have is 255 * 128 = 32640. So, for 128-byte packets, s1 never wraps. That is critical. Why?",
+      "ja": "アドラー-32は、2つの16ビットカウンタ、S1およびS2を使用します。 S1は8ビット・バイトとし、入力の和です。 S2はS1の各値のランニング和です。 S1とS2の両方MOD-65521（2 ^ 16より小さい最大素数）計算されます。 128バイトのパケットを考えてみましょう。 *ほとんどが*することができ、各バイトがあり、入力の唯一の128バイトなので、S1アキュムレータを持つことができる最大値は128バイトのパケットに対して、だから、255 * 128 = 32640.である255であることを、S1はラップしません。それは非常に重要です。どうして？"
+    },
+    {
+      "indent": 3,
+      "text": "The key is to consider the distribution of the s1 values, over some distribution of the values of the individual input bytes in each packet. Because s1 never wraps, s1 is simply the sum of the individual input bytes. (Even Doug's trick of adding 0x5555 doesn't help here, and an even larger value doesn't really help: we can get at most one mod-65521 reduction.)",
+      "ja": "キーは、各パケット内の個々の入力バイトの値のいくつか分布上、S1値の分布を考慮することです。 s1がラップしたことがないので、S1は、単に個々の入力バイトの合計です。 （0x5555での追加のさえDougのトリックはここに助けにはならない、とさらに大きな価値が本当に助けにはならない：私たちは多くても1つのmod-65521の減少を得ることができます。）"
+    },
+    {
+      "indent": 3,
+      "text": "Given the further assumption that the input bytes are drawn independently from some distribution (they probably aren't: for file system data, it's even worse than that!), the Central Limit Theorem tells us that that s1 will tend to have a normal distribution. That's bad: it tells us that the value of s1 will have hot-spots at around 128 times the mean of the input distribution: around 16k, assuming a uniform distribution. That's bad. We want the accumulator to wrap as many times as possible, so that the resulting sum has as close to a uniform distribution as possible. (I call this \"fairness\".)",
+      "ja": "入力バイトは、いくつかのディストリビューション（！彼らはおそらくありません：ファイルシステムデータのために、それはそれよりもさらに悪いです）から独立して描かれていることをさらに仮定を考えると、中心極限定理は、s1は、正規分布を有する傾向があることを教えてくれる。それは悪いです：一様分布を仮定すると、周り16K：それはS1の値は入力分布の約128倍の平均でホットスポットを持つことになりますことを教えてくれる。それは良くないね。私たちは、その和が可能な限り均一な分布に近い持つようにアキュムレータが、できるだけ多くの回数をラップします。 （私はこの「公正」と呼んでいます。）"
+    },
+    {
+      "indent": 3,
+      "text": "So, for short packets, the Adler-32 s1 sum is guaranteed to be unfair. Why is that bad? It's bad because the space of valid packets -- input data, plus checksum values -- is also small. If all packets have checksum values very close to 32640, then the likelihood of even a 'small' error leaving a damaged packet with a valid checksum is higher than if all checksum values are equally likely.\"",
+      "ja": "だから、ショートパケットのために、アドラー-32 s1の合計は不公平であることが保証されます。なぜそれが悪いのですか？入力されたデータに加え、チェックサム値 -   - も小さい有効なパケットのスペースがあるためそれは悪いです。すべてのパケットが32640に非常に近いのチェックサム値を持っている場合は、有効なチェックサムで破損したパケットを残しても、「小さな」エラーの可能性は、すべてのチェックサム値が等しく可能性がある場合よりも高くなっています。」"
+    },
+    {
+      "indent": 3,
+      "text": "Due to this inherent weakness, exacerbated by the fact that SCTP will first be used as a signaling transport protocol where signaling messages are usually less than 128 bytes, a new checksum algorithm is specified by this document, replacing the current Adler-32 algorithm with CRC-32c.",
+      "ja": "SCTPは、第1のシグナリングメッセージは、通常、128バイト未満であるシグナリングトランスポートプロトコルとして使用されるという事実によって悪化この固有の弱点に、新しいチェックサムアルゴリズムは、CRCと現在アドラー-32アルゴリズムを置き換え、この文書で指定されています-32c。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1 Conventions",
+      "section_title": true,
+      "ja": "1.1表記"
+    },
+    {
+      "indent": 3,
+      "text": "The keywords MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD,SHOULD NOT, RECOMMENDED, NOT RECOMMENDED, MAY, and OPTIONAL, when they appear in this document, are to be interpreted as described in [RFC2119].",
+      "ja": "彼らは、この文書に表示される[RFC2119]で説明したように解釈される際のキーワードは、REQUIREDは、、、、、、推奨MAY、およびオプションではない、推奨すべきでないないものとものとしてはなりませんしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Bit number order is defined in [RFC1700].",
+      "ja": "ビット数順序は[RFC1700]で定義されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2 Checksum Procedures",
+      "ja": "2つのチェックサム手順"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures described in section 2.1 of this document MUST be followed, replacing the current checksum defined in [RFC2960].",
+      "ja": "この文書のセクション2.1に記載された手順は、[RFC2960]で定義された現在のチェックサムを置き換える、従わなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore any references within [RFC2960] to Adler-32 MUST be treated as a reference to CRC-32c. Section 2.1 of this document describes the new calculation and verification procedures that MUST be followed.",
+      "ja": "またアドラー-32 [RFC2960]内の任意の参照はCRC-32Cを参照として扱われなければなりません。このドキュメントのセクション2.1に従わなければならない新しい計算と検証の手順を説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1 Checksum Calculation",
+      "section_title": true,
+      "ja": "2.1チェックサムの計算"
+    },
+    {
+      "indent": 3,
+      "text": "When sending an SCTP packet, the endpoint MUST strengthen the data integrity of the transmission by including the CRC-32c checksum value calculated on the packet, as described below.",
+      "ja": "SCTPパケットを送信するとき、以下に記載されるように、エンドポイントは、パケットで計算CRC-32Cのチェックサム値を含むことによって、送信のデータの整合性を強化しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "After the packet is constructed (containing the SCTP common header and one or more control or DATA chunks), the transmitter shall:",
+      "ja": "パケットが（SCTP共通ヘッダと1つ以上の制御またはDATAチャンクを含む）を構築した後、送信機はなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1) Fill in the proper Verification Tag in the SCTP common header and initialize the Checksum field to 0's.",
+      "ja": "1）SCTP共通ヘッダに適切な検証タグを入力し、0のにチェックサムフィールドを初期化します。"
+    },
+    {
+      "indent": 3,
+      "text": "2) Calculate the CRC-32c of the whole packet, including the SCTP common header and all the chunks.",
+      "ja": "2）SCTP共通ヘッダとすべてのチャンクを含む、全パケットのCRC-32Cを計​​算します。"
+    },
+    {
+      "indent": 3,
+      "text": "3) Put the resulting value into the Checksum field in the common header, and leave the rest of the bits unchanged.",
+      "ja": "3）共通ヘッダ内のチェックサムフィールドにその値を入れ、そして不変のビットの残りの部分を残します。"
+    },
+    {
+      "indent": 3,
+      "text": "When an SCTP packet is received, the receiver MUST first check the CRC-32c checksum:",
+      "ja": "SCTPパケットが受信されると、受信機は、最初CRC-32Cのチェックサムをチェックしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1) Store the received CRC-32c value,",
+      "ja": "1）、受信したCRC-32C値を格納"
+    },
+    {
+      "indent": 3,
+      "text": "2) Replace the 32 bits of the Checksum field in the received SCTP packet with all '0's and calculate a CRC-32c value of the whole received packet. And,",
+      "ja": "2）全て「0で受信SCTPパケット内のチェックサムフィールドの32ビットを交換し、全受信パケットのCRC-32C値を計算します。そして、"
+    },
+    {
+      "indent": 3,
+      "text": "3) Verify that the calculated CRC-32c value is the same as the received CRC-32c value. If not, the receiver MUST treat the packet as an invalid SCTP packet.",
+      "ja": "3）計算されたCRC-32C値は、受信CRC-32C値と同じであることを確認します。そうでない場合、受信機は、無効なSCTPパケットとしてパケットを扱わなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The default procedure for handling invalid SCTP packets is to silently discard them.",
+      "ja": "無効なSCTPパケットを処理するためのデフォルトの手順は静かにそれらを捨てることです。"
+    },
+    {
+      "indent": 3,
+      "text": "Any hardware implementation SHOULD be done in a way that is verifiable by the software.",
+      "ja": "任意のハードウェア実装は、ソフトウェアによって検証可能な方法で行うべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "We define a 'reflected value' as one that is the opposite of the normal bit order of the machine. The 32 bit CRC is calculated as described for CRC-32c and uses the polynomial code 0x11EDC6F41 (Castagnoli93) or x^32+x^28+x^27+x^26+x^25 +x^23+x^22+x^20+x^19+x^18+x^14+x^13+x^11+x^10+x^9+x^8+x^6+x^0. The CRC is computed using a procedure similar to ETHERNET CRC [ITU32], modified to reflect transport level usage.",
+      "ja": "我々は、機械の通常のビット順序の逆であるとして「反射値を」定義します。 CRC-32Cについて記載多項式コード0x11EDC6F41（Castagnoli93）またはX ^ 32 + X ^ 28 + X ^ 27 + X ^ 26 + X ^ 25 + X ^ 23 + X ^ 22 +を使用するように32ビットのCRCが計算されますX ^ 20 + X ^ 19 + X ^ 18 + X ^ 14 + X ^ 13 + X ^ 11 + X ^ 10 + X ^ 9 + X ^ 8 + X ^ 6 + X ^ 0。 CRCは、トランスポートレベルの使用を反映するように修正ETHERNET CRC [ITU32]と同様の手順を使用して計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "CRC computation uses polynomial division. A message bit-string M is transformed to a polynomial, M(X), and the CRC is calculated from M(X) using polynomial arithmetic [Peterson 72].",
+      "ja": "CRCの計算は、多項式除算を使用しています。多項式演算【ピーターソン72]を使用してメッセージビットストリングMは多項式M（X）に変換され、そしてCRCはM（X）から計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When CRCs are used at the link layer, the polynomial is derived from on-the-wire bit ordering: the first bit 'on the wire' is the high-order coefficient. Since SCTP is a transport-level protocol, it cannot know the actual serial-media bit ordering. Moreover, different links in the path between SCTP endpoints may use different link-level bit orders.",
+      "ja": "CRCはリンク層で使用される場合、多項式がオン・ザ・ワイヤビットの順序から導出される：「ワイヤ上の」最初のビットは、高次係数です。 SCTPは、トランスポートレベルのプロトコルであるので、実際のシリアルメディアビット順序を知ることができません。また、SCTPエンドポイント間の経路における異なるリンクは、異なるリンク・レベルのビット順序を使用してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "A convention must therefore be established for mapping SCTP transport messages to polynomials for purposes of CRC computation. The bit-ordering for mapping SCTP messages to polynomials is that bytes are taken most-significant first; but within each byte, bits are taken least-significant first. The first byte of the message provides the eight highest coefficients. Within each byte, the least-significant SCTP bit gives the most significant polynomial coefficient within that byte, and the most-significant SCTP bit is the least significant polynomial coefficient in that byte. (This bit ordering is sometimes called 'mirrored' or 'reflected' [Williams93].) CRC polynomials are to be transformed back into SCTP transport-level byte values, using a consistent mapping.",
+      "ja": "大会は、したがって、CRC計算の目的のために多項式にマッピングSCTP輸送メッセージのために確立されなければなりません。多項式へのマッピングSCTPメッセージのビット順序はバイトが最初に最上位取らされていることです。しかし、各バイト内のビットは最下位第取られます。メッセージの最初のバイトは8つの最高の係数を提供します。各バイト内、最下位SCTPビットがそのバイト内の最上位の多項式係数を与え、そして最上位SCTPビットがそのバイトの最下位多項式の係数です。 （このビットの順序は、時に[Williams93]「ミラー」または「反射」と呼ばれる。）CRC多項式一致マッピングを使用して、バックSCTPトランスポートレベルのバイト値に変換されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The SCTP transport-level CRC value should be calculated as follows:",
+      "ja": "次のようにSCTPトランスポートレベルのCRC値が計算されるべきです。"
+    },
+    {
+      "indent": 6,
+      "text": "- CRC input data are assigned to a byte stream, numbered from 0 to N-1.",
+      "ja": " -  CRC入力データが0からN-1までの番号が付けられたバイトストリームに割り当てられます。"
+    },
+    {
+      "indent": 6,
+      "text": "- the transport-level byte-stream is mapped to a polynomial value. An N-byte PDU with j bytes numbered 0 to N-1, is considered as coefficients of a polynomial M(x) of order 8N-1, with bit 0 of byte j being coefficient x^(8(N-j)-8), bit 7 of byte j being coefficient x^(8(N-j)-1).",
+      "ja": " - トランスポートレベルのバイトストリームを、多項式の値にマッピングされます。 JのバイトのNバイトのPDUをN-1まで番号0、バイトjのビット0は、係数X ^された状態で、オーダー8N-1の多項式M（x）の係数として考えられている（図8（NJ）-8） 、バイトJある係数X ^（8（NJ）-1）のビット7。"
+    },
+    {
+      "indent": 6,
+      "text": "- the CRC remainder register is initialized with all 1s and the CRC is computed with an algorithm that simultaneously multiplies by x^32 and divides by the CRC polynomial.",
+      "ja": " -  CRC剰余レジスタはすべて1で初期化され、CRCが同時にX ^ 32によって乗算し、CRC多項式で除算アルゴリズムを用いて計算されます。"
+    },
+    {
+      "indent": 6,
+      "text": "- the polynomial is multiplied by x^32 and divided by G(x), the generator polynomial, producing a remainder R(x) of degree less than or equal to 31.",
+      "ja": " - 多項式は、x ^ 32によって乗算され、31以下程度の剰余R（x）を生成し、G（x）は、生成多項式で割りました。"
+    },
+    {
+      "indent": 6,
+      "text": "- the coefficients of R(x) are considered a 32 bit sequence.",
+      "ja": " -  Rの係数（x）は32ビットシーケンスであると考えられます。"
+    },
+    {
+      "indent": 6,
+      "text": "- the bit sequence is complemented. The result is the CRC polynomial.",
+      "ja": " - ビットシーケンスが補完されます。結果は、CRC多項式です。"
+    },
+    {
+      "indent": 6,
+      "text": "- The CRC polynomial is mapped back into SCTP transport-level bytes. Coefficient of x^31 gives the value of bit 7 of SCTP byte 0, the coefficient of x^24 gives the value of bit 0 of byte 0. The coefficient of x^7 gives bit 7 of byte 3 and the coefficient of x^0 gives bit 0 of byte 3. The resulting four-byte transport-level sequence is the 32-bit SCTP checksum value.",
+      "ja": " -  CRC多項式はバックSCTPトランスポートレベルのバイトにマッピングされます。 X ^ 31の係数は、SCTPのバイト0のビット7の値を与える、X ^ 24の係数は、x ^ 7が得られるバイト3のビット7およびXの係数^バイト0の係数のビット0の値を与えます0が得られた4バイトのトランスポートレベルの配列は、32ビットのSCTPチェックサム値であるバイト3のビット0を与えます。"
+    },
+    {
+      "indent": 3,
+      "text": "IMPLEMENTATION NOTE: Standards documents, textbooks, and vendor literature on CRCs often follow an alternative formulation, in which the register used to hold the remainder of the long-division algorithm is initialized to zero rather than all-1s, and instead the first 32 bits of the message are complemented. The long-division algorithm used in our formulation is specified, such that the the initial multiplication by 2^32 and the long-division are combined into one simultaneous operation. For such algorithms, and for messages longer than 64 bits, the two specifications are precisely equivalent. That equivalence is the intent of this document.",
+      "ja": "実装注：標準ドキュメント、教科書、及びCRCの上のベンダー文献は、多くの場合、レジスタがゼロではなく、すべての-1Sに初期化される長い分割アルゴリズムの残りの部分を保持するために使用される代替製剤、その代わりに最初の32ビットをたどりますメッセージの補完されています。我々の製剤に使用される長い分割アルゴリズムは、2 ^ 32による初期乗算と長い分割は、1つの同時操作に結合されるように、指定されています。そのようなアルゴリズムのために、64ビットより長いメッセージのために、2つの仕様を正確に等価です。その等価性は、この文書の意図です。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementors of SCTP are warned that both specifications are to be found in the literature, sometimes with no restriction on the long-division algorithm. The choice of formulation in this document is to permit non-SCTP usage, where the same CRC algorithm may be used to protect messages shorter than 64 bits.",
+      "ja": "SCTPの実装は、両方の仕様は、時には長い分割アルゴリズム上の制限なく、文献に見出されることを警告されています。この文書に記載されている製剤の選択は、同じCRCアルゴリズムは、64ビットより短いメッセージを保護するために使用することができる非SCTPの使用を、可能にすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "If SCTP could follow link level CRC use, the CRC would be computed over the link-level bit-stream. The first bit on the link mapping to the highest-order coefficient, and so on, down to the last link-level bit as the lowest-order coefficient. The CRC value would be transmitted immediately after the input message as a link-level 'trailer'. The resulting link-level bit-stream would be (M(X)x) * x^32) + (M(X)*x^32))/ G(x), which is divisible by G(X). There would thus be a constant CRC remainder for 'good' packets. However, given that implementations of RFC 2960 have already proliferated, the IETF discussions considered that the benefit of a 'trailer' CRC did not outweigh the cost of making a very large change in the protocol processing. Further, packets accepted by the SCTP 'header' CRC are in one-to-one correspondence with packets accepted by a modified procedure using a 'trailer' CRC value, and where the SCTP common checksum header is set to zero on transmission and is received as zero.",
+      "ja": "SCTPは、リンクレベルのCRCの使用をたどることができれば、CRCは、リンク・レベルのビットストリーム上で計算されます。最初の最上位係数へのリンクマッピングのビットなど、ダウン最下位係数として最後のリンク・レベル・ビットに。 CRC値は、リンクレベル「トレーラー」として入力されたメッセージの直後に送信されます。得られたリンクレベルのビットストリームは、（M（X）X）* X ^ 32）+（M（X）G（X）で割り切れる* X ^ 32））/ G（x）は、あろう。したがって「良い」のパケットに対して一定のCRC余りがあるでしょう。しかし、RFC 2960の実装はすでに、「トレーラー」CRCの利点は、プロトコル処理に非常に大きな変化を作るのコストを上回るなか​​ったことが考えられIETF議論を増殖していることを考えます。さらに、SCTP「ヘッダ」によりCRCを受け入れたパケットは「トレーラー」CRC値、及び場所SCTP共通チェックサムヘッダが送信にゼロに設定され、受信されたを使用して修正手順によって受け付けられたパケットと1対1に対応していますゼロとして。"
+    },
+    {
+      "indent": 3,
+      "text": "There may be a computational advantage in validating the Association against the Verification Tag, prior to performing a checksum, as invalid tags will result in the same action as a bad checksum in most cases. The exceptions for this technique would be INIT and some SHUTDOWN-COMPLETE exchanges, as well as a stale COOKIE-ECHO. These special case exchanges must represent small packets and will minimize the effect of the checksum calculation.",
+      "ja": "無効なタグは、ほとんどの場合、不正なチェックサムと同じ動作になりますよう、事前のチェックサムを実行し、検証タグに対する協会の検証における計算利点があるかもしれません。この技術のための例外はINITと、いくつかのSHUTDOWN-COMPLETEの交流だけでなく、古いCOOKIE-ECHOだろう。これらの特別なケースの交換は小さなパケットを表しなければならず、チェックサム計算の影響を最小化します。"
+    },
+    {
+      "indent": 0,
+      "text": "3 Security Considerations",
+      "ja": "3つのセキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "In general, the security considerations of RFC 2960 apply to the protocol with the new checksum as well.",
+      "ja": "一般的には、RFC 2960のセキュリティ上の考慮事項は、同様に新しいチェックサムとのプロトコルに適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4 IANA Considerations",
+      "ja": "4つのIANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "There are no IANA considerations required in this document.",
+      "ja": "この文書に必要な一切IANAの考慮事項はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5 Acknowledgments",
+      "ja": "5つの謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank the following people that have provided comments and input on the checksum issue:",
+      "ja": "著者は、チェックサムの問題にコメントして入力を提供した以下の方々に感謝したいと思います："
+    },
+    {
+      "indent": 3,
+      "text": "Mark Adler, Ran Atkinson, Stephen Bailey, David Black, Scott Bradner, Mikael Degermark, Laurent Glaude, Klaus Gradischnig, Alf Heidermark, Jacob Heitz, Gareth Kiely, David Lehmann, Allision Mankin, Lyndon Ong, Craig Partridge, Vern Paxson, Kacheong Poon, Michael Ramalho, David Reed, Ian Rytina, Hanns Juergen Schwarzbauer, Chip Sharp, Bill Sommerfeld, Michael Tuexen, Jim Williams, Jim Wendt, Michael Welzl, Jonathan Wood, Lloyd Wood, Qiaobing Xie, La Monte Yarroll.",
+      "ja": "マーク・アドラーは、アトキンソン、スティーブン・ベイリー、デビッド・ブラック、スコット・ブラッドナー、ミカエルDegerブランド、ローランGlaude、クラウスGradischnig、アルフHeidermark、ヤコブハイツ、ガレスKiely、デビッド・レーマン、Allisionマンキン、リンドンオング、クレイグ・パートリッジ、バーン・パクソン、Kacheongプーン蘭マイケルRamalho、デビッド・リード、イアンRytina、ハンスユルゲンシュヴァルツェンバウアー、シャープチップ、ビルゾンマーフェルト、マイケルTÜXEN、ジム・ウィリアムズ、ジム・ウェント、マイケルWelzl、ジョナサン・ウッド、ロイドの木材、Qiaobing謝、ラ・モンテYarroll。"
+    },
+    {
+      "indent": 3,
+      "text": "Special thanks to Dafna Scheinwald, Julian Satran, Pat Thaler, Matt Wakeley, and Vince Cavanna, for selection criteria of polynomials and examination of CRC polynomials, particularly CRC-32c [Castagnoli93].",
+      "ja": "多項式とCRC多項式の検査の選択基準、特にCRC-32C [Castagnoli93]をDAFNA Scheinwald、ジュリアンSatran、特許ターラー、マットWakeley、及びビンスCavannaに感謝、。"
+    },
+    {
+      "indent": 3,
+      "text": "Special thanks to Mr. Ross Williams and his document [Williams93]. This non-formal perspective on software aspects of CRCs furthered understanding of authors previously unfamiliar with CRC computation. More formal treatments of [Blahut 94] or [Peterson 72], was also essential.",
+      "ja": "氏はロス・ウィリアムズと彼の文書[Williams93]に感謝します。 CRCのソフト面でのこの非正式な視点は、CRC計算で以前に不慣れな作家の理解をさらに進めます。 [Blahut 94]または[ピーターソン72]、のより正式なトリートメントも不可欠でした。"
+    },
+    {
+      "indent": 0,
+      "text": "6 References",
+      "ja": "6つの参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[Castagnoli93] G. Castagnoli, S. Braeuer and M. Herrman, \"Optimization of Cyclic Redundancy-Check Codes with 24 and 32 Parity Bits\", IEEE Transactions on Communications, Vol. 41, No. 6, June 1993",
+      "ja": "【Castagnoli93] G. Castagnoli、S. Braeuer及びM. Herrman、「24と32パリティビットと巡回冗長検査符号の最適化」、通信に関するIEEEトランザクション、巻。 41、第6号、1993年6月"
+    },
+    {
+      "indent": 3,
+      "text": "[McKee75] H. McKee, \"Improved {CRC} techniques detects erroneous leading and trailing 0's in transmitted data blocks\", Computer Design Volume 14 Number 10 Pages 102-4,106, October 1975",
+      "ja": "【McKee75】H.マッキー、1975年10月、コンピューターデザイン14巻番号10ページ102-4,106、「改善{CRC}技術が誤っ先頭を検出して送信されたデータブロック0の末尾」"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1700] Reynolds, J. and J. Postel, \"ASSIGNED NUMBERS\", RFC 1700, October 1994.",
+      "ja": "[RFC1700]レイノルズ、J.およびJ.ポステル、 \"割り当てられた番号\"、RFC 1700、1994年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2026] Bradner, S., \"The Internet Standards Process -- Revision 3\", BCP 9, RFC 2026, October 1996.",
+      "ja": "[RFC2026]ブラドナーの、S.、 \"インターネット標準化プロセス - リビジョン3\"、BCP 9、RFC 2026、1996年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2960] Stewart, R., Xie, Q., Morneault, K., Sharp, C., Schwarzbauer, H., Taylor, T., Rytina, I., Kalla, M., Zhang, L. and V. Paxson, \"Stream Control Transmission Protocol,\" RFC 2960, October 2000.",
+      "ja": "[RFC2960]スチュワート、R.、謝、Q.、Morneault、K.、シャープ、C.、Schwarzbauer、H.、テイラー、T.、Rytina、I.、カラ、M.、チャン、L.およびV.パクソン、 \"ストリーム制御伝送プロトコル、\" RFC 2960、2000年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ITU32] ITU-T Recommendation V.42, \"Error-correcting procedures for DCEs using asynchronous-to-synchronous conversion\", section 8.1.1.6.2, October 1996.",
+      "ja": "、セクション8.1.1.6.2、1996年10月[ITU32] ITU-T勧告V.42、 \"非同期に同期変換を使用してのDCEのエラー訂正手順\"。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1 Informative References",
+      "section_title": true,
+      "ja": "7.1参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[STONE] Stone, J., \"Checksums in the Internet\", Doctoral dissertation - August 2001.",
+      "ja": "[STONE]ストーン、J.、 \"インターネットでチェックサム\"、博士論文 -  2001年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Williams93] Williams, R., \"A PAINLESS GUIDE TO CRC ERROR DETECTION ALGORITHMS\" - Internet publication, August 1993, http://www.geocities.com/SiliconValley/Pines/ 8659/crc.htm.",
+      "ja": "[Williams93]ウィリアムズ、R.、 \"CRCエラー検出アルゴリズム無痛ガイド\"  - インターネット出版、1993年8月、http://www.geocities.com/SiliconValley/Pines/ 8659 / crc.htm。"
+    },
+    {
+      "indent": 3,
+      "text": "[Blahut 1994] R.E. Blahut, Theory and Practice of Error Control Codes, Addison-Wesley, 1994.",
+      "ja": "[Blahut 1994] R.E.誤り制御符号、アディソン・ウェズリー、1994年のBlahut、理論と実践。"
+    },
+    {
+      "indent": 3,
+      "text": "[Easics 2001] http://www.easics.be/webtools/crctool. Online tools for synthesis of CRC Verilog and VHDL.",
+      "ja": "[Easics 2001] http://www.easics.be/webtools/crctool。 CRC VerilogおよびVHDLの合成のためのオンラインツール。"
+    },
+    {
+      "indent": 3,
+      "text": "[Feldmeier 95] David C. Feldmeier, Fast software implementation of error detection codes, IEEE Transactions on Networking, vol 3 no 6, pp 640-651, December, 1995.",
+      "ja": "[Feldmeier 95]デビッド・C. Feldmeier、エラー検出コードの高速ソフトウェア実装、ネットワーク上のIEEEトランザクション、第3巻なし6、頁640から651まで、12月、1995。"
+    },
+    {
+      "indent": 3,
+      "text": "[Glaise 1997] R. J. Glaise, A two-step computation of cyclic redundancy code CRC-32 for ATM networks, IBM Journal of Research and Development} vol 41 no 6, 1997. http://www.research.ibm.com/journal/rd/416/ glaise.html.",
+      "ja": "【Glaise 1997] RJ Glaise、ATMネットワークのための巡回冗長コードCRC-32の二段階の計算、研究開発のIBMジャーナル}容量41ない6、1997 http://www.research.ibm.com/journal / RD / 416 / glaise.html。"
+    },
+    {
+      "indent": 3,
+      "text": "[Prange 1957] E. Prange, Cyclic Error-Correcting codes in two symbols, Technical report AFCRC-TN-57-103, Air Force Cambridge Research Center, Cambridge, Mass. 1957.",
+      "ja": "[プランゲ1957] E.プランゲ、二つのシンボル、技術レポートAFCRC-TN-57から103、空軍ケンブリッジ研究所、マサチューセッツ州ケンブリッジでの巡回誤り訂正符号。1957。"
+    },
+    {
+      "indent": 3,
+      "text": "[Peterson 1972] W. W. Peterson and E.J Weldon, Error Correcting Codes, 2nd. edition, MIT Press, Cambridge, Massachusetts.",
+      "ja": "[ピーターソン1972] W. W.ピーターソンとE.Jウェルドン、誤り訂正符号、第二。版、MITプレス、ケンブリッジ、マサチューセッツ州。"
+    },
+    {
+      "indent": 3,
+      "text": "[Shie2001] Ming-Der Shieh et. al, A Systematic Approach for Parallel CRC Computations. Journal of Information Science and Engineering, Vol.17 No.3, pp.445-461",
+      "ja": "【Shie2001]明デアShiehら。ら、並列CRC計算のための体系的なアプローチ。情報理工学ジャーナル、Vol.17第3号、pp.445-461"
+    },
+    {
+      "indent": 3,
+      "text": "[Sprachman2001] Michael Sprachman, Automatic Generation of Parallel CRC Circuits, IEEE Design & Test May-June 2001",
+      "ja": "[Sprachman2001]マイケルSprachman、パラレルCRC回路の自動生成、IEEEデザイン＆テスト月 -  2001年6月"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix",
+      "ja": "付録"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix is for information only and is NOT part of the standard.",
+      "ja": "この付録では、情報提供のみを目的と標準の一部ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The anticipated deployment of SCTP ranges over several orders of magnitude of link speed: from cellular-power telephony devices at tens of kilobits, to local links at tens of gigabits. Implementors of SCTP should consider their link speed and choose, from the wide range of CRC implementations, one which matches their own design point for size, cost, and throughput. Many techniques for computing CRCs are known. This Appendix surveys just a few, to give a feel for the range of techniques available.",
+      "ja": "SCTPの予想される展開は、リンク速度の数桁上の範囲：キロビットの十の携帯電力テレフォニーデバイスから、ギガビットの数十のローカルリンクに。 SCTPの実装者は、CRCの実装の広い範囲、サイズ、コスト、およびスループットのための独自のデザインのポイントと一致するものから、彼らのリンク速度を考慮して選択する必要があります。コンピューティングのCRCのための多くの技術が知られています。わずか数この付録の調査では、利用可能な技術の範囲の感触を得ました。"
+    },
+    {
+      "indent": 3,
+      "text": "CRCs are derived from early work by Prange in the 1950s [Prange 57]. The theory underlying CRCs and choice of generator polynomial can be introduced by either the theory of Galois fields [Blahut 94] or as ideals of an algebra over cyclic codes [cite Peterson 72].",
+      "ja": "CRCのは、1950年代にプランゲ[プランゲ57]によって初期の作品から派生しています。 CRCと生成多項式の選択の基礎となる理論はガロアフィールドの理論[Blahut 94]のいずれかによって、または巡回符号上代数の理想として導入することができる[72ピーターソン引用]。"
+    },
+    {
+      "indent": 3,
+      "text": "One of the simplest techniques is direct bit-serial hardware implementations, using the generator polynomial as the taps of a linear feedback shift register (LSFR). LSFR computation follows directly from the mathematics, and is generally attributed to Prange. Tools exist which, a CRC generator polynomial, will produce synthesizable Verilog code for CRC hardware [Easics 2001].",
+      "ja": "最も簡単な技術の一つは、線形フィードバックシフトレジスタ（LSFR）のタップとして生成多項式を用いて、直接ビットシリアルハードウェア実装です。 LSFR計算は数学から直接次、及び一般プランゲに起因します。ツールは、CRC生成多項式は、[Easics 2001] CRCハードウェアの合成Verilogコードを生成する存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "Since LSFRs do not scale well in speed, a variety of other techniques\nhave been explored.  One technique exploits the fact that the divisor\nof the polynomial long-division, G, is known in advance.  It is thus\npossible to pre-compute lookup tables giving the polynomial remainder\nof multiple input bits --- typically 2, 4, or 8 bits of input at a\ntime.  This technique can be used either in software or in hardware.\nSoftware to compute lookup tables yielding 2, 4, or 8 bits of result\nis freely available. [Williams93]",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "For multi-gigabit links, the above techniques may still not be fast enough. One technique for computing CRCS at OC-48 rates is 'two-stage' CRC computation [Glaise 1997]. Here, some multiple of G(x), G(x)H(x), is chosen so as to minimize the number of nonzero coefficients, or weight, of the product G(x)H(x). The low weight of the product polynomial makes it susceptible to efficient hardware divide-by-constant implementations. This first stage gives M(x)/ (G(x)H(x)), as its result. The second stage then divides the result of the first stage by H(x), yielding (M(x)/(G(x)H(x)))/H(x). If H(x) is also relatively prime to G(x), this gives M(x)/G(x). Further developments on this approach can be found in [Shie2001] and [Sprachman2001].",
+      "ja": "マルチギガビットリンクでは、上記の技術はまだ十分に速くないかもしれません。 OC-48レートでCRCを計算するための一つの技術は、「二段階」CRC計算[1997 Glaise]です。非ゼロ係数の数、または重量を最小にするようにここでは、Gの倍数（x）は、G（x）はH（x）は、生成物G（x）はH（X）の、選択されます。製品多項式の低重量は、効率的なハードウェア除算定数の実装にそれが受けやすくなります。この第一段階では、その結果として、M（X）/（G（x）は、H（x））を与えます。第二段階は、次に、Hすることにより、第1段階の結果を分割（X）、（M（X）/（G（x）は、H（X）））/ H（X）を得ました。 H（x）は（x）はまた、Gと互いに素である場合、これは、M（X）/ G（X）が得られます。このアプローチのさらなる発展は、[Sprachman2001] [Shie2001]に見出すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The literature also includes a variety of software CRC implementations. One approach is to use a carefully-tuned assembly code for direct polynomial division. [Feldmeier 95] reports that for low-weight polynomials, tuned polynomial arithmetic gives higher throughput than table-lookup algorithms. Even within table-lookup algorithms, the size of the table can be tuned, either for total cache footprint, or (for space-restricted environments) to minimize total size.",
+      "ja": "文献は、ソフトウェアCRCのさまざまなインプリメンテーションを含みます。一つのアプローチは、直接の多項式除算のために慎重に調整されたアセンブリコードを使用することです。 【Feldmeier 95]低重量多項式のために、調整された多項式演算は、テーブルルックアップアルゴリズムよりも高いスループットが得られることを報告しています。でも、テーブルルックアップアルゴリズムの中に、テーブルのサイズは合計サイズを最小限にするためにどちらかの合計キャッシュ・フットプリントのために、または（スペース制限された環境のために）、調整することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementors should keep in mind, the bit ordering described in Section 2: the ordering of bits within bytes for computing CRCs in SCTP is the least significant bit of each byte is the most-significant polynomial coefficient(and vice-versa). This 'reflected' SCTP CRC bit ordering matches on-the-wire bit order for Ethernet and other serial media, but is the reverse of traditional Internet bit ordering.",
+      "ja": "実装者は、心の中で第2節で説明したビットの順序を維持する必要があり：SCTPにおけるCRCを計算するためのバイト内のビットの順序は、各バイトの最下位ビットは、最上位の多項式係数（及びその逆）です。この「反射」SCTP CRCビットの順序は、イーサネット（登録商標）及び他のシリアルメディアのオン・ザ・ワイヤビットの順序と一致するが、伝統的なインターネットビット順序の逆です。"
+    },
+    {
+      "indent": 3,
+      "text": "One technique to accommodate this bit-reversal can be explained as follows: sketch out a hardware implementation, assuming the bits are in CRC bit order; then perform a left-to-right inversion (mirror image) on the entire algorithm. (We defer, for a moment, the issue of byte order within words.) Then compute that \"mirror image\" in software. The CRC from the \"mirror image\" algorithm will be the bit-reversal of a correct hardware implementation. When the link-level media sends each byte, the byte is sent in the reverse of the host CPU bit-order. Serialization of each byte of the \"reflected\" CRC value re-reverses the bit order, so in the end, each byte will be transmitted on-the-wire in the specified bit order.",
+      "ja": "次のように、このビット反転を収容するための一つの技術は、説明することができる：ビットがCRCビット順序であると仮定すると、ハードウェア実装をスケッチ。次いで、アルゴリズム全体を左から右への反転（ミラーイメージ）を行います。 （私たちは、延期、一瞬、言葉内のバイト順の問題が。）そして、ソフトウェアでその「ミラー・イメージ」を計算します。 「鏡像」アルゴリズムからCRCが正しいハードウェア実装のビット反転であろう。リンクレベルのメディアが各バイトを送信すると、バイトは、ホストCPUのビット順序の逆に送信されます。 CRC値は、ビット順序を再反転させるので、最終的に、各バイトが指定されたビット順にオン・ワイヤ送信される「反射」の各バイトのシリアライズ"
+    },
+    {
+      "indent": 3,
+      "text": "The following non-normative sample code is taken from an open-source CRC generator [Williams93], using the \"mirroring\" technique and yielding a lookup table for SCTP CRC32-c with 256 entries, each 32 bits wide. While neither especially slow nor especially fast, as software table-lookup CRCs go, it has the advantage of working on both big-endian and little-endian CPUs, using the same (host-order) lookup tables, and using only the pre-defined ntohl() and htonl() operations. The code is somewhat modified from [Williams93], to ensure portability between big-endian and little-endian architectures. (Note that if the byte endian-ness of the target architecture is known to be little-endian the final bit-reversal and byte-reversal steps can be folded into a single operation.)",
+      "ja": "以下の非規範的なサンプル・コードは、「ミラーリング」技術を使用して256のエントリ、広い各32ビットでSCTP CRC32-Cのルックアップテーブルをもたらす、オープンソースのCRC生成器[Williams93]から取られます。しばらくどちらもいないソフトウェアのテーブルルックアップCRCが行くように、それは、両方のビッグエンディアンとリトルエンディアンのCPUに取り組んで同じ（ホスト順）ルックアップテーブルを使用して、唯一の事前を使用することの利点を持っている、特に低速でも特に速いです定義ntohl（）とhtonl（）操作。コードは幾分ビッグエンディアンとリトルエンディアンアーキテクチャ間の移植性を確保するために、[Williams93]から変更されています。 （ターゲット・アーキテクチャのバイトエンディアンネスは、リトルエンディアンであることが分かっている場合、最終的なビット反転とバイト反転ステップは単一の動作に折り畳むことができることに留意されたいです。）"
+    },
+    {
+      "indent": 0,
+      "text": "/*************************************************************/\n/* Note Definition for Ross Williams table generator would   */\n/* be: TB_WIDTH=4, TB_POLLY=0x1EDC6F41, TB_REVER=TRUE        */\n/* For Mr. Williams direct calculation code use the settings */\n/* cm_width=32, cm_poly=0x1EDC6F41, cm_init=0xFFFFFFFF,      */\n/* cm_refin=TRUE, cm_refot=TRUE, cm_xorort=0x00000000        */\n/*************************************************************/",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "/* Example of the crc table file */\n#ifndef __crc32cr_table_h__\n#define __crc32cr_table_h__",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "#define CRC32C_POLY 0x1EDC6F41 #define CRC32C(c,d) (c=(c>>8)^crc_c[(c^(d))&0xFF])",
+      "ja": "#define CRC32C_POLY 0x1EDC6F41に#define CRC32C（C、D）（C =（C >> 8）^ crc_c [（C ^（D））＆0xFFで]）"
+    },
+    {
+      "indent": 0,
+      "text": "unsigned long crc_c[256] = { 0x00000000L, 0xF26B8303L, 0xE13B70F7L, 0x1350F3F4L, 0xC79A971FL, 0x35F1141CL, 0x26A1E7E8L, 0xD4CA64EBL, 0x8AD958CFL, 0x78B2DBCCL, 0x6BE22838L, 0x9989AB3BL, 0x4D43CFD0L, 0xBF284CD3L, 0xAC78BF27L, 0x5E133C24L, 0x105EC76FL, 0xE235446CL, 0xF165B798L, 0x030E349BL, 0xD7C45070L, 0x25AFD373L, 0x36FF2087L, 0xC494A384L, 0x9A879FA0L, 0x68EC1CA3L, 0x7BBCEF57L, 0x89D76C54L, 0x5D1D08BFL, 0xAF768BBCL, 0xBC267848L, 0x4E4DFB4BL, 0x20BD8EDEL, 0xD2D60DDDL, 0xC186FE29L, 0x33ED7D2AL, 0xE72719C1L, 0x154C9AC2L, 0x061C6936L, 0xF477EA35L, 0xAA64D611L, 0x580F5512L, 0x4B5FA6E6L, 0xB93425E5L, 0x6DFE410EL, 0x9F95C20DL, 0x8CC531F9L, 0x7EAEB2FAL, 0x30E349B1L, 0xC288CAB2L, 0xD1D83946L, 0x23B3BA45L, 0xF779DEAEL, 0x05125DADL, 0x1642AE59L, 0xE4292D5AL, 0xBA3A117EL, 0x4851927DL, 0x5B016189L, 0xA96AE28AL, 0x7DA08661L, 0x8FCB0562L, 0x9C9BF696L, 0x6EF07595L, 0x417B1DBCL, 0xB3109EBFL, 0xA0406D4BL, 0x522BEE48L, 0x86E18AA3L, 0x748A09A0L, 0x67DAFA54L, 0x95B17957L, 0xCBA24573L, 0x39C9C670L, 0x2A993584L, 0xD8F2B687L, 0x0C38D26CL, 0xFE53516FL, 0xED03A29BL, 0x1F682198L, 0x5125DAD3L, 0xA34E59D0L, 0xB01EAA24L, 0x42752927L, 0x96BF4DCCL, 0x64D4CECFL, 0x77843D3BL, 0x85EFBE38L, 0xDBFC821CL, 0x2997011FL, 0x3AC7F2EBL, 0xC8AC71E8L, 0x1C661503L, 0xEE0D9600L, 0xFD5D65F4L, 0x0F36E6F7L, 0x61C69362L, 0x93AD1061L, 0x80FDE395L, 0x72966096L, 0xA65C047DL, 0x5437877EL, 0x4767748AL, 0xB50CF789L, 0xEB1FCBADL, 0x197448AEL, 0x0A24BB5AL, 0xF84F3859L, 0x2C855CB2L, 0xDEEEDFB1L, 0xCDBE2C45L, 0x3FD5AF46L, 0x7198540DL, 0x83F3D70EL, 0x90A324FAL, 0x62C8A7F9L, 0xB602C312L, 0x44694011L, 0x5739B3E5L, 0xA55230E6L, 0xFB410CC2L, 0x092A8FC1L, 0x1A7A7C35L, 0xE811FF36L,",
+      "ja": "unsigned long型crc_c [256] = {0x00000000L、0xF26B8303L、0xE13B70F7L、0x1350F3F4L、0xC79A971FL、0x35F1141CL、0x26A1E7E8L、0xD4CA64EBL、0x8AD958CFL、0x78B2DBCCL、0x6BE22838L、0x9989AB3BL、0x4D43CFD0L、0xBF284CD3L、0xAC78BF27L、0x5E133C24L、0x105EC76FL、0xE235446CL、0xF165B798L、0x030E349BL、0xD7C45070L、 0x25AFD373L、0x36FF2087L、0xC494A384L、0x9A879FA0L、0x68EC1CA3L、0x7BBCEF57L、0x89D76C54L、0x5D1D08BFL、0xAF768BBCL、0xBC267848L、0x4E4DFB4BL、0x20BD8EDEL、0xD2D60DDDL、0xC186FE29L、0x33ED7D2AL、0xE72719C1L、0x154C9AC2L、0x061C6936L、0xF477EA35L、0xAA64D611L、0x580F5512L、0x4B5FA6E6L、0xB93425E5L、0x6DFE410EL、0x9F95C20DL、 0x8CC531F9L、0x7EAEB2FAL、0x30E349B1L、0xC288CAB2L、0xD1D83946L、0x23B3BA45L、0xF779DEAEL、0x05125DADL、0x1642AE59L、0xE4292D5AL、0xBA3A117EL、0x4851927DL、0x5B016189L、0xA96AE28AL、0x7DA08661L、0x8FCB0562L、0x9C9BF696L、0x6EF07595L、0x417B1DBCL、0xB3109EBFL、0xA0406D4BL、0x522BEE48L、0x86E18AA3L、0x748A09A0L、0x67DAFA54L、 0x95B17957L、0xCBA24573L、0x39C9C670L、0x2A99358 4L、0xD8F2B687L、0x0C38D26CL、0xFE53516FL、0xED03A29BL、0x1F682198L、0x5125DAD3L、0xA34E59D0L、0xB01EAA24L、0x42752927L、0x96BF4DCCL、0x64D4CECFL、0x77843D3BL、0x85EFBE38L、0xDBFC821CL、0x2997011FL、0x3AC7F2EBL、0xC8AC71E8L、0x1C661503L、0xEE0D9600L、0xFD5D65F4L、0x0F36E6F7L、0x61C69362L、0x93AD1061L、0x80FDE395L、 0x72966096L、0xA65C047DL、0x5437877EL、0x4767748AL、0xB50CF789L、0xEB1FCBADL、0x197448AEL、0x0A24BB5AL、0xF84F3859L、0x2C855CB2L、0xDEEEDFB1L、0xCDBE2C45L、0x3FD5AF46L、0x7198540DL、0x83F3D70EL、0x90A324FAL、0x62C8A7F9L、0xB602C312L、0x44694011L、0x5739B3E5L、0xA55230E6L、0xFB410CC2L、0x092A8FC1L、0x1A7A7C35L、0xE811FF36L、"
+    },
+    {
+      "indent": 0,
+      "text": "0x3CDB9BDDL, 0xCEB018DEL, 0xDDE0EB2AL, 0x2F8B6829L, 0x82F63B78L, 0x709DB87BL, 0x63CD4B8FL, 0x91A6C88CL, 0x456CAC67L, 0xB7072F64L, 0xA457DC90L, 0x563C5F93L, 0x082F63B7L, 0xFA44E0B4L, 0xE9141340L, 0x1B7F9043L, 0xCFB5F4A8L, 0x3DDE77ABL, 0x2E8E845FL, 0xDCE5075CL, 0x92A8FC17L, 0x60C37F14L, 0x73938CE0L, 0x81F80FE3L, 0x55326B08L, 0xA759E80BL, 0xB4091BFFL, 0x466298FCL, 0x1871A4D8L, 0xEA1A27DBL, 0xF94AD42FL, 0x0B21572CL, 0xDFEB33C7L, 0x2D80B0C4L, 0x3ED04330L, 0xCCBBC033L, 0xA24BB5A6L, 0x502036A5L, 0x4370C551L, 0xB11B4652L, 0x65D122B9L, 0x97BAA1BAL, 0x84EA524EL, 0x7681D14DL, 0x2892ED69L, 0xDAF96E6AL, 0xC9A99D9EL, 0x3BC21E9DL, 0xEF087A76L, 0x1D63F975L, 0x0E330A81L, 0xFC588982L, 0xB21572C9L, 0x407EF1CAL, 0x532E023EL, 0xA145813DL, 0x758FE5D6L, 0x87E466D5L, 0x94B49521L, 0x66DF1622L, 0x38CC2A06L, 0xCAA7A905L, 0xD9F75AF1L, 0x2B9CD9F2L, 0xFF56BD19L, 0x0D3D3E1AL, 0x1E6DCDEEL, 0xEC064EEDL, 0xC38D26C4L, 0x31E6A5C7L, 0x22B65633L, 0xD0DDD530L, 0x0417B1DBL, 0xF67C32D8L, 0xE52CC12CL, 0x1747422FL, 0x49547E0BL, 0xBB3FFD08L, 0xA86F0EFCL, 0x5A048DFFL, 0x8ECEE914L, 0x7CA56A17L, 0x6FF599E3L, 0x9D9E1AE0L, 0xD3D3E1ABL, 0x21B862A8L, 0x32E8915CL, 0xC083125FL, 0x144976B4L, 0xE622F5B7L, 0xF5720643L, 0x07198540L, 0x590AB964L, 0xAB613A67L, 0xB831C993L, 0x4A5A4A90L, 0x9E902E7BL, 0x6CFBAD78L, 0x7FAB5E8CL, 0x8DC0DD8FL, 0xE330A81AL, 0x115B2B19L, 0x020BD8EDL, 0xF0605BEEL, 0x24AA3F05L, 0xD6C1BC06L, 0xC5914FF2L, 0x37FACCF1L, 0x69E9F0D5L, 0x9B8273D6L, 0x88D28022L, 0x7AB90321L, 0xAE7367CAL, 0x5C18E4C9L, 0x4F48173DL, 0xBD23943EL, 0xF36E6F75L, 0x0105EC76L, 0x12551F82L, 0xE03E9C81L, 0x34F4F86AL, 0xC69F7B69L, 0xD5CF889DL, 0x27A40B9EL, 0x79B737BAL, 0x8BDCB4B9L, 0x988C474DL, 0x6AE7C44EL, 0xBE2DA0A5L, 0x4C4623A6L, 0x5F16D052L, 0xAD7D5351L, };",
+      "ja": "0x3CDB9BDDL、0xCEB018DEL、0xDDE0EB2AL、0x2F8B6829L、0x82F63B78L、0x709DB87BL、0x63CD4B8FL、0x91A6C88CL、0x456CAC67L、0xB7072F64L、0xA457DC90L、0x563C5F93L、0x082F63B7L、0xFA44E0B4L、0xE9141340L、0x1B7F9043L、0xCFB5F4A8L、0x3DDE77ABL、0x2E8E845FL、0xDCE5075CL、0x92A8FC17L、0x60C37F14L、0x73938CE0L、0x81F80FE3L、0x55326B08L、 0xA759E80BL、0xB4091BFFL、0x466298FCL、0x1871A4D8L、0xEA1A27DBL、0xF94AD42FL、0x0B21572CL、0xDFEB33C7L、0x2D80B0C4L、0x3ED04330L、0xCCBBC033L、0xA24BB5A6L、0x502036A5L、0x4370C551L、0xB11B4652L、0x65D122B9L、0x97BAA1BAL、0x84EA524EL、0x7681D14DL、0x2892ED69L、0xDAF96E6AL、0xC9A99D9EL、0x3BC21E9DL、0xEF087A76L、0x1D63F975L、 0x0E330A81L、0xFC588982L、0xB21572C9L、0x407EF1CAL、0x532E023EL、0xA145813DL、0x758FE5D6L、0x87E466D5L、0x94B49521L、0x66DF1622L、0x38CC2A06L、0xCAA7A905L、0xD9F75AF1L、0x2B9CD9F2L、0xFF56BD19L、0x0D3D3E1AL、0x1E6DCDEEL、0xEC064EEDL、0xC38D26C4L、0x31E6A5C7L、0x22B65633L、0xD0DDD530L、0x0417B1DBL、0xF67C32D8L、0xE52CC12CL、 0x1747422FL、0x49547E0BL、 0xBB3FFD08L、0xA86F0EFCL、0x5A04​​8DFFL、0x8ECEE914L、0x7CA56A17L、0x6FF599E3L、0x9D9E1AE0L、0xD3D3E1ABL、0x21B862A8L、0x32E8915CL、0xC083125FL、0x144976B4L、0xE622F5B7L、0xF5720643L、0x07198540L、0x590AB964L、0xAB613A67L、0xB831C993L、0x4A5A4A90L、0x9E902E7BL、0x6CFBAD78L、0x7FAB5E8CL、0x8DC0DD8FL、0xE330A81AL、0x115B2B19L、 0x020BD8EDL、0xF0605BEEL、0x24AA3F05L、0xD6C1BC06L、0xC5914FF2L、0x37FACCF1L、0x69E9F0D5L、0x9B8273D6L、0x88D28022L、0x7AB90321L、0xAE7367CAL、0x5C18E4C9L、0x4F48173DL、0xBD23943EL、0xF36E6F75L、0x0105EC76L、0x12551F82L、0xE03E9C81L、0x34F4F86AL、0xC69F7B69L、0xD5CF889DL、0x27A40B9EL、0x79B737BAL、0x8BDCB4B9L、0x988C474DL、 0x6AE7C44EL、0xBE2DA0A5L、0x4C4623A6L、0x5F16D052L、0xAD7D5351L、}。"
+    },
+    {
+      "indent": 0,
+      "text": "#endif",
+      "ja": "#endifの"
+    },
+    {
+      "indent": 1,
+      "text": "/* Example of table build routine */",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "#include <stdio.h> #include <stdlib.h>",
+      "ja": "書式#include <stdio.hに>する#include <stdlib.h>に含ま"
+    },
+    {
+      "indent": 0,
+      "text": "#define OUTPUT_FILE \"crc32cr.h\" #define CRC32C_POLY 0x1EDC6F41L FILE *tf;",
+      "ja": "#define OUTPUT_FILE \"crc32cr.h\" の#define CRC32C_POLY 0x1EDC6F41L FILEの*のTF。"
+    },
+    {
+      "indent": 0,
+      "text": "unsigned long\nreflect_32 (unsigned long b)\n{\n  int i;\n  unsigned long rw = 0L;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "  for (i = 0; i < 32; i++){\n      if (b & 1)\n        rw |= 1 << (31 - i);\n      b >>= 1;\n  }\n  return (rw);\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "unsigned long\nbuild_crc_table (int index)\n{\n  int i;\n  unsigned long rb;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "rb = reflect_32 (index);",
+      "ja": "RB = reflect_32（インデックス）"
+    },
+    {
+      "indent": 0,
+      "text": "  for (i = 0; i < 8; i++){\n      if (rb & 0x80000000L)\n       rb = (rb << 1) ^ CRC32C_POLY;\n      else\n       rb <<= 1;\n  }\n  return (reflect_32 (rb));\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "main () { int i;",
+      "ja": "メイン（）{I int型。"
+    },
+    {
+      "indent": 2,
+      "text": "printf (\"\\nGenerating CRC-32c table file <%s>\\n\", OUTPUT_FILE);\nif ((tf = fopen (OUTPUT_FILE, \"w\")) == NULL){\n    printf (\"Unable to open %s\\n\", OUTPUT_FILE);\n    exit (1);\n}\nfprintf (tf, \"#ifndef __crc32cr_table_h__\\n\");\nfprintf (tf, \"#define __crc32cr_table_h__\\n\\n\");\nfprintf (tf, \"#define CRC32C_POLY 0x%08lX\\n\", CRC32C_POLY);\nfprintf (tf, \"#define CRC32C(c,d) (c=(c>>8)^crc_c[(c^(d))&0xFF])\\n\");\nfprintf (tf, \"\\nunsigned long  crc_c[256] =\\n{\\n\");\nfor (i = 0; i < 256; i++){\n    fprintf (tf, \"0x%08lXL, \", build_crc_table (i));\n    if ((i & 3) == 3)",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "      fprintf (tf, \"\\n\");\n}\n fprintf (tf, \"};\\n\\n#endif\\n\");",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "  if (fclose (tf) != 0)\n    printf (\"Unable to close <%s>.\" OUTPUT_FILE);\n  else\n    printf (\"\\nThe CRC-32c table has been written to <%s>.\\n\",\n      OUTPUT_FILE);\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "/* Example of crc insertion */",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "#include \"crc32cr.h\"",
+      "ja": "#include \"crc32cr.h\""
+    },
+    {
+      "indent": 0,
+      "text": "unsigned long\ngenerate_crc32c(unsigned char *buffer, unsigned int length)\n{\n  unsigned int i;\n  unsigned long crc32 = ~0L;\n  unsigned long result;\n  unsigned char byte0,byte1,byte2,byte3;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "for (i = 0; i < length; i++){\n    CRC32C(crc32, buffer[i]);\n}\nresult = ~crc32;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "/*  result  now holds the negated polynomial remainder;\n *  since the table and algorithm is \"reflected\" [williams95].\n *  That is,  result has the same value as if we mapped the message\n *  to a polynomial, computed the host-bit-order polynomial\n *  remainder, performed final negation, then did an end-for-end\n *  bit-reversal.\n *  Note that a 32-bit bit-reversal is identical to four inplace\n *  8-bit reversals followed by an end-for-end byteswap.\n *  In other words, the bytes of each bit are in the right order,\n *  but the bytes have been byteswapped.  So we now do an explicit\n *  byteswap.  On a little-endian machine, this byteswap and\n *  the final ntohl cancel out and could be elided.\n */",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "byte0 = result & 0xff;\nbyte1 = (result>>8) & 0xff;\nbyte2 = (result>>16) & 0xff;\nbyte3 = (result>>24) & 0xff;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "  crc32 = ((byte0 << 24) |\n           (byte1 << 16) |\n           (byte2 << 8)  |\n           byte3);\n  return ( crc32 );\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "int\ninsert_crc32(unsigned char *buffer, unsigned int length)\n{\n  SCTP_message *message;\n  unsigned long crc32;\n  message = (SCTP_message *) buffer;\n  message->common_header.checksum = 0L;\n  crc32 = generate_crc32c(buffer,length);\n  /* and insert it into the message */\n  message->common_header.checksum = htonl(crc32);\n  return 1;\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "int\nvalidate_crc32(unsigned char *buffer, unsigned int length)\n{\n  SCTP_message *message;\n  unsigned int i;\n  unsigned long original_crc32;\n  unsigned long crc32 = ~0L;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "  /* save and zero checksum */\n  message = (SCTP_message *) buffer;\n  original_crc32 = ntohl(message->common_header.checksum);\n  message->common_header.checksum = 0L;\n  crc32 = generate_crc32c(buffer,length);\n  return ((original_crc32 == crc32)? 1 : -1);\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Jonathan Stone Room 446, Mail code 9040 Gates building 4A Stanford, Ca 94305",
+      "ja": "ジョナサン・ストーンルーム446、メールコード9040ゲイツビル4Aスタンフォード、カリフォルニア94305"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: jonathan@dsg.stanford.edu",
+      "ja": "メールアドレス：jonathan@dsg.stanford.edu"
+    },
+    {
+      "indent": 3,
+      "text": "Randall R. Stewart 24 Burning Bush Trail. Crystal Lake, IL 60012 USA",
+      "ja": "ランドールR.スチュワート24燃える柴トレイル。クリスタルレイク、IL 60012 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: rrs@cisco.com",
+      "ja": "メールアドレス：rrs@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Douglas Otis 800 E. Middlefield Mountain View, CA 94043 USA",
+      "ja": "ダグラス・オーティス800 E.ミドルマウンテンビュー、CA 94043 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: dotis@sanlight.net",
+      "ja": "メールアドレス：dotis@sanlight.net"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2002). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2002）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}
