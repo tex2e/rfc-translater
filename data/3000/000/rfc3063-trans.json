@@ -1,0 +1,2209 @@
+{
+  "title": {
+    "text": "RFC 3063 - MPLS Loop Prevention Mechanism",
+    "ja": "RFC 3063 - MPLSループ防止機構"
+  },
+  "number": 3063,
+  "created_at": "2019-10-22 09:10:45.235326+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                            Y. Ohba\nRequest for Comments: 3063                                    Y. Katsube\nCategory: Experimental                                           Toshiba\n                                                                E. Rosen\n                                                           Cisco Systems\n                                                               P. Doolan\n                                                       Ennovate Networks\n                                                           February 2001",
+      "raw": true
+    },
+    {
+      "indent": 21,
+      "text": "MPLS Loop Prevention Mechanism",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This memo defines an Experimental Protocol for the Internet community. It does not specify an Internet standard of any kind. Discussion and suggestions for improvement are requested. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのためにExperimentalプロトコルを定義します。それはどんな種類のインターネット標準を指定しません。改善のための議論や提案が要求されています。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2001). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2001）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This paper presents a simple mechanism, based on \"threads\", which can be used to prevent Multiprotocol Label Switching (MPLS) from setting up label switched path (LSPs) which have loops. The mechanism is compatible with, but does not require, VC merge. The mechanism can be used with either the ordered downstream-on-demand allocation or ordered downstream allocation. The amount of information that must be passed in a protocol message is tightly bounded (i.e., no path-vector is used). When a node needs to change its next hop, a distributed procedure is executed, but only nodes which are downstream of the change are involved.",
+      "ja": "本論文では、ラベルはループを有するパス（LSPを）切り替え設定から（MPLS）をマルチプロトコルラベルスイッチングを防止するために使用することができる「スレッド」に基づく単純なメカニズムを、提供します。メカニズムはと互換性がありますが、、VCマージを必要としません。機構は、順序付けられた下流オンデマンド割り当て又は規則下流割当のいずれかと共に使用することができます。プロトコルメッセージに渡さなければならない情報の量（すなわち、何パスベクトルを使用しない）しっかり有界です。ノードが次のホップを変更する必要がある場合、分散手順が実行されているが、変化の下流にあるノードのみが関与しています。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1      Introduction ..........................................  2\n2      Basic definitions .....................................  3\n3      Thread basics .........................................  5\n3.1    Thread attributes .....................................  5\n3.2    Thread loop ...........................................  7\n3.3    Primitive thread actions ..............................  7\n3.4    Examples of primitive thread actions  ................. 10\n4      Thread algorithm ...................................... 14\n5      Applicability of the algorithm ........................ 14\n5.1    LSP Loop prevention/detection ......................... 15\n5.2    Using old path while looping on new path .............. 15\n5.3    How to deal with ordered downstream allocation ........ 15\n5.4    How to realize load splitting ......................... 15\n6      Why this works ........................................ 16\n6.1    Why a thread with unknown hop count is extended ....... 16\n6.2    Why a rewound thread cannot contain a loop ............ 17\n6.2.1  Case1: LSP with known link hop counts ................. 17\n6.2.1  Case2: LSP with unknown link hop counts ............... 17\n6.3    Why L3 loop is detected ............................... 17\n6.4    Why L3 loop is not mis-detected ....................... 17\n6.5    How a stalled thread automatically recovers from loop . 18\n6.6    Why different colored threads do not chase each other . 18\n7      Loop prevention examples .............................. 19\n7.1    First example ......................................... 19\n7.2    Second example ........................................ 23\n8      Thread control block .................................. 24\n8.1    Finite state machine .................................. 25\n9      Comparison with path-vector/diffusion method .......... 28\n10     Security Considerations ............................... 29\n11     Intellectual Property Considerations .................. 29\n12     Acknowledgments ....................................... 29\n13     Authors' Addresses .................................... 30\n14     References ............................................ 30\nAppendix A   Further discussion of the algorithm ............. 31\nFull Copyright Statement ..................................... 44",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This paper presents a simple mechanism, based on \"threads\", which can be used to prevent MPLS from setting up label switched paths (LSPs) which have loops.",
+      "ja": "本論文では、ラベルはループを有するパス（LSPを）切り替え設定からMPLSを防ぐために使用することができる「スレッド」に基づく単純なメカニズムを、提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "When an LSR finds that it has a new next hop for a particular FEC (Forwarding Equivalence Class) [1], it creates a thread and extends it downstream. Each such thread is assigned a unique \"color\", such that no two threads in the network can have the same color.",
+      "ja": "LSRは、それが特定のFEC（転送等価クラス）のための新たな次のホップを有することを発見したとき[1]は、スレッドを作成し、それを下流方向に延びます。それぞれのそのようなスレッドは、ネットワークには2つのスレッドが同じ色を持つことはできませんように、独自の「色」が割り当てられています。"
+    },
+    {
+      "indent": 3,
+      "text": "For a given LSP, once a thread is extended to a particular next hop, no other thread is extended to that next hop unless there is a change in the hop count from the furthest upstream node. The only state information that needs to be associated with a particular next hop for a particular LSP is the thread color and hop count.",
+      "ja": "スレッドが特定の次のホップに拡張されると、最も遠い上流ノードからのホップ数の変化がない限り、所定のLSPのために、他のスレッドは、その次のホップに拡張されていません。特定のLSPのための特定の次のホップに関連付けされる必要がある唯一の状態情報は、糸色とホップ数です。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is a loop, then some thread will arrive back at an LSR through which it has already passed. This is easily detected, since each thread has a unique color.",
+      "ja": "ループがある場合、いくつかのスレッドは、それがすでに通過したLSRに戻って到着します。各スレッドが固有の色を有しているため、これは容易に検出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 3 and 4 provide procedures for determining that there is no loop. When this is determined, the threads are \"rewound\" back to the point of creation. As they are rewound, labels get assigned. Thus labels are NOT assigned until loop freedom is guaranteed.",
+      "ja": "セクション3と4にはループが存在しないことを決定するための手順を提供します。これが決定されると、スレッドが戻っ作成のポイントに「巻き戻されます」。それらが巻き戻されると、ラベルが割り当てられます。ループの自由が保証されるまで、このようにラベルが割り当てられていません。"
+    },
+    {
+      "indent": 3,
+      "text": "While a thread is extended, the LSRs through which it passes must remember its color and hop count, but when the thread has been rewound, they need only remember its hop count.",
+      "ja": "スレッドが拡張されますが、それが通過するのLSRは、その色とホップ数を覚えておく必要がありますが、スレッドが巻き戻されたとき、彼らはそのホップカウントを覚えていなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The thread mechanism works if some, all, or none of the LSRs in the LSP support VC-merge. It can also be used with either the ordered downstream on-demand label allocation or ordered downstream unsolicited label allocation [2,3]. The mechanism can also be applicable to loop detection, old path retention, and load-splitting.",
+      "ja": "スレッド機構が動作する場合、いくつかの、LSPのサポートVC-マージ内のLSRの全部、またはnone。また、注文したダウンストリームオンデマンドラベル割り当てまたは注文下流迷惑ラベル割り当て[2,3]のいずれかで使用することができます。メカニズムは、ループ検出、古いパスの保持、および負荷分割に適用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The state information which must be carried in protocol messages, and which must be maintained internally in state tables, is of fixed size, independent of the network size. Thus the thread mechanism is more scalable than alternatives which require that path-vectors be carried.",
+      "ja": "状態テーブルの内部に維持されなければならない状態プロトコルメッセージで搬送されなければならない情報とは、ネットワークのサイズとは無関係に一定の大きさのものです。したがってスレッド機構は、パスベクトルが実施されることを必要と代替よりスケーラブルです。"
+    },
+    {
+      "indent": 3,
+      "text": "To set up a new LSP after a routing change, the thread mechanism requires communication only between nodes which are downstream of the point of change. There is no need to communicate with nodes that are upstream of the point of change. Thus the thread mechanism is more robust than alternatives which require that a diffusion computation be performed (see section 9).",
+      "ja": "ルーティング変更後に新しいLSPをセットアップするために、スレッド機構は、変化点の下流にあるノード間の通信を必要とします。変化点の上流にあるノードと通信する必要がありません。したがってスレッド機構は、拡散計算が（セクション9を参照）が実行されることを必要と代替よりも堅牢です。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Basic definitions",
+      "section_title": true,
+      "ja": "2.基本的な定義"
+    },
+    {
+      "indent": 3,
+      "text": "LSP",
+      "ja": "LSP"
+    },
+    {
+      "indent": 6,
+      "text": "We will use the term LSP to refer to a multipoint-to-point tree whose root is the egress node. See section 3.5 of [3].",
+      "ja": "私たちは、そのルート出口ノードであるマルチポイント・ツー・ポイントのツリーを参照するために用語LSPを使用します。 [3]のセクション3.5を参照してください。"
+    },
+    {
+      "indent": 6,
+      "text": "In the following, we speak as if there were only a single LSP being set up in the network. This allows us to talk of incoming and outgoing links without constantly saying something like \"for the same LSP.",
+      "ja": "ネットワークに設定されている唯一のLSPがあったかのように、以下では、我々は話します。これは、私たちは常に同じLSPのために」のような何かを言わずに着信と発信のリンクの話をすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Incoming Link, Upstream Link Outgoing Link, Downstream Link",
+      "ja": "着信リンク、上流のリンク発信リンク、ダウンストリームリンク"
+    },
+    {
+      "indent": 6,
+      "text": "At a given node, a given LSP will have one or more incoming, or upstream links, and one outgoing or downstream link. A \"link\" is really an abstract relationship with an \"adjacent\" LSR; it is an \"edge\" in the \"tree\", and not necessarily a particular concrete entity like an \"interface\".",
+      "ja": "所与のノードにおいて、与えられたLSPは、一つ以上の受信、または上流リンク、及び1つの出力又は下流リンクを有することになります。 「リンク」は、本当に「隣接」LSRと抽象の関係です。それは、「ツリー」の「エッジ」、必ずしも「インターフェース」などの特定の具体的なエンティティです。"
+    },
+    {
+      "indent": 3,
+      "text": "Leaf Node, Ingress Node",
+      "ja": "リーフノード、進入ノード"
+    },
+    {
+      "indent": 6,
+      "text": "A node which has no upstream links.",
+      "ja": "何上流リンクを持たないノード。"
+    },
+    {
+      "indent": 3,
+      "text": "Eligible Leaf Node",
+      "ja": "適格リーフノード"
+    },
+    {
+      "indent": 6,
+      "text": "A node which is capable of being a leaf node. For example, a node is not an eligible leaf node if it is not allowed to directly inject L3 packets created or received at the node into its outgoing link.",
+      "ja": "リーフノードであることが可能であるノード。例えば、ノードは、直接その出力リンクにノードで作成または受信されたL3パケットを注入するために許可されていない場合に適格リーフノードではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Link Hop Count",
+      "ja": "リンクホップカウント"
+    },
+    {
+      "indent": 6,
+      "text": "Every link is labeled with a \"link hop count\". This is the number of hops between the given link and the leaf node which is furthest upstream of the given link. At any node, the link hop count for the downstream link is one more than the largest of the hop counts associated with the upstream links.",
+      "ja": "すべてのリンクは「リンクホップ数」で標識されています。これは、所与のリンクと、所与のリンクの最も遠い上流にあるリーフノード間のホップ数です。任意のノードでは、下りリンクのリンクホップ数は、上流のリンクに関連付けられたホップ数の最大より1つ多いです。"
+    },
+    {
+      "indent": 6,
+      "text": "We define the quantity \"Hmax\" at a given node to be the maximum of all the incoming link hop counts. Note that, the link hop count of the downstream link is equal to Hmax+1. At a leaf node, Hmax is set to be zero.",
+      "ja": "我々は、すべての着信リンクのホップ数の最大値であることを所与のノードに量「Hmaxを」を定義します。なお、下流リンクのリンクホップカウントは、Hmaxを+ 1に等しいです。リーフノードでは、Hmaxとはゼロに設定されています。"
+    },
+    {
+      "indent": 6,
+      "text": "An an example of link hop counts is shown in Fig.1.",
+      "ja": "リンクホップ数の例を図1に示します。"
+    },
+    {
+      "indent": 19,
+      "text": " 1   2\nA---B---C       K\n        |       |\n        |3      |1\n        |       |\n        | 4   5 | 6   7\n        D---G---H---I---J\n        |\n        |2\n      1 |\n    E---F",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "Fig.1 Example of link hop counts",
+      "ja": "リンクホップカウントの図1の例"
+    },
+    {
+      "indent": 3,
+      "text": "Next Hop Acquisition",
+      "ja": "ネクストホップの取得"
+    },
+    {
+      "indent": 6,
+      "text": "Node N thought that FEC F was unreachable, but now has a next hop for it.",
+      "ja": "ノードNは、FEC Fが到達不能だったと思ったが、今それのための次のホップを持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Next Hop Loss",
+      "ja": "ネクストホップ損失"
+    },
+    {
+      "indent": 6,
+      "text": "Node N thought that node A was the next hop for FEC F, but now no longer has the next hop for FEC F. A node loses a next hop whenever the next hop goes down.",
+      "ja": "ノードNはノードAは、FEC Fのネクストホップだと思っていないが、今はもう次のホップがダウンしたときにFEC F.のための次のホップは、ノードが次のホップを失う持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Next Hop Change",
+      "ja": "ネクストホップの変更"
+    },
+    {
+      "indent": 6,
+      "text": "At node N, the next hop for FEC F changes from node A to node B, where A is different than B. A next hop change event can be seen as a combination of a next hop loss event on the old next hop and a next hop acquisition event on the new next hop.",
+      "ja": "ノードN、AはBのAネクストホップ変更イベントは古いネクストホップ上の次のホップの損失事象の組み合わせと次のように見ることができるとは異なるノードBにノードAからFEC Fの変化のための次のホップで新しい次のホップに取得イベントをホップ。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Thread basics",
+      "section_title": true,
+      "ja": "3.スレッドの基礎"
+    },
+    {
+      "indent": 3,
+      "text": "A thread is a sequence of messages used to set up an LSP, in the \"ordered downstream-on-demand\" (ingress-initiated ordered control) style.",
+      "ja": "スレッドには、「注文したダウンストリーム・オンデマンド」（入力が開始したが、コントロールを命じた）スタイルでLSPを設定するために使用されるメッセージのシーケンスです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Thread attributes",
+      "section_title": true,
+      "ja": "3.1。スレッドの属性"
+    },
+    {
+      "indent": 3,
+      "text": "There are three attributes related to threads. They may be encoded into a single thread object as:",
+      "ja": "スレッドに関連する3つの属性があります。それらは単一のスレッドオブジェクトに符号化されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": " 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+                             Color                             +\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Hop Count   |      TTL      |           Reserved            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Thread Color",
+      "ja": "糸色"
+    },
+    {
+      "indent": 6,
+      "text": "Every time a path control message is initiated by a node, the node assigns a unique \"color\" to it. This color is to be unique in both time and space: its encoding consists of an IP address of the node concatenated with a unique event identifier from a numbering space maintained by the node. The path setup messages that the node sends downstream will contain this color. Also, when the node sends such a message downstream, it will remember the color, and this color becomes the color of the downstream link.",
+      "ja": "パス制御メッセージがノードによって開始されるたびに、ノードはそれに固有の「色」を割り当てます。この色は、時間と空間の両方で一意であることである。そのコードは、ノードによって維持ナンバリング空間から固有のイベント識別子と連結ノードのIPアドレスで構成されています。ノードがダウンストリーム送信経路設定メッセージは、この色を含んでいます。ノードは、下流ようなメッセージを送信するときにも、それは色を覚えているだろうし、この色は、下流のリンクの色になります。"
+    },
+    {
+      "indent": 6,
+      "text": "When a colored message is received, its color becomes the color of the incoming link. The thread which consists of messages of a certain color will be known as a thread of that color.",
+      "ja": "着色されたメッセージを受信したとき、その色は、着信リンクの色となります。特定の色のメッセージから成る糸は、その色のスレッドとして知られているであろう。"
+    },
+    {
+      "indent": 6,
+      "text": "special color value \"transparent\"(=all 0's) is reserved.",
+      "ja": "「透明」（=全て0の）特別な色の値が予約されています。"
+    },
+    {
+      "indent": 6,
+      "text": "One possible method for unique color assignment is, starting the event identifier from its initial value, and incrementing it by one (modulo its maximum value) each time a color is assigned. In this method, the initial event identifier is either selected at random or assigned to be larger than the largest event identifier used on the previous system incarnation.",
+      "ja": "固有の色割当の一つの可能​​な方法は、その初期値からイベント識別子を起動し、（その最大値を法）一つによって色が割り当てられるたびに、それをインクリメントする、です。この方法では、最初のイベント識別子は、いずれかをランダムに選択または以前のシステムの化身で使用される最大イベント識別子よりも大きくなるように割り当てられます。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Hop Count",
+      "ja": "スレッドホップカウント"
+    },
+    {
+      "indent": 6,
+      "text": "In order to maintain link hop counts, we need to carry hop counts in the path control messages. For instance, a leaf node would assign a hop count of 1 to its downstream link, and would store that value into a path setup message it sends downstream. When a path setup message is sent downstream, a node would assign a hop count which is one more than the largest of the incoming link hop counts, to its downstream link, and would store that value into a path setup message it sends downstream. Once the value is stored in a path control message, we may refer to it has a \"thread hop count\".",
+      "ja": "リンクホップ数を維持するために、我々はパス制御メッセージ内のホップ数を実行する必要があります。例えば、リーフノードは、その下流リンクに1のホップカウントを割り当てるであろう、そしてそれは、下流送信経路設定メッセージにその値を格納することになります。経路設定メッセージが下流送信されると、ノードは、その下流のリンクには、着信リンクのホップ数の最大数の多いホップ数を割り当てます、そして、それは下流の送信経路設定メッセージの中にその値を格納します。値をパス制御メッセージに格納されると、それは「スレッドのホップ数を」持っているし、我々は参照することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "A special hop count value \"unknown\"(=0xff), which is larger than any other known value, is used when a loop is found. Once the thread hop count is \"unknown\", it is not increased any more as the thread is extended.",
+      "ja": "特別なホップカウント値「不明」（= 0xffの）ループが発見された場合、任意の他の既知の値よりも大きいが、使用されています。スレッドのホップ数が「不明」になったら、これ以上のスレッドが拡張されて増加していません。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread TTL",
+      "ja": "スレッドTTL"
+    },
+    {
+      "indent": 6,
+      "text": "To avoid infinite looping of control messages in some cases, a thread TTL is used. When a node creates a path control message and sends it downstream, it sets a TTL to the message, and the TTL is decremented at each hop. When the TTL reaches 0, the message is not forwarded any more. Unlike the thread hop counts and the thread colors, the thread TTLs do not needs to be stored in incoming links.",
+      "ja": "いくつかのケースでは、制御メッセージの無限ループを回避するために、スレッドのTTLが使用されています。ノードは、経路制御メッセージを作成して下流に送るとき、それはメッセージにTTLを設定し、TTLは、各ホップでデクリメントされます。 TTLが0になると、メッセージはこれ以上転送されません。スレッドのホップカウントと糸色とは異なり、スレッドのTTLは、着信リンクに格納する必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Thread loop",
+      "section_title": true,
+      "ja": "3.2。糸ループ"
+    },
+    {
+      "indent": 3,
+      "text": "When the same colored thread is received on multiple incoming links, or the received thread color was assigned by the receiving node, it is said that the thread forms a loop. A thread creator can tell whether it assigned the received thread color by checking the IP address part of the received thread color.",
+      "ja": "同じ色のスレッドが受信ノードにより、複数の着信リンク上で受信され、または受信された糸色が割り当てられた場合には、スレッドがループを形成すると言われています。スレッドの作成者は、それが受け取った糸色のIPアドレスの部分をチェックすることにより、受信糸色を割り当てるかどうかを伝えることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Primitive thread actions",
+      "section_title": true,
+      "ja": "3.3。プリミティブスレッドアクション"
+    },
+    {
+      "indent": 3,
+      "text": "Five primitive actions are defined in order to prevent LSP loops by using threads: \"extending\", \"rewinding\", \"withdrawing\", \"merging\", and \"stalling\". This section describes only each primitive action and does not describe how these primitive actions are combined and how the algorithm totally works. The main body of the algorithm is described in section 4.",
+      "ja": "「マージ」、および「ストール」、「吸引」、「拡張」、「巻き戻し」：五のプリミティブアクションはLSPがスレッドを使用してループを防止するために定義されています。このセクションでは、各プリミティブアクションを説明し、これらの原始的なアクションを組み合わせるとどのようにアルゴリズムが完全に機能しているかについては説明しません。アルゴリズムの本体セクション4に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Extending",
+      "ja": "スレッドの拡張"
+    },
+    {
+      "indent": 6,
+      "text": "When a node starts to send a path setup message to its next hop with a set of thread attributes, it is said that \"the node creates a thread and extends it downstream\". When a node receives a path setup message from an upstream node with a set of thread attributes and forwards it downstream, it is said that \"the node receives a thread and extends it downstream\". The color and hop count of the thread become the color and hop count of the outgoing link. Whenever a thread is received on a particular link, the color and hop count of that thread become the color and hop count of that incoming link, replacing any color and hop count that the link may have had previously.",
+      "ja": "ノードは、スレッド属性のセットと、その次のホップに経路設定メッセージを送信するために開始すると、「ノードは、スレッドを作成し、それを下流方向に延びる」と言われています。ノードは、スレッド属性のセットで上流ノードから経路設定メッセージを受信し、下流に転送するとき、「ノードがスレッドを受け取り、それを下流方向に延びる」と言われています。糸の色とホップカウントは、発信リンクの色とホップ数になります。スレッドが特定のリンクで受信されるたびに、そのスレッドの色とホップカウントは、リンクが以前持っていたかもしれない任意の色とホップカウントを置き換える、その入ってくるリンクの色とホップ数になります。"
+    },
+    {
+      "indent": 6,
+      "text": "For example, when an ingress node initiates a path setup, it creates a thread and extends it downstream by sending a path setup message. The thread hop count is set to be 1, and the thread color is set to be the ingress node's address with an appropriate event identifier, and the thread TTL is set to be its maximum value.",
+      "ja": "例えば、入口ノードは経路設定を開始するとき、それはスレッドを作成し、経路設定メッセージを送信することによって、下流に延びています。スレッドホップカウントが1に設定され、そして糸色は、適切なイベント識別子を有する入口ノードのアドレスに設定され、スレッドTTLは、その最大値に設定されます。"
+    },
+    {
+      "indent": 6,
+      "text": "When a node receives a thread and extends it downstream, the node either (i) extends the thread without changing color, or (ii) extend the thread with changing color. The received thread is extended with changing color if it is received on a new incoming link and extended on an already existing outgoing link, otherwise, it is extended without changing color. When a thread is extended with changing color, a new colored thread is created and extended.",
+      "ja": "ノードは、スレッドを受け取り、下流に延びている場合、ノードは、（i）は、色を変更することなくスレッドを拡張し、又は（ii）の色を変えてスレッドを拡張します。受信されたスレッドは、それ以外の場合は、色を変更することなく延長され、それが新しい着信リンク上で受信され、既存の発信リンク上で拡張された場合に色を変えることで拡張されます。スレッドが色を変えて延長された場合、新しいカラースレッドが作成され、拡張されます。"
+    },
+    {
+      "indent": 6,
+      "text": "Thread creation does not occur only at leaf nodes. If an intermediate node has an incoming link, it will create and extend a new thread whenever it acquires a new next hop.",
+      "ja": "スレッドの作成は、リーフノードでのみ発生しません。中間ノードが着信リンクを持っている場合、それは新しい次のホップを取得するたびに新しいスレッドを作成し、拡張します。"
+    },
+    {
+      "indent": 6,
+      "text": "When a node notifies a next hop node of a decrease of the link hop count, if it is not extending a colored thread, a transparent thread is extended.",
+      "ja": "ノードは、リンクのホップ数の減少の次ホップノードを通知するとき、それは色の糸を拡張されていない場合は、透明のスレッドが延長されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Merging",
+      "ja": "スレッドのマージ"
+    },
+    {
+      "indent": 6,
+      "text": "When a node which has a colored outgoing link receives a new thread, it does not necessarily extend the new thread. It may instead 'merge' the new threads into the existing outgoing thread. In this case, no messages are sent downstream. Also, if a new incoming thread is extended downstream, but there are already other incoming threads, these other incoming threads are considered to be merged into the new outgoing thread.",
+      "ja": "色付きの発信リンクを持つノードは、新しいスレッドを受信すると、それは必ずしも新しいスレッドを拡張しません。それは代わりに、既存の発信スレッドに新しいスレッドを「マージ」があります。この場合、メッセージは下流送信されません。新しい着信スレッドが下流に拡張されていますが、他の着信のスレッドがすでに存在する場合にも、これらの他の着信スレッドは新しいスレッドの発信にマージされていると考えられます。"
+    },
+    {
+      "indent": 6,
+      "text": "Specifically, a received thread is merged if all the following conditions hold:",
+      "ja": "次のすべての条件が成り立つ場合には具体的には、受信したスレッドがマージされます。"
+    },
+    {
+      "indent": 6,
+      "text": "o A colored thread is received by node N, AND o The thread does not form a loop, AND o N is not an egress node, AND o N's outgoing link is colored, AND o N's outgoing link hop count is at least one greater than the hop count of the newly received thread.",
+      "ja": "着色されたスレッドがノードNによって受信されるO、スレッドがループを形成しない、およびO Nが出口ノードではなく、Nの発信リンクが着色され、Nの発信リンクのホップ数がより少なくとも1大きいO O O新たに受信したスレッドのホップ数。"
+    },
+    {
+      "indent": 6,
+      "text": "When an outgoing thread rewinds (see below), any incoming threads which have been merged with it will rewind as well.",
+      "ja": "送信スレッドが（下記参照）巻き戻した場合、それにマージされているすべての着信スレッドは、同様に巻き戻します。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Stalling",
+      "ja": "スレッドのストール"
+    },
+    {
+      "indent": 6,
+      "text": "When a colored thread is received, if the thread forms a loop, the received thread color and hop count are stored on the receiving link without being extended. This is the special case of thread merging applied only for threads forming a loop and referred to as the \"thread stalling\", and the incoming link storing the stalled thread is called \"stalled incoming link\". A distinction is made between stalled incoming links and unstalled incoming links.",
+      "ja": "着色されたスレッドを受信したときに糸がループを形成した場合、受信した糸色とホップカウントは拡張されずに受信リンク上に格納されています。これは、スレッドのマージの特殊な場合は、ループを形成するスレッドに対してのみ適用され、「スレッドストール」と呼ばれ、ストールスレッドを記憶する着信リンクが「ストール着信リンク」と呼ばれています。区別が失速着信リンクとunstalled着信リンクの間で行われます。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Rewinding",
+      "ja": "スレッドの巻き戻し"
+    },
+    {
+      "indent": 6,
+      "text": "When a thread reaches a node which satisfies a particular loop-free condition, the node returns an acknowledgment message back to the message initiator in the reverse path on which the thread was extended. The transmission of the acknowledgment messages is the \"rewinding\" of the thread.",
+      "ja": "スレッドは、特定のループフリー条件を満足するノードに到達すると、ノードは、バックスレッドが延長された逆方向経路のメッセージイニシエータに肯定応答メッセージを返します。確認メッセージの送信は、スレッドの「巻き戻し」です。"
+    },
+    {
+      "indent": 6,
+      "text": "The loop-free condition is:",
+      "ja": "ループフリー条件は次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "o A colored thread is received by the egress node, OR o All of the following conditions hold: (a) A colored thread is received by node N, AND (b) N's outgoing link is transparent, AND (c) N's outgoing link hop count is at least one greater than the hop count of the newly received thread.",
+      "ja": "O着色スレッドが出口ノードによって受信されるか、または次の条件のすべてが成立（O）（a）のA着色スレッドがノードNで受信され、（B）Nの発信リンクは透明であり、（C）Nの発信リンクホップカウントは、新たに受信したスレッドのホップ数よりも少なくとも1大きいです。"
+    },
+    {
+      "indent": 6,
+      "text": "When a node rewinds a thread which was received on a particular link, it changes the color of that link to transparent.",
+      "ja": "ノードは、特定のリンク上で受信された糸を巻き戻したときに、それが透明にそのリンクの色を変化させます。"
+    },
+    {
+      "indent": 6,
+      "text": "If there is a link from node M to node N, and M has extended a colored thread to N over that link, and M determines (by receiving a message from N) that N has rewound that thread, then M sets the color of its outgoing link to transparent. M then continues rewinding the thread, and in addition, rewinds any other incoming thread which had been merged with the thread being rewound, including stalled threads.",
+      "ja": "そこNのノードにノードMからのリンクであり、Mは、そのリンクを介してNに着色されたスレッドを拡張しており、Mは、Nがそのスレッドを巻き戻されたこと（Nからメッセージを受信することにより）決定した場合、その後、Mは、色を設定し、その透明への発信のリンク。 Mは、スレッドを巻き戻し続け、加えて、スレッドがストールしたスレッドを含む、巻き戻しされるとマージされていた他の受信スレッドをリワインド。"
+    },
+    {
+      "indent": 6,
+      "text": "Each node can start label switching after the thread colors in all incoming and outgoing links becomes transparent.",
+      "ja": "すべての着信および発信リンクで糸色が透明になった後、各ノードは、ラベルスイッチングを開始することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "Note that transparent threads are threads which have already been rewound; hence there is no such thing as rewinding a transparent thread.",
+      "ja": "透明のスレッドが既に巻き戻しされているスレッドがあることに注意してください。したがって、透明糸を巻き戻すようなものはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Thread Withdrawing",
+      "ja": "撤退スレッド"
+    },
+    {
+      "indent": 6,
+      "text": "It is possible for a node to tear down a path. A node tears down the portion of the path downstream of itself by sending teardown messages to its next hop. This process is known as the \"thread withdrawing\".",
+      "ja": "ノードがパスを取り壊すすることが可能です。ノードは、その次ホップにティアダウンメッセージを送信することにより、下流自体のパスの一部を切断します。このプロセスは、「スレッド撤退」として知られています。"
+    },
+    {
+      "indent": 6,
+      "text": "For example, suppose a node is trying to set up a path, and then experiences a next hop change or a next hop loss. It will withdraw the thread that it had extended down its old next hop.",
+      "ja": "たとえば、ノードがパスを設定しようとすると、その後、次のホップの変更またはネクストホップの損失を経験されているとします。それはその古いネクストホップを下に延長していたことをスレッドを撤回します。"
+    },
+    {
+      "indent": 6,
+      "text": "If node M has extended a thread to node N, and node M then withdraws that thread, N now has one less incoming link than it had before. If N now has no other unstalled incoming links and N is not an eligible leaf node, it must withdraw its outgoing thread. If N still has an unstalled incoming link or N is an eligible leaf node, it may (or may not) need to change the hop count of the outgoing link.",
+      "ja": "ノードMはNをノードにスレッドを拡張していて、ノードMは、そのスレッドを撤回した場合、Nは、今では前に持っていたより1つの少ないの着信リンクを持っています。 Nは、今は他のunstalled着信リンクを持っていないし、Nは対象とリーフノードでない場合、それはその送信スレッドを撤回しなければなりません。 Nはまだunstalledの着信リンクを持っているか、Nが適格リーフノードである場合、それは（またはしない場合があります）、発信リンクのホップ数を変更する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "N needs to change the outgoing hop count if:",
+      "ja": "Nは、以下の場合に、発信ホップ数を変更する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "o The incoming link hop count that was just removed had a larger hop count than any of the remaining incoming links, AND o One of the following conditions holds: (a) The outgoing link is transparent, OR (b) The outgoing link has a known hop count.",
+      "ja": "次のいずれかの条件が成立して、着信リンクホップだけで、残りの着信リンクのいずれかのより大きなホップ数を持っていた削除された回数、〇〇：（a）は、発信リンクは透明である、または（b）出力リンクを持っています知られているホップ数。"
+    },
+    {
+      "indent": 6,
+      "text": "If the outgoing link is transparent, it remains transparent, but the new hop count needs to be sent downstream. If the outgoing link is colored, a new thread (with a new color) needs to be created and extended downstream.",
+      "ja": "発信リンクが透明である場合、それは透明のままですが、新しいホップ数が下流送信する必要があります。発信リンクが着色されている場合は、（新色付き）新しいスレッドが作成され、下流に拡張する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Examples of primitive thread actions",
+      "section_title": true,
+      "ja": "3.4。原始スレッドアクションの例"
+    },
+    {
+      "indent": 3,
+      "text": "The following notations are used to illustrate examples of primitive actions defined for threads.",
+      "ja": "以下の表記は、スレッド用に定義されたプリミティブの操作の例を説明するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A pair of thread attributes stored in each link is represented by \"(C,H)\", where C and H represent the thread color and thread hop count, respectively.",
+      "ja": "各リンクに格納されたスレッド属性の組は、C及びHは、それぞれ、糸色及び糸ホップ数を表し、「（C、H）」で表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A thread marked \"+\" indicates that it is created or received now. A thread marked \"-\" indicates that it is withdrawn now.",
+      "ja": "「+」マークされたスレッドは、それが今で作成または受信されることを示しています。マークされたスレッドは、「 - 」それは今引き抜かれることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "A link labeled with squared brackets (e.g., \"[a]\") indicates that it is an unstalled link. A link labeled with braces (e.g., \"{a}\") indicates that it is a stalled link.",
+      "ja": "二乗ブラケット（例えば、「[A]」）で標識されたリンクは、それがunstalledリンクであることを示しています。ブレース（例えば、「{A}」）で標識されたリンクは、それが停止したリンクであることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Fig. 2 shows an example in which a leaf node A creates a blue thread and extends it downstream.",
+      "ja": "図2は、リーフノードAは、青色のスレッドを作成し、下流側に延びた例を示しています。"
+    },
+    {
+      "indent": 33,
+      "text": "   (bl,1)\nA---[o1]--->",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "Fig.2 Thread extending at leaf node",
+      "ja": "リーフノードで延びる図2のスレッド"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.3 shows an example of thread extending without changing color at intermediate node. Assume that a node B has no incoming and outgoing link before receiving a blue thread. When node B receives the blue thread of hop count 1 on a new incoming link i1, it extends the thread downstream without changing color (Fig.3(a)). After the blue thread is extended, node B receives a red thread of hop count unknown on incoming link i1 again (Fig.3(b)). The red thread is also extended without changing its color, since both i1 and o1 already exists.",
+      "ja": "図3は、中間ノードに色を変化させずに延びる糸の一例を示しています。ノードBは、青色スレッドを受信する前に着信および発信リンクを持たないと仮定する。ノードBは、新しい着信リンクI1上のホップ数1の青色のスレッドを受信すると、それは下流の色を変更することなくスレッドを拡張し（図3（a）参照）。青色のスレッドが拡張された後、ノードBは、再び入ってくるリンクI1上のホップカウント未知の赤い糸を受信する（図3（b）参照）。 I1とO1の両方がすでに存在しているので、赤い糸はまた、その色を変更することなく拡張されます。"
+    },
+    {
+      "indent": 6,
+      "text": "   (bl,1)+     (bl,2)            (re,U)+      (re,U)\n----[i1]--->B---[o1]---->     ----[i1]--->B----[o1]--->",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Fig.3(a) Fig.3(b)",
+      "ja": "図3（a）は図3（B）"
+    },
+    {
+      "indent": 10,
+      "text": "Fig.3 Thread extending without changing color",
+      "ja": "図3のスレッドの色を変更せずに拡張"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.4 shows an example of thread extending with changing color. There are single incoming link i1 and single outgoing link o1 in Fig.4(a). Then a red thread of hop count 3 is received on a new incoming link i2. In this case, the received thread is extended with changing color, i.e., a new green thread is created and extended (Fig.4(b)), since o1 already exists.",
+      "ja": "図4は、色を変えて延びる糸の一例を示しています。単一の着信リンクi1と図4（a）の中の単一の発信リンクo1があります。そして、ホップ数3の赤い糸は、新しい着信リンクI2上で受信されます。 O1が既に存在するので、この場合には、受信されたスレッドは色を変えて拡張され、すなわち、新たなグリーンスレッドは、（図4（b））が作成され、拡張されます。"
+    },
+    {
+      "indent": 4,
+      "text": "   (bl,1)       (bl,2)          (bl,1)       (gr,4)\n----[i1]--->B----[o1]--->    ----[i1]--->B----[o1]--->\n                                         ^\n                                         |\n                             ----[i2]----+\n                                (re,3)+",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Fig.4(a) Fig.4(b)",
+      "ja": "図4（a）は図4（B）"
+    },
+    {
+      "indent": 8,
+      "text": "Fig.4 Thread extending with changing color",
+      "ja": "図4スレッドの色を変えて拡張"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.5 shows an example of thread merging. When a node B receives a red thread of hop count 3, the received thread is not extended since the outgoing link hop count is at least one greater than the received thread hop count. Both the red and blue threads will be rewound when the blue thread on outgoing link o1 is rewound.",
+      "ja": "図5は、スレッドのマージの例を示しています。ノードBは、ホップ数3の赤い糸を受信すると、発信リンクホップカウントは、受信スレッドのホップ数より少なくとも1大きいので、受信スレッドは延長されません。発信リンクO1上の青い糸が巻き戻されるときの両方赤と青のスレッドが巻き戻されます。"
+    },
+    {
+      "indent": 19,
+      "text": "   (bl,3)       (bl,4)\n----[i1]--->B----[o1]--->\n            ^\n            |\n----[i2]----+\n   (re,3)+",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Fig.5 Thread merging",
+      "ja": "図5スレッドのマージ"
+    },
+    {
+      "indent": 3,
+      "text": "Figs 6 and 7 show examples of thread stalling. When a node B receives a blue thread of hop count 10 on incoming link i2 in Fig.6, it \"stalls\" the received thread since the blue thread forms a loop. In Fig.7, a leaf node A finds the loop of its own thread.",
+      "ja": "図6及びスレッドストールの7例を示します。ノードBは、図6に着信リンクI2にホップカウント10の青色のスレッドを受信すると、「ストール」ブルースレッド以降に受信スレッドは、ループを形成します。図7において、リーフノードAは、自身のスレッドのループを見つけます。"
+    },
+    {
+      "indent": 20,
+      "text": "   (bl,3)       (bl,4)\n----[i1]--->B----[o1]--->\n            ^\n            |\n----{i2}----+\n   (bl,10)+",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Fig.6 Thread stalling (1)",
+      "ja": "失速図6のスレッド（1）"
+    },
+    {
+      "indent": 20,
+      "text": "  (bl,10)+      (bl,1)\n----{i1}--->A----[o1]--->",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Fig.7 Thread stalling (2)",
+      "ja": "失速図7のスレッド（2）"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.8 shows an example of thread rewinding. When the yellow thread which is currently being extended is rewound (Fig.8(a)), the node changes all the incoming and outgoing thread color to transparent, and propagates thread rewinding to upstream nodes (Fig.8(b)).",
+      "ja": "図8は、糸の巻き戻しの一例を示しています。現在拡張されている黄色の糸を巻き戻されると（図8（a）参照）、ノードが透明にすべての着信および発信糸色を変更し、上流ノード（図8（b）参照）に巻き戻しスレッドを伝播します。"
+    },
+    {
+      "indent": 5,
+      "text": "   (bl,1)       (ye,2)                  (tr,1)       (tr,2)\n----[i2]--->B----[o1]--->            ----[i2]--->B----[o1]--->\n            ^                                    ^\n            |                                    |\n----[i3]----+                        ----[i3]----+\n   (ye,1)                               (tr,1)",
+      "raw": true
+    },
+    {
+      "indent": 12,
+      "text": "Fig.8(a) Fig.8(b)",
+      "ja": "図8（a）は図8（B）"
+    },
+    {
+      "indent": 21,
+      "text": "Fig.8 Thread rewinding",
+      "ja": "図8スレッド巻き戻し"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.9 shows an example of thread withdrawing. In Fig.9(a), the red thread on incoming link i2 is withdrawn. Then Hmax decreases from 3 to 1, and node B creates a new green thread and extends it downstream, as shown in Fig.9(b).",
+      "ja": "図9は、吸引スレッドの一例を示しています。図9（A）においては、入ってくるリンクI2上の赤い糸が引き出されます。次いで、Hmaxを3から1に減少し、ノードBは、新しいグリーンスレッドを作成し、図9（B）に示すように、下流側に延びています。"
+    },
+    {
+      "indent": 7,
+      "text": "   (bl,1)      (re,4)           (bl,1)       (gr,2)+\n----[i1]--->B---[o1]--->     ----[i1]--->B----[o1]--->\n            ^\n            |\n----[i2]----+\n   (re,3)-",
+      "raw": true
+    },
+    {
+      "indent": 16,
+      "text": "Fig.9(a) Fig.9(b)",
+      "ja": "図9（a）は図9（B）"
+    },
+    {
+      "indent": 15,
+      "text": "Fig.9 Thread withdrawing (1)",
+      "ja": "図9スレッド撤退（1）"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.10 shows another example of thread withdrawing. In Fig.10(a), the red thread on incoming link i3 is withdrawn. In this case, Hmax decreases from unknown to 1, however, no thread is extended as shown in Fig.10(b), since the outgoing link has a colored thread and the hop count is unknown.",
+      "ja": "図10は、吸引スレッドの他の例を示します。図10（A）においては、入ってくるリンクI3上の赤い糸が引き出されます。この場合、Hmaxをが未知から1に減少、しかし、スレッドは図10に示すように、発信リンクは着色スレッドを有しているので、（b）は拡張せず、ホップ数は不明です。"
+    },
+    {
+      "indent": 7,
+      "text": "    (bl,1)      (re,U)          (bl,1)       (re,U)\n----[i2]--->B----[o1]--->    ----[i2]--->B----[o1]--->\n            ^\n            |\n----[i3]----+\n    (re,U)-",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Fig.10(a) Fig.10(b)",
+      "ja": "図10（a）は図10（B）"
+    },
+    {
+      "indent": 15,
+      "text": "Fig.10 Thread withdrawing (2)",
+      "ja": "撤退図10のスレッド（2）"
+    },
+    {
+      "indent": 3,
+      "text": "Fig.11 shows another example of thread withdrawing. In Fig.11(a), the transparent thread on incoming link i3 is withdrawn. In this case, a transparent thread is extended (Fig.11(b)), since Hmax decreases and the outgoing link is transparent.",
+      "ja": "図11は、吸引スレッドの他の例を示します。図11（A）においては、入ってくるリンクI3上の透明スレッドが引き出されます。この場合、透明スレッドが延長される（図11（B））、Hmaxをが減少し、発信リンクが透明であるからです。"
+    },
+    {
+      "indent": 7,
+      "text": "    (tr,1)      (tr,U)          (tr,1)       (tr,2)+\n----[i2]--->B----[o1]--->    ----[i2]--->B----[o1]--->\n            ^\n            |\n----[i3]----+\n    (tr,U)-",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Fig.11(a) Fig.11(b)",
+      "ja": "図11（a）は図11（B）"
+    },
+    {
+      "indent": 15,
+      "text": "Fig.11 Thread withdrawing (3)",
+      "ja": "撤退図11のスレッド（3）"
+    },
+    {
+      "indent": 0,
+      "text": "4. Thread algorithm",
+      "section_title": true,
+      "ja": "4.スレッドのアルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "The ordered downstream-on-demand allocation is assumed here, however, the algorithm can be adapted to the ordered downstream allocation, as shown in section 5.",
+      "ja": "セクション5に示すように順序付け下流オンデマンド割り当ては、しかし、アルゴリズムが注文下流割当に適合させることができ、ここで想定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the algorithm, a next hop change event will be separated into two events: a next hop loss event on the old next hop and a next hop acquisition event on the new next hop, in this order.",
+      "ja": "このためには、古いネクストホップの次のホップ損失イベントと新しい次のホップのネクストホップ取得イベント：アルゴリズムでは、ネクストホップの変更イベントは、二つのイベントに分離されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The following notations are defined:",
+      "ja": "次の表記が定義されています。"
+    },
+    {
+      "indent": 9,
+      "text": "Hmax: the largest incoming link hop count\nNi:   the number of unstalled incoming links",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The thread algorithm is described as follows.",
+      "ja": "次のようにスレッドのアルゴリズムについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "When a node acquires a new next hop, it creates a colored thread and extends it downstream.",
+      "ja": "ノードは、新たな次のホップを取得すると、それは着色スレッドを作成し、それを下流方向に延びます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a node loses a next hop to which it has extended a thread, it may withdraw that thread. As described in section 3, this may or may not cause the next hop to take some action. Among the actions the next hop may take are withdrawing the thread from its own next hop, or extending a new thread to its own next hop.",
+      "ja": "ノードは、それがスレッドを拡張していた次のホップを失ったときに、そのスレッドを撤回してもよいです。 3章で述べたように、これは、またはネクストホップが何らかのアクションを取ることが発生しないことがあります。ネクストホップがかかる場合がありますアクションの中で、自身の次のホップから糸を引き出すされている、または自身の次のホップに新しいスレッドを拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "A received colored thread is either stalled, merged, rewound, or extended. A thread with TTL zero is never extended.",
+      "ja": "受信された着色されたスレッドがストールされるか、巻き戻しをマージ、または拡張。 TTLがゼロのスレッドが延長されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When a received thread is stalled at a node, if Ni=0 and the node is not an eligible leaf node, initiate a thread withdrawing. Otherwise, if Ni>0 and the received thread hop count is not unknown, a colored thread of hop count unknown is created and extended. If the received thread hop count is unknown, no thread is extended and no further action is taken.",
+      "ja": "受信されたスレッドがノードでストールされた場合のNi = 0、ノードが対象のリーフノードでない場合、吸引スレッドを開始します。そうでない場合は、> 0 Niおよび受信スレッドのホップ数が不明でない場合は、ホップカウント、未知の着色スレッドが作成され、拡張されます。受信スレッドのホップ数が不明の場合は、スレッドが延長されず、さらなる行動がとられません。"
+    },
+    {
+      "indent": 3,
+      "text": "When a thread being extended is rewound, if the thread hop count is greater than one more than Hmax, a transparent thread of hop count (Hmax+1) is extended downstream.",
+      "ja": "拡張された糸が巻き戻されるときにスレッドホップカウントがHmaxをより1より大きい場合、ホップカウント（Hmaxを+ 1）の透明なスレッドが下流延長されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a node that has an transparent outgoing link receives a transparent thread, if Hmax decreases the node extends it downstream without changing color.",
+      "ja": "透明発信リンクを有するノードは、透明スレッドを受信するとHmaxとが減少した場合、ノードは、色を変化させずに下流に延びています。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Applicability of the algorithm",
+      "section_title": true,
+      "ja": "アルゴリズムの適用性5。"
+    },
+    {
+      "indent": 3,
+      "text": "The thread algorithm described in section 4 can be applied to various LSP management policies.",
+      "ja": "セクション4で説明したスレッドアルゴリズムは、種々のLSP管理ポリシーを適用することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. LSP Loop prevention/detection",
+      "section_title": true,
+      "ja": "5.1。 LSPループ防止/検出"
+    },
+    {
+      "indent": 3,
+      "text": "The same thread algorithm is applicable to both LSP loop prevention and detection.",
+      "ja": "同じスレッドアルゴリズムは、LSPループ防止および検出の両方に適用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "In loop prevention mode, a node transmits a label mapping (including a thread object) for a particular LSP only when it rewinds the thread for that LSP. No mapping message is sent until the thread rewinds.",
+      "ja": "ループ防止モードでは、ノードは、そのLSPのために糸を巻き戻した場合にのみ、特定のLSPのために（スレッドオブジェクトを含む）ラベルマッピングを送信します。スレッドが巻き戻しまで、マッピングメッセージは送信されません。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, if a node operates in loop detection mode, it returns a label mapping message without a thread object immediately after receiving a colored thread. A node which receives a label mapping message that does not have a thread object will not rewind the thread.",
+      "ja": "ノードは、ループ検出モードで動作する一方、それはすぐに着色糸を受信した後、スレッドオブジェクトなしラベルマッピングメッセージを返します。糸を巻き戻しませんスレッドオブジェクトを持たないラベルマッピングメッセージを受信するノード。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Using old path while looping on new path",
+      "section_title": true,
+      "ja": "5.2。新しいパスにループしながら、古いパスを使用します"
+    },
+    {
+      "indent": 3,
+      "text": "When a route changes, one might want to continue to use the old path if the new route is looping. This is achieved simply by holding the label assigned to the downstream link on the old path until the thread being extended on the new route gets rewound. This is an implementation choice.",
+      "ja": "ルートが変更されると、人は新しい経路がループしている場合は、古いパスの使用を継続する場合があります。これは、単に新しいルートに拡張されているスレッドが巻き戻さされるまで、古いパス上の下流のリンクに割り当てられたラベルを保持することによって達成されます。これは、実装の選択です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. How to deal with ordered downstream allocation",
+      "section_title": true,
+      "ja": "5.3。注文した下流の割り当てに対処する方法"
+    },
+    {
+      "indent": 3,
+      "text": "The thread mechanism can be also adapted to ordered downstream allocation mode (or the egress-initiated ordered control) by regarding the event of newly receiving of a label mapping message [4] from the next hop as a next hop acquisition event.",
+      "ja": "スレッド機構はまた、順序付けられた下流割当モードに適合させることができる新たなネクストホップ取得イベントとして次のホップからラベルマッピングメッセージ[4]の受信のイベントに関することによって（または出力が開始制御を注文）。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that a node which doesn't yet have an incoming link behaves as a leaf. In the case where the tree is being initially built up (e.g., the egress node has just come up), each node in turn will behave as a leaf for a short period of time.",
+      "ja": "まだ入って来るリンクを持っていないノードが葉のように振る舞うことに注意してください。木が最初に構築されている場合（例えば、出口ノードがちょうど来ている）に、順に各ノードは、時間の短い期間のための葉のように動作します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. How to realize load splitting",
+      "section_title": true,
+      "ja": "5.4。負荷分割を実現する方法"
+    },
+    {
+      "indent": 3,
+      "text": "A leaf node can easily perform load splitting by setting up two different LSPs for the same FEC. The downstream links for the two LSPs are simply assigned different colors. The thread algorithm now prevents a loop in either path, but also allows the two paths to have a common downstream node.",
+      "ja": "リーフノードは容易に同じFECのための2つの異なるLSPを設定することにより、負荷分割を行うことができます。 2つのLSPのための下流のリンクは、単純に異なる色を割り当てています。スレッドアルゴリズムは、現在のいずれかの経路でループを防止するだけでなく、2つのパスが共通の下流のノードを持つことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If some intermediate node wants to do load splitting, the following modification is made. Assume that there are multiple next hops for the same FEC. If there are n next hops for a particular FEC, the set of incoming links for that FEC's LSP can be partitioned into n subsets, where each subset can be mapped to a distinct outgoing link.",
+      "ja": "いくつかの中間ノードは、負荷分割を行いたい場合は、以下の変更が行われています。同じFECのための複数の次のホップがあることを前提としています。 nは特定のFECのための次のホップがある場合、そのFECのLSPの着信リンクのセットは、各サブセットは別個の発信リンクにマッピングすることができるn個のサブセットに分割することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This provides n LSPs for the FEC. Each such LSP uses a distinct color for its outgoing link. The thread algorithm now prevents a loop in any of the paths, but also allows two or more of the paths to have a common downstream node.",
+      "ja": "これは、FECのためのn個のLSPを提供します。このような各LSPは、その発信リンクのための別個の色を使用します。スレッドアルゴリズムは、現在のパスのいずれかでループを防止するだけでなく、共通の下流のノードを有するようにパスの2つ以上を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "In this case, an interesting situation may happen. Let's say that in Fig.12, node B has two incoming links, i1 and i2, and two outgoing links, o1 and o2, such that i1 is mapped to o1, while i2 is mapped to o2.",
+      "ja": "この場合には、興味深い状況が発生する可能性があります。 I2はO2にマッピングされている間のが、図12に、ノードBは、2つの入力リンク、I1とI2、および2つの出力リンク、I1はO1にマッピングされるように、O1とO2を、持っているとしましょう。"
+    },
+    {
+      "indent": 3,
+      "text": "If a blue thread received on i1 and extended on o1 is again received at node B on i2, the blue thread is not regarded as forming a loop, since i1 and i2 are regarded as belonging to different subsets. Instead, the blue thread received on i2 is extended on o2. If the thread extended on o2 is rewound, a single loop-free LSP which traverses node B twice is established.",
+      "ja": "青色のスレッドがI1で受信及びO1に拡張I2にノードBで再び受信した場合、I1及びI2は異なるサブセットに属すると見なされるので、青い糸は、ループを形成するとはみなされません。代わりに、I2上で受信された青色のスレッドがO2に延長されます。 O2に拡張糸が巻き戻されている場合、シングルループのないLSP回ノードBを横断確立されます。"
+    },
+    {
+      "indent": 11,
+      "text": "+------------------...--------------------+\n.        (bl,3)          (bl,4)           |\n.     ----[i1]---+     +--[o1]---> .... --+\n.                 \\   /\n.                  v /\n|                   B\n|\n+-----------[i2]--->B----[o2]--->\n          (bl,10)+      (bl,11)",
+      "raw": true
+    },
+    {
+      "indent": 12,
+      "text": "Fig.12 Load splitting at intermediate node",
+      "ja": "中間ノードにおける図12の負荷分割"
+    },
+    {
+      "indent": 3,
+      "text": "There is another type of load splitting, in which packets arrived at single incoming link can be label switched to any one of multiple outgoing links. This case does not seem to be a good load-splitting scheme, since the packet order in the same FEC is not preserved. Thus, this document does not focus on this case.",
+      "ja": "パケットは、単一の着信リンクに到着した負荷分割の別のタイプは、ラベルは、複数の送信リンクのいずれかに切り替えることができますがあります。この場合は、同じFECのパケット順序が保存されていないため、良好な負荷分割スキームではないようです。したがって、この文書では、このような場合に焦点を当てていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Whether that's a good type of load splitting or not, the fact remains that ATM-LSRs cannot load split like this because ATM switches just don't have the capability to make forwarding decisions on a per-packet basis.",
+      "ja": "それは、負荷分割かどうかの良いタイプだかどうかは、実際にはATMがちょうどパケット単位で転送決定を行うための機能を持たないスイッチので、ATM-LSRには次のように分割し、ロードすることができないことに変わりはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Why this works",
+      "section_title": true,
+      "ja": "6.この作品はなぜ"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Why a thread with unknown hop count is extended",
+      "section_title": true,
+      "ja": "6.1。未知のホップ数とスレッドが延長されるのはなぜ"
+    },
+    {
+      "indent": 3,
+      "text": "In the algorithm, a thread of unknown hop count is extended when a thread loop is detected. This reduces the number of loop prevention messages by merging threads (of known hop count) that are flowing inside or outside the loop. See Appendix A.12.",
+      "ja": "糸ループが検出された場合のアルゴリズムでは、未知のホップカウントのスレッドが延長されます。これは、ループの内部または外部に流れている（公知のホップ数の）スレッドをマージすることによって、ループ防止メッセージの数を減らします。付録A.12を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Why a rewound thread cannot contain a loop",
+      "section_title": true,
+      "ja": "6.2。なぜ、巻き戻しのスレッドがループを含めることはできません"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.1. Case1: LSP with known link hop counts",
+      "section_title": true,
+      "ja": "6.2.1。ケース1：既知のリンクホップカウントとLSP"
+    },
+    {
+      "indent": 3,
+      "text": "How can we be sure that an established path does not contain a loop when the outgoing link hop count is NOT \"unknown\"?",
+      "ja": "どのように我々は、発信リンクのホップ数が「不明」でない場合確立されたパスがループを含んでいないことを確認することができますか？"
+    },
+    {
+      "indent": 3,
+      "text": "Consider a sequence of LSRs <R1, ..., Rn>, such that there is a loop traversing the LSRs in the sequence. (I.e., packets from R1 go to R2, then to R3, etc., then to Rn, and then from Rn to R1.)",
+      "ja": "シーケンス内のLSRを通過するループが存在するように、LSRの<R1、...、Rn>のシーケンスを考えてみましょう。 （即ち、R1からのパケットはR2へ、次いでR3、等に、次いでRNに、次いでrnからR1へ行きます。）"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose that the thread hop count of the link between R1 and R2 is k. Then by the above procedures, the hop counts between Rn and R1 must be k+n-1. But the algorithm also ensures that if a node has an incoming hop count of j, its outgoing link hop count must be at least of j+1. Hence, if we assume that the LSP established as a result of thread rewinding contains a loop, the hop counts between R1 and R2 must be at least k+n. From this we may derive the absurd conclusion that n=0, and we may therefore conclude that there is no such sequence of LSRs.",
+      "ja": "R1とR2との間のリンクのスレッドのホップ数をkであると仮定する。その後、上記の手順により、RnとR1との間のホップ数がk + N-1でなければなりません。しかし、このアルゴリズムは、ノードがJの流入ホップ数を持っている場合は、その発信リンクのホップ数が少なくともJ + 1でなければならないことを保証します。我々は、スレッド巻き戻しの結果として確立LSPループが含まれていると仮定すると従って、R1とR2との間のホップ数は、少なくともK + Nでなければなりません。このことから私たちはそのためのLSRのそのようなシーケンスが存在しないと結論づけることがありn = 0で、かつ不合理な結論を導き出すことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.1. Case2: LSP with unknown link hop counts",
+      "section_title": true,
+      "ja": "6.2.1。ケース2：不明なリンクのホップカウントとLSP"
+    },
+    {
+      "indent": 3,
+      "text": "An established path does not contain a loop as well, when the outgoing link hop count is \"unknown\". This is because a colored thread of unknown hop count is never rewound unless it reaches egress.",
+      "ja": "確立されたパスは、発信リンクのホップ数が「不明」であるとき、同様にループが含まれていません。それが出口に達しない限り、未知のホップカウントの着色糸が巻き戻されることはありませんので、これがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Why L3 loop is detected",
+      "section_title": true,
+      "ja": "6.3。 L3ループが検出される理由"
+    },
+    {
+      "indent": 3,
+      "text": "Regardless of whether the thread hop count is known or unknown, if there is a loop, then some node in the loop will be the last node to receive a thread over a new incoming link. This thread will always arrive back at that node, without its color having changed. Hence the loop will always be detected by at least one of the nodes in the loop.",
+      "ja": "スレッドのホップ数が既知または未知されているかどうかのループがある場合にかかわらず、その後、ループ内のいくつかのノードが新しい着信リンク上でスレッドを受信するための最後のノードになります。このスレッドは、常にその色を変更せずに、そのノードに戻って到着します。したがって、ループは常にループ内のノードのうちの少なくとも1つによって検出されます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. Why L3 loop is not mis-detected",
+      "section_title": true,
+      "ja": "6.4。 L3ループは、誤検出されない理由"
+    },
+    {
+      "indent": 3,
+      "text": "Since no node ever extends the same colored thread downstream twice, a thread loop is not detected unless there actually is an L3 routing loop.",
+      "ja": "どのノードがこれまで下流回同じ色の糸を拡張しないので、実際にL3ルーティングループがない限り、スレッドループが検出されません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.5. How a stalled thread automatically recovers from loop",
+      "section_title": true,
+      "ja": "6.5。どのようにストールしたスレッドは自動的にループから回復"
+    },
+    {
+      "indent": 3,
+      "text": "Once a thread is stalled in a loop, the thread (or the path setup request) effectively remains in the loop, so that a path reconfiguration (i.e., thread withdrawing on the old path and thread extending on the new path) can be issued from any node that may receive a route change event so as to break the loop.",
+      "ja": "スレッドがループ内で立ち往生したらパス再構成（新しいパスに拡張古いパスとスレッド上撤退すなわち、スレッドは）から発行することができるように、スレッド（またはパス設定要求）が効果的に、ループのままループを切断するようにルート変更イベントを受け取ることができる任意のノード。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6. Why different colored threads do not chase each other",
+      "section_title": true,
+      "ja": "6.6。異なる色のスレッドがお互いを追いかけていないのはなぜ"
+    },
+    {
+      "indent": 3,
+      "text": "In the algorithm, multiple thread color and/or hop count updates may happen if several leaf nodes start extending threads at the same time. How can we prevent multiple threads from looping unlimitedly?",
+      "ja": "いくつかのリーフノードが同時に拡張のスレッドを起動した場合、アルゴリズムでは、複数の糸色および/またはホップ数の更新が発生する可能性があります。どのように我々は無限ループから複数のスレッドを防ぐことができますか？"
+    },
+    {
+      "indent": 3,
+      "text": "First, when a node finds that a thread forms a loop, it creates a new thread of hop count \"unknown\". All the looping threads of a known hop count which later arrive at the node would be merged into this thread. Such a thread behaves like a thread absorber.",
+      "ja": "ノードは、スレッドがループを形成していることを発見したときにまず、それが「不明」のホップカウントの新しいスレッドを作成します。後でノードに到着知られているホップ数のすべてのループのスレッドがこのスレッドにマージされます。このようなスレッドは、スレッドアブソーバのように振る舞います。"
+    },
+    {
+      "indent": 3,
+      "text": "Second, the \"thread extending with changing color\" prevents two threads from chasing each other.",
+      "ja": "第二に、「色を変えて延びるねじ山」は、互いを追いかけてから、二つのスレッドを防止します。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose that a received thread were always extended without changing color. Then we would encounter the following situation.",
+      "ja": "受信スレッドは、常に色を変更することなく、拡張されたと仮定します。その後、我々は次のような状況に遭遇するでしょう。"
+    },
+    {
+      "indent": 32,
+      "text": "G        Y\n|        |\nv        v\nR1------>R2\n^        |\n|        v\nR4<------R3",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Fig.13 Example of thread chasing",
+      "ja": "スレッドの追跡の図13の例"
+    },
+    {
+      "indent": 3,
+      "text": "In Fig.13, (1) node G acquires R1 as a next hop, and starts to extend a green thread of hop count 1, (2) node Y acquires R2 as a next hop, and starts to extend a yellow thread of hop count 1, and (3) both node G and node Y withdraws their threads before these threads go round.",
+      "ja": "図13において、（1）ノードGは、ネクストホップとしてR1を取得し、ホップ数1のグリーンスレッドを拡張するために開始する、（2）ノードYは、ネクストホップとしてR2を取得し、ホップの黄色スレッドを拡張し始めます1をカウントし、これらのスレッドはラウンド行く前に（3）ノードGとノードの両方のYは、自分のスレッドを撤回。"
+    },
+    {
+      "indent": 3,
+      "text": "In this case, the yellow and green threads would go round and get back to R2 and R1, respectively. When the threads get back to R2 and R1, however, the incoming links that store the yellow and green colors no longer exist. As a result, the yellow and green threads would chase each other forever in the loop.",
+      "ja": "この場合、黄色と緑のスレッドはそれぞれ、ラウンド行くとバックR2とR1になるだろう。スレッドはバックR2とR1を取得する場合、しかし、黄色と緑の色を保存する着信リンクはもはや存在しません。その結果、黄色と緑のスレッドがループの中で永遠にお互いを追いかけるでしょう。"
+    },
+    {
+      "indent": 3,
+      "text": "However, since we have the \"extending with changing color\" mechanism, this does not actually happen. When a green thread is received at R2, R2 extends the thread with changing color, i.e., creates a new red thread and extends it. Similarly, when a yellow thread is received at R1, R1 creates a new purple thread and extends it. Thus, the thread loop is detected even after node G and node Y withdraw threads. This ensures that a thread is extended around the loop which has a color assigned by some node that is in the loop.",
+      "ja": "私たちは「変化する色と拡張」のメカニズムを持っているのでしかし、これは実際には発生しません。グリーンスレッドがR2で受信されたとき、R2は色を変えてスレッドを拡張し、すなわち、新しい赤スレッドを作成し、それを拡張します。黄色スレッドがR1で受信されると同様に、R1は、新しい紫のスレッドを作成し、それを拡張します。これにより、糸ループは、ノードGとノードYがスレッドを撤回した後も検出されます。これは、スレッドがループ内にあるいくつかのノードによって割り当てられた色を有するループの周囲に拡張されることを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "There is at least one case even the \"extending with changing color\" mechanism cannot treat, that is, the \"self-chasing\" in which thread extending and thread withdrawing with regard to the same thread chase each other in a loop. This case would happen when a node withdraw a thread immediately after extending it into an L3 loop.",
+      "ja": "少なくとも一つのケースがあっても、すなわち、「自己追跡」は、糸延び、スレッドが、同じスレッドの追跡ループにおいて互いに関連して吸引を治療することができない仕組みを「色を変えて延びます」。ノードはL3ループにそれを拡張した直後に糸を引き出す際に、この場合はどうなります。"
+    },
+    {
+      "indent": 3,
+      "text": "A heuristics for self-chasing is to delay the execution of thread withdrawing at an initiating node of the thread withdrawing. Anyway, the thread TTL mechanism can eliminate any kind of thread looping.",
+      "ja": "自己追跡のためのヒューリスティックは、吸引スレッドの開始ノードに吸引スレッドの実行を遅延することです。とにかく、スレッドTTLメカニズムは、スレッドのループのいずれかの種類を排除することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Loop prevention examples",
+      "section_title": true,
+      "ja": "7.ループ防止の例"
+    },
+    {
+      "indent": 3,
+      "text": "In this section, we show two examples to show how the algorithm can prevent LSP loops in given networks.",
+      "ja": "このセクションでは、アルゴリズムはLSPが与えられたネットワークでループを防ぐことができる方法を示すために2つの例を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "We assume that the ordered downstream-on-demand allocation is employed, that all the LSPs are with regard to the same FEC, and that all nodes are VC-merge capable.",
+      "ja": "私たちは、注文したダウンストリームオンデマンド割り当てがすべてのLSPが同じFECに関してであることを、採用されていると仮定し、すべてのノードがあることが可能なVC-マージ。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. First example",
+      "section_title": true,
+      "ja": "7.1。最初の例"
+    },
+    {
+      "indent": 3,
+      "text": "Consider an MPLS network shown in Fig.14 in which an L3 loop exists. Each directed link represents the current next hop of the FEC at each node. Now leaf nodes R1 and R6 initiate creation of an LSP.",
+      "ja": "L3ループが存在する図14に示すMPLSネットワークを考えます。各有向リンクは、各ノードにおけるFECの現在のネクストホップを表します。今、リーフノードR1とR6は、LSPの作成を開始します。"
+    },
+    {
+      "indent": 14,
+      "text": " R11 ------- R10 <-------------------- R9\n  |           |                         ^\n  |           |                         |\n  |           |                         |\n  v           v                         |\n  R1 -------> R2 --------> R3 --------> R4 --------- R5\n[leaf]                     ^\n                           |\n                           |\n                           |\n  R6 -------> R7 --------> R8\n[leaf]",
+      "raw": true
+    },
+    {
+      "indent": 22,
+      "text": "Fig. 14 Example MPLS network (1)",
+      "ja": "図14の例MPLSネットワーク（1）"
+    },
+    {
+      "indent": 3,
+      "text": "Assume that R1 and R6 send a label request message at the same time, and that the initial thread TTL is 255. First we show an example of how to prevent LSP loops.",
+      "ja": "R1とR6が同時にラベル要求メッセージを送信することを想定し、初期スレッドのTTLが255であることを第一に、私たちは、LSPループを防ぐ方法の一例を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "A set of thread attributes is represented by (color, hop count, TTL).",
+      "ja": "スレッド属性のセットは、（色、ホップカウント、TTL）で表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The request from R1 and R6 contains (re,1,255) and (bl,1,255), respectively.",
+      "ja": "R1及びR6からの要求は、それぞれ、（RE、1255）及び（BL、1255）を含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "Assume that R3 receives the request originated from R1 before receiving the request originated from R6. When R3 receives the first request with red thread, R3 forwards it with (re,3,253) without changing thread color, since both the receiving incoming link and the outgoing link are newly created. Then R3 receives the second request with blue thread. In this time, the outgoing link is already exists. Thus, R3 performs thread extending with changing color, i.e., creates a new brown thread and forwards the request with (br,4,255).",
+      "ja": "R3が、R6から発信要求を受信する前に、R1から発信要求を受信すると仮定する。 R3は、赤い糸で第1の要求を受信すると受信の着信リンクと送信リンクの両方が新たに作成されているため、R3は、糸色を変更することなく（RE、3253）とそれを転送します。次いで、R3は、青色のスレッドと第2の要求を受信します。この時点では、発信リンクはすでに存在しています。したがって、R3は色を変えて延びるスレッドを実行し、すなわち、新たな褐色スレッドを作成し（BR、4255）を用いて要求を転送します。"
+    },
+    {
+      "indent": 3,
+      "text": "When R2 receives the request from R10 with (re,6,250), it finds that the red thread forms a loop, and stalls the red thread. Then, R2 creates a purple thread of hop count unknown and extends it downstream by sending a request with (pu,U,255) to R3, where \"U\" represents \"unknown\".",
+      "ja": "R2は（RE、6250）とのR10からの要求を受信すると、赤い糸がループを形成し、赤い糸をストールすることを認めます。そして、R2は、未知のホップカウントの紫のスレッドを作成し、「U」が「不明」を表すR3に（PU、U、255）で要求を送信することによって、下流に延びています。"
+    },
+    {
+      "indent": 3,
+      "text": "After that, R2 receives another request from R10 with (br,7,252). The brown thread is merged into purple thread. R2 sends no request to R3.",
+      "ja": "その後、R2は（BR、7252）とR10から別の要求を受信します。茶色のスレッドは、紫のスレッドにマージされます。 R2はR3への要求を送信しません。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, the purple thread goes round without changing color through existing links, and R2 finds the thread loop and stalls the purple thread. Since the received thread hop count is unknown, no thread is created any more. In this case no thread rewinding occurs. The current state of the network is shown in Fig.15.",
+      "ja": "一方、紫のスレッドは、既存のリンクを介して色を変更せずにラウンド行き、そしてR2は、糸ループを検出し、紫のスレッドをストール。受信スレッドのホップ数が不明であるので、どのスレッドはこれ以上作成されません。この場合、どのスレッドの巻き戻しが発生しません。ネットワークの現在の状態が図15に示されています。"
+    },
+    {
+      "indent": 11,
+      "text": "*: location of thread stalling",
+      "ja": "*：スレッドストールの場所"
+    },
+    {
+      "indent": 14,
+      "text": "                        (pu,U)\n R11 ------- R10 <-------------------- R9\n  |           |                         ^\n  |           |(pu,U)*                  |\n  |           |                         |(pu,U)\n  v           v                         |\n  R1 -------> R2 --------> R3 --------> R4 --------- R5\n[leaf] (re,1)      (pu,U)  ^  (pu,U)\n                           |\n                           | (bl,3)\n                           |\n  R6 -------> R7 --------> R8\n[leaf] (bl,1)      (bl,2)",
+      "raw": true
+    },
+    {
+      "indent": 28,
+      "text": "Fig.15 The network state",
+      "ja": "ネットワークの状態図15"
+    },
+    {
+      "indent": 3,
+      "text": "Then R10 changes its next hop from R2 to R11.",
+      "ja": "そして、R10はR2からR11へのネクストホップを変更します。"
+    },
+    {
+      "indent": 3,
+      "text": "Since R10 has a purple thread on the old downstream link, it first sends a path teardown message to the old next hop R2 for withdrawing the purple thread. Next, it creates a green thread of hop count unknown and sends a request with (gr,U,255) to R11.",
+      "ja": "R10は古い下りリンクの紫のスレッドを持っているので、それは最初に紫の糸を引き出すために、古いネクストホップR2へのパスのティアダウンメッセージを送信します。次に、それは未知のホップ数の緑のスレッドを作成し、R11に（GR、U、255）に要求を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "When R2 receives the teardown message from R10, R2 removes the stalled incoming link between R10 and R2.",
+      "ja": "R2は、R10からティアダウンメッセージを受信したとき、R2は、R10とR2との間のストール入来リンクを削除します。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, the green thread reaches R1 and Hmax is updated from zero to unknown. In this case, R1 performs thread extending with changing color since the thread is received on a new incoming link but extended on the already existing outgoing link. As a result, R1 creates an orange thread of hop count unknown and extend it to R2.",
+      "ja": "一方、グリーンスレッドはR1に到達し、Hmaxを、ゼロから不明に更新されます。この場合には、R1は、スレッドが新しい着信リンク上で受信されたが、既存の発信リンク上で拡張されるので、色を変えて延びるねじ山を行います。その結果、R1は、未知のホップカウントのオレンジ色のスレッドを作成し、R2にそれを拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "The orange thread goes round through existing links without changing color, and finally it is stalled at R1.",
+      "ja": "オレンジ色の糸の色を変更することなく、既存のリンクを介してのラウンドになり、そして最終的にはR1でストールしています。"
+    },
+    {
+      "indent": 3,
+      "text": "The state of the network is now shown in Fig.16.",
+      "ja": "ネットワークの状態は今、図16に示しています。"
+    },
+    {
+      "indent": 11,
+      "text": "*: location of thread stalling",
+      "ja": "*：スレッドストールの場所"
+    },
+    {
+      "indent": 14,
+      "text": "      (or,U)             (or,U)\n R11 <------ R10 <-------------------- R9\n  |           |                         ^\n  |(or,U)*    |                         |\n  |           |                         |(or,U)\n  v           |                         |\n  R1 -------> R2 --------> R3 --------> R4 --------- R5\n[leaf] (or,U)      (or,U)  ^  (or,U)\n                           |\n                           | (bl,3)\n                           |\n  R6 -------> R7 --------> R8\n[leaf] (bl,1)      (bl,2)",
+      "raw": true
+    },
+    {
+      "indent": 28,
+      "text": "Fig.16 The network state",
+      "ja": "ネットワークの状態、図16"
+    },
+    {
+      "indent": 3,
+      "text": "Then R4 changes its next hop from R9 to R5.",
+      "ja": "その後、R4はR9からR5へのネクストホップを変更します。"
+    },
+    {
+      "indent": 3,
+      "text": "Since R4 is extending an orange thread, it first sends a teardown message to the old next hop R9 to withdraw the orange thread on the old route. Next, it creates a yellow thread of hop count unknown, and sends a request message with (ye,U,255) to R5.",
+      "ja": "R4は、オレンジ色の糸を拡張しているので、それは最初の旧経路上のオレンジ色の糸を引き出すために、古いネクストホップR9にティアダウンメッセージを送信します。次に、未知のホップカウントの黄色スレッドを作成し、そしてR5に（がた、U、255）を用いて要求メッセージを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "Since R5 is the egress node, the yellow thread rewinding starts. R5 returns a label mapping message. The thread rewinding procedure is performed at each node, as the label mapping message is returned upstream hop-by-hop.",
+      "ja": "R5は、出口ノードであるため、黄色のスレッドが開始巻き戻し。 R5は、ラベルマッピングメッセージを返します。ラベルマッピングメッセージは、上流ホップバイホップに戻されるようにスレッドリワインド手順は、各ノードで実行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If R1 receives a label mapping message before receiving the orange thread's withdrawal from R11, R1 returns a label mapping message to R11. On receiving the orange thread's withdrawal, R1 will create a transparent thread and extend it by sending an update message with (tr,1,255) in order to notify downstream of the known hop count.",
+      "ja": "R1は、R11からオレンジ色のスレッドの撤退を受信する前にラベルマッピングメッセージを受信した場合、R1は、R11にラベルマッピングメッセージを返します。オレンジ色のスレッドの撤退を受信すると、R1は、透明なスレッドを作成し、既知のホップカウントの下流に通知するために（TR、1255）を用いて更新メッセージを送信することによって、それを拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "Otherwise, if R1 receives the orange thread's withdrawal before receiving a label mapping message, R1 removes the stalled incoming orange link and waits for rewinding of the outgoing orange thread. Finally, when R1 receives a label mapping message from R2, it creates a transparent thread (tr,1,255) and extend it downstream.",
+      "ja": "R1は、ラベルマッピングメッセージを受信する前に、オレンジ色のスレッドの撤退を受信した場合、さもなければ、R1が停止着信オレンジリンクを削除し、発信オレンジ糸の巻き戻しを待ちます。 R1はR2からラベルマッピングメッセージを受信したときに最後に、透明糸（TR、1255）を作成し、下流側に延びます。"
+    },
+    {
+      "indent": 3,
+      "text": "In both cases, a merged LSP ((R1->R2),(R6->R7->R8))->R3->R4->R5) is established and every node obtains the correct link hop count. The final network state is shown in Fig.17.",
+      "ja": "両方の場合において、マージされたLSP（（R1-> R2）、（R6-> R7-> R8）） - > R3-> R4-> R5）が確立され、すべてのノードが正しいリンクホップカウントを取得します。最終的なネットワークの状態が図17に示されています。"
+    },
+    {
+      "indent": 14,
+      "text": " R11 <------ R10 <-------------------- R9\n  |           |                         |\n  |           |                         |\n  |           |                         |\n  v           |                         |\n  R1 -------> R2 --------> R3 --------> R4 --------> R5\n[leaf] (tr,1)      (tr,2)  ^  (tr,4)        (tr,5)\n                           |\n                           | (tr,3)\n                           |\n  R6 -------> R7 --------> R8\n[leaf] (tr,1)      (tr,2)",
+      "raw": true
+    },
+    {
+      "indent": 23,
+      "text": "Fig.17 The final network state",
+      "ja": "最終的ネットワークの状態図17"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Second example",
+      "section_title": true,
+      "ja": "7.2。第二の例"
+    },
+    {
+      "indent": 19,
+      "text": "       +----- R6----> R7-----+\n       |                     |\n       |                     v\nR1---->R2                    R4----->R5\n       |                     ^\n       |                     |\n       +--------->R3---------+",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Fig.18 Example MPLS network (2)",
+      "ja": "図18の例MPLSネットワーク（2）"
+    },
+    {
+      "indent": 3,
+      "text": "Assume that in Fig.18, there is an established LSP R1->R2->R3->R4- >R5, and the next hop changes at R2 from R3 to R6. R2 sends a request to R6 with a red thread (re,2,255). When the request with (re,4,253) reaches R4, it extends the thread to R5 with changing color. Thus, a new green thread is created at R4 and extended to R5 by sending an update message with (gr,5,255).",
+      "ja": "図18に、確立されたLSP R1-> R2-> R3-> R4-> R5、及びR3からR6にR2におけるネクストホップの変更があると仮定する。 R2は、赤い糸（RE、2255）とR6に要求を送信します。 （RE、4253）との要求がR4に到達すると、それは色を変えてR5にスレッドを拡張します。したがって、新たなグリーンスレッドが（5255、GR）と更新メッセージを送信することによりR4で作成およびR5に拡張されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When R5 receives the update, it updates the incoming link hop count to 5 and returns an ack (or a notification message with a success code) for the update. When R4 receives the ack for the update, it returns a label mapping message to R7.",
+      "ja": "R5は、更新を受信すると、それは5への着信リンクのホップカウントを更新し、更新のためのACK（又は成功コードと通知メッセージ）を返します。 R4は、更新のためのACKを受信すると、それはR7にラベルマッピングメッセージを返します。"
+    },
+    {
+      "indent": 3,
+      "text": "When R2 receives the label mapping message on the new route, it sends a teardown message to R3. When R4 receives the teardown message, it does not sends an update to R5 since Hmax does not change. Now an established LSP R1->R2->R6->R7->R4->R5 is obtained.",
+      "ja": "R2は、新しいルート上のラベルマッピングメッセージを受信すると、R3にティアダウンメッセージを送信します。 R4がティアダウンメッセージを受信するとHmaxとが変化しないので、それはR5に更新を送信しません。今確立されたLSP R1-> R2-> R6-> R7-> R4-> R5が得られます。"
+    },
+    {
+      "indent": 3,
+      "text": "Then, the next hop changes again at R2 from R6 to R3.",
+      "ja": "次いで、次のホップは、R6からR3にR2に再び変化します。"
+    },
+    {
+      "indent": 3,
+      "text": "R2 sends a request with a blue thread (bl,2,255) to R3. R3 forwards the request with (bl,3,254) to R4.",
+      "ja": "R2はR3に青い糸（BL、2255）を用いて要求を送信します。 R3はR4に（BL、3254）を用いて要求を転送します。"
+    },
+    {
+      "indent": 3,
+      "text": "When R4 receives the request, it immediately returns a label mapping message to R3 since Hmax does not change.",
+      "ja": "R4は、要求を受信するとHmaxとが変化しないので、それは直ちにR3にラベルマッピングメッセージを返します。"
+    },
+    {
+      "indent": 3,
+      "text": "When R2 receives the label mapping message on the new route, it sends a teardown message to R6. The teardown message reaches R4, triggering an update message with a transparent thread (tr,4,255) to R5, since Hmax decreases from 4 to 3. R5 updates the incoming link hop count to 4 without returning an ack.",
+      "ja": "R2は、新しいルート上のラベルマッピングメッセージを受信すると、それはR6にティアダウンメッセージを送信します。 Hmaxを4から3に減少するのでティアダウンメッセージは、R5に対して透明スレッド（TR、4255）を用いて更新メッセージをトリガする、R4に到達R5は、ACKを返さずに4への着信リンクのホップカウントを更新します。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Thread control block",
+      "section_title": true,
+      "ja": "8.スレッド制御ブロック"
+    },
+    {
+      "indent": 3,
+      "text": "A thread control block (TCB) is maintained per LSP at each node and may contain the following information:",
+      "ja": "スレッド制御ブロック（TCB）は、各ノードでLSPごとに維持され、次の情報を含むことができます。"
+    },
+    {
+      "indent": 9,
+      "text": "- FEC\n- State\n- Incoming links\n    Each incoming link has the following attributes:\n      o  neighbor: upstream neighbor node address\n        o  color: received thread color\n        o  hop count: received thread hop count\n      o  label\n      o  S-flag: indicates a stalled link\n- Outgoing links\n    Each outgoing link has the following attributes:\n      o  neighbor: downstream neighbor node address\n        o  color: received thread color\n        o  hop count: received thread hop count\n      o  label\n      o  C-flag: indicates the link to the current next hop",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "If a transparent thread is received on an incoming link for which no label is assigned yet or a non-transparent color is stored, discard the thread without entering the FSM. An error message may be returned to the sender.",
+      "ja": "透明スレッドがラベルが割り当てられていない、まだまたは非透明色が格納されている着信リンク上で受信された場合、FSMを入力せずに糸を捨てます。エラーメッセージが送信者に返されることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Whenever a thread is received on an incoming link, the following actions are taken before entering the FSM: (1) Store the received thread color and hop count on the link, replacing the old thread color and hop count, and (2) set the following flags that are used for an event switch within \"Recv thread\" event (see section 8.1).",
+      "ja": "スレッドは、着信リンクで受信されるたびに、次のアクションは、FSMに入る前に撮影されている：（1）旧糸色とのホップ数を置き換え、リンク上で受信糸色とホップカウントを保管、および（2）を設定「レシーバ・スレッド」イベント内のイベント・スイッチに使用されるフラグを下記（セクション8.1を参照）。"
+    },
+    {
+      "indent": 6,
+      "text": "o Color flag (CL-flag): Set if the received thread is colored. o Loop flag (LP-flag): Set if the received thread forms a loop. o Arrived on new link flag (NL-flag): Set if the received thread arrives on a new incoming link.",
+      "ja": "Oカラーフラグ（CL-フラグ）：受信したスレッドが着色されている場合に設定。 Oループフラグ（LPフラグ）：受信したスレッドがループを形成する場合に設定。 O新しいリンクフラグ（NL-フラグ）に到着：受信スレッドが新しい着信リンクに到着した場合に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "If LP-flag is set, there must be an incoming link L, other than the receiving link, which stores the same thread color as the received one. The TCB to which link L belongs is referred to as the \"detecting TCB\". If the receiving LSR is VC-merge capable, the detecting TCB and the receiving TCB is the same, otherwise, the two TCBs are different.",
+      "ja": "LP-フラグが設定されている場合、受信されたものと同じ糸色を記憶する受信リンク以外の着信リンクL、存在しなければなりません。 Lが属するリンクするTCBを「検出TCB」と呼ばれます。受信LSRが可能なVCは、マージされた場合、検出TCB及び受信TCBは、そうでなければ、2つのTCBが異なる、同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "Before performing a thread extending, the thread TTL is decremented by one. If the resulting TTL becomes zero, the thread is not extended but silently discarded. Otherwise, the thread is extended and the extended thread hop count and color are stored into the outgoing link.",
+      "ja": "延びるスレッドを実行する前に、スレッドTTLは1だけデクリメントされます。得られたTTLがゼロになった場合、スレッドは、拡張が、黙って破棄されません。それ以外の場合は、スレッドが拡張され、拡張されたスレッドのホップ数と色が発信リンクに格納されています。"
+    },
+    {
+      "indent": 3,
+      "text": "When a node receives a thread rewinding event, if the received thread color and the extending thread color are different, it discards the event without entering the FSM.",
+      "ja": "ノードは、スレッドのリワインドイベントを受信したときに受信した糸色と延びる糸色が異なる場合、それはFSMを入力せずにイベントを破棄する。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Finite state machine",
+      "section_title": true,
+      "ja": "8.1。有限ステートマシン"
+    },
+    {
+      "indent": 3,
+      "text": "An event which is \"scheduled\" by an action in an FSM must be passed immediately after the completion of the action.",
+      "ja": "FSMの作用によって、「スケジュール設定」されているイベントは、アクションの完了後、すぐに渡さなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following variables are used in the FSM:",
+      "ja": "以下の変数がFSMに使用されます。"
+    },
+    {
+      "indent": 6,
+      "text": "o Ni: number of unstalled incoming links o Hmax: largest incoming hop count o Hout: hop count of the outgoing link for the current next hop o Hrec: hop count of the received thread",
+      "ja": "Oニッケル：HmaxとO unstalled着信リンクの数：ハウトO最大の着信ホップ数：Hrec O現在のネクストホップの発信リンクのホップ数：受信スレッドのホップ数"
+    },
+    {
+      "indent": 3,
+      "text": "In the FSM, if Hmax=unknown, the value for (Hmax+1) becomes the value reserved for unknown hop count plus 1. For example, if Hmax=unknown=255, the value (Hmax+1) becomes 256.",
+      "ja": "未知HmaxをIF = Hmaxを=不明= 255、値（Hmaxを+ 1）が256になった場合FSMにおいて、（Hmaxを+ 1）の値は、例えば、未知のホップカウント+1のために予約値となります。"
+    },
+    {
+      "indent": 3,
+      "text": "A TCB has three states; Null, Colored, and Transparent. When a TCB is in state Null, there is no outgoing link and Ni=0. The state Colored means that the node is extending a colored thread on the outgoing link for the current next hop. The state Transparent means that the node is the egress node or the outgoing link is transparent.",
+      "ja": "TCBは、3つの状態があります。ヌル、カラー、および透明。 TCB状態ヌルであるとき、何発信リンク及びNi = 0は存在しません。状態カラーは、ノードが現在のネクストホップの発信リンク上に着色糸を延長することを意味します。透明状態は、ノードが出口ノードであるか、または発信リンクが透明であることを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "The flag value \"1\" represents the flag is set, \"0\" represents the flag is not set, and \"*\" means the flag value is either 1 or 0.",
+      "ja": "フラグの値が「1」「0」フラグが設定されていない示し、「*」フラグ値が1または0であることを意味し、フラグがセットされ表します。"
+    },
+    {
+      "indent": 3,
+      "text": "The FSM allows to have one transparent outgoing link on the old next hop and one colored outgoing link on the current next hop. However, it is not allowed to have a colored outgoing link on the old next hop.",
+      "ja": "FSMは古いネクストホップと、現在のネクストホップに1色の発信リンクに一つの透明な発信リンクを持つことができます。しかし、古いネクストホップに色の発信リンクを持つことが許されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "State Null:",
+      "ja": "州ヌル："
+    },
+    {
+      "indent": 1,
+      "text": "Event Action New state Recv thread Flags CL LP NL 0 * * Do nothing. No change 1 0 * If the node is egress, start thread rewinding Transparent and change the color of the receiving link to transparent. Otherwise, extend the received thread without Colored changing color. 1 1 * Stall the received thread; if Hrec<unknown, No change schedule \"Reset to unknown\" event for the detecting TCB.",
+      "ja": "イベントアクションの新しい状態のrecvスレッドフラグCL LP NL 0 * *何もしません。ノードが出ている場合は変更なしは1 0 *、透明巻き戻しスレッドを起動していないし、透明に受信リンクの色を変更します。そうでなければ、カラーは色を変えずに受信スレッドを拡張します。 1 1 *受信スレッドをストール。 Hrec <不明な場合は、変更なしのスケジュールは、検出TCBのためのイベント「未知へのリセットありません」。"
+    },
+    {
+      "indent": 1,
+      "text": "Next hop If eligible-leaf, create a colored thread and Colored acquisition extend it.",
+      "ja": "次のホップは、対象と葉場合は、色付きのスレッドを作成し、着色の取得は、それを拡張します。"
+    },
+    {
+      "indent": 1,
+      "text": "Others Silently ignore the event. No change",
+      "ja": "その他には、サイレントイベントを無視します。変化なし"
+    },
+    {
+      "indent": 0,
+      "text": "State Colored:",
+      "ja": "州カラー："
+    },
+    {
+      "indent": 1,
+      "text": "Event Action New state Recv thread Flags CL LP NL 0 * * If Hmax+1<Hout<unknown, create a colored No change thread and extend it. Otherwise, do nothing. 1 0 * If Hmax<Hout, merge the received thread. No change Otherwise, extend the thread with (if NL=1) or without (if NL=0) changing color. 1 1 * Stall the received thread. If Ni=0 and the node is not an eligible leaf, Null initiate thread withdrawing. If Ni>0 and Hrec<unknown, schedule \"Reset to No change unknown\" event for the detecting TCB. Otherwise, do nothing. No change",
+      "ja": "イベントアクションの新しい状態のrecvスレッドフラグCL LP NL 0 * * Hmaxを+ 1 <ハウト<不明な場合は、色の変化なしスレッドを作成し、それを拡張します。そうでなければ、何もしません。 1 0 * Hmaxを<ハウト場合は、受信スレッドをマージします。変化はそうでない場合、（NL = 1の場合）又はなし（NL = 0の場合）の色を変えてスレッドを拡張していません。 1 1 *は、受信スレッドがストール。 Niは= 0、ノードが対象リーフでない場合、Nullが吸引スレッドを開始します。ニッケル> 0とHrecは、<不明、スケジュール検出TCBのためのイベント「変更なし不明にリセット」をした場合。そうでなければ、何もしません。変化なし"
+    },
+    {
+      "indent": 1,
+      "text": "Rewound Propagate thread rewinding to previous hops Transparent that are extending a colored thread; change the colors stored in all incoming and outgoing links to transparent; if Hmax+1<Hout, extend transparent thread. Withdraw the thread on the outgoing link for which C-flag=0.",
+      "ja": "着色されたスレッドを拡張する透過前のホップに巻き戻す巻き戻し伝播スレッド。透明にすべての着信と発信のリンクに保存されている色を変更。もしHmaxを+ 1 <ハウトは、透明のスレッドを拡張します。発信リンクに対するCフラグ= 0で糸を引き出します。"
+    },
+    {
+      "indent": 1,
+      "text": "Withdrawn Remove the corresponding incoming link. If Ni=0 and the node is not an eligible leaf, Null propagate thread withdrawing to all next hops. Otherwise, if Hmax+1<Hout<unknown, create No change a colored thread and extend it. Otherwise, do nothing. No change",
+      "ja": "取り下げ対応の着信リンクを削除します。ニッケル= 0とノードが対象と葉でない場合は、Nullのすべての次のホップに引き出すスレッドを伝播します。それ以外の場合は、Hmaxを+ 1 <ハウト<不明な場合は、変更なしにカラースレッドを作成していないし、それを拡張します。そうでなければ、何もしません。変化なし"
+    },
+    {
+      "indent": 1,
+      "text": "Next hop If there is already an outgoing link for the Transparent acquisition next hop, do nothing. (This case happens only when the node retains the old path.) Otherwise, create a colored thread and extend No change it.",
+      "ja": "すでに透明な買収ネクストホップの発信リンクがある場合は次のホップは、何もしません。そうでない場合（この場合は、ノードは、古いパスを保持している場合にのみ起こる）、着色されたスレッドを作成し、変更なして延びていません。"
+    },
+    {
+      "indent": 1,
+      "text": "Next hop If the outgoing link is transparent and the No change loss node is allowed to retain the link and the next hop is alive, do nothing. Otherwise, take the following actions. Initiate thread withdrawing for the next hop; if the node becomes a new egress, schedule \"Rewound\" event for this TCB. If Ni=0, move to Null. Null Otherwise, do nothing. No change",
+      "ja": "次のホップの発信リンクは透明であり、変更なしの損失のノードは、リンクを保持させ、次のホップは、何もしないで生きている場合。そうでない場合は、次のアクションを取ります。次のホップのために撤退スレッドを開始します。ノードは、このTCBのための新しい出口、スケジュール「巻き戻し」イベントになった場合。ニッケル= 0の場合、Nullに移動します。そうでない場合はnull、何もしません。変化なし"
+    },
+    {
+      "indent": 1,
+      "text": "Reset to Create a colored thread of hop count unknown No change unknown and extend it.",
+      "ja": "未知の変更なしにホップカウント不明の着色スレッドを作成していないし、それを拡張してリセット。"
+    },
+    {
+      "indent": 1,
+      "text": "Others Silently ignore the event. No change",
+      "ja": "その他には、サイレントイベントを無視します。変化なし"
+    },
+    {
+      "indent": 0,
+      "text": "State Transparent:",
+      "ja": "透明状態："
+    },
+    {
+      "indent": 1,
+      "text": "Event Action New state Recv thread Flags CL LP NL 0 * * If Hmax+1<Hout, extend a transparent thread. No change 1 0 * If the node is egress or if Hmax<Hout, change No change the color of the receiving link to transparent and start thread rewinding. Otherwise, extend the thread with (if NL=1) Colored or without (if NL=0) changing color.",
+      "ja": "イベントアクションの新しい状態のrecvスレッドフラグCL LP NL 0 * * Hmaxを+ 1 <ハウトは、透明の糸を拡張する場合。変更なし1 0 *ノードが出ている場合や、Hmaxを<ハウトは、変更なしに透明に受信リンクの色を変更しないと、スレッドの巻き戻しを開始した場合。 （NL = 0の場合）色を変えるそうでなければ、（もしNL = 1）着色又は無しでスレッドを拡張します。"
+    },
+    {
+      "indent": 1,
+      "text": "Withdrawn Remove the corresponding incoming link. If Ni=0 and the node is not an eligible leaf, Null propagate thread withdrawing to next hops. Otherwise, if Hmax+1<Hout, create No change a transparent thread and extend it. Otherwise, do nothing. No change",
+      "ja": "取り下げ対応の着信リンクを削除します。 Niは= 0、ノードが対象と葉でない場合は、Nullが次のホップに引き出すスレッドを伝播します。それ以外の場合は、Hmaxを+ 1 <ハウト場合は、変更なしに透明のスレッドを作成していないし、それを拡張します。そうでなければ、何もしません。変化なし"
+    },
+    {
+      "indent": 1,
+      "text": "Next hop Create a colored thread and extend it. Colored acquisition",
+      "ja": "次のホップは、着色スレッドを作成し、それを拡張します。カラー買収"
+    },
+    {
+      "indent": 1,
+      "text": "Next hop If the node is allowed to retain the outgoing No change loss link and the next hop is alive, do nothing. Otherwise, take the following actions. Initiate thread withdrawing. If Ni=0, move to Null. Null Otherwise, do nothing. No change",
+      "ja": "次ホップノードは変更なし損失リンクの発信を保持しないさせ、次のホップは生きている、何もしていない場合。そうでない場合は、次のアクションを取ります。撤退スレッドを開始します。ニッケル= 0の場合、Nullに移動します。そうでない場合はnull、何もしません。変化なし"
+    },
+    {
+      "indent": 1,
+      "text": "Others Silently ignore the event. No change",
+      "ja": "その他には、サイレントイベントを無視します。変化なし"
+    },
+    {
+      "indent": 0,
+      "text": "9. Comparison with path-vector/diffusion method",
+      "section_title": true,
+      "ja": "パスベクトル/拡散法と9の比較"
+    },
+    {
+      "indent": 3,
+      "text": "o Whereas the size of the path-vector increases with the length of the LSP, the sizes of the threads are constant. Thus the size of messages used by the thread algorithm are unaffected by the network size or topology. In addition, the thread merging capability reduces the number of outstanding messages. These lead to improved scalability.",
+      "ja": "LSPの長さのパスベクトルのサイズが大きくなる一方、O、スレッドのサイズは一定です。したがってスレッドアルゴリズムによって使用されるメッセージのサイズは、ネットワークのサイズやトポロジーにより影響を受けません。また、スレッドのマージ機能は未処理メッセージの数を減らすことができます。これらは、スケーラビリティの向上につながります。"
+    },
+    {
+      "indent": 3,
+      "text": "o In the thread algorithm, a node which is changing its next hop for a particular LSP must interact only with nodes that are between it and the LSP egress on the new path. In the path-vector algorithm, however, it is necessary for the node to initiate a diffusion computation that involves nodes which do not lie between it and the LSP egress.",
+      "ja": "Oスレッドアルゴリズムでは、特定のLSPのための次のホップを変更されたノードはそれと新しい経路上のLSPの出口との間にあるノードと相互作用しなければなりません。ノードはそれとLSPの出口との間に存在しないノードを含む拡散計算を開始するためのパスベクトルアルゴリズムでは、しかし、それは必要です。"
+    },
+    {
+      "indent": 6,
+      "text": "This characteristic makes the thread algorithm more robust. If a diffusion computation is used, misbehaving nodes which aren't even in the path can delay the path setup. In the thread algorithm, the only nodes which can delay the path setup are those nodes which are actually in the path.",
+      "ja": "この特性は、スレッドのアルゴリズムがより堅牢になります。拡散演算が使用される場合、パスでもない誤動作ノードは経路設定を遅延させることができます。スレッドのアルゴリズムでは、パス設定を遅らせることができる唯一のノードがパスに実際にあるそれらのノードです。"
+    },
+    {
+      "indent": 3,
+      "text": "o The thread algorithm is well suited for use with both the ordered downstream-on-demand allocation and ordered downstream allocation. The path-vector/diffusion algorithm, however, is tightly coupled with the ordered downstream allocation.",
+      "ja": "Oスレッドアルゴリズムは、両方の順序付けられた下流オンデマンド割り当てと共に使用するのに適していると下流割当を指示しました。パスベクトル/拡散アルゴリズム、しかし、しっかり順序付け下流割当に連結されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o The thread algorithm is retry-free, achieving quick path (re)configuration. The diffusion algorithm tends to delay the path reconfiguration time, since a node at the route change point must to consult all its upstream nodes.",
+      "ja": "Oスレッドアルゴリズムは、再試行のない、素早いパス（再）コンフィギュレーションを実現しています。拡散アルゴリズムは、経路変更点のノードがすべてのその上流のノードを参照する必要があるため、経路再設定時間を遅延させる傾向があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o In the thread algorithm, the node can continue to use the old path if there is an L3 loop on the new path, as in the path-vector algorithm.",
+      "ja": "Oスレッドアルゴリズムでは、ノードは、パスベクトルアルゴリズムのように、新しい経路上のL3ループがある場合、古いパスを使用し続けることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Security Considerations",
+      "section_title": true,
+      "ja": "10.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The use of the procedures specified in this document does not have any security impact other than that which may generally be present in the use of any MPLS procedures.",
+      "ja": "この文書で指定された手順の使用は、一般に、任意のMPLS手順の使用中に存在し得るもの以外の任意のセキュリティ影響を与えません。"
+    },
+    {
+      "indent": 0,
+      "text": "11. Intellectual Property Considerations",
+      "section_title": true,
+      "ja": "11.知的財産権に関する注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "Toshiba and/or Cisco may seek patent or other intellectual property protection for some of the technologies disclosed in this document. If any standards arising from this document are or become protected by one or more patents assigned to Toshiba and/or Cisco, Toshiba and/or Cisco intend to disclose those patents and license them on reasonable and non-discriminatory terms.",
+      "ja": "東芝および/またはシスコは、この文書で開示された技術のいくつかの特許またはその他の知的財産の保護を求めることができます。本書に起因するすべての基準があるか、東芝および/またはシスコ、東芝および/またはシスコに割り当てられた1つまたは複数の特許により保護されてしまう場合は、これらの特許を開示し、合理的かつ非差別的な条件でそれらをライセンス供与していきます。"
+    },
+    {
+      "indent": 0,
+      "text": "12. Acknowledgments",
+      "section_title": true,
+      "ja": "12.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "We would like to thank Hiroshi Esaki, Bob Thomas, Eric Gray, and Joel Halpern for their comments.",
+      "ja": "私たちは、彼らのコメントのための江崎浩、ボブ・トーマス、エリックグレー、とジョエル・ハルパーンに感謝したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "13. Authors' Addresses",
+      "section_title": true,
+      "ja": "13.著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Yoshihiro Ohba Toshiba Corporation 1, Komukai-Toshiba-cho, Saiwai-ku Kawasaki 210-8582, Japan",
+      "ja": "よしひろ おｈば としば こｒぽらちおん １、 こむかいーとしばーちょ、 さいわいーく かわさき ２１０ー８５８２、 じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: yoshihiro.ohba@toshiba.co.jp",
+      "ja": "メールアドレス：yoshihiro.ohba@toshiba.co.jp"
+    },
+    {
+      "indent": 3,
+      "text": "Yasuhiro Katsube Toshiba Corporation 1, Toshiba-cho, Fuchu-shi, Tokyo, 183-8511, Japan",
+      "ja": "やすひろ かつべ としば こｒぽらちおん １、 としばーちょ、 ふちゅーし、 ときょ、 １８３ー８５１１、 じゃぱん"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: yasuhiro.katsube@toshiba.co.jp",
+      "ja": "メールアドレス：yasuhiro.katsube@toshiba.co.jp"
+    },
+    {
+      "indent": 3,
+      "text": "Eric Rosen Cisco Systems, Inc. 250 Apollo Drive Chelmsford, MA, 01824",
+      "ja": "エリック・ローゼンシスコシステムズ社250アポロドライブチェルムズフォード、MA、01824"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: erosen@cisco.com",
+      "ja": "メールアドレス：erosen@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Paul Doolan Ennovate Networks 330 Codman Hill Rd Marlborough MA 01719",
+      "ja": "ポールDoolan Ennovateネットワーク330 CodmanヒルRdのマールボロMA 01719"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: pdoolan@ennovatenetworks.com",
+      "ja": "メールアドレス：pdoolan@ennovatenetworks.com"
+    },
+    {
+      "indent": 0,
+      "text": "14. References",
+      "section_title": true,
+      "ja": "14.参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Callon, R., et al., \"A Framework for Multiprotocol Label Switching\", Work in Progress.",
+      "ja": "[1] Callon、R.、ら。、 \"マルチプロトコルラベルスイッチングのためのフレームワーク\"、ProgressのWork。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Davie, B., Lawrence, J., McCloghrie, K., Rosen, E., Swallow, G., Rekhter, Y. and P. Doolan, \"MPLS using LDP and ATM VC Switching\", RFC 3035, January 2001.",
+      "ja": "[2]デイビー、B.、ローレンス、J.、McCloghrie、K.、ローゼン、E.、ツバメ、G.、Rekhter、Y.、およびP. Doolan、 \"スイッチングLDPおよびATM VCを使用してMPLS\"、RFC 3035、 2001年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Rosen, E., et al., \"A Proposed Architecture for MPLS\", Work in Progress.",
+      "ja": "[3]ローゼン、E.、ら、 \"MPLSのために提案されたアーキテクチャ\"、ProgressのWork。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Andersson, L., Doolan, P., Feldman, N., Fredette, A. and B. Thomas, \"LDP Specification\", RFC 3036, January 2001.",
+      "ja": "[4]アンダーソン、L.、Doolan、P.、フェルドマン、N.、Fredette、A.及びB.トーマス、 \"LDP仕様\"、RFC 3036、2001年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A - Further discussion of the algorithm",
+      "ja": "付録A  - アルゴリズムのさらなる議論"
+    },
+    {
+      "indent": 3,
+      "text": "The purpose of this appendix is to give a more informal and tutorial presentation of the algorithm, and to provide some of the motivation for it. For the precise specification of the algorithm, the FSM should be taken as authoritative.",
+      "ja": "この付録の目的は、アルゴリズムのより非公式とチュートリアルプレゼンテーションをし、そしてそれのためにモチベーションの一部を提供することです。アルゴリズムの正確な仕様のために、FSMは、権威として解釈されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "As in the body of the document, we speak as if there is only one LSP; otherwise we would always be saying \"... of the same LSP\". We also consider only the case where the algorithm is used for loop prevention, rather than loop detection.",
+      "ja": "一つだけLSPがあるかのように文書の本文のように、私たちは話します。そうでない場合は、私たちはいつも言っているでしょう「...同じLSPの」。また、アルゴリズムはループ防止ではなく、ループ検出のために使用されている場合のみを考えます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1. Loop Prevention the Brute Force Way",
+      "ja": "A.1。ループ防止ブルートフォース・ウェイ"
+    },
+    {
+      "indent": 3,
+      "text": "As a starting point, let's consider an algorithm which we might call \"loop prevention by brute force\". In this algorithm, every path setup attempt must go all the way to the egress and back in order for the path to be setup. This algorithm is obviously loop-free, by virtue of the fact that the setup messages actually made it to the egress and back.",
+      "ja": "出発点として、我々は「ブルートフォースによって、ループ防止」と呼ぶかもしれないアルゴリズムを考えてみましょう。このアルゴリズムでは、すべてのパス設定しようとすると、パスが設定されるためにすべての道の出口と裏に行かなければなりません。このアルゴリズムは、設定メッセージは、実際に出力し、背中にそれを作っているという事実のおかげで、明らかにループフリーです。"
+    },
+    {
+      "indent": 3,
+      "text": "Consider, for example, an existing LSP B-C-D-E to egress node E. Now node A attempts to join the LSP. In this algorithm, A must send a message to B, B to C, C to D, D to E. Then messages are sent from E back to A. The final message, from B to A, contains a label binding, and A can now join the LSP, knowing that the path is loop-free.",
+      "ja": "例えば、出口ノードEへの既存のLSP B-C-D-EすぐLSPに参加しようとするノード考えます。このアルゴリズムでは、Aは、次にメッセージがBからAへ、最終メッセージバックA.へEから送信されたC、CとD、DとEにB、Bにメッセージを送信する必要があり、結合ラベルを含み、A今、パスがループフリーであることを知って、LSPに参加することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Using our terminology, we say that A created a thread and extended it downstream. The thread reached the egress, and then rewound.",
+      "ja": "私たちの専門用語を使用して、我々はAがスレッドを作成し、下流それを拡張することを言います。スレッドが出口に達し、その後、巻き戻し。"
+    },
+    {
+      "indent": 3,
+      "text": "We needn't assume, in the above example, that A is an ingress node. It can be any node which acquires or changes its next hop for the LSP in question, and there may be nodes upstream of it which are also trying to join the LSP.",
+      "ja": "我々は、Aは、入口ノードであることを、上記の例では、想定する必要はありません。それは、当該LSPのために次のホップを取得または変更する任意のノードとすることができ、また、LSPに参加しようとしているそれの上流のノードが存在してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "It is clear that if there is a loop, the thread never reaches the egress, so it does not rewind. What does happen? The path setup messages just keep traveling around the loop. If one keeps a hop count in them, one can ensure that they stop traveling around the loop when the hop count reaches a certain maximum value. That is, when one receives a path setup message with that the maximum hop count value, one doesn't send a path setup message downstream.",
+      "ja": "ループがある場合、スレッドが出口に到達したことがないことは明らかであるので、巻き戻しされません。何が起こるのでしょうか？経路設定メッセージは、単にループを旅保ちます。 1は、それらにおけるホップ数を維持した場合、1は、ホップ数が一定の最大値に達したとき、彼らはループを旅停止することを確認することができます。それは1つがその最大ホップカウント値を持つ経路設定メッセージを受信したとき、人は下流の経路設定メッセージを送信しない、です。"
+    },
+    {
+      "indent": 3,
+      "text": "How does one recover from this situation of a looping thread? In order for L3 routing to break the loop, some node in the loop MUST experience a next hop change. This node will withdraw the thread from its old next hop, and extend a thread down its new next hop. If there is no longer a loop, this thread now reaches the egress, and gets rewound.",
+      "ja": "どのようにしてループ糸のこのような状況から回復するのでしょうか？ L3ルーティングがループを切断するために、ループ内の一部のノードは、次ホップの変化を経験しなければなりません。このノードは、その古いネクストホップから糸を引き出し、そしてその新しい次のホップダウンのスレッドを拡張します。もはやループがある場合、このスレッドは現在、出口に到達していない、と巻き戻します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.2. What's Wrong with the Brute Force Method?",
+      "ja": "A.2。ブルートフォース方法で何が悪いのでしょうか？"
+    },
+    {
+      "indent": 3,
+      "text": "Consider this example:",
+      "ja": "この例を考えてみます。"
+    },
+    {
+      "indent": 16,
+      "text": "A\n|\nB--D--E\n|\nC",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "If A and C both attempt to join the established B-D-E path, then B and D must keep state for both path setup attempts, the one from A and the one from C. That is, D must keep track of two threads, the A-thread and the C-thread. In general, there may be many more nodes upstream of B who are attempting to join the established path, and D would need to keep track of them all.",
+      "ja": "AとC確立BDE経路に参加する両方の試みが、その後B及びDが共にパス設定試み、Aから1となるCからいずれかの状態を維持する必要がある場合、Dは、A- 2つのスレッドを追跡しなければなりませんスレッドとC-スレッド。一般的には、確立されたパスに参加しようとしている、そしてDは、それらすべてを追跡する必要があるだろうBの上流にさらに多くのノードがあるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "If VC merge is not being used, this isn't actually so bad. Without VC merge, D really must support one LSP for each upstream node anyway. If VC merge is being used, however, supporting an LSP requires only that one keep state for each upstream link. It would be advantageous if the loop prevention technique also required that the amount of state kept by a node be proportional to the number of upstream links which thenode has, rather than to the number of nodes which are upstream in the LSP.",
+      "ja": "VCマージが使用されていない場合、これは実際にはそれほど悪くないです。 VCマージがなければ、Dは本当にとにかく各上流のノードに1つのLSPをサポートしている必要があります。 VCが使用されているマージ場合、しかしながら、LSPをサポートすることは、1つが各アップストリームリンクの状態を保つことのみが必要です。ループ防止技術は、ノードによって保持状態量を有するthenode上流リンクの数ではなく、LSPの上流にあるノードの数に比例することが、必要であればそれが有利であろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Another problem is that if there is a loop, the setup messages keep looping. Even though a thread has traversed some node twice, the node has no way to tell that a setup message it is currently receiving is part of the same thread as some setup message it received in the past.",
+      "ja": "もう一つの問題は、ループがある場合は、セットアップメッセージがループし続けるということです。スレッドは二回、いくつかのノードを横断しているにもかかわらず、ノードは、それが現在受信している設定メッセージが、それは過去に受信​​したいくつかのセットアップメッセージと同じスレッドの一部であることを伝える方法はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Can we modify this brute force scheme to eliminate these two problems? We can. To show how to do this, we introduce two notions: thread hop count, and thread color.",
+      "ja": "我々はこの2つの問題を解消するために、この強引な手法を変更することはできますか？私たちはできる。スレッドのホップ数、及び糸色：これを行う方法を示すために、我々は2つの概念を紹介します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.3. Thread Hop Count",
+      "ja": "A.3。スレッドホップカウント"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose every link in an LSP tree is labeled with the number of hops you would traverse if you were to travel backwards (upstream) from that link to the leaf node which is furthest upstream of the link.",
+      "ja": "LSPツリー内のすべてのリンクは、あなたが、リンクの最上流であるリーフノードへリンクしているから逆方向（上流）に移動した場合、あなたが通過するだろうホップ数で標識されているとします。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the following tree would have its links labeled as follows:",
+      "ja": "たとえば、以下のツリーは、次のようにラベルのリンクがあります："
+    },
+    {
+      "indent": 7,
+      "text": "  1   2\nA---B---C       K\n        |       |\n        |3      |1\n        |       |\n        | 4   5 | 6   7\n        D---G---H---I---J\n        |\n        |2\n      1 |\n    E---F",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Call these the \"link hop counts\".",
+      "ja": "これらの「リンクのホップ数」を呼び出します。"
+    },
+    {
+      "indent": 3,
+      "text": "Links AB, EF, KH are labeled one, because you can go only one hop upstream from these links. Links BC, and FD are labeled 2, because you can go 2 hops upstream from these links. Link DG is labeled 4, because it is possible to travel 4 hops upstream from this link, etc.",
+      "ja": "あなたはこれらのリンクから上流に一つだけのホップを行くことができますので、リンクAB、EF、KHは、1のラベルが付いています。あなたはこれらのリンクから上流に2つのホップを行くことができるので、リンクBC、およびFDは、2のラベルが付いています。このリンクから上流に4つのホップを走行することができるので、リンクDGはなど、4ラベル付けされます"
+    },
+    {
+      "indent": 3,
+      "text": "Note that at any node, the hop count associated with the downstream link is one more than the largest of the hop counts associated with the upstream links.",
+      "ja": "任意のノードで、下流のリンクに関連付けられたホップ数は、上流のリンクに関連付けられたホップ数の最大より1であることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Let's look at a way to maintain these hop counts.",
+      "ja": "のは、これらのホップ数を維持するための方法を見てみましょう。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to maintain the link hop counts, we need to carry hop counts in the path setup messages. For instance, a node which has no upstream links would assign a hop count of 1 to its downstream link, and would store that value into the path setup messages it sends downstream. Once the value is stored in a path setup message, we may refer to it has a \"thread hop count\".",
+      "ja": "リンクホップ数を維持するために、我々は、経路設定メッセージにホップ数を実行する必要があります。例えば、何も上流のリンクを持たないノードは、その下流リンクに1のホップカウントを割り当てるであろう、そしてそれは、下流送信経路設定メッセージにその値を格納することになります。値は、経路設定メッセージに格納されると、それは「スレッドのホップ数を」持っているし、我々は参照することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a path setup message is received, the thread hop count is stored as the link hop count of the upstream link over which the message was received.",
+      "ja": "経路設定メッセージが受信されると、スレッドホップカウントは、メッセージを受信した上、上流側リンクのリンクホップカウントとして記憶されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a path setup message is sent downstream, the downstream link's hop count (and the thread hop count) is set to be one more than the largest of the incoming link hop counts.",
+      "ja": "経路設定メッセージが下流送信されると、下流リンクのホップ数（およびスレッドのホップ数）は、着信リンクのホップ数の最大よりも1つ多くなるように設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose a node N has some incoming links and an outgoing link, with hop counts all set properly, and N now acquires a new incoming link. If, and only if, the link hop count of the new incoming link is greater than that of all of the existing incoming links, the downstream link hop count must be changed. In this case, control messages must be sent downstream carrying the new, larger thread hop count.",
+      "ja": "Nはホップカウントのすべてが正しく設定されており、Nは現在、新しい着信リンクを取得して、いくつかの着信リンクと出力リンクを持つノードを仮定します。新しい着信リンクのリンクホップ数が既存の着信リンクのすべてのものよりも大きい場合にかぎり、下りリンクのホップ数を変更する必要があります。この場合、制御メッセージは、新たな、より大きなスレッドのホップ数を運ぶ下流送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If, on the other hand, N acquires a new incoming link with a link hop count that is less than or equal to the link hop count of all existing incoming links, the downstream link hop count remains unchanged, and no messages need be sent downstream.",
+      "ja": "一方、Nは、既存のすべての着信リンクのリンクホップ数以下のリンクホップ数を持つ新しい着信リンクを取得した場合、下流のリンクのホップ数は変わらず、そして何のメッセージは、下流送信される必要がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose N loses the incoming link whose hop count was the largest of any of the incoming links. In this case, the downstream link hop count must be made smaller, and messages need to be sent downstream to indicate this.",
+      "ja": "Nは、そのホップ数の着信リンクのいずれかの最も大きかったの着信リンクを失うとします。この場合、下流のリンクのホップ数を小さくすることが必要であり、これを示すために、メッセージは、下流送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose we were not concerned with loop prevention, but only with the maintenance of the hop counts. Then we would adopt the following rules to be used by merge points:",
+      "ja": "我々はループ防止に関係するが、唯一のホップ数を維持していなかったと仮定します。その後、我々は、マージポイントで使用するには、以下のルールを採用します："
+    },
+    {
+      "indent": 0,
+      "text": "A.3.1 When a new incoming thread is received, extend it downstream if and only if its hop count is the largest of all incoming threads.",
+      "ja": "A.3.1新しい着信スレッドを受信した場合、それを拡張下流であれば、そのホップ数がすべての着信スレッドの最大である場合にのみ。"
+    },
+    {
+      "indent": 0,
+      "text": "A.3.2 Otherwise, rewind the thread.",
+      "ja": "A.3.2それ以外の場合は、スレッドを巻き戻し。"
+    },
+    {
+      "indent": 0,
+      "text": "A.3.3 An egress node would, of course, always rewind the thread.",
+      "ja": "A.3.3は、出口ノードは、当然のことながら、常に糸を巻き戻します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.4. Thread Color",
+      "ja": "A.4。糸色"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes create new threads as a result of next hop changes or next hop acquisitions. Let's suppose that every time a thread is created by a node, the node assigns a unique \"color\" to it. This color is to be unique in both time and space: its encoding consists of an IP address of the node concatenated with a unique event identifier from a numbering space maintained by the node. The path setup messages that the node sends downstream will contain this color. Also, when the node sends such a message downstream, it will remember the color, and this color becomes the color of the downstream link.",
+      "ja": "ノードは次のホップの変更や次のホップの買収の結果として、新しいスレッドを作成します。のは、スレッドがノードによって作成されるたびに、ノードがそれに独特の「色」を割り当てているとしましょう。この色は、時間と空間の両方で一意であることである。そのコードは、ノードによって維持ナンバリング空間から固有のイベント識別子と連結ノードのIPアドレスで構成されています。ノードがダウンストリーム送信経路設定メッセージは、この色を含んでいます。ノードは、下流ようなメッセージを送信するときにも、それは色を覚えているだろうし、この色は、下流のリンクの色になります。"
+    },
+    {
+      "indent": 3,
+      "text": "When a colored message is received, its color becomes the color of the incoming link. The thread which consists of messages of a certain color will be known as a thread of that color.",
+      "ja": "着色されたメッセージを受信したとき、その色は、着信リンクの色となります。特定の色のメッセージから成る糸は、その色のスレッドとして知られているであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "When a thread is rewound (and a path set up), the color is removed. The links become transparent, and we will sometimes speak of an established LSP as being a \"transparent thread\".",
+      "ja": "スレッドが巻き戻し（およびパスが設定）された場合、色が除去されます。リンクが透明になり、私たちは時々「透明スレッド」として設立されたLSPの話をします。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that packets cannot be forwarded on a colored link, but only on a transparent link.",
+      "ja": "パケットは唯一の透明リンクで、色付きのリンクで転送することができないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that if a thread loops, some node will see a message, over a particular incoming link, with a color that the node has already seen before. Either the node will have originated the thread of that color, or it will have a different incoming link which already has that color. This fact can be used to prevent control messages from looping. However, the node would be required to remember the colors of all the threads passing through it which have not been rewound or withdrawn. (I.e., it would have to remember a color for each path setup in progress.)",
+      "ja": "糸ループ場合、いくつかのノードは、ノードが既に前に見た色と、特定の着信リンクを介して、メッセージが表示されることに注意してください。いずれかのノードは、その色の糸を発信しているか、またはそれが既にその色を有する異なる着信リンクを有することになります。この事実は、ループからの制御メッセージを防止するために用いることができます。ただし、ノードが巻き戻され又は取り下げられていない、それを通過するすべてのスレッドの色を覚えておくことが必要とされるであろう。 （すなわち、それは進行中の各パス設定の色を覚えておく必要があります。）"
+    },
+    {
+      "indent": 0,
+      "text": "A.5. The Relation between Color and Hop Count",
+      "ja": "A.5。色とホップカウントの関係"
+    },
+    {
+      "indent": 3,
+      "text": "By combining the color mechanism and the hop count mechanism, we can prevent loops without requiring any node to remember more than one color and one hop count per link for each LSP.",
+      "ja": "カラー機構とホップカウント機構を組み合わせることにより、我々は、複数の色、各LSPのリンクごとにホップカウントを記憶する任意のノードを必要とせずにループを防止することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "We have already stated that in order to maintain the hop counts, a node needs to extend only the thread which has the largest hop count of any incoming thread. Now we add the following rule:",
+      "ja": "我々はすでにホップ数を維持するために、ノードは、すべての着信スレッドの最大ホップ数を持っているだけのスレッドを拡張する必要があると述べています。今、私たちは次のルールを追加します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.5.1 When extending an incoming thread downstream, that thread's color is also passed downstream (I.e., the downstream link's color will be the same as the color of the upstream link with largest hop count.)",
+      "ja": "下流着信スレッドを拡張する場合A.5.1、そのスレッドの色も下流渡される（すなわち、下流リンクの色は、最大ホップカウントとアップストリームリンクの色と同じになります。）"
+    },
+    {
+      "indent": 3,
+      "text": "Note that at a given node, the downstream link is either transparent or it has one and only one color.",
+      "ja": "所与のノードで、下流リンクが透明またはそれが唯一つの色を有しているのいずれかであることに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "A.5.2 If a link changes color, there is no need to remember the old color.",
+      "ja": "A.5.2リンクは色が変化した場合は、古い色を覚えておく必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "We now define the concept of \"thread merging\":",
+      "ja": "私たちは今、「スレッドのマージ」の概念を定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.5.2 Suppose a colored thread arrives at a node over an incoming link, the node already has an incoming thread with the same or larger hop count, and the node has an outgoing colored thread. In this case, we may say that the new incoming thread is \"merged\" into the outgoing thread.",
+      "ja": "A.5.2ノードが既に同じ以上のホップ数と受信スレッドを有し、ノードは、発信着色糸を有し、着色スレッドは、着信リンクを介してノードに到着すると仮定する。このケースでは、我々は新しい受信スレッドが発信スレッドに「合併」であると言うことがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that when an incoming thread is merged into an outgoing thread, no messages are sent downstream.",
+      "ja": "入ってくるスレッドが出スレッドにマージされたときに、何もメッセージが下流送信されないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "A.6. Detecting Thread Loops",
+      "ja": "A.6。糸ループを検出"
+    },
+    {
+      "indent": 3,
+      "text": "It can now be shown that if there is a loop, there will always either be some node which gets two incoming threads of the same color, or the colored thread will return to its initiator. In this section, we give several examples that may provide an intuitive understanding of how the thread loops are detected.",
+      "ja": "今、ループが存在する場合、常にいずれかのイニシエータに戻り、同じ色、または着色された糸の2つの入力スレッドを取得し、いくつかのノードが存在するであろうことを示すことができます。このセクションでは、糸ループが検出されたかの直感的な理解を提供することができるいくつかの例を与えます。"
+    },
+    {
+      "indent": 7,
+      "text": "  1   2\nA---B---C       K\n        |       |\n        |3      |1\n        |       |\n        | 4   5 | 6   7\n        D---G---H---I---J\n        |\n        |2\n      1 |\n    E---F",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Returning to our previous example, let's set what would happen if H changed its next hop from I to E. H now creates a new thread, and assigns it a new color, say, red. Since H has two incoming link, with hop counts 1 and 5 respectively, it assigns hop count 6 to its new downstream link, and attempts a path setup through E.",
+      "ja": "前の例に戻って、のは、HがIからE. Hへのネクストホップを変更した場合は、新しいスレッドを作成し、赤、たとえば、それを新しい色を割り当て、何が起こるかを設定できます。 Hは、それぞれのホップ数1と5との2つの入力リンクを有しているので、新しいダウンストリームリンクにホップ数6を割り当て、そしてE.を介してパス設定を試みます"
+    },
+    {
+      "indent": 3,
+      "text": "E now has an incoming red thread with hop count 6. Since E's downstream link hop count is now only 1, it must extend the red thread to F, with hop count 7. F then extends the red thread to D with hop count 8, D to G with hop count 9, and G to H with hop count 10.",
+      "ja": "Eの下流リンクホップカウントは、現在1つだけであるので、Eは現在のホップ数6と着信赤い糸を有し、それは、ホップ数7 Fと、Fに赤い糸を拡張する必要があり、次に、ホップカウント8とDに赤い糸を拡張ホップカウント10とHのホップ数9、及びGとGとD。"
+    },
+    {
+      "indent": 3,
+      "text": "The red thread has now returned to its initiator, and the loop is detected.",
+      "ja": "赤い糸は現在、イニシエータに戻っており、ループが検出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose though that before the red thread makes it back to H, G changes its next hop from H to E. Then G will extend the red thread to E. But E already has an incoming red link (from H), so the loop is detected.",
+      "ja": "赤い糸バックH、Gにそれを作る前に、HからEへの次ホップを変更しそしてGはE.しかしEに赤い糸を延長する既に（H）から入ってくる赤リンクを有しているので、ループであることも想定検出されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Let's now define the notion of a \"stalled thread\". A stalled thread is a thread which is merged into the outgoing thread, even though the outgoing thread has a smaller link hop count.",
+      "ja": "今度は「失速スレッド」の概念を定義してみましょう。ストールしたスレッドは、発信スレッドが小さいリンクホップ数を有していても、出て行くのスレッドにマージされたスレッドです。"
+    },
+    {
+      "indent": 3,
+      "text": "When a thread loop is detected, the thread becomes stalled.",
+      "ja": "糸ループが検出された場合、スレッドがストールになります。"
+    },
+    {
+      "indent": 0,
+      "text": "A.6.1 When a loop is detected due to a thread of a particular color traversing some node twice, we will say that the thread is \"stalled\" at the node. More precisely, it is the second appearance of the thread which is stalled. Note that we say that a thread is traversing a node twice if the thread is received by that node on an incoming link, but either there is another incoming link with the same color, or the color is one that was assigned by the node itself.",
+      "ja": "A.6.1ループが原因二回、いくつかのノードを通過する特定の色のスレッドに検出されたとき、私たちは、スレッドがノードで「停滞」していることを言うだろう。より正確には、それが停止されたスレッドの第二の外観です。我々は、スレッドがスレッドが入ってくるのリンクをそのノードによって受信された場合に二回のノードを通過するが、どちらかが同じ色の別の着信リンクがある、または色がノード自身によって割り当てられたものであることを言うことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7. Preventing the Setup of Looping LSPS",
+      "ja": "A.7。ルーピングLSPSのセットアップを防止"
+    },
+    {
+      "indent": 3,
+      "text": "The mechanism to be used for preventing the setup of looping LSPs should now be obvious. If node M is node N's next hop, and N wishes to set up an LSP (or to merge into an LSP which already exists at M), then N extends a thread to M.",
+      "ja": "ループLSPのセットアップを防止するために使用されるメカニズムは今明らかにする必要があります。ノードMは、ノードNの次のホップであり、Nは、LSPを設定する（またはすでにMに存在するLSPにマージする）ことを望む場合、NはMにスレッドを拡張します"
+    },
+    {
+      "indent": 3,
+      "text": "M first checks to see if the thread forms a loop (see Appendix A.6), and if so, the thread is stalled. If not, the following procedure is followed.",
+      "ja": "スレッドがループを形成するかどうかを確認するためにM個の第1チェックする（付録A.6を参照）、そうであれば、スレッドがストールされます。ない場合は、以下の手順に従っています。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.1 If M receives this thread, and M has a next hop, and either:",
+      "ja": "A.7.1 Mは、このスレッドを受け取り、そしてMは、次のホップを持っており、いずれかの場合："
+    },
+    {
+      "indent": 3,
+      "text": "- M has no outgoing thread",
+      "ja": " -  Mには、発信スレッドがありません"
+    },
+    {
+      "indent": 3,
+      "text": "- the incoming thread hop count is larger than the hop count of all other incoming threads,",
+      "ja": " - 着信スレッドホップカウントは、他のすべての受信スレッドのホップカウントよりも大きい場合、"
+    },
+    {
+      "indent": 3,
+      "text": "then M must extend the thread downstream.",
+      "ja": "その後、Mは、下流のスレッドを拡張する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.2 On the other hand, if M receives this thread, and M has a next hop and there is another incoming thread with a larger hop count, then:",
+      "ja": "一方A.7.2、Mは、このスレッドを受け取り、そしてMは、次のホップがあり、より大きなホップカウントと別の受信スレッドがある場合。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.2.1 if the outgoing thread is transparent, M rewinds the new incoming thread.",
+      "ja": "A.7.2.1の発信スレッドが透明である場合、Mは、新しい着信スレッドを巻き戻し。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.2.2 if the outgoing thread is colored, M merges the new incoming thread into the outgoing thread, but does not send any messages downstream.",
+      "ja": "A.7.2.2の発信スレッドが着色されている場合、Mは、発信スレッドに新しい着信スレッドをマージしますが、下流の任意のメッセージを送信しません。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.3 If M has not already assigned a label to N, it will assign one when, and only when, M rewinds the thread which N has extended to it.",
+      "ja": "A.7.3 MはすでにNにラベルを割り当てられていない場合、それは時に1を割り当てます、そしてMはNがそれに拡張したスレッドを巻き戻した場合にのみ、。"
+    },
+    {
+      "indent": 0,
+      "text": "A.7.4 If M merges the new thread into an existing colored outgoing thread, then the new incoming thread will rewind when, and only when, the outgoing thread rewinds.",
+      "ja": "A.7.4 Mは、既存のカラーの発信スレッドに新しいスレッドをマージした場合、発信スレッドが巻き戻したとき、そしてときにのみ、その後、新しい着信スレッドが巻き戻します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.8. Withdrawing Threads",
+      "ja": "A.8。スレッドを撤回"
+    },
+    {
+      "indent": 0,
+      "text": "A.8.1 If a particular node has a colored outgoing thread, and loses or changes its next hop, it withdraws the outgoing thread.",
+      "ja": "特定のノードが着色発信スレッドを有し、そして失い又はその次のホップを変更A.8.1場合は、発信スレッドを撤回します。"
+    },
+    {
+      "indent": 3,
+      "text": "Suppose that node N is immediately upstream of node M, and that N has extended a thread to M. Suppose further that N then withdraws the thread.",
+      "ja": "そのノードNがノードMのすぐ上流であり、NはMにスレッドを延長したと仮定すると、Nは、スレッドを撤回することをさらに仮定する。"
+    },
+    {
+      "indent": 0,
+      "text": "A.8.2 If M has another incoming thread with a larger hop count, then M does not send any messages downstream.",
+      "ja": "A.8.2 Mは大きなホップ数を持つ別の着信のスレッドがある場合、Mは、下流の任意のメッセージを送信しません。"
+    },
+    {
+      "indent": 0,
+      "text": "A.8.3 However, if the withdrawn thread had the largest hop count of any incoming thread, then M's outgoing thread will no longer have the proper hop count and color. Therefore:",
+      "ja": "撤回スレッドはすべての着信スレッドの最大ホップカウントを持っていた場合A.8.3はしかし、その後、Mの送信スレッドは、もはや適切なホップ数と色を持っていません。したがって："
+    },
+    {
+      "indent": 0,
+      "text": "A.8.3.1 M must now extend downstream the incoming thread with the largest hop count. (This will cause it to forget the old downstream link hop count and color.)",
+      "ja": "A.8.3.1 Mは現在、下流の最大ホップ数の着信スレッドを拡張する必要があります。 （これは古い下りリンクのホップ数と色を忘れることになります。）"
+    },
+    {
+      "indent": 0,
+      "text": "A.8.3.2 The other incoming threads are considered to be merged into the thread which is extended.",
+      "ja": "A.8.3.2他の入ってくるスレッドが拡張されたスレッドにマージされると考えられます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.8.4 When the last unstalled incoming thread is withdrawn, the outgoing thread must be withdrawn.",
+      "ja": "最後unstalled入ってくるスレッドが引き抜かれるときA.8.4は、送信スレッドが撤回されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "A.9. Modifying Hop Counts and Colors of Existing Threads",
+      "ja": "A.9。ホップカウントと既存のスレッドの色を変更します"
+    },
+    {
+      "indent": 3,
+      "text": "We have seen the way in which the withdrawal of a thread may cause hop count and color changes downstream. Note that if the hop count and/or color of an outgoing thread changes, then the hop count and color of the corresponding incoming thread at the next hop will also change. This may result in a color and/or next hop change of the outgoing thread at that next hop.",
+      "ja": "私たちは、スレッドの撤退は、下流のホップ数や色の変化を引き起こす可能性のある方法を見てきました。ホップカウント及び/又は発信スレッドの色が変化した場合、次のホップでホップカウントと対応する着信糸の色も変化することに注意してください。これは、色および/またはその次のホップに送信スレッドの次のホップの変化をもたらすことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.9.1 Whenever there is a hop count change for any incoming thread, a node must determine whether the \"largest hop count of any incoming thread\" has changed as a result. If so, the outgoing thread's hop count, and possibly color, will change as well, causing messages to be sent downstream.",
+      "ja": "A.9.1すべての受信スレッドのホップ数の変更があるたびに、ノードは、「すべての着信スレッドの最大ホップ数は」結果として変更されたかどうかを判断しなければなりません。その場合、送信スレッドのホップ数、およびおそらく色は、下流送信するメッセージを引き起こし、同様に変更されます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.10. When There is No Next Hop",
+      "ja": "A.10。いいえネクストホップがない場合には"
+    },
+    {
+      "indent": 0,
+      "text": "A.10.1 If a particular node has a colored incoming thread, but has no next hop (or loses its next hop), the incoming thread is stalled.",
+      "ja": "特定のノードが着色着信スレッドを有しているが、何次のホップを有していない（またはその次のホップを失う）場合A.10.1、入ってくるスレッドがストールされます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.11. Next Hop Changes and Pre-existing Colored Incoming Threads",
+      "ja": "A.11。ネクストホップの変更や、既存のカラーの着信スレッド"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible that a node will experience a next hop change or a next hop acquisition at a time when it has colored incoming threads. This happens when routing changes before path setup is complete.",
+      "ja": "ノードが、それが入ってくるのスレッドを色付けした時点で、次のホップの変更またはネクストホップの取得を経験することも可能です。パス設定が完了する前に変更をルーティングする場合に発生します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.11.1 If a node has a next hop change or a next hop acquisition at a time when it has colored incoming threads, it will create a thread with a new color, but whose hop count is one more than the largest of the incoming link hop counts. It will then extend this thread downstream.",
+      "ja": "A.11.1ノードは、それが入ってくるのスレッドを色付けした時点で、次のホップの変更またはネクストホップの取得を持っている場合、それは新しい色でスレッドを作成しますが、そのホップ数の着信リンクの最大より1つ多いですホップカウント。その後、下流のこのスレッドを拡張します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.11.2 When this new thread is created and extended downstream, all incoming threads are merged into it. Any incoming threads that were previously stalled are now considered to be \"merged\" rather than \"stalled\".",
+      "ja": "この新しいスレッドが作成され、下流延長されA.11.2は、すべての着信のスレッドがそれにマージされています。以前にストールしたすべての着信スレッドは今ではなく、「停滞」よりも、「マージ」していると考えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "That is, even though the outgoing thread has a different color than any of the incoming threads, the pre-existing incoming threads are all considered to have been merged into the new outgoing thread. This means that when the outgoing thread rewinds, the incoming threads will too.",
+      "ja": "これは、発信スレッドが入ってくるのスレッドのいずれよりも別の色を持っているにもかかわらず、である、既存の着信スレッドは、すべての新規の発信スレッドにマージされたと考えられています。これは、発信スレッドが巻き戻したときに、入ってくるスレッドがあまりにもすることを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: it is still required to distinguish stalled incoming links from unstalled incoming links when thread withdrawing is performed.",
+      "ja": "注意：まだスレッド撤退が行われた場合unstalled着信リンクから失速着信リンクを区別するために必要とされます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.12. How Many Threads Run Around a Loop?",
+      "ja": "A.12。どのように多くのスレッドがループ走り回りますか？"
+    },
+    {
+      "indent": 3,
+      "text": "We have seen that when a loop is detected, the looping thread stalls. However, considering the following topology:",
+      "ja": "私たちは、ループ糸の屋台、ループが検出されたときにことを見てきました。ただし、次のトポロジを考慮："
+    },
+    {
+      "indent": 19,
+      "text": "X--->A----->B<---Y\n     ^      |\n     |      v\nW--->D<-----C<---Z",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "In this example, there is a loop A-B-C-D-A. However, there are also threads entering the loop from X, Y, Z, and W. Once the loop is detected, there really is no reason why any other thread should have to wrap around the loop. It would be better to simply mark presence of the loop in each node.",
+      "ja": "この例では、ループA-B-C-D-Aです。ただし、X、Y、Z、およびWからループに入るスレッドは、ループが検出されると、実際に他のスレッドがループを包み込むように持つべきない理由はありませんもあります。単に、各ノードでのループの存在をマークする方が良いだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "To do this, we introduce the notion of the \"unknown\" hop count, U. This hop count value is regarded as being larger than any other hop count value. A thread with hop count U will be known as a \"U-thread\".",
+      "ja": "これを行うために、我々は「不明」ホップ数の概念を導入し、U.このホップカウント値は、他のホップカウント値よりも大きいとみなされています。ホップ数Uとのスレッドは、「U-スレッド」として知られるであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "A.12.1 When an incoming thread with a known hop count stalls, and there is an outgoing thread, we assign the hop count U to the outgoing thread, and we assign a new color to the outgoing thread as well.",
+      "ja": "A.12.1すると知られているホップ数の屋台の着信スレッド、および発信スレッドがあり、我々は、発信スレッドへのホップ数Uを割り当て、我々としても、発信スレッドに新しい色を割り当てます。"
+    },
+    {
+      "indent": 3,
+      "text": "As a result, the next hop will then have an incoming U-thread, with the newly assigned color. This causes its outgoing thread in turn to be assigned hop count U and the new color. The rules we have already given will then cause each link in the loop to be assigned the new color and the hop count U. When this thread either reaches its originator, or any other node which already has an incoming thread of the same color, it stalls.",
+      "ja": "結果として、次のホップは、新たに割り当てられた色で、入ってくるUスレッドを有することになります。これは、順番にその送信スレッドはホップ数Uと新しい色を割り当てられるようになります。このスレッドのいずれかがその創始者、またはすでに同じ色の入ってくるスレッドがあり、他のノードに到達したとき、我々はすでに、ループ内の各リンクの原因となります与えているルールは、それを新しい色とホップカウントU.を割り当てられます屋台。"
+    },
+    {
+      "indent": 3,
+      "text": "In our example above, this will cause the links AB, BC, CD, and DA to be given hop count U.",
+      "ja": "上記の例では、これは、ホップ数U.与えられるべきリンクAB、BC、CD、およびDAの原因となります"
+    },
+    {
+      "indent": 3,
+      "text": "Now let's add one more rule:",
+      "ja": "今度は、1以上のルールを追加してみましょう："
+    },
+    {
+      "indent": 0,
+      "text": "A.12.2 When a thread with a known hop count reaches a node that has a colored outgoing U-thread, the incoming thread merges into the outgoing thread. (Actually, this is just a consequence of a rule which has already been given, since U is greater than any known hop count.)",
+      "ja": "既知のホップカウントを持つスレッドが着色発信Uスレッドを有するノードに到達するとA.12.2は、受信スレッドは、送信スレッドに合流します。 （Uは、任意の公知のホップカウントよりも大きいので実際には、これは、既に与えられているルールのちょうど結果です。）"
+    },
+    {
+      "indent": 3,
+      "text": "Then if W, X, Y, or Z attempt to extend a thread to D, A, B, or C respectively, those threads will immediately stall. Once all the links are marked as being within a loop, no other threads are extended around the loop, i.e., no other setup messages will traverse the loop.",
+      "ja": "それぞれD、A、B、またはCにスレッドを拡張するW、X、Y、またはZの試み場合、これらのスレッドは、即座に停止します。すべてのリンクがループ内にあるものとしてマークされたら、他のスレッドはすなわち、他のセットアップメッセージがループを通過しません、ループの周りに拡張されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Here is our example topology with the link hop counts that would exist during a loop:",
+      "ja": "ここではループの間に存在するであろうリンクホップ数とのトポロジ例は次のとおりです。"
+    },
+    {
+      "indent": 19,
+      "text": "  1     U      1\nX--->A----->B<---Y\n     ^      |\n   U |      |U\n     |      v\nW--->D<-----C<---Z\n  1      U     1",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "A.13. Some Special Rules for Hop Count U",
+      "ja": "A.13。ホップのためのいくつかの特別ルールは、Uカウント"
+    },
+    {
+      "indent": 3,
+      "text": "When a U-thread encounters a thread with known hop count, the usual rules apply, remembering that U is larger than any known hop count value.",
+      "ja": "U-スレッドが既知のホップ数とスレッドに遭遇すると、通常の規則は、Uは、任意の公知のホップカウント値よりも大きいことを思い出して、適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "However, we need to add a couple of special rules for the case when a U-thread encounters a U-thread. Since we can't tell which of the two U-threads is really the longer, we need to make sure that each of the U-threads is extended.",
+      "ja": "しかし、我々はU-スレッドがU-スレッドに遭遇したときにケースのために特別なルールのカップルを追加する必要があります。私たちは本当に長い2つのU-スレッドのどの言うことができないので、我々はU-各スレッドが拡張されていることを確認する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "A.13.1 If an incoming colored U-thread arrives at a node which already has an incoming U-thread of that color, or arrives at the node which created that U-thread, then the thread stalls.",
+      "ja": "A.13.1着信着色U-スレッドが既にその色の入ってくるUスレッドを有するノードに到着する、またはU-スレッド、スレッドがストールすることを作成したノードに到達した場合。"
+    },
+    {
+      "indent": 3,
+      "text": "(Once a loop is detected, there is no need to further extend the thread.)",
+      "ja": "（ループが検出されると、さらにスレッドを拡張する必要はありません。）"
+    },
+    {
+      "indent": 0,
+      "text": "A.13.2 If an incoming colored U-thread arrives at a node which has a transparent outgoing U-thread to its next hop, the incoming thread is extended.",
+      "ja": "A.13.2着信着色U-スレッドは、その次のホップに透明出射Uスレッドを有するノードに到着した場合、着信スレッドが延長されます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.13.3 If an incoming colored U-thread arrives at a node which has a colored outgoing U-thread, and if the incoming link over which the thread was received was already an incoming link of the LSP, the thread is extended.",
+      "ja": "A.13.3着信着色Uスレッドは、着色発信Uスレッドを有するノードに到着した場合、スレッドは、受信された上の着信リンクが既にLSPの着信リンクした場合、スレッドが延長されます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.13.4 If an incoming colored U-thread arrives at a node which has a colored outgoing U-thread, and if the incoming link over which the thread was received was NOT already an incoming link of the LSP, a new U-thread is created and extended. All the incoming threads are merged into it. This is known in the main body of this document as \"extending the thread with changing color\".",
+      "ja": "A.13.4着信着色Uスレッドは、着色発信Uスレッドを有するノードに到着すると、スレッドが受信された上の着信リンクが既にLSPの着信リンクされなかった場合、新たなU-スレッドがある場合作成と拡張。すべての受信スレッドは、それにマージされています。これは、「色を変えてスレッドの拡張」として、この文書の本体に知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "These rules ensure that an incoming U-thread is always extended (or merged into a new U-thread which then gets extended), unless it is already known to form a loop.",
+      "ja": "これらのルールは、すでにループを形成することが知られていない限り、着信U-スレッドは常に、拡張（またはその後拡張されます新しいU-スレッドにマージ）されていることを確認します。"
+    },
+    {
+      "indent": 3,
+      "text": "What is the purpose of rule A.13.4? There are certain cases where a loop can form, but where the node which created the looping thread is not part of the loop. Rule A.13.4 ensures that when there is a loop, there will be a looping thread which was created by some node which is actually in the loop. This in turn ensures that the loop will be detected well before the thread TTL expires.",
+      "ja": "ルールA.13.4の目的は何ですか？ループを形成することができるが、ループのスレッドを作成したノードがループの一部ではない場合、特定の場合があります。ルールA.13.4は、ループがある場合には、ループに実際にあるいくつかのノードによって作成されたループのスレッドが存在することを保証します。これは、順番に、スレッドのTTLが期限切れになる前にループがうまく検出されることを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "The rule of \"extending the thread with changing color\" is also applied when extending a thread with a known hop count.",
+      "ja": "既知のホップカウントを有するスレッドを拡張するとき、「色を変えてスレッドを拡張」のルールも適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.13.5 When a received colored thread with a known hop count is extended, if the node has an outgoing thread, and if the incoming link over which the thread was received was NOT already an incoming link of the LSP, a new thread is created and extended. All the incoming threads are merged into it. This is an exceptional case of A.5.1.",
+      "ja": "ノードが発信スレッドがあり、スレッドを受信した上で、着信リンクが既にLSPの入リンクされていない場合は、新しいスレッドが作成された場合には知られているホップ数と受け取った色の糸が、延長されA.13.5そして、拡張。すべての受信スレッドは、それにマージされています。これは、A.5.1の例外的なケースです。"
+    },
+    {
+      "indent": 0,
+      "text": "A.14. Recovering From a Loop",
+      "ja": "A.14。ループからの回復"
+    },
+    {
+      "indent": 3,
+      "text": "Here is our example topology again, in the presence of a loop.",
+      "ja": "ここに私たちのトポロジ例は、ループの存在下で、再びです。"
+    },
+    {
+      "indent": 19,
+      "text": "  1     U      1\nX--->A----->B<---Y\n     ^      |\n   U |      |U\n     |      v\nW--->D<-----C<---Z\n  1      U     1",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Suppose now that C's next hop changes from D to some other node E, thereby breaking the loop. For simplicity, we will assume that E is the egress node.",
+      "ja": "いくつかの他のノードEにDからCの次のホップの変化は、それによってループを壊すことになりましたと仮定する。簡単にするために、我々は、Eは、出口ノードであることを前提としています。"
+    },
+    {
+      "indent": 3,
+      "text": "C will withdraw its outgoing U-thread from D (9.1). It will also create a new thread (12.1), assign it a new color, assign it hop count U (the largest hop count of C's incoming threads), merge its two other incoming threads into the new thread (12.2), and extend the new thread to E, resulting the following configuration:",
+      "ja": "Cは、D（9.1）から、その発信Uスレッドを撤退します。それはまた、新しいスレッド（12.2）にその2つの他の受信スレッドをマージし、U（Cの入ってくるスレッドの最大ホップ数）をカウントホップ割り当て、それを新しい色を割り当てて、新しいスレッド（12.1）を作成し、拡張します次のような構成を結果としてEに新しいスレッド、："
+    },
+    {
+      "indent": 19,
+      "text": "  1     U      1\nX--->A----->B<---Y\n     ^      |\n   U |      |U\n     |      v\nW--->D      C<---Z\n  1         |  1\n           U|\n            v\n            E",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "When the thread from C to E rewinds, the merged threads also rewind (8.4). This process of rewinding can now proceed all the way back to the leafs. While this is happening, of course, D will note that its outgoing thread hop count should be 2, not U, and will make this change (9.3). As a result, A will note that its outgoing hop count should be 3, not U, and will make this change. So at some time in the future, we might see the following:",
+      "ja": "CからEまでスレッドがリワインド場合、マージされたスレッドは、（8.4）を巻き戻します。巻き戻しのこのプロセスは、すぐに戻って葉にすべての道を進むことができます。これが起こっているが、当然のことながら、DはU、その送信スレッドのホップ数が2でなければならないことはないに注意し、この変更（9.3）を作成します。その結果、Aはその送信ホップ数が3でなければならないことに注意してください、ないU、およびこの変更を行いますされます。だから、将来のある時点で、私たちは次のように表示される場合があります。"
+    },
+    {
+      "indent": 19,
+      "text": "  1     3      1\nX--->A----->B<---Y\n     ^      |\n   2 |      |U\n     |      v\nW--->D      C<---Z\n  1         |  1\n           U|\n            v\n            E",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "After a short period, we see the following:",
+      "ja": "短い期間の後、我々は以下を参照してください。"
+    },
+    {
+      "indent": 19,
+      "text": "  1     3      1\nX--->A----->B<---Y\n     ^      |\n   2 |      |4\n     |      v\nW--->D      C<---Z\n  1         |  1\n           5|\n            v\n            E",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "with all threads transparent, and we have a fully set up non-looping path.",
+      "ja": "透明すべてのスレッドで、私たちは完全にセットアップ非ループパスを持っています。"
+    },
+    {
+      "indent": 0,
+      "text": "A.15. Continuing to Use an Old Path",
+      "ja": "A.15。古いパスを使用し続けます"
+    },
+    {
+      "indent": 3,
+      "text": "Nothing in the above requires that any node withdraw a transparent thread. Existing transparent threads (established paths) can continue to be used, even while new paths are being set up.",
+      "ja": "上記のいかなる部分も、ノードは、透明な糸を撤回することを必要としません。既存の透明スレッド（確立されたパスは）新たなパスが設定されている間も、使用し続けることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If this is done, then some node may have both a transparent outgoing thread (previous path) and a colored outgoing thread (new path being set up). This would happen only if the downstream links for the two threads are different. When the colored outgoing thread rewinds (and becomes transparent), the previous path should be withdrawn.",
+      "ja": "これが行われる場合、いくつかのノードは、透明発信スレッド（前パス）と着色発信スレッド（新しいパスが設定されている）の両方を有していてもよいです。この2つのスレッドのために下流のリンクが異なっている場合にのみ起こるでしょう。着色発信スレッドがリワインド（透明になる）場合、前のパスを回収しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2001). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2001）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

@@ -1,0 +1,371 @@
+{
+  "title": {
+    "text": "RFC 4321 - Problems Identified Associated with the Session Initiation Protocol's (SIP) Non-INVITE Transaction",
+    "ja": "RFC 4321 - 問題は、セッション開始プロトコル（SIP）非INVITEトランザクションに関連付けられた識別します"
+  },
+  "number": 4321,
+  "created_at": "2019-10-23 11:20:06.830482+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          R. Sparks\nRequest for Comments: 4321                              Estacado Systems\nCategory: Informational                                     January 2006",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "         Problems Identified Associated with the\nSession Initiation Protocol's (SIP) Non-INVITE Transaction",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes several problems that have been identified with the Session Initiation Protocol's (SIP) non-INVITE transaction.",
+      "ja": "この文書では、セッション開始プロトコル（SIP）非INVITEトランザクションで確認されているいくつかの問題について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Problems under the Current Specifications .......................2\n   1.1. NITs must complete immediately or risk losing a race .......2\n   1.2. Provisional responses can delay recovery from lost\n        final responses ............................................3\n   1.3. Delayed responses will temporarily blacklist an element ....4\n   1.4. 408 for non-INVITE is not useful ...........................6\n   1.5. Non-INVITE timeouts doom forking proxies ...................7\n   1.6. Mismatched timer values make winning the race harder .......7\n2. Security Considerations .........................................8\n3. Acknowledgements ................................................8\n4. Informative References ..........................................9",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Problems under the Current Specifications",
+      "section_title": true,
+      "ja": "現在の仕様の下1の問題点"
+    },
+    {
+      "indent": 3,
+      "text": "There are a number of unpleasant edge conditions created by the SIP non-INVITE transaction (NIT) model's fixed duration. The negative aspects of some of these are exacerbated by the effect that provisional responses have on the non-INVITE transaction state machines as currently defined.",
+      "ja": "SIP非INVITEトランザクション（NIT）モデルの固定期間によって作成された不快なエッジ条件がいくつかあります。これらのいくつかの負の側面は、暫定応答は、現在定義されている非INVITEトランザクション状態のマシンに持っていることの効果によって悪化しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. NITs must complete immediately or risk losing a race",
+      "section_title": true,
+      "ja": "1.1。 NITはすぐに完了したり、レースを失う危険性がなければなりません"
+    },
+    {
+      "indent": 3,
+      "text": "The non-INVITE transaction defined in RFC 3261 [1] is designed to have a fixed and finite duration (dependent on T1). A consequence of this design is that participants must strive to complete the transaction as quickly as possible. Consider the race condition shown in Figure 1.",
+      "ja": "RFC 3261で定義された非INVITEトランザクションは[1]固定及び有限の時間（T1に依存する）を有するように設計されています。この設計の結果は、参加者が可能な限り迅速にトランザクションを完了するために努力しなければならないということです。図1に示した競合状態を考えてみましょう。"
+    },
+    {
+      "indent": 8,
+      "text": "                 UAC           UAS\n                  |   request   |\n             ---  |---.         |\n              ^   |    `---.    |\n              |   |         `-->|  ---\n              |   |             |   ^\n              |   |             |   |\n            64*T1 |             |   |\n              |   |             |   |\n              |   |             | 64*T1\n              |   |             |   |\n              |   |             |   |\n              v   |             |   |\ntimeout <=== ---  |   200 OK    |   |\n                  |         .---|   v\n                  |    .---'    |  ---\n                  |<--'         |",
+      "raw": true
+    },
+    {
+      "indent": 16,
+      "text": "Figure 1: Non-Invite Race Condition",
+      "ja": "図1：非招待レースコンディション"
+    },
+    {
+      "indent": 3,
+      "text": "The User Agent Server (UAS) in this figure believes it has responded to the request in time, and that the request succeeded. The User Agent Client (UAC), on the other hand, believes the request has timed-out, hence failed. No longer having a matching client transaction, the UAC core will ignore what it believes to be a spurious response. As far as the UAC is concerned, it received no response at all to its request. The ultimate result is that the UAS and UAC have conflicting views of the outcome of the transaction.",
+      "ja": "この図ではユーザエージェントサーバ（UAS）は、それが時間内に要求に応じて、要求が成功したことをしていると考えています。ユーザエージェントクライアント（UAC）は、一方で、要求がタイムアウトしたと考えて、それゆえに失敗しました。一致するクライアントトランザクションを持つもはや、UACコアは、それがスプリアスであると信じるものを無視しません。限りUACが懸念しているとして、それは、その要求に全く応答を受信しません。最終的な結果は、UASとUACはトランザクションの結果の矛盾する見解を持っているということです。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, a UAS cannot wait until the last possible moment to send a final response within a NIT. It must, instead, send its response so that it will arrive at the UAC before that UAC times out. Unfortunately, the UAS has no way to accurately measure the propagation time of the request or predict the propagation time of the response. The uncertainty it faces is compounded by each proxy that participates in the transaction. Thus, the UAS's only choice is to send its final response as soon as it possibly can and hope for the best.",
+      "ja": "したがって、UASは、NIT内の最終的な応答を送信するために最後の可能な瞬間まで待つことができません。それが出ているUAC時間前にUACに到着するようにそれは、代わりに、その応答を送信する必要があります。残念ながら、UASは、正確にリクエストの伝播時間を測定したり、応答の伝搬時間を予測する方法はありません。それが直面する不確実性は、トランザクションに参加する各プロキシによって配合されます。したがって、UASの唯一の選択肢は、すぐにそれは多分できると最高の希望としての最終的な応答を送信することです。"
+    },
+    {
+      "indent": 3,
+      "text": "This result constrains the set of problems that can be solved with a single NIT. Any delay introduced during processing of a request increases the probability of losing the race. If the timing characteristics of that processing are not predictable and controllable, a single NIT is an inappropriate model for handling the request. One viable alternative is to accept the request with a 202 and send the ultimate results in a new request in the reciprocal direction.",
+      "ja": "この結果は、単一のNITを解くことができる問題のセットを制約します。リクエストの処理中に導入された任意の遅延は、レースを失う確率が高くなります。その処理のタイミング特性が予測可能かつ制御可能でない場合、単一のNITは、要求を処理するための不適切なモデルです。一つの実行可能な代案は202で要求を受け入れ、相互の方向に新しい要求に究極の結果を送信することです。"
+    },
+    {
+      "indent": 3,
+      "text": "In specialized networks, a UAS might have some reliable knowledge of inter-hop latency and could use that knowledge to determine if it has time to delay its final response in order to perform some processing such as a database lookup while mitigating its risk of losing the race in Figure 1. Establishing this knowledge across arbitrary networks (perhaps using resource reservation techniques and deterministic transports) is not currently feasible.",
+      "ja": "専門ネットワークでは、UASは間ホップの待ち時間のいくつかの信頼性の高い知識を持っているかもしれないし、負けのリスクを軽減しながら、それは、このようなデータベース検索など、いくつかの処理を実行するために、その最終的な応答を遅らせるための時間を持っているかどうかを判断するためにその知識を使用することができます図1（おそらくリソース予約手法と決定論的トランスポートを使用して）任意のネットワーク全体この知識を確立する際にレースは現在不可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Provisional responses can delay recovery from lost final responses",
+      "section_title": true,
+      "ja": "1.2。暫定応答が失われ、最終的な応答からの回復を遅らせることができます"
+    },
+    {
+      "indent": 3,
+      "text": "The non-INVITE client transaction state machine provides reliability for NITs over unreliable transports (UDP) through retransmission of the request message. Timer E is set to T1 when a request is initially transmitted. As long as the machine remains in the Trying state, each time Timer E fires, it will be reset to twice its previous value (capping at T2) and the request is retransmitted.",
+      "ja": "非INVITEクライアントトランザクションのステートマシンは、要求メッセージの再送信による信頼性のないトランスポート（UDP）以上のNITのための信頼性を提供します。要求が最初に送信されたときにタイマーEはT1に設定されています。限り、マシンは、各時間タイマE火災、試行状態のままであるように、それは（T2でキャッピング）回前の値にリセットされ、要求が再送信されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the non-INVITE client transaction state machine sees a provisional response, it transitions to the Proceeding state, where retransmission continues, but the algorithm for resetting Timer E is simply to use T2 instead of doubling at each firing. (Note that Timer E is not altered during the transition to Proceeding.)",
+      "ja": "非INVITEクライアントトランザクションのステートマシンは、暫定応答を見れば、それは再送が続く進行状態に移行しますが、タイマーEをリセットするためのアルゴリズムは、単に代わりに、各焼成時の倍のT2を使用することです。 （タイマEが進行への移行中に変更されていないことに注意してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "Making the transition to the Proceeding state before Timer E is reset to T2 can cause recovery from a lost final response to take extra time. Figure 2 shows recovery from a lost final response with and without a provisional message during this window. Recovery occurs within 2*T1 in the case without the provisional. With the provisional, recovery is delayed until T2, which by default is 8*T1.",
+      "ja": "タイマーEがT2にリセットされる前に進行状態への移行を作ることは、余分な時間を取るために失われた最終的な応答からの回復を引き起こす可能性があります。図2は、このウィンドウ中暫定メッセージととせずに失われた最終的な応答の回復を示しています。回復は、仮がない場合に2 * T1内で起こります。暫定では、回復はデフォルトでは8 * T1であるT2、まで遅延されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In practical terms, a provisional response to a NIT in currently deployed networks can delay transaction completion by up to 3.5 seconds.",
+      "ja": "実用的な面では、現在配備ネットワークのNITへの暫定的な応答は、最大3.5秒での取引完了を遅らせることができます。"
+    },
+    {
+      "indent": 9,
+      "text": "        UAC       UAS               UAC        UAS\n         |         |                 |          |\n   ---   |----.    |            ---  |----.     |\n    ^    |     `-->|             ^   |     `--->|\nE = T1   |         |         E = T1  |    .-----|(provisional)\n    v    |         |             v   |<--'      |\n   ---   |----.    |            ---  |----.     |\n    ^    |     `-->|             ^   |     `--->|\n    |    |   X<----|(lost final) |   |   X<-----|(lost final)\n    |    |         |             |   |          |\nE = 2*T1 |         |             |   |          |\n    |    |         |             |   |          |\n    |    |         |             |   |          |\n    v    |         |             |   |          |\n   ---   |----.    |             |   |          |\n         |     `-->|             |   |          |\n         |   .-----|(final)      |   |          |\n         |<-'      |             |   |          |\n         |         |             |   |          |\n        \\/\\       /\\/           /\\/ /\\/        /\\/\n                             E = T2\n        \\/\\       /\\/           /\\/ /\\/        /\\/\n         |         |             |   |          |\n         |         |             v   |          |\n         |         |            ---  |----.     |\n         |         |                 |     `--->|\n         |         |                 |    .-----|(final)\n         |         |                 |<--'      |\n         |         |                 |          |",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Figure 2: Provisionals Can Harm Recovery",
+      "ja": "図2：Provisionalsは回復に悪影響を与えることができます"
+    },
+    {
+      "indent": 3,
+      "text": "No additional delay is introduced if the first provisional response is received after Timer E has reached its maximum reset interval of T2.",
+      "ja": "タイマEは、T2の最大リセット間隔に達した後の最初の暫定的な応答を受信した場合、追加の遅延が導入されません。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Delayed responses will temporarily blacklist an element",
+      "section_title": true,
+      "ja": "1.3。遅延応答は、一時的要素をブラックリストします"
+    },
+    {
+      "indent": 3,
+      "text": "A SIP element's use of DNS Service Record Resource Records [3] is specified in RFC 3263 [2]. That specification discusses how SIP ensures high availability by having upstream elements detect failure of downstream elements. It proceeds to define several types of failure detection and instructions for failover. Two of the behaviors it describes are important to this document: o Within a transaction, transport failure is detected either through an explicit report from the transport layer or through timeout. Note specifically that timeout will indicates transport failure regardless of the transport in use. When transport failure is detected, the request is retried at the next element from the sorted results of the SRV query.",
+      "ja": "DNSサービスレコードリソースレコード[3]のSIP要素の使用は、RFC 3263で指定されている[2]。その仕様は、SIPは、上流要素は、下流要素の故障を検出有することにより高可用性を保証する方法について説明します。これは、障害検出およびフェイルオーバーのための命令のいくつかのタイプを定義するために進みます。それが記述する行動の二つは、本文書に重要です：トランザクション内では、輸送障害がトランスポート層からの明示的な報告書を介して、またはタイムアウトのいずれかによって検出されたoを。なお、具体的にそのタイムアウト意志にかかわらず、使用中の輸送の輸送障害を示します。搬送異常が検出された場合、要求はSRVクエリのソート結果から次の要素に再試行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Between transactions, locations reporting temporary failure (through 503/Retry-After, for example) are not used until their requested black-out period expires.",
+      "ja": "彼らの要求されたブラックアウト期間が終了するまで、一時的な障害を報告し、トランザクション、ロケーション間のO（503通過/リトライした後、例えば）は使用されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The specification notes the benefit of caching locations that are successfully contacted, but does not discuss how such a cache is maintained. It is unclear whether an element should stop using (temporarily blacklist) a location returned in the SRV query that results in a transport error. If it does, when should such a location be removed from the blacklist?",
+      "ja": "仕様は首尾よく接触する場所をキャッシュすることの利点を指摘するが、そのようなキャッシュが維持されている方法については説明しません。要素が（一時的にブラックリスト）を使用して搬送誤差をもたらすSRVクエリに返される場所を停止すべきかどうかは不明です。それがない場合は、ときにそのような場所はブラックリストから削除する必要がありますか？"
+    },
+    {
+      "indent": 3,
+      "text": "Without such a blacklist (or equivalent mechanism), the intended availability mechanism fails miserably. Consider traffic between two domains. Proxy pA in domain A needs to forward a sequence of non-INVITE requests to domain B. Through DNS SRV, pA discovers pB1 and pB2, and the ordering rules of [2] and [3] indicate it should use pB1 first. The first request to pB1 times out. Since pA is a proxy and a NIT has a fixed duration, pA has no opportunity to retry the request at pB2. If pA does not remember pB1's failure, the second request (and all subsequent non-INVITE requests until pB1 recovers) are doomed to the same failure. Caching would allow the subsequent requests to be tried at pB2.",
+      "ja": "このようなブラックリスト（または同等の機構）することなく、意図した可用性機構は悲惨失敗します。 2つのドメイン間のトラフィックを考えてみましょう。プロキシPAはドメインにAがDNS SRV介してドメインBに非INVITEリクエストのシーケンスを転送する必要があり、PAはPB1とPB2、及び[2]、[3]が最初のPB1を使用する必要が示すの順序付けルールを発見します。アウトPB1回に最初の要求。 PAはプロキシで、NITは、一定の期間を持っているので、PAはPB2の要求を再試行する機会を持っていません。 （PB1が回復するまでとそれ以降のすべての非INVITEリクエスト）PAがPB1の故障、第2の要求を覚えていない場合は、同じ失敗する運命にされています。キャッシングは、後続の要求は、PB2で試したことができるようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Since miserable failure is not acceptable in deployed networks, we should anticipate that elements will, in fact, cache timeout failures between transactions. Then the race in Figure 1 becomes important. If an element fails to respond \"soon enough\", it has effectively not responded at all and will be blacklisted at its peer for some period of time.",
+      "ja": "惨めな失敗が展開されたネットワークでは受け入れられないので、我々は、要素が、実際には、キャッシュトランザクション間タイムアウトエラーをすることを予想しなければなりません。次に、図1のレースが重要になります。要素は、「すぐに十分な」応答に失敗した場合は、それが効果的にまったく応答がなく、ある程度の期間のためのピアでブラックリストにされます。"
+    },
+    {
+      "indent": 3,
+      "text": "(Note that even with caching, the first request timeout results in a timeout failure all the way back to the original submitter. The failover mechanisms in [2] work well to increase the resiliency of a given INVITE transaction, but do nothing for a given non-INVITE transaction.)",
+      "ja": "（[2]でフェールオーバーメカニズムは、与えられたINVITEトランザクションの弾力性を高めるためにうまく機能する。元の提出者にすべての方法タイムアウトエラーの最初の要求タイムアウトの結果、あってもキャッシュでますが、与えられたために何もしませんトランザクション非INVITE。）"
+    },
+    {
+      "indent": 0,
+      "text": "1.4. 408 for non-INVITE is not useful",
+      "section_title": true,
+      "ja": "1.4。非INVITEのための408は有用ではありません"
+    },
+    {
+      "indent": 3,
+      "text": "Consider the race condition in Figure 1 when the final response is 408 instead of 200. Under the current specification, the race is guaranteed to be lost. Most existing endpoints will emit a 408 for a non-INVITE request 64*T1 after receiving the request if they have not emitted an earlier final response. Such a 408 is guaranteed to arrive at the next upstream element too late to be useful. In fact, in the presence of proxies, these messages are even harmful. When the 408 arrives, each proxy will have already terminated its associated client transaction due to timeout. Therefore, each proxy must forward the 408 upstream statelessly. This, in turn, is guaranteed to arrive too late. As Figure 3 shows, this can ultimately result in bombarding the original requester with spurious 408s. (Note that the proxy's client transaction state machine never enters the Completed state, so Timer K does not enter into play.)",
+      "ja": "最終的な応答は、408の代わりに、現在の仕様では200であるとき、図1における競合状態を考慮し、レースが失われることが保証されています。ほとんどの既存のエンドポイントは、彼らが以前に最終的な応答を放出されていない場合は、要求を受信した後* T1非INVITEリクエスト64のための408を放出します。そのような408は、有用であるには余りにも遅く次の上流の要素に到達することが保証されています。実際には、プロキシの存在下では、これらのメッセージは有害でさえあります。 408が到着すると、各プロキシは、すでにタイムアウトによりそれに関連するクライアントトランザクションを終了しています。したがって、各プロキシはステートレス408上流を転送しなければなりません。これは、順番に、あまりにも遅れて到着することが保証されます。図3に示すように、これは、最終的に偽408sと元のリクエスタを衝撃をもたらすことができます。 （タイマーKが戦場に入らないようにプロキシのクライアントトランザクションのステートマシンは決して、完成した状態になっていないことに注意してください。）"
+    },
+    {
+      "indent": 6,
+      "text": "               UAC        P1         P2         P3         UAS\n                |          |          |          |          |\n          ---  ===---.     |          |          |          |\n           ^    |     `-->===---.     |          |          |\n           |    |          |     `-->===---.     |          |\n           |    |          |          |     `-->===---.     |\n         64*T1  |          |          |          |     `-->===\n           |    |          |          |          |          |\n           |    |          |          |          |          |\n           v    |          |          |          |          |\n(timeout) ---  ===         |          |          |          |\n                |    .-408===         |          |          |\n                |<--'      |    .-408===         |          |\n                |    .-408-|<--'      |    .-408===         |\n                |<--'      |    .-408-|<--'      |    .-408===\n                |    .-408-|<--'      |    .-408-|<--'      |\n                |<--'      |    .-408-|<--'      |          |\n                |    .-408-|<--'      |          |          |\n                |<--'      |          |          |          |\n                |          |          |          |          |",
+      "raw": true
+    },
+    {
+      "indent": 21,
+      "text": "Figure 3: Late 408s to Non-INVITEs",
+      "ja": "図3：非のINVITE下旬〜408s"
+    },
+    {
+      "indent": 3,
+      "text": "This response bombardment is not limited to the 408 response, though it only exists when participating client transaction state machines are timing out. Figure 4 generalizes Figure 1 to include multiple hops. Note that even though the UAS responds \"in time\" to P3, the response is too late for P2, P1, and the UAC.",
+      "ja": "参加するクライアントのトランザクション状態マシンがタイムアウトしているときにのみ存在するが、この応答衝撃は、408応答に限定されるものではありません。図4は、複数のホップを含むように図1を一般化します。 UASはP3に「時間に」対応していても、レスポンスが遅すぎるP2、P1、およびUACのためであることに注意してください。"
+    },
+    {
+      "indent": 6,
+      "text": "               UAC        P1         P2         P3         UAS\n                |          |          |          |          |\n          ---  ===---.     |          |          |          |\n           ^    |     `-->===---.     |          |          |\n           |    |          |     `-->===---.     |          |\n           |    |          |          |     `-->===---.     |\n         64*T1  |          |          |          |     `-->===\n           |    |          |          |          |          |\n           |    |          |          |          |          |\n           v    |          |          |          |          |\n(timeout) ---  ===         |          |          |          |\n                |    .-408===         |          |    .-200-|\n                |<--'      |    .-408===   .-200-|<--'      |\n                |    .-408-|<--'.-200-|<--'     ===         |\n                |<--'.-200-|<--'      |          |         ===\n                |<--'      |          |          |          |\n                |          |          |          |          |",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Figure 4: Additional Timeout-Related Error",
+      "ja": "図4：追加のタイムアウト関連のエラー"
+    },
+    {
+      "indent": 0,
+      "text": "1.5. Non-INVITE timeouts doom forking proxies",
+      "section_title": true,
+      "ja": "1.5。タイムアウト運命フォークプロキシを非INVITE"
+    },
+    {
+      "indent": 3,
+      "text": "A single branch with a delayed or missing final response will dominate the processing at proxy that receives no 2xx responses to a forked non-INVITE request. This proxy is required to allow all of its client transactions to terminate before choosing a \"best response\". This forces the proxy's server transaction to lose the race in Figure 1. Any response it ultimately forwards (a 401, for example) will arrive at the upstream elements too late to be used. Thus, if no element among the branches would return a 2xx response, failure of a single element (or its transport) dooms the proxy to failure.",
+      "ja": "遅れたり、不足している最終的な応答を持つ単一の分岐は、分岐した非INVITEリクエストに何の2xx応答を受信しないプロキシの処理を支配します。このプロキシは、その顧客取引のすべてが、「最高の応答」を選択する前に終了できるようにするために必要とされます。これは、図1に何の応答もレースを失うことを、プロキシのサーバーのトランザクションを強制的にそれが最終的に転送（401など）を使用するには遅すぎ上流エレメントに到着します。したがって、ブランチの間でどの要素が故障に代理dooms 2XX応答、単一の要素（又はその輸送）の障害を返さないならば。"
+    },
+    {
+      "indent": 0,
+      "text": "1.6. Mismatched timer values make winning the race harder",
+      "section_title": true,
+      "ja": "1.6。不一致タイマー値が難しく、レースに勝つ作ります"
+    },
+    {
+      "indent": 3,
+      "text": "There are many failure scenarios due to misconfiguration or misbehavior that the SIP specification does not discuss. One is placing two elements with different configured values for T1 and T2 on the same network. Review of Figure 1 illustrates that the race failure is only made more likely in this misconfigured state (it may appear that shortening T1 at the element behaving as a UAS improves this particular situation, but remember that these elements may trade roles on the next request). Since the protocol provides no mechanism for discovering/negotiating a peer's timer values, exceptional care must be taken when deploying systems with non-defaults to ensure that they will never directly communicate with elements with default values.",
+      "ja": "誤設定または誤動作に起因する多くの障害シナリオは、SIP仕様が議論していないことがあります。一つは、同じネットワーク上のT1およびT2のための異なる構成値を持つ2つの要素を配置しています。図1のレビューはレースの障害のみがこの設定に誤り状態の可能性が高い作られていることを示す（UASとして動作する要素でT1を短くし、この特定の状況を改善することが表示されますが、これらの要素は次の要求に役割を取引することを覚えている場合があります） 。プロトコルはピアのタイマー値を交渉/発見するためのメカニズムを提供していないので、例外的なケアは、彼らが直接、デフォルト値を持つ要素と通信することはありませんことを保証するために、非デフォルト値を持つシステムを導入する際に注意する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Security Considerations",
+      "section_title": true,
+      "ja": "2.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes some problems in the core SIP specification [1] related to the SIP non-INVITE requests, the messages other than INVITE that begin transactions. A few of the problems lead to flooding or forgery risk, and could possibly be exploited by an adversary in a denial of service attack. Solutions are defined in the companion document [4].",
+      "ja": "この文書[1]はSIP非INVITEリクエスト、トランザクションを開始し、そのINVITE以外のメッセージに関連するコアSIP仕様のいくつかの問題が記載されています。問題のいくつかは、洪水や偽造のリスクにつながり、そしておそらく、サービス拒否攻撃で敵によって悪用される可能性があります。ソリューションは、仲間ドキュメントで定義されている[4]。"
+    },
+    {
+      "indent": 3,
+      "text": "One solution there prohibits proxies and User Agents from sending 408 responses to non-INVITE transactions. Without this change, proxies automatically generate a storm of useless responses. An attacker could capitalize on this by enticing User Agents to send non-INVITE requests to a black hole (through social engineering or DNS poisoning) or by selectively dropping responses.",
+      "ja": "そこに一つの解決策は、非INVITE取引に408応答を送信してから、プロキシとユーザエージェントを禁止しています。この変更がなければ、プロキシは自動的に無用の応答の嵐を発生させます。攻撃者は、（ソーシャルエンジニアリングやDNSポイズニングを通じて）ブラックホールにまたは選択的に応答をドロップすることにより、非INVITEリクエストを送信するためにユーザエージェントを誘導することで、これに生かすことができました。"
+    },
+    {
+      "indent": 3,
+      "text": "Another solution prohibits proxies from forwarding late responses. Without this change, an attacker could easily forge messages which appear to be late responses. All proxies compliant with RFC 3261 are required to forward these responses, wasting bandwidth and CPU and potentially overwhelming target User Agents (especially those with low speed connections).",
+      "ja": "別の解決策は遅れて応答を転送からプロキシを禁止しています。この変更を行わないと、攻撃者が簡単に遅く応答のように見えるメッセージを偽造する可能性があります。 RFC 3261に準拠したすべてのプロキシは、帯域幅とCPUと潜在的に圧倒的なターゲットユーザエージェント（低速接続で特に）を無駄に、これらの応答を転送するために必要とされています。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Acknowledgements",
+      "section_title": true,
+      "ja": "3.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document captures many conversations about non-INVITE issues. Significant contributers include Ben Campbell, Gonzalo Camarillo, Steve Donovan, Rohan Mahy, Dan Petrie, Adam Roach, Jonathan Rosenberg, and Dean Willis.",
+      "ja": "この文書では、非INVITE問題について多くの会話をキャプチャします。重要な貢献者はベン・キャンベル、ゴンサロ・カマリロ、スティーブ・ドノバン、ロハンマーイ、ダン・ペトリー、アダムローチ、ジョナサン・ローゼンバーグ、およびディーンウィリスが含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Informative References",
+      "section_title": true,
+      "ja": "4.有益な参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Rosenberg, J., Schulzrinne, H., Camarillo, G., Johnston, A., Peterson, J., Sparks, R., Handley, M., and E. Schooler, \"SIP: Session Initiation Protocol\", RFC 3261, June 2002.",
+      "ja": "[1]ローゼンバーグ、J.、Schulzrinneと、H.、カマリロ、G.、ジョンストン、A.、ピーターソン、J.、スパークス、R.、ハンドレー、M.、およびE.学生、 \"SIP：セッション開始プロトコル\" 、RFC 3261、2002年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Rosenberg, J. and H. Schulzrinne, \"Session Initiation Protocol (SIP): Locating SIP Servers\", RFC 3263, June 2002.",
+      "ja": "[2]ローゼンバーグ、J.、およびH. Schulzrinneと、 \"セッション開始プロトコル（SIP）：SIPサーバの検索\"、RFC 3263、2002年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Gulbrandsen, A., Vixie, P., and L. Esibov, \"A DNS RR for specifying the location of services (DNS SRV)\", RFC 2782, February 2000.",
+      "ja": "[3] Gulbrandsenの、A.、いるVixie、P.、およびL. Esibov、 \"（DNSのSRV）サービスの位置を特定するためのDNS RR\"、RFC 2782、2000年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Sparks, R., \"Actions Addressing Identified Issues with the Session Initiation Protocol's (SIP) Non-INVITE Transaction\", RFC 4320, January 2006.",
+      "ja": "[4] R.、スパークス、 \"セッション開始プロトコル（SIP）と特定された問題への対処アクション非INVITEトランザクション\"、RFC 4320、2006年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Robert J. Sparks Estacado Systems 17210 Campbell Road Suite 250 Dallas, TX 75252-4203",
+      "ja": "ロバート・J・スパークスシステムズEstacado 17210キャンベル道スイート250、ダラス、TX 75252から4203"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: rjsparks@estacado.net",
+      "ja": "メールアドレス：rjsparks@estacado.net"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}

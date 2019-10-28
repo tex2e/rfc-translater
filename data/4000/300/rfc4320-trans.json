@@ -1,0 +1,402 @@
+{
+  "title": {
+    "text": "RFC 4320 - Actions Addressing Identified Issues with the Session Initiation Protocol's (SIP) Non-INVITE Transaction",
+    "ja": "RFC 4320 - セッション開始プロトコル（SIP）非INVITEトランザクションと特定された問題に対処するアクション"
+  },
+  "number": 4320,
+  "created_at": "2019-10-23 11:14:02.350614+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          R. Sparks\nRequest for Comments: 4320                              Estacado Systems\nUpdates: 3261                                               January 2006\nCategory: Standards Track",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "      Actions Addressing Identified Issues with the\nSession Initiation Protocol's (SIP) Non-INVITE Transaction",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes modifications to the Session Initiation Protocol (SIP) to address problems that have been identified with the SIP non-INVITE transaction. These modifications reduce the probability of messages losing the race condition inherent in the non-INVITE transaction and reduce useless network traffic. They also improve the robustness of SIP networks when elements stop responding. These changes update behavior defined in RFC 3261.",
+      "ja": "この文書では、SIP非INVITEトランザクションで確認されている問題に対処するために、セッション開始プロトコル（SIP）への変更について説明します。これらの変更は、非INVITEトランザクションに固有の競合状態を失ったメッセージの確率を低減し、無用なネットワークトラフィックを削減します。要素が応答を停止するとき彼らはまた、SIPネットワークの堅牢性を向上させます。これらの変更は、RFC 3261で定義された動作を更新します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Improving the Situation When Responses Are Only Delayed .........2\n   2.1. Action 1: Make the best use of provisional responses .......2\n   2.2. Action 2: Remove the useless late-response storm ...........3\n3. Improving the Situation When an Element Is Not Going to\n   Respond .........................................................4\n4. Normative Updates to RFC 3261 ...................................4\n   4.1. Action 1 ...................................................4\n   4.2. Action 2 ...................................................5\n5. Security Considerations .........................................5\n6. Contributors ....................................................5\n7. Normative References ............................................6",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "There are a number of unpleasant edge conditions created by the SIP non-INVITE transaction (NIT) model's fixed duration. The negative aspects of some of these are exacerbated by the effect that provisional responses have on the non-INVITE transaction state machines. These problems are documented in [3]. In summary:",
+      "ja": "SIP非INVITEトランザクション（NIT）モデルの固定期間によって作成された不快なエッジ条件がいくつかあります。これらのいくつかの負の側面は、暫定応答が非INVITEトランザクション状態マシンに与える影響によって悪化しています。これらの問題は、[3]に記載されています。要約すれば："
+    },
+    {
+      "indent": 6,
+      "text": "A non-INVITE transaction must complete immediately or risk losing a race",
+      "ja": "非INVITEトランザクションがすぐに完了したり、レースを失う危険性がなければなりません"
+    },
+    {
+      "indent": 6,
+      "text": "Losing the race will cause the requester to stop sending traffic to the responder (the responder will be temporarily blacklisted)",
+      "ja": "レースを失うこと（応答者が一時的にブラックリストにされます）リクエスタが応答者へのトラフィックの送信を停止します"
+    },
+    {
+      "indent": 6,
+      "text": "Provisional responses can delay recovery from lost final responses",
+      "ja": "暫定応答が失われ、最終的な応答からの回復を遅らせることができます"
+    },
+    {
+      "indent": 6,
+      "text": "The 408 response is useless for the non-INVITE transaction",
+      "ja": "408応答は、非INVITEトランザクションのために役に立ちません"
+    },
+    {
+      "indent": 6,
+      "text": "As non-INVITE transactions through N proxies time-out, there can be an O(N^2) storm of the useless 408 responses",
+      "ja": "Nプロキシタイムアウトを介して非INVITEトランザクションとして、無駄な408の応答のO（N ^ 2）ストームが存在することができます"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies updates to RFC 3261 [1] to improve the behavior of SIP elements when these edge conditions arise.",
+      "ja": "この文書では、これらのエッジ条件が生じたとき、[1] SIP要素の挙動を改善するために、RFC 3261への更新を指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Improving the Situation When Responses Are Only Delayed",
+      "section_title": true,
+      "ja": "応答が唯一の遅れで表示された場合2.状況の改善"
+    },
+    {
+      "indent": 3,
+      "text": "There are two goals to achieve when we constrain the problem to those cases where all elements are ultimately responsive and networks ultimately deliver messages:",
+      "ja": "我々はすべての要素が最終的に応答すると、ネットワークは、最終的にメッセージを配信するような場合に問題を制約するとき達成するには、2つの目標があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Reduce the probability of losing the race, preferably to the point that it is negligible",
+      "ja": "O好ましくは、それはごくわずかであることをポイントに、レースを失う確率を低減"
+    },
+    {
+      "indent": 3,
+      "text": "o Reduce or eliminate useless messaging",
+      "ja": "O無用メッセージングを減らすか、または排除します"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Action 1: Make the best use of provisional responses",
+      "section_title": true,
+      "ja": "2.1。アクション1：暫定応答を最大限に活用してください"
+    },
+    {
+      "indent": 3,
+      "text": "o Disallow non-100 provisionals to non-INVITE requests",
+      "ja": "O非INVITEリクエストに非100 provisionalsを禁止"
+    },
+    {
+      "indent": 3,
+      "text": "o Disallow 100 Trying to non-INVITE requests before Timer E reaches T2 (for UDP hops)",
+      "ja": "タイマEは、（UDPホップの場合）T2に達する前にO非INVITE要求しようとして100を許可しません"
+    },
+    {
+      "indent": 3,
+      "text": "o Allow 100 Trying after Timer E reaches T2 (for UDP hops)",
+      "ja": "タイマーEは、（UDPホップのため）T2に到達した後、Oしようと100を許可します"
+    },
+    {
+      "indent": 3,
+      "text": "o Allow 100 Trying for hops over reliable transports",
+      "ja": "O信頼性の高いトランスポート上でのホップのためにしようと100を許可します"
+    },
+    {
+      "indent": 3,
+      "text": "Since non-INVITE transactions must complete rapidly ([3]), any information beyond \"I'm here\" (which can be provided by a 100 Trying) can be just as usefully delayed to the final response. Sending non-100 provisionals wastes bandwidth.",
+      "ja": "非INVITEトランザクションが急速に完了しなければならないので（[3]）、（試みる100によって提供することができる）「私がここにいる」を超えたすべての情報は、ちょうどとして有効最終的な応答を遅延させることができます。非100 provisionals廃棄物の帯域幅を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "As shown in [3], sending any provisional response inside a NIT before Timer E reaches T2 damages recovery from failure of an unreliable transport.",
+      "ja": "タイマEは、信頼性の低いトランスポートの障害からT2損傷回復に到達する前に、NIT内部の暫定応答を送信する、[3]に示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Without a provisional, a late final response is the same as no response at all and will likely result in blacklisting the late-responding element ([3]). If an element is delaying its final response at all, sending a 100 Trying after Timer E reaches T2 prevents this blacklisting without damaging recovery from unreliable transport failure.",
+      "ja": "仮せず、後期の最終応答が全く応答と同じであり、おそらく後期応答エレメント（[3]）をブラックリストになります。要素は、まったくその最終的な応答を遅らせるタイマーEがT2に達した後にしようと100を送信している場合は信頼性の低い輸送の障害からの回復に損傷を与えることなく、このブラックリストを防止します。"
+    },
+    {
+      "indent": 3,
+      "text": "Blacklisting on a late response occurs even over reliable transports. Thus, if an element processing a request received over a reliable transport is delaying its final response at all, sending a 100 Trying well in advance of the timeout will prevent blacklisting. Sending a 100 Trying immediately will not harm the transaction as it would over UDP, but a policy of always sending such a message results in unnecessary traffic. A policy of sending a 100 Trying after the period of time in which Timer E reaches T2 had this been a UDP hop is one reasonable compromise.",
+      "ja": "後半応答にブラックリストしても、信頼性の高いトランスポート上で発生します。したがって、要求の処理要素は、信頼性の高いトランスポートを介して受信した場合、タイムアウトの前に十分にしようと100はブラックリストを防止する送信、まったくその最終応答を遅らせています。送信100それはUDPの上と同じように取引が、常に不要なトラフィックにこのようなメッセージの結果を送信する政策に害を与えないであろう、すぐにしようとしています。タイマーEがT2に達するまでの時間の経過後にしようと100は、このUDPホップされていた送信のポリシーには、1つの合理的な妥協です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Action 2: Remove the useless late-response storm",
+      "section_title": true,
+      "ja": "2.2。アクション2：無用後期応答の嵐を削除します"
+    },
+    {
+      "indent": 3,
+      "text": "o Disallow 408 to non-INVITE requests",
+      "ja": "O非INVITEリクエストに対して408を禁止"
+    },
+    {
+      "indent": 3,
+      "text": "o Absorb stray non-INVITE responses at proxies",
+      "ja": "Oプロキシの浮遊非INVITE応答を吸収"
+    },
+    {
+      "indent": 3,
+      "text": "A 408 to non-INVITE will always arrive too late to be useful ([3]), The client already has full knowledge of the timeout. The only information this message would convey is whether or not the server believed the transaction timed out. However, with the current design of the NIT, a client cannot do anything with this knowledge. Thus, the 408 is simply wasting network resources and contributes to the response bombardment illustrated in [3].",
+      "ja": "408非INVITE常に有用であるためには遅すぎる到着します（[3]）、クライアントがすでにタイムアウトの完全な知識を持っています。このメッセージは伝えしまう唯一の情報は、サーバーがタイムアウトしたトランザクションを信じているか否かです。しかし、NITの現在の設計では、クライアントはこの知識で何もすることができません。従って、408は、単にネットワーク資源を浪費し、[3]に示す応答衝撃に寄与する。"
+    },
+    {
+      "indent": 3,
+      "text": "Late non-INVITE responses by definition arrive after the client transaction's Timer F has fired and the client transaction has entered the Terminated state. Thus, these responses cannot be distinguished from strays. Changing the protocol behavior to prohibit forwarding non-INVITE stray responses stops the late-response storm. It also improves the proxy's defenses against malicious users counting on the RFC 3261 requirement to forward such strays.",
+      "ja": "クライアントトランザクションのタイマーFが発射された後、定義により後期非INVITE応答が到着し、クライアントトランザクションが終了状態になりました。したがって、これらの応答が外れると区別することはできません。フォワーディング非INVITE浮遊応答を禁止するプロトコルの動作を変更すると、後期応答の嵐を停止します。また、このような漂遊を転送するために、RFC 3261の要件にカウント悪意あるユーザーに対して、プロキシの防御を向上させます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Improving the Situation When an Element Is Not Going to Respond",
+      "section_title": true,
+      "ja": "3.要素が応答するつもりはないような状況を改善します"
+    },
+    {
+      "indent": 3,
+      "text": "When we expand the scope of the problem to also deal with element or network failure, we have more goals to achieve:",
+      "ja": "我々はまた、要素またはネットワークの障害に対処するために、問題の範囲を拡大すると、我々は達成するためのより多くの目標を持っています："
+    },
+    {
+      "indent": 3,
+      "text": "o Identifying when an element is non-responsive",
+      "ja": "要素が非応答性であるとき、特定のO"
+    },
+    {
+      "indent": 3,
+      "text": "o Minimizing or eliminating falsely identifying responsive elements as non-responsive",
+      "ja": "誤って非応答などの応答エレメントを識別最小化または除去O"
+    },
+    {
+      "indent": 3,
+      "text": "o Avoiding non-responsive elements with future requests",
+      "ja": "今後の要求と非応答要素を回避O"
+    },
+    {
+      "indent": 3,
+      "text": "Action 1 helps with the first two goals, dramatically improving an element's ability to distinguish between failure and delayed response from the next downstream element. Some response, either provisional or final, will almost certainly be received before the transaction times out. So, an element can more safely assume that no response at all indicates that the peer is not available and follow the existing requirements in [1] and [2] for that case.",
+      "ja": "アクション1は劇的に失敗し、次の下流の要素からの応答遅れを区別する要素の能力を向上させることは、最初の2つの目標に役立ちます。暫定的または最終のいずれかのいくつかの応答は、ほぼ確実にトランザクションがタイムアウト前に受信されます。それで、要素はより安全ピアが利用可能でないことを全く応答を示さないと仮定して、[1]と[2]のために、その場合の既存の要件に従うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Achieving the third goal requires more aggressive changes to the protocol. As noted in [3], future non-INVITE transactions are likely to fail again unless the implementation takes steps beyond what is defined in [1] and [2] to remember non-responsive destinations between transactions. Standardizing these extra steps is left to future work.",
+      "ja": "3番目の目標を達成することは、プロトコルへのより積極的な変更を必要とします。 [3]で述べたように、将来の非INVITEトランザクションは実装がで定義されているものを超えてのステップを取らない限り、再び失敗する可能性がある[1]と[2]トランザクション間の非応答の宛先を覚えておくこと。これらの追加手順を標準化することは、将来の仕事に委ねられています。"
+    },
+    {
+      "indent": 1,
+      "text": "4. Normative Updates to",
+      "section_title": true,
+      "ja": "4.規範を更新します"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Action 1",
+      "section_title": true,
+      "ja": "4.1。アクション1"
+    },
+    {
+      "indent": 3,
+      "text": "An SIP element MUST NOT send any provisional response with a Status-Code other than 100 to a non-INVITE request.",
+      "ja": "SIP要素は、ステータスコード100以外の非INVITEリクエストに持つ任意の暫定的な応答を送ってはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "An SIP element MUST NOT respond to a non-INVITE request with a Status-Code of 100 over any unreliable transport, such as UDP, before the amount of time it takes a client transaction's Timer E to be reset to T2.",
+      "ja": "SIP要素は、それがクライアントトランザクションのタイマーEがT2にリセットするのにかかる時間の量の前に、UDPなどの任意の信頼性の低いトランスポート、100以上のステータスコードと非INVITEリクエストに応じてはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "An SIP element MAY respond to a non-INVITE request with a Status-Code of 100 over a reliable transport at any time.",
+      "ja": "SIP要素は、ステータスコード100のいずれかの時点で信頼性の高いトランスポート上で非INVITEリクエストに応答することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Without regard to transport, an SIP element MUST respond to a non-INVITE request with a Status-Code of 100 if it has not otherwise responded after the amount of time it takes a client transaction's Timer E to be reset to T2.",
+      "ja": "それはそうでなければT2にリセットされるようにクライアントトランザクションのタイマーEのにかかる時間の量の後に応答しなかった場合の輸送に関係なく、SIP要素は、100のステータスコードを非INVITE要求に応答しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Action 2",
+      "section_title": true,
+      "ja": "4.2。アクション2"
+    },
+    {
+      "indent": 3,
+      "text": "A transaction-stateful SIP element MUST NOT send a response with Status-Code of 408 to a non-INVITE request. As a consequence, an element that cannot respond before the transaction expires will not send a final response at all.",
+      "ja": "トランザクションステートフルSIP要素は非INVITEリクエストに対して408のステータスコードでレスポンスを送ってはいけません。その結果、トランザクションの有効期限が切れる前に応答できない要素がすべてで最終的な応答を送信しません。"
+    },
+    {
+      "indent": 3,
+      "text": "A transaction-stateful SIP proxy MUST NOT send any response to a non-INVITE request unless it has a matching server transaction that is not in the Terminated state. As a consequence, this proxy will not forward any \"late\" non-INVITE responses.",
+      "ja": "トランザクションステートフルSIPプロキシは、それが終了状態ではありませんマッチングサーバのトランザクションを持っていない限り、非INVITEリクエストに対する応答を送ってはいけません。結果として、このプロキシは、任意の「後半」非INVITE応答を転送しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document makes a number of small changes to the core SIP specification [1] to improve the robustness of SIP non-INVITE transactions. Many of these actions also prevent flooding and denial-of-service attacks.",
+      "ja": "この文書[1]はSIP非INVITEトランザクションのロバスト性を改善するために、コアSIP仕様に小さな変化の数になります。これらのアクションの多くは、洪水やサービス拒否攻撃を防ぎます。"
+    },
+    {
+      "indent": 3,
+      "text": "One change prohibits proxies and user agents from sending 408 responses to non-INVITE transactions. Without this change, proxies automatically generate a storm of useless responses as described in [3]. An attacker could capitalize on this by enticing user agents to send non-INVITE requests to a black hole (through social engineering or DNS poisoning) or by selectively dropping responses.",
+      "ja": "1つの変更は、非INVITE取引に408応答を送信してから、プロキシとユーザーエージェントを禁止します。 [3]に記載されているように、この変更せずに、プロキシは自動的に無駄な応答の嵐を生成します。攻撃者は、（ソーシャルエンジニアリングやDNSポイズニングを通じて）ブラックホールにまたは選択的に応答をドロップすることにより、非INVITEリクエストを送信するためにユーザーエージェントを誘導することで、これに生かすことができました。"
+    },
+    {
+      "indent": 3,
+      "text": "Another change prohibits proxies from forwarding late responses. Without this change, an attacker could easily forge messages that appear to be late responses. All proxies compliant with RFC 3261 are required to forward these responses, wasting bandwidth and CPU and potentially overwhelming target user agents (especially those with low-speed connections).",
+      "ja": "もう一つの変化は、後半の応答を転送するからプロキシを禁止しています。この変更を行わないと、攻撃者が簡単に遅く応答のように見えるメッセージを偽造する可能性があります。 RFC 3261に準拠したすべてのプロキシは、帯域幅とCPUと潜在的に圧倒的なターゲットユーザーエージェント（低速接続で特に）を無駄に、これらの応答を転送するために必要とされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The remainder of these changes do not affect the security of the SIP protocol.",
+      "ja": "これらの変化の残りの部分は、SIPプロトコルのセキュリティに影響を与えません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Contributors",
+      "section_title": true,
+      "ja": "6.寄与者"
+    },
+    {
+      "indent": 3,
+      "text": "Rohan Mahy provided the Security Considerations section.",
+      "ja": "ロハンマーイは、Security Considerations部を提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Normative References",
+      "section_title": true,
+      "ja": "7.引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Rosenberg, J., Schulzrinne, H., Camarillo, G., Johnston, A., Peterson, J., Sparks, R., Handley, M., and E. Schooler, \"SIP: Session Initiation Protocol\", RFC 3261, June 2002.",
+      "ja": "[1]ローゼンバーグ、J.、Schulzrinneと、H.、カマリロ、G.、ジョンストン、A.、ピーターソン、J.、スパークス、R.、ハンドレー、M.、およびE.学生、 \"SIP：セッション開始プロトコル\" 、RFC 3261、2002年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Rosenberg, J. and H. Schulzrinne, \"Session Initiation Protocol (SIP): Locating SIP Servers\", RFC 3263, June 2002.",
+      "ja": "[2]ローゼンバーグ、J.、およびH. Schulzrinneと、 \"セッション開始プロトコル（SIP）：SIPサーバの検索\"、RFC 3263、2002年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Sparks, R., \"Problems Identified Associated with the Session Initiation Protocol's (SIP) Non-INVITE Transaction\", RFC 4321, January 2006.",
+      "ja": "[3] R.、スパークス、RFC 4321、2006年1月 \"セッション開始プロトコル（SIP）非INVITEトランザクションに関連付けられた特定された問題\"。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Robert J. Sparks Estacado Systems 17210 Campbell Road Suite 250 Dallas, TX 75252-4203",
+      "ja": "ロバート・J・スパークスシステムズEstacado 17210キャンベル道スイート250、ダラス、TX 75252から4203"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: rjsparks@estacado.net",
+      "ja": "メールアドレス：rjsparks@estacado.net"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}

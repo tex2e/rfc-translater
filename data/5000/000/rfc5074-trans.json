@@ -1,0 +1,480 @@
+{
+  "title": {
+    "text": "RFC 5074 - DNSSEC Lookaside Validation (DLV)",
+    "ja": "RFC 5074 - DNSSECルックアサイドバリデーション（DLV）"
+  },
+  "number": 5074,
+  "created_at": "2019-10-23 00:51:37.098112+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          S. Weiler\nRequest for Comments: 5074                                  SPARTA, Inc.\nCategory: Informational                                    November 2007",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "DNSSEC Lookaside Validation (DLV)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "DNSSEC Lookaside Validation (DLV) is a mechanism for publishing DNS Security (DNSSEC) trust anchors outside of the DNS delegation chain. It allows validating resolvers to validate DNSSEC-signed data from zones whose ancestors either aren't signed or don't publish Delegation Signer (DS) records for their children.",
+      "ja": "DNSSECルックアサイドバリデーション（DLV）は、DNS委任チェーンの外側のDNSセキュリティ（DNSSEC）トラストアンカーを公開するためのメカニズムです。これは、検証リゾルバは祖先のいずれかに署名されていないか、または彼らの子供のための委任署名者（DS）レコードを公開していないゾーンからDNSSEC署名データを検証することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . . . 2\n2.  Architecture  . . . . . . . . . . . . . . . . . . . . . . . . . 2\n3.  DLV Domains . . . . . . . . . . . . . . . . . . . . . . . . . . 3\n4.  Overview of Validator Behavior  . . . . . . . . . . . . . . . . 3\n5.  Details of Validator Behavior . . . . . . . . . . . . . . . . . 4\n6.  Aggressive Negative Caching . . . . . . . . . . . . . . . . . . 5\n  6.1.  Implementation Notes  . . . . . . . . . . . . . . . . . . . 5\n7.  Overlapping DLV Domains . . . . . . . . . . . . . . . . . . . . 6\n8.  Optimization  . . . . . . . . . . . . . . . . . . . . . . . . . 7\n9.  Security Considerations . . . . . . . . . . . . . . . . . . . . 7\n10. IANA Considerations . . . . . . . . . . . . . . . . . . . . . . 8\n11. References  . . . . . . . . . . . . . . . . . . . . . . . . . . 8\n  11.1. Normative References  . . . . . . . . . . . . . . . . . . . 8\n  11.2. Informative References  . . . . . . . . . . . . . . . . . . 9\nAppendix A.  Acknowledgments  . . . . . . . . . . . . . . . . . . .10",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "DNSSEC [RFC4033] [RFC4034] [RFC4035] authenticates DNS data by building public-key signature chains along the DNS delegation chain from a trust anchor.",
+      "ja": "DNSSEC [RFC4033] [RFC4034] [RFC4035]はトラストアンカーからDNS委譲チェーンに沿って、公開鍵署名チェーンを構築することにより、DNSデータを認証します。"
+    },
+    {
+      "indent": 3,
+      "text": "In the present world, with the DNS root and many key top level domains unsigned, the only way for a validating resolver (\"validator\") to validate the many DNSSEC-signed zones is to maintain a sizable collection of preconfigured trust anchors. Maintaining multiple preconfigured trust anchors in each DNSSEC-aware validator presents a significant management challenge.",
+      "ja": "現在の世界では、DNSルートと符号なしの多くのキートップレベルドメインで、多くのDNSSEC署名のゾーンを検証する検証をリゾルバのための唯一の方法（「バリデータ」）は、事前設定されたトラストアンカーのかなりのコレクションを維持することです。各DNSSEC対応のバリデータで複数の事前設定された信頼アンカーを維持することは重要な経営課題を提示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a way to publish trust anchors in the DNS outside of the normal delegation chain, as a way to easily configure many validators within an organization or to \"outsource\" trust anchor management.",
+      "ja": "この文書では、簡単に組織内の多くのバリデータを設定したり、トラストアンカーの管理「を外部委託」する方法として、通常の委任チェーンの外のDNSに信頼アンカーを公開する方法を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Some design trade-offs leading to the mechanism presented here are described in [INI1999-19].",
+      "ja": "ここで紹介するメカニズムにつながるいくつかの設計上のトレードオフは、[INI1999-19]で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Architecture",
+      "section_title": true,
+      "ja": "2.アーキテクチャ"
+    },
+    {
+      "indent": 3,
+      "text": "DNSSEC Lookaside Validation allows a set of domains, called \"DLV domains\", to publish secure entry points for zones that are not their own children.",
+      "ja": "DNSSECルックアサイドの検証は、自分の子ではないのゾーンのための安全なエントリーポイントを公開するために、「DLVドメイン」と呼ばれる、ドメインのセットすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "With DNSSEC, validators may expect a zone to be secure when validators have one of two things: a preconfigured trust anchor for the zone or a validated Delegation Signer (DS) record for the zone in the zone's parent (which presumes a preconfigured trust anchor for the parent or another ancestor). DLV adds a third mechanism: a validated entry in a DLV domain (which presumes a preconfigured trust anchor for the DLV domain). Whenever a DLV domain contains a DLV RRset for a zone, a validator may expect the named zone to be signed. Absence of a DLV RRset for a zone does not necessarily mean that the zone should be expected to be insecure; if the validator has another reason to believe the zone should be secured, validation of that zone's data should still be attempted.",
+      "ja": "以下のために事前設定されたトラストアンカーを前提とし、ゾーンまたはゾーンの親でゾーンの検証委任署名者（DS）レコード（のための事前設定されたトラストアンカー：DNSSECでは、バリデータがバリデータが2つのうちのいずれかを持っている場合、ゾーンが安全であることを期待することがあり親または他の祖先）。 （DLVドメインの事前設定済みのトラストアンカーを前提）DLVドメインで検証エントリ：DLVは、第3の機構を追加します。 DLVドメインがゾーンのDLV RRセットが含まれているときはいつでも、バリデータは、指定されたゾーンが署名されることを期待することがあります。ゾーンのDLV RRセットの不在は必ずしもゾーンが安全でないことが予想されなければならないという意味ではありません。バリデータが確保されなければならないゾーンを信じる別の理由がある場合は、そのゾーンのデータの検証はまだ試みるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "3. DLV Domains",
+      "section_title": true,
+      "ja": "3. DLVドメイン"
+    },
+    {
+      "indent": 3,
+      "text": "A DLV domain includes trust statements about descendants of a single zone, called the 'target' zone. For example, the DLV domain trustbroker.example.com could target the org zone and the DLV domain bar.example.com could target the root.",
+      "ja": "DLVドメインは、「ターゲット」ゾーンと呼ば単一のゾーンの子孫で、程度の信頼ステートメントを含んでいます。例えば、DLVドメインtrustbroker.example.comは、組織ゾーンをターゲット可能性があり、DLVドメインbar.example.comはルートをターゲットにすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A DLV domain contains one or more DLV records [RFC4431] for each of the target's descendant zones that have registered security information with it. For a given zone, the corresponding name in the DLV domain is formed by replacing the target zone name with the DLV domain name.",
+      "ja": "DLVドメインはそれでセキュリティ情報を登録している対象者の子孫ゾーンごとに1つのまたは複数のDLVレコード[RFC4431]を含んでいます。所与のゾーンに対して、DLVドメイン内の対応する名前は、DLVドメイン名とターゲットゾーン名を置換することによって形成されています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, assuming the DLV domain trustbroker.example.com targets the org zone, any DLV records corresponding to the zone example.org can be found at example.trustbroker.example.com. DLV records corresponding to the org zone can be found at the apex of trustbroker.example.com.",
+      "ja": "例えば、DLVドメインtrustbroker.example.comが組織ゾーンを標的と仮定すると、ゾーンexample.orgに対応する任意のDLVレコードがexample.trustbroker.example.comで見つけることができます。組織ゾーンに対応DLVレコードがtrustbroker.example.comの頂点で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As another example, assuming the DLV domain bar.example.com targets the root zone, DLV records corresponding to the zone example.org can be found at example.org.bar.example.com. DLV records corresponding to the org zone can be found at org.bar.example.com, and DLV records corresponding to the root zone itself can be found at the apex of bar.example.com.",
+      "ja": "別の例として、bar.example.comは、ルートゾーンを標的DLVドメインを仮定し、ゾーンexample.orgに対応DLVレコードがexample.org.bar.example.comで見つけることができます。組織ゾーンに対応DLVレコードがorg.bar.example.comで見つけることができ、且つルートゾーン自体に対応DLVレコードがbar.example.comの頂点に見出すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A DLV domain need not contain data other than DLV records, appropriate DNSSEC records validating that data, the apex NS and SOA records, and, optionally, delegations. In most cases, the operator of a DLV domain will probably not want to include any other RR types in the DLV domain.",
+      "ja": "DLVドメインは、DLVレコード以外のデータが含まれていなくて、そのデータを検証し、適切なDNSSECレコード、頂点NSおよびSOAレコード、および、必要に応じて、代表団。ほとんどの場合、DLVドメインのオペレータは、おそらくDLVドメイン内の他のRRタイプを含めることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "To gain full benefit from aggressive negative caching, described in Section 6, a DLV domain SHOULD NOT use minimally-covering NSEC records, as described in [RFC4470], and it SHOULD NOT use NSEC3 records, as described in [NSEC3].",
+      "ja": "セクション6で説明アグレッシブネガティブキャッシュ、より完全な利益を得るために[RFC4470]に記載されているように、DLVドメインは、最小被覆NSECレコードを使用しません、そして[NSEC3]に記載されているように、それは、NSEC3レコードを使用しないでください。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Overview of Validator Behavior",
+      "section_title": true,
+      "ja": "バリ行動の4概要"
+    },
+    {
+      "indent": 3,
+      "text": "To minimize the load on the DLV domain's authoritative servers as well as query response time, a validator SHOULD first attempt validation using any applicable (non-DLV) trust anchors. If the validation succeeds (with a result of Secure), DLV processing need not occur.",
+      "ja": "DLVドメインの権威サーバーの負荷だけでなく、クエリの応答時間を最小限に抑えるために、バリデータは、最初に任意の適用（非DLV）トラストアンカーを使用して検証を試みるべきです。検証が（セキュアの結果で）成功した​​場合、DLV処理が発生する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When configured with a trust anchor for a DLV domain, a validator SHOULD attempt to validate all responses at and below the target of that DLV domain.",
+      "ja": "DLVドメインのトラストアンカーを使用して設定すると、バリデータはそのDLVドメインの対象にし、下のすべての応答を検証しようとすべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "To do validation using DLV, a validator looks for a (validated) DLV RRset applicable to the query, as described in the following section, and uses it as though it were a DS RRset to validate the answer using the normal procedures in Section 5 of RFC 4035.",
+      "ja": "DLVを使用して検証を行うには、バリデータは、次のセクションで説明するように、（検証）DLV RRセットのクエリに適用見え、それはの第5節では、通常の手順を使用して答えを検証するためにDS RRセットであるかのようにそれを使用していますRFC 4035。"
+    },
+    {
+      "indent": 3,
+      "text": "For each response, the validator attempts validation using the \"closest enclosing\" DLV RRset in the DLV domain, which is the DLV RRset with the longest name that matches the query or could be an ancestor of the QNAME. For example, assuming the DLV domain trustbroker.example.com targets the org zone, and there exist DLV RRsets named trustbroker.example.com (applicable to org), example.trustbroker.example.com (applicable to example.org), and sub.example.trustbroker.example.com (applicable to sub.example.org), a validator would use the sub.example.trustbroker.example.com DLV RRset for validating responses to a query for sub.example.org.",
+      "ja": "各応答のために、バリデータは、クエリに一致する、またはQNAMEの先祖であり得る最長の名前を持つDLV資源レコード集合であるDLVドメインに「最も近い囲み」DLV RRセットを用いて検証を試みます。例えば、DLVドメインtrustbroker.example.comを仮定すると、組織ゾーンを標的とtrustbroker.example.com、（ORGに適用）example.trustbroker.example.com（example.orgのに適用可能）という名前DLVの資源レコード集合が存在し、及びsub.example.trustbroker.example.com（sub.example.orgに適用可能）、バリデータはsub.example.orgのクエリへの応答を検証するためsub.example.trustbroker.example.com DLV RRセットを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "The choice of which DLV record(s) to use has a significant impact on the query load seen at DLV domains' authoritative servers. The particular DLV selection rule described in this document results in a higher query load than some other selection rules, but it has some advantages in terms of the security policies that it can implement. More detailed discussion of this DLV selection rule as well as several alternatives that were considered along the way can be found in [INI1999-19].",
+      "ja": "DLVレコード（複数可）を使用するかの選択がDLVドメイン権威サーバで見られるクエリ負荷に大きな影響を与えます。特定のDLV選択ルールは、他のいくつかの選択ルールよりも高いクエリ負荷で、このドキュメントの結果で説明したが、それはそれが実装できるセキュリティポリシーの面でいくつかの利点を有しています。道に沿って考えられたこのDLV選択ルールのより詳細な議論だけでなく、いくつかの選択肢が[INI1999-19]で見つけることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Details of Validator Behavior",
+      "section_title": true,
+      "ja": "バリ行動の5.詳細"
+    },
+    {
+      "indent": 3,
+      "text": "As above, to minimize the load on the DLV domain's authoritative servers as well as query response time, a validator SHOULD first attempt validation using any applicable (non-DLV) trust anchors. If the validation succeeds (with a result of Secure), DLV processing need not occur.",
+      "ja": "上記のように、DLVドメインの権威サーバーの負荷だけでなく、クエリの応答時間を最小限に抑えるために、バリデータは、最初に任意の適用（非DLV）トラストアンカーを使用して検証を試みるべきです。検証が（セキュアの結果で）成功した​​場合、DLV処理が発生する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "To find the closest enclosing DLV RRset for a given query, the validator starts by looking for a DLV RRset corresponding to the QNAME. If it doesn't find a DLV RRset for that name (as confirmed by the presence of a validated NSEC record) and that name is not the apex of the DLV domain, the validator removes the leading label from the name and tries again. This process is repeated until a DLV RRset is found or it is proved that there is no enclosing DLV RRset applicable to the QNAME. In all cases, a validator SHOULD check its cache for the desired DLV RRset before issuing a query. Section 8 discusses a slight optimization to this strategy.",
+      "ja": "特定のクエリのために最も近い囲んDLV RRセットを見つけるには、バリデータはQNAMEに対応DLV RRセットを探すことで始まります。それはその名前のためDLV RRセットを見つけることができません（検証NSECレコードの存在によって確認される）と、その名前がDLVドメインの頂点ではない場合、バリデータは名前から先頭のラベルを削除し、再試行します。 DLV RRセットが発見されたか、QNAMEに適用一切囲むDLV RRセットが存在しないことを証明されるまで、このプロセスが繰り返されます。すべての場合において、バリデータは、クエリを発行する前に希望DLV RRセットのためにそのキャッシュをチェックする必要があります。第8章では、この戦略に若干の最適化について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Having found the closest enclosing DLV RRset or received proof that no applicable DLV RRset exists, the validator MUST validate the RRset or non-existence proof using the normal procedures in Section 5 of RFC 4035. In particular, any delegations within the DLV domain need",
+      "ja": "最も近い封入DLV資源レコード集合又は該当DLV RRセットは、バリデータは、特に、RFC 4035のセクション5で通常の手順を使用して、資源レコード集合または非存在の証明を検証しなければならない存在しないことを受信された証拠を発見したが、DLVドメイン必要内の任意の委任"
+    },
+    {
+      "indent": 3,
+      "text": "to be followed, with normal DNSSEC validation applied. If validation of the DLV RRset leads to a result of Bogus, then it MUST NOT be used and the validation result for the original response SHOULD be Bogus, also. If validation of the DLV RRset leads to a result of Insecure (i.e., the DLV record is in an unsecured portion of the DLV domain), then it MUST NOT be used and the validation result for the original response SHOULD be Insecure, also. (It should be very odd, indeed, to find part of a DLV domain marked as Insecure: this is likely to happen only when there are delegations within the DLV domain and some portions of that domain use different cryptographic signing algorithms.) If the validation of the DLV RRset leads to a result of Secure, the validator then treats that DLV RRset as though it were a DS RRset for the applicable zone and attempts validation using the procedures described in Section 5 of RFC 4035.",
+      "ja": "通常のDNSSEC検証を適用して、従うべき。 DLV RRセットの検証が偽の結果につながる場合は、それを使用してはいけませんし、元の応答の検証結果はまた、偽であるべきです。 DLV RRセットの検証が安全でない結果をもたらす場合、それは使用してはいけません、元の応答の検証結果も、安全でないあるべきである（すなわち、DLVレコードはDLVドメインのセキュリティで保護されていない部分です）。 （これは、安全でないとマークされたDLVドメインの一部を見つけるために、確かに、非常に奇妙でなければなりません。これは、DLVドメイン内の代表団があるときにのみ起こると、そのドメインのある部分が、異なる暗号署名アルゴリズムを使用する可能性がある。）の検証場合DLV RRセットは、Secureの結果をもたらすのが適用可能ゾーンのDS RRセットであり、RFC 4035のセクション5に記載された手順を用いて検証を試みているかのように、バリデータはそのDLV RRセットを扱います。"
+    },
+    {
+      "indent": 3,
+      "text": "In the interest of limiting complexity, validators SHOULD NOT attempt to use DLV to validate data from another DLV domain.",
+      "ja": "複雑さを制限するの関心では、バリデータは他のDLVドメインからのデータを検証するためにDLVを使用することを試みるべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Aggressive Negative Caching",
+      "section_title": true,
+      "ja": "6.積極的なネガティブキャッシュ"
+    },
+    {
+      "indent": 3,
+      "text": "To minimize load on authoritative servers for DLV domains, particularly those with few entries, DLV validators SHOULD implement aggressive negative caching, as defined in this section.",
+      "ja": "このセクションで定義されているようDLVドメインの権威サーバ、いくつかのエントリを持つ特に上の負荷を最小限に抑えるために、DLVのバリデータは、積極的なネガティブキャッシュを実装する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Previously, cached negative responses were indexed by QNAME, QCLASS, QTYPE, and the setting of the CD bit (see RFC 4035, Section 4.7), and only queries matching the index key would be answered from the cache. With aggressive negative caching, the validator, in addition to checking to see if the answer is in its cache before sending a query, checks to see whether any cached and validated NSEC record denies the existence of the sought record(s).",
+      "ja": "以前は、キャッシュされた負の応答がQNAME、QCLASS、QTYPEでインデックス化し、CDビットの設定は、（RFC 4035、セクション4.7を参照）、およびインデックスのキーと一致するクエリのみがキャッシュから答えられるでしょう。積極的なネガティブキャッシュを使用すると、バリデータは、答えは、クエリを送信する前にそのキャッシュ内にあるかどうかをチェックすることに加えて、任意のキャッシュされ、検証さNSECレコードが求めレコード（複数可）の存在を否定するかどうかをチェックします。"
+    },
+    {
+      "indent": 3,
+      "text": "Using aggressive negative caching, a validator will not make queries for any name covered by a cached and validated NSEC record. Furthermore, a validator answering queries from clients will synthesize a negative answer whenever it has an applicable validated NSEC in its cache unless the CD bit was set on the incoming query.",
+      "ja": "積極的なネガティブキャッシュを使用して、バリデータはキャッシュされ、検証さNSECレコードによってカバーされ、任意の名前のクエリをすることはありません。さらに、クライアントからのクエリに応答バリデータは、CDビットが入ってくるクエリに設定されていない限り、それはそのキャッシュに該当する検証NSECを持っていたときに、負の答えを合成します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Implementation Notes",
+      "section_title": true,
+      "ja": "6.1。実装の注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "Implementing aggressive negative caching suggests that a validator will need to build an ordered data structure of NSEC records in order to efficiently find covering NSEC records. Only NSEC records from DLV domains need to be included in this data structure.",
+      "ja": "積極的なネガティブキャッシュを実装すると、バリデータが効率的にNSECレコードをカバー見つけるためにNSECレコードの順序付きデータ構造を構築する必要がありますことを示唆しています。 DLVドメインからのみNSECレコードは、このデータ構造に含まれる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Also note that some DLV validator implementations do not synthesize negative answers to insert into outgoing responses -- they only use aggressive negative caching when looking up DLV RRs as part of their internal DLV validation.",
+      "ja": "その内部DLVの検証の一環としてDLV RRを検索するとき、彼らは唯一の積極的なネガティブキャッシュを使用する - また、いくつかのDLVバリデータの実装は、発信応答に挿入する負の答えを合成しないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Overlapping DLV Domains",
+      "section_title": true,
+      "ja": "7.重複DLVドメイン"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to have multiple DLV domains targeting overlapping portions of the DNS hierarchy. For example, two DLV domains, perhaps operated by different parties, might target the org zone, or one DLV domain might target the root while another targets org.",
+      "ja": "DNS階層の重複部分を対象に、複数のDLVドメインを持つことが可能です。例えば、恐らく異なる当事者によって運営2つのDLVドメインは、組織ゾーンを標的かもしれない、または他の標的は組織、一方のDLVドメインルートを標的かもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "If a validator supports multiple DLV domains, the choice of precedence in case of overlap is left up to the implementation and SHOULD be exposed as a configuration option to the user (as compared to the choice of DLV records within each domain, a precedence for which is clearly specified in this document). As a very simple default, a validator could give precedence to the most specific DLV domain.",
+      "ja": "バリデータが複数DLVドメインをサポートしている場合、重複した場合の優先順位の選択は、実装に任され、ユーザへの設定オプションとして公開されるべきである（各ドメイン内DLVレコードの選択のための優先順位と比較し明確に）この文書で指定されています。非常に単純なデフォルトとして、バリデータは最も具体的なDLVドメインに優先権を与えることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Some other reasonable options include:",
+      "ja": "他のいくつかの合理的なオプションは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Searching all applicable DLV domains until an applicable DLV record is found that results in a successful validation of the response. In the case where no applicable DLV record is found in any DLV domain, the answer will be treated as Unsecure.",
+      "ja": "該当DLVレコードが応答の検証に成功をもたらしていることがわかるまで、1が適用されるすべてのDLVドメインを検索しています。該当DLVレコードがどのDLVドメインで見つからない場合には、その答えは、非セキュアとして扱われます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Applying some sort of precedence to the DLV domains based on their perceived trustworthiness.",
+      "ja": "2.自分の知覚信頼性に基づいてDLVドメインに優先のいくつかの並べ替えを適用します。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Searching all applicable DLV domains for applicable DLV records and using only the most specific of those DLV records.",
+      "ja": "3.該当するDLVレコードのすべての適用可能なDLVドメインを検索してのみDLVレコードの最も具体的なを使用して。"
+    },
+    {
+      "indent": 3,
+      "text": "4. If multiple DLV domains provide applicable DLV records, use a threshold or scoring system (e.g., \"best 2 out of 3\") to determine the validation result.",
+      "ja": "4.複数DLVドメインが適用DLVレコードを提供する場合、検証結果を決定する（例えば、「3のうちベスト2」）しきい値またはスコアリングシステムを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "The above list is surely not complete, and it's possible for validators to have different precedence rules and configuration options for these cases. [INI1999-19] discusses different policies for selecting from multiple DLV records within the same DLV domain. That discussion may also be applicable to the question of which DLV domain to use and may be of interest to implementers of validators that support multiple DLV domains.",
+      "ja": "上記のリストは確かに完全ではない、とバリデータは、これらのケースごとに異なる優先順位のルールと設定オプションを持つことが可能です。 [INI1999-19]同じDLVドメイン内の複数のDLVレコードから選択するための異なるポリシーを説明します。その議論はまた、DLVドメインを使用すると、複数のDLVドメインをサポートバリデータの実装に関心のあるそれらの質問にも適用することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Optimization",
+      "section_title": true,
+      "ja": "8.最適化"
+    },
+    {
+      "indent": 3,
+      "text": "This section documents an optimization to further reduce query load on DLV servers and improve validator response time.",
+      "ja": "このセクションでは、さらにDLVサーバ上のクエリ負荷を軽減し、バリの応答時間を改善するための最適化について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Authoritative servers, when processing a query for a DLV RRset, SHOULD include all DLV RRsets potentially applicable to a query (specifically, all DLV RRsets applicable to the QNAME and any of its ancestors) in the Additional section of the response as well as NSEC records proving the non-existence of any other applicable DLV records in the DLV domain. Authoritative servers need only include DLV RRsets they're aware of -- RRsets in sub-zones may be omitted.",
+      "ja": "権威サーバ、DLV RRセットのクエリを処理し、追加の応答の部分だけでなく、NSECレコードにクエリーに対して潜在的に適用されるすべてのDLVのRRセット（具体的には、すべてのDLVのQNAMEへの適用のRRsetとその祖先のいずれか）を含むべきですDLVドメイン内の他の適用DLVレコードの非存在を証明します。権威サーバは、彼らだけが知っているDLVのRRセットを含める必要がある - サブゾーンのRRセットを省略してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Validators still seek out of the closest enclosing DLV RRset first. If they receive any data about other DLV RRsets in the zone, they MAY cache and use it (assuming that it validates), thus avoiding further round-trips to the DLV domain's authoritative servers.",
+      "ja": "バリデータはまだ最初のDLV RRセットを囲む最も近いの外に求めます。彼らは、ゾーン内の他のDLVのRRセットに関するすべてのデータを受信した場合、彼らはこのようにDLVドメインの権威サーバへのさらなるラウンドトリップを避ける、（それが検証することを仮定して）、それをキャッシュして使用してもよい（MAY）。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Validators MUST NOT use a DLV record unless it has been successfully authenticated. Normally, validators will have a trust anchor for the DLV domain and use DNSSEC to validate the data in it.",
+      "ja": "それが正常に認証されていない限り、バリデータは、DLVレコードを使用してはなりません。通常、バリデータはDLVドメインのトラストアンカーを持っており、それにデータを検証するためにDNSSECを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Aggressive negative caching increases the need for validators to do some basic validation of incoming NSEC records before caching them. In particular, the 'next name' field in the NSEC record MUST be within the zone that generated (and signed) the NSEC. Otherwise, a malicious zone operator could generate an NSEC that reaches out of its zone -- into its ancestor zones, even up into the root zone -- and use that NSEC to spoof away any name that sorts after the name of the NSEC. We call these overreaching NSECs. More insidiously, an attacker could use an overreaching NSEC in combination with a signed wildcard record to substitute a signed positive answer in place of the real data. This checking is not a new requirement -- these attacks are a risk even without aggressive negative caching. However, aggressive negative caching makes the checking more important. Before aggressive negative caching, NSECs were cached only as metadata associated with a particular query. An overreaching NSEC that resulted from a broken zone signing tool or some misconfiguration would only be used by a cache for those queries that it had specifically made before. Only an overreaching NSEC actively served by an attacker could cause misbehavior. With aggressive negative caching, an overreaching NSEC can cause broader problems even in the absence of an active attacker. This threat can be easily mitigated by checking the bounds on the NSEC.",
+      "ja": "積極的なネガティブキャッシュはそれらをキャッシュする前に、着信NSECレコードのいくつかの基本的な検証を行うためのバリデータの必要性が増します。具体的には、NSECレコード内の「次のネーム」フィールドは、生成された（符号付き）ゾーン内になければならないNSEC。でもアップルートゾーンに、その祖先のゾーンに -   - それ以外の場合は、悪質なゾーンのオペレータは、そのゾーンの外に到達したNSECを生成することがありましたし、NSECはNSECの名前の後にソートする任意の名前を離れて偽装することを使用します。我々は、これらの背伸びNSECSを呼び出します。もっと知らぬ間に、攻撃者は、実際のデータの代わりに署名した肯定的な回答を置換する署名したワイルドカードレコードと組み合わせて背伸びNSECを使用することができます。このチェックは新しい要件ではありません - これらの攻撃にも積極的なネガティブキャッシュのないリスクです。しかし、積極的なネガティブキャッシュはチェックがより重要になります。積極的なネガティブキャッシュする前に、NSECSは、特定のクエリに関連付けられたメタデータとしてキャッシュされました。壊れたゾーン署名ツールまたはいくつかの設定ミスに起因背伸びNSECは、それが具体的に前に作られたこれらのクエリのためにキャッシュが使用されます。だけ背伸びNSECは、積極的に不正行為が発生する可能性があり、攻撃者によって提供されます。積極的なネガティブキャッシュを使用すると、背伸びNSECも、アクティブな攻撃者が存在しない状態でより広範な問題を引き起こす可能性があります。この脅威は、簡単にNSEC上の境界を確認することで緩和することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As a reminder, validators MUST NOT use the mere presence of an RRSIG or apex DNSKEY RRset as a trigger for doing validation, whether through the normal DNSSEC hierarchy or DLV. Otherwise, an attacker might perpetrate a downgrade attack by stripping off those RRSIGs or DNSKEYs.",
+      "ja": "リマインダとして、バリデータはどうか、通常のDNSSEC階層またはDLVを通じて、検証を行うためのトリガとしてRRSIGまたは頂点DNSKEY RRセットの単なる存在を使用してはなりません。そうしないと、攻撃者はこれらのRRSIGsまたはDNSKEYsを剥離することにより、ダウングレード攻撃を犯す可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 8 of RFC 4034 describes security considerations specific to the DS RR. Those considerations are equally applicable to DLV RRs. Of particular note, the key tag field is used to help select DNSKEY RRs efficiently, but it does not uniquely identify a single DNSKEY RR. It is possible for two distinct DNSKEY RRs to have the same owner name, the same algorithm type, and the same key tag. An implementation that uses only the key tag to select a DNSKEY RR might select the wrong public key in some circumstances.",
+      "ja": "RFC 4034のセクション8は、DS RRに固有のセキュリティ上の考慮事項について説明します。これらの考慮事項は、DLVのRRにも同様に適用可能です。特に注目すべきは、キータグフィールドを効率的にDNSKEY RRを選択するために使用されますが、それは一意に単一のDNSKEY RRを特定していません。二つの異なるDNSKEYのRRのは、同じ所有者名、同じアルゴリズムタイプ、および同じ鍵タグを持つことが可能です。 DNSKEY RRを選択するだけで、キーのタグを使用する実装は、いくつかの状況で間違った公開鍵を選択するかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "For further discussion of the security implications of DNSSEC, see RFCs 4033, 4034, and 4035.",
+      "ja": "DNSSECのセキュリティへの影響のさらなる議論については、RFCの4033、4034、および4035を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "10. IANA Considerations",
+      "section_title": true,
+      "ja": "10. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "DLV makes use of the DLV resource record (RR type 32769) previously assigned in [RFC4431].",
+      "ja": "DLVは、以前に[RFC4431]で割り当てられDLVリソースレコード（RRタイプ32769）を利用します。"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4033] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"DNS Security Introduction and Requirements\", RFC 4033, March 2005.",
+      "ja": "[RFC4033]アレンズ、R.、Austeinと、R.、ラーソン、M.、マッシー、D.、およびS.ローズ、 \"DNSセキュリティ序論と要件\"、RFC 4033、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4034] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"Resource Records for the DNS Security Extensions\", RFC 4034, March 2005.",
+      "ja": "[RFC4034]アレンズ、R.、Austeinと、R.、ラーソン、M.、マッシー、D.、およびS.ローズ、 \"DNSセキュリティ拡張機能のためのリソースレコード\"、RFC 4034、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4035] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"Protocol Modifications for the DNS Security Extensions\", RFC 4035, March 2005.",
+      "ja": "[RFC4035]アレンズ、R.、Austeinと、R.、ラーソン、M.、マッシー、D.、およびS.ローズ、 \"DNSセキュリティ拡張のためのプロトコル変更\"、RFC 4035、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4431] Andrews, M. and S. Weiler, \"The DNSSEC Lookaside Validation (DLV) DNS Resource Record\", RFC 4431, February 2006.",
+      "ja": "[RFC4431]アンドリュース、M.とS.ワイラー、 \"DNSSECルックアサイドバリデーション（DLV）DNSリソースレコード\"、RFC 4431、2006年2月。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[INI1999-19] Weiler, S., \"Deploying DNSSEC Without a Signed Root\", Technical Report 1999-19, Information Networking Institute, Carnegie Mellon University, April 2004.",
+      "ja": "[INI1999-19]ワイラー、S.、「署名ルートなしの展開DNSSEC」、技術報告書1999年から1919年、情報ネットワーク研究所、カーネギーメロン大学、2004年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[NSEC3] Laurie, B., Sisson, G., Arends, R., and D. Blacka, \"DNSSEC Hashed Authenticated Denial of Existence\", Work in Progress, July 2007.",
+      "ja": "[NSEC3]ローリー、B.、シッソン、G.、アレンズ、R.、およびD. Blacka、 \"存在のDNSSECハッシュ認証拒否\"、進歩、2007年7月の作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4470] Weiler, S. and J. Ihren, \"Minimally Covering NSEC Records and DNSSEC On-line Signing\", RFC 4470, April 2006.",
+      "ja": "[RFC4470]ワイラー、S.とJ. Ihren、 \"最低限カバリングNSECレコードとDNSSECオンライン署名\"、RFC 4470、2006年4月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Acknowledgments",
+      "ja": "付録A.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Johan Ihren, Paul Vixie, and Suzanne Woolf contributed significantly to the exploration of possible validator algorithms that led to this design. More about those explorations is documented in [INI1999-19].",
+      "ja": "ヨハンIhren、ポール・ヴィクシー、そしてスザンヌウルフは、この設計につながった可能性バリアルゴリズムの探求に大きく貢献しました。これらの探査についての詳細は、[INI1999-19]に記述されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Johan Ihren and the editor share the blame for aggressive negative caching.",
+      "ja": "ヨハンIhrenと編集者は積極的なネガティブキャッシュのための責任を共有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to David B. Johnson and Marvin Sirbu for their patient review of [INI1999-19] which led to this specification being far more complete.",
+      "ja": "この仕様ははるかに完全であることにつながっ[INI1999-19]の彼らの患者レビューのためのデビッド・B・ジョンソンとマーヴィンSIRBUに感謝します。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Mark Andrews, Rob Austein, David Blacka, Stephane Bortzmeyer, Steve Crocker, Wes Hardaker, Alfred Hoenes, Russ Housley, Peter Koch, Olaf Kolkman, Juergen Quittek, and Suzanne Woolf for their valuable comments on this document.",
+      "ja": "このドキュメントの彼らの貴重なコメントについてマーク・アンドリュース、ロブAusteinと、デビッドBlacka、ステファンBortzmeyer、スティーブクロッカー、ウェスHardaker、アルフレッドHoenes、ラスHousley、ピーター・コッホ、オラフKolkman、ユルゲンQuittek、そしてスザンヌウルフに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Samuel Weiler SPARTA, Inc. 7110 Samuel Morse Drive Columbia, Maryland 21046 US",
+      "ja": "サミュエル・ワイラーSPARTA、Inc.の7110サミュエル・モールスドライブコロンビア、メリーランド州21046米国"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: weiler@tislabs.com",
+      "ja": "メールアドレス：weiler@tislabs.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}
