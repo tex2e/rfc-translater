@@ -1,0 +1,508 @@
+{
+  "title": {
+    "text": "RFC 8164 - Opportunistic Security for HTTP/2",
+    "ja": "RFC 8164 - HTTP / 2のための日和見セキュリティ"
+  },
+  "number": 8164,
+  "created_at": "2019-10-24 06:06:34.360521+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     M. Nottingham\nRequest for Comments: 8164\nCategory: Experimental                                        M. Thomson\nISSN: 2070-1721                                                  Mozilla\n                                                                May 2017",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Opportunistic Security for HTTP/2",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how \"http\" URIs can be accessed using Transport Layer Security (TLS) and HTTP/2 to mitigate pervasive monitoring attacks. This mechanism not a replacement for \"https\" URIs; it is vulnerable to active attacks.",
+      "ja": "この文書では、「HTTP」のURIでTransport Layer Security（TLS）を使用してアクセスすることができ、HTTP / 2普及モニタリング攻撃を軽減する方法について説明します。このメカニズムではない「https」をURIの置換;それはアクティブな攻撃に対して脆弱です。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for examination, experimental implementation, and evaluation.",
+      "ja": "このドキュメントはインターネット標準化過程仕様ではありません。それは、検査、実験的な実装、および評価のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an Experimental Protocol for the Internet community. This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are a candidate for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットコミュニティのためにExperimentalプロトコルを定義します。このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。 IESGによって承認されていないすべての文書がインターネットStandardのどんなレベルの候補です。 RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc8164.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc8164で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2017 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2017 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n   1.1. Goals and Non-goals ........................................3\n   1.2. Notational Conventions .....................................3\n2. Using HTTP URIs over TLS ........................................3\n   2.1. Alternative Server Opt-In ..................................4\n   2.2. Interaction with \"https\" URIs ..............................5\n   2.3. The \"http-opportunistic\" Well-Known URI ....................5\n3. IANA Considerations .............................................6\n4. Security Considerations .........................................7\n   4.1. Security Indicators ........................................7\n   4.2. Downgrade Attacks ..........................................7\n   4.3. Privacy Considerations .....................................7\n   4.4. Confusion regarding Request Scheme .........................7\n   4.5. Server Controls ............................................8\n5. References ......................................................8\n   5.1. Normative References .......................................8\n   5.2. Informative References .....................................9\nAcknowledgements ...................................................9\nAuthors' Addresses ................................................10",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a use of HTTP Alternative Services [RFC7838] to decouple the URI scheme from the use and configuration of underlying encryption. It allows an \"http\" URI [RFC7230] to be accessed using HTTP/2 and Transport Layer Security (TLS) [RFC5246] with Opportunistic Security [RFC7435].",
+      "ja": "この文書では、基礎となる暗号化を使用すると、コンフィギュレーションからのURIスキームを切り離すHTTP代替サービス[RFC7838]の使用を記載しています。これは、 \"HTTP\" URI [RFC7230]はHTTP / 2及び日和見セキュリティ[RFC7435]とトランスポート層セキュリティ（TLS）[RFC5246]を用いてアクセスすることを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a usage model whereby sites can serve \"http\" URIs over TLS, thereby avoiding the problem of serving Mixed Content (described in [W3C.CR-mixed-content-20160802]) while still providing protection against passive attacks.",
+      "ja": "このドキュメントでは、サイトは、それによって、まだ受動的攻撃に対する保護を提供しながら、（[W3C.CR-混合コンテンツ-20160802]で説明）混在したコンテンツを提供するという問題を回避、TLS経由URIを「HTTP」を果たすことができる使用モデルについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Opportunistic Security does not provide the same guarantees as using TLS with \"https\" URIs, because it is vulnerable to active attacks, and does not change the security context of the connection. Normally, users will not be able to tell that it is in use (i.e., there will be no \"lock icon\").",
+      "ja": "それはアクティブな攻撃に対して脆弱であり、接続のセキュリティコンテキストを変更しないので、日和見セキュリティは、「HTTPS」のURIでTLSを使用したのと同じ保証するものではありません。通常、ユーザーはそれが（すなわち、ない「ロックアイコン」は存在しません）使用中であることを伝えることができなくなります。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Goals and Non-goals",
+      "section_title": true,
+      "ja": "1.1。目標および非目標"
+    },
+    {
+      "indent": 3,
+      "text": "The immediate goal is to make the use of HTTP more robust in the face of pervasive passive monitoring [RFC7258].",
+      "ja": "当面の目標は、普及パッシブモニタリング[RFC7258]の顔にHTTPの使用をより堅牢にすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "A secondary (but significant) goal is to provide for ease of implementation, deployment, and operation. This mechanism is expected to have a minimal impact upon performance and require trivial administrative effort to configure.",
+      "ja": "二次（しかし重要な）目標は、実装、展開、および操作性を提供することです。このメカニズムはパフォーマンスに最小限の影響しか与えないし、設定するには些細な管理作業を必要とすると予想されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Preventing active attacks (such as man-in-the-middle attacks) is a non-goal for this specification. Furthermore, this specification is not intended to replace or offer an alternative to \"https\", since \"https\" both prevents active attacks and invokes a more stringent security model in most clients.",
+      "ja": "（例えばman-in-the-middle攻撃など）アクティブな攻撃を防ぐことは、この仕様のための非目標です。さらに、この仕様は、「https」のために、代替の「HTTPS」を交換したり、提供することを意図していないの両方がアクティブな攻撃を防ぎ、ほとんどのクライアントでは、より厳格なセキュリティモデルを起動します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Notational Conventions",
+      "section_title": true,
+      "ja": "1.2。表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Using HTTP URIs over TLS",
+      "section_title": true,
+      "ja": "2. TLS上でHTTP URIを使用して"
+    },
+    {
+      "indent": 3,
+      "text": "An origin server that supports the resolution of \"http\" URIs can indicate support for this specification by providing an alternative service advertisement [RFC7838] for a protocol identifier that uses TLS, such as \"h2\" [RFC7540]. Such a protocol MUST include an explicit indication of the scheme of the resource. This excludes HTTP/1.1; HTTP/1.1 clients are forbidden from including the absolute form of a URI in requests to origin servers (see Section 5.3.1 of [RFC7230]).",
+      "ja": "「HTTP」URIの解像度をサポートするオリジンサーバは、「H2」[RFC7540]としてTLSを使用するプロトコル識別子のための代替サービス広告[RFC7838]を提供することによって、本明細書のサポートを示すことができます。そのようなプロトコルは、リソースのスキームの明示的な指示を含まなければなりません。これは、HTTP / 1.1を除きます。 HTTPは/ 1.1クライアントは（[RFC7230]のセクション5.3.1を参照）オリジンサーバへのリクエストにおけるURIの絶対形式を含むから禁止されています。"
+    },
+    {
+      "indent": 3,
+      "text": "A client that receives such an advertisement MAY make future requests intended for the associated origin [RFC6454] to the identified service (as specified by [RFC7838]), provided that the alternative service opts in as described in Section 2.1.",
+      "ja": "識別されたサービスに関連した原点[RFC6454]のために意図さ将来の要求を行うことができるような広告を受信するクライアント（によって指定されるように[RFC7838]）は、セクション2.1で説明したように、代替サービスがでオプトことを条件とします。"
+    },
+    {
+      "indent": 3,
+      "text": "A client that places the importance of protection against passive attacks over performance might choose to withhold requests until an encrypted connection is available. However, if such a connection cannot be successfully established, the client can resume its use of the cleartext connection.",
+      "ja": "パフォーマンス上の受動的攻撃に対する保護の重要性を置き、クライアントは暗号化された接続が使用可能になるまで要求を保留することを選択するかもしれません。このような接続が正常に確立することができない場合は、クライアントは、平文の接続の使用を再開することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A client can also explicitly probe for an alternative service advertisement by sending a request that bears little or no sensitive information, such as one with the OPTIONS method. Likewise, clients with existing alternative services information could make such a request before they expire, in order minimize the delays that might be incurred.",
+      "ja": "また、クライアントは、明示的にほとんど、あるいは全く機密情報を負い要求、OPTIONSメソッドを持つものなどを送信することによって、代替サービスの広告のために調べることができます。有効期限が切れる前に、同様に、既存の代替サービス情報とクライアントが被る可能性があります遅延を最小限に抑えるためには、そのような要求を作ることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Client certificates are not meaningful for URLs with the \"http\" scheme; therefore, clients creating new TLS connections to alternative services for the purposes of this specification MUST NOT present them. A server that also provides \"https\" resources on the same port can request a certificate during the TLS handshake, but it MUST NOT abort the handshake if the client does not provide one.",
+      "ja": "クライアント証明書は、「HTTP」スキームとURLの意味がありません。そのため、本明細書の目的のために代替サービスへの新しいTLS接続を作成クライアントはそれらを提示してはなりません。また、同じポートで「https」のリソースを提供するサーバは、TLSハンドシェイク中に証明書を要求することができますが、クライアントが1つを提供しない場合、それは握手を中止してはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Alternative Server Opt-In",
+      "section_title": true,
+      "ja": "2.1。代替サーバーのオプトイン"
+    },
+    {
+      "indent": 3,
+      "text": "For various reasons, it is possible that the server might become confused about whether requests' URLs have an \"http\" or \"https\" scheme (see Section 4.4). To ensure that the alternative service has opted into serving \"http\" URLs over TLS, clients are required to perform additional checks before directing \"http\" requests to it.",
+      "ja": "様々な理由から、サーバがリクエストURLは 『http』または 『https』スキーム（セクション4.4を参照）を持っているかどうかについて混乱してしまうかもしれないという可能性です。代替サービスはTLSを超える「HTTP」のURLにサービスを提供するにオプトインしていることを確認するために、クライアントはそれに「HTTP」要求を向ける前に、追加のチェックを実行するために必要とされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT send \"http\" requests over a secured connection, unless the chosen alternative service presents a certificate that is valid for the origin as defined in [RFC2818]. Using an authenticated alternative service establishes \"reasonable assurances\" for the purposes of [RFC7838]. In addition to authenticating the server, the client MUST have obtained a valid \"http-opportunistic\" response for an origin (as per Section 2.3) using the authenticated connection. An exception to the latter restriction is made for requests for the \"http-opportunistic\" well-known URI.",
+      "ja": "選択した代替サービスは、[RFC2818]で定義されるように、原点に有効である証明書を提示しない限り、クライアントは、セキュアな接続を介して「HTTP」要求を送ってはいけません。認証された代替サービスを使用すると、[RFC7838]のための「合理的な保証」を確立します。サーバーの認証に加えて、クライアントは、認証済みの接続を使用（2.3節ごとなど）、原点に有効な「HTTP-日和見」の応答を取得している必要があります。後者の制限の例外は、「HTTP-日和見」のよく知られたURIに対する要求のために作られています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, assuming the following request is made over a TLS connection that is successfully authenticated for those origins, the following request/response pair would allow requests for the origins \"http://www.example.com\" or \"http://example.com\" to be sent using a secured connection:",
+      "ja": "たとえば、次の要求が正常にそれらの起源のために認証されたTLS接続を介して行われていると仮定すると、次の要求/応答のペアは「http://www.example.com」または「HTTP起源の要求を可能にする：//セキュアな接続を使用して送信することがexample.com」："
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS + END_STREAM + END_HEADERS :method = GET :scheme = http :authority = example.com :path = /.well-known/http-opportunistic",
+      "ja": "HEADERS + END_STREAM + END_HEADERS：メソッド= GET：スキーム=のhttp：権威= example.com：パス= /.well-known/http-opportunistic"
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS :status = 200 content-type = application/json DATA + END_STREAM [ \"http://www.example.com\", \"http://example.com\" ]",
+      "ja": "HEADERS：ステータス= 200コンテンツタイプ=アプリケーション/ JSONデータ+ END_STREAM [ \"http://www.example.com\"、 \"http://example.com\"]"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes multiple origins, but only for operational convenience. Only a request made to an origin (over an authenticated connection) can be used to acquire the \"http-opportunistic\" resource for that origin. Thus, in the example, the request to \"http://example.com\" cannot be assumed to also provide a representation of the \"http-opportunistic\" resource for \"http://www.example.com\".",
+      "ja": "この文書では、複数の起源を説明するが、唯一の業務の利便のために。 （認証された接続を介して）オリジンに加えられた唯一の要求は、その起源のために「HTTP-日和見」リソースを取得するために使用することができます。したがって、この例では、「http://example.com」への要求は、「http://www.example.com」の「HTTP-日和見」リソースの表現を提供すると仮定することはできません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Interaction with \"https\" URIs",
+      "section_title": true,
+      "ja": "2.2。 「https」のURIをとの相互作用"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT send \"http\" and \"https\" requests on the same connection. Similarly, clients MUST NOT send \"http\" requests for multiple origins on the same connection.",
+      "ja": "クライアントは、「http」と同じ接続の「https」のリクエストを送ってはいけません。同様に、クライアントが同じ接続上で複数の起源のための「HTTP」要求を送ってはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. The \"http-opportunistic\" Well-Known URI",
+      "section_title": true,
+      "ja": "2.3。 「HTTP-日和見」既知のURI"
+    },
+    {
+      "indent": 3,
+      "text": "This specification defines the \"http-opportunistic\" well-known URI [RFC5785]. A client is said to have a valid \"http-opportunistic\" response for a given origin when:",
+      "ja": "本明細書では、 \"HTTP-日和見\" 周知のURI [RFC5785]を定義します。クライアントは、与えられたとき、原点に有効な「HTTP-日和見」応答を持っていると言われます。"
+    },
+    {
+      "indent": 3,
+      "text": "o The client has requested the well-known URI from the origin over an authenticated connection and a 200 (OK) response was provided,",
+      "ja": "Oクライアントが認証された接続を介して原点から周知のURIを要求しており、200（OK）応答を提供し、"
+    },
+    {
+      "indent": 3,
+      "text": "o That response is fresh [RFC7234] (potentially through revalidation [RFC7232]),",
+      "ja": "Oすなわち、応答が（潜在的に再検証を経て[RFC7232]）新鮮[RFC7234]は、"
+    },
+    {
+      "indent": 3,
+      "text": "o That response has the media type \"application/json\",",
+      "ja": "Oその応答は、メディアタイプ「アプリケーション/ JSONを」持っています、"
+    },
+    {
+      "indent": 3,
+      "text": "o That response's payload, when parsed as JSON [RFC7159], contains an array as the root, and",
+      "ja": "JSON [RFC7159]として解析その応答のペイロード、O、ルートとしての配列を含み、そして"
+    },
+    {
+      "indent": 3,
+      "text": "o The array contains a string that is a case-insensitive, character-for-character match for the origin in question, serialized into Unicode as per Section 6.1 of [RFC6454].",
+      "ja": "O配列は、[RFC6454]のセクション6.1あたりとしてUnicodeにシリアライズ問題の起源、大小文字を区別せず、文字と文字の一致する文字列が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "A client MAY treat an \"http-opportunistic\" resource as invalid if values it contains are not strings.",
+      "ja": "クライアントは、それが含まれている値が文字列でない場合は無効として、「HTTP-日和見」のリソースを扱うかもしれ。"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not define semantics for \"http-opportunistic\" resources on an \"https\" origin, nor does it define semantics if the resource includes \"https\" origins.",
+      "ja": "この文書では、「https」の起源に「HTTP-日和見」リソースのためのセマンティクスを定義していない、また、リソースが「https」の起源が含まれている場合、それは意味を定義ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Allowing clients to cache the \"http-opportunistic\" resource means that all alternative services need to be able to respond to requests for \"http\" resources. A client is permitted to use an alternative service without acquiring the \"http-opportunistic\" resource from that service.",
+      "ja": "クライアントが「HTTP-日和見」のリソースをキャッシュできるようにすると、すべての代替サービスは、「HTTP」のリソースに対する要求に応答できるようにする必要があることを意味します。クライアントがそのサービスから「HTTP-日和見」のリソースを取得せずに、代替サービスの使用を許可されています。"
+    },
+    {
+      "indent": 3,
+      "text": "A client MUST NOT use any cached copies of an \"http-opportunistic\" resource that was acquired (or revalidated) over an unauthenticated connection. To avoid potential errors, a client can request or revalidate the \"http-opportunistic\" resource before using any connection to an alternative service.",
+      "ja": "クライアントが認証されていない接続を介して取得し（または再検証）して、「HTTP-日和見」リソースのキャッシュされたコピーを使用してはなりません。潜在的なエラーを回避するために、クライアントが要求したり、代替サービスへの接続を使用する前に、「HTTP-日和見」のリソースを再検証することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients that use cached \"http-opportunistic\" responses MUST ensure that their cache is cleared of any responses that were acquired over an unauthenticated connection. Revalidating an unauthenticated response using an authenticated connection does not ensure the integrity of the response.",
+      "ja": "キャッシュされた「HTTP-日和見」の応答を使用するクライアントは、そのキャッシュが認証されていない接続を介して取得された任意の応答がクリアされていることを確認しなければなりません。応答の整合性を保証しません認証された接続を使用して認証されていない応答を再検証。"
+    },
+    {
+      "indent": 0,
+      "text": "3. IANA Considerations",
+      "section_title": true,
+      "ja": "3. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This specification registers the following well-known URI [RFC5785]:",
+      "ja": "この仕様は、以下のよく知られたURI [RFC5785]を登録します。"
+    },
+    {
+      "indent": 3,
+      "text": "o URI Suffix: http-opportunistic",
+      "ja": "O URIサフィックス：HTTP-日和見"
+    },
+    {
+      "indent": 3,
+      "text": "o Change Controller: IETF",
+      "ja": "Oの変更コントローラ：IETF"
+    },
+    {
+      "indent": 3,
+      "text": "o Specification Document(s): Section 2.3 of RFC 8164",
+      "ja": "O仕様書（S）：RFC 8164のセクション2.3"
+    },
+    {
+      "indent": 3,
+      "text": "o Related Information:",
+      "ja": "関連情報O："
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Security Indicators",
+      "section_title": true,
+      "ja": "4.1。セキュリティインジケータ"
+    },
+    {
+      "indent": 3,
+      "text": "User agents MUST NOT provide any special security indicators when an \"http\" resource is acquired using TLS. In particular, indicators that might suggest the same level of security as \"https\" MUST NOT be used (e.g., a \"lock device\").",
+      "ja": "ユーザーエージェントは「HTTP」リソースがTLSを使用して取得され、特別なセキュリティ指標を提供してはなりません。具体的には、「HTTPS」と同じレベルのセキュリティを示唆している可能性がある指標（例えば、「ロック装置」）を使用してはいけません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Downgrade Attacks",
+      "section_title": true,
+      "ja": "4.2。ダウングレード攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "A downgrade attack against the negotiation for TLS is possible.",
+      "ja": "TLSのための交渉に対するダウングレード攻撃が可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, because the \"Alt-Svc\" header field [RFC7838] likely appears in an unauthenticated and unencrypted channel, it is subject to downgrade by network attackers. In its simplest form, an attacker that wants the connection to remain in the clear need only strip the \"Alt-Svc\" header field from responses.",
+      "ja": "「Altキー-SVC」ヘッダフィールド[RFC7838]はおそらく非認証と暗号化されていないチャンネルに表示されているため、例えば、ネットワーク攻撃者によってダウングレードすることが課題です。その最も単純な形式、接続が唯一の応答から、「Altキー-SVC」ヘッダフィールドを除去明確な必要性に留まることを望んでいる攻撃者で。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Privacy Considerations",
+      "section_title": true,
+      "ja": "4.3。プライバシーの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Cached alternative services can be used to track clients over time, e.g., using a user-specific hostname. Clearing the cache reduces the ability of servers to track clients; therefore, clients MUST clear cached alternative service information when clearing other origin-based state (i.e., cookies).",
+      "ja": "キャッシュされた代替サービスは、ユーザー固有のホスト名を使用して、例えば、時間をかけてクライアントを追跡するために使用することができます。キャッシュをクリアすると、クライアントを追跡するサーバーの能力を減少させます。他の起源に基づく状態（即ち、クッキー）をクリアする場合、したがって、クライアントは、キャッシュされた代替サービス情報をクリアしなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Confusion regarding Request Scheme",
+      "section_title": true,
+      "ja": "4.4。要求スキームに関する混乱"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP implementations and applications sometimes use ambient signals to determine if a request is for an \"https\" resource; for example, they might look for TLS on the stack or a server port number of 443.",
+      "ja": "HTTP実装及びアプリケーションは、時々要求が「https」のリソースのためのものであるかどうかを決定するために、周囲信号を使用します。例えば、彼らはスタックまたは443のサーバポート番号にTLSのために見えるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "This might be due to expected limitations in the protocol (the most common HTTP/1.1 request form does not carry an explicit indication of the URI scheme, and the resource might have been developed assuming HTTP/1.1), or it may be because of how the server and application are implemented (often, they are two separate entities, with a variety of possible interfaces between them).",
+      "ja": "これは、（最も一般的なHTTP / 1.1リクエストフォームは、URIスキームの明示的な指示を運ばない、リソースがHTTP / 1.1を仮定して開発されているかもしれない）、またはそれが原因でどのようであってもよい起因プロトコルにおける期待制限のためであるかもしれませんサーバアプリケーションが（それらの間の可能なインターフェイスのさまざまな、しばしば、彼らは、2つの別個のエンティティである）に実装されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Any security decisions based upon this information could be misled by the deployment of this specification, because it violates the assumption that the use of TLS (or port 443) means that the client is accessing an HTTPS URI and operating in the security context implied by HTTPS.",
+      "ja": "それはTLS（またはポート443）を使用すると、クライアントはHTTPS URIにアクセスし、HTTPSによって暗黙のセキュリティコンテキストで動作していることを意味していることを前提に違反するため、この情報に基づいて任意のセキュリティ上の決定は、この仕様の展開に惑わさすることができ。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, server implementers and administrators need to carefully examine the use of such signals before deploying this specification.",
+      "ja": "そのため、サーバーの実装と管理者は、慎重にこの仕様を展開する前に、このような信号の使用を検討する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Server Controls",
+      "section_title": true,
+      "ja": "4.5。サーバーコントロール"
+    },
+    {
+      "indent": 3,
+      "text": "This specification requires that a server send both an alternative service advertisement and host content in a well-known location to send HTTP requests over TLS. Servers SHOULD take suitable measures to ensure that the content of the well-known resource remains under their control. Likewise, because the \"Alt-Svc\" header field is used to describe policies across an entire origin, servers SHOULD NOT permit user content to set or modify the value of this header.",
+      "ja": "この仕様は、サーバーがTLS上でHTTPリクエストを送信するために、よく知られた場所に代替サービスの広告やホストコンテンツの両方を送信する必要があります。サーバは、よく知られたリソースの内容が自分の管理下に残ることを保証するために、適切な措置をとるべきです。 「Altキー-SVC」ヘッダフィールドは全体の原点間でポリシーを記述するために使用されているため、同様に、サーバはこのヘッダの値を設定または変更するユーザーコンテンツを許可すべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. References",
+      "section_title": true,
+      "ja": "5.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Normative References",
+      "section_title": true,
+      "ja": "5.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <http://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<http://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2818] Rescorla, E., \"HTTP Over TLS\", RFC 2818, DOI 10.17487/RFC2818, May 2000, <http://www.rfc-editor.org/info/rfc2818>.",
+      "ja": "[RFC2818]レスコラ、E.、 \"TLSオーバーHTTP\"、RFC 2818、DOI 10.17487 / RFC2818、2000年5月、<http://www.rfc-editor.org/info/rfc2818>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5246] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.2\", RFC 5246, DOI 10.17487/RFC5246, August 2008, <http://www.rfc-editor.org/info/rfc5246>.",
+      "ja": "[RFC5246]ダークス、T.およびE.レスコラ、 \"トランスポート層セキュリティ（TLS）プロトコルバージョン1.2\"、RFC 5246、DOI 10.17487 / RFC5246、2008年8月、<http://www.rfc-editor.org/info / RFC5246>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5785] Nottingham, M. and E. Hammer-Lahav, \"Defining Well-Known Uniform Resource Identifiers (URIs)\", RFC 5785, DOI 10.17487/RFC5785, April 2010, <http://www.rfc-editor.org/info/rfc5785>.",
+      "ja": "[RFC5785]ノッティンガム、M.およびE.ハンマーLahav、 \"既知のUniform Resource Identifier（URI）を定義\"、RFC 5785、DOI 10.17487 / RFC5785、2010年4月<http://www.rfc-editor.org /情報/ rfc5785>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6454] Barth, A., \"The Web Origin Concept\", RFC 6454, DOI 10.17487/RFC6454, December 2011, <http://www.rfc-editor.org/info/rfc6454>.",
+      "ja": "[RFC6454]バース、A.、 \"ウェブ起源コンセプト\"、RFC 6454、DOI 10.17487 / RFC6454、2011年12月、<http://www.rfc-editor.org/info/rfc6454>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7159] Bray, T., Ed., \"The JavaScript Object Notation (JSON) Data Interchange Format\", RFC 7159, DOI 10.17487/RFC7159, March 2014, <http://www.rfc-editor.org/info/rfc7159>.",
+      "ja": "[RFC7159]ブレイ、T.、エド。、 \"JavaScriptのObject Notation（JSON）形式のデータ交換フォーマット\"、RFC 7159、DOI 10.17487 / RFC7159、2014年3月、<http://www.rfc-editor.org/info/ rfc7159>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7230] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing\", RFC 7230, DOI 10.17487/RFC7230, June 2014, <http://www.rfc-editor.org/info/rfc7230>.",
+      "ja": "[RFC7230]フィールディング、R.、エド。及びJ. Reschke、編、 \"ハイパーテキスト転送プロトコル（HTTP / 1.1）：メッセージの構文およびルーティング\"、RFC 7230、DOI 10.17487 / RFC7230、2014年6月、<http://www.rfc-editor.org/info/ rfc7230>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7232] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Conditional Requests\", RFC 7232, DOI 10.17487/RFC7232, June 2014, <http://www.rfc-editor.org/info/rfc7232>.",
+      "ja": "[RFC7232]フィールディング、R.、エド。そして、J. Reschke、エド、 \"ハイパーテキスト転送プロトコル（HTTP / 1.1）：条件付きリクエスト\"、RFC 7232、DOI 10.17487 / RFC7232、2014年6月、<http://www.rfc-editor.org/info/rfc7232> 。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7234] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Caching\", RFC 7234, DOI 10.17487/RFC7234, June 2014, <http://www.rfc-editor.org/info/rfc7234>.",
+      "ja": "[RFC7234]フィールディング、R.、エド、ノッティンガム、M.、エド、及びJ. Reschke、編、 \"ハイパーテキスト転送プロトコル（HTTP / 1.1）：キャッシュ\"。。。、RFC 7234、DOI 10.17487 / RFC7234、2014年6月、<http://www.rfc-editor.org/info/rfc7234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7540] Belshe, M., Peon, R., and M. Thomson, Ed., \"Hypertext Transfer Protocol Version 2 (HTTP/2)\", RFC 7540, DOI 10.17487/RFC7540, May 2015, <http://www.rfc-editor.org/info/rfc7540>.",
+      "ja": "[RFC7540] Belshe、M.、ペオン、R.、およびM.トムソン、エド、 \"ハイパーテキスト転送プロトコルバージョン2（HTTP / 2）\"、RFC 7540、DOI 10.17487 / RFC7540、2015年5月、<のhttp：// www.rfc-editor.org/info/rfc7540>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7838] Nottingham, M., McManus, P., and J. Reschke, \"HTTP Alternative Services\", RFC 7838, DOI 10.17487/RFC7838, April 2016, <http://www.rfc-editor.org/info/rfc7838>.",
+      "ja": "[RFC7838]ノッティンガム、M.、マクマナス、P.、およびJ. Reschke、 \"HTTP代替サービス\"、RFC 7838、DOI 10.17487 / RFC7838、2016年4月、<http://www.rfc-editor.org/info/ rfc7838>。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Informative References",
+      "section_title": true,
+      "ja": "5.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7258] Farrell, S. and H. Tschofenig, \"Pervasive Monitoring Is an Attack\", BCP 188, RFC 7258, DOI 10.17487/RFC7258, May 2014, <http://www.rfc-editor.org/info/rfc7258>.",
+      "ja": "[RFC7258]ファレル、S.およびH. Tschofenig、BCP 188 \"パーベイシブモニタリングが攻撃である\"、RFC 7258、DOI 10.17487 / RFC7258、2014年5月、<http://www.rfc-editor.org/info/rfc7258 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7435] Dukhovni, V., \"Opportunistic Security: Some Protection Most of the Time\", RFC 7435, DOI 10.17487/RFC7435, December 2014, <http://www.rfc-editor.org/info/rfc7435>.",
+      "ja": "[RFC7435] Dukhovni、V.、 \"日和見セキュリティ：時間のいくつかの保護ほとんど\"、RFC 7435、DOI 10.17487 / RFC7435、2014年12月、<http://www.rfc-editor.org/info/rfc7435>。"
+    },
+    {
+      "indent": 3,
+      "text": "[W3C.CR-mixed-content-20160802] West, M., \"Mixed Content\", World Wide Web Consortium CR CR-mixed-content-20160802, August 2016, <https://www.w3.org/TR/2016/CR-mixed-content-20160802>.",
+      "ja": "[W3C.CR-混合コンテンツ-20160802]西、M.、 \"混在したコンテンツ\"、ワールドワイドウェブコンソーシアムCR CR-混合コンテンツ-20160802、2016年8月、<https://www.w3.org/TR/ 2016 / CR-混合コンテンツ-20160802>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Mike Bishop contributed significant text to this document.",
+      "ja": "マイク・ビショップはこのドキュメントへの重要なテキストを拠出しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Patrick McManus, Stefan Eissing, Eliot Lear, Stephen Farrell, Guy Podjarny, Stephen Ludin, Erik Nygren, Paul Hoffman, Adam Langley, Eric Rescorla, Julian Reschke, Kari Hurtta, and Richard Barnes for their feedback and suggestions.",
+      "ja": "彼らのフィードバックや提案のためのパトリック・マクマナス、ステファンEissing、エリオット・リア、スティーブン・ファレル、ガイPodjarny、スティーブンLudin、エリックNygren、ポール・ホフマン、アダム・ラングレー、エリックレスコラ、ジュリアンReschke、カリHurtta、そしてリチャード・バーンズに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Nottingham",
+      "ja": "マーク・ノッティンガム"
+    },
+    {
+      "indent": 3,
+      "text": "Email: mnot@mnot.net URI: https://www.mnot.net/",
+      "ja": "メール：mnot@mnot.net URI：https://www.mnot.net/"
+    },
+    {
+      "indent": 3,
+      "text": "Martin Thomson Mozilla",
+      "ja": "マーティン・トムソンのMozilla"
+    },
+    {
+      "indent": 3,
+      "text": "Email: martin.thomson@gmail.com",
+      "ja": "メール：martin.thomson@gmail.com"
+    }
+  ]
+}

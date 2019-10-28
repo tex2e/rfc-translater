@@ -1,0 +1,954 @@
+{
+  "title": {
+    "text": "RFC 5210 - A Source Address Validation Architecture (SAVA) Testbed and Deployment Experience",
+    "ja": "RFC 5210 - 送信元アドレスの検証アーキテクチャ（SAVA）テストベッドと展開の経験"
+  },
+  "number": 5210,
+  "created_at": "2019-10-24 18:22:28.385073+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                              J. Wu\nRequest for Comments: 5210                                         J. Bi\nCategory: Experimental                                             X. Li\n                                                                  G. Ren\n                                                                   K. Xu\n                                                     Tsinghua University\n                                                             M. Williams\n                                                        Juniper Networks\n                                                               June 2008",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "A Source Address Validation Architecture (SAVA) Testbed\n               and Deployment Experience",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo defines an Experimental Protocol for the Internet community. It does not specify an Internet standard of any kind. Discussion and suggestions for improvement are requested. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのためにExperimentalプロトコルを定義します。それはどんな種類のインターネット標準を指定しません。改善のための議論や提案が要求されています。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Because the Internet forwards packets according to the IP destination address, packet forwarding typically takes place without inspection of the source address and malicious attacks have been launched using spoofed source addresses. In an effort to enhance the Internet with IP source address validation, a prototype implementation of the IP Source Address Validation Architecture (SAVA) was created and an evaluation was conducted on an IPv6 network. This document reports on the prototype implementation and the test results, as well as the lessons and insights gained from experimentation.",
+      "ja": "インターネットは、IP宛先アドレスに基づいてパケットを転送するので、パケット転送は、通常、送信元アドレスの検査なしで行われ、悪意のある攻撃は、偽装された送信元アドレスを使用して起動されています。 IP送信元アドレスの検証、IPソースのプロトタイプ実装検証アーキテクチャアドレス（SAVA）とインターネットを強化するための努力の一環として作成されたとの評価がIPv6ネットワーク上で行われました。この文書では、プロトタイプの実装とテストの結果だけでなく、実験から得られた教訓や知見について報告します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction . . . . . . . . . . . . . . . . . . . . . . . . .  3\n2.  A Prototype SAVA Implementation  . . . . . . . . . . . . . . .  4\n  2.1.  Solution Overview  . . . . . . . . . . . . . . . . . . . .  4\n  2.2.  IP Source Address Validation in the Access Network . . . .  6\n  2.3.  IP Source Address Validation at Intra-AS/Ingress Point . .  9\n  2.4.  IP Source Address Validation in the Inter-AS Case\n        (Neighboring AS) . . . . . . . . . . . . . . . . . . . . .  9\n  2.5.  IP Source Address Validation in the Inter-AS Case\n        (Non-Neighboring AS) . . . . . . . . . . . . . . . . . . . 12\n3.  SAVA Testbed . . . . . . . . . . . . . . . . . . . . . . . . . 15\n  3.1.  CNGI-CERNET2 . . . . . . . . . . . . . . . . . . . . . . . 15\n  3.2.  SAVA Testbed on CNGI-CERNET2 Infrastructure  . . . . . . . 16\n4.  Test Experience and Results  . . . . . . . . . . . . . . . . . 17\n  4.1.  Test Scenarios . . . . . . . . . . . . . . . . . . . . . . 17\n  4.2.  Test Results . . . . . . . . . . . . . . . . . . . . . . . 18\n5.  Limitations and Issues . . . . . . . . . . . . . . . . . . . . 18\n  5.1.  General Issues . . . . . . . . . . . . . . . . . . . . . . 18\n  5.2.  Security Issues  . . . . . . . . . . . . . . . . . . . . . 20\n  5.3.  Protocol Details . . . . . . . . . . . . . . . . . . . . . 20\n6.  Conclusion . . . . . . . . . . . . . . . . . . . . . . . . . . 21\n7.  Security Considerations  . . . . . . . . . . . . . . . . . . . 22\n8.  Acknowledgements . . . . . . . . . . . . . . . . . . . . . . . 22\n9.  References . . . . . . . . . . . . . . . . . . . . . . . . . . 23\n  9.1.  Normative References . . . . . . . . . . . . . . . . . . . 23\n  9.2.  Informative References . . . . . . . . . . . . . . . . . . 23",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "By design, the Internet forwards data packets solely based on the destination IP address. The source IP address is not checked during the forwarding process in most cases. This makes it easy for malicious hosts to spoof the source address of the IP packet. We believe that it would be useful to enforce the validity of the source IP address for all the packets being forwarded.",
+      "ja": "単に、宛先IPアドレスに基づいて設計、インターネットの転送データパケットによって。送信元IPアドレスは、ほとんどの場合、転送処理中にチェックされていません。これにより、簡単に悪質なホストがIPパケットの送信元アドレスを偽装できるようになります。私たちは、転送されるすべてのパケットの送信元IPアドレスの有効性を強制することは有用であろうと信じています。"
+    },
+    {
+      "indent": 3,
+      "text": "Enforcing the source IP address validity would help us achieve the following goals:",
+      "ja": "送信元IPアドレスの有効性を強制することは、私たちは次の目標を達成するのに役立ちます："
+    },
+    {
+      "indent": 3,
+      "text": "o Since packets which carry spoofed source addresses would not be forwarded, it would be impossible to launch network attacks that are enabled by using spoofed source addresses and more difficult to successfully carry out attacks enhanced or strengthened by the use of spoofed source addresses.",
+      "ja": "偽装された送信元アドレスを運ぶパケットが転送されないので、O、正常に増強または偽装された送信元アドレスの使用によって強化攻撃を実行するために偽装された送信元アドレスと、より困難を使用して有効にされているネットワーク攻撃を開始することは不可能であろう。"
+    },
+    {
+      "indent": 3,
+      "text": "o Being able to assume that all packet source addresses are correct would allow traceback to be accomplished accurately and with confidence. This would benefit network diagnosis, management, accounting, and applications.",
+      "ja": "すべてのパケットの送信元アドレスが正しいことを前提とすることができることoをトレースバックを正確かつ自信を持って行うことができるようになります。これは、ネットワーク診断、管理、会計、およびアプリケーションの恩恵を受けるだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "As part of the effort in developing a Source Address Validation Architecture (SAVA), we implemented a SAVA prototype and deployed the prototype in 12 ASes in an operational network as part of China Next Generation Internet (CNGI) Project [Wu07]. We conducted evaluation experiments. In this document, we first describe the prototype solutions and then report experimental results. We hope that this document can provide useful insights to those interested in the subject, and can serve as an initial input to future IETF effort in this area.",
+      "ja": "送信元アドレスの検証アーキテクチャ（SAVA）の開発に取り組みの一環として、我々はSAVAのプロトタイプを実装し、中国の次世代インターネット（CNGI）プロジェクト[Wu07]の一部として運用、ネットワーク内の12個のASに試作品を展開しました。私たちは、評価実験を行いました。この文書では、我々は最初のプロトタイプ・ソリューションを記述して、実験結果を報告します。私たちは、この文書が対象に興味のある方に便利な洞察を提供することができ、そしてこの分野における将来のIETFの努力への初期の入力として使用できることを願っています。"
+    },
+    {
+      "indent": 3,
+      "text": "In recent years, there have been a number of research and engineering efforts to design IP source address validation mechanisms, such as [RFC2827], [Park01], [Li02], [Brem05], and [Snoe01]. Our SAVA prototype implementation was inspired by some of the schemes from the proposed or existing solutions.",
+      "ja": "近年では、このような[RFC2827]などのIP送信元アドレスの検証メカニズムを設計するための研究と工学の努力の数、[Park01]、[Li02]、[Brem05]、および[Snoe01]がありました。私たちのSAVAのプロトタイプ実装を提案したり、既存のソリューションからのスキームの一部に触発されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The prototype implementation and experimental results presented in this report serve only as an input, and by no means preempt any solution development that may be carried out by future IETF effort. Indeed, the presented solutions are experimental approaches and have a number of limitations as discussed in Sections 5 and 6.",
+      "ja": "この報告書で提示プロトタイプ実装と実験結果は、入力としてのみ機能し、決して将来のIETFの努力によって行うことができる任意のソリューション開発を先取り。実際、提示ソリューションは、実験的なアプローチであり、セクション5及び6で説明したように多くの制限を有します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. A Prototype SAVA Implementation",
+      "section_title": true,
+      "ja": "2. AプロトタイプSAVA実装"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Solution Overview",
+      "section_title": true,
+      "ja": "2.1。ソリューションの概要"
+    },
+    {
+      "indent": 3,
+      "text": "A multiple-fence solution is proposed in this document. That is, there are multiple points in the network at which the validity of a packet's source address can be checked. This is because in the current single-fence model where source address validity is essentially checked only at ingress to the network, deployment has been inadequate to the point that there is always sufficient opportunity to mount attacks based on spoofed source addresses, and it seems likely that this condition will continue in the foreseeable future. A multiple-fence solution will allow \"holes\" in deployment to be covered and validity of the source address to be evaluated with increased confidence across the whole Internet. The assumption here is that when validity checking is not universal, it is still worthwhile to increase the confidence in the validity of source addresses and to reduce the opportunities to mount a source address spoofing attack.",
+      "ja": "複数のフェンス溶液は、この文書で提案されています。これは、パケットの送信元アドレスの有効性を確認することができた時に、ネットワーク内の複数のポイントがある、です。送信元アドレスの有効性は、本質的にのみネットワークへの入口でチェックされ、現在のシングルフェンスモデルでは、展開がポイントに不十分であったため、これが偽装された送信元アドレスに基づいて攻撃をマウントするのに十分な機会が常に存在することであり、それは可能性が高いと思われますこの条件は、予見可能な将来において継続すること。マルチフェンス・ソリューションは、展開中の「穴」がカバーされると、ソースアドレスの有効性が全体のインターネットを介して増加した自信を持って評価することができるようになります。ここでの仮定は妥当性チェックが普遍的でないとき、送信元アドレスの妥当性への信頼を高めるために、ソースアドレススプーフィング攻撃をマウントする機会を減らすために、まだ価値があるということです。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, the architecture allows for multiple independent and loosely-coupled checking mechanisms. The motivation for this is that in the Internet at large, it is unrealistic to expect any single IP source address validation mechanism to be universally supported. Different operators and vendors may choose to deploy/develop different mechanisms to achieve the same end, and there need to be different mechanisms to solve the problem at different places in the network. Furthermore, implementation bugs or configuration errors could potentially render an implementation ineffective. Therefore, our prototype SAVA implementation is a combination of multiple coexisting and cooperating mechanisms. More specifically, we implement source IP address validation at three levels: access network source address validation; intra-AS source address validation; and inter-AS source address validation, as shown in Figure 1. The system details can be found in [Wu07].",
+      "ja": "さらに、アーキテクチャは、複数の独立したと疎結合チェック機構を可能にします。この動機は、大規模で、インターネットで、普遍的にサポートする任意の単一のIP送信元アドレスの検証メカニズムを期待するのは非現実的であるということです。異なる事業者やベンダーが同じ目的を達成するための異なるメカニズムを開発/展開することを選択すると、ネットワーク内の別の場所で問題を解決するための異なるメカニズムがあることが必要な場合があります。さらに、実装のバグや設定エラーは潜在的に実装が無効レンダリングできます。したがって、私たちのプロトタイプSAVAの実装では、複数の共存と協力のメカニズムを組み合わせたものです。具体的には、我々は3つのレベルで送信元IPアドレスの検証を実装：アクセスネットワークの送信元アドレスの検証を。内AS元アドレスの検証。図1に示すように相互ASソースアドレス検証、システムの詳細は、[Wu07]に見出すことができます。"
+    },
+    {
+      "indent": 6,
+      "text": "               __ ____                          __ ____\n           .-''       `':                   .-''       `':\n           |             |                  |             |\n           |   +-+----+  |   Inter-AS SAV   |   +-+----+  |\n           |   |Router+--+------------------+---|Router+  +\n           |   +--.---+  |                  |   +--.---+  |\nIntra-AS   |      |       \\      Intra-AS   |      |      |\n   SAV     |   +--+---+    \\        SAV     |   +--+---+  |\n           |   |Router|     \\               |   |Router|  |\n           |   +--.---+      \\               '_  +-----+  _\n           |      |           \\               `'-------'''\n          /       |            \\\n         /        |             \\\n        | +---------------------+\\\n    ----+---------. Router      | \\\n        | ++-------\\------------+  \\\n        |  |     |  \\    |     |    |",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "|  | +------+|+------++----+|Intra-AS\n|  | |Switch|||Switch||Host||SAV",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "|  | +------+|+------++----+|",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "| | | | | \\ |",
+      "ja": "｜ ｜ ｜ ｜ ｜ ￥ ｜"
+    },
+    {
+      "indent": 14,
+      "text": "|+-+--++----+|+----++----+  |",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "||Host||Host|||Host||Host|  |\n`+----++----+|+----++----+ /",
+      "raw": true
+    },
+    {
+      "indent": 16,
+      "text": "`--.       |         _.-'\n    `------|------+''\n Access    |\n Network   |\n  SAV",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "Key: SAV - Source Address Validation",
+      "ja": "キー：SAV  - 送信元アドレスの検証"
+    },
+    {
+      "indent": 24,
+      "text": "Figure 1: Solution Overview",
+      "ja": "図1：ソリューションの概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document divides source address validation into three different classes of solutions:",
+      "ja": "この文書では、ソリューションの3つの異なるクラスに送信元アドレスの検証を分割します："
+    },
+    {
+      "indent": 3,
+      "text": "1. Access network. This prevents a host in a network from spoofing the address of another host in the same network segment. This enables host-granularity of protection compared to Intra-AS prevention. See Section 2.2 for details.",
+      "ja": "1.アクセスネットワーク。これは、同じネットワークセグメント内の他のホストのアドレスをスプーフィングからネットワーク内のホストを防止します。これはイントラAS防止に比べて保護のホスト・粒度を可能にします。詳細については、2.2節を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Intra-AS. When the edge router of an access network performs source address validation (e.g., using [RFC2827] and [RFC3704]), hosts are prevented from spoofing an arbitrary address, but unless access network SAV is employed, they may be able to spoof an address of a host in the same network segment. In a degenerate case, when a router connects a single host, the host can't spoof any address.",
+      "ja": "2.イントラAS。アクセスネットワークのエッジルータは、送信元アドレスの検証を行う場合（例えば、[RFC2827]及び[RFC3704]を使用して）、ホストは任意のアドレスをスプーフィングすることが防止されるが、アクセスネットワークSAVが使用されていない限り、それらはアドレスをスプーフィングすることができるかもしれません同じネットワークセグメント内のホストの。ルータは単一のホストを接続したときに縮退場合、ホストは任意のアドレスを偽造することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Inter-AS. Mechanisms that enforce packet source address correctness at AS boundaries. Because the global Internet has a mesh topology, and because different networks belong to different administrative authorities, IP source address validation at the Inter-AS level is more challenging. Nevertheless, we believe this third level of protection is necessary to detect packets with spoofed source addresses, when the first two levels of source address validation are missing or ineffective.",
+      "ja": "3.インターAS。 AS境界でパケットの送信元アドレスの正当性を強制するメカニズム。グローバルなインターネットはメッシュトポロジを持っているため、異なるネットワークは、異なる行政当局に属しているため、AS間レベルでのIP送信元アドレスの検証がより困難です。それにもかかわらず、我々は送信元アドレスの検証の最初の2つのレベルが存在しないか、または無効されている場合、保護のこの第三のレベルが偽装された送信元アドレスを持つパケットを検出する必要があると考えています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the following sections, we describe the specific mechanisms implemented at each of the three levels in detail.",
+      "ja": "以下のセクションでは、我々は、詳細に三つのレベルのそれぞれで実装固有のメカニズムを記述する。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. IP Source Address Validation in the Access Network",
+      "section_title": true,
+      "ja": "2.2。アクセスネットワークにおけるIP送信元アドレスの検証"
+    },
+    {
+      "indent": 3,
+      "text": "At the access network level, the solution ensures the host inside the access network cannot use the source address of another host. The host address should be a valid address assigned to the host statically or dynamically. The solution implemented in the experiment provides such a function for Ethernet networks. A layer-3 source address validation architecture device (SAVA Device) for the access network (the device can be a function inside the Customer Premises Equipment (CPE) router or a separate device) is deployed at the exit of the access network. Source address validation architecture agents (SAVA Agents) are deployed inside the access network. (In fact, these agents could be a function inside the first hop router/switch connected to the hosts.) A set of protocols was designed for communication between the host, SAVA Agent, and SAVA Device. Only a packet originating from the host that was assigned that particular source address may pass through the SAVA Agent and SAVA Device.",
+      "ja": "アクセス・ネットワーク・レベルでは、解決策は、アクセスネットワーク内のホストが別のホストの送信元アドレスを使用することはできません保証します。ホストアドレスは、静的または動的ホストに割り当てられた有効なアドレスでなければなりません。実験に実装ソリューションは、イーサネットネットワークのような機能を提供します。アクセスネットワーク（デバイスが顧客宅内機器（CPE）ルータまたは別のデバイス内の関数とすることができる）のためのレイヤ3のソースアドレス検証アーキテクチャデバイス（SAVAデバイス）はアクセスネットワークの出口に配備されています。ソースアドレス確認アーキテクチャエージェント（SAVAエージェント）は、アクセスネットワーク内に配置されています。 （実際には、これらの薬剤は、ホストに接続された最初のホップルータ/スイッチ内の機能であってもよい。）プロトコルのセットは、ホスト、SAVAエージェント、およびSAVA装置との間の通信のために設計されました。特定の送信元アドレスがSAVAエージェントとSAVAデバイスを通過できること割り当てられたホストから発信パケットのみ。"
+    },
+    {
+      "indent": 3,
+      "text": "Two possible deployment variants exist; we will call them Variant A and Variant B. In Variant A, an agent is mandatory and each host is attached to the agent on a dedicated physical port. In Variant B, hosts are required to perform network access authentication and generate key material needed to protect each packet. In this variant, the agent is optional.",
+      "ja": "二つの可能な展開変異体が存在します。我々は、エージェントが必須であり、各ホストは、専用の物理ポート上のエージェントに接続され、バリアントAではバリアントAとB.バリアントそれらを呼び出します。バリアントBでは、ホストはネットワークアクセス認証を実行し、各パケットを保護するために必要な鍵材料を生成するために必要とされます。この変形例では、エージェントは任意です。"
+    },
+    {
+      "indent": 3,
+      "text": "The key function of Variant A is to create a dynamic binding between a switch port and valid source IP address, or a binding between Media Access Control (MAC) address, source IP address, and switch port. In the prototype, this is established by having hosts employ a new address configuration protocol that the switch is capable of tracking.",
+      "ja": "変法Aのキーの機能は、スイッチポートと有効な送信元IPアドレスとの間の結合の動的に作成するか、またはメディアアクセス制御（MAC）アドレス、送信元IPアドレスとの間の結合、およびポートを切り替えることです。試作品では、これは、ホストがスイッチをトラッキングすることが可能な新たなアドレス構成プロトコルを使用有することによって確立されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: In a production environment, the approach in the prototype would not be sufficient due to reasons discussed in Section 5.",
+      "ja": "注意：本番環境では、プロトタイプでのアプローチが原因セクション5で説明する理由には十分ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "In Variant A, there are three main participants: Source Address Request Client (SARC) on the host, Source Address Validation Proxy (SAVP) on the switch, and Source Address Management Server (SAMS). as shown in Figure 2. The solution follows the basic steps below:",
+      "ja": "バリアントAでは、三つの主要な参加者があります：ソースアドレス要求クライアントホスト上の（SARC）は、ソースがスイッチ上での検証プロキシ（SAVP）のアドレス、および送信元アドレス管理サーバ（SAMS）。図2に示すように、溶液は、以下の基本的な手順に従います。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The SARC on the end host sends an IP address request. The SAVP on the switch relays this request to the SAMS and records the MAC address and incoming port. If the address has already been predetermined by the end host, the end host still needs to put that address in the request message for verification by SAMS.",
+      "ja": "1.エンドホスト上のSARCは、IPアドレス要求を送信します。 SAMSのスイッチリレーのSAVPこの要求とMACアドレスと着信ポートを記録します。アドレスが既にエンドホストによって所定されている場合は、エンドホストはまだSAMSによる検証のための要求メッセージでそのアドレスを置く必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. After the SAMS receives the IP address request, it then allocates a source address for that SARC based on the address allocation and management policy of the access network, it stores the allocation of the IP address in the SAMS history database for traceback, then sends response message containing the allocated address to the SARC.",
+      "ja": "SAMSは、IPアドレス要求を受信した後2.、それは次いで、アクセスネットワークのアドレスの割り当てと管理ポリシーに基づいてそのSARCの送信元アドレスは、それがトレースバックのためのSAMS履歴データベース内のIPアドレスの割り当てを格納する割り当てSARCに割り当てられたアドレスを含む応答メッセージを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "3. After the SAVP on the access switch receives the response, it binds the IP address and the former stored MAC address of the request message with the switch port on the binding table. Then, it forwards the issued address to SARC on the end host.",
+      "ja": "3.アクセススイッチのSAVPが応答を受信した後、それはIPアドレスとバインディングテーブルのスイッチポートと要求メッセージの元記憶されたMACアドレスをバインド。その後、それはエンドホスト上のSARCに発行されたアドレスを転送します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The access switch begins to filter packets sent from the end host. Packets which do not conform to the tuple (IP address, Switch Port) are discarded.",
+      "ja": "4.アクセススイッチは、エンドホストから送信されたパケットをフィルタリングするために開始します。タプルに適合しないパケット（IPアドレス、ポートスイッチ）が破棄されます。"
+    },
+    {
+      "indent": 25,
+      "text": "----------------\n| SERVER        |\n|    -------    |\n|    | SAMS |   |\n|    --------   |\n-----------------\n        |\n        |\n----------------\n| SWITCH        |\n|    -------    |\n|    | SAVP |   |\n|    --------   |\n-----------------\n        |\n        |\n----------------\n| END HOST      |\n|    -------    |\n|    | SARC |   |\n|    --------   |\n-----------------",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "Key: SARC - Source Address Request Client SAVP - Source Address Validation Proxy SAMS - Source Address Management Sever",
+      "ja": "キー：SARC  - ソースアドレス要求クライアントSAVP  - 送信元アドレスの検証プロキシSAMS  - ソースアドレス管理Severを"
+    },
+    {
+      "indent": 11,
+      "text": "Figure 2: Binding-Based IP Source Address Validation in the Access Network",
+      "ja": "図2：アクセスネットワークにおけるバインディングベースのIP送信元アドレスの検証"
+    },
+    {
+      "indent": 3,
+      "text": "The main idea of Variant B is to employ key material from network access authentication for some additional validation process. A session key is derived for each host connecting to the network, and each packet sent by the host has cryptographic protection that employs this session key. After establishing which host the packet comes from, it again becomes possible to track whether the addresses allocated to the host match those used by the host. The mechanism details can be found in [XBW07], but the process follows these basic steps:",
+      "ja": "バリアントBの主なアイデアは、いくつかの追加の検証プロセスのためのネットワークアクセス認証からキーマテリアルを採用することです。セッションキーは、ネットワークに接続するホストごとに導出され、ホストによって送信される各パケットは、このセッション鍵を使用する暗号保護を有しています。パケットがから来ているホスト確立した後、再度アドレスはホストマッチホストによって使用されるものに割り当てられているかどうかを追跡することが可能となります。メカニズムの詳細は[XBW07]に見出すことができるが、このプロセスは、これらの基本的な手順に従います。"
+    },
+    {
+      "indent": 3,
+      "text": "1. When a host wants to establish connectivity, it needs to perform network access authentication.",
+      "ja": "ホストが接続を確立しようとするとき1、それはネットワークアクセス認証を実行する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The network access devices provide the SAVA Agent (often co-located) a session key S. This key is further distributed to the SAVA Device. The SAVA Device binds the session key and the host's IP address.",
+      "ja": "2.ネットワーク・アクセス・デバイスは、このキーはさらにSAVAデバイスに分配されるSAVAエージェント（しばしば同じ場所に）セッション鍵Sを提供します。 SAVAデバイスは、セッションキーとホストのIPアドレスをバインドします。"
+    },
+    {
+      "indent": 3,
+      "text": "3. When the host sends packet M to somewhere outside the access network, either the host or the SAVA Agent needs to generate a message authentication code for each using key S and packet M. In the prototype, the message authentication code is carried in an experimental IPv6 extension header.",
+      "ja": "ホストは、ホスト又はSAVA剤のいずれかは、プロトタイプでそれぞれ使用して、鍵SとパケットM.ためのメッセージ認証コードを生成する必要があり、アクセスネットワークの外部のどこかに、パケットMを送信3.メッセージ認証コードで実施されます実験IPv6拡張ヘッダ。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The SAVA Device uses the session key to authenticate the signature carried in the packet so that it can validate the source address.",
+      "ja": "4. SAVAデバイスは、送信元アドレスを検証できるように、パケットで搬送署名を認証するためのセッションキーを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In our testbed, we implemented and tested both solutions. The switch-based solution has better performance, but the switches in the access network would need to be upgraded (usually the number of switches in an access network is large). The signature-based solution could be deployed between the host and the exit router, but it has some extra cost in inserting and validating the signature.",
+      "ja": "私達のテストベッドでは、我々は両方のソリューションを実装し、テストしました。スイッチ - ベースのソリューションは、より良好な性能を有するが、アクセスネットワーク内のスイッチは、（通常、アクセスネットワーク内のスイッチの数が多い）にアップグレードされる必要があるであろう。シグネチャベースのソリューションは、ホストと出口ルータの間に配置することができますが、それは、署名を挿入し、有効にいくつかの余分なコストを持っています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. IP Source Address Validation at Intra-AS/Ingress Point",
+      "section_title": true,
+      "ja": "2.3。イントラAS /イングレスポイントでのIP送信元アドレスの検証"
+    },
+    {
+      "indent": 3,
+      "text": "We adopted the solution of the source address validation of IP packets at ingress points described in [RFC2827] and [RFC3704]; the latter describes source address validation at the ingress points of multi-homed access networks.",
+      "ja": "我々は、[RFC2827]及び[RFC3704]に記載の入口点におけるIPパケットの送信元アドレスの検証のソリューションを採用しました。後者は、マルチホームアクセスネットワークの入口点でソースアドレス検証を記述する。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. IP Source Address Validation in the Inter-AS Case (Neighboring AS)",
+      "section_title": true,
+      "ja": "2.4。インターASケースにおけるIP送信元アドレスの検証（ASを隣接）"
+    },
+    {
+      "indent": 3,
+      "text": "Our design for the Inter-AS Source Address Validation included the following characteristics: It should cooperate among different ASes with different administrative authorities and different interests. It should be lightweight enough to support high throughput and not to influence forwarding efficiency.",
+      "ja": "インターASソースアドレス検証のための私たちのデザインは、次のような特徴が含まれていました。それは別の行政当局と異なる利害を持つ別のAS間で協力すべきです。高いスループットをサポートすると転送効率に影響を与えることがないように十分に軽量でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The inter-AS level of SAVA can be classified into two sub-cases:",
+      "ja": "SAVAの間ASレベルは、2つのサブケースに分類することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Two SAVA-compliant ASes exchanging traffic are directly connected;",
+      "ja": "Oトラフィックを交換する2つSAVA準拠のASが直接接続されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o Two SAVA-compliant ASes are separated by one or more intervening, non-SAVA-compliant providers.",
+      "ja": "O二SAVA準拠のASは、1以上の介在、非SAVA準拠プロバイダによって分離されています。"
+    },
+    {
+      "indent": 3,
+      "text": "                                     ---------\n                                     | AIMS   |\n                                      ------|-\n                                            |\n--------------                   -----------|-----\n|  AS-4       |--------  --------|    AS-1  |    |-------     Global\n| ------      |ASBR,VE|->|ASBR,VE|    ------|-   |ASBR,VE|--->IPv6\n| |VRGE|      |--------  --------|    | VRGE |   |-------     Network\n| ------      |                  |    --------   |\n---------------            ----- -----------------\n                           |ASBR,VE|    |ASBR,VE|\n                           ---------    ---------\n                            /             |\n                           /              |\n                          /               |\n                         /                |\n                     ----------        --------\n                     |ASBR, VE|        |ASBR,VE|\n                ---------------      -------------\n                |   AS-2      |      |  AS-3     |\n                |  -----      |      |   -----   |\n                |  |VRGE|     |      |  |VRGE|   |\n                |  -----      |      |  ------   |\n                ---------------      -------------",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "Key:     AIMS - AS-IPv6 prefix Mapping Server\n         ASBR - AS Border Router\n         VE   - Validating Engine\n         VR   - Validation Rule\n         VRGE - Validation Rule Generating Engine",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Figure 3: Inter-ISP (Neighboring AS) Solution",
+      "ja": "図3：インターISP（隣接AS）ソリューション"
+    },
+    {
+      "indent": 3,
+      "text": "Two ASes that exchange traffic have a customer-to-provider, provider-to-customer, peer-to-peer, or sibling-to-sibling relationship. In a customer-to-provider or provider-to-customer relationship, the customer typically belongs to a smaller administrative domain that pays a larger administrative domain for access to the rest of Internet. The provider is an AS that belongs to the larger administrative domain. In a peer-to-peer relationship, the two peers typically belong to administrative domains of comparable size and find it mutually advantageous to exchange traffic between their respective customers. Two ASes have a sibling-to-sibling relationship if they belong to the same administrative domain or to administrative domains that have a mutual-transit agreement.",
+      "ja": "トラフィックを交換二つのASは、顧客への提供者、提供者から顧客への、ピア・ツー・ピア、または兄弟・ツー・兄弟関係を有しています。顧客・ツー・プロバイダまたはプロバイダから顧客への関係では、顧客は通常、インターネットの残りの部分にアクセスするために、より大きな管理ドメインを支払う小さい管理ドメインに属します。プロバイダは、より大きな管理ドメインに属するASです。ピア・ツー・ピア関係で、2つのピアが、典型的には同等の大きさの管理ドメインに属しており、それぞれの顧客との間でトラフィックを交換することは、相互に有利見つけます。彼らは同じ管理ドメインまたは相互輸送契約を締結している管理ドメインに属している場合、2つのASは、兄弟・ツー・兄弟関係を有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "An AS-relation-based mechanism is used for neighboring SAVA-compliant ASes. The basic ideas of this AS-relation-based mechanism are as follows. It builds a VR table that associates each incoming interface of a router with a set of valid source address blocks, and then uses it to filter spoofed packets.",
+      "ja": "AS-関係ベースのメカニズムは、隣接SAVA準拠のASのために使用されています。次のようにこのAS-関係ベースのメカニズムの基本的なアイデアがあります。これは、有効な送信元アドレスブロックのセットでルータの各入力インタフェースを関連付けるVRテーブルを構築し、その後スプーフィングされたパケットをフィルタリングするためにそれを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "In the solution implemented on the testbed, the solution for the validation of IPv6 prefixes is separated into three functional modules: The Validation Rule Generating Engine (VRGE), the Validation Engine (VE), and the AS-IPv6 prefix Mapping Server (AIMS). Validation rules that are generated by the VRGE are expressed as IPv6 address prefixes.",
+      "ja": "検証ルールの生成エンジン（VRGE）、検証エンジン（VE）、およびAS-IPv6プレフィックスマッピングサーバー（AIMS）：テストベッド上で実現溶液中で、IPv6プレフィックスの検証のための溶液は、三個の機能モジュールに分離されます。 VRGEによって生成された検証ルールは、IPv6アドレスのプレフィックスとして表されます。"
+    },
+    {
+      "indent": 2,
+      "text": " The VRGE generates validation rules that are derived according to\n Table 1, and each AS has a VRGE.  The VE loads validation rules\n generated by VRGE to filter packets passed between ASes (in the case\n of Figure 3, from neighboring ASes into AS-1).  In the SAVA testbed,\n the VE is implemented as a simulated layer-2 device on a Linux-based\n machine inserted into the data path just outside each ASBR interface\n that faces a neighboring AS.  In a real-world implementation, it\n would probably be implemented as a packet-filtering set on the ASBR.\n The AS-IPv6 prefix mapping server is also implemented on a Linux\n machine and derives a mapping between an IPv6 prefix and the AS\n number of that prefix.\n----------------------------------------------------------------------\n|   \\Export| Own     | Customer's| Sibling's | Provider's | Peer's   |\n|To  \\     | Address | Address   | Address   | Address    | Address  |\n|-----\\--------------------------------------------------------------|\n| Provider |    Y    |     Y     |     Y     |            |          |\n|--------------------------------------------------------------------|\n| Customer |    Y    |     Y     |     Y     |     Y      |    Y     |\n|--------------------------------------------------------------------|\n| Peer     |    Y    |     Y     |     Y     |            |          |\n|--------------------------------------------------------------------|\n| Sibling  |    Y    |     Y     |     Y     |     Y      |    Y     |\n----------------------------------------------------------------------",
+      "raw": true
+    },
+    {
+      "indent": 11,
+      "text": "Table 1: AS-Relation-Based Inter-AS Filtering",
+      "ja": "表1：AS-関係ベースのInter-ASフィルタリング"
+    },
+    {
+      "indent": 3,
+      "text": "Different ASes exchange and transmit VR information using the AS-Relation-Based Export Rules in the VRGE. As per Table 1, an AS exports the address prefixes of itself, its customers, its providers, its siblings, and its peers to its customers and siblings as valid prefixes, while it only exports the address prefixes of itself, its customers, and its siblings to its providers and peers as valid prefixes. With the support of the AS-IPv6 prefix mapping server, only AS numbers of valid address prefixes are transferred between ASes, and the AS number is mapped to address prefixes at the VRGE.",
+      "ja": "異なるのAS交換とVRGEでAS-関係ベースのエクスポートルールを使用してVR情報を送信します。表1のとおり、ASは、それだけで、それ自体、その顧客のアドレスプレフィックスをエクスポートしている間、アドレス自体の接頭辞、その顧客、そのプロバイダ、その兄弟とその顧客や兄弟などの有効なプレフィックスへのピアをエクスポートし、そしてその有効な接頭語としてのプロバイダや仲間の兄弟。 AS-IPv6プレフィックスのマッピングサーバのサポートにより、唯一の有効なアドレスプレフィックスのAS番号のAS間で転送され、およびAS番号がVRGEでプレフィックスをアドレスにマッピングされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Only changes of AS relation and changes of IP address prefixes belonging to an AS require the generation of VR updates.",
+      "ja": "AS関係の変化とASに属するIPアドレスプレフィックスの変化だけではVRのアップデートの生成を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The procedure's principal steps are as follows (starting from AS-1 in Figure 3):",
+      "ja": "（図3にAS-1から出発して）次のように手順の主要ステップは以下のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. When the VRGE has initialized, it reads its neighboring SAVA-compliant AS table and establishes connections to all the VEs in its own AS.",
+      "ja": "VRGEが初期化された場合には1、それはテーブルとしてその近隣SAVA準拠を読み取り、自身のAS内のすべての仮想環境への接続を確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The VRGE initiates a VR renewal. According to its export table, it sends its own originated VR to VRGEs of neighboring ASes. In this process, VRs are expressed as AS numbers.",
+      "ja": "2. VRGEはVRの更新を開始します。そのエクスポートテーブルによると、それはそれ自身のは、隣接のASのVRGEsにVRを発し送信します。このプロセスでは、仮想ルーターは、AS番号として表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. When a VRGE receives a new VR from its neighbor, it uses its own export table to decide whether it should accept the VR and, if it accepts a VR, whether or not it should re-export the VR to other neighboring ASes.",
+      "ja": "VRGEはその隣人から新しいVRを受け取ると3.は、それはそれは他の近隣のASにVRを再エクスポートする必要があるかどうか、それはVRを受け入れる場合、VRを受け入れ、必要があるかどうかを決定するために、独自のエクスポートテーブルを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "4. If the VRGE accepts a VR, it uses the AIMS to transform the AS-expressed VR into an IPv6 prefix-expressed VR.",
+      "ja": "4. VRGEはVRを受け入れる場合、それはIPv6プレフィックス-表現VRにAS-表現VRを変換するためにAIMSを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The VRGE pushes the VR to all the VEs in its AS.",
+      "section_title": true,
+      "ja": "5. VRGEは、そのAS内のすべての仮想環境へのVRをプッシュ。"
+    },
+    {
+      "indent": 3,
+      "text": "The VEs use these prefix-based VRs to validate the source IP addresses of incoming packets.",
+      "ja": "VEは、着信パケットの送信元IPアドレスを検証するためにこれらのプレフィックスベースのVRを使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. IP Source Address Validation in the Inter-AS Case (Non-Neighboring AS)",
+      "ja": "2.5。インターASケースにおけるIP送信元アドレスの検証（AS非隣接）"
+    },
+    {
+      "indent": 3,
+      "text": "In the case where two ASes do not exchange packets directly, it is not possible to deploy a solution like that described in the previous section. However, it is highly desirable for non-neighboring ISPs to be able to form a trust alliance such that packets leaving one AS will be recognized by the other and inherit the validation status they possessed on leaving the first AS. There is more than one way to do this. For the SAVA experiments to date, an authentication tag method has been used. This solution is inspired by the work of [Brem05].",
+      "ja": "2つのASは、直接パケットを交換していない場合には、前のセクションで説明したようなソリューションを展開することは不可能です。しかし、非隣接のISPは1 ASを残すパケットが他によって認識され、彼らは最初のASを残すに保有検証ステータスを継承されるように信頼の同盟を形成することができるようにするために非常に望ましいです。これを行うには複数の方法があります。これまでのSAVA実験のために、認証タグの方法が用いられてきました。このソリューションは、[Brem05]の仕事に触発されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The key elements of this lightweight authentication tag based mechanism are as follows: For each pair of SAVA-compliant ASes, there is a pair of unique temporary authentication tags. All SAVA-compliant ASes together form a SAVA AS Alliance. When a packet is leaving its own AS, if the destination IP address belongs to an AS in the SAVA AS Alliance, the edge router of this AS looks up the authentication tag using the destination AS number as the key, and adds an authentication tag to the packet. When a packet arrives at the destination AS, if the source address of the packet belongs to an AS in the SAVA AS Alliance, the edge router of the destination AS searches its table for the authentication tag using the source AS number as the key, and the authentication tag carried in the packet is verified and removed. As suggested by its name, this particular method uses a lightweight authentication tag. For every packet forwarded, the authentication tag can be put in an IPv6 hop-by-hop extension header. It is reasonable to use a 128-bit shared random number as the authentication tag to save the processing overhead brought by using a cryptographic method to generate the authentication tag.",
+      "ja": "次のようにこの軽量の認証タグベースのメカニズムの重要な要素は次のとおりです。SA​​VA準拠のASの各ペアについて、一意の一時認証タグのペアがあります。すべてのSAVA準拠のAS一緒SAVA AS同盟を形成します。パケットは、自身のASを残している場合は、宛先IPアドレスがAS SAVA ASアライアンスに属している場合、このASのエッジルータは、キーとしてAS番号の宛先を使用して認証タグを検索し、及びに認証タグを追加しますパケット。パケットの送信元アドレスをキーとして番号としてソースを使用して認証タグに対するそのテーブルを検索AS SAVA ASアライアンス、先のエッジルータでASに属している場合、パケットは、宛先に到達したとき、およびパケットで運ばれた認証タグを検証して除去します。その名によって示唆されているように、この特定の方法は、軽量の認証タグを使用しています。転送されたパケットごとに、認証タグは、IPv6ホップバイホップ拡張ヘッダに入れることができます。認証タグを生成する暗号方式を使用してもたらさ処理オーバーヘッドを保存するために、認証タグとして128ビットの共有乱数を使用するのが妥当です。"
+    },
+    {
+      "indent": 3,
+      "text": "The benefit of this scheme compared to merely turning on local address validation (such as RFC 2827) is as follows: when local address validation is employed within a group of networks, it is assured that their networks do not send spoofed packets. But other networks may still do this. With the above scheme, however, this capability is eliminated. If someone outside the alliance spoofs a packet using a source address from someone within the alliance, the members of the alliance refuse to accept such a packet.",
+      "ja": "単にローカルアドレス検証をオンに比べてこの方式の利点は、（RFC 2827など）は、以下の通りである：ローカルアドレスの検証がネットワークのグループ内で使用されるとき、そのネットワークがスプーフィングされたパケットを送信しないことが保証されます。しかし、他のネットワークはまだこれを行うことがあります。上記の方式では、しかし、この能力が排除されます。提携外の誰かが同盟内の誰かからの送信元アドレスを使用してパケットを偽装した場合、同盟のメンバーは、このようなパケットを受け入れることを拒否します。"
+    },
+    {
+      "indent": 3,
+      "text": "                             +-----+\n           .-----------------+ REG |-----------------.\n           |                 +-----+                 |\n           |                                         |\n     ,-----+--------                          ,------+-------\n   ,'     `|        `.                      ,'     ` |       `.\n  /        |         \\                     /         |         \\\n /         |          \\                   /          |          \\\n;       +--'--+      +----+             +----+     +-----+       ;\n|       | ASC +------+ASBR|             |ASBR+-----+ ASC |       |\n:       +--.--+      +----+`            +----+     +--+--+       :\n \\         |__________________________________________|         /\n  \\                   /                    \\                   /\n   `.               ,'                      `.               ,'\n     '-------------'                          '-------------'\n          AS-1                                     AS-2",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "Key:   REG  - Registration Server\n       ASC  - AS Control Server\n       ASBR - AS Border Router",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Figure 4: Inter-AS (Non-Neighboring AS) Solution",
+      "ja": "図4：インターAS（非近隣AS）ソリューション"
+    },
+    {
+      "indent": 3,
+      "text": "There are three major components in the system: the Registration Server (REG), the AS Control Server (ASC), and the AS Border Router (ASBR).",
+      "ja": "登録サーバー（REG）、AS制御サーバ（ASC）、およびAS境界ルータ（ASBR）：システムの3つの主要コンポーネントがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The Registration Server is the \"center\" of the trust alliance (TA). It maintains a member list for the TA. It performs two major functions:",
+      "ja": "登録サーバーは、信頼アライアンス（TA）の「中央」です。これは、TAのメンバーリストを管理します。これは、2つの主要な機能を実行します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Processes requests from the AS Control Server, to get the member list for the TA.",
+      "ja": "oはTAのメンバーリストを取得するには、AS制御サーバからの要求を処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Notifies each AS Control Server when the member list is changed.",
+      "ja": "メンバーリストが変更されたときoは制御サーバASそれぞれに通知します。"
+    },
+    {
+      "indent": 3,
+      "text": "Each AS deploying the method has an AS Control Server. The AS Control Server has three major functions:",
+      "ja": "メソッドを展開ASはそれぞれ、AS制御サーバを持っています。 AS制御サーバは、三つの主要な機能があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Communicates with the Registration Server, to get the up-to-date member list of TA.",
+      "ja": "oはTAの最新のメンバーリストを取得するには、登録サーバーと通信します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Communicates with the AS Control Server in other member ASes in the TA, to exchange updates of prefix ownership information and to exchange authentication tags.",
+      "ja": "oは、プレフィックスの所有権情報の更新情報を交換するために、認証タグを交換するために、TA内の他のメンバーのASでASコントロールサーバーと通信します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Communicates with all AS Border Routers of the local AS, to configure the processing component on the AS Border Routers.",
+      "ja": "oはAS境界ルータ上の処理コンポーネントを設定するには、ローカルASの境界ルータASすべてと通信します。"
+    },
+    {
+      "indent": 3,
+      "text": "The AS Border Router does the work of adding the authentication tag to the packet at the sending AS, and the work of verifying and removing the authentication tag at the destination AS.",
+      "ja": "AS境界ルータは、送信側のASにパケット、宛先ASでの認証タグを検証し、除去作業に認証タグを追加する作業を行います。"
+    },
+    {
+      "indent": 3,
+      "text": "In the design of this system, in order to decrease the burden on the REG, most of the control traffic happens between ASCs.",
+      "ja": "このシステムの設計では、REGの負担を減らすために、制御トラフィックのほとんどは、ASCを間に起こります。"
+    },
+    {
+      "indent": 3,
+      "text": "The authentication tag needs to be changed periodically. Although the overhead of maintaining and exchanging authentication tags between AS pairs is O(N) from the point of view of one AS, rather than O(N^2), the traffic and processing overhead do increase as the number of ASes increases. Therefore, an automatic authentication tag refresh mechanism is utilized in this solution. In this mechanism, each peer runs the same algorithm to automatically generate an authentication tag sequence. Then the authentication tag in packets can be changed automatically with high frequency. To enhance the security, a seed is used for the algorithm to generate an authentication tag sequence robust against guessing. Thus, the peers need only to negotiate and change the seed at very low frequency. This lowers the overhead associated with frequently negotiating and changing the authentication tag while maintaining acceptable security.",
+      "ja": "認証タグは、定期的に変更する必要があります。ペアとの間の認証タグを維持し、交換のオーバーヘッドはなくOより一つとして、（N ^ 2）の観点から、O（N）であるが、トラフィック及び処理オーバーヘッドがのASの数が増加するにつれて増加します。したがって、自動認証タグリフレッシュ機構は、この溶液中で利用されています。この機構では、各ピアは自動的に認証タグ配列を生成するために同じアルゴリズムを実行します。その後、パケット内の認証タグが高頻度で自動的に変更することができます。セキュリティを強化するために、種子は推測にロバストな認証タグ配列を生成するためのアルゴリズムに使用されます。したがって、ピアは交渉し、非常に低い頻度でシードを変更するだけで済みます。これは、頻繁に交渉および許容可能なセキュリティを維持しながら、認証タグを変更することに関連するオーバーヘッドを低下させます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the authentication tag is put in an IPv6 hop-by-hop extension header, the MTU issues should be considered. Currently we have two solutions to this problem. Neither of the solutions is perfect, but they are both feasible. One possible way is to set the MTU at the ASBR to be 1280 bytes, which is the minimum MTU for the IPv6. Thus, there should be no ICMP \"Packet Too Big\" message received from the downstream gateways. The disadvantage of this solution is that it doesn't make good use of the available MTU. The other possible way is to let the ASBR catch all incoming ICMP \"Packet Too Big\" messages, and decrease the value in the MTU field before forwarding it into the AS. The advantage of this solution is that it can make good use of the available MTU. But such processing of ICMP packets at the ASBR may create a target for a denial-of-service (DoS) attack.",
+      "ja": "認証タグがIPv6ホップバイホップ拡張ヘッダに配置されているので、MTUの問題を考慮すべきです。現在、我々はこの問題には2つのソリューションを持っています。ソリューションのどちらも完璧ですが、彼らは両方とも実現可能です。一つの可能​​な方法は、IPv6のための最小のMTUである1280バイトであることがASBRにMTUを設定することです。このように、下流のゲートウェイから受信なしICMP「パケット過大」メッセージがあってはなりません。この解決策の欠点は、それが可能なMTUを十分に活用しないということです。他の可能な方法は、ASBRは、すべての着信ICMP「パケット過大」メッセージをキャッチし、ASにそれを転送する前にMTUフィールドに値を減少させることです。このソリューションの利点は、それが可能なMTUの良い利用することができるということです。しかし、ASBRでICMPパケットのこのような処理は、サービス拒否（DoS）攻撃のターゲットを作成することがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Because the authentication tag is validated at the border router of the destination AS, not the destination host, the destination options header is not chosen to carry the authentication tag.",
+      "ja": "認証タグが先ASの境界ルータに検証されているので、ない宛先ホスト、宛先オプションヘッダは、認証タグを運ぶために選択されません。"
+    },
+    {
+      "indent": 3,
+      "text": "Authentication tag management is a critical issue. Our work focused on two points: tag negotiation and tag refresh. The tag negotiation happens between the ASCs of a pair of ASes in the SAVA AS Alliance. Considering the issue of synchronization and the incentive of enabling SAVA, receiver-driven tag negotiation is suggested. It gives more decision power to the receiver AS rather than the sender AS. With a receiver-driven scheme, the receiver AS can decide the policies of tag management. The packets tagged with old authentication tags should not be allowed indefinitely. Rather, after having negotiated a new tag, the old tag should be set to be invalid after a period of time. The length of this period is a parameter that will control how long the old tag will be valid after the new tag has been assigned. In the experiment, we used five seconds.",
+      "ja": "認証タグ管理は重要な問題です。タグ交渉とタグリフレッシュ：私たちの仕事は、二つの点に焦点を当てました。タグ交渉はSAVA AS同盟でのASのペアのASCを間に起こります。同期の問題とSAVAを可能にするインセンティブを考慮すると、受信機駆動のタグネゴシエーションが示唆されました。これは、受信機ASではなく、送信元ASにより決定力を与えます。受信機ドリブン方式では、受信機ASは、タグ管理の方針を決めることができます。古い認証タグでタグ付けされたパケットが無限に許されるべきではありません。むしろ、新しいタグを交渉した後、古いタグは、一定期間後に無効されるように設定する必要があります。この期間の長さは、新しいタグが割り当てられた後、古いタグが有効になりますどのくらい制御するパラメータです。実験では、5秒を使用しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The trust alliance is intended to be established dynamically (join and quit), but in this testbed we needed to confirm off-line the initial trust among alliance members.",
+      "ja": "信託アライアンスは、（参加して終了）を動的に確立されるものではなく、このテストベッドでは、我々はオフラインアライアンスのメンバー間の初期信頼性を確認するために必要とされます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. SAVA Testbed",
+      "section_title": true,
+      "ja": "3。 SAUテストベッド"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. CNGI-CERNET2",
+      "section_title": true,
+      "ja": "3.1。 CNGI-CERNET2"
+    },
+    {
+      "indent": 3,
+      "text": "The prototypes of our solutions for SAVA are implemented and tested on CNGI-CERNET2. CNGI-CERNET2 is one of the China Next Generation Internet (CNGI) backbones, operated by the China Education and Research Network (CERNET). CNGI-CERNET2 connects 25 core nodes distributed in 20 cities in China at speeds of 2.5-10 Gb/s. The CNGI-CERNET2 backbones are IPv6-only networks rather than being a mixed IPv4/IPv6 infrastructure. Only some Customer Premises Networks (CPNs) are dual-stacked. The CNGI-CERNET2 backbones, CNGI-CERNET2 CPNs, and CNGI-6IX all have globally unique AS numbers. Thus a multi-AS testbed environment is provided.",
+      "ja": "SAVAのための当社のソリューションのプロトタイプを実装し、CNGI-CERNET2上でテストされています。 CNGI-CERNET2は、中国教育研究ネットワーク（CERNET）が運営する中国次世代インターネット（CNGI）バックボーンの一つです。 CNGI-CERNET2は2.5-10 Gb /秒の速度で、中国の20都市に分布25個のコア・ノードを接続します。 CNGI-CERNET2バックボーンではなく、混合のIPv4 / IPv6インフラストラクチャであるよりIPv6のみのネットワークです。唯一のいくつかの顧客宅内ネットワーク（CPNS）は、デュアルスタックです。 CNGI-CERNET2バックボーン、CNGI-CERNET2 CPNS、およびCNGI-6IXすべてはAS番号グローバルにユニークなを持っています。このように、マルチASテストベッド環境が提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. SAVA Testbed on CNGI-CERNET2 Infrastructure",
+      "section_title": true,
+      "ja": "3.2。 CNGI-CERNET2インフラ上SAVAテストベッド"
+    },
+    {
+      "indent": 3,
+      "text": "It is intended that eventually the SAVA testbed will be implemented\ndirectly on the CNGI-CERNET2 backbone, but in the early stages the\ntestbed has been implemented across 12 universities connected to\nCNGI-CERNET2.  First, this is because some of the algorithms need to\nbe implemented in the testbed routers themselves, and to date they\nhave not been implemented on any of the commercial routers forming\nthe CNGI-CERNET2 backbone.  Second, since CNGI-CERNET2 is an\noperational backbone, any new protocols and networking techniques\nneed to be tested in a non-disruptive way.\n                            __\n                          ,'  \\                            _,...._\n                         ,'    \\____---------------+     ,'Beijing`.\n                         /      \\  | Inter-AS SAV  |-----| Univ    |\n +---------------+     |         | +---------------+     `-._____,'\n | Inter-AS SAV  +-----|         |\n +------.--------+     |  CNGI-  |                         _,...._\n        |              | CERNET2 |__---------------+     ,Northeast`.\n        |              |         | |Inter-AS SAV   |-----| Univ    |\nTsinghua|University    | Backbone| +---------------+     `-._____,'\n     ,,-|-._           |         |\n   ,'   |   `.         |         |\n ,'+---------+\\        |         |\n|  |Intra-AS | |       |         |      ...\n|  |   SAV   | |       |         |\n|  +---------+ |       |         |\n|       |      |       |         |                         _,...._\n|  +---------+ |       |         |__---------------+     ,Chongqing`.\n|  | Access  | |       |         | |Inter-AS SAV   |-----|Univ     |\n|  | Network | |       |         | +---------------+     `-._____,'\n|  |  SAV    | |       |         |\n \\ +---------+.'        \\       .'\n  \\          ,'          \\      |\n   `.      ,'             \\    /\n     ``---'                -_,'",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Key: SAV - Source Address Validation",
+      "ja": "キー：SAV  - 送信元アドレスの検証"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 5: CNGI-CERNET2 SAVA Testbed",
+      "ja": "図5：CNGI-CERNET2 SAVAテストベッド"
+    },
+    {
+      "indent": 3,
+      "text": "In any case, the testbed is fully capable of functional testing of solutions for all parts of SAVA. This includes testing procedures for ensuring the validity of IPv6 source addresses in the access network, in packets sent from the access network to an IPv6 service provider, in packets sent within one service provider's network, in packets sent between neighboring service providers, and in packets sent between service providers separated by an intervening transit network.",
+      "ja": "いずれの場合においても、テストベッドは、SAVAのすべての部分のためのソリューションの機能テストの完全に可能です。これは、アクセスネットワークにおいて、IPv6サービスプロバイダにアクセスネットワークから送信されたパケットに、一つのサービスプロバイダのネットワーク内で送信されたパケットに、隣接するサービスプロバイダとの間で送信されるパケットに、パケット内のIPv6ソースアドレスの有効性を確保するためのテスト手順を含みます介在中継網で区切られたサービスプロバイダーとの間で送信されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The testbed is distributed across 12 universities connected to CNGI-CERNET2.",
+      "ja": "テストベッドは、CNGI-CERNET2に接続された12の大学に分散されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Each of the university installations is connected to the CNGI-CERNET2 backbone through a set of inter-AS Source Address Validation prototype equipment and traffic monitoring equipment for test result display.",
+      "ja": "大学の設備のそれぞれは、テスト結果の表示のための相互AS送信元アドレス検証プロトタイプ機器やトラフィック監視機器のセットを通してCNGI-CERNET2バックボーンに接続されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Each university deployed one AS. Six universities deployed all parts of the solution and are hence fully-featured, with validation at the inter-AS, intra-AS, and access network levels all able to be tested. In addition, a suite of applications that could be subject to spoofing attacks or that can be subverted to carry out spoofing attacks were installed on a variety of servers. Two solutions for the access network were deployed.",
+      "ja": "各大学は1 ASを展開しました。六大学は、ソリューションのすべての部分を展開し、従って、相互AS内、ASで検証して、フル機能しており、すべての可能なアクセスネットワークのレベルがテストされます。また、スプーフィング攻撃を実行するために堕落することができスプーフィング攻撃の対象やその可能性アプリケーションスイートは、さまざまなサーバーにインストールされていました。アクセスネットワークのための二つの解決策が展開されました。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Test Experience and Results",
+      "section_title": true,
+      "ja": "4.テストの経験と実績"
+    },
+    {
+      "indent": 3,
+      "text": "The solutions outlined in section 2 were implemented on the testbed described in section 3. Successful testing of all solutions was been carried out, as detailed in the following sections.",
+      "ja": "セクション2で概説した溶液は、以下のセクションで詳述するように、行われた全ての溶液の部3成功試験に記載のテストベッド上で実施されました。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Test Scenarios",
+      "section_title": true,
+      "ja": "4.1。テストシナリオ"
+    },
+    {
+      "indent": 3,
+      "text": "For each of the test scenarios, we tested many cases. Taking the Inter-AS (non-neighboring AS) SAVA solution test as an example, we classified the test cases into three classes: normal class, dynamic class, and anti-spoofing class.",
+      "ja": "テストシナリオのそれぞれについて、私たちは多くの例をテストしました。通常のクラス、ダイナミッククラス、およびアンチスプーフィングクラス：例として、インターAS（非隣接AS）SAVA溶液試験を取る、我々は3つのクラスにテストケースを分類しました。"
+    },
+    {
+      "indent": 3,
+      "text": "1. For normal class, there are three cases: Adding authentication tag Test, Removing authentication tag Test, and Forwarding packets with valid source address.",
+      "ja": "認証タグテストの追加、認証タグテストを除去し、有効な送信元アドレスを持つパケットを転送します。1.通常のクラスのために、3つのケースがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. For dynamic class, there are four cases: Updating the authentication tag between ASes, The protection for a newly joined member AS, Adding address space, and Deleting address space.",
+      "ja": "AS、新たに接合部材としての保護との間の認証タグの更新、アドレス空間を追加し、アドレス空間を削除：動的クラス2. 4つの場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "3. For anti-spoofing class, there is one case: Filtering of packets with forged IP addresses.",
+      "ja": "偽造IPアドレスを持つパケットのフィルタリング：アンチスプーフィングクラスの3は、一つのケースがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "As is shown in Figure 5, we have \"multiple-fence\" design for our SAVA testbed. If source address validation is deployed in the access network, we can get a host granularity validation. If source address validation is deployed at the intra-AS level, we can guarantee that the packets sent from this point have a correct IP prefix. If source address validation is deployed at the inter-AS level, we can guarantee that the packets sent from this point are from the correct AS.",
+      "ja": "図5に示すように、我々は我々のSAVAテストベッドのための「マルチフェンス」のデザインを持っています。送信元アドレスの検証は、アクセスネットワークに配置されている場合は、私たちはホスト粒度の検証を取得することができます。送信元アドレスの検証がイントラ-ASレベルで展開されている場合は、我々はこの時点から送信されたパケットが正しいIPプレフィックスを持っていることを保証することができます。送信元アドレスの検証がインターASレベルで展開されている場合は、我々はこの時点から送信されたパケットが正しいASからのものであることを保証することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Test Results",
+      "section_title": true,
+      "ja": "4.2。試験結果"
+    },
+    {
+      "indent": 3,
+      "text": "1. The test results are consistent with the expected ones. For an AS that has fully-featured SAVA deployment with validation at the inter-AS, intra-AS, and access network levels, packets that do not hold an authenticated source address will not be forwarded in the network. As a result, it is not possible to launch network attacks with spoofed source addresses. Moreover, the traffic in the network can be traced back accurately.",
+      "ja": "1.テスト結果は、期待されるものと一致しています。インターAS内、AS、およびアクセスネットワークレベルでの検証でSAVAの展開を完全な機能を備えたASのために、認証された送信元アドレスを保持していないパケットは、ネットワーク内で転送されません。その結果、偽装された送信元アドレスを持つネットワーク攻撃を開始することはできません。また、ネットワーク内のトラフィックを正確に遡ることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. For the Inter-AS (non-neighboring AS) SAVA solution, during the period of authentication tag update, the old and the new authentication tags are both valid for source address validation; thus, there is no packet loss.",
+      "ja": "認証タグ更新の期間中のInter-AS（非隣接AS）SAVAソリューション、2.は、古いものと新しい認証タグは、両方の送信元アドレスの検証のために有効です。このように、パケットロスがありません。"
+    },
+    {
+      "indent": 3,
+      "text": "3. For the Inter-AS (non-neighboring AS) SAVA solution, the validation function is implemented in software on a device running Linux, which simulates the source address validation functions of a router interface. It is a layer-2 device because it needs to be transparent to the router interface. During the test, when the devices were connected directly, normal line-rate forwarding was achieved. When the devices were connected with routers from another vendor, only a very limited forwarding speed was achieved. The reason is that the authentication tags are added on the IPv6 hop-by-hop option header, and many current routers can handle the hop-by-hop options only at a limited rate.",
+      "ja": "3.インターAS（非隣接AS）SAVA溶液の場合、検証機能は、ルータインタフェースのソースアドレス検証機能をシミュレートするのLinuxを実行しているデバイス上のソフトウェアで実現されます。それはルータインターフェイスに対して透明である必要があるので、それはレイヤ2デバイスです。デバイスが直接接続された試験中に、通常のラインレート転送が達成されました。デバイスが別のベンダからのルータに接続されたときに、非常に限られた転送速度が達成されました。その理由は、認証タグがIPv6ホップバイホップオプションヘッダに追加されていることであり、多くの現在のルータは、限られた速度でホップバイホップオプションを処理することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Limitations and Issues",
+      "section_title": true,
+      "ja": "5.制限事項と問題"
+    },
+    {
+      "indent": 3,
+      "text": "There are several issues both within this overall problem area and with the particular approach taken in the experiment.",
+      "ja": "この全体的な問題領域内の実験で撮影した特定のアプローチとの両方のいくつかの問題があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. General Issues",
+      "section_title": true,
+      "ja": "5.1。一般的な問題"
+    },
+    {
+      "indent": 3,
+      "text": "There is a long-standing debate about whether the lack of universal deployment of source address validation is a technical issue that needs a technical solution, or if mere further deployment of existing tools (such as RFC 2827) would be a more cost effective way to improve the situation. Further deployment efforts of this tool have proved to be slow, however. Some of the solutions prototyped in this experiment allow a group of network operators to have additional protection for their networks while waiting for universal deployment of simpler tools in the rest of the Internet. This allows them to prevent spoofing attacks that the simple tools alone would not be able to prevent, even if already deployed within the group.",
+      "ja": "送信元アドレスの検証の普遍的展開の欠如は、技術的な解決策を必要とする、または（例えばRFC 2827など）既存のツールの場合は単なる更なる展開の技術的な問題であるかどうかについて、長年議論があると、より費用効果的な方法だろう状況を改善します。このツールのさらなる展開の努力は、しかし、遅くなることが証明されています。この実験で試作したソリューションの一部は、インターネットの残りの部分で単純なツールの普遍的展開を待っている間にネットワークオペレータのグループは、彼らのネットワークのための追加の保護を持つことができます。これは、彼らが一人で簡単なツールがすでにグループ内に展開しても、防ぐことができないだろうスプーフィング攻撃を防ぐことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, since a large fraction of current denial-of-service attacks can be launched by employing legitimate IP addresses belonging to botnet clients, even universal deployment of better source address validation techniques would be unable to prevent these attacks. However, tracing these attacks would be easier given that there would be more reliance on the validity of source address.",
+      "ja": "現在のサービス拒否攻撃の大部分は、ボットネットのクライアント、より優れた送信元アドレスの検証技術のさえ普遍的な展開に属する正当なIPアドレスを使用することによって起動することができますので、同様に、これらの攻撃を防ぐことができないであろう。しかし、これらの攻撃をトレースすることは容易に送信元アドレスの有効性について、より信頼があるだろうことを考えることになります。"
+    },
+    {
+      "indent": 3,
+      "text": "There is also a question about the optimal placement of the source address validation checks. The simplest model is placing the checks on the border of a network. Such RFC 2827-style checks are more widely deployed than full checks ensuring that all addresses within the network are correct. It can be argued that it is sufficient to provide such coarse granularity checks, because this makes it at least possible to find the responsible network administrators. However, depending on the type of network in question, those administrators may or may not find it easy to track the specific offending machines or users. It is obviously required that the administrators have a way to trace offending equipment or users -- even if the network does not block spoofed packets in real-time.",
+      "ja": "送信元アドレスの妥当性チェックの最適な配置についての質問もあります。最も単純なモデルは、ネットワークの境界にチェックをかけています。このようなRFC 2827スタイルのチェックがより広く、ネットワーク内のすべてのアドレスが正しいことを保証する完全な小切手よりも配備されています。これは、それが少なくとも可能担当するネットワーク管理者を見つけることができますので、このような粗粒度チェックを提供するのに十分であることを主張することができます。しかし、問題のネットワークの種類に応じて、それらの管理者またはそれが簡単に特定の問題のマシンまたはユーザーを追跡するために見つけない場合があります。ネットワークをリアルタイムに偽装されたパケットをブロックしていない場合でも - 明らかに、管理者が怒ら機器やユーザーを追跡するための方法を持っていることが必要とされます。"
+    },
+    {
+      "indent": 3,
+      "text": "New technology for address validation would also face a number of deployment barriers. For instance, all current technology can be locally and independently applied. A system that requires global operation (such as the Inter-AS validation mechanism) would require significant coordination, deployment synchronization, configuration, key setup, and other issues, given the number of ASes.",
+      "ja": "アドレス検証のための新技術も導入障壁の数に直面するだろう。たとえば、すべての現在の技術では、ローカルと独立して適用することができます。 （例えばインター-ASの検証メカニズムなど）グローバルな操作を必要とするシステムは、のASの数を考えると、大幅な調整、展開同期、設定、キー設定、およびその他の問題を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, deploying host-based access network address validation mechanisms requires host changes, and can generally be done only when the network owners are in control of all hosts. Even then, the changing availability of the host for all types of products and platforms would likely prevent universal deployment even within a single network.",
+      "ja": "同様に、ホストベースのアクセスネットワークアドレス検証メカニズムを展開すると、ホストの変更を必要とし、一般に、ネットワークの所有者は、すべてのホストの制御にある場合にのみ行うことができます。それでも、製品およびプラットフォームのすべてのタイプのホストの変更可用性がそうであっても、単一のネットワーク内でのユニバーサル展開を防止するであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "There may be also be significant costs involved in some of these solutions. For instance, in an environment where access network authentication is normally not required, employing an authentication-based access network address validation would require deployment of equipment capable of this authentication as well as credentials distribution for all devices. Such undertaking is typically only initiated after careful evaluation of the costs and benefits involved.",
+      "ja": "また、これらのソリューションの一部に関与多大なコストが存在することができます。例えば、アクセスネットワーク認証が正常に認証ベースのアクセス・ネットワーク・アドレスの検証は、この認証が可能な機器の導入だけでなく、すべてのデバイスの資格情報の配布を必要とする使用し、必要とされていない環境インチこのような取り組みは、一般的にのみ関与コストとベネフィットを慎重に評価した後に開始されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, all the presented solutions have issues in situations that go beyond a simple model of a host connecting to a network via the same single interface at all times. Multihoming, failover, and some forms of mobility or wireless solutions may collide with the requirements of source address validation. In general, dynamic changes to the attachment of hosts and topology of the routing infrastructure are something that would have to be handled in a production environment.",
+      "ja": "最後に、すべての提示ソリューションは、すべての回で同じ単一のインタフェースを介してネットワークに接続するホストの簡単なモデルを超えた状況での問題を抱えています。マルチホーミング、フェイルオーバー、およびモビリティ又は無線ソリューションのいくつかの形態は、送信元アドレスの検証の要件と衝突することができます。一般的には、ホストおよびルーティングインフラストラクチャのトポロジの添付ファイルへの動的な変更は、本番環境で取り扱わなければならない何かです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Security Issues",
+      "section_title": true,
+      "ja": "5.2。セキュリティ上の問題"
+    },
+    {
+      "indent": 3,
+      "text": "The security vs. scalability of the authentication tags in the Inter-AS (non-neighboring AS) SAVA solution presents a difficult tradeoff. Some analysis about the difficulty of guessing the authentication tag between two AS members was discussed in [Brem05]. It is relatively difficult, even with using a random number as an \"authentication tag\". The difficulty of guessing can be increased by increasing the length of the authentication tag.",
+      "ja": "インターAS（非隣接AS）SAVA溶液中の認証タグのスケーラビリティ対セキュリティは難しいトレードオフを提示します。 2人のASメンバー間の認証タグを推測することの難しさについてのいくつかの分析は、[Brem05]で議論されました。それも、「認証タグ」として、乱数を用いて、比較的困難です。推測の難しさは、認証タグの長さを増加させることによって増加させることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "In any case, the random number approach is definitely vulnerable to attackers who are on the path between the two ASes.",
+      "ja": "いずれの場合も、乱数のアプローチは間違いなく2つのAS間の経路上にある攻撃に対して脆弱です。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, using an actual cryptographic hash in the packets will cause a significant increase in the amount of effort needed to forward a packet. In general, addition of the option and the calculation of the authentication tag consume valuable resources on the forwarding path. This resource usage comes on top of everything else that modern routers need to do at ever increasing line speeds. It is far from clear that the costs are worth the benefits.",
+      "ja": "一方、パケットの実際の暗号化ハッシュを使用してパケットを転送するために必要な努力の量の有意な増加を引き起こします。一般的には、オプションおよび認証タグの計算の追加は、転送パス上で、貴重なリソースを消費します。このリソースの使用状況は、現代のルータは、これまでの回線速度の向上を行うために必要なことを他のすべての上に来ます。これは、コストがメリット価値があることを明らか遠くからです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Protocol Details",
+      "section_title": true,
+      "ja": "5.3。プロトコルの詳細"
+    },
+    {
+      "indent": 3,
+      "text": "In the current CNGI-CERNET2 SAVA testbed, a 128-bit authentication tag is placed in an IPv6 hop-by-hop option header. The size of the packets increases with the authentication tags. This by itself is expected to be acceptable, if the network administrator feels that the additional protection is needed. The size increases may result in an MTU issue, and we found a way to resolve it in the testbed. Since an IPv6 hop-by-hop option header was chosen, the option header has to be examined by all intervening routers. While in theory this should pose no concern, the test results show that many current routers handle hop-by-hop options with a much reduced throughput compared to normal traffic.",
+      "ja": "現在CNGI-CERNET2 SAVAテストベッドでは、128ビットの認証タグは、IPv6ホップバイホップオプションヘッダに配置されます。パケットのサイズは、認証タグと共に増加します。それだけでこれは、ネットワーク管理者は、追加の保護が必要であると感じている場合は、許容可能であると期待されています。サイズの増加はMTUの問題をもたらすことができる、と私たちはテストベッドでそれを解決する方法を見つけました。 IPv6のホップバイホップオプションヘッダが選択されたため、オプションヘッダは、すべての介在ルータによって検査されなければなりません。理論的には、これは何の懸念を提起するべきではありませんが、テスト結果は、多くの現在のルータが通常のトラフィックに比べて大幅に減少し、スループットとホップバイホップオプションを処理することを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The Inter-AS (neighboring AS) SAVA solution is based on the AS relation; thus, it may not synchronize with the dynamics of route changes very quickly and it may cause false positives. Currently,",
+      "ja": "インターAS（隣接AS）SAVA溶液ような関係に基づいています。したがって、それは非常に迅速にルート変更のダイナミクスと同期しないことがあり、それは偽陽性を引き起こす可能性があります。現在、"
+    },
+    {
+      "indent": 3,
+      "text": "CNGI-CERNET2 is a relatively stable network, and this method works well in the testbed. We will further study the impact of false positives in an unstable network.",
+      "ja": "CNGI-CERNET2は、比較的安定したネットワークであり、この方法は、テストベッドではうまく動作します。我々はさらに不安定なネットワークでは偽陽性の影響を検討します。"
+    },
+    {
+      "indent": 3,
+      "text": "The access network address validation solution is merely one option among many. Solutions appear to depend highly on the chosen link technology and network architecture. For instance, source address validation on point-to-point links is easy and has generally been supported by implementations for years. Validation in shared networks has been more problematic, but is increasing in importance given the use of Ethernet technology across administrative boundaries (such as in DSL). In any case, the prototyped solution has a number of limitations, including the decision to use a new address configuration protocol. In a production environment, a solution that is suitable for all IPv6 address assignment mechanisms would be needed.",
+      "ja": "アクセスネットワークアドレス検証ソリューションは、多くの間で単に一つの選択肢です。ソリューションは、選択されたリンク技術とネットワークアーキテクチャに非常に依存するように見えます。例えば、ポイントツーポイントリンク上の送信元アドレスの検証は簡単で、一般的に年間の実装によってサポートされています。共有ネットワークの検証がより問題となっているが、（例えばDSLのように）行政境界を越えイーサネット技術を使用特定の重要性が増しています。いずれの場合においても、試作溶液が新しいアドレス構成プロトコルを使用するという決定を含む、多くの制限を有しています。本番環境では、すべてのIPv6アドレス割り当てメカニズムに適しているソリューションは、必要とされるであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Conclusion",
+      "section_title": true,
+      "ja": "6.おわりに"
+    },
+    {
+      "indent": 3,
+      "text": "Several conclusions can be drawn from the experiment.",
+      "ja": "いくつかの結論は、実験から引き出すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "First, the experiment is a proof that a prototype can be built that is deployable on loosely-coupled domains of test networks in a limited scale and \"multiple-fence\" design for source address validation. The solution allows different validation granularities, and also allows different providers to use different solutions. The coupling of components at different levels of granularity can be loose enough to allow component substitution.",
+      "ja": "最初の実験は、疎結合限られた規模のテストネットワークのドメインと送信元アドレスの検証のための「マルチフェンス」設計に展開可能であり、プロトタイプを構築することができるという証拠があります。ソリューションは、さまざまな検証粒度を可能にし、また、異なるプロバイダは、さまざまなソリューションを使用することができます。粒度の異なるレベルでの成分の結合は、コンポーネント置換を可能にするのに十分緩いことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Incremental deployment is another design principle that was used in the experiment. The tests have demonstrated that benefit is derived even when deployment is incomplete, thus giving providers an incentive to be early adopters.",
+      "ja": "インクリメンタル展開は実験に用いた別の設計原理です。テストは、展開が不完全であっても利点は、このようにプロバイダに早期に導入することのインセンティブを与え、得られることが実証されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The experiment also provided a proof of concept for the switch-based local subnet validation, network authentication based validation, filter-based Inter-AS validation, and authentication tag-based Inter-AS validation mechanisms. The client host and network equipment need to be modified and some new servers should be deployed.",
+      "ja": "実験はまた、スイッチベースのローカルサブネットの検証、ネットワーク認証ベースの検証、フィルタベースのインターASの検証、および認証タグベースのInter-ASの検証メカニズムの概念の証拠を提供しました。クライアントホストやネットワーク機器を変更すると、いくつかの新しいサーバが展開されなければならない必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Nevertheless, as discussed in the previous section, there are a number of limitations, issues, and questions in the prototype designs and the overall source address validation space.",
+      "ja": "それにもかかわらず、前のセクションで説明したように、制限事項、問題、およびプロトタイプの設計と全体的な送信元アドレスの検証空間での質問の数があります。"
+    },
+    {
+      "indent": 3,
+      "text": "It is our hope that some of the experiences will help vendors and the Internet standards community in these efforts. Future work in this space should attempt to answer some of the issues raised in Section 5. Some of the key issues going forward include:",
+      "ja": "経験のいくつかは、これらの努力にベンダーとインターネット標準コミュニティに役立つことを私たちの希望です。この空間での今後の作業は、今後の重要な課題のいくつかには、第5節で提起された問題のいくつかに答えることを試みるべきです："
+    },
+    {
+      "indent": 3,
+      "text": "o Scalability questions and per-packet operations.",
+      "ja": "Oスケーラビリティの質問とパケットごとの操作。"
+    },
+    {
+      "indent": 3,
+      "text": "o Protocol design issues, such as integration to existing address allocation mechanisms, use of hop-by-hop headers, etc.",
+      "ja": "など既存のアドレス割り当てメカニズムに統合、ホップバイホップヘッダの使用、などOプロトコルの設計上の問題、"
+    },
+    {
+      "indent": 3,
+      "text": "o Cost vs. benefit questions. These may be ultimately answered only by actually employing some of these technologies in production networks.",
+      "ja": "給付の質問対Oコスト。これらは、最終的には、実際に生産ネットワークにおけるこれらの技術の一部を使用することによってのみ回答することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Trust establishment issue and study of false positives.",
+      "ja": "Oの信頼確立の問題と偽陽性の研究。"
+    },
+    {
+      "indent": 3,
+      "text": "o Deployability considerations, e.g. modifiability of switches, hosts, etc.",
+      "ja": "O展開性の考慮、例えばスイッチ、ホストなどの修正可能"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The purpose of the document is to report experimental results. Some security considerations of the solution mechanisms of the testbed are mentioned in the document, but are not the main problem to be described in this document.",
+      "ja": "文書の目的は、実験結果を報告することです。テストベッドの解決メカニズムのいくつかのセキュリティ上の考慮事項は、文書で述べたが、この文書で説明する主な問題ではありませんされています。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Acknowledgements",
+      "section_title": true,
+      "ja": "8.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This experiment was conducted among 12 universities -- namely, Tsinghua University, Beijing University, Beijing University of Post and Telecommunications, Shanghai Jiaotong University, Huazhong University of Science and Technology in Wuhan, Southeast University in Nanjing, South China University of Technology in Guangzhou, Northeast University in Shenyang, Xi'an Jiaotong University, Shandong University in Jinan, University of Electronic Science and Technology of China in Chengdu, and Chongqing University. The authors would like to thank everyone involved in this effort in these universities.",
+      "ja": "すなわち、清華大学、北京大学、北京郵電大学、上海交通大学、武漢の華中科技大学、南京の東南大学、広州で華南理工大学、 - この実験は、12大学間実施しました瀋陽、西安交通大学、済南山東大学、成都にある中国の電子科学技術大学、重慶大学で東北大学。著者らは、これらの大学では、この取り組みに関わるすべての人に感謝したいと思います。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Jari Arkko, Lixia Zhang, and Pekka Savola for their detailed review comments on this document, and thank Paul Ferguson and Ron Bonica for their valuable advice on the solution development and the testbed implementation.",
+      "ja": "著者は、この文書にその詳細なレビューコメントのためにヤリArkko、Lixiaチャン、およびペッカSavolaに感謝し、そしてソリューション開発とテストベッドの実装上の貴重なアドバイスをポール・ファーガソンとロンBonicaに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2827] Ferguson, P. and D. Senie, \"Network Ingress Filtering: Defeating Denial of Service Attacks which employ IP Source Address Spoofing\", BCP 38, RFC 2827, May 2000.",
+      "ja": "[RFC2827]ファーガソン、P.およびD. Senie、 \"ネットワーク入力フィルタリング：IP Source Address Spoofingを使うサービス攻撃の敗北拒否\"、BCP 38、RFC 2827、2000年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3704] Baker, F. and P. Savola, \"Ingress Filtering for Multihomed Networks\", BCP 84, RFC 3704, March 2004.",
+      "ja": "[RFC3704]ベイカー、F.およびP. Savola、 \"マルチホームネットワークの入力フィルタリング\"、BCP 84、RFC 3704、2004年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[Brem05] Bremler-Barr, A. and H. Levy, \"Spoofing Prevention Method\", INFOCOM 2005.",
+      "ja": "【Brem05] Bremler  - バール、A.及びH.レヴィ、 \"なりすまし防止方法\"、INFOCOM 2005。"
+    },
+    {
+      "indent": 3,
+      "text": "[Li02] Li,, J., Mirkovic, J., Wang, M., Reiher, P., and L. Zhang, \"SAVE: Source Address Validity Enforcement Protocol\", INFOCOM 2002.",
+      "ja": "[Li02]李,, J.、Mirkovic、J.、王、M.、Reiher、P.、およびL.チャン、 \"SAVE：ソースアドレス妥当性施行プロトコル\"、インフォコム2002。"
+    },
+    {
+      "indent": 3,
+      "text": "[Park01] Park, K. and H. Lee, \"On the effectiveness of route-based packet filtering for distributed DoS attack prevention in power-law internets\", SIGCOMM 2001.",
+      "ja": "「べき乗則のインターネットにおける分散型DoS攻撃防止のためのルートベースのパケットフィルタリングの有効性について」[Park01]パーク、K.およびH.リー、SIGCOMM 2001。"
+    },
+    {
+      "indent": 3,
+      "text": "[Snoe01] Snoeren, A., Partridge, C., Sanchez, L., and C. Jones, \"A Hash-based IP traceback\", SIGCOMM 2001.",
+      "ja": "【Snoe01] Snoeren、A.、ヤマウズラ、C.、サンチェス、L.、及びC.ジョーンズ、 \"ハッシュベースのIPトレースバック\"、SIGCOMM 2001。"
+    },
+    {
+      "indent": 3,
+      "text": "[Wu07] Wu, J., Ren, G., and X. Li, \"Source Address Validation: Architecture and Protocol Design\", ICNP 2007.",
+      "ja": "[Wu07]呉、J.、レン、G.、およびX.李、 \"送信元アドレス検証：アーキテクチャとプロトコル設計\"、ICNP 2007。"
+    },
+    {
+      "indent": 3,
+      "text": "[XBW07] Xie, L., Bi, J., and J. Wu, \"An Authentication based Source Address Spoofing Prevention Method Deployed in IPv6 Edge Network\", ICCS 2007.",
+      "ja": "[XBW07]謝、L.、バイ、J.、およびJ.呉、「認証ベースのソースアドレスIPv6のエッジネットワークに配置スプーフィング防止法」、ICCS 2007。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Jianping Wu Tsinghua University Computer Science, Tsinghua University Beijing 100084 China EMail: jianping@cernet.edu.cn",
+      "ja": "JイアンW UTはフラット歌い、その後、大学のコンピュータサイエンス、大学北京100084中国メール:.才能のJianping @CER純額のTS ING。"
+    },
+    {
+      "indent": 3,
+      "text": "Jun Bi Tsinghua University Network Research Center, Tsinghua University Beijing 100084 China EMail: junbi@cernet.edu.cn",
+      "ja": "6月のBi清華大学ネットワーク研究センター、清華大学、北京100084中国Eメール：junbi@cernet.edu.cn"
+    },
+    {
+      "indent": 3,
+      "text": "Xing Li Tsinghua University Electronic Engineering, Tsinghua University Beijing 100084 China EMail: xing@cernet.edu.cn",
+      "ja": "興李清華大学電子工学、清華大学、北京100084中国メール：xing@cernet.edu.cn"
+    },
+    {
+      "indent": 3,
+      "text": "Gang Ren Tsinghua University Computer Science, Tsinghua University Beijing 100084 China EMail: rg03@mails.tsinghua.edu.cn",
+      "ja": "マック@ 03は彼に制限するための4カ年計画を送信する場合、ギャングは、大学のコンピュータサイエンス、大学北京100084中国メールのTS ING :.のINGをレンタル。"
+    },
+    {
+      "indent": 3,
+      "text": "Ke Xu Tsinghua University Computer Science, Tsinghua University Beijing 100084 China EMail: xuke@csnet1.cs.tsinghua.edu.cn",
+      "ja": "柯徐清華大学コンピュータサイエンス、清華大学、北京100084中国Eメール：xuke@csnet1.cs.tsinghua.edu.cn"
+    },
+    {
+      "indent": 3,
+      "text": "Mark I. Williams Juniper Networks Suite 1508, W3 Tower, Oriental Plaza, 1 East Chang'An Ave Dong Cheng District, Beijing 100738 China EMail: miw@juniper.net",
+      "ja": "マーク・I.ウィリアムズジュニパーネットワークススイート1508、W3タワー、オリエンタルプラザ、1東長安アヴェ東城区、北京100738中国メール：miw@juniper.net"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2008).",
+      "ja": "著作権（C）IETFトラスト（2008）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}
