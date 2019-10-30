@@ -1,0 +1,1478 @@
+{
+  "title": {
+    "text": "RFC 2676 - QoS Routing Mechanisms and OSPF Extensions",
+    "ja": "RFC 2676 - QoSルーティングメカニズムとOSPF拡張機能"
+  },
+  "number": 2676,
+  "created_at": "2019-10-28 15:58:02.551928+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                  G. Apostolopoulos\nRequest for Comments: 2676                                   D. Williams\nCategory: Experimental                                               IBM\n                                                                S. Kamat\n                                                                  Lucent\n                                                               R. Guerin\n                                                                   UPenn\n                                                                 A. Orda\n                                                                Technion\n                                                           T. Przygienda\n                                                           Siara Systems\n                                                             August 1999",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "QoS Routing Mechanisms and OSPF Extensions",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This memo defines an Experimental Protocol for the Internet community. It does not specify an Internet standard of any kind. Discussion and suggestions for improvement are requested. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのためにExperimentalプロトコルを定義します。それはどんな種類のインターネット標準を指定しません。改善のための議論や提案が要求されています。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1999). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1999）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This memo describes extensions to the OSPF [Moy98] protocol to support QoS routes. The focus of this document is on the algorithms used to compute QoS routes and on the necessary modifications to OSPF to support this function, e.g., the information needed, its format, how it is distributed, and how it is used by the QoS path selection process. Aspects related to how QoS routes are established and managed are also briefly discussed. The goal of this document is to identify a framework and possible approaches to allow deployment of QoS routing capabilities with the minimum possible impact to the existing routing infrastructure.",
+      "ja": "このメモは、QoSルートをサポートするために、OSPF [Moy98]プロトコルに拡張機能について説明します。この文書の焦点は、それが分散される方法、及びそれはQoS経路選択により使用される方法、そのフォーマット情報が必要な、例えば、この機能をサポートするためのQoS経路を計算するために使用されるアルゴリズム上及びOSPFに必要な変更であります処理する。 QoSのルートが確立され、管理されている方法に関連する態様は、簡単に説明されています。このドキュメントの目標は、既存のルーティングインフラストラクチャへの最小限の影響を与えたQoSルーティング機能の展開を可能にするためのフレームワークとの可能なアプローチを識別することです。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, experience from an implementation of the proposed extensions in the GateD environment [Con], along with performance measurements is presented.",
+      "ja": "また、ゲートで囲われた環境[コン]で提案された拡張機能の実装からの経験は、性能測定と一緒に提示されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction                                                    3\n    1.1. Overall Framework . . . . . . . . . . . . . . . . . . . . 3\n    1.2. Simplifying Assumptions . . . . . . . . . . . . . . . . . 5\n2. Path Selection Information and Algorithms                       7\n    2.1. Metrics . . . . . . . . . . . . . . . . . . . . . . . . . 7\n    2.2. Advertisement of Link State Information . . . . . . . . . 8\n    2.3. Path Selection  . . . . . . . . . . . . . . . . . . . . .10\n          2.3.1. Path Computation Algorithm  . . . . . . . . . . .11\n3. OSPF Protocol Extensions                                       16\n    3.1. QoS -- Optional Capabilities  . . . . . . . . . . . . . .17\n    3.2. Encoding Resources as Extended TOS  . . . . . . . . . . .17\n          3.2.1. Encoding bandwidth resource . . . . . . . . . . .19\n          3.2.2. Encoding Delay  . . . . . . . . . . . . . . . . .21\n    3.3. Packet Formats  . . . . . . . . . . . . . . . . . . . . .21\n    3.4. Calculating the Inter-area Routes . . . . . . . . . . . .22\n    3.5. Open Issues . . . . . . . . . . . . . . . . . . . . . . .22\n4. A Reference Implementation based on GateD                      22\n    4.1. The Gate Daemon (GateD) Program . . . . . . . . . . . . .22\n    4.2. Implementing the QoS Extensions of OSPF . . . . . . . . .23\n          4.2.1. Design Objectives and Scope . . . . . . . . . . .23\n          4.2.2. Architecture  . . . . . . . . . . . . . . . . . .24\n    4.3. Major Implementation Issues . . . . . . . . . . . . . . .25\n    4.4. Bandwidth and Processing Overhead of QoS Routing  . . . .29\n5. Security Considerations                                        32\nA. Pseudocode for the BF Based Pre-Computation Algorithm          33\nB. On-Demand Dijkstra Algorithm for QoS Path Computation          36\nC. Precomputation Using Dijkstra Algorithm                        39\nD. Explicit Routing Support                                       43\nEndnotes                                                          45\nReferences                                                        46\nAuthors' Addresses                                                48\nFull Copyright Statement                                          50",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, we describe a set of proposed additions to the OSPF routing protocol (these additions have been implemented on top of the GateD [Con] implementation of OSPF V2 [Moy98]) to support Quality-of-Service (QoS) routing in IP networks. Support for QoS routing can be viewed as consisting of three major components:",
+      "ja": "この文書では、我々は内のルーティングサービス品質（QoS）をサポートするために、（これらの追加ゲーテッドの上に実装されている[コン] OSPF V2 [Moy98]の実装）OSPFルーティングプロトコルへの提案の追加のセットを記述しますIPネットワーク。 QoSのルーティングのサポートは、3つの主要コンポーネントから成ると見なすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Obtain the information needed to compute QoS paths and select a path capable of meeting the QoS requirements of a given request,",
+      "ja": "1のQoSパスを計算し、与えられたリクエストのQoS要件を満たすことができる経路を選択するために必要な情報を取得し、"
+    },
+    {
+      "indent": 3,
+      "text": "2. Establish the path selected to accommodate a new request,",
+      "section_title": true,
+      "ja": "2.新しい要求に対応するために選択したパスを確立し、"
+    },
+    {
+      "indent": 3,
+      "text": "3. Maintain the path assigned for use by a given request.",
+      "section_title": true,
+      "ja": "3.特定の要求による使用のために割り当てられたパスを維持します。"
+    },
+    {
+      "indent": 3,
+      "text": "Although we touch upon aspects related to the last two components, the focus of this document is on the first one. In particular, we discuss the metrics required to support QoS, the extension to the OSPF link state advertisement mechanism to propagate updates of QoS metrics, and the modifications to the path selection to accommodate QoS requests. The goal of the extensions described in this document is to improve performance for QoS flows (likelihood to be routed on a path capable of providing the requested QoS), with minimal impact on the existing OSPF protocol and its current implementation. Given the inherent complexity of QoS routing, achieving this goal obviously implies trading-off \"optimality\" for \"simplicity\", but we believe this to be required in order to facilitate deployment of QoS routing capabilities.",
+      "ja": "我々は最後の二つの成分に関連する側面に触れますが、この文書の焦点は最初の1です。特に、我々は、QoS、QoSの要求に対応するためにパス選択にQoSメトリックの更新、および修正を伝播するOSPFリンクステートアドバタイズメントメカニズムへの拡張をサポートするために必要な測定基準を議論します。本書では説明の拡張の目的は、QoSは、既存のOSPFプロトコルと現在の実装への影響を最小限に抑えて、（要求されたQoSを提供することができる経路上にルーティングされる可能性を）流れるのパフォーマンスを改善することです。 QoSルーティングの固有の複雑さを考えると、明らかにこの目標を達成することは、「シンプルさ」のためのトレードオフ「最適」を意味しますが、我々はこれがQoSルーティング機能の展開を容易にするために必要とされると信じています。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to describing the proposed extensions to the OSPF protocol, this document also reports experimental data based on performance measurements of an implementation done on the GateD platform (see Section 4).",
+      "ja": "OSPFプロトコルに提案された拡張機能を記述することに加えて、この文書はまた、（セクション4を参照）GateDのプラットフォーム上で行わ実装の性能測定値に基づいて実験データを報告します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Overall Framework",
+      "section_title": true,
+      "ja": "1.1。全体のフレームワーク"
+    },
+    {
+      "indent": 3,
+      "text": "We consider a network (1) that supports both best-effort packets and packets with QoS guarantees. The way in which the network resources are split between the two classes is irrelevant, except for the assumption that each QoS capable router in the network is able to dedicate some of its resources to satisfy the requirements of QoS packets. QoS capable routers are also assumed capable of identifying and advertising resources that remain available to new QoS flows. In addition, we limit ourselves to the case where all the routers involved support the QoS extensions described in this document, i.e., we do not consider the problem of establishing a route in a heterogeneous environment where some routers are QoS-capable and others are not. Furthermore, in this document, we focus on the case of unicast flows, although many of the additions we define are applicable to multicast flows as well.",
+      "ja": "私たちは、QoS保証とベストエフォートパケットとパケットの両方をサポートするネットワーク（1）を検討してください。ネットワークリソースは、二つのクラスの間で分割される方法は、ネットワーク内の各QoS対応ルータがQoSパケットの要件を満たすために、そのリソースの一部を専用することが可能であるという仮定を除いて、無関係です。 QoSの対応ルータは、新しいQoSのフローが利用可能なままに資源を特定し、広告することを想定しています。また、我々は関係するすべてのルータが、この文書で説明したQoS拡張をサポートする場合に自分自身を制限する、すなわち、我々はいくつかのルータがQoS対応であり、他ではない異種環境でルートを確立する問題を考慮していません。我々が定義する追加の多くが同様にマルチキャストフローにも適用可能であるがまた、この文書では、我々は、ユニキャストフローの場合に焦点を当てます。"
+    },
+    {
+      "indent": 3,
+      "text": "We assume that a flow with QoS requirements specifies them in some fashion that is accessible to the routing protocol. For example, this could correspond to the arrival of an RSVP [RZB+97] PATH message, whose TSpec is passed to routing together with the destination address. After processing such a request, the routing protocol returns the path that it deems the most suitable given the flow's requirements. Depending on the scope of the path selection process, this returned path could range from simply identifying the best next hop, i.e., a hop-by-hop path selection model, to specifying all intermediate nodes to the destination, i.e., an explicit route model. The nature of the path being returned impacts the operation of the path selection algorithm as it translates into different requirements for constructing and returning the appropriate path information. However, it does not affect the basic operation of the path selection algorithm (2).",
+      "ja": "私たちは、QoS要件を有するフローは、ルーティングプロトコルにアクセス可能ないくつかの方法でそれらを指定することを想定しています。例えば、これは、TSpecの宛先アドレスと共にルーティングに渡されRSVP [RZB + 97] PATHメッセージの到着に対応することができます。このような要求を処理した後、ルーティングプロトコルは、それが最も適切な所定のフローの要求を認めるパスを返します。経路選択プロセスの範囲に応じて、このパスは、単に最良の次のホップを識別するから、すなわち、ホップバイホップ経路選択モデル、宛先へのすべての中間ノードを指定すること、すなわち、明示的経路モデル及ぶ可能性が返さ。それは構築し、適切なパス情報を返すためのさまざまな要件に翻訳ように、パスの性質は、パス選択アルゴリズムの動作に影響を返されます。しかし、それはパス選択アルゴリズム（2）の基本的な動作には影響を与えません。"
+    },
+    {
+      "indent": 3,
+      "text": "For simplicity and also because it is the model currently supported in the implementation (see Section 4 for details), in the rest of this document we focus on the hop-by-hop path selection model. The additional modifications required to support an explicit routing model are discussed in appendix D, but are peripheral to the main focus of this document which concentrates on the specific extensions to the OPSF protocol to support computation of QoS routes.",
+      "ja": "簡単にするためにも、それは現在の実装でサポートされているモデルであるので（詳細はセクション4を参照）、我々はホップバイホップの経路選択モデルに焦点を当て、この文書の残りの部分インチ明示的なルーティング・モデルをサポートするために必要な追加の変更は付録Dで説明したが、QoSのルートの計算をサポートするために、OPSFプロトコルに固有の拡張に集中この文書の主な焦点に末梢されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to the problem of selecting a QoS path and possibly reserving the corresponding resources, one should note that the successful delivery of QoS guarantees requires that the packets of the associated \"QoS flow\" be forwarded on the selected path. This typically requires the installation of corresponding forwarding state in the router. For example, with RSVP [RZB+97] flows a classifier entry is created based on the filter specs contained in the RESV message. In the case of a Differentiated Service [KNB98] setting, the classifier entry may be based on the destination address (or prefix) and the corresponding value of the DS byte. The mechanisms described in this document are at the control path level and are, therefore, independent of data path mechanisms such as the packet classification method used. Nevertheless, it is important to notice that consistent delivery of QoS guarantees implies stability of the data path. In particular, while it is possible that after a path is first selected, network conditions change and result in the appearance of \"better\" paths, such changes should be prevented from unnecessarily affecting existing paths. In particular, switching over to a new (and better) path should be limited to specific conditions, e.g., when the initial selection turns out to be inadequate or extremely \"expensive\". This aspect is beyond the scope of QoS routing and belongs to the realm of path management, which is outside the main focus of this document. However, because of its potentially significant impact on the usefulness of QoS routing, we briefly outline a possible approach to path management.",
+      "ja": "QoS経路を選択し、おそらく対応するリソースを予約する問題に加えて、1つは、QoS保証の配信成功は、関連のパケットを選択されたパス上に転送される「QoSの流れ」ことを必要とすることに注意すべきです。これは、通常のルータに転送状態に対応するのインストールが必要です。例えば、RSVPと[RZB + 97]分類子エントリがRESVメッセージに含まれるフィルタ仕様に基づいて作成されて流れます。 【KNB98】設定差別化サービスの場合には、分類子エントリーは、宛先アドレス（またはプレフィックス）とDSバイトの対応する値に基づいてもよいです。本書で説明されたメカニズムは、制御経路レベルであり、そのような使用されるパケット分類方法として、従って、データ・パス・メカニズムとは無関係です。それにも関わらず、QoS保証の一貫性のある配信がデータパスの安定性を暗示していることに気づくことが重要です。それは経路が最初に選択された後に、ネットワークの状態が変化し、「良好」パスの外観をもたらすことが可能であるが、特に、このような変化は、不必要に既存の経路に影響を与えることを防止しなければなりません。具体的には、新しい（より良い）パスに切り替えるが、例えば、初期選択が不十分又は非常に「高価」であることが判明した場合に特定の条件が、これらに限定されるべきです。この態様は、QoSルーティングの範囲外であり、この文書の主な焦点外にあるパス管理の分野に属します。しかし、QoSのルーティングの有用性への潜在的に重要な影響を、我々は簡単にパス管理への可能なアプローチを概説します。"
+    },
+    {
+      "indent": 3,
+      "text": "Avoiding unnecessary changes to QoS paths requires that state information be maintained for each QoS path after it has been selected. This state information is used to track the validity of the path, i.e., is the current path adequate or should QoS routing be queried again to generate a new and potentially better path. We say that a path is \"pinned\" when its state specifies that QoS routing need not be queried anew, while a path is considered \"un-pinned\" otherwise. The main issue is then to define how, when, and where path pinning and un-pinning is to take place, and this will typically depend on the mechanism used to request QoS routes. For example, when the RSVP protocol is the mechanism being used, it is desirable that path management be kept as synergetic as possible with the existing RSVP state management. In other words, pinning and un-pinning of paths should be coordinated with RSVP soft states, and structured so as to require minimal changes to RSVP processing rules. A broad RSVP-routing interface that enables this is described in [GKR97]. Use of such an interface in the context of reserving resources along an explicit path with RSVP is discussed in [GLG+97]. Details of path management and a means for avoiding loops in case of hop-by-hop path setup can be found in [GKH97], and are not addressed further in this document.",
+      "ja": "QoSのパスへの不要な変更を回避することは、選択された後の状態情報は、各QoS経路のために維持されることを要求します。この状態情報は、経路の有効性を追跡するために使用され、すなわち、電流経路が適切であるかのQoSルーティングは、新たな潜在的により優れたパスを生成するために、再度照会しなければなりません。私たちは、その状態がパスがそうでない場合は、「非固定」と見なされている間のQoSルーティングは、新たに照会する必要がないことを指定した場合、パスは「固定」されていることを言います。主な問題は、どのように、いつ、どこでパスは、ピン止めと非ピニングを行うべきであり、これは一般的なQoSルートを要求するために使用されるメカニズムに依存しますを定義すること、その後です。 RSVPプロトコルが使用されている機構である場合、例えば、パス管理は、既存のRSVP状態管理にできるだけ相乗維持することが望ましいです。すなわち、ピニングとパスの非ピニングにRSVPソフト状態と協調、及び処理ルールをRSVPに最小限の変更を要求するように構成されるべきです。これを可能にする幅広いRSVP-ルーティングインタフェースは、[GKR97]に記載されています。 RSVPとの明示的なパスに沿ってリソースを予約するの文脈において、このようなインターフェイスの使用は、[GLG + 97]に記載されています。パス管理及びホップバイホップパス設定の場合にはループを回避するための手段の詳細は[GKH97]に見出すことができ、本書で更に対処されていません。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Simplifying Assumptions",
+      "section_title": true,
+      "ja": "1.2。仮定の簡素化"
+    },
+    {
+      "indent": 3,
+      "text": "In order to achieve our goal of minimizing impact to the existing protocol and implementation, we impose certain restrictions on the range of extensions we initially consider to support QoS. The first restriction is on the type of additional (QoS) metrics that will be added to Link State Advertisements (LSAs) for the purpose of distributing metrics updates. Specifically, the extensions to LSAs that we initially consider, include only available bandwidth and delay. In addition, path selection is itself limited to considering only bandwidth requirements. In particular, the path selection algorithm selects paths capable of satisfying the bandwidth requirement of flows, while at the same time trying to minimize the amount of network resources that need to be allocated, i.e., minimize the number of hops used.",
+      "ja": "既存のプロトコルと実装への影響を最小限に抑えるという目標を達成するために、我々は我々が最初にQoSをサポートするために検討する拡張子の範囲に一定の制限を課します。第一の制限は、メトリックの更新を配布する目的でリンクステートアドバタイズメント（LSA）に追加される追加（QoS）のメトリックの種類です。具体的には、我々が最初に考えるのLSAの拡張機能は、のみ利用可能な帯域幅と遅延が含まれます。また、パス選択は、帯域幅の要件を考慮に制限そのものです。同時に、割り当てすなわち、使用されるホップの数を最小化する必要があるネットワークリソースの量を最小化しようとしたとき、特に、経路選択アルゴリズムは、フローの帯域幅要件を満たすことが可能なパスを選択します。"
+    },
+    {
+      "indent": 3,
+      "text": "This focus on bandwidth is adequate in most instances, and meant to keep initial complexity at an acceptable level. However, it does not fully capture the complete range of potential QoS requirements. For example, a delay-sensitive flow of an interactive application could be put on a path using a satellite link, if that link provided a direct path and had plenty of unused bandwidth. This would clearly be an undesirable choice. Our approach to preventing such poor choices, is to assign delay-sensitive flows to a \"policy\" that would eliminate from the network all links with high propagation delay, e.g., satellite links, before invoking the path selection algorithm. In general, multiple policies could be used to capture different requirements, each presenting to the path selection algorithm a correspondingly pruned network topology, on which the same algorithm would be used to generate an appropriate path. Alternatively, different algorithms could be used depending on the QoS requirements expressed by an incoming request. Such extensions are beyond the scope of this document, which limits itself to describing the case of a single metric, bandwidth. However, it is worth pointing out that a simple extension to the path selection algorithm proposed in this document allows us to directly account for delay, under certain conditions, when rate-based schedulers are employed, as in the Guaranteed Service proposal [SPG97]; details can be found in [GOW97].",
+      "ja": "帯域幅のこの焦点は、ほとんどの場合で十分ですし、許容可能なレベルでの最初の複雑さを維持するためのもの。しかし、それは完全に可能性のあるQoS要件の完全な範囲をキャプチャしません。そのリンクは、ダイレクトパスを提供し、未使用の帯域幅の多くを持っている場合たとえば、対話型アプリケーションの遅延に敏感なフローは、衛星回線を使用してパスに置くことができます。これは明らかに望ましくない選択です。このような貧弱な選択を防止する我々のアプローチは、経路選択アルゴリズムを呼び出す前に、例えば、ネットワークからの衛星リンクを高伝搬遅延とのすべてのリンクを排除する「ポリシー」に遅延に敏感なフローを割り当てることです。一般的に、複数のポリシーが異なる要件を捕捉するために使用することができ、同じアルゴリズムが適切なパスを生成するために使用されるどの経路選択アルゴリズム対応プルーニングネットワークトポロジ、各提示。代替的に、異なるアルゴリズムが着信要求で表さQoS要件に応じて使用することができます。そのような拡張は、単一のメトリック、帯域幅の場合を説明するに自分自身を制限し、この文書の範囲を超えています。しかし、それはこの文書で提案されているパス選択アルゴリズムへの簡単な拡張が直接[SPG97]保証サービスの提案のように、レートベースのスケジューラが採用されている場合、一定の条件の下で、遅延を考慮して、私たちを許可することを指摘する価値があります。詳細は[GOW97]で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Another important aspect to ensure that introducing support for QoS routing has the minimal possible impact, is to develop a solution that has the smallest possible computing overhead. Additional computations are unavoidable, but it is desirable to keep the computational cost of QoS routing at a level comparable to that of traditional routing algorithms. One possible approach to achieve this goal, is to allow pre-computation of QoS routes. This is the method that was chosen for the implementation of the QoS extensions to OSPF and is, therefore, the one described in detail in this document. Alternative approaches are briefly reviewed in appendices. However, it should be noted that although several alternative path selection algorithms are possible, the same algorithm should be used consistently within a given routing domain. This requirement may be relaxed when explicit routing is used, as the responsibility for selecting a QoS path lies with a single entity, the origin of the request, which then ensures consistency even if each router uses a different path selection algorithm. Nevertheless, the use of a common path selection algorithm within an AS is recommended, if not necessary, for proper operation.",
+      "ja": "別の重要な態様は、QoSルーティングのためのサポートを導入すると、最小の可能な影響を有することを確実にするために、可能な限り最小の計算オーバーヘッドを有する溶液を開発することです。追加の計算は避けられないが、伝統的なルーティングアルゴリズムに匹敵するレベルでのQoSルーティングの計算コストを維持することが望ましいです。この目標を達成するための一つの可能​​なアプローチは、QoSのルートの事前計算を可能にすることです。これは、OSPFへのQoS拡張機能の実装のために選択した方法であり、従って、本書では詳細に説明したものです。別のアプローチは、簡単に付録に検討されています。しかし、いくつかの代替的な経路選択アルゴリズムが可能であるが、同一のアルゴリズムは、所与のルーティングドメイン内で一貫して使用されるべきであることに留意すべきです。明示的なルーティングを使用する場合のQoSパスを選択するための責任は、各ルータは異なる経路選択アルゴリズムを使用しても一貫性を保証する単一のエンティティ、要求元であるようにこの要件を緩和することができます。それにもかかわらず、AS内の共通パス選択アルゴリズムを使用することは適切に動作させるために、必要に応じていない、推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A last aspect of concern regarding the introduction of QoS routing, is to control the overhead associated with the additional link state updates caused by more frequent changes to link metrics. The goal is to minimize the amount of additional update traffic without adversely affecting the performance of path selection. In Section 2.2, we present a brief discussion of various alternatives that trade accuracy of link state information for protocol overhead. Potential enhancements to the path selection algorithm, which seek to (directly) account for the inaccuracies in link metrics, are described in [GOW97], while a comprehensive treatment of the subject",
+      "ja": "QoS経路制御の導入に関する懸念の最後の態様は、リンク・メトリックのより頻繁な変化に起因する追加のリンク状態の更新に関連するオーバーヘッドを制御することです。目標は、悪パス選択のパフォーマンスに影響を与えることなく、追加の更新トラフィックの量を最小限にすることです。 2.2節では、プロトコルのオーバーヘッドのためのリンク状態情報の正確さをトレード様々な選択肢の簡単な説明を提示します。リンクメトリックの不正確さのために（直接的に）アカウントにシーク経路選択アルゴリズムへの潜在的強化は、被写体の包括的な治療しながら、[GOW97]に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "can be found in [LO98, GO99]. In Section 4, we also describe the design choices made in a reference implementation, to allow future extensions and experimentation with different link state update mechanisms.",
+      "ja": "[LO98、GO99]で見つけることができます。第4節では、我々はまた、別のリンク状態更新メカニズムと将来の拡張や実験を可能にし、リファレンス実装で行われた設計上の選択を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The rest of this document is structured as follows. In Section 2, we describe the general design choices and mechanisms we rely on to support QoS request. This includes details on the path selection metrics, link state update extensions, and the path selection algorithm itself. Section 3 focuses on the specific extensions that the OSPF protocol requires, while Section 4 describes their implementation in the GateD platform and also presents some experimental results. Section 5 briefly addresses security issues that the proposed schemes may raise. Finally, several appendices provide additional material of interest, e.g., alternative path selection algorithms and support for explicit routes, but somewhat outside the main focus of this document.",
+      "ja": "このドキュメントの残りは以下の通り構成されています。第2節では、我々はQoS要求をサポートするために依存している一般的な設計の選択肢とメカニズムについて説明します。これは、パス選択メトリック、リンク状態更新の拡張機能、およびパス選択アルゴリズム自体の詳細が含まれています。第4ゲーテッドプラットフォームで彼らの実装を説明し、また、いくつかの実験結果を提示しながら、第3節では、OSPFプロトコルが必要となる特定の拡張子に焦点を当てています。第5節では、簡単に、提案方式が上げることができるセキュリティ問題に対処しています。最後に、いくつかの付録は、例えば、代替経路選択アルゴリズムと、明示的なルートのサポート、その他の材料を提供するが、多少この文書の主な焦点外。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Path Selection Information and Algorithms",
+      "section_title": true,
+      "ja": "2.パス選択情報とアルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This section reviews the basic building blocks of QoS path selection, namely the metrics on the which the routing algorithm operates, the mechanisms used to propagate updates for these metrics, and finally the path selection algorithm itself.",
+      "ja": "このセクションでは、QoS経路選択の基本的なビルディングブロックを見直し、ルーティングアルゴリズムは、これらのメトリックの更新を伝播するために使用されるメカニズム、そして最終的にパス選択アルゴリズム自体を動作させる、すなわちメトリックれています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Metrics",
+      "section_title": true,
+      "ja": "2.1。メトリック"
+    },
+    {
+      "indent": 3,
+      "text": "The process of selecting a path that can satisfy the QoS requirements of a new flow relies on both the knowledge of the flow's requirements and characteristics, and information about the availability of resources in the network. In addition, for purposes of efficiency, it is also important for the algorithm to account for the amount of resources the network has to allocate to support a new flow. In general, the network prefers to select the \"cheapest\" path among all paths suitable for a new flow, and it may even decide not to accept a new flow for which a feasible path exists, if the cost of the path is deemed too high. Accounting for these aspects involves several metrics on which the path selection process is based. They include:",
+      "ja": "新しいフローのQoS要件を満たすことができるのパスを選択するプロセスは、流れの要件と特性の知識、およびネットワーク内のリソースの可用性に関する情報の両方に依存しています。また、効率の目的のために、アルゴリズムは、ネットワークが新しいフローをサポートするために割り当てなければならない資源の量を考慮するためにも重要です。一般に、ネットワークは、新たな流れに適したすべてのパスの中で「最も安い」パスを選択することを好む、とパスのコストが高すぎると判断される場合にはそれも、実現可能なパスが存在するための新しい流れを受け入れないことを決定することができます。これらの側面の会計処理パス選択プロセスがベースとなっているいくつかの指標を必要とします。彼らは、次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "- Link available bandwidth: As mentioned earlier, we currently assume that most QoS requirements are derivable from a rate-related quantity, termed \"bandwidth.\" We further assume that associated with each link is a maximal bandwidth value, e.g., the link physical bandwidth or some fraction thereof that has been set aside for QoS flows. Since for a link to be capable of accepting a new flow with given bandwidth requirements, at least that much bandwidth must be still available on the link, the relevant link metric is, therefore, the (current) amount of available (i.e., unallocated) bandwidth. Changes in this metric need to be advertised as part of extended LSAs, so that accurate information is available to the path selection algorithm.",
+      "ja": " - リンク利用可能な帯域幅：前述したように、私たちは現在、ほとんどのQoS要件が率関連量から誘導されていることを前提とし、「帯域幅」と呼ばれます我々はさらに、各リンクに関連付けられていることは、QoSフローのために、例えば、リンク物理的帯域幅またはその一部の画分が確保されている最大帯域幅の値であると仮定する。リンクは、多くの帯域幅がリンク上でまだ利用可能でなければならない、少なくともことを与えられた帯域幅要件、との新しい流れを受け入れることができるようにするために、関連するリンクのメトリックがあるので、そのための（現在の）量入手できる（すなわち、未割り当て）帯域幅。拡張されたLSAの一部としてアドバタイズされるには、このメトリックを必要としているの変更、正確な情報は、パス選択アルゴリズムが使用できるように。"
+    },
+    {
+      "indent": 3,
+      "text": "- Link propagation delay: This quantity is meant to identify high latency links, e.g., satellite links, which may be unsuitable for real-time requests. This quantity also needs to be advertised as part of extended LSAs, although timely dissemination of this information is not critical as this parameter is unlikely to change (significantly) over time. As mentioned earlier, link propagation delay can be used to decide on the pruning of specific links, when selecting a path for a delay sensitive request; also, it can be used to support a related extension, as described in [GOW97].",
+      "ja": " - リンク伝搬遅延：この量は、高レイテンシ・リンク、リアルタイム要求には適さないかもしれ例えば、衛星リンクを識別することを意味します。このパラメータは、時間をかけて（大幅に）変更することはほとんどありませんように、この情報のタイムリーな普及が重要ではないが、この量はまた、拡張されたLSAの一部として宣伝する必要があります。前述したように、リンクの伝搬遅延は、遅延に敏感なリクエストのパスを選択する際に、特定のリンクの剪定を決定するために使用することができます。また、[GOW97]に記載されているように、関連する拡張機能をサポートするために使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "- Hop-count: This quantity is used as a measure of the path cost to the network. A path with a smaller number of hops (that can support a requested connection) is typically preferable, since it consumes fewer network resources. As a result, the path selection algorithm will attempt to find the minimum hop path capable of satisfying the requirements of a given request. Note that contrary to bandwidth and propagation delay, hop count is a metric that does not affect LSAs, and it is only used implicitly as part of the path selection algorithm.",
+      "ja": " - ホップカウント：この量は、ネットワークへの経路コストの尺度として使用されます。それは、より少ないネットワーク資源を消費するので、（要求された接続をサポートすることができる）ホップ数の少ない経路は、典型的には好ましいです。結果として、経路選択アルゴリズムは、与えられた要求の要件を満たすことができる最小ホップ経路を見つけることを試みます。帯域幅に反すると伝搬遅延は、ホップ数がLSAを影響しない指標であり、それは唯一のパス選択アルゴリズムの一部として暗黙的に使用されることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Advertisement of Link State Information",
+      "section_title": true,
+      "ja": "2.2。リンク状態情報の広告"
+    },
+    {
+      "indent": 3,
+      "text": "The new link metrics identified in the previous section need to be advertised across the network, so that each router can compute accurate and consistent QoS routes. It is assumed that each router maintains an updated database of the network topology, including the current state (available bandwidth and propagation delay) of each link. As mentioned before, the distribution of link state (metrics) information is based on extending OSPF mechanisms. The detailed format of those extensions is described in Section 3, but in addition to how link state information is distributed, another important aspect is when such distribution is to take place.",
+      "ja": "各ルータは、正確で一貫性のQoSルートを計算できるように、前のセクションで特定される新しいリンクメトリックは、ネットワークを介して宣伝する必要があります。各ルータは、各リンクの現在の状態（使用可能な帯域幅および伝播遅延）を含むネットワークトポロジーの更新されたデータベースを維持しているものとします。前に述べたように、リンク状態（メトリクス）情報の分布は、OSPFメカニズムを拡張に基づいています。これらの拡張機能の詳細なフォーマットは、セクション3に記載されているが、このような配布が行われる場合に、リンク状態情報が配布される方法に加えて、別の重要な態様です。"
+    },
+    {
+      "indent": 3,
+      "text": "One option is to mandate periodic updates, where the period of updates is determined based on a tolerable corresponding load on the network and the routers. The main disadvantage of such an approach is that major changes in the bandwidth available on a link could remain unknown for a full period and, therefore, result in many incorrect routing decisions. Ideally, routers should have the most current view of the bandwidth available on all links in the network, so that they can make the most accurate decision of which path to select. Unfortunately, this then calls for very frequent updates, e.g., each time the available bandwidth of a link changes, which is neither scalable nor practical. In general, there is a trade-off between the protocol overhead of frequent updates and the accuracy of the network state information that the path selection algorithm depends on. We outline next a few possible link state update policies, which strike a practical compromise.",
+      "ja": "1つのオプションは、アップデートの期間は、ネットワーク上の許容対応するロードおよびルータに基づいて決定される定期的な更新を強制することです。このようなアプローチの主な欠点は、リンク上で利用可能な帯域幅の大きな変化は、全期間のために未知のままであり、したがって、多くの間違ったルーティング決定につながる可能性があることです。彼らが選択したパスの最も正確な意思決定を行うことができるように、理想的には、ルータは、ネットワーク内のすべてのリンク上で利用可能な帯域幅の最新の見解を持っている必要があります。残念ながら、これは、スケーラブルでも実用的でもない、リンクの変更の利用可能な帯域幅、毎回、例えば、非常に頻繁に更新するために呼び出します。一般的に、頻繁な更新のプロトコルオーバーヘッド及び経路選択アルゴリズムが依存するネットワーク状態情報の精度とのトレードオフがあります。私たちは、次の実用的な妥協を打ついくつかの可能なリンク状態の更新ポリシーを、概説します。"
+    },
+    {
+      "indent": 3,
+      "text": "The basic idea is to trigger link state advertisements only when there is a significant change in the value of metrics since the last advertisement. The notion of significance of a change can be based on an \"absolute\" scale or a \"relative\" one. An absolute scale means partitioning the range of values that a metric can take into equivalence classes and triggering an update whenever the metric changes sufficiently to cross a class boundary (3). A relative scale, on the other hand, triggers updates when the percentage change in the metric value exceeds a predefined threshold. Independent of whether a relative or an absolute change trigger mechanism is used, a periodic trigger constraint can also be added. This constraint can be in the form of a hold-down timer, which is used to force a minimum spacing between consecutive updates. Alternatively, a transmit timer can also be used to ensure the transmission of an update after a certain time has expired. Such a feature can be useful if link state updates advertising bandwidth changes are sent unreliably. The current protocol extensions described in Section 3 as well as the implementation of Section 4 do not consider such an option as metric updates are sent using the standard, and reliable, OSPF flooding mechanism. However, this is clearly an extension worth considering as it can help lower substantially the protocol overhead associated with metrics updates.",
+      "ja": "基本的な考え方は、最後の広告以来のメトリックの値に大きな変化がある場合にのみ、リンクステートアドバタイズメントをトリガーすることです。変化の有意性の概念は、「絶対」スケールまたは「相対」いずれかに基づくことができます。絶対スケールは、メトリックが等価クラスに取り得る値の範囲を分割し、メトリックの変化が十分クラス境界（3）を通過するたびに更新をトリガします。メトリック値の変化率が所定の閾値を超えたときに相対スケールは、一方で、更新をトリガします。相対的または絶対的変化のトリガー機構が使用されているかどうかとは無関係に、周期的なトリガ制約を加えることもできます。この制約は、連続する更新の間の最小間隔を強制するために使用されているホールドダウンタイマー、の形態であり得ます。あるいは、送信タイマーは、特定の時間が経過した後、更新の送信を確実にするために使用することができます。リンク状態の更新広告帯域幅の変更が不確実に送信された場合、このような機能は便利です。第3節と同様に第4の実施で説明現在のプロトコルの拡張機能は、メトリック更新が標準を使用して送信されているようなオプションを検討し、かつ信頼性の高い、OSPFフラッディングメカニズムはありません。しかし、これは下、実質的メトリックの更新に関連するプロトコルのオーバーヘッドを助けることができるよう検討する価値の拡張は明らかです。"
+    },
+    {
+      "indent": 3,
+      "text": "In both the relative and absolute change approaches, the metric value advertised in an LSA can be either the actual or a quantized value. Advertising the actual metric value is more accurate and, therefore, preferable when metrics are frequently updated. On the other hand, when updates are less frequent, e.g., because of a low sensitivity trigger or the use of hold-down timers, advertising quantized values can be of benefit. This is because it can help increase the number of equal cost paths and, therefore, improve robustness to metrics inaccuracies. In general, there is a broad space of possible trade-offs between accuracy and overhead and selecting an appropriate design point is difficult and depends on many parameters (see [AGKT98] for a more detailed discussion of these issues). As a result, in order to help acquire a better understanding of these issues, the implementation described in Section 4 supports a range of options that allow exploration of the available design space. In addition, Section 4 also reports experimental data on the traffic load and processing overhead generated by links state updates for different configurations.",
+      "ja": "両方の相対的および絶対的変化のアプローチでは、LSAでアドバタイズメトリック値は、実際の、または量子化された値のいずれかであり得ます。メトリックが頻繁に更新された場合、実際のメトリック値をアドバタイズすることは、より正確で、したがって、好ましいです。更新はそれほど頻繁である場合一方、例えば、なぜなら低感度トリガまたはホールドダウンタイマーの使用、量子化値を広告することは有益であることができます。それは等コストパスの数を増加させ、従って、メトリクスの不正確さに対するロバスト性を向上させることができるからです。一般的に、正確さとオーバーヘッドと適切な設計点を選択することとの間の可能なトレードオフの広いスペースがある（これらの問題のより詳細な議論については[AGKT98]参照）が困難であり、多くのパラメータに依存します。その結果、これらの問題のより良い理解を獲得するのを助けるために、第4節で説明した実装が可能な設計空間の探査が可能なオプションの範囲をサポートしています。また、第4節では、異なる構成のリンク状態の更新によって生成されたトラフィックの負荷や処理のオーバーヘッドに実験データを報告します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Path Selection",
+      "section_title": true,
+      "ja": "2.3。経路の選択"
+    },
+    {
+      "indent": 3,
+      "text": "There are two major aspects to computing paths for QoS requests. The first is the actual path selection algorithm itself, i.e., which metrics and criteria it relies on. The second is when the algorithm is actually invoked.",
+      "ja": "QoSの要求のための経路を計算するには2つの主要な側面があります。最初は、それが依存するメトリクスと基準実際の経路選択アルゴリズム自体、すなわち、です。アルゴリズムが実際に呼び出されたときに、第2です。"
+    },
+    {
+      "indent": 3,
+      "text": "The topology on which the algorithm is run is, as with the standard OSPF path selection, a directed graph where vertices (4) consist of routers and networks (transit vertices) as well as stub networks (non-transit vertices). When computing a path, stub networks are added as a post-processing step, which is essentially similar to what is done with the current OSPF routing protocol. The optimization criteria used by the path selection are reflected in the costs associated with each interface in the topology and how those costs are accounted for in the algorithm itself. As mentioned before, the cost of a path is a function of both its hop count and the amount of available bandwidth. As a result, each interface has associated with it a metric, which corresponds to the amount of bandwidth that remains available on this interface. This metric is combined with hop count information to provide a cost value, whose goal is to pick a path with the minimum possible number of hops among those that can support the requested bandwidth. When several such paths are available, the preference is for the path whose available bandwidth (i.e., the smallest value on any of the links in the path) is maximal. The rationale for the above rule is the following: we focus on feasible paths (as accounted by the available bandwidth metric) that consume a minimal amount of network resources (as accounted by the hop-count metric); and the rule for selecting among these paths is meant to balance load as well as maximize the likelihood that the required bandwidth is indeed available.",
+      "ja": "アルゴリズムが実行されるトポロジーは、標準的なOSPF経路選択、頂点（4）ルータとネットワーク（トランジット頂点）ならびにスタブネットワーク（非トランジット頂点）から成る有向グラフと同様です。経路を計算するとき、スタブネットワークは、現在のOSPFルーティングプロトコルを用いて行われるものと本質的に類似して後処理工程として添加されます。経路選択によって使用される最適化基準は、これらのコストは、アルゴリズム自体に計上されている方法を各トポロジにおけるインターフェイスと関連付けられたコストに反映されます。前に述べたように、パスのコストは、そのホップ数と利用可能な帯域幅の量の両方の関数です。その結果、各インタフェースはそれにこのインターフェイスで利用可能なままである帯域幅の量に対応するメトリックを、関連付けられています。このメトリックは、その目標は要求された帯域幅をサポートすることができるもののうち、ホップの可能な最小数のパスを選択することですコスト値を、提供するために、ホップカウント情報と組み合わされます。いくつかのそのような経路が利用可能であるとき、嗜好は、その利用可能な帯域幅（すなわち、経路内のリンクのいずれか上の最小値）が最大となるパスのためのものです。上記のルールのための理論的根拠は以下の通りである：（ホップカウントメトリックによって占めように）ネットワーク・リソースの最小量を消費すること（利用可能な帯域幅のメトリックによって占めれるように）、我々は可能パスに焦点を当てます。そしてこれらのパスの間で選択するためのルールは、負荷のバランスをとるだけでなく、必要な帯域幅が実際に利用可能である可能性を最大化するためのものです。"
+    },
+    {
+      "indent": 3,
+      "text": "It should be noted that standard routing algorithms are typically single objective optimizations, i.e., they may minimize the hop-count, or maximize the path bandwidth, but not both. Double objective path optimization is a more complex task, and, in general, it is an intractable problem [GJ79]. Nevertheless, because of the specific nature of the two objectives being optimized (bandwidth and hop count), the complexity of the above algorithm is competitive with even that of standard single-objective algorithms. For readers interested in a thorough treatment of the topic, with insights into the connection between the different algorithms, linear algebra and modification of metrics, [Car79] is recommended.",
+      "ja": "標準ルーティングアルゴリズム、すなわち、それらは、ホップ数を最小化する、またはパスの帯域幅を最大化する、両方ではないことがあり、典型的には単一の目的最適化であることに留意されたいです。ダブル客観パスの最適化は、より複雑な作業です、そして、一般的に、それは手に負えない問題[GJ79]です。それにもかかわらず、最適化されている2つの目標（帯域幅とホップ数）の具体的な性質のため、上記のアルゴリズムの複雑さは、それさえも、標準的な単目的のアルゴリズムの持つ競争力があります。トピックの完全な治療に興味がある読者のために、異なるアルゴリズム、線形代数およびメトリックの変更との間の接続についての洞察と、[Car79]が推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Before proceeding with a more detailed description of the path selection algorithm itself, we briefly review the available options when it comes to deciding when to invoke the algorithm. The two main options are: 1) to perform on-demand computations, that is, trigger a computation for each new request, and 2) to use some form of pre-computation. The on-demand case involves no additional issues in terms of when computations should be triggered, but running the path selection algorithm for each new request can be computationally expensive (see [AT98] for a discussion on this issue). On the other hand, pre-computing paths amortizes the computational cost over multiple requests, but each computation instance is usually more expensive than in the on-demand case (paths are computed to all destinations and for all possible bandwidth requests rather than for a single destination and a given bandwidth request). Furthermore, depending on how often paths are recomputed, the accuracy of the selected paths may be lower. In this document, we primarily focus on the case of pre-computed paths, which is also the only method currently supported in the reference implementation described in Section 4. In this case, clearly, an important issue is when such pre-computation should take place. The two main options we consider are periodic pre-computations and pre-computations after a given (N) number of updates have been received. The former has the benefit of ensuring a strict bound on the computational load associated with pre-computations, while the latter can provide for a more responsive solution (5). Section 4 provides some experimental results comparing the performance and cost of periodic pre-computations for different period values.",
+      "ja": "それは、アルゴリズムを呼び出すためにする場合を決定することになるとパス選択アルゴリズム自体の詳細な説明に進む前に、我々は簡単に利用可能なオプションを確認します。二つの主なオプションがある：1）それは、それぞれの新しい要求の計算をトリガされ、オンデマンドで計算を実行するため、及び2）事前計算のいくつかのフォームを使用します。オンデマンドの場合は、計算がトリガされなければならないときの点では全く別の問題が含まれていないが、各新しい要求のパス選択アルゴリズムを実行すると、計算コストが高くなる（この問題についての議論のための[AT98]を参照）することができます。一方、事前計算経路（パスはすべての宛先に計算され、全ての可能な帯域幅要求のためではなく、単一のためのものである複数の要求にわたって計算コストを償却するが、各計算インスタンスは、通常、オンデマンドの場合よりも高価です先と与えられた帯域幅要求）。また、パスは再計算される頻度に応じて、選択されたパスの精度が低くてもよいです。この文書では、我々は主に、現在この場合項4に記載のリファレンス実装でサポートされている唯一の方法であり、事前計算経路の場合、に焦点を当て、明確に、重要な問題は、そのような事前計算が取るべき時であります場所。アップデートの与えられた（N）数が受信された後、我々は考える二つの主要なオプションは、定期的な事前計算と事前計算されています。前者は後者の応答性溶液（5）を提供することができるが、事前の計算に関連する計算負荷に厳密界を保証するという利点を有します。セクション4は、異なる期間値の周期的な事前計算の性能とコストとを比較するいくつかの実験結果を提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3.1. Path Computation Algorithm",
+      "section_title": true,
+      "ja": "2.3.1。経路計算アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes a path selection algorithm, which for a given network topology and link metrics (available bandwidth), pre-computes all possible QoS paths, while maintaining a reasonably low computational complexity. Specifically, the algorithm pre-computes for any destination a minimum hop count path with maximum bandwidth, and has a computational complexity comparable to that of a standard Bellman-Ford shortest path algorithm. The Bellman-Ford (BF) shortest path algorithm is adapted to compute paths of maximum available bandwidth for all hop counts. It is a property of the BF algorithm that, at its h-th iteration, it identifies the optimal (in our context: maximal bandwidth) path between the source and each destination, among paths of at most h hops. In other words, the cost of a path is a function of its available bandwidth, i.e., the smallest available bandwidth on all links of the path, and finding a minimum cost path amounts to finding a maximum bandwidth path. However, because the BF algorithm progresses by increasing hop count, it essentially provides for free the hop count of a path as a second optimization criteria.",
+      "ja": "このセクションでは、適度に低い計算の複雑性を維持しながら、所与のネットワークトポロジ及びリンクメトリクス（利用可能な帯域幅）のために、すべての可能なQoSパスを事前計算経路選択アルゴリズムが記載されています。具体的には、アルゴリズムの任意の宛先の最大帯域幅と最小のホップカウント経路を事前に計算し、標準ベルマン - フォード最短経路アルゴリズムに匹敵する計算の複雑さを有します。ベルマン・フォード（BF）最短パスアルゴリズムは、すべてのホップ数の最大利用可能な帯域幅の経路を計算するように構成されています。ソースと各宛先との間の経路、最もHホップでのパス間：それは、H番目の反復で、それは（最大の帯域幅を我々の文脈で）最適に識別する、BFアルゴリズムの特性です。換言すれば、パスのコストは、すなわち、経路のすべてのリンク上の最小の利用可能な帯域幅の利用可能な帯域幅の関数であり、最小コスト経路を見つけることは、最大帯域幅パスを見つけることになります。 BFアルゴリズムは、ホップ数を増やすことで進行するためしかし、それは基本的に第2の最適化基準としてパスの自由なホップ数のために用意されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, at the kth (hop count) iteration of the algorithm, the maximum bandwidth available to all destinations on a path of no more than k hops is recorded (together with the corresponding routing information). After the algorithm terminates, this information provides for all destinations and bandwidth requirements, the path with the smallest possible number of hops and sufficient bandwidth to accommodate the new request. Furthermore, this path is also the one with the maximal available bandwidth among all the feasible paths with at most these many hops. This is because for any hop count, the algorithm always selects the one with maximum available bandwidth.",
+      "ja": "具体的には、アルゴリズムのk番目（ホップ数）の反復において、kはホップを超えないの経路上の全ての宛先への利用可能な最大帯域幅は（一緒に対応するルーティング情報を含む）が記録されます。アルゴリズムが終了した後、この情報は、ホップの可能な最小の数と十分な帯域幅を持つパスが新しい要求に対応するために、すべての宛先および帯域幅の要件のために用意されています。さらに、このパスはまた、ほとんどのこれらの多くのホップを持つすべての実行可能なパスのうち、最大の利用可能な帯域幅を有するものです。任意のホップ数のために、アルゴリズムは常に利用可能な最大帯域幅を持つものを選択するためです。"
+    },
+    {
+      "indent": 3,
+      "text": "We now proceed with a more detailed description of the algorithm and the data structure used to record routing information, i.e., the QoS routing table that gets built as the algorithm progresses (the pseudo-code for the algorithm can be found in Appendix A). As mentioned before, the algorithm operates on a directed graph consisting only of transit vertices (routers and networks), with stub-networks subsequently added to the path(s) generated by the algorithm. The metric associated with each edge in the graph is the bandwidth available on the corresponding interface. Let us denote by b(n;m) the available bandwidth on the link from node n to m. The vertex corresponding to the router where the algorithm is being run, i.e., the computing router, is denoted as the \"source node\" for the purpose of path selection. The algorithm proceeds to pre-compute paths from this source node to all possible destination networks and for all possible bandwidth values. At each (hop count) iteration, intermediate results are recorded in a QoS routing table, which has the following structure:",
+      "ja": "現在、アルゴリズムのより詳細な説明と情報、アルゴリズムが進行するように構築されます、すなわち、QoSのルーティングテーブルを（アルゴリズムの擬似コードは付録Aに見出すことができる）ルーティングを記録するために使用されるデータ構造を進めます。前に述べたように、アルゴリズムは、その後、アルゴリズムによって生成されたパス（複数可）に加えスタブネットワークと、のみトランジット頂点（ルータやネットワーク）からなる有向グラフ上で動作します。グラフの各エッジに関連付けられたメトリックは、対応するインターフェイスで利用可能な帯域幅です。 mとノードnからのリンク上で利用可能な帯域幅、私たちはB（M n）で表すものとします。アルゴリズムが実行されているルータに対応する頂点、すなわち、コンピューティング・ルータは、経路選択の目的のために、「ソース・ノード」と表記されています。アルゴリズムは、すべての可能な宛先ネットワークに可能なすべての帯域幅の値は、このソース・ノードからの事前計算経路を進みます。各（ホップ数）反復で、中間結果は次の構造を有しているQoSのルーティングテーブルに記録されています。"
+    },
+    {
+      "indent": 0,
+      "text": "The QoS routing table:",
+      "ja": "QoSのルーティングテーブル："
+    },
+    {
+      "indent": 3,
+      "text": "- a KxH matrix, where K is the number of destinations (vertices in the graph) and H is the maximal allowed (or possible) number of hops for a path.",
+      "ja": " -  Kは、目的地（グラフの頂点）の数であり、Hは、許容最大（または可能）であるKxHマトリックス、パスのホップ数。"
+    },
+    {
+      "indent": 3,
+      "text": "- The (n;h) entry is built during the hth iteration (hop count value) of the algorithm, and consists of two fields:",
+      "ja": " - （N、H）エントリは、アルゴリズムのHTH反復（ホップカウント値）中に構築し、2つのフィールドで構成されています。"
+    },
+    {
+      "indent": 9,
+      "text": "*  bw:  the maximum available bandwidth, on a path of at most h\n   hops between the source node (router) and destination node\n   n;",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "* neighbor: this is the routing information associated with the h (or less) hops path to destination node n, whose available bandwidth is bw. In the context of hop-by-hop path selection (6), the neighbor information is simply the identity of the node adjacent to the source node on that path. As a rule, the \"neighbor\" node must be a router and not a network, the only exception being the case where the network is the destination node (and the selected path is the single edge interconnecting the source to it).",
+      "ja": "*隣接：これは、H（またはそれ以下）に関連付けられたルーティング情報は、利用可能な帯域幅BWである宛先ノードnへのパスは、ホップです。ホップバイホップ経路選択（6）の文脈では、隣接情報は、単に、そのパス上のソースノードに隣接するノードのIDです。原則として、「隣接」ノードはルータではなく、ネットワーク、ネットワークは宛先ノード（および選択されたパスがそれにソースを相互接続する単一のエッジである）である場合である唯一の例外でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Next, we provide additional details on the operation of the algorithm and how the entries in the routing table are updated as the algorithm proceeds. For simplicity, we first describe the simpler case where all edges count as \"hops,\" and later explain how zero-hop edges are handled. Zero-hop edges arise in the case of transit networks vertices, where only one of the two incoming and outgoing edges should be counted in the hop count computation, as they both correspond to the same physical hop. Accounting for this aspect requires distinguishing between network and router nodes, and the steps involved are detailed later in this section as well as in the pseudo-code of Appendix A.",
+      "ja": "次に、我々はアルゴリズムの動作に関する追加の詳細を提供し、ルーティングテーブルのエントリは、アルゴリズムの進行に伴ってどのように更新されます。簡単にするために、我々はまず、すべてのエッジが「ホップ」としてカウントし、後でゼロホップのエッジがどのように扱われるかを説明シンプルなケースについて説明します。ゼロホップエッジはどちらも同じ物理ホップに対応するように、2つの着信および発信のエッジの一方のみが、ホップカウントの計算にカウントされるべきであるトランジットネットワーク頂点の場合に生じます。この態様の会計は、ネットワークとルータノードを区別する必要があり、必要な手順は、付録Aの擬似コードならびに、このセクションで後述されています"
+    },
+    {
+      "indent": 3,
+      "text": "When the algorithm is invoked, the routing table is first initialized with all bw fields set to 0 and neighbor fields cleared. Next, the entries in the first column (which corresponds to one-hop paths) of the neighbors of the computing router are modified in the following way: the bw field is set to the value of the available bandwidth on the direct edge from the source. The neighbor field is set to the identity of the neighbor of the computing router, i.e., the next router on the selected path.",
+      "ja": "アルゴリズムが呼び出されると、ルーティングテーブルが最初にクリア全て0に設定され、BWフィールドと隣接フィールドで初期化されます。次に、コンピューティング・ルータの近隣の（ワンホップ経路に相当する）最初の列のエントリは、次のように修正される：BWフィールドは、ソースから直接エッジ上で利用可能な帯域幅の値に設定されています。隣接フィールドは、コンピューティング・ルータ、すなわち、選択された経路上の次のルータの近隣の同一に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Afterwards, the algorithm iterates for at most H iterations (considering the above initial iteration as the first). The value of H could be implicit, i.e., the diameter of the network or, in order to better control the worst case complexity, it can be set explicitly thereby limiting path lengths to at most H hops. In the latter case, H must be assigned a value larger than the length of the minimum hop-count path to any node in the graph.",
+      "ja": "その後、最もH反復でのアルゴリズムの反復は、（第一上記のように、初期の反復を考慮して）。 Hの値は、ネットワークの直径、すなわち、暗黙的であるか、または、より良好な最悪の場合の複雑さを制御するためには、経路を制限する明示的それによって設定することができるホップ最もH ATに長。後者の場合には、Hは、グラフ内の任意のノードへの最小ホップ数の経路の長さよりも大きい値を割り当てなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "At iteration h, we first copy column h-1 into column h. In addition, the algorithm keeps a list of nodes that changed their bw value in the previous iteration, i.e., during the (h-1)-th iteration. The algorithm then looks at each link (n;m) where n is a node whose bw value changed in the previous iteration, and checks the maximal available bandwidth on an (at most) h-hop path to node m whose final hop is that link. This amounts to taking the minimum between the bw field in entry (n;h-1) and the link metric value b(n;m) kept in the topology database. If this value is higher than the present value of the bw field in entry (m;h), then a better (larger bw value) path has been found for destination m and with at most h hops. The bw field of entry (m;h) is then updated to reflect this new value. In the case of hop-by-hop routing, the neighbor field of entry (m;h) is set to the same value as in entry (n;h-1). This records the identity of the first hop (next hop from the source) on the best path identified thus far for destination m and with h (or less) hops.",
+      "ja": "反復時間で、我々は最初の列の時間に列H-1をコピーします。また、アルゴリズムは（H-1）番目の反復中に、以前の反復、すなわちにおけるそれらの体重値を変更したノードのリストを保持します。 nがその体重値が前の反復で変更ノードであり、最終ホップことであるノードmに（せいぜい）Hホップ経路上の最大の利用可能な帯域幅をチェックする場合、アルゴリズムは、各リンク（M n）が見リンク。これは、エントリ内のBWフィールドとの間の最小値をとることになる（N、H-1）とリンクメトリック値b（N、M）は、トポロジデータベースに保持しました。この値は、エントリ内のBWフィールドの現在値（M、H）より高い場合、（より大きな体重値）より良好なパスが最もHホップで宛先mに対してとで見出されています。エントリ（M、H）のBWフィールドが、この新しい値を反映するように更新されます。ホップバイホップルーティングエントリの隣接フィールドの場合（M、H）（H-1〜N）のエントリと同じ値に設定されています。これは、先のMおよびH（またはそれ以下）でこれまでに同定された最良経路上の最初のホップ（ソースから次のホップ）のアイデンティティを記録ホップ。"
+    },
+    {
+      "indent": 3,
+      "text": "As mentioned earlier, extending the above algorithm to handle zero-hop edges is needed due to the possible use of multi-access networks, e.g., T/R, E/N, etc., to interconnect routers. Such entities are also represented by means of a vertex in the OSPF topology, but a network connecting two routers should clearly be considered as a single hop path rather than a two hop path. For example, consider three routers A, B, and C connected over an Ethernet network N, which the OSPF topology represents as in Figure 1.",
+      "ja": "前述のように、ゼロホップ縁を処理するために上記のアルゴリズムを拡張するルータを相互接続するために、例えば、T / R、E / N等によるマルチアクセスネットワークの使用可能性に必要とされます。そのようなエンティティはまた、OSPFトポロジの頂点によって表されているが、二つのルータを接続するネットワークは、明らかに、単一のホップ経路というよりも2つのホップパスとして考慮されるべきです。例えば、OSPFトポロジーは、図1のように表すイーサネットネットワークNを介し接続された3つのルータA、B、及びCを考えます。"
+    },
+    {
+      "indent": 27,
+      "text": "A----N----B\n     |\n     |\n     C",
+      "raw": true
+    },
+    {
+      "indent": 24,
+      "text": "Figure 1: Zero-Hop Edges",
+      "ja": "図1：ゼロホップのエッジ"
+    },
+    {
+      "indent": 3,
+      "text": "In the example of Figure 1, although there are directed edges in both directions, an edge from the network to any of the three routers must have zero \"cost\", so that it is not counted twice. It should be noted that when considering such environments in the context of QoS routing, it is assumed that some entity is responsible for determining the \"available bandwidth\" on the network, e.g., a subnet bandwidth manager. The specification and operation of such an entity is beyond the scope of this document.",
+      "ja": "有向エッジが両方向に存在するが、それが二度カウントされないように、図1の例では、3つのルータの任意のネットワークからエッジは、ゼロ「コスト」を有していなければなりません。 QoSルーティングの文脈において、このような環境を考慮した場合、いくつかのエンティティは、ネットワーク上で「利用可能な帯域幅」、例えば、サブネット帯域幅マネージャを決定する責任があると仮定されることに留意すべきです。そのようなエンティティの仕様および動作は、この文書の範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "Accommodating zero-hop edges in the context of the path selection algorithm described above is done as follows: At each iteration h (starting with the first), whenever an entry (m;h) is modified, it is checked whether there are zero-cost edges (m;k) emerging from node m. This is the case when m is a transit network. In that case, we attempt to further improve the entry of node k within the current iteration, i.e., entry (k;h) (rather than entry (k;h+1)), since the edge (m;k) should not count as an additional hop. As with the regular operation of the algorithm, this amounts to taking the minimum between the bw field in entry (m;h) and the link metric value b(m;k) kept in the topology database (7). If this value is higher than the present value of the bw field in entry (k;h), then the bw field of entry (k;h) is updated to this new value. In the case of hop-by-hop routing, the neighbor field of entry (k;h) is set, as usual, to the same value as in entry (m;h) (which is also the value in entry (n;h-1)).",
+      "ja": "次のように行われる上述の経路選択アルゴリズムの文脈でゼロホップ縁を収容する：エントリたびに各反復時間で、（最初から始まる）（M、H）が変更され、ゼロが存在するかどうかをチェックしますノードmから出;コストエッジ（K M）。これは、mはトランジットネットワークである場合です。 （むしろエントリよりも（K、H + 1））;その場合、我々は、すなわち、エントリ（H K）、さらに現在の反復内のノードkのエントリを改善しようと、エッジので（M、K）はいけません追加ホップとしてカウントされます。リンクメトリック値B（M、K）;アルゴリズムの通常動作と同様に、これはエントリ（H M）でBWフィールドとの間の最小値をとることになるトポロジデータベース（7）に保持。この値は、エントリ（K、H）におけるBWフィールドの現在の値よりも高い場合、エントリ（K、H）のBWフィールドが、この新しい値に更新されます。ホップバイホップルーティングの場合には、エントリの隣のフィールド（K、H）は、また、エントリ内の値である（（N（H m）のエントリと同じ値に、いつものように、設定されています。 H-1））。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that while for simplicity of the exposition, the issue of equal cost, i.e., same hop count and available bandwidth, is not detailed in the above description, it can be easily supported. It only requires that the neighbor field be expanded to record the list of next (previous) hops, when multiple equal cost paths are present.",
+      "ja": "説明の簡略化のため、等しいコスト、すなわち、同一のホップ数と利用可能な帯域幅の問題は、上記の説明で詳述されていないが、それは容易にサポートすることができることに留意されたいです。それだけ隣接フィールドが複数の等コスト・パスが存在する場合、次の（前の）ホップのリストを記録するように拡張されることを必要とします。"
+    },
+    {
+      "indent": 0,
+      "text": "Addition of Stub Networks",
+      "ja": "スタブネットワークの追加"
+    },
+    {
+      "indent": 3,
+      "text": "As was mentioned earlier, the path selection algorithm is run on a graph whose vertices consist only of routers and transit networks and not stub networks. This is intended to keep the computational complexity as low as possible as stub networks can be added relatively easily through a post-processing step. This second processing step is similar to the one used in the current OSPF routing table calculation [Moy98], with some differences to account for the QoS nature of routes.",
+      "ja": "前述したように、経路選択アルゴリズムは、頂点のみルータと輸送網ではなくスタブネットワークから成るグラフ上で実行されます。これは、スタブネットワークは、後処理工程を経て、比較的容易に追加することができるように、できるだけ低い計算複雑性を維持することを意図しています。この第2の処理ステップは、経路のQoSの性質を説明するためにいくつかの違いと、現在のOSPFルーティングテーブル計算[Moy98]で使用したものと同様です。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, after the QoS routing table has been constructed, all the router vertices are again considered. For each router, stub networks whose links appear in the router's link advertisements will be processed to determine QoS routes available to them. The QoS routing information for a stub network is similar to that of routers and transit networks and consists of an extension to the QoS routing table in the form of an additional row. The columns in that new row again correspond to paths of different hop counts, and contain both bandwidth and next hop information. We also assume that an available bandwidth value has been advertised for the stub network. As before, how this value is determined is beyond the scope of this document. The QoS routes for a stub network S are constructed as follows:",
+      "ja": "QoSのルーティングテーブルが構築された後に具体的に、すべてのルータの頂点が再び考慮されます。各ルータについて、そのリンクルータのリンク広告に表示されるスタブネットワークは、それらに利用可能なQoSルートを決定するために処理されます。スタブネットワークのためのルーティング情報をQoSは、ルータと輸送網のと同様であり、追加の列の形態におけるQoSルーティングテーブルの拡張から成っています。その新しい行の列は、再度異なるホップ数の経路に対応し、帯域幅と次ホップ情報の両方を含みます。また、利用可能な帯域幅の値は、スタブネットワークのために宣伝されていることを前提としています。前述のように、どのようにこの値が決定され、この文書の範囲を超えています。次のようにスタブネットワークSのQoSルートが構築されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Each entry in the row corresponding to stub network S has its bw(s) field initialized to zero and its neighbor set to null. When a stub network S is found in the link advertisement of router V, the value bw(S,h) in the hth column of the row corresponding to stub network S is updated as follows:",
+      "ja": "ネットワークSスタブに対応する行の各エントリは、そのBW（S）フィールドがゼロに初期化し、その隣人がヌルに設定されています。スタブネットワークSはルータVのリンク広告で発見された場合、以下のように、ネットワークのSスタブに対応する行のHTH列の値BW（S、H）が更新されます。"
+    },
+    {
+      "indent": 6,
+      "text": "bw(S,h) = max ( bw(S,h) ; min ( bw(V,h) , b(V,S) ) ),",
+      "ja": "BW（S、H）= MAX（BW（S、H）、分（BW（V、H）、B（V、S）））、"
+    },
+    {
+      "indent": 3,
+      "text": "where bw(V,h) is the bandwidth value of the corresponding column for the QoS routing table row associated with router V, i.e., the bandwidth available on an h hop path to V, and b(V,S) is the advertised available bandwidth on the link from V to S. The above expression essentially states that the bandwidth of a h hop path to stub network S is updated using a path through router V, only if the minimum of the bandwidth of the h hop path to V and the bandwidth on the link between V and S is larger than the current value.",
+      "ja": "BWは（Vは、H）はルータV、すなわち、VがHホップ経路上の利用可能な帯域幅、及びB（V、S）に関連付けられたQoSルーティングテーブルの行の対応する列の帯域幅の値であり使用可能なアドバタイズされます表現上記VからS.ザへのリンク上の帯域幅は、本質的にのみからV Hホップ経路の帯域幅の最小の場合、ネットワークSをスタブにああホップパスの帯域幅は、ルータVを通る経路を使用して更新される状態及びVとSの間のリンク上の帯域幅は、現在の値よりも大きくなっています。"
+    },
+    {
+      "indent": 3,
+      "text": "Update of the neighbor field proceeds similarly whenever the bandwidth of a path through V is found to be larger than or equal to the current value. If it is larger, then the neighbor field of V in the corresponding column replaces the current neighbor field of S. If it is equal, then the neighbor field of V in the corresponding column is concatenated with the existing field for S, i.e., the current set of neighbors for V is added to the current set of neighbors for S.",
+      "ja": "Vを通るパスの帯域幅は、現在の値以上であることが判明したときはいつでも、隣接フィールドの更新は、同様に進行します。それが大きい場合、対応する列中のVの隣接フィールドは、Sの現在の隣接フィールドを置き換えることが等しい場合、次いで、対応する列のVの隣接フィールドは、Sのための既存のフィールドと連結され、すなわち、 Vのための近隣の現在のセットは、Sのために近隣の現在セットに追加され"
+    },
+    {
+      "indent": 0,
+      "text": "Extracting Forwarding Information from Routing Table",
+      "ja": "ルーティングテーブルから転送情報の抽出"
+    },
+    {
+      "indent": 3,
+      "text": "When the QoS paths are precomputed, the forwarding information for a flow with given destination and bandwidth requirement needs to be extracted from the routing table. The case of hop-by-hop routing is simpler than that of explicit routing. This is because, only the next hop needs to be returned instead of an explicit route.",
+      "ja": "QoSのパスが事前に計算されたときに、所定の宛先と帯域幅要件を有するフローのための転送情報は、ルーティングテーブルから抽出される必要があります。ホップバイホップルーティングの場合は、明示的ルーティングのものよりも簡単です。これは、次のホップではなく、明示的なルートを戻す必要があるためです。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, assume a new request to destination, say, d, and with bandwidth requirements B. The index of the destination vertex identifies the row in the QoS routing table that needs to be checked to generate a path. Assuming that the QoS routing table was constructed using the Bellman-Ford algorithm presented later in this section, the search then proceeds by increasing index (hop) count until an entry is found, say at hop count or column index of h, with a value of the bw field which is equal to or larger than B. This entry points to the initial information identifying the selected path.",
+      "ja": "具体的には、たとえば、D、目的地までの新たな要求を想定し、帯域幅要件Bと宛先頂点のインデックスパスを生成するためにチェックする必要があるのQoSルーティングテーブル内の行を識別する。テーブルルーティング、QoSが後でこのセクションで提示ベルマン - フォード法を用いて構築したと仮定すると、検索は、その値を用いて、エントリが発見されるまでカウント、ホップ数又はHの列インデックスで言う増加率（ホップ）によって進行します選択されたパスを識別する初期情報にこのエントリポイントに等しいまたはBよりも大きいBWフィールドの。"
+    },
+    {
+      "indent": 3,
+      "text": "If the path computation algorithm stores multiple equal cost paths, then some degree of load balancing can be achieved at the time of path selection. A next hop from the list of equivalent next hops can be chosen in a round robin manner, or randomly with a probability that is weighted by the actual available bandwidth on the local interface. The latter is the method used in the implementation described in Section 4.",
+      "ja": "経路計算アルゴリズムは、複数の等コスト・パスを格納する場合には、負荷分散のある程度は、経路選択の時間で達成することができます。同等の次のホップのリストから次のホップは、ローカルインターフェース上で実際に利用可能な帯域幅によって重み付けされた確率でランダムにラウンドロビン方式で選択された、またはすることができます。後者はセクション4に記載の実装に使用される方法です。"
+    },
+    {
+      "indent": 3,
+      "text": "The case of explicit routing is discussed in Appendix D.",
+      "ja": "明示的ルーティングの場合は、付録Dに記載されています"
+    },
+    {
+      "indent": 0,
+      "text": "3. OSPF Protocol Extensions",
+      "section_title": true,
+      "ja": "3. OSPFプロトコル拡張"
+    },
+    {
+      "indent": 3,
+      "text": "As stated earlier, one of our goals is to limit the additions to the existing OSPF V2 protocol, while still providing the required level of support for QoS based routing. To this end, all of the existing OSPF mechanisms, data structures, advertisements, and data formats remain in place. The purpose of this section of the document is to describe the extensions to the OSPF protocol needed to support QoS as outlined in the previous sections.",
+      "ja": "先に述べたように、私たちの目標の一つは、まだQoSのサポートの必要なレベルベースのルーティングを提供しながら、既存のOSPF V2プロトコルへの追加を制限することです。このため、既存のOSPFメカニズム、データ構造、広告、およびデータ・フォーマットのすべてが所定の位置に残ります。文書のこのセクションの目的は、前のセクションで説明したようなQoSをサポートするために必要なOSPFプロトコルの拡張機能を記述することです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. QoS -- Optional Capabilities",
+      "section_title": true,
+      "ja": "3.1。 QoSの - オプション機能"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Options field is present in OSPF Hello packets, Database Description packets and all LSAs. The Options field enables OSPF routers to support (or not support) optional capabilities, and to communicate their capability level to other OSPF routers. Through this mechanism, routers of differing capabilities can be mixed within an OSPF routing domain. Currently, the OSPF standard [Moy98] specifies the following 5 bits in the options octet:",
+      "ja": "OSPFのオプションフィールドは、OSPF Helloパケット、Database記述パケット、およびすべてのLSAに存在しています。オプションフィールドは、OSPFルータサポート（またはサポートしない）任意の機能、および他のOSPFルータにそれらの能力レベルを通信することを可能にします。このメカニズムを介して、異なる機能のルータがOSPFルーティングドメイン内で混合することができます。現在、OSPF標準は[Moy98]オプションのオクテットで、次の5ビットを指定します："
+    },
+    {
+      "indent": 11,
+      "text": "+-----------------------------------------------+\n|  *  |  *  | DC  |  EA | N/P |  MC |  E  |  *  |\n+-----------------------------------------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that the least significant bit (`T' bit) that was used to indicate TOS routing capability in the older OSPF specification [Moy94] has been removed. However, for backward compatibility with previous versions of the OSPF specification, TOS-specific information can be included in router-LSAs, summary-LSAs and AS-external-LSAs.",
+      "ja": "最下位ビット（ 'T」ビット）古いOSPF仕様[Moy94]におけるTOSルーティング能力を示すために使用された除去されていることに留意されたいです。しかし、OSPF仕様の以前のバージョンと下位互換性を維持するために、TOS固有の情報は、ルータのLSA、要約のLSA及びAS-外部のLSAに含まれることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "We propose to reclaim the `T' bit as an indicator of router's QoS routing capability and refer to it as the `Q' bit. In fact, QoS capability can be viewed as an extension of the TOS-capabilities and QoS routing as a form of TOS-based routing. A router sets this bit in its hello packets to indicate that it is capable of supporting such routing. When this bit is set in a router or summary links link state advertisement, it means that there are QoS fields to process in the packet. When this bit is set in a network link state advertisement it means that the network described in the advertisement is QoS capable.",
+      "ja": "私たちは、「ルータのQoSルーティング機能の指標としてビットと `Qとしてそれを参照してください」` Tを取り戻すビットすることを提案します。実際には、QoSの機能は、TOSベースのルーティングの形態としてルーティングTOS-機能およびQoSの拡張とみなすことができます。ルータは、ルーティングをサポートすることが可能であることを示すために、そのハローパケットにこのビットをセットします。このビットがルータまたは概要リンクのリンク状態通知に設定されている場合は、パケットに処理するために、QoSフィールドが存在することを意味します。このビットがネットワークのリンク状態通知に設定されている場合には、広告に記載されているネットワークがQoS対応であることを意味しています。"
+    },
+    {
+      "indent": 3,
+      "text": "We need to be careful in this approach so as to avoid confusing any old style (i.e., RFC 1583 based) TOS routing implementations. The TOS metric encoding rules of QoS fields introduced further in this section will show how this is achieved. Additionally, unlike the RFC 1583 specification that unadvertised TOS metrics be treated to have same cost as TOS 0, for the purpose of computing QOS routes, unadvertised TOS metrics (on a hop) indicate lack of connectivity for the specific TOS metrics (for that hop).",
+      "ja": "（すなわち、RFC 1583に基づく）TOSルーティングの実装、古いスタイルの混乱を避けるために、我々は、このアプローチでは注意する必要があります。このセクションでは、さらに導入QoSフィールドのTOSメトリック符号化規則は、これが達成される方法を示します。また、未宣伝TOSメトリックがQOS経路を計算するために、TOS 0と同じコストを有するように処理することがRFC 1583仕様とは異なり、（ホップに）未宣伝TOSメトリックは、ホップのために（特定のTOSメトリックの接続性の欠如を示します）。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Encoding Resources as Extended TOS",
+      "section_title": true,
+      "ja": "3.2。拡張TOSなどのリソースをコードします"
+    },
+    {
+      "indent": 3,
+      "text": "Introduction of QoS should ideally not influence the compatibility with existing OSPFv2 routers. To achieve this goal, necessary extensions in packet formats must be defined in a way that either is understood by OSPFv2 routers, ignored, or in the worst case \"gracefully\" misinterpreted. Encoding of QoS metrics in the TOS field which fortunately enough is longer in OSPF packets than officially defined in [Alm92], allows us to mimic the new facility as extended TOS capability. OSPFv2 routers will either disregard these definitions or consider those unspecified. Specific precautions are taken to prevent careless OSPF implementations from influencing traditional TOS routers (if any) when misinterpreting the QoS extensions.",
+      "ja": "QoSの導入は、理想的には、既存のOSPFv2ルータとの互換性に影響を与えるべきではありません。この目標を達成するために、パケットフォーマットに必要な拡張は、どちらかが、あるいは最悪の場合には「優雅」無視誤解OSPFv2ルータ、理解されるような方法で定義する必要があります。幸いなことに、十分長い正式[Alm92]で定義されているよりも、OSPFパケットであるTOSフィールド内のQoSメトリックのエンコーディングは、私たちは拡張TOS機能などの新機能を模倣することができます。 OSPFv2ルータは、これらの定義を無視するか、それらの未指定を検討しますか。具体的な注意事項は、QoS拡張を誤って解釈する場合（もしあれば）、伝統的なTOSルータに影響を与えることから、不注意なOSPFの実装を防ぐために取られています。"
+    },
+    {
+      "indent": 3,
+      "text": "For QoS resources, 32 combinations are available through the use of the fifth bit in TOS fields contained in different LSAs. Since [Alm92] defines TOS as being four bits long, this definition never conflicts with existing values. Additionally, to prevent naive implementations that do not take all bits of the TOS field in OSPF packets into considerations, the definitions of the `QoS encodings' is aligned in their semantics with the TOS encoding. Only bandwidth and delay are specified as of today and their values map onto `maximize throughput' and `minimize delay' if the most significant bit is not taken into account. Accordingly, link reliability and jitter could be defined later if necessary.",
+      "ja": "QoSリソースのために、32個の組み合わせが異なるのLSAに含まれるTOSフィールドの5ビットを使用することによって利用可能です。 【Alm92】長い4ビットであるとTOSを定義するので、この定義は、既存の値と競合することはありません。また、検討事項にOSPFパケットでTOSフィールドのすべてのビットを取ることはありませんナイーブな実装を防ぐために、 `QoSのエンコーディングの定義は、TOSのエンコードとその意味に整列されます。唯一の帯域幅と遅延は、今日のように指定されており、その値は `スループットを最大化「と`遅延を最小限に抑える」最上位ビットが考慮されていない場合にマッピング。したがって、リンクの信頼性およびジッタは、後で必要に応じて定義することができます。"
+    },
+    {
+      "indent": 8,
+      "text": "OSPF encoding   RFC 1349 TOS values\n___________________________________________\n0               0000 normal service\n2               0001 minimize monetary cost\n4               0010 maximize reliability\n6               0011\n8               0100 maximize throughput\n10              0101\n12              0110\n14              0111\n16              1000 minimize delay\n18              1001\n20              1010\n22              1011\n24              1100\n26              1101\n28              1110\n30              1111",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "OSPF encoding `QoS encoding values'",
+      "ja": "OSPFのエンコーディング `QoSのエンコーディング値"
+    },
+    {
+      "indent": 8,
+      "text": "-------------------------------------------\n32             10000\n34             10001\n36             10010\n38             10011\n40             10100 bandwidth\n42             10101\n44             10110\n46             10111\n48             11000 delay\n50             11001\n52             11010\n54             11011\n56             11100\n58             11101\n60             11110\n62             11111",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "Representing TOS and QoS in OSPF.",
+      "ja": "OSPFでのTOSおよびQoSを表します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1. Encoding bandwidth resource",
+      "section_title": true,
+      "ja": "3.2.1。エンコード帯域幅のリソース"
+    },
+    {
+      "indent": 3,
+      "text": "Given the fact that the actual metric field in OSPF packets only provides 16 bits to encode the value used and that links supporting bandwidth ranging into Gbits/s are becoming reality, linear representation of the available resource metric is not feasible. The solution is exponential encoding using appropriately chosen implicit base value and number bits for encoding mantissa and the exponent. Detailed considerations leading to the solution described are not presented here but can be found in [Prz95].",
+      "ja": "OSPFパケットの実際のメトリックフィールドのみ使用される値を符号化するために16ビットを提供するという事実を考えると、ギガビット/秒に及ぶ帯域幅をサポートするリンクが現実になりつつあることを、利用可能なリソースメトリックの線形表現は不可能です。溶液は仮数と指数を符号化するために適切に選択された暗黙のベース値と数ビットを用いて符号化指数です。記載された解決策につながるの詳細な考察はここに提示されていませんが、[Prz95]で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Given a base of 8, the 3 most significant bits should be reserved for the exponent part and the remaining 13 for the mantissa. This allows a simple comparison for two numbers encoded in this form, which is often useful during implementation.",
+      "ja": "8の塩基を与え、3つの最上位ビットは、指数部と仮数部の残りの13のために確保されなければなりません。これは、実装時に便利です。この形で符号化された二つの数字のための簡単な比較を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "The following table shows bandwidth ranges covered when using different exponents and the granularity of possible reservations.",
+      "ja": "以下の表は、異なる指数および可能な予約の細分性を使用するときに覆われた帯域幅の範囲を示しています。"
+    },
+    {
+      "indent": 8,
+      "text": "exponent\nvalue x         range (2^13-1)*8^x      step 8^x\n-------------------------------------------------\n0               8,191                   1\n1               65,528                  8\n2               524,224                 64\n3               4,193,792               512\n4               33,550,336              4,096\n5               268,402,688             32,768\n6               2,147,221,504           262,144\n7               17,177,772,032          2,097,152",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "Ranges of Exponent Values for 13 bits, base 8 Encoding, in Bytes/s",
+      "ja": "バイト/秒で13ビット、ベース8エンコードのための指数値の範囲"
+    },
+    {
+      "indent": 3,
+      "text": "The bandwidth encoding rule may be summarized as: \"represent available bandwidth in 16 bit field as a 3 bit exponent (with assumed base of 8) followed by a 13 bit mantissa as shown below and advertise 2's complement of the above representation.\"",
+      "ja": "帯域符号化規則は、のように要約することができる：「（8の想定ベースで）3ビットの指数は、13ビットの仮数が続くように、以下に示すように、16ビットフィールドで利用可能な帯域幅を表し、上記表現の2の補数を宣伝します」"
+    },
+    {
+      "indent": 7,
+      "text": " 0       8       16\n |       |       |\n -----------------\n|EXP| MANT        |\n -----------------",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Thus, the above encoding advertises a numeric value that is",
+      "ja": "したがって、上記の符号化は、数値をアドバタイズ"
+    },
+    {
+      "indent": 6,
+      "text": "2^16 -1 -(exponential encoding of the available bandwidth):",
+      "ja": "2 ^ 16 -1  - （利用可能な帯域幅の指数関数的な符号化）："
+    },
+    {
+      "indent": 3,
+      "text": "This has the property of advertising a higher numeric value for lower available bandwidth, a notion that is consistent with that of cost.",
+      "ja": "これは、下の利用可能な帯域幅、コストのそれと一致しているという考えの方が高い数値を宣伝する性質を有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Although it may seem slightly pedantic to insist on the property that less bandwidth is expressed higher values, it has, besides consistency, a robustness aspect in it. A router with a poor OSPF implementation could misuse or misunderstand bandwidth metric as normal administrative cost provided to it and compute spanning trees with a \"normal\" Dijkstra. The effect of a heavily congested link advertising numerically very low cost could be disastrous in such a scenario. It would raise the link's attractiveness for future traffic instead of lowering it. Evidence that such considerations are not speculative, but similar scenarios have been encountered, can be found in [Tan89].",
+      "ja": "それはより少ない帯域幅がより高い値を発現しているプロパティを主張するためにわずかに衒学見えるかもしれないが、それは一貫性、その中の堅牢性の観点に加えて、有します。貧しいOSPFの実装を持つルータは、誤用またはそれに提供する通常の管理コストなどの帯域幅メトリックを誤解し、「正常な」ダイクストラでスパニングツリーを計算することができます。非常に輻輳リンク広告数値的に非常に低コストの効果は、そのようなシナリオでは悲惨である可能性があります。それは、それを下げるのではなく、将来のトラフィック用のリンクの魅力を高めるだろう。 、そのような考慮は投機的ではありませんが、同様のシナリオが遭遇したという証拠は[Tan89]で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Concluding with an example, assume a link with bandwidth of 8 Gbits/s = 1024^3 Bytes/s, its encoding would consist of an exponent value of 6 since 1024^3= 4,096*8^6, which would then have a granularity of 8^6 or approx. 260 kBytes/s. The associated binary representation would then be %(110) 0 1000 0000 0000% or 53,248 (8). The bandwidth cost (advertised value) of this link when it is idle, is then the 2's complement of the above binary representation, i.e., %(001) 1 0111 1111 1111% which corresponds to a decimal value of (2^16 - 1) - 53,248 = 12,287. Assuming now a current reservation level of 6;400 Mbits/s = 200 * 1024^2, there remains 1;600 Mbits/s of available bandwidth on the link. The encoding of this available bandwidth of 1'600 Mbits/s is 6,400 * 8^5, which corresponds to a granularity of 8^5 or approx. 30 kBytes/s, and has a binary representation of %(101) 1 1001 0000 0000% or decimal value of 47,360. The advertised cost of the link with this load level, is then %(010) 0 0110 1111 1111%, or (2^16-1) -47,360 = 18,175.",
+      "ja": "8ギガビット/秒の帯域幅を有するリンクを想定し、例を締結= 1024 ^ 3バイト/ sで、そのコードが1024以来6の指数値から成ることになる^ 3 = 4096 ^ 6 * 8、次いで、粒度を有するであろう8 ^ 6またはおよその。 260キロバイト/秒。関連バイナリ表現は、その後％（110）0〜1000 0000 0000％または53,248（8）であろう。すなわち、このリンクの帯域幅コスト（アドバタイズ値）がアイドル状態のとき、上記の二進表現の2の補数であり、％（001）（2 ^ 16の十進値に対応する1 0111 1111 1111％ -  1 ） -  53248 = 12287。今6の現在の予約レベルを想定;リンク上で利用可能な帯域幅の600メガビット/秒、400メガビット/秒= 200×1024 ^ 2は、1が残っています。 1'600 Mビット/秒のこの利用可能な帯域幅のエンコーディングは、8 ^ 5または約の細かさに相当する、6400 * 8 ^ 5です。 30キロバイト/秒、及び％のバイナリ表現（101）1〜1001 0000 0000％、または47360の10進値を有します。この負荷レベルとリンクのアドバタイズコストは、その後％（010）0 0110 1111 1111％、または（2 ^ 16-1）-47360 = 18175です。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the cost function behaves as it should, i.e., the less bandwidth is available on a link, the higher the cost and the less attractive the link becomes. Furthermore, the targeted property of better granularity for links with less bandwidth available is also achieved. It should, however, be pointed out that the numbers given in the above examples match exactly the resolution of the proposed encoding, which is of course not always the case in practice. This leaves open the question of how to encode available bandwidth values when they do not exactly match the encoding. The standard practice is to round it to the closest number. Because we are ultimately interested in the cost value for which it may be better to be pessimistic than optimistic, we choose to round costs up and, therefore, bandwidth down.",
+      "ja": "それは、すなわち、少ない帯域幅がリンクになるリンク、高いコストとあまり魅力的に利用可能である必要があり、コスト関数が動作することに注意してください。さらに、利用可能な帯域幅より少ないとのリンクのためのより良い細分性の目標特性も達成されます。しかしながら、上記の例で与えられた数字は、常に、もちろん実際にはそうではない提案されたエンコーディングの正確解像度と一致していることが指摘されるべきです。これは、彼らが正確にエンコードが一致しない場合に利用可能な帯域幅の値をエンコードする方法についての質問を開いたまま。標準的な方法は、最も近い番号にそれを丸めることです。我々は楽観よりも悲観的であることを良いことかもしれないため、コスト値が最終的に興味を持っているので、私たちは、そのため、帯域幅を上下にコストを丸めることを選択すると。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2. Encoding Delay",
+      "section_title": true,
+      "ja": "3.2.2。エンコードディレイ"
+    },
+    {
+      "indent": 3,
+      "text": "Delay is encoded in microseconds using the same exponential method as described for bandwidth except that the base is defined to be 4 instead of 8. Therefore, the maximum delay that can be expressed is (2^13-1) *4^7 i.e., approx. 134 seconds.",
+      "ja": "塩基は、したがって、4の代わりに8であると定義されることを除いて、帯域幅のために記載したように遅延が同じ指数の方法を用いてマイクロ秒で符号化され、発現させることができる最大遅延は、（2 ^ 13-1）である* 4 ^ 7すなわち、約134秒。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Packet Formats",
+      "section_title": true,
+      "ja": "3.3。パケットフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "Given the extended TOS notation to account for QoS metrics, no changes in packet formats are necessary except for the (re)introduction of T-bit as the Q-bit in the options field. Routers not understanding the Q-bit should either not consider the QoS metrics distributed or consider those as `unknown' TOS.",
+      "ja": "QoSメトリックを考慮するように拡張TOS表記与えられ、パケット・フォーマットにおける変化はオプションフィールドのQビットとしてTビットの（再）導入する以外は必要ありません。 Qビットを理解していないルータは、分散QoSメトリックを検討したり、 `不明」TOSとしてそれらを考慮するべきではありませんどちらか。"
+    },
+    {
+      "indent": 3,
+      "text": "To support QoS, there are additions to two Link State Advertisements, the Router Links Advertisement and the Summary Links Advertisement. As stated above, a router identifies itself as supporting QoS by setting the Q-bit in the options field of the Link State Header. When a router that supports QoS receives either the Router Links or Summary Links Advertisement, it should parse the QoS metrics encoded in the received Advertisement.",
+      "ja": "QoSをサポートするために、2つのリンクステートアドバタイズメント、ルータリンク広告および概要リンク広告への追加があります。上述したように、ルータはリンクステートヘッダーのオプションフィールドにQビットを設定することにより、QoSをサポートするものとして自分自身を識別します。 QoSをサポートするルータは、ルータのリンクまたは概要リンク広告のいずれかを受信すると、受信した広告でエンコードされたQoSメトリックを解析する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Calculating the Inter-area Routes",
+      "section_title": true,
+      "ja": "3.4。エリア間のルートを計算します"
+    },
+    {
+      "indent": 3,
+      "text": "This document proposes a very limited use of OSPF areas, that is, it is assumed that summary links advertisements exist for all networks in the area. This document does not discuss the problem of providing support for area address ranges and QoS metric aggregation. This is left for further studies.",
+      "ja": "この文書では、OSPFエリアの非常に限られた使用を提案しているつまり、要約は広告がエリア内のすべてのネットワークのために存在してリンクするものとします。この文書では、エリアアドレスの範囲およびQoSメトリックの集計のためのサポートを提供するという問題を議論しません。これは、さらなる研究のために残されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.5. Open Issues",
+      "section_title": true,
+      "ja": "3.5。未解決の問題"
+    },
+    {
+      "indent": 3,
+      "text": "Support for AS External Links, Virtual Links, and incremental updates for summary link advertisements are not addressed in this document and are left for further study. For Virtual Links that do exist, it is assumed for path selection that these links are non-QoS capable even if the router advertises QoS capability. Also, as stated earlier, this document does not address the issue of non-QoS routers within a QoS domain.",
+      "ja": "AS外部リンク、仮想リンク、およびサマリーリンクアドバタイズメントのための増分更新のサポートは、本書で扱われておらず、さらなる研究のために残されています。存在しない仮想リンクのためには、ルータがQoS機能をアドバタイズしても、これらのリンクができる非QoSのあるパス選択のために想定されます。また、先に述べたように、このドキュメントは、QoSドメイン内の非のQoSルータの問題に対処しません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. A Reference Implementation based on GateD",
+      "section_title": true,
+      "ja": "4. Aリファレンス実装のGateDに基づきます"
+    },
+    {
+      "indent": 3,
+      "text": "In this section we report on the experience gained from implementing the pre-computation based approach of Section 2.3.1 in the GateD [Con] environment. First, we briefly introduce the GateD environment, and then present some details on how the QoS extensions were implemented in this environment. Finally, we discuss issues that arose during the implementation effort and present some measurement based results on the overhead that the QoS extensions impose on a QoS capable router and a network of QoS routers. For further details on the implementation study, the reader is referred to [AGK99]. Additional performance evaluation based on simulations can be found in [AGKT98].",
+      "ja": "このセクションでは、ゲート[コン]環境中のセクション2.3.1の事前計算ベースのアプローチを実装から得られた経験について報告します。まず、我々は簡単にGateDの環境を導入し、その後のQoS拡張はこの環境で実装された方法についていくつかの詳細を提示します。最後に、我々は、実装作業中に生じた問題を議論し、QoSの拡張機能は、QoS対応ルータおよびQoSルータのネットワークに課すことを頭上にいくつかの測定基づいて結果を提示します。実施研究の詳細については、読者は[AGK99]と呼ばれます。シミュレーションに基づく追加の性能評価は、[AGKT98]で見つけることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. The Gate Daemon (GateD) Program",
+      "section_title": true,
+      "ja": "4.1。門デーモン（GateDの）プログラム"
+    },
+    {
+      "indent": 3,
+      "text": "GateD [Con] is a popular, public domain (9) program that provides a platform for implementing routing protocols on hosts running the Unix operating system. The distribution of the GateD software also includes implementations of many popular routing protocols, including the OSPF protocol. The GateD environment offers a variety of services useful for implementing a routing protocol. These services include a) support for creation and management of timers, b) memory management, c) a simple scheduling mechanism, d) interfaces for manipulating the host's routing table and accessing the network, and e) route management (e.g., route prioritization and route exchange between protocols).",
+      "ja": "GateDの[コン]は人気のある、パブリックドメインのUnixオペレーティングシステムを実行するホスト上のルーティングプロトコルを実装するためのプラットフォームを提供します（9）プログラムです。 GateDは、ソフトウェアの配布はまた、OSPFプロトコルを含む多くの一般的なルーティングプロトコルの実装を含みます。 GateDの環境では、ルーティングプロトコルを実装するための便利な様々なサービスを提供しています。これらのサービスは、a）のタイマーの作成と管理のためのサポート、b）は、メモリ管理、C）の単純なスケジューリング機構、d）のホストのルーティングテーブルを操作し、ネットワークにアクセスするためのインタフェース、およびe）ルート管理（例えば、ルートの優先順位付けが含まれており、プロトコル間の経路交換）。"
+    },
+    {
+      "indent": 3,
+      "text": "All GateD processing is done within a single Unix process, and routing protocols are implemented as one or several tasks. A GateD task is a collection of code associated with a Unix socket. The socket is used for the input and output requirements of the task. The main loop of GateD contains, among other operations, a select() call over all task sockets to determine if any read/write or error conditions occurred in any of them. GateD implements the OSPF link state database using a radix tree for fast access to individual link state records. In addition, link state records for neighboring network elements (such as adjacent routers) are linked together at the database level with pointers. GateD maintains a single routing table that contains routes discovered by all the active routing protocols. Multiple routes to the same destination are prioritized according to a set of rules and administrative preferences and only a single route is active per destination. These routes are periodically downloaded in the host's kernel forwarding table.",
+      "ja": "全てGateDの処理は、単一のUNIXプロセス内で行われ、およびルーティングプロトコルは、一つまたは複数のタスクとして実装されています。 GateDのタスクは、Unixソケットに関連付けられたコードの集まりです。ソケットは、タスクの入力と出力の要件のために使用されています。 GateDのメインループは、他の動作のうち、含ま、select（）の任意の読み取り/書き込みまたはエラー条件がそれらのいずれかで発生したかどうかを決定するために、すべてのタスク・ソケット上で呼び出します。 GateDが、個々のリンク状態記録への高速アクセスのための基数木を使用したOSPFリンクステートデータベースを実装しています。加えて、（例えば、隣接ルータなど）の隣接ネットワークエレメントのためのリンク状態レコードは、ポインタを使用してデータベース・レベルで一緒に連結されています。 GateDがすべてのアクティブなルーティングプロトコルによって発見されたルートを含む単一のルーティングテーブルを維持します。同じ宛先への複数のルートは、ルールおよび管理設定のセットに従って優先順位付けされ、単一のルートは、宛先ごとにアクティブです。これらのルートは定期的にホストのカーネル転送テーブルにダウンロードされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Implementing the QoS Extensions of OSPF",
+      "section_title": true,
+      "ja": "4.2。 OSPFのQoSの拡張機能を実装"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. Design Objectives and Scope",
+      "section_title": true,
+      "ja": "4.2.1。設計目標と範囲"
+    },
+    {
+      "indent": 3,
+      "text": "One of our major design objectives was to gain substantial experience with a functionally complete QoS routing implementation while containing the overall implementation complexity. Thus, our architecture was modular and aimed at reusing the existing OSPF code with only minimal changes. QoS extensions were localized to specific modules and their interaction with existing OSPF code was kept to a minimum. Besides reducing the development and testing effort, this approach also facilitated experimentation with different alternatives for implementing the QoS specific features such as triggering policies for link state updates and QoS route table computation. Several of the design choices were also influenced by our assumptions regarding the core functionalities that an early prototype implementation of QoS routing must demonstrate. Some of the important assumptions/requirements are:",
+      "ja": "当社の主要な設計目標の一つは、全体的な実装の複雑さを含みながら実装をルーティング機能的に完全なQoSとの実質的な経験を積むことでした。したがって、我々のアーキテクチャは、モジュラー的だったが、最小限の変更で既存のOSPFコードを再利用を目的としました。 QoSの拡張機能は、特定のモジュールに局在し、既存のOSPFコードとの相互作用を最小限に抑えました。開発とテストの労力を削減するだけでなく、このアプローチはまたのQoSなどリンク状態の更新とQoSルートテーブル計算のためのポリシーをトリガーとして特定の機能を実装するためのさまざまな選択肢を持つ実験を容易にしました。設計の選択肢のいくつかはまたのQoSルーティングの初期のプロトタイプ実装を証明しなければならないコア機能に関する当社の仮定の影響を受けました。重要な仮定の一部/要件は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "- Support for only hop-by-hop routing. This affected the path structure in the QoS routing table as it only needs to store next hop information. As mentioned earlier, the structure can be easily extended to allow construction of explicit routes.",
+      "ja": " - 唯一のホップバイホップルーティングのサポート。それだけで次のホップ情報を格納する必要があるので、これは、QoSルーティングテーブルに経路構造に影響を与えました。前述したように、構造が簡単明示的ルートの構築を可能にするように拡張することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "- Support for path pre-computation. This required the creation of a separate QoS routing table and its associated path structure, and was motivated by the need to minimize processing overhead.",
+      "ja": " - パスの事前計算のためのサポート。これは、別のQoSルーティングテーブルとそれに関連する経路構造の作成を必要とし、処理オーバーヘッドを最小化する必要性によって動機付けました。"
+    },
+    {
+      "indent": 3,
+      "text": "- Full integration of the QoS extensions into the GateD framework, including configuration support, error logging, etc. This was required to ensure a fully functional implementation that could be used by others.",
+      "ja": " - などの設定サポート、エラーロギング、など、GateDのフレームワークにQoSの機能拡張の完全な統合は、これは他の人が使用することができ、完全に機能の実装を確保するために必要とされました。"
+    },
+    {
+      "indent": 3,
+      "text": "- Ability to allow experimentation with different approaches, e.g., use of different update and pre-computation triggering policies with support for selection and parameterization of these policies from the GateD configuration file.",
+      "ja": " - 異なるアプローチ、例えば、異なる更新及び選択ゲーテッドコンフィギュレーションファイルからこれらのポリシーのパラメータをサポートするポリシーをトリガ事前計算を用いて実験を可能にする機能。"
+    },
+    {
+      "indent": 3,
+      "text": "- Decoupling from local traffic and resource management components, i.e., packet classifiers and schedulers and local call admission. This is supported by providing an API between QoS routing and the local traffic management module, which hides all internal details or mechanisms. Future implementations will be able to specify their own mechanisms for this module.",
+      "ja": " - ローカルトラフィックとリソース管理コンポーネント、すなわち、パケット分類及びスケジューラとローカル呼受付から切り離します。これは、QoSルーティングとすべての内部詳細や機構を隠しローカルトラフィック管理モジュールとの間のAPIを提供することによってサポートされています。今後の実装は、このモジュールのために、独自のメカニズムを特定することができるようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "- Interface to RSVP. The implementation assumes that RSVP [RZB+97] is the mechanism used to request routes with specific QoS requirements. Such requests are communicated through an interface based on [GKR97], and used the RSVP code developed at ISI, version 4.2a2 [RZB+97].",
+      "ja": " -  RSVPへのインタフェース。実装はRSVP [RZB + 97]は、特定のQoS要件を有するルートを要求するために使用されるメカニズムであることを前提としています。そのような要求は、ISIで開発RSVPコード、バージョン4.2a2 [RZB + 97] [GKR97]に基づいてインターフェイスを介して通信し、使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, our implementation also relies on several of the simplifying assumptions made earlier in this document, namely:",
+      "ja": "また、私たちの実装はまた、すなわち、このドキュメントの作られた単純化の仮定のいくつかに依存しています："
+    },
+    {
+      "indent": 3,
+      "text": "- The scope of QoS route computation is currently limited to a single area.",
+      "ja": " -  QoSのルート計算の範囲は、現在、単一の領域に限定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "- All routers within the area are assumed to run a QoS enabled version of OSPF, i.e., inter-operability with non-QoS aware versions of the OSPF protocol is not considered.",
+      "ja": " - 区域内のすべてのルータがOSPFのバージョンを有効にQoSを実行すると仮定される、すなわち、OSPFプロトコルの非QoS認識バージョンとの相互運用性は考慮されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "- All interfaces on a router are assumed to be QoS capable.",
+      "ja": " - ルータ上のすべてのインターフェイスは可能なQoSであると想定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.2. Architecture",
+      "section_title": true,
+      "ja": "4.2.2。建築"
+    },
+    {
+      "indent": 3,
+      "text": "The above design decisions and assumptions resulted in the architecture shown in Figure 2. It consists of three major components: the signaling component (RSVP in our case); the QoS routing component; and the traffic manager. In the rest of this section we concentrate on the structure and operation of the QoS routing component. As can be seen in Figure 2, the QoS routing extensions are further divided into the following modules:",
+      "ja": "設計の決定と仮定上は、3つの主要コンポーネントで構成され、図2に示すアーキテクチャをもたらした：シグナリング成分（我々の場合でRSVP）。コンポーネントルーティングのQoS;およびトラフィックマネージャ。このセクションの残りの部分では、我々は、QoSルーティングコンポーネントの構成と動作に集中します。図2に見られるように、拡張ルーティングQoSはさらに、次のモジュールに分割されます。"
+    },
+    {
+      "indent": 3,
+      "text": "- Update trigger module determines when to advertise local link state updates. This module implements a variety of triggering policies: periodic, threshold based triggering, and class based triggering. This module also implements a hold-down timer that enforces minimum spacing between two consecutive update triggerings from the same node.",
+      "ja": " - 更新トリガーモジュールは、ローカルリンク状態の更新を通知する際に決定されます。トリガーベースの定期的な、しきい値ベースのトリガ、およびクラス：このモジュールは、トリガ政策の多様性を実装しています。このモジュールはまた、同じノードから二つの連続更新triggerings間の最小間隔を強制ホールドダウンタイマーを実装します。"
+    },
+    {
+      "indent": 3,
+      "text": "- Pre-computation trigger module determines when to perform QoS path pre-computation. So far, this module implements only periodic pre-computation triggering.",
+      "ja": " - 事前計算トリガモジュールは、QoS経路事前計算を実行するときに決定します。これまでのところ、このモジュールは、トリガのみ定期的に事前計算を実装しています。"
+    },
+    {
+      "indent": 3,
+      "text": "- Path pre-computation module computes the QoS routing table based on the QoS specific link state information as described in Section 2.3.1.",
+      "ja": " - セクション2.3.1に記載したようにパス事前計算モジュールは、QoS、特定のリンク状態情報に基づいて、QoSのルーティングテーブルを計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "- Path selection and management module selects a path for a request with particular QoS requirements, and manages it once selected, i.e., reacts to link or reservation failures. Path selection is performed as described in Section 2.3.1. Path management functionality is not currently supported.",
+      "ja": " - パスの選択と管理モジュールは、特定のQoS要件を要求するためのパスを選択し、それが一度選択管理、すなわち、リンク障害または予約するように反応します。 2.3.1項で説明したようにパスの選択が行われます。パス管理機能は、現在サポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "- QoS routing table module implements the QoS specific routing table, which is maintained independently of the other GateD routing tables.",
+      "ja": " -  QoSのルーティングテーブルモジュールは互いに独立gatedルーティングテーブルの維持されたQoS特定のルーティングテーブルを実装します。"
+    },
+    {
+      "indent": 3,
+      "text": "- Tspec mapping module maps request requirements expressed in the form of RSVP Tspecs and Rspecs into the bandwidth requirements that QoS routing uses.",
+      "ja": " -  QoSが使用ルーティング帯域幅要件にRSVP仕様及び仕様の形式で表現Tspecはマッピングモジュールのマップ要求要件。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Major Implementation Issues",
+      "section_title": true,
+      "ja": "4.3。主な実装の問題"
+    },
+    {
+      "indent": 3,
+      "text": "Mapping the above design to the framework of the GateD implementation of OSPF led to a number of issues and design decisions. These issues mainly fell under two categories: a) interoperation of the QoS extensions with pre-existing similar OSPF mechanisms, and b) structure, placement, and organization of the QoS routing table. Next, we briefly discuss these issues and justify the resulting design decisions.",
+      "ja": "OSPFのGateDの実施の枠組みに上記の設計をマッピングする問題や設計上の決定の数につながりました。これらの問題は、主として二つのカテゴリーの下に落ちた：既存の同様のOSPFメカニズムとのQoS拡張のA）相互運用、およびb）構造、配置、およびQoSルーティングテーブルの組織。次に、我々は簡単にこれらの問題を議論し、その結果、設計上の決定を正当化します。"
+    },
+    {
+      "indent": 0,
+      "text": "                    +--------------------------------------------------+\n                    |              +-----------------------------+     |\n                    |              | QoS Route Table Computation |     |\n                    |              +-----------------------------+     |\n                    |                 |                    |           |\n                    |                 V                    |           |\n                    |  +-----------------+                 |           |\n       +-------------->| QoS Route Table |                 |           |\n       |            |  +-----------------+                 |           |\n       |            |                                      |           |\n       |            |  +----------------------+     +---------------+  |\n       |            |  | Core OSPF Functions  |     | Precomputation|  |\n       |            |  |        +             |     | Trigger       |  |\n       |            |  | (Enhanced) Topology  |     +---------------+  |\n       |            |  | Data Base            |             |          |\n       |            |  +----------------------+             |          |\n       |            |         |           |                 |          |\n       |            |         |       +----------------------------+   |\n       |            |         |       | Receive and update QoS-LSA |   |\n       |            |         |       +----------------------------+   |\n       |            |         |                             |          |\n       |            |         |                    +----------------+  |\n       |            |         |                    | Local Interface|  |\n       |            |         |                    | Status Monitor |  |\n       |            |         |                    +----------------+  |\n+----------------+  |         |                            |           |\n| Path Selection |  |    +--------------+          +----------------+  |\n| & Management   |  |    | Build and    |          | Link State     |  |\n+----------------+  |    | Send QoS-LSA |----------| Update Trigger |  |\n       |            |    +--------------+          +----------------+  |\n+----------------+  |                                           |      |\n| QoS Parameter  |  |                                           |      |\n| Mapping        |  |        OSPF with QoS Routing Extensions   |      |\n|----------------+  +-------------------------------------------|------+\n       |                                                        |\n+----------------+                                          +----------+\n| QoS Route      |                                          | Local    |\n| Request Client |<---------------------------------------->| Resource |\n| (e.g. RSVP)    |                                          | Manager  |\n+----------------+                                          +----------+",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Figure 2: The software architecture",
+      "ja": "図2：ソフトウェアアーキテクチャ"
+    },
+    {
+      "indent": 3,
+      "text": "The ability to trigger link state updates in response to changes in bandwidth availability on interfaces is an essential component of the QoS extensions. Mechanisms for triggering these updates and controlling their rate have been mentioned in Section 2.2. In addition, OSPF implements its own mechanism for triggering link state updates as well as its own hold down timer, which may be incompatible with what is used for the QoS link state updates. We handle such potential conflicts as follows. First, since OSPF triggers updates on a periodic basis with low frequency, we expect these updates to be only a small part of the total volume of updates generated. As a result, we chose to maintain the periodic update triggering of OSPF. Resolving conflicts in the settings of the different hold down timer settings requires more care. In particular, it is important to ensure that the existing OSPF hold down timer does not interfere with QoS updates. One option is to disable the existing OSPF timer, but protection against transient overloads calls for some hold down timer, albeit with a small value. As a result, the existing OSPF hold down timer was kept, but reduced its value to 1 second. This value is low enough (actually is the lowest possible, since GateD timers have a maximum resolution of 1 second) so that it does not interfere with the generation of the QoS link state updates, which will actually often have hold down timers of their own with higher values. An additional complexity is that the triggering of QoS link state updates needs to be made aware of updates performed by OSPF itself. This is necessary, as regular OSPF updates also carry bandwidth information, and this needs to be considered by QoS updates to properly determine when to trigger a new link state update.",
+      "ja": "インターフェイス上で帯域幅の可用性の変化に応じてリンク状態の更新をトリガする能力は、QoS拡張の必須成分です。これらの更新をトリガし、その速度を制御するための機構は、2.2節で言及されています。また、OSPFはリンク状態の更新などのQoSリンク状態の更新のために使用されるものと互換性がない可能性があり、独自のホールドダウンタイマーをトリガするための独自のメカニズムを実装しています。次のように私たちは、このような潜在的な競合を処理します。 OSPFは、低頻度で定期的に更新をトリガーするのでまず、我々はこれらの更新プログラムは、生成されたアップデートの総量のほんの一部であることを期待しています。その結果、我々は、OSPFのトリガ定期的な更新を維持することにしました。別のホールドダウンタイマー設定値の設定で競合を解決することは、より注意が必要です。特に、既存のOSPFホールドダウンタイマーは、QoSの更新に干渉しないようにすることが重要です。 1つのオプションは、既存のOSPFタイマーを無効にすることであるが、一部には小さな値とはいえ、タイマーを押したままにするために過渡的な過負荷に対する保護を呼び出します。その結果、既存のOSPF押しながらタイマーを維持したが、1秒にその値を減少しました。それは実際には、多くの場合、自分自身のタイマーを押したままになりますのQoSリンク状態の更新の世代に干渉しないように、この値は、（GateDのタイマーは1秒の最大解像度を持っているので、実際に、可能な限り低いです）十分低いですより高い値を持ちます。追加の複雑さは、QoSリンク状態の更新のトリガは、OSPF自体によって実行された更新を認識される必要があるということです。定期的なOSPFの更新も、帯域幅の情報を運ぶように、これは、必要であり、これは適切に新しいリンク状態更新をトリガーするタイミングを決定するためのQoSの更新によって検討する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Another existing OSPF mechanism that has the potential to interfere with the extensions needed for QoS routing, is the support for delayed acknowledgments that allows aggregation of acknowledgments for multiple LSAs. Since link state updates are maintained in retransmission queues until acknowledged, excessive delay in the generation of the acknowledgement combined with the increased rates of QoS updates may result in overflows of the retransmission queues. To avoid these potential overflows, this mechanism was bypassed altogether and LSAs received from neighboring routers were immediately acknowledged. Another approach which was considered but not implemented, was to make QoS LSAs unreliable, i.e., eliminate their acknowledgments, so as to avoid any potential interference. Making QoS LSAs unreliable would be a reasonable design choice because of their higher frequency compared to the regular LSAs and the reduced impact that the loss of a QoS LSA has on the protocol operation. Note that the loss of a QoS LSA does not interfere with the base operation of OSPF, and only transiently reduces the quality of paths discovered by QoS routing.",
+      "ja": "QoSのルーティングに必要な機能拡張を妨害する可能性を秘めている別の既存のOSPFメカニズムは、複数のLSAのための肯定応答の集約を可能に遅れて確認応答のサポートです。リンク状態の更新が確認されるまで再送信キュー内に維持されるので、QoSの更新率の増加と組み合わせる肯定応答の生成における過度の遅延は、再送キューのオーバフローを生じ得ます。これらの潜在的なオーバーフローを回避するために、このメカニズムは完全にバイパスされたと近隣のルータから受信したLSAをすぐに認めました。考えられますが実装されていなかった別のアプローチは、任意の潜在的な干渉を避けるために、すなわち、その確認応答を排除すると、QoSのLSAが信頼でき作ることでした。信頼性のないQoSのLSAを作ることは、通常のLSAとQoS LSAの損失は、プロトコル動作に持っていることが減少の影響に比べため、その高い周波数の合理的な設計上の選択です。 QoSのLSAの損失は、OSPFのベース動作を妨げ、そしてのみ一時的なQoSルーティングによって発見された経路の品質を低下しないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The structure and placement of the QoS routing table also raises some interesting implementation issues. Pre-computed paths are placed into a QoS routing table. This table is implemented as a set of path structures, one for each destination, which contain all the available paths to this destination. In order to be able to efficiently locate individual path structures, an access structure is needed. In order to minimize the develpement effort, the radix tree structure used for the regular GateD routing tables was reused. In addition, the QoS routing table was kept independent of the GateD routing tables to conform to the design goal of localizing changes and minimizing the impact on the existing OSPF code. An additional reason for maintaining the QoS routing separate and self-contained is that it is re-computed under conditions that are different from those used for the regular routing tables.",
+      "ja": "QoSのルーティングテーブルの構造や配置もいくつかの興味深い実装上の問題を提起します。事前計算経路は、QoSルーティングテーブルに配置されています。このテーブルは、この宛先への利用可能なすべてのパスを含むパス構造、各宛先について1つのセットとして実装されています。効率的に、個々のパス構造を見つけることができるようにするために、アクセス構造が必要です。 develpement労力を最小限に抑えるために、定期的なgatedルーティングテーブルに使用する基数ツリー構造を再利用しました。また、QoSのルーティングテーブルが変更をローカライズし、既存のOSPFコードへの影響を最小限に抑えるの設計目標に適合するようにgatedルーティングテーブルとは独立に維持しました。別々の自己完結型のルーティングQoSを維持するための追加の理由は、通常のルーティングテーブルに使用されるものとは異なる条件の下で再計算されることです。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, since the QoS routing table is re-built frequently, it must be organized so that its computation is efficient. A common operation during the computation of the QoS routing table is mapping a link state database entry to the corresponding path structure. In order to make this operation efficient, the link state database entries were extended to contain a pointer to the corresponding path structure. In addition, when a new QoS routing table is to be computed, the previous one must be de-allocated. This is accomplished by traversing the radix tree in-order, and de-allocating each node in the tree. This full de-allocation of the QoS routing table is potentially wasteful, especially since memory allocation and de-allocation is an expensive operation. Furthermore, because path pre-computations are typically not triggered by changes in topology, the set of destinations will usually remain the same and correspond to an unchanged radix tree. A natural optimization would then be to de-allocate only the path structures and maintain the radix tree. A further enhancement would be to maintain the path structures as well, and attempt to incrementally update them only when required. However, despite the potential gains, these optimizations have not been included in the initial implementation. The main reason is that they involve subtle and numerous checks to ensure the integrity of the overall data structure at all times, e.g., correctly remove failed destinations from the radix tree and update the tree accordingly.",
+      "ja": "QoSのルーティングテーブルが頻繁に再構築されているので、その計算が効率的であるように、また、それは組織化されなければなりません。 QoSのルーティングテーブルの計算中共通の操作は、対応するパス構造へのリンク状態データベースのエントリにマッピングされています。この操作が効率的にするために、リンク状態データベースのエントリは、対応するパス構造へのポインタを含むように拡張しました。新たなQoSルーティングテーブルを計算する際に加えて、以前のものは、割り当て解除されなければなりません。これは、インオーダー基数ツリーをトラバースし、ツリー内の各ノードをデ割り当てることによって達成されます。 QoSのルーティングテーブルのこの完全な割り当て解除は、メモリの割り当てと割り当て解除は高価な操作であるため、特に、潜在的に無駄です。経路事前計算は、典型的には、トポロジの変化によってトリガされていないので、さらに、目的地のセットは、通常、同一のままであり、不変の基数ツリーに対応することになります。自然の最適化は、その後、唯一のパス構造を割り当て解除し、基数ツリーを維持するだろう。さらなる強化は、同様に、パス構造を維持し、必要な場合にのみ、増分それらを更新しようとすることです。しかし、潜在的な利益にもかかわらず、これらの最適化は、初期の実装には含まれていません。主な理由は、彼らはすべての回で、全体的なデータ構造の整合性を確保するため、例えば、正しく基数ツリーから失敗した宛先を削除し、それに応じてツリーを更新するために微妙な、多数のチェックを伴うということです。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Bandwidth and Processing Overhead of QoS Routing",
+      "section_title": true,
+      "ja": "4.4。帯域幅およびQoSルーティングの処理オーバーヘッド"
+    },
+    {
+      "indent": 3,
+      "text": "After completing the implementation outlined in the previous sections, it was possible to perform an experimental study of the cost and nature of the overhead of the QoS routing extensions proposed in this document. In particular, using a simple setup consisting of two interconnected routers, it is possible to measure the cost of individual QoS routing related operations. These operations are: a) computation of the QoS routing table, b) selection of a path from the QoS routing table, c) generation of a link state update, and d) reception of a link state update. Note that the last two operations are not really specific to QoS routing since regular OSPF also performs them. Nevertheless, we expect the more sensitive update triggering mechanisms required for effective QoS routing to result in increased number of updates, making the cost of processing updates an important component of the QoS routing overhead. An additional cost dimension is the memory required for storing the QoS routing table. Scaling of the above costs with increasing sizes of the topology database was investigated by artificially populating the topology databases of the routers under measurement.",
+      "ja": "前のセクションで概説した実装を完了した後に、この文書で提案したQoSルーティング機能拡張のオーバーヘッドのコストと自然の実験的研究を行うことが可能でした。具体的には、2つの相互接続ルータから成る単純なセットアップを使用して、関連する操作をルーティング個々のQoSのコストを測定することが可能です。これらの操作は、次のとおり、リンク状態更新のA）のQoSルーティングテーブルの計算、QoSのルーティングテーブルから経路B）の選択、リンク状態更新のc）の生成、およびd）受信。通常のOSPFはまた、それらを実行するので、最後の二つの操作がQoSルーティングには本当に固有のものではないことに注意してください。それにもかかわらず、我々は処理のコストがオーバーヘッドルーティングのQoSの重要な要素を更新しながら、更新の数の増加をもたらすことがルーティング有効なQoSのために必要なより感度の高い更新トリガ機構を期待します。追加コスト寸法は、QoS、ルーティングテーブルを格納するために必要なメモリです。トポロジーデータベースの増加サイズが上記の費用のスケーリングは、人為的に被測定ルータのトポロジデータベースを投入することにより調べました。"
+    },
+    {
+      "indent": 3,
+      "text": "Table 1 shows how the measured costs depend on the size of the topology. The topology used in the measurements was built by replicating a basic building block consisting of four routers connected with transit networks in a rectangular arrangement. The details of the topology and the measurements can be found in [AGK99]. The system running the GateD software was an IBM IntelliStation Z Pro with a Pentium Pro processor at 200 MHz, 64 MBytes or real memory, running FreeBSD 2.2.5-RELEASE and GateD 4. From the results of Table 1, one can observe that the cost of path pre-computation is not much higher than that of the regular SPF computation. However, path pre-computation may need to be performed much more often than the SPF computation, and this can potentially lead to higher processing costs. This issue was investigated in a set of subsequent experiments, that are described later in this section. The other cost components reported in Table 1 include memory, and it can be seen that the QoS routing table requires roughly 80% more memory than the regular routing table. Finally, the cost of selecting a path is found to be very small compared to the path pre-computation times. As expected, all the measured quantities increase as the size of the topology increases. In particular, the storage requirements and the processing costs for both SPF computation and QoS path pre-computation scale almost linearly with the network size.",
+      "ja": "表1は、測定された費用は、トポロジのサイズに依存する方法を示しています。測定に用いたトポロジーは、矩形配置で中継ネットワークに接続された4つのルータからなる基本的なビルディング・ブロックを複製することによって構築されました。トポロジと測定の詳細は[AGK99]に見出すことができます。 GateDのソフトウェアを実行しているシステムは、表1の結果からはFreeBSD 2.2.5-RELEASEゲーテッド4を実行して、200 MHzで、64メガバイトまたは実メモリのPentium Proのプロセッサとは、IBM IntelliStation Zプロた、一つは、観察することができますパスの事前計算のコストは、通常のSPF計算のそれよりもはるかに高いではありません。しかし、パスの事前計算は、SPF計算よりもはるかに頻繁に実行する必要があり、これは潜在的により高い処理コストにつながることができます。この問題は、このセクションで後述するその後の実験のセットで検討しました。表1に報告された他のコスト・コンポーネントはメモリを含み、そしてQoS、ルーティングテーブルは、通常のルーティングテーブルよりも約80％多くのメモリを必要としていることが分かります。最後に、経路を選択するコストは、経路事前計算時間に比べて非常に小さいことが分かりました。予想されるように、全ての測定量は、トポロジのサイズが増加するにつれて増加します。具体的には、ストレージ要件とネットワークサイズとほぼ直線的にSPF計算とQoS経路事前計算スケールの両方のための処理コスト。"
+    },
+    {
+      "indent": 0,
+      "text": "________________________________________________________________________\n|Link_state_database_size_______|_25_|__49_|__81__|__121_|__169_|__225_|\n|Regular_SPF_time_(microsec)____|215_|_440_|_747__|_1158_|_1621_|_2187_|\n|Pre-computation_time_(microsec)|736_|_1622|_2883_|_4602_|_6617_|_9265_|\n|SPF_routing_table_size_(bytes)_|2608|_4984|_8152_|_12112|_16864|_22408|\n|QoS_routing_table_size_(bytes)_|3924|_7952|_13148|_19736|_27676|_36796|\n|Path_Selection_time_(microsec)_|_.7_|_1.6_|__2.8_|__4.6_|__6.6_|__9.2_|",
+      "raw": true
+    },
+    {
+      "indent": 17,
+      "text": "Table 1: Stand alone QoS routing costs",
+      "ja": "表1：コストをルーティングするスタンドアローンのQoS"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to the stand alone costs reported in Table 1, it is important to assess the actual operational load induced by QoS routing in the context of a large network. Since it is not practical to reproduce a large scale network in a lab setting, the approach used was to combine simulation and measurements. Specifically, a simulation was used to obtain a time stamped trace of QoS routing related events that occur in a given router in a large scale network. The trace was then used to artificially induce similar load conditions on a real router and its adjacent links. In particular, it was used to measure the processing load at the router and bandwidth usage that could be attributed to QoS updates. A more complete discussion of the measurement method and related considerations can be found in [AGK99].",
+      "ja": "表1に報告され、スタンドアローンコストに加えて、大規模なネットワークの文脈でQoSルーティングによって誘発される実際の運用負荷を評価することが重要です。それはラボの設定で、大規模なネットワークを再現することは現実的ではないので、使用されるアプローチは、シミュレーションと測定を組み合わせることでした。具体的には、シミュレーションは、大規模ネットワーク内の指定されたルータで発生したQoSルーティング関連のイベントのタイムスタンプトレースを取得するために使用されました。トレースは、その後、人工的に実際のルータとその隣接するリンク上で同様の負荷条件を誘導するために使用されました。特に、それは、QoSのアップデートに起因することができ、ルータと帯域幅の利用状況の処理負荷を測定するために使用されました。測定方法及び関連する考慮事項のより完全な議論は[AGK99]に見出すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The use of a simulation further allows the use of different configurations, where network topology is varied together with other QoS parameters such as a) period of pre-computation, and b) threshold for triggering link state updates. The results reported here were derived using two types of topologies. One based on a regular but artificial 8x8 mesh network, and another (isp) which has been used in several previous studies [AGKT98, AT98] and that approximates the network of a nation-wide ISP. As far as pre-computation periods are concerned, three values of 1, 5 and 50 seconds were chosen, and for the triggering of link state update thresholds of 10% and 80% were used. These values were selected as they cover a wide range in terms of precision of pre-computed paths and accuracy of the link state information available at the routers. Also note that 1 second is the smallest pre-computation period allowed by GateD.",
+      "ja": "さらに、シミュレーションを使用することは、ネットワーク・トポロジは、事前計算の）期間のような他のQoSパラメータと共に変化する異なる構成の使用を可能にし、リンク状態の更新をトリガするb）のしきい値。ここで報告された結果は、トポロジの2種類を使用して得ました。いくつかの以前の研究[AGKT98、AT98]で使用され、それが全国的なISPのネットワークに近似された正規のが、人工的な8×8のメッシュネットワーク、および他の（ISP）に基づくもの。まで事前計算期間は懸念しているように、1,5及び50秒の3つの値が選択された、10％および80％のリンク状態更新閾値のトリガのために使用しました。それらはルータで利用可能な事前計算経路およびリンク状態情報の精度の精度の点で広い範囲をカバーするように、これらの値を選択しました。また、1秒ゲーテッドによって許容される最小事前計算期間であることに注意。"
+    },
+    {
+      "indent": 3,
+      "text": "Table 2 provides results on the processing load at the router driven by the simulation trace, for the two topologies and different combinations of QoS parameters, i.e., pre-computation period and threshold for triggering link state updates. Table 3 gives the bandwidth consumption of QoS updates on the links adjacent to the router.",
+      "ja": "表2は、リンク状態の更新をトリガするための2つのトポロジとQoSパラメータ、すなわち、事前計算期間としきい値の異なる組み合わせについて、シミュレーショントレースによって駆動されるルータの処理負荷に結果を提供します。表3は、ルータに隣接するリンク上でのQoSの更新の帯域幅の消費を与えます。"
+    },
+    {
+      "indent": 4,
+      "text": "________________________________________________________________\n|_____________________|_________Pre-computation_Period_________|\n|Link_state_threshold_|___1_sec____|____5_sec____|____50_sec___|\n|_________10%_________|.45%_(1.6%)_|__.29%_(2%)__|__.17%_(3%)__|\n|_________80%_________|.16%_(2.4%)_|__.04%_(3%)__|_.02%_(3.8%)_|",
+      "raw": true
+    },
+    {
+      "indent": 34,
+      "text": "isp",
+      "ja": "ISP"
+    },
+    {
+      "indent": 4,
+      "text": "________________________________________________________________\n|_________10%_________|3.37%_(2.1%)|_2.23%_(3.3%)|_1.78%_(7.7%)|\n|_________80%_________|1.54%_(5.4%)|_.42%_(6.6%)_|_.14%_(10.4%)|",
+      "raw": true
+    },
+    {
+      "indent": 31,
+      "text": "8x8 mesh",
+      "ja": "Dksdメッシュ"
+    },
+    {
+      "indent": 7,
+      "text": "Table 2: Router processing load and (bandwidth blocking).",
+      "ja": "表2：ルータの処理負荷と（帯域阻止）。"
+    },
+    {
+      "indent": 3,
+      "text": "In Table 2, processing load is expressed as the percentage of the total CPU resources that are consumed by GateD processing. The same table also shows the routing performance that is achieved for each combination of QoS parameters, so that comparison of the different processing cost/routing performance trade-offs can be made. Routing performance is measured using the bandwidth blocking ratio, defined as the sum of requested bandwidth of the requests that were rejected over the total offered bandwidth. As can be seen from Table 2, processing load is low even when the QoS routing table is recomputed every second, and LSAs are generated every time the available bandwidth on a link changes by more than 10% of the last advertised value. This seems to indicate that given today's processor technology, QoS routing should not be viewed as a costly enhancement, at least not in terms of its processing requirements. Another general observation is that while network size has obviously an impact, it does not seem to drastically affect the relative influence of the different parameters. In particular, despite the differences that exist between the isp and mesh topologies, changing the pre-computation period or the update threshold translates into essentially similar relative changes.",
+      "ja": "表2において、処理負荷をGateDの処理によって消費される総CPUリソースのパーセンテージとして表現されます。異なる処理コスト/ルーティングパフォーマンスのトレードオフの比較を行うことができるので、同じテーブルはまた、QoSパラメータの組み合わせごとに達成されるルーティング性能を示します。ルーティング性能は、全提供帯域幅で拒否されたリクエストの要求帯域の合計として定義された比率を遮断帯域幅を使用して測定されます。表2から分かるように、処理負荷は、QoS、ルーティングテーブルは毎秒を再計算する場合であっても低く、LSAはたびに最後アドバタイズ値の10％以上のリンクの変更に使用可能な帯域幅が生成されます。これは、今日のプロセッサ技術与えられた、のQoSルーティングは、少なくともではないその処理要件の観点から、高価な拡張として見るべきではないことを示していると思われます。別の一般的な観察は、ネットワークのサイズは明らかに影響を与えている一方で、大幅に異なるパラメータの相対的な影響に影響を与えていないようだということです。具体的には、事前計算期間又は更新閾値を変更するISPとメッシュトポロジとの間に存在する差にもかかわらず、実質的に同様の相対的変化に変換されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Similar conclusions can be drawn for the update traffic shown in Table 3. In all cases, this traffic is only a small fraction of the link's capacity. Clearly, both the router load and the link bandwidth consumption depend on the router and link that was the target of the measurements and will vary for different choices. The results shown here are meant to be indicative, and a more complete discussion can be found in [AGK99].",
+      "ja": "同様の結論は、すべての場合において、表3に示す更新トラフィックのために描くことができ、このトラフィックは、リンクの容量のごく一部です。明らかに、ルータの負荷およびリンク帯域幅の消費量の両方が測定の対象となった、さまざまな選択肢のために変化しますルータとのリンクに依存します。ここに示した結果が示すことを意図しており、より完全な議論は[AGK99]で見つけることができます。"
+    },
+    {
+      "indent": 16,
+      "text": "_______________________________________\n|_Link_state_threshold_|_______________|\n|_________10%__________|3112_bytes/sec_|\n|_________80%__________|177_bytes/sec__|",
+      "raw": true
+    },
+    {
+      "indent": 16,
+      "text": "                  isp\n________________________________________\n|_________10%__________|15438_bytes/sec_|\n|_________80%__________|1053_bytes/sec__|",
+      "raw": true
+    },
+    {
+      "indent": 31,
+      "text": "8x8 mesh",
+      "ja": "Dksdメッシュ"
+    },
+    {
+      "indent": 19,
+      "text": "Table 3: Link state update traffic",
+      "ja": "表3：リンク状態の更新トラフィック"
+    },
+    {
+      "indent": 3,
+      "text": "Summarizing, by carrying out the implementation of the proposed QoS routing extensions to OSPF we demonstrated that such extensions are fairly straightforward to implement. Furthermore, by measuring the performance of the real system we were able to demonstrate that the overheads associated with QoS routing are not excessive, and are definitely within the capabilities of modern processor and workstation technology.",
+      "ja": "まとめると、OSPFへの拡張をルーティング提案したQoSの実装を行うことにより、私たちは、このような機能拡張が実装するのは非常に簡単であることを実証しました。さらに、実際のシステムのパフォーマンスを測定することにより、我々は、QoSルーティングに関連したオーバーヘッドが過剰ではない、と現代のプロセッサおよびワークステーション・テクノロジーの能力の範囲内に間違いであることを実証することができました。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The QoS extensions proposed in this document do not raise any security considerations that are in addition to the ones associated with regular OSPF. The security considerations of OSPF are presented in [Moy98]. However, it should be noted that this document assumes the availability of some entity responsible for assessing the legitimacy of QoS requests. For example, when the protocol used for initiating QoS requests is the RSVP protocol, this capability can be provided through the use of RSVP Policy Decision Points and Policy Enforcement Points as described in [YPG97]. Similarly, a policy server enforcing the acceptability of QoS requests by implementing decisions based on the rules and languages of [RMK+98], would also be capable of providing the desired functionality.",
+      "ja": "この文書で提案したQoSの拡張機能は、通常のOSPFに関連したものに加えて、ある任意のセキュリティ上の考慮事項は発生しません。 OSPFのセキュリティの考慮事項は、[Moy98]に提示されています。しかし、この文書は、QoS要求の正当性を評価するための責任がいくつかのエンティティの利用可能性を想定していることに留意すべきです。 QoSの要求を開始するために使用されるプロトコルは、RSVPプロトコルである場合[YPG97]に記載されているように、例えば、この機能は、RSVPポリシー決定ポイントとポリシー施行ポイントの使用を介して提供することができます。同様に、[RMK + 98]の規則および言語に基づいて決定を実装することにより、QoSの要求の受容を強制ポリシーサーバは、また、所望の機能性を提供することができるであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "APPENDICES",
+      "ja": "付録"
+    },
+    {
+      "indent": 0,
+      "text": "A. Pseudocode for the BF Based Pre-Computation Algorithm",
+      "ja": "BFベースの事前計算アルゴリズムの擬似コードA."
+    },
+    {
+      "indent": 3,
+      "text": "Note: The pseudocode below assumes a hop-by-hop forwarding approach in updating the neighbor field. The modifications needed to support explicit route construction are straightforward. The pseudocode also does not handle equal cost multi-paths for simplicity, but the modification needed to add this support are straightforward.",
+      "ja": "注意：以下の擬似コードは、隣接フィールドの更新にホップバイホップ転送アプローチを想定しています。明示的な経路構築をサポートするために必要な変更が簡単です。擬似コードはまた、簡単にするために等価コストマルチパスを処理しませんが、このサポートを追加するために必要な変更が簡単です。"
+    },
+    {
+      "indent": 0,
+      "text": "Input: V = set of vertices, labeled by integers 1 to N. L = set of edges, labeled by ordered pairs (n,m) of vertex labels. s = source vertex (at which the algorithm is executed). For all edges (n,m) in L: * b(n,m) = available bandwidth (according to last received update) on interface associated with the edge between vertices n and m. * If(n,m) outgoing interface corresponding to edge (n,m) when n is a router. H = maximum hop-count (at most the graph diameter).",
+      "ja": "入力：N. L頂点ラベルの順序対（N、M）によって標識されたエッジの=組の整数1で標識された頂点V =セット。 （アルゴリズムが実行される）S =ソース頂点。頂点nとmとの間のエッジに関連付けられたインターフェイス上で（最後に受信した更新に応じて）* bの（N、M）=利用可能な帯域幅：すべてのLのエッジ（N、M）のために。 * IF（n、m）は、nがルータである場合（n、m）はエッジに対応する発信インターフェース。 （ほとんどのグラフの直径で）H =最大ホップ数。"
+    },
+    {
+      "indent": 0,
+      "text": "Type: tab_entry: record bw = integer, neighbor = integer 1..N.",
+      "ja": "タイプ：tab_entry：記録BW =整数、隣人=整数1..N。"
+    },
+    {
+      "indent": 0,
+      "text": "Variables: TT[1..N, 1..H]: topology table, whose (n,h) entry is a tab_entry record, such that: TT[n,h].bw is the maximum available bandwidth (as known thus far) on a path of at most h hops between vertices s and n, TT[n,h].neighbor is the first hop on that path (a neighbor of s). It is either a router or the destination n.",
+      "ja": "変数：TT [1..N、1..H]：トポロジテーブル、その（N、H）エントリように、tab_entryレコードである：従って知られているようにTT [N、H] .bwが使用可能な最大帯域幅（あります遠）最も時間での経路上には、頂点S及びNの間のホップTT [N、H] .neighborそのパス（複数の近隣）の最初のホップです。これは、ルータまたは宛先nのいずれかです。"
+    },
+    {
+      "indent": 2,
+      "text": "S_prev: list of vertices that changed a bw value in the TT table in the previous iteration. S_new: list of vertices that changed a bw value (in the TT table etc.) in the current iteration.",
+      "ja": "S_prev：前の反復でTTテーブルに体重値を変更頂点のリスト。 S_new：現在の反復において（TTテーブル等に）BWの値を変更した頂点のリスト。"
+    },
+    {
+      "indent": 0,
+      "text": "The Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 0,
+      "text": "begin;",
+      "ja": "ベギン;"
+    },
+    {
+      "indent": 2,
+      "text": "for n:=1 to N do  /* initialization */\nbegin;\n  TT[n,0].bw := 0;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "  TT[n,0].neighbor := null\n  TT[n,1].bw := 0;\n  TT[n,1].neighbor := null\nend;\nTT[s,0].bw := infinity;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "reset S_prev;\nfor all neighbors n of s do\nbegin;\n  TT[n,1].bw := max( TT[n,1].bw, b[s,n]);\n  if (TT[n,1].bw = b[s,n]) then TT[n,1].neighbor := If(s,n);\n           /* need to make sure we are picking the maximum */\n           /* bandwidth path for routers that can be reached */\n           /* through both networks and point-to-point links */\n     if (n is a router) then\n         S_prev :=  S_prev union {n}\n           /* only a router is added to S_prev, */\n           /* if it is not already included in S_prev */\n     else     /* n is a network: */\n           /* proceed with network--router edges, without */\n           /* counting another hop */\n        for all (n,k) in L, k <> s, do\n           /* i.e., for all other neighboring routers of n */\n        begin;\n        TT[k,1].bw := max( min( TT[n,1].bw, b[n,k]), TT[k,1].bw );\n           /* In case k could be reached through another path */\n           /* (a point-to-point link or another network) with */\n           /* more bandwidth, we do not want to update TT[k,1].bw */\n        if (min( TT[n,1].bw, b[n,k]) = TT[k,1].bw )\n           /* If we have updated TT[k,1].bw by going through */\n           /* network n  */\n        then TT[k,1].neighbor := If(s,n);\n           /* neighbor is interface to network n */\n        if ( {k} not in S_prev) then S_prev :=  S_prev union {k}\n           /* only routers are added to S_prev, but we again need */\n           /* to check they are not already included in S_prev */\n        end\nend;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "for h:=2 to H do   /* consider all possible number of hops */\nbegin;\n  reset S_new;\n  for all vertices m in V do\n  begin;\n    TT[m,h].bw := TT[m,h-1].bw;\n    TT[m,h].neighbor := TT[m,h-1].neighbor\n  end;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "  for all vertices n in S_prev do\n           /* as shall become evident, S_prev contains only routers */\n  begin;\n    for all edges (n,m) in L do\n    if min( TT[n,h-1].bw, b[n,m]) > TT[m,h].bw then\n    begin;\n      TT[m,h].bw := min( TT[n,h-1].bw, b[n,m]);\n      TT[m,h].neighbor := TT[n,h-1].neighbor;\n      if m is a router then S_new :=  S_new union {m}\n           /* only routers are added to S_new */\n      else /* m is a network: */\n           /* proceed with network--router edges, without counting */\n           /* them as another hop */\n      for all (m,k) in L, k <> n,\n           /* i.e., for all other neighboring routers of m */\n      if min( TT[m,h].bw, b[m,k]) > TT[k,h].bw then\n      begin;\n           /* Note: still counting it as the h-th hop, as (m,k) is */\n           /* a network--router edge */\n        TT[k,h].bw := min( TT[m,h].bw, b[m,k]);\n        TT[k,h].neighbor := TT[m,h].neighbor;\n        S_new :=  S_new union {k}\n           /* only routers are added to S_new */\n      end\n    end\n  end;\n  S_prev := S_new;\n          /* the two lists can be handled by a toggle bit */\n  if S_prev=null then h=H+1   /* if no changes then exit */\nend;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "end.",
+      "ja": "終わり。"
+    },
+    {
+      "indent": 0,
+      "text": "B. On-Demand Dijkstra Algorithm for QoS Path Computation",
+      "ja": "B.オンデマンドのQoS経路計算のためのダイクストラ法"
+    },
+    {
+      "indent": 3,
+      "text": "In the main text, we described an algorithm that allows pre-computation of QoS routes. However, it may be feasible in some instances, e.g., limited number of requests for QoS routes, to instead perform such computations on-demand, i.e., upon receipt of a request for a QoS route. The benefit of such an approach is that depending on how often recomputation of pre-computed routes is triggered, on-demand route computation can yield better routes by using the most recent link metrics available. Another benefit of on-demand path computation is the associated storage saving, i.e., there is no need for a QoS routing table. This is essentially the standard trade-off between memory and processing cycles.",
+      "ja": "本文では、我々は、QoS経路の事前計算を可能にするアルゴリズムを説明しました。しかし、いくつかの例では、例えば、QoSのルートのリクエストの限られた数は、代わりのQoS経路のための要求を受信すると、すなわち、オンデマンドそのような計算を実行することが可能であってもよいです。このようなアプローチの利点は、事前に計算されたルートの再計算がトリガされる頻度に応じて、オンデマンドルート計算は、最新のリンクメトリックが使用可能に使用することによって、より良いルートを生み出すことができるということです。オンデマンドの経路計算の別の利点、すなわち、QoSのルーティングテーブルを必要としない、関連する記憶保存しています。これは、本質的に、メモリ及び処理サイクルの間に標準のトレードオフです。"
+    },
+    {
+      "indent": 3,
+      "text": "In this section, we briefly describe how a standard Dijkstra algorithm can, for a given destination and bandwidth requirement, generate a minimum hop path that can accommodate the required bandwidth and also has maximum bandwidth. Because the Dijkstra algorithm is already used in the current OSPF route computation, only differences from the standard algorithm are described. Also, while for simplicity we do not consider here zero-hop edges, the modification required for supporting them is straightforward.",
+      "ja": "このセクションでは、我々は簡単に標準ダイクストラアルゴリズムは、与えられた宛先及び帯域幅要件のために、必要な帯域幅を収容できる最小ホップ経路を生成することができる方法を説明し、また、最大帯域幅を有しています。ダイクストラのアルゴリズムは既に現在のOSPFルート計算に使用されているので、標準のアルゴリズムとの相違点のみを説明します。簡単にするために、我々はここでゼロホップのエッジを考慮していないながらも、それらをサポートするために必要な修正は簡単です。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm essentially performs a minimum hop path computation, on a graph from which all edges, whose available bandwidth is less than that requested by the flow triggering the computation, have been removed. This can be performed either through a pre-processing step, or while running the algorithm by checking the available bandwidth value for any edge that is being considered (see the pseudocode that follows). Another modification to a standard Dijkstra based minimum hop count path computation, is that the list of equal cost next (previous) hops which is maintained as the algorithm proceeds, needs to be sorted according to available bandwidth. This is to allow selection of the minimum hop path with maximum available bandwidth. Alternatively, the algorithm could also be modified to, at each step, only keep among equal hop count paths the one with maximum available bandwidth. This would essentially amount to considering a cost that is function of both hop count and available bandwidth.",
+      "ja": "アルゴリズムは、本質的に、利用可能な帯域幅の計算をトリガフローによって要求されたよりも小さいすべてのエッジが、除去されたグラフ上の最小ホップ経路計算を行います。これは、（以下の擬似コードを参照）前処理工程を経て、または検討されている任意のエッジのために利用可能な帯域幅の値をチェックすることによって、アルゴリズムを実行している間のいずれかで行うことができます。標準ダイクストラベースの最小ホップ数の経路計算の他の変形例は、アルゴリズムが進行するにつれて維持さ等しいコスト次の（前の）ホップのリストが、利用可能な帯域幅に応じてソートする必要があること。ありますこれは、最大の利用可能な帯域幅と最小ホップ経路の選択を可能にすることです。あるいは、アルゴリズムは、各ステップで、唯一の利用可能な最大帯域幅と等しいホップカウント経路のうちいずれかを保つに修正することができます。これは本質的に、ホップ数と利用可能な帯域幅の両方の関数であるコストを考慮に達するでしょう。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: The pseudocode below assumes a hop-by-hop forwarding approach in updating the neighbor field. Addition of routes to stub networks is done in a second phase as usual. The modifications needed to support explicit route construction are straightforward. The pseudocode also does not handle equal cost multi-paths for simplicity, but the modifications needed to add this support are also easily done.",
+      "ja": "注意：以下の擬似コードは、隣接フィールドの更新にホップバイホップ転送アプローチを想定しています。ネットワークをスタブにルートの付加は、通常のように第二段階で行われます。明示的な経路構築をサポートするために必要な変更が簡単です。擬似コードはまた、簡単にするために等価コストマルチパスを処理しませんが、このサポートを追加するために必要な修正も簡単に行われます。"
+    },
+    {
+      "indent": 0,
+      "text": "Input: V = set of vertices, labeled by integers 1 to N. L = set of edges, labeled by ordered pairs (n,m) of vertex labels. s = source vertex (at which the algorithm is executed). For all edges (n,m) in L: * b(n,m) = available bandwidth (according to last received update) on interface associated with the edge between vertices n and m. * If(n,m) = outgoing interface corresponding to edge (n,m) when n is a router. d = destination vertex. B = requested bandwidth for the flow served.",
+      "ja": "入力：N. L頂点ラベルの順序対（N、M）によって標識されたエッジの=組の整数1で標識された頂点V =セット。 （アルゴリズムが実行される）S =ソース頂点。頂点nとmとの間のエッジに関連付けられたインターフェイス上で（最後に受信した更新に応じて）* bの（N、M）=利用可能な帯域幅：すべてのLのエッジ（N、M）のために。 * IF（N、M）=エッジに対応する発信インターフェース（n、m）は、nがルータである場合。 D =宛先頂点。 B =フローのための要求帯域が務めました。"
+    },
+    {
+      "indent": 0,
+      "text": "Type: tab_entry: record hops = integer, neighbor = integer 1..N, ontree = boolean.",
+      "ja": "タイプ：tab_entry：記録ホップ=整数、隣人=整数1..N、ontree =ブール値。"
+    },
+    {
+      "indent": 0,
+      "text": "Variables:\n  TT[1..N]: topology table, whose (n) entry is a tab_entry\n                  record, such that:\n                    TT[n].bw is the available bandwidth (as known\n                        thus far) on a shortest-path between\n                        vertices s and n,\n                    TT[n].neighbor is the first hop on that path (a\n                        neighbor of s). It is either a router or the\n                        destination n.\n  S: list of candidate vertices;\n  v: vertex under consideration;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "The Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 0,
+      "text": "begin;\n  for n:=1 to N do  /* initialization */\n  begin;\n    TT[n].hops := infinity;\n    TT[n].neighbor := null;\n    TT[n].ontree := FALSE;\n  end;\n  TT[s].hops := 0;",
+      "raw": true
+    },
+    {
+      "indent": 2,
+      "text": "reset S;\nv:= s;\nwhile v <> d do\nbegin;\n  TT[v].ontree := TRUE;\n  for all edges (v,m) in L and b(v,m) >= B do\n  begin;",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "  if m is a router\n  begin;\n    if not TT[m].ontree then\n    begin;\n      /* bandwidth must be fulfilled since all links >= B */\n      if TT[m].hops > TT[v].hops + 1 then\n      begin\n        S := S union { m };\n        TT[m].hops := TT[v].hops + 1;\n        TT[m].neighbor := v;\n      end;\n    end;\n  end;\n  else /* must be a network, iterate over all attached routers */\n  begin; /* each network -- router edge treated as zero hop edge */\n    for all (m,k) in L, k <> v,\n         /* i.e., for all other neighboring routers of m */\n    if not TT[k].ontree and b(m,k) >= B then\n    begin;\n      if TT[k].hops > TT[v].hops  then\n      begin;\n        S := S union { k };\n        TT[k].hops := TT[v].hops;\n        TT[k].neighbor := v;\n      end;\n    end;\n  end;\nend; /* of all edges from the vertex under consideration */",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "    if S is empty then\n    begin;\n      v=d; /* which will end the algorithm */\n    end;\n    else\n    begin;\n      v := first element of S;\n      S := S - {v}; /* remove and store the candidate to consider */\n    end;\n  end; /* from processing of the candidate list */\nend.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "C. Precomputation Using Dijkstra Algorithm",
+      "ja": "ダイクストラ法を用いてC.事前計算"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix outlines a Dijkstra-based algorithm that allows pre-computation of QoS routes for all destinations and bandwidth values. The benefit of using a Dijkstra-based algorithm is a greater synergy with existing OSPF implementations. The solution to compute all \"best\" paths is to consecutively compute shortest path spanning trees starting from a complete graph and removing links with less bandwidth than the threshold used in the previous computation. This yields paths with possibly better bandwidth but of course more hops. Despite the large number of Dijkstra computations involved, several optimizations such as incremental spanning tree computation can be used and allow for efficient implementations in terms of complexity as well as storage since the structure of computed paths leans itself towards path compression [ST83]. Details including measurements and applicability studies can be found in [Prz95] and [BP95].",
+      "ja": "この付録では、すべての宛先と帯域幅値のためのQoSルートのプレ計算を可能にダイクストラベースのアルゴリズムを概説します。ダイクストラベースのアルゴリズムを使用することの利点は、既存のOSPF実装と大きな相乗効果です。すべて「最良」の経路を計算するために溶液を連続的に計算最短パススパニングツリー完全グラフから開始し、前の計算で使用される閾値よりも小さい帯域幅を有するリンクを除去することです。これは、おそらくより良い帯域幅が、もちろん、より多くのホップでパスを生成します。関与ダイクストラ計算の多数にもかかわらず、そのような増分スパニングツリーの計算のようないくつかの最適化を使用することができ、計算されたパスの構造がパス圧縮[ST83]に向かって自分自身を傾くので複雑ならびに記憶の点で効率的な実装を可能にします。測定および応用研究を含む詳細は、[Prz95]と[BP95]に見出すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A variation of this theme is to trade the \"accuracy\" of the pre-computed paths, (i.e., the paths being generated may be of a larger hop count than needed) for the benefit of using a modified version of Dijkstra shortest path algorithm and also saving on some computations. This loss in accuracy comes from the need to rely on quantized bandwidth values, which are used when computing a minimum hop count path. In other words, the range of possible bandwidth values that can be requested by a new flow is mapped into a fixed number of quantized values, and minimum hop count paths are generated for each quantized value. For example, one could assume that bandwidth values are quantized as low, medium, and high, and minimum hop count paths are computed for each of these three values. A new flow is then assigned to the minimum hop path that can carry the smallest quantized value, i.e., low, medium, or high, larger than or equal to what it requested. We restrict our discussion here to this \"quantized\" version of the algorithm.",
+      "ja": "このテーマの変形は、事前計算経路の「精度」を取引することで、（すなわち、必要とされるよりも大きいホップ数とすることができる生成されるパス）ダイクストラ最短パスアルゴリズムの修正バージョンを使用する利点およびまた、いくつかの計算を節約。精度のこの損失は最小ホップ数のパスを計算するときに使用されている量子化された帯域幅の値に依存する必要性から来ています。換言すれば、新しいフローによって要求することができる可能な帯域幅の値の範囲は、量子化値の固定された数にマッピングされ、最小のホップカウント経路は各量子化値に対して生成されます。例えば、一つは、低、中、高、および最小のホップカウント経路は、これらの3つの値のそれぞれについて計算されるように、その帯域幅の値が量子化されると仮定できました。新しいフローは、次に、より大きいまたはそれが要求されたものに等しい最小量子化値、すなわち、低、中、高を運ぶことができる最小のホップパスに割り当てられています。私たちは、アルゴリズムのこの「量子化」バージョンに、ここで我々の議論を制限します。"
+    },
+    {
+      "indent": 3,
+      "text": "Here too, we discuss the elementary case where all edges count as \"hops\", and note that the modification required for supporting zero-hop edges is straightforward.",
+      "ja": "ここでは、あまりにも、私たちは、すべてのエッジが「ホップ」としてカウントされ、ゼロホップのエッジをサポートするために必要な修正は簡単であることに注意して基本ケースを議論します。"
+    },
+    {
+      "indent": 3,
+      "text": "As with the BF algorithm, the algorithm relies on a routing table that gets built as the algorithm progresses. The structure of the routing table is as follows:",
+      "ja": "BFアルゴリズムと同様に、このアルゴリズムは、アルゴリズムの進行に伴って構築されますルーティングテーブルに依存しています。次のようにルーティングテーブルの構造は以下の通りであります："
+    },
+    {
+      "indent": 0,
+      "text": "The QoS routing table:",
+      "ja": "QoSのルーティングテーブル："
+    },
+    {
+      "indent": 3,
+      "text": "- a K x Q matrix, where K is the number of vertices and Q is the number of quantized bandwidth values.",
+      "ja": " -  Kは、Kは、頂点の数であり、Qは量子化された帯域幅の値の数であるQ行列、xは。"
+    },
+    {
+      "indent": 3,
+      "text": "- The (n;q) entry contains information that identifies the minimum hop count path to destination n, which is capable of accommodating a bandwidth request of at least bw[q] (the qth quantized bandwidth value). It consists of two fields:",
+      "ja": " - （N、Q）エントリは、少なくともBW [Q]の帯域要求（QTH量子化された帯域幅値）を収容することができる宛先nは、最小ホップ数の経路を識別する情報を含みます。それは2つのフィールドで構成されています。"
+    },
+    {
+      "indent": 6,
+      "text": "* hops: the minimal number of hops on a path between the source node and destination n, which can accommodate a request of at least bw[q] units of bandwidth.",
+      "ja": "*ホップ：帯域幅の少なくともBW [Q]単位の要求に対応できるソースノードと宛先N、の間の経路上のホップの最小数。"
+    },
+    {
+      "indent": 6,
+      "text": "* neighbor: this is the routing information associated with the minimum hop count path to destination node n, whose available bandwidth is at least bw[q]. With a hop-by-hop routing approach, the neighbor information is simply the identity of the node adjacent to the source node on that path.",
+      "ja": "*隣接：これは、利用可能な帯域幅[Q]少なくとも体重である宛先ノードnは、最小ホップ数の経路に関連するルーティング情報です。ホップバイホップルーティング方法では、隣接情報は、単に、そのパス上のソースノードに隣接するノードのIDです。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm operates again on a directed graph where vertices correspond to routers and transit networks. The metric associated with each edge in the graph is as before the bandwidth available on the corresponding interface, where b(n;m) is the available bandwidth on the edge between vertices n and m. The vertex corresponding to the router where the algorithm is being run is selected as the source node for the purpose of path selection, and the algorithm proceeds to compute paths to all other nodes (destinations).",
+      "ja": "アルゴリズムは、頂点がルータと輸送網に対応する有向グラフ上で再び動作します。頂点nとmとの間のエッジ上の利用可能な帯域幅である。グラフの各エッジに関連付けられたメトリックは、B（M n）は、対応するインターフェイス上で利用可能な帯域幅前の通りです。アルゴリズムが実行をされているルータに対応する頂点は、経路選択の目的のためにソース・ノードとして選択され、アルゴリズムは他のすべてのノード（宛先）へのパスを計算するために進みます。"
+    },
+    {
+      "indent": 3,
+      "text": "Starting with the highest quantization index, Q, the algorithm considers the indices consecutively, in decreasing order. For each index q, the algorithm deletes from the original network topology all links (n;m) for which b(n;m) < bw[q], and then runs on the remaining topology a Dijkstra-based minimum hop count algorithm (10) between the source node and all other nodes (vertices) in the graph. Note that as with the Dijkstra used for on-demand path computation, the elimination of links such that b(n;m) < bw[q] could also be performed while running the algorithm.",
+      "ja": "最高の量子化インデックスをはじめ、Qは、アルゴリズムが順に、連続してインデックスを考慮します。各インデックスqに対して、アルゴリズムは、元のネットワークトポロジーから削除するすべてのリンク（N、M）がB（N、M）のための<BW [Q]、および残りのトポロジにダイクストラベースの最小ホップカウントアルゴリズムを（実行10）ソース・ノードと、グラフ内の他のすべてのノード（頂点）の間です。アルゴリズムの実行中に<BW [Q]も実行することができる。ダイクストラと同様に、オンデマンドの経路計算のためにB（M n）がなるようにリンクの除去を用いることに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "After the algorithm terminates, the q-th column in the routing table is updated. This amounts to recording in the hops field the hop count value of the path that was generated by the algorithm, and by updating the neighbor field. As before, the update of the neighbor field depends on the scope of the path computation. In the case of a hop-by-hop routing decision, the neighbor field is set to the identity of the node adjacent to the source node (next hop) on the path returned by the algorithm. However, note that in order to ensure that the path with the maximal available bandwidth is always chosen among all minimum hop paths that can accommodate a given quantized bandwidth, a slightly different update mechanism of the neighbor field needs to be used in some instances. Specifically, when for a given row, i.e., destination node n, the value of the hops field in column q is found equal to the value in column q+1 (here we assume q<Q), i.e., paths that can accommodate bw[q] and bw[q+ 1] have the same hop count, then the algorithm copies the value of the neighbor field from entry (n;q+1) into that of entry (n;q).",
+      "ja": "アルゴリズムが終了した後、ルーティングテーブル内のq番目の列が更新されます。これは、近接場を更新することにより、ホップフィールドにアルゴリズムによって生成されたパスのホップカウント値を記録になります。前述のように、隣接フィールドの更新は、経路計算の範囲に依存します。ホップバイホップルーティング決定の場合には、隣接フィールドは、アルゴリズムによって返された経路上のソースノード（次のホップ）に隣接するノードの識別に設定されています。しかし、最大の利用可能な帯域幅を持つパスが常に所定の量子化された帯域幅を収容することができるすべての最小ホップ経路の中から選択されることを確実にするためになお、隣接フィールドのわずかに異なる更新機構は、いくつかの場合に使用する必要があります。所与の行について、すなわち、宛先ノードnは、列Qにおけるホップフィールドの値は、列Qの値に等しい発見された場合、具体的に、+ 1 BWを収容することができ、すなわち、パス（ここではQ <Qを想定します） [Q]とBW [Q + 1]同じホップカウント、アルゴリズムコピーエントリ（N; Q + 1）から隣接フィールドの値を持つエントリ（N、Q）のものに。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: The pseudocode below assumes a hop-by-hop forwarding approach in updating the neighbor field. The modifications needed to support explicit route construction are straightforward. The pseudocode also does not handle equal cost multi-paths for simplicity, but the modification needed to add this support have been described above. Details of the post-processing step of adding stub networks are omitted.",
+      "ja": "注意：以下の擬似コードは、隣接フィールドの更新にホップバイホップ転送アプローチを想定しています。明示的な経路構築をサポートするために必要な変更が簡単です。擬似コードはまた、簡単にするために等価コストマルチパスを処理しませんが、このサポートを追加するために必要な変更は、上記に記載されています。スタブネットワークを追加の後処理工程の詳細は省略する。"
+    },
+    {
+      "indent": 0,
+      "text": "Input: V = set of vertices, labeled by integers 1 to N. L = set of edges, labeled by ordered pairs (n,m) of vertex labels. s = source vertex (at which the algorithm is executed). bw[1..Q] = array of bandwidth values to \"quantize\" flow requests to. For all edges (n,m) in L: * b(n,m) = available bandwidth (according to last received update) on interface associated with the edge between vertices n and m. * If(n,m) = outgoing interface corresponding to edge (n,m) when n is a router.",
+      "ja": "入力：N. L頂点ラベルの順序対（N、M）によって標識されたエッジの=組の整数1で標識された頂点V =セット。 （アルゴリズムが実行される）S =ソース頂点。にフロー要求を「量子化」するために帯域幅の値のBW [1..Q] =配列。頂点nとmとの間のエッジに関連付けられたインターフェイス上で（最後に受信した更新に応じて）* bの（N、M）=利用可能な帯域幅：すべてのLのエッジ（N、M）のために。 * IF（N、M）=エッジに対応する発信インターフェース（n、m）は、nがルータである場合。"
+    },
+    {
+      "indent": 0,
+      "text": "Type: tab_entry: record hops = integer, neighbor = integer 1..N, ontree = boolean.",
+      "ja": "タイプ：tab_entry：記録ホップ=整数、隣人=整数1..N、ontree =ブール値。"
+    },
+    {
+      "indent": 0,
+      "text": "Variables:\n  TT[1..N, 1..Q]: topology table, whose (n,q) entry is a tab_entry\n                  record, such that:\n                    TT[n,q].bw is the available bandwidth (as known\n                        thus far) on a shortest-path between\n                        vertices s and n accommodating bandwidth b(q),\n                    TT[n,q].neighbor is the first hop on that path (a\n                        neighbor of s). It is either a router or the\n                        destination n.\n  S: list of candidate vertices;\n  v: vertex under consideration;\n  q: \"quantize\" step",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "The Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 0,
+      "text": "begin;\n  for r:=1 to Q do\n  begin;\n    for n:=1 to N do  /* initialization */ begin;\n      TT[n,r].hops     := infinity;\n      TT[n,r].neighbor := null;\n      TT[n,r].ontree   := FALSE;\n    end;\n    TT[s,r].hops := 0;\n  end;\n  for r:=1 to Q do\n  begin;\n    S = {s};\n    while S not empty do\n    begin;\n      v := first element of S;\n      S := S - {v}; /* remove and store the candidate to consider */\n      TT[v,r].ontree := TRUE;\n      for all edges (v,m) in L and b(v,m) >= bw[r] do\n      begin;\n        if m is a router\n        begin;\n          if not TT[m,r].ontree then\n          begin;\n            /* bandwidth must be fulfilled since all links >= bw[r] */\n            if TT[m,r].hops > TT[v,r].hops + 1 then\n            begin\n              S := S union { m };\n              TT[m,r].hops := TT[v,r].hops + 1;\n              TT[m,r].neighbor := v;\n            end;\n          end;\n        end;\n        else /* must be a network, iterate over all attached\n                routers */\n        begin;\n          for all (m,k) in L, k <> v,\n               /* i.e., for all other neighboring routers of m */\n          if not TT[k,r].ontree and b(m,k) >= bw[r] then\n          begin;\n            if TT[k,r].hops > TT[v,r].hops + 2 then\n            begin;\n              S := S union { k };\n              TT[k,r].hops := TT[v,r].hops + 2;\n              TT[k,r].neighbor := v;\n            end;\n          end;\n        end;\n      end; /* of all edges from the vertex under consideration */\n    end; /* from processing of the candidate list */\n  end; /* of \"quantize\" steps */",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "end.",
+      "ja": "終わり。"
+    },
+    {
+      "indent": 0,
+      "text": "D. Explicit Routing Support",
+      "ja": "D.明示的なルーティングのサポート"
+    },
+    {
+      "indent": 3,
+      "text": "As mentioned before, the scope of the path selection process can range from simply returning the next hop on the QoS path selected for the flow, to specifying the complete path that was computed, i.e., an explicit route. Obviously, the information being returned by the path selection algorithm differs in these two cases, and constructing it imposes different requirements on the path computation algorithm and the data structures it relies on. While the presentation of the path computation algorithms focused on the hop-by-hop routing approach, the same algorithms can be applied to generate explicit routes with minor modifications. These modifications and how they facilitate constructing explicit routes are discussed next.",
+      "ja": "前に述べたように、経路選択処理の範囲は、すなわち、計算された完全なパスを指定するには、フローのために選択されたQoSパス上の次のホップを返すからの明示的なルートを範囲とすることができます。もちろん、情報は、これらの2つのケースで異なり、パス選択アルゴリズムによって返され、それが経路計算アルゴリズムとそれが依存するデータ構造上のさまざまな要件を課して構築されています。ホップバイホップルーティングアプローチに焦点を当てた経路計算アルゴリズムを提示しながら、同じアルゴリズムがわずかな変更と明示的経路を生成するために適用することができます。これらの変更及びそれらがどのように明示的なルートを構築する容易が次に議論されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The general approach to facilitate construction of explicit routes is to update the neighbor field differently from the way it is done for hop-by-hop routing as described in Section 2.3. Recall that in the path computation algorithms the neighbor field is updated to reflect the identity of the router adjacent to the source node on the partial path computed. This facilitates returning the next hop at the source for the specific path. In the context of explicit routing, the neighbor information is updated to reflect the identity of the previous router on the path.",
+      "ja": "明示的なルートの構築を容易にするための一般的なアプローチは、セクション2.3で説明したように、ホップバイホップルーティングのために行われる方法は異なる隣接フィールドを更新することです。隣接フィールドが計算部分パス上のソースノードに隣接ルータのアイデンティティを反映するように更新された経路計算アルゴリズムにそれを思い出してください。これは、特定のパスのソースで次のホップを返す容易にします。明示的なルーティングの文脈では、隣接情報は、パス上の前のルータのアイデンティティを反映するように更新されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In general, there can be multiple equivalent paths for a given hop count. Thus, the neighbor information is stored as a list rather than single value. Associated with each neighbor, additional information is stored to facilitate load balancing among these multiple paths at the time of path selection. Specifically, we store the advertised available bandwidth on the link from the neighbor to the destination in the entry.",
+      "ja": "一般に、与えられたホップ・カウントのための複数の等価経路が存在することができます。したがって、隣接情報は、リストではなく単一の値として格納されます。各ネイバーに関連付けられた、追加情報は経路選択時に、これらの複数のパス間で負荷分散を容易にするために格納されます。具体的には、エントリ内の目的地への隣人からのリンクで宣伝に利用可能な帯域幅を保存します。"
+    },
+    {
+      "indent": 3,
+      "text": "With this change, the basic approach used to extract the complete list of vertices on a path from the neighbor information in the QoS routing table is to proceed `recursively' from the destination to the origin vertex. The path is extracted by stepping through the precomputed QoS routing table from vertex to vertex, and identifying at each step the corresponding neighbor (precursor) information. The process is described as recursive since the neighbor node identified in one step becomes the destination node for table look up in the next step. Once the source router is reached, the concatenation of all the neighbor fields that have been extracted forms the desired explicit route. This applies to algorithms of Section 2.3.1 and Appendix C. If at a particular stage there are multiple neighbor choices (due to equal cost multi-paths), one of them can be chosen at random with a probability that is weighted, for example, by the associated bandwidth on the link from the neighbor to the (current) destination.",
+      "ja": "この変更により、QoSのルーティングテーブル内の近隣情報から経路上の頂点の完全なリストを抽出するために使用される基本的なアプローチは、原点頂点に先から「再帰 `進行することです。パスは、頂点から頂点に事前計算のQoSルーティングテーブルをステップ、及び各対応する隣接（前駆体）情報を識別するステップによって抽出されます。ワンステップで識別された隣接ノードがテーブルの宛先ノードが次のステップでルックアップとなるためプロセスは、再帰として記載されています。ソースルータに到達すると、抽出されたすべての隣接フィールドの連結は、希望のルートを明示的に形成しています。特定の段階で（これは等価コストマルチパスに）複数の隣接選択肢、そのうちの一つは、例えば、重み付けされた確率でランダムに選択することが可能である場合、これは、セクション2.3.1及び付録Cのアルゴリズムに適用されます、（現在の）目的地までのネイバーからのリンクに関連する帯域幅による。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, assume a new request to destination, say, d, and with bandwidth requirements B. The index of the destination vertex identifies the row in the QoS routing table that needs to be checked to generate a path. The row is then searched to identify a suitable path. If the Bellman-Ford algorithm of Section 2.3.1 was used, the search proceeds by increasing index (hop) count until an entry is found, say at hop count or column index of h, with a value of the bw field that is equal to or greater than B. This entry points to the initial information identifying the selected path. If the Dijkstra algorithm of Appendix C is used, the first quantized value qB such that qB >= B is first identified, and the associated column then determines the first entry in the QoS routing table that identifies the selected path.",
+      "ja": "具体的には、たとえば、D、目的地までの新たな要求を想定し、帯域幅要件Bと宛先頂点のインデックスパスを生成するためにチェックする必要があるのQoSルーティングテーブル内の行を識別する。行は、その後、適切なパスを識別するために探索されます。セクション2.3.1のベルマン - フォード法を使用した場合、エントリが見つかるまで、増加する指数（ホップ）による検索が進行し、カウント等しいBWフィールドの値と、ホップ数又はHの列インデックスで言いますまたは選択したパスを特定する初期情報B.このエントリポイントよりも大きいです。付録Cのダイクストラのアルゴリズムが使用される場合、最初の量子化値QBは、QB> = Bは、最初に同定されていること、および関連する列は、その後、選択された経路を特定のQoSルーティングテーブルの最初のエントリを決定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Once this first entry has been identified, reconstruction of the complete list of vertices on the path proceeds similarly, whether the table was built using the algorithm of Section 2.3.1 or Appendix C. Specifically, in both cases, the neighbor field in each entry points to the previous node on the path from the source node and with the same bandwidth capabilities as those associated with the current entry. The complete path is, therefore, reconstructed by following the pointers provided by the neighbor field of successive entries.",
+      "ja": "この最初のエントリが識別されると、経路上の頂点の完全なリストの再構成は、テーブルは、各エントリに、両方の場合において、具体的には隣接フィールドをセクション2.3.1または付録Cのアルゴリズムを使用して構築されたかどうかを、同様に進みソースノードから、現在のエントリに関連付けられたものと同一の帯域幅能力と経路上の前のノードを指します。完全なパスは、従って、連続したエントリの隣のフィールドによって提供されるポインタに従うことによって再構成される。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of the Bellman-Ford algorithm of Section 2.3.1, this means moving backwards in the table from column to column, using at each step the row index pointed to by the neighbor field of the entry in the previous column. Each time, the corresponding vertex index specified in the neighbor field is pre-pended to the list of vertices constructed so far. Since we start at column h, the process ends when the first column is reached, i.e., after h steps, at which point the list of vertices making up the path has been reconstructed.",
+      "ja": "セクション2.3.1のベルマン - フォード法の場合には、これは列から列に表に後方に移動する手段、各ステップで使用した行のインデックスは、前の列のエントリの隣のフィールドによって指されます。たびに、隣のフィールドに指定された対応する頂点インデックスは、これまでに構築された頂点のリストに事前に付加されます。我々は列hで開始してから最初の列はパスを構成する頂点のリストが再構築された時点で時間の手順後、即ち、到達した場合、処理は終了します"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of the Dijkstra algorithm of Appendix C, the backtracking process is similar although slightly different because of the different relation between paths and columns in the routing table, i.e., a column now corresponds to a quantized bandwidth value instead of a hop count. The backtracking now proceeds along the column corresponding to the quantized bandwidth value needed to satisfy the bandwidth requirements of the flow. At each step, the vertex index specified in the neighbor field is pre-pended to the list of vertices constructed so far, and is used to identify the next row index to move to. The process ends when an entry is reached whose neighbor field specifies the origin vertex of the flow. Note that since there are as many rows in the table as there are vertices in the graph, i.e., N, it could take up to N steps before the process terminates.",
+      "ja": "付録Cのダイクストラ法の場合には、バックトラッキングプロセスが原因で、ルーティングテーブル内のパスと列の間の異なる関係をわずかに異なるが類似している、すなわち、カラムは、現在代わりにホップカウントの量子化された帯域幅の値に対応します。バックトラックは、現在のフローの帯域幅要件を満たすために必要な量子化された帯域幅の値に対応する列に沿って進みます。各ステップで、隣接フィールドに指定された頂点インデックスがこれまで構築頂点のリストに予め保留され、に移動し、次の行のインデックスを識別するために使用されます。エントリはその隣人フィールドフローの原点頂点を指定達したときに処理を終了します。グラフの頂点が存在するようにテーブルのように多くの行が存在するので、プロセスが終了する前、すなわち、Nは、それはNステップに取ることができることに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the identification of the first entry in the routing table is identical to what was described for the hop-by-hop routing case. However, as described in this section, the update of the neighbor fields while constructing the QoS routing tables, is being performed differently in the explicit and hop-by-hop routing cases. Clearly, two different neighbor fields can be kept in each entry and updates to both could certainly be performed jointly, if support for both xplicit routing and hop-by-hop routing is needed.",
+      "ja": "ルーティングテーブルの最初のエントリの識別は、ホップバイホップルーティングの場合について説明したものと同一であることに留意されたいです。しかしながら、ルーティングテーブルQoSを構築しながら、隣接フィールドの更新は、このセクションに記載されているように、明示的及びホップバイホップルーティングの場合に異なる行われています。明らかに、二つの異なる隣接フィールドがxplicitルーティングとホップバイホップルーティングの両方のためのサポートが必要な場合は、確かに、共同で実施することができるの両方に各エントリと更新に保つことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Endnotes",
+      "ja": "文末"
+    },
+    {
+      "indent": 3,
+      "text": "1. In this document we commit the abuse of notation of calling a \"network\" the interconnection of routers and networks through which we attempt to compute a QoS path.",
+      "ja": "1.この文書では、我々はQoS経路を計算しようとすると、それを通してルータとネットワークの相互接続「ネットワーク」を呼び出すの表記法の乱用をコミットします。"
+    },
+    {
+      "indent": 3,
+      "text": "2. This is true for uni-cast flows, but in the case of multi-cast flows, hop-by-hop and an explicit routing clearly have different implications.",
+      "ja": "2.これは、ユニキャストフローについても同様であるが、マルチキャストフローの場合には、ホップバイホップおよび明示ルーティング明らかに異なる意味を持ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Some hysteresis mechanism should be added to suppress updates when the metric value oscillates around a class boundary.",
+      "ja": "3.いくつかのヒステリシス機構は、メトリック値がクラスの境界付近で振動するときの更新を抑制するために追加する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "4. In this document, we use the terms node and vertex interchangeably.",
+      "ja": "4.この文書では、我々は、互換的用語ノードと頂点を使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "5. Various hybrid methods can also be envisioned, e.g., periodic computations except if more than a given number of updates are received within a shorter interval, or periodic updates except if the change in metrics corresponding to a given update exceeds a certain threshold. Such variations are, however, not considered in this document.",
+      "ja": "5.様々なハイブリッド方法はまた、例えば、アップデート以上の所定数が所定の更新に対応する指標の変化が一定の閾値を超えた場合を除いて短い間隔、または定期的な更新の中に受信された場合を除き、定期的な計算を想定することができます。このような変化は、しかし、この文書では考慮されません。"
+    },
+    {
+      "indent": 3,
+      "text": "6. Modifications to support explicit routing are discussed in Appendix D.",
+      "ja": "明示的なルーティングをサポートする6変形例は付録Dに記載されています"
+    },
+    {
+      "indent": 3,
+      "text": "7. Note, that this does not say anything on whether to differentiate between outgoing and incoming bandwidth on a shared media network. As a matter of fact, a reasonable option is to set the incoming bandwidth (from network to router) to infinity, and only use the outgoing bandwidth value to characterize bandwidth availability on the shared network.",
+      "ja": "これは、共有メディアネットワーク上での発信と着信帯域幅を区別するかどうかの何も言わないことに注意7.、。実際のところ、合理的な選択肢は無限大（ルータへのネットワークからの）着信帯域幅を設定し、唯一の共有ネットワーク上の帯域幅の利用可能性を特徴づけるために、発信帯域幅の値を使用することです。"
+    },
+    {
+      "indent": 3,
+      "text": "8. exponent in parenthesis",
+      "section_title": true,
+      "ja": "括弧内の8.指数"
+    },
+    {
+      "indent": 3,
+      "text": "9. Access to some of the more recent versions of the GateD software is restricted to the GateD consortium members.",
+      "ja": "GateDはソフトウェアのより新しいバージョンの一部9.アクセスは、GateDのコンソーシアムのメンバーに制限されています。"
+    },
+    {
+      "indent": 3,
+      "text": "10. Note that a Breadth-First-Search (BFS) algorithm [CLR90] could also be used. It has a lower complexity, but would not allow reuse of existing code in an OSPF implementation.",
+      "ja": "幅優先-検索（BFS）アルゴリズムは[CLR90]も使用することができる10.注意。これは、低複雑性を持っていますが、OSPFの実装で既存のコードの再利用を許可しないでしょう。"
+    },
+    {
+      "indent": 0,
+      "text": "References",
+      "ja": "リファレンス"
+    },
+    {
+      "indent": 3,
+      "text": "[AGK99] G. Apostolopoulos, R. Guerin, and S. Kamat. Implementation and performance meassurements of QoS routing extensions to OSPF. In Proceedings of INFOCOM'99, pages 680--688, New York, NY, March 1999.",
+      "ja": "【AGK99] G. Apostolopoulos、R.ゲラン、およびS. Kamat。 OSPFへのQoSルーティングの拡張機能の実装と性能meassurements。 INFOCOM'99、ページ680--688、ニューヨーク、NY、1999年3月の議事録。"
+    },
+    {
+      "indent": 3,
+      "text": "[AGKT98] G. Apostolopoulos, R. Guerin, S. Kamat, and S. K. Tripathi. QoS routing: A performance perspective. In Proceedings of ACM SIGCOMM'98, pages 17--28, Vancouver, Canada, October",
+      "ja": "【AGKT98] G. Apostolopoulos、R.ゲラン、S. Kamat、およびS. K. Tripathi。 QoSルーティング：パフォーマンスの観点。 ACM SIGCOMM'98、ページ17--28、バンクーバー、カナダ、10月の議事録"
+    },
+    {
+      "indent": 3,
+      "text": "[Alm92] Almquist, P., \"Type of Service in the Internet Protocol Suite\", RFC 1349, July 1992.",
+      "ja": "[Alm92] Almquist、P.、 \"インターネットプロトコルスイートでサービスの種類\"、RFC 1349、1992年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[AT98] G. Apostolopoulos and S. K. Tripathi. On reducing the processing cost of on-demand QoS path computation. In Proceedings of ICNP'98, pages 80--89, Austin, TX, October 1998.",
+      "ja": "【AT98] G. ApostolopoulosおよびS. K. Tripathi。オンデマンドのQoS経路計算の処理コストの削減に。 ICNP'98の議事録には、ページ80--89、オースティン、TX、1998年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[BP95] J.-Y. Le Boudec and T. Przygienda. A Route Pre-Computation Algorithm for Integrated Services Networks. Journal of Network and Systems Management, 3(4), 1995.",
+      "ja": "[BP95] J.-Y.ルBoudecとT. Przygienda。サービス統合型ネットワーク用のルート事前計算アルゴリズム。ネットワークとシステム管理のジャーナル、3（4）、1995。"
+    },
+    {
+      "indent": 3,
+      "text": "[Car79] B. Carre. Graphs and Networks. Oxford University Press, ISBN 0-19-859622-7, Oxford, UK, 1979.",
+      "ja": "【Car79] B.カレ。グラフとネットワーク。オックスフォード大学出版、ISBN 0-19-859622-7、オックスフォード、英国、1979年。"
+    },
+    {
+      "indent": 3,
+      "text": "[CLR90] T. H. Cormen, C. E. Leiserson, and R. L. Rivest. Introduction to Algorithms. MIT Press, Cambridge, MA, 1990.",
+      "ja": "[CLR90] T. H. Cormen、C。E. Leiserson、およびR. L.リベスト。アルゴリズムの紹介。 MITプレス、ケンブリッジ、MA、1990。"
+    },
+    {
+      "indent": 3,
+      "text": "[Con] Merit GateD Consortium. The Gate Daemon (GateD) project.",
+      "ja": "[コン]メリットは、コンソーシアムゲーテッド。門デーモン（GateDの）プロジェクト。"
+    },
+    {
+      "indent": 3,
+      "text": "[GJ79] M.R. Garey and D.S. Johnson. Computers and Intractability. Freeman, San Francisco, 1979.",
+      "ja": "[GJ79] M.R. GareyおよびD。S.ジョンソン。コンピュータと扱いにくさ。フリーマン、サンフランシスコ、1979。"
+    },
+    {
+      "indent": 3,
+      "text": "[GKH97] R. Guerin, S. Kamat, and S. Herzog. QoS Path Management with RSVP. In Proceedings of the 2nd IEEE Global Internet Mini-Conference, pages 1914-1918, Phoenix, AZ, November",
+      "ja": "【GKH97] R.ゲラン、S. Kamat、及びS.ヘルツォーク。 RSVPとQoSのパス管理。第2回IEEEグローバルインターネットミニ会議議事録、ページ1914年から1918年、フェニックス、AZ、11月"
+    },
+    {
+      "indent": 3,
+      "text": "[GKR97] Guerin, R., Kamat, S. and E. Rosen, \"An Extended RSVP Routing Interface, Work in Progress.",
+      "ja": "【GKR97】ゲラン、R.、Kamat、S.、およびE.ローゼン、「拡張RSVP配線インタフェース、進行中で働いています。"
+    },
+    {
+      "indent": 3,
+      "text": "[GLG+97] Der-Hwa G., Li, T., Guerin, R., Rosen, E. and S. Kamat, \"Setting Up Reservations on Explicit Paths using RSVP\", Work in Progress.",
+      "ja": "[GLG + 97]デア・ファG.、李、T.、ゲラン、R.、ローゼン、E.およびS. Kamatは、進行中の作業 \"RSVPを使用して明示的なパスの予約を設定します\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[GO99] R. Guerin and A. Orda. QoS-Based Routing in Networks with Inaccurate Information: Theory and Algorithms. IEEE/ACM Transactions on Networking, 7(3):350--364, June 1999.",
+      "ja": "[GO99] R.ゲラン及びA.オルダ。不正確な情報とネットワークにおけるQoSベースのルーティング：理論とアルゴリズム。ネットワーク上のIEEE / ACM取引、7（3）：350--364、1999年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[GOW97] R. Guerin, A. Orda, and D. Williams. QoS Routing Mechanisms and OSPF Extensions. In Proceedings of the 2nd IEEE Global Internet Mini-Conference, pages 1903-1908, Phoenix, AZ, November 1997.",
+      "ja": "【GOW97] R.ゲラン、A.オルダ、及びD.ウィリアムズ。 QoSルーティングメカニズムとOSPF拡張機能。第2回IEEEグローバルインターネットミニ会議議事録、ページには1903年から1908年、フェニックス、AZ、1997年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[KNB98] Nichols, K., Blake, S., Baker F. and D. Black, \"Definition of the Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers\", RFC 2474, December 1998.",
+      "ja": "[KNB98]ニコルズ、K.、ブレイク、S.、ベーカーF.とD.黒、 \"IPv4とIPv6ヘッダーとの差別化されたサービス分野（DS分野）の定義\"、RFC 2474、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[LO98] D. H. Lorenz and A. Orda. QoS Routing in Networks with Uncertain Parameters. IEEE/ACM Transactions on Networking, 6(6):768--778, December 1998.",
+      "ja": "[LO98] D. H.ローレンツとA.オルダ。不確実なパラメータを使用したネットワークにおけるQoSルーティング。ネットワーク上のIEEE / ACM取引、6（6）：768--778、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Moy94] Moy, J., \"OSPF Version 2\", RFC 1583, March 1994.",
+      "ja": "[Moy94]モイ、J.、 \"OSPFバージョン2\"、RFC 1583、1994年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Moy98] Moy, J., \"OSPF Version 2\", STD 54, RFC 2328, April 1998.",
+      "ja": "【Moy98】モイ、J.、 \"OSPFバージョン2\"、STD 54、RFC 2328、1998年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Prz95] A. Przygienda. Link State Routing with QoS in ATM LANs. Ph.D. Thesis Nr. 11051, Swiss Federal Institute of Technology, April 1995.",
+      "ja": "【Prz95] A. Przygienda。 ATMのLAN内のQoSとリンクステートルーティング。博士論文Nrを。 11051、スイス連邦工科大学、1995年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RMK+98] R. Rajan, J. C. Martin, S. Kamat, M. See, R. Chaudhury, D. Verma, G. Powers, and R. Yavatkar. Schema for differentiated services and integrated services in networks. INTERNET-DRAFT, October 1998. work in progress.",
+      "ja": "[RMK + 98] R.ラジャン、J. C.マーチン、S. Kamat、M.参照R. Chaudhury、D.バーマ、G.パワーズ、及びR. Yavatkar。ネットワークでの差別化されたサービスと統合されたサービスのためのスキーマ。 INTERNET-DRAFT、進行中の1998年10月の作品。"
+    },
+    {
+      "indent": 3,
+      "text": "[RZB+97] Braden, R., Editor, Zhang, L., Berson, S., Herzog, S. and S. Jamin, \"Resource reSerVation Protocol (RSVP) Version 1, Functional Specification\", RFC 2205, September 1997.",
+      "ja": "[RZB + 97]ブレーデン、R.、エディタ、チャン、L.、Berson氏、S.、ハーツォグ、S.、およびS.ヤミン、 \"リソース予約プロトコル（RSVP）バージョン1機能仕様\"、RFC 2205、1997年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SPG97] Shenker, S., Partridge, C. and R. Guerin, \"Specification of Guaranteed Quality of Service\", RFC 2212, November 1997.",
+      "ja": "[SPG97] Shenker、S.、ヤマウズラ、C.とR.ゲラン、 \"保証されたサービスの質の仕様\"、RFC 2212、1997年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ST83] D.D. Sleator and R.E. Tarjan. A Data Structure for Dynamic Trees. Journal of Computer Systems, 26, 1983.",
+      "ja": "[ST83] D.D. SleatorとR.E. Tarjan。ダイナミックな木のデータ構造。コンピュータシステムのジャーナル、26、1983。"
+    },
+    {
+      "indent": 3,
+      "text": "[Tan89] A. Tannenbaum. Computer Networks. Addisson Wesley, 1989.",
+      "ja": "【Tan89] A.タネンバウム。コンピューターネットワーク。アディソンウェズリー、1989。"
+    },
+    {
+      "indent": 3,
+      "text": "[YPG97] Yavatkar, R., Pendarakis, D. and R. Guerin, \"A Framework for Policy-based Admission Control\", INTERNET-DRAFT, April 1999. Work in Progress.",
+      "ja": "[YPG97] Yavatkar、R.、Pendarakis、D.とR.ゲラン、進行中、インターネットドラフト、1999年4月ワーク「ポリシーベースのアドミッション制御のためのフレームワーク」。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "George Apostolopoulos IBM T.J. Watson Research Center P.O. Box 704 Yorktown Heights, NY 10598",
+      "ja": "ジョージApostolopoulos IBM T.J。ワトソン研究所の私書箱ボックス704ヨークタウンハイツ、NY 10598"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 914 784-6204 Fax: +1 914 784-6205 EMail: georgeap@watson.ibm.com",
+      "ja": "電話：+1 914 784-6204ファックス：+1 914 784-6205 Eメール：georgeap@watson.ibm.com"
+    },
+    {
+      "indent": 3,
+      "text": "Roch Guerin University Of Pennsylvania Department of Electrical Engineering, Rm 367 GRW 200 South 33rd Street Philadelphia, PA 19104--6390",
+      "ja": "電気工学のペンシルベニア州省、Rmの367 GRW 200南33丁目駅、フィラデルフィア、PA 19104--6390のRochのゲラン大学"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 215-898-9351 EMail: guerin@ee.upenn.edu",
+      "ja": "電話：+1 215-898-9351電子メール：guerin@ee.upenn.edu"
+    },
+    {
+      "indent": 3,
+      "text": "Sanjay Kamat Bell Laboratories Lucent Technologies Room 4C-510 101 Crawfords Corner Road Holmdel, NJ 07733",
+      "ja": "サンジャイKamatベル研究所ルーセント・テクノロジーズルーム4C-510 101 Crawfordsコーナー道路ホルムデル、NJ 07733"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: (732) 949-5936 email: sanjayk@dnrc.bell-labs.com",
+      "ja": "電話：（732）949-5936、電子メール：sanjayk@dnrc.bell-labs.com"
+    },
+    {
+      "indent": 3,
+      "text": "Ariel Orda Dept. Electrical Engineering Technion - I.I.T Haifa, 32000 - ISRAEL",
+      "ja": "アリエルオルダ学科電気工学テクニオン -  I.I.Tハイファ、32000  - イスラエル"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +011 972-4-8294646 Fax: +011 972-4-8323041 EMail: ariel@ee.technion.ac.il",
+      "ja": "電話：+011 972-4-8294646ファックス：+011 972-4-8323041 Eメール：ariel@ee.technion.ac.il"
+    },
+    {
+      "indent": 3,
+      "text": "Tony Przygienda Siara Systems 300 Ferguson Drive Moutain View California 94043",
+      "ja": "トニーPrzygienda Siaraシステム300ファーガソンドライブマウンテンビュー、カリフォルニア94043"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 732 949-5936 Email: prz@siara.com",
+      "ja": "電話：+1 732 949-5936 Eメール：prz@siara.com"
+    },
+    {
+      "indent": 3,
+      "text": "Doug Williams IBM T.J. Watson Research Center P.O. Box 704 Yorktown Heights, NY 10598",
+      "ja": "ダグ・ウィリアムスIBM T.J。ワトソン研究所の私書箱ボックス704ヨークタウンハイツ、NY 10598"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 914 784-5047 Fax: +1 914 784-6318 EMail: dougw@watson.ibm.com",
+      "ja": "電話：+1 914 784-5047ファックス：+1 914 784-6318 Eメール：dougw@watson.ibm.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1999). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1999）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}
