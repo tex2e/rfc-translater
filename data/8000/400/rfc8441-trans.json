@@ -1,0 +1,429 @@
+{
+  "title": {
+    "text": "RFC 8441 - Bootstrapping WebSockets with HTTP/2",
+    "ja": "RFC 8441 - HTTP / 2を使用したWebSocketのブートストラップ"
+  },
+  "number": 8441,
+  "created_at": "2019-10-23 22:16:16.340153+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        P. McManus\nRequest for Comments: 8441                                       Mozilla\nUpdates: 6455                                             September 2018\nCategory: Standards Track\nISSN: 2070-1721",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Bootstrapping WebSockets with HTTP/2",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a mechanism for running the WebSocket Protocol (RFC 6455) over a single stream of an HTTP/2 connection.",
+      "ja": "このドキュメントでは、HTTP / 2接続の単一ストリームでWebSocketプロトコル（RFC 6455）を実行するためのメカニズムを定義しています。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット標準化過程の文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、Internet Engineering Task Force（IETF）の製品です。 IETFコミュニティのコンセンサスを表しています。 これは公開レビューを受けており、Internet Engineering Steering Group（IESG）による公開が承認されています。 インターネット標準の詳細については、RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8441.",
+      "ja": "このドキュメントの現在のステータス、エラッタ、およびフィードバックの提供方法に関する情報は、https：//www.rfc-editor.org/info/rfc8441で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2018 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（c）2018 IETF Trustおよび文書作成者として特定された人物。 全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書は、BCP 78と、この文書の公開日に有効なIETF文書に関するIETFトラストの法的条項（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するあなたの権利と制限を説明しているので、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust Legal Provisionsのセクション4.eに記載されているSimplified BSD Licenseテキストを含める必要があり、Simplified BSD Licenseに記載されている保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2\n2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   3\n3.  The SETTINGS_ENABLE_CONNECT_PROTOCOL SETTINGS Parameter . . .   3\n4.  The Extended CONNECT Method . . . . . . . . . . . . . . . . .   4\n5.  Using Extended CONNECT to Bootstrap the WebSocket Protocol  .   4\n  5.1.  Example . . . . . . . . . . . . . . . . . . . . . . . . .   6\n6.  Design Considerations . . . . . . . . . . . . . . . . . . . .   6\n7.  About Intermediaries  . . . . . . . . . . . . . . . . . . . .   6\n8.  Security Considerations . . . . . . . . . . . . . . . . . . .   7\n9.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .   7\n  9.1.  A New HTTP/2 Setting  . . . . . . . . . . . . . . . . . .   7\n  9.2.  A New HTTP Upgrade Token  . . . . . . . . . . . . . . . .   7\n10. Normative References  . . . . . . . . . . . . . . . . . . . .   8\nAcknowledgments . . . . . . . . . . . . . . . . . . . . . . . . .   8\nAuthor's Address  . . . . . . . . . . . . . . . . . . . . . . . .   8",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The Hypertext Transfer Protocol (HTTP) [RFC7230] provides compatible resource-level semantics across different versions, but it does not offer compatibility at the connection-management level. Other protocols that rely on connection-management details of HTTP, such as WebSockets, must be updated for new versions of HTTP.",
+      "ja": "ハイパーテキスト転送プロトコル（HTTP）[RFC7230]は、異なるバージョン間で互換性のあるリソースレベルのセマンティクスを提供しますが、接続管理レベルでの互換性は提供しません。 WebSocketなど、HTTPの接続管理の詳細に依存する他のプロトコルは、HTTPの新しいバージョンに合わせて更新する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The WebSocket Protocol [RFC6455] uses the HTTP/1.1 Upgrade mechanism (Section 6.7 of [RFC7230]) to transition a TCP connection from HTTP into a WebSocket connection. A different approach must be taken with HTTP/2 [RFC7540]. Due to its multiplexing nature, HTTP/2 does not allow connection-wide header fields or status codes, such as the Upgrade and Connection request-header fields or the 101 (Switching Protocols) response code. These are all required by the [RFC6455] opening handshake.",
+      "ja": "WebSocketプロトコル[RFC6455]は、HTTP / 1.1アップグレードメカニズム（[RFC7230]のセクション6.7）を使用して、TCP接続をHTTPからWebSocket接続に移行します。 HTTP / 2 [RFC7540]では別のアプローチをとる必要があります。 多重化の性質により、HTTP / 2では、アップグレードおよび接続要求ヘッダーフィールドや101（スイッチングプロトコル）応答コードなど、接続全体のヘッダーフィールドまたはステータスコードは許可されません。 これらはすべて[RFC6455]オープニングハンドシェイクに必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Being able to bootstrap WebSockets from HTTP/2 allows one TCP connection to be shared by both protocols and extends HTTP/2's more efficient use of the network to WebSockets.",
+      "ja": "HTTP / 2からWebSocketをブートストラップできるため、1つのTCP接続を両方のプロトコルで共有でき、HTTP / 2のネットワークのより効率的な使用をWebSocketに拡張できます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document extends the HTTP CONNECT method, as specified for HTTP/2 in Section 8.3 of [RFC7540]. The extension allows the substitution of a new protocol name to connect to rather than the external host normally used by CONNECT. The result is a tunnel on a single HTTP/2 stream that can carry data for WebSockets (or any other protocol). The other streams on the connection may carry more extended CONNECT tunnels, traditional HTTP/2 data, or a mixture of both.",
+      "ja": "このドキュメントは、[RFC7540]のセクション8.3でHTTP / 2に指定されているHTTP CONNECTメソッドを拡張します。 この拡張により、CONNECTで通常使用される外部ホストではなく、接続する新しいプロトコル名の置換が可能になります。 その結果、WebSocket（またはその他のプロトコル）のデータを伝送できる単一のHTTP / 2ストリーム上のトンネルができます。 接続上の他のストリームは、さらに拡張されたCONNECTトンネル、従来のHTTP / 2データ、または両方の混合を伝送する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This tunneled stream will be multiplexed with other regular streams on the connection and enjoys the normal priority, cancellation, and flow-control features of HTTP/2.",
+      "ja": "このトンネルストリームは、接続上の他の通常のストリームと多重化され、HTTP / 2の通常の優先度、キャンセル、およびフロー制御機能を享受します。"
+    },
+    {
+      "indent": 3,
+      "text": "Streams that successfully establish a WebSocket connection using a tunneled stream and the modifications to the opening handshake defined in this document then use the traditional WebSocket Protocol, treating the stream as if it were the TCP connection in that specification.",
+      "ja": "トンネルストリームを使用してWebSocket接続を正常に確立するストリームと、このドキュメントで定義されているオープニングハンドシェイクへの変更は、従来のWebSocketプロトコルを使用し、その仕様のTCP接続であるかのようにストリームを処理します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2.用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」 この文書の「」は、BCP 14 [RFC2119] [RFC8174]で説明されているように、ここに示すようにすべての大文字で表示される場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. The SETTINGS_ENABLE_CONNECT_PROTOCOL SETTINGS Parameter",
+      "section_title": true,
+      "ja": "3. SETTINGS_ENABLE_CONNECT_PROTOCOL SETTINGSパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "This document adds a new SETTINGS parameter to those defined by [RFC7540], Section 6.5.2.",
+      "ja": "このドキュメントは、[RFC7540]、セクション406.5.2で定義されたものに新しいSETTINGSパラメータを追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "The new parameter name is SETTINGS_ENABLE_CONNECT_PROTOCOL. The value of the parameter MUST be 0 or 1.",
+      "ja": "新しいパラメーター名はSETTINGS_ENABLE_CONNECT_PROTOCOLです。 パラメータの値は0または1でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receipt of SETTINGS_ENABLE_CONNECT_PROTOCOL with a value of 1, a client MAY use the Extended CONNECT as defined in this document when creating new streams. Receipt of this parameter by a server does not have any impact.",
+      "ja": "値が1のSETTINGS_ENABLE_CONNECT_PROTOCOLを受信すると、クライアントは、新しいストリームを作成するときに、このドキュメントで定義されている拡張CONNECTを使用できます。 サーバーがこのパラメーターを受信しても、影響はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender MUST NOT send a SETTINGS_ENABLE_CONNECT_PROTOCOL parameter with the value of 0 after previously sending a value of 1.",
+      "ja": "送信者は、以前に値1を送信した後、値0のSETTINGS_ENABLE_CONNECT_PROTOCOLパラメーターを送信してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Using a SETTINGS parameter to opt into an otherwise incompatible protocol change is a use of \"Extending HTTP/2\" defined by Section 5.5 of [RFC7540]. Specifically, the addition a new pseudo-header field, \":protocol\", and the change in meaning of the :authority pseudo-header field in Section 4 require opt-in negotiation. If a client were to use the provisions of the extended CONNECT method defined in this document without first receiving a SETTINGS_ENABLE_CONNECT_PROTOCOL parameter, a non-supporting peer would detect a malformed request and generate a stream error (Section 8.1.2.6 of [RFC7540]).",
+      "ja": "SETTINGSパラメータを使用して互換性のないプロトコル変更を選択することは、[RFC7540]のセクション5.5で定義されている「Extending HTTP / 2」の使用です。 具体的には、新しい疑似ヘッダーフィールド「：protocol」の追加、およびセクション4の：authority疑似ヘッダーフィールドの意味の変更には、オプトインネゴシエーションが必要です。 クライアントが最初にSETTINGS_ENABLE_CONNECT_PROTOCOLパラメーターを受信することなく、このドキュメントで定義されている拡張CONNECTメソッドの規定を使用する場合、非サポートピアは不正なリクエストを検出し、ストリームエラーを生成します（[RFC7540]のセクション8.1.2.6）。"
+    },
+    {
+      "indent": 0,
+      "text": "4. The Extended CONNECT Method",
+      "section_title": true,
+      "ja": "4.拡張CONNECTメソッド"
+    },
+    {
+      "indent": 3,
+      "text": "Usage of the CONNECT method in HTTP/2 is defined by Section 8.3 of [RFC7540]. This extension modifies the method in the following ways:",
+      "ja": "HTTP / 2のCONNECTメソッドの使用法は、[RFC7540]のセクション8.3で定義されています。 この拡張機能は、次の方法でメソッドを変更します。"
+    },
+    {
+      "indent": 3,
+      "text": "o A new pseudo-header field :protocol MAY be included on request HEADERS indicating the desired protocol to be spoken on the tunnel created by CONNECT. The pseudo-header field is single valued and contains a value from the \"Hypertext Transfer Protocol (HTTP) Upgrade Token Registry\" located at <https://www.iana.org/assignments/http-upgrade-tokens/>",
+      "ja": "o CONNECTによって作成されたトンネルで話されるべき所望のプロトコルを示すリクエストHEADERSに、新しい擬似ヘッダーフィールド：protocolを含めることができます。 疑似ヘッダーフィールドは単一の値で、<https://www.iana.org/assignments/http-upgrade-tokens/>にある「ハイパーテキスト転送プロトコル（HTTP）アップグレードトークンレジストリ」の値が含まれています"
+    },
+    {
+      "indent": 3,
+      "text": "o On requests that contain the :protocol pseudo-header field, the :scheme and :path pseudo-header fields of the target URI (see Section 5) MUST also be included.",
+      "ja": "o：protocol疑似ヘッダーフィールドを含む要求では、ターゲットURI（セクション5を参照）の：schemeおよび：path疑似ヘッダーフィールドも含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o On requests bearing the :protocol pseudo-header field, the :authority pseudo-header field is interpreted according to Section 8.1.2.3 of [RFC7540] instead of Section 8.3 of that document. In particular, the server MUST NOT create a tunnel to the host indicated by the :authority as it would with a CONNECT method request that was not modified by this extension.",
+      "ja": "o：protocol疑似ヘッダーフィールドを持つ要求では、：authority疑似ヘッダーフィールドは、そのドキュメントのセクション8.3ではなく[RFC7540]のセクション8.1.2.3に従って解釈されます。 特に、サーバーは、この拡張機能によって変更されなかったCONNECTメソッド要求の場合のように、：authorityによって示されるホストへのトンネルを作成してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving a CONNECT request bearing the :protocol pseudo-header field, the server establishes a tunnel to another service of the protocol type indicated by the pseudo-header field. This service may or may not be co-located with the server.",
+      "ja": "：protocol疑似ヘッダーフィールドを持つCONNECT要求を受信すると、サーバーは、疑似ヘッダーフィールドで示されたプロトコルタイプの別のサービスへのトンネルを確立します。 このサービスは、サーバーと同じ場所にあってもなくてもかまいません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Using Extended CONNECT to Bootstrap the WebSocket Protocol",
+      "section_title": true,
+      "ja": "5.拡張CONNECTを使用してWebSocketプロトコルをブートストラップする"
+    },
+    {
+      "indent": 3,
+      "text": "The :protocol pseudo-header field MUST be included in the CONNECT request, and it MUST have a value of \"websocket\" to initiate a WebSocket connection on an HTTP/2 stream. Other HTTP request and response-header fields, such as those for manipulating cookies, may be included in the HEADERS with the CONNECT method as usual. This request replaces the GET-based request in [RFC6455] and is used to process the WebSockets opening handshake.",
+      "ja": "：protocol疑似ヘッダーフィールドはCONNECTリクエストに含まれている必要があり、HTTP / 2ストリームでWebSocket接続を開始するために「websocket」の値を持たなければなりません。 Cookieを操作するためのフィールドなど、他のHTTP要求および応答ヘッダーフィールドは、通常どおり、CONNECTメソッドを使用してHEADERSに含めることができます。 この要求は、[RFC6455]のGETベースの要求を置き換え、WebSocketsハンドシェイクを処理するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The scheme of the target URI (Section 5.1 of [RFC7230]) MUST be \"https\" for \"wss\"-schemed WebSockets and \"http\" for \"ws\"-schemed WebSockets. The remainder of the target URI is the same as the WebSocket URI. The WebSocket URI is still used for proxy autoconfiguration. The security requirements for the HTTP/2 connection used by this specification are established by [RFC7540] for https requests and [RFC8164] for http requests.",
+      "ja": "ターゲットURIのスキーム（[RFC7230]のセクション5.1）は、「wss」でスケジュールされたWebSocketsの場合は「https」、「ws」でスケジュールされたWebSocketsの場合は「http」でなければなりません。 ターゲットURIの残りは、WebSocket URIと同じです。 WebSocket URIは、プロキシの自動構成に引き続き使用されます。 この仕様で使用されるHTTP / 2接続のセキュリティ要件は、https要求の場合は[RFC7540]、http要求の場合は[RFC8164]によって確立されます。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6455] requires the use of Connection and Upgrade header fields that are not part of HTTP/2. They MUST NOT be included in the CONNECT request defined here.",
+      "ja": "[RFC6455]では、HTTP / 2の一部ではないConnectionおよびUpgradeヘッダーフィールドを使用する必要があります。 ここで定義されたCONNECTリクエストにそれらを含めることはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6455] requires the use of a Host header field that is also not part of HTTP/2. The Host information is conveyed as part of the :authority pseudo-header field, which is required on every HTTP/2 transaction.",
+      "ja": "[RFC6455]では、HTTP / 2の一部でもないHostヘッダーフィールドを使用する必要があります。 ホスト情報は、：authority擬似ヘッダーフィールドの一部として伝達されます。これは、すべてのHTTP / 2トランザクションで必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations using this extended CONNECT to bootstrap WebSockets do not do the processing of the Sec-WebSocket-Key and Sec-WebSocket-Accept header fields of [RFC6455] as that functionality has been superseded by the :protocol pseudo-header field.",
+      "ja": "この拡張CONNECTを使用してWebSocketをブートストラップする実装は、[RFC6455]のSec-WebSocket-KeyおよびSec-WebSocket-Acceptヘッダーフィールドの処理を行いません。その機能は：protocol疑似ヘッダーフィールドに置き換えられたためです。"
+    },
+    {
+      "indent": 3,
+      "text": "The Origin [RFC6454], Sec-WebSocket-Version, Sec-WebSocket-Protocol, and Sec-WebSocket-Extensions header fields are used in the CONNECT request and response-header fields as defined in [RFC6455]. Note that HTTP/1 header field names were case insensitive, whereas HTTP/2 requires they be encoded as lowercase.",
+      "ja": "Origin [RFC6454]、Sec-WebSocket-Version、Sec-WebSocket-Protocol、およびSec-WebSocket-Extensionsヘッダーフィールドは、[RFC6455]で定義されているように、CONNECT要求および応答ヘッダーフィールドで使用されます。 HTTP / 1ヘッダーフィールド名では大文字と小文字が区別されませんが、HTTP / 2では小文字でエンコードする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "After successfully processing the opening handshake, the peers should proceed with the WebSocket Protocol [RFC6455] using the HTTP/2 stream from the CONNECT transaction as if it were the TCP connection referred to in [RFC6455]. The state of the WebSocket connection at this point is OPEN, as defined by [RFC6455], Section 4.1.",
+      "ja": "オープニングハンドシェイクを正常に処理した後、ピアは[RFC6455]で参照されるTCP接続であるかのように、CONNECTトランザクションからのHTTP / 2ストリームを使用してWebSocketプロトコル[RFC6455]を続行する必要があります。 [RFC6455]、セクション4.1で定義されているように、この時点でのWebSocket接続の状態はOPENです。"
+    },
+    {
+      "indent": 3,
+      "text": "The HTTP/2 stream closure is also analogous to the TCP connection closure of [RFC6455]. Orderly TCP-level closures are represented as END_STREAM flags ([RFC7540], Section 6.1). RST exceptions are represented with the RST_STREAM frame ([RFC7540], Section 6.4) with the CANCEL error code ([RFC7540], Section 7).",
+      "ja": "HTTP / 2ストリームクロージャは、[RFC6455]のTCP接続クロージャにも類似しています。 秩序だったTCPレベルのクロージャは、END_STREAMフラグとして表されます（[RFC7540]、セクション6.1）。 RST例外は、RST_STREAMフレーム（[RFC7540]、セクション6.4）とCANCELエラーコード（[RFC7540]、セクション7）で表されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Example",
+      "section_title": true,
+      "ja": "5.1。 例"
+    },
+    {
+      "indent": 0,
+      "text": "[[ From Client ]] [[ From Server ]]",
+      "ja": "[[クライアントから]] [[サーバーから]]"
+    },
+    {
+      "indent": 40,
+      "text": "SETTINGS\nSETTINGS_ENABLE_CONNECT_[..] = 1",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "HEADERS + END_HEADERS :method = CONNECT :protocol = websocket :scheme = https :path = /chat :authority = server.example.com sec-websocket-protocol = chat, superchat sec-websocket-extensions = permessage-deflate sec-websocket-version = 13 origin = http://www.example.com",
+      "ja": "HEADERS + END_HEADERS：method = CONNECT：protocol = websocket：scheme = https：path = / chat：authority = server.example.com sec-websocket-protocol = chat、superchat sec-websocket-extensions = permessage-deflate sec-websocket- バージョン= 13 origin = http://www.example.com"
+    },
+    {
+      "indent": 40,
+      "text": "HEADERS + END_HEADERS\n:status = 200\nsec-websocket-protocol = chat",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "DATA WebSocket Data",
+      "ja": "DATA WebSocketデータ"
+    },
+    {
+      "indent": 40,
+      "text": "DATA + END_STREAM\nWebSocket Data",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "DATA + END_STREAM WebSocket Data",
+      "ja": "DATA + END_STREAM WebSocketデータ"
+    },
+    {
+      "indent": 0,
+      "text": "6. Design Considerations",
+      "section_title": true,
+      "ja": "6.設計上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "A more native integration with HTTP/2 is certainly possible with larger additions to HTTP/2. This design was selected to minimize the solution complexity while still addressing the primary concern of running HTTP/2 and WebSockets concurrently.",
+      "ja": "HTTP / 2へのより多くの追加により、HTTP / 2とのよりネイティブな統合が確実に可能になります。 この設計は、HTTP / 2とWebSocketを同時に実行することの主な懸念に対処しながら、ソリューションの複雑さを最小限に抑えるために選択されました。"
+    },
+    {
+      "indent": 0,
+      "text": "7. About Intermediaries",
+      "section_title": true,
+      "ja": "7.仲介業者について"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not change how WebSockets interacts with HTTP forward proxies. If a client wishing to speak WebSockets connects via HTTP/2 to an HTTP proxy, it should continue to use a traditional CONNECT (i.e., not with a :protocol pseudo-header field) to tunnel through that proxy to the WebSocket server via HTTP.",
+      "ja": "このドキュメントは、WebSocketがHTTPフォワードプロキシと対話する方法を変更しません。 WebSocketを使用したいクライアントがHTTP / 2経由でHTTPプロキシに接続する場合、従来のCONNECT（つまり、：protocol疑似ヘッダーフィールドではない）を使用して、HTTP経由でそのプロキシを介してWebSocketサーバーにトンネルする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The resulting version of HTTP on that tunnel determines whether WebSockets is initiated directly or via a modified CONNECT request described in this document.",
+      "ja": "そのトンネルで生成されるHTTPのバージョンによって、WebSocketが直接開始されるか、このドキュメントで説明されている変更されたCONNECTリクエストを介して開始されるかが決まります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6455] ensures that non-WebSockets clients, especially XMLHttpRequest-based clients, cannot make a WebSocket connection. Its primary mechanism for doing that is the use of Sec-prefixed request-header fields that cannot be created by XMLHttpRequest-based clients. This specification addresses that concern in two ways:",
+      "ja": "[RFC6455]は、非WebSocketsクライアント、特にXMLHttpRequestベースのクライアントがWebSocket接続を確立できないようにします。 そのための主なメカニズムは、XMLHttpRequestベースのクライアントでは作成できないSecプレフィックス付きリクエストヘッダーフィールドの使用です。 この仕様は、2つの方法でその懸念に対処します。"
+    },
+    {
+      "indent": 3,
+      "text": "o XMLHttpRequest also prohibits use of the CONNECT method in addition to Sec-prefixed request-header fields.",
+      "ja": "o XMLHttpRequestは、Sec接頭辞付きのrequest-headerフィールドに加えて、CONNECTメソッドの使用も禁止しています。"
+    },
+    {
+      "indent": 3,
+      "text": "o The use of a pseudo-header field is something that is connection specific, and HTTP/2 never allows a pseudo-header to be created outside of the protocol stack.",
+      "ja": "o疑似ヘッダーフィールドの使用は接続固有のものであり、HTTP / 2はプロトコルスタックの外部で疑似ヘッダーを作成することを許可しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations of [RFC6455], Section 10 continue to apply to the use of the WebSocket Protocol when using this specification, with the exception of 10.8. That section is not relevant, because it is specific to the bootstrapping handshake that is changed in this document.",
+      "ja": "[RFC6455]のセキュリティに関する考慮事項、セクション10は、10.8を除き、この仕様を使用する場合のWebSocketプロトコルの使用に引き続き適用されます。 このセクションは、このドキュメントで変更されているブートストラップハンドシェイクに固有であるため、関連していません。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. A New HTTP/2 Setting",
+      "section_title": true,
+      "ja": "9.1。 新しいHTTP / 2設定"
+    },
+    {
+      "indent": 3,
+      "text": "This document registers an entry in the \"HTTP/2 Settings\" registry that was established by Section 11.3 of [RFC7540].",
+      "ja": "このドキュメントは、[RFC7540]のセクション11.3で確立された「HTTP / 2設定」レジストリにエントリを登録します。"
+    },
+    {
+      "indent": 6,
+      "text": "Code: 0x8 Name: SETTINGS_ENABLE_CONNECT_PROTOCOL Initial Value: 0 Specification: This document",
+      "ja": "コード：0x8名前：SETTINGS_ENABLE_CONNECT_PROTOCOL初期値：0仕様：このドキュメント"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. A New HTTP Upgrade Token",
+      "section_title": true,
+      "ja": "9.2。 新しいHTTPアップグレードトークン"
+    },
+    {
+      "indent": 3,
+      "text": "This document registers an entry in the \"HTTP Upgrade Tokens\" registry that was established by [RFC7230].",
+      "ja": "このドキュメントは、[RFC7230]によって確立された「HTTP Upgrade Tokens」レジストリにエントリを登録します。"
+    },
+    {
+      "indent": 6,
+      "text": "Value: websocket Description: The Web Socket Protocol Expected Version Tokens: References: [RFC6455] [RFC8441]",
+      "ja": "値：websocket説明：Webソケットプロトコルの予期されるバージョントークン：参照：[RFC6455] [RFC8441]"
+    },
+    {
+      "indent": 0,
+      "text": "10. Normative References",
+      "section_title": true,
+      "ja": "10.規範的参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S.、「要件レベルを示すためにRFCで使用するキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ rfc2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6454] Barth, A., \"The Web Origin Concept\", RFC 6454, DOI 10.17487/RFC6454, December 2011, <https://www.rfc-editor.org/info/rfc6454>.",
+      "ja": "[RFC6454] Barth、A。、「Web Origin Concept」、RFC 6454、DOI 10.17487 / RFC6454、2011年12月、<https://www.rfc-editor.org/info/rfc6454>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6455] Fette, I. and A. Melnikov, \"The WebSocket Protocol\", RFC 6455, DOI 10.17487/RFC6455, December 2011, <https://www.rfc-editor.org/info/rfc6455>.",
+      "ja": "[RFC6455] Fette、I。およびA. Melnikov、「WebSocketプロトコル」、RFC 6455、DOI 10.17487 / RFC6455、2011年12月、<https://www.rfc-editor.org/info/rfc6455>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7230] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing\", RFC 7230, DOI 10.17487/RFC7230, June 2014, <https://www.rfc-editor.org/info/rfc7230>.",
+      "ja": "[RFC7230]フィールディング、R。、エド。 およびJ. Reschke、Ed。、「ハイパーテキスト転送プロトコル（HTTP / 1.1）：メッセージの構文とルーティング」、RFC 7230、DOI 10.17487 / RFC7230、2014年6月、<https://www.rfc-editor.org/info/ rfc7230>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7540] Belshe, M., Peon, R., and M. Thomson, Ed., \"Hypertext Transfer Protocol Version 2 (HTTP/2)\", RFC 7540, DOI 10.17487/RFC7540, May 2015, <https://www.rfc-editor.org/info/rfc7540>.",
+      "ja": "[RFC7540] Belshe、M.、Peon、R.、およびM. Thomson、Ed。、「ハイパーテキスト転送プロトコルバージョン2（HTTP / 2）」、RFC 7540、DOI 10.17487 / RFC7540、2015年5月、<https：// www.rfc-editor.org/info/rfc7540>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8164] Nottingham, M. and M. Thomson, \"Opportunistic Security for HTTP/2\", RFC 8164, DOI 10.17487/RFC8164, May 2017, <https://www.rfc-editor.org/info/rfc8164>.",
+      "ja": "[RFC8164]ノッティンガム、M。およびM.トムソン、「HTTP / 2の便宜的セキュリティ」、RFC 8164、DOI 10.17487 / RFC8164、2017年5月、<https://www.rfc-editor.org/info/rfc8164>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The 2017 HTTP Workshop had a very productive discussion that helped determine the key problem and acceptable level of solution complexity.",
+      "ja": "2017年のHTTPワークショップでは、主要な問題とソリューションの複雑さの許容レベルを決定するのに役立つ非常に生産的な議論が行われました。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Patrick McManus Mozilla",
+      "ja": "パトリック・マクマナス・モジラ"
+    },
+    {
+      "indent": 3,
+      "text": "Email: mcmanus@ducksong.com",
+      "ja": "メール：mcmanus@ducksong.com"
+    }
+  ]
+}

@@ -1,0 +1,673 @@
+{
+  "title": {
+    "text": "RFC 5682 - Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP",
+    "ja": "RFC 5682 - フォワードRTO-復旧（F-RTO）：TCPとスプリアス再送タイムアウトを検出するためのアルゴリズム"
+  },
+  "number": 5682,
+  "created_at": "2019-10-27 11:44:49.385517+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                       P. Sarolahti\nRequest for Comments: 5682                         Nokia Research Center\nUpdates: 4138                                                    M. Kojo\nCategory: Standards Track                         University of Helsinki\n                                                             K. Yamamoto\n                                                                 M. Hata\n                                                              NTT Docomo\n                                                          September 2009",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "Forward RTO-Recovery (F-RTO): An Algorithm for Detecting\n       Spurious Retransmission Timeouts with TCP",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The purpose of this document is to move the F-RTO (Forward RTO-Recovery) functionality for TCP in RFC 4138 from Experimental to Standards Track status. The F-RTO support for Stream Control Transmission Protocol (SCTP) in RFC 4138 remains with Experimental status. See Appendix B for the differences between this document and RFC 4138.",
+      "ja": "このドキュメントの目的は、標準化過程の状態に実験からRFC 4138でTCPのためのF-RTO（フォワードRTO-復旧）機能を移動することです。 RFC 4138でのストリーム制御伝送プロトコル（SCTP）のためのF-RTOのサポートは実験的なステータスで残っています。このドキュメントとRFC 4138との違いについては、付録Bを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Spurious retransmission timeouts cause suboptimal TCP performance because they often result in unnecessary retransmission of the last window of data. This document describes the F-RTO detection algorithm for detecting spurious TCP retransmission timeouts. F-RTO is a TCP sender-only algorithm that does not require any TCP options to operate. After retransmitting the first unacknowledged segment triggered by a timeout, the F-RTO algorithm of the TCP sender monitors the incoming acknowledgments to determine whether the timeout was spurious. It then decides whether to send new segments or retransmit unacknowledged segments. The algorithm effectively helps to avoid additional unnecessary retransmissions and thereby improves TCP performance in the case of a spurious timeout.",
+      "ja": "彼らは多くの場合、データの最後のウィンドウの不要な再送信につながるので、スプリアス再送タイムアウトが次善のTCP性能を引き起こします。この文書では、偽のTCP再送タイムアウトを検出するためのF-RTO検出アルゴリズムを説明します。 F-RTOが動作するために、任意のTCPオプションを必要としないTCP送信側のみのアルゴリズムです。タイムアウトによってトリガー最初不承認のセグメントを再送信した後に、TCP送信側のF-RTOアルゴリズムは、タイムアウトが偽であったかどうかを決定するために受信確認応答を監視します。これは、新しいセグメントを送信したり、未確認のセグメントを再送信するかを決定します。このアルゴリズムは、効果的に追加の不必要な再送信を回避するために役立ち、それによって、スプリアスタイムアウトした場合のTCPのパフォーマンスが向上します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright and License Notice",
+      "ja": "著作権とライセンスに関するお知らせ"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2009 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2009 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクション4.eに記載されており、BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n   1.1. Conventions and Terminology ................................5\n2. Basic F-RTO Algorithm ...........................................5\n   2.1. The Algorithm ..............................................5\n   2.2. Discussion .................................................7\n3. SACK-Enhanced Version of the F-RTO Algorithm ....................9\n   3.1. The Algorithm ..............................................9\n   3.2. Discussion ................................................11\n4. Taking Actions after Detecting Spurious RTO ....................11\n5. Evaluation of RFC 4138 .........................................12\n6. Security Considerations ........................................13\n7. Acknowledgments ................................................14\nAppendix A. Discussion of Window-Limited Cases ....................15\nAppendix B. Changes since RFC 4138 ................................16\nReferences ........................................................16\n   Normative References ...........................................16\n   Informative References .........................................17",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The Transmission Control Protocol (TCP) [Pos81] has two methods for triggering retransmissions. First, the TCP sender relies on incoming duplicate acknowledgments (ACKs), which indicate that the receiver is missing some of the data. After a required number of successive duplicate ACKs have arrived at the sender, it retransmits the first unacknowledged segment [APB09] and continues with a loss recovery algorithm such as NewReno [FHG04] or SACK-based (Selective Acknowledgment) loss recovery [BAFW03]. Second, the TCP sender maintains a retransmission timer that triggers retransmission of segments, if they have not been acknowledged before the retransmission timeout (RTO) occurs. When the retransmission timeout occurs, the TCP sender enters the RTO recovery where the congestion window is initialized to one segment and unacknowledged segments are retransmitted using the slow-start algorithm. The retransmission timer is adjusted dynamically, based on the measured round-trip times [PA00].",
+      "ja": "伝送制御プロトコル（TCP）[Pos81]は、再送をトリガするための2つの方法を持っています。まず、TCPの送信側は受信側がデータの一部が欠落していることを示し、着信重複確認応答（ACKの）、に依存しています。連続した重複ACKの必要数は、送信者に到着した後、それは[APB09】第未確認のセグメントを再送し、[BAFW03ようなNewRenoの[FHG04]またはSACKベース（選択的確認応答）損失回復として損失回復アルゴリズムを継続します。第二に、TCPの送信側は再送タイムアウト（RTO）が発生する前に、彼らは確認されていない場合は、セグメントの再送をトリガーする再送タイマを維持します。再送タイムアウトが発生した場合、TCPの送信側は、輻輳ウィンドウが1つのセグメントに初期化され、未確認のセグメントはスロースタートアルゴリズムを使用して再送されRTO回復に入ります。再送タイマが測定された往復時間[PA00]に基づいて、動的に調整されます。"
+    },
+    {
+      "indent": 3,
+      "text": "It has been pointed out that the retransmission timer can expire spuriously and cause unnecessary retransmissions when no segments have been lost [LK00, GL02, LM03]. After a spurious retransmission timeout, the late acknowledgments of the original segments arrive at the sender, usually triggering unnecessary retransmissions of a whole window of segments during the RTO recovery. Furthermore, after a spurious retransmission timeout, a conventional TCP sender increases the congestion window on each late acknowledgment in slow start. This injects a large number of data segments into the network within one round-trip time, thus violating the packet conservation principle [Jac88].",
+      "ja": "何のセグメントが[LK00、GL02、LM03]失われていないとき再送タイマーが誤って失効し、不必要な再送信を引き起こす可能性があることを指摘されています。スプリアス再送タイムアウトの後、元のセグメントの後期確認応答は通常、RTO回復時にセグメントのウィンドウ全体の不必要な再送信をトリガ、送信側に到着します。さらに、スプリアス再送タイムアウトの後、従来のTCPの送信側はスロースタートの各後半確認の輻輳ウィンドウが増加します。これにより、パケット保存原理[Jac88]に違反し、1往復時間内にネットワークへのデータ・セグメントの多数を注入します。"
+    },
+    {
+      "indent": 3,
+      "text": "There are a number of potential reasons for spurious retransmission timeouts. First, some mobile networking technologies involve sudden delay spikes on transmission because of actions taken during a hand-off. Second, a hand-off may take place from a low latency path to a high latency path, suddenly increasing the round-trip time beyond the current RTO value. Third, on a low-bandwidth link the arrival of competing traffic (possibly with higher priority), or some other change in available bandwidth, can cause a sudden increase of the round-trip time. This may trigger a spurious retransmission timeout. A persistently reliable link layer can also cause a sudden delay when a data frame and several retransmissions of it are lost for some reason. This document does not distinguish between the different causes of such a delay spike. Rather, it discusses the spurious retransmission timeouts caused by a delay spike in general.",
+      "ja": "スプリアス再送タイムアウトの潜在的な理由はたくさんあります。まず、いくつかのモバイルネットワーク技術があるため、ハンドオフ時に取られた行動の伝送に突然の遅延スパイクを伴います。第二に、ハンドオフが突然現在のRTO値を超えて往復時間を増やし、高レイテンシーパスに低遅延パスから行われてもよいです。第三には、低帯域幅リンク（おそらく優先順位の高い）のトラフィックを、競合の到着、または利用可能な帯域幅で他のいくつかの変化に、ラウンドトリップ時間の急激な増加を引き起こす可能性があります。これは、スプリアス再送タイムアウトをトリガすることができます。永続的に信頼性の高いリンク層は、データフレームと、それにはいくつかの再送が何らかの理由で失われた突然の遅延を引き起こす可能性があります。この文書では、このような遅延スパイクの異なる原因を区別しません。むしろ、それは一般的には遅延スパイクに起因するスプリアス再送タイムアウトを説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes the F-RTO detection algorithm for TCP. It is based on the detection mechanism of the \"Forward RTO-Recovery\" (F-RTO) algorithm [SKR03] that is used for detecting spurious retransmission timeouts and thus avoids unnecessary retransmissions following the retransmission timeout. When the timeout is not spurious, the F-RTO algorithm reverts back to the conventional RTO recovery algorithm, and therefore has similar behavior and performance. In contrast to alternative algorithms proposed for detecting unnecessary retransmissions (Eifel [LK00, LM03] and DSACK-based (Duplicate SACK) algorithms [BA04]), F-RTO does not require any TCP options for its operation, and it can be implemented by modifying only the TCP sender. The Eifel algorithm uses TCP timestamps [BBJ92] for detecting a spurious timeout upon arrival of the first acknowledgment after the retransmission. The DSACK-based algorithms require that the TCP Selective Acknowledgment Option [MMFR96], with the DSACK extension [FMMP00], is in use. With DSACK, the TCP receiver can report if it has received a duplicate segment, enabling the sender to detect afterwards whether it has retransmitted segments unnecessarily. The F-RTO algorithm only attempts to detect and avoid unnecessary retransmissions after an RTO. Eifel and DSACK can also be used for detecting unnecessary retransmissions caused by other events, such as packet reordering.",
+      "ja": "この文書では、TCPのためのF-RTO検出アルゴリズムを説明します。これは、スプリアス再送タイムアウトを検出するために使用される「前方RTOリカバリ」（F-RTO）アルゴリズム[SKR03]の検出メカニズムに基づいており、従って再送タイムアウトの後、不要な再送信を回避します。タイムアウトがスプリアスでない場合は、F-RTOアルゴリズムは、従来のRTO回復アルゴリズムに戻りますので、同様の動作とパフォーマンスを持っています。不要な再送（アイフェル[LK00、LM03]とDSACKベース（重複SACK）アルゴリズム[BA04]）を検出するために提案された代替アルゴリズムとは対照的に、F-RTOは、その動作のための任意のTCPオプションを必要とせず、それはによって実現することができます唯一のTCPの送信者を変更します。アイフェルアルゴリズムは、再送後の最初の確認応答の到着時にスプリアスタイムアウトを検出するための[BBJ92] TCPタイムスタンプを使用します。 DSACKベースのアルゴリズムは、DSACK延長[FMMP00]とTCP選択的確認応答オプション[MMFR96]は、使用中であることを必要とします。それは重複セグメントを受信した場合DSACKでは、TCP受信機はそれが不必要にセグメントを再送信しているかどうかを後で検出するために、送信者を有効にする、報告することができます。 F-RTOアルゴリズムは、RTOの後に不要な再送を検出し、避けるようにしようとします。アイフェルとDSACKはまた、パケットの並べ替えのような他のイベントによって引き起こされる不必要な再送信を検出するために使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When the retransmission timer expires, the F-RTO sender retransmits the first unacknowledged segment as usual [APB09]. Deviating from the normal operation after a timeout, it then tries to transmit new, previously unsent data for the first acknowledgment that arrives after the timeout, given that the acknowledgment advances the window. If the second acknowledgment that arrives after the timeout advances the window (i.e., acknowledges data that was not retransmitted), the F-RTO sender declares the timeout spurious and exits the RTO recovery. However, if either of these two acknowledgments is a duplicate ACK, there will not be sufficient evidence of a spurious timeout. Therefore, the F-RTO sender retransmits the unacknowledged segments in slow start similar to the traditional algorithm. With a SACK-enhanced version of the F-RTO algorithm, spurious timeouts may be detected even if duplicate ACKs arrive after an RTO retransmission.",
+      "ja": "再送タイマが満了したとき、F-RTOの送信者は[APB09】通常通り最初の不承認のセグメントを再送信します。タイムアウト後に正常な動作から逸脱、次に肯定応答ウィンドウを進めることを考えると、タイムアウト後に到着する最初の受信確認のための新しい、以前に未送信のデータを送信しようとします。タイムアウト後に到着した第二確認応答が窓を進める（すなわち、再送されていなかったデータを認める）、F-RTOの送信者は、スプリアスタイムアウトを宣言し、RTO回復を終了します。これら二つの肯定応答のいずれかが重複ACKである場合には、スプリアスタイムアウトの十分な証拠は存在しません。したがって、F-RTOの送信者は、従来のアルゴリズムと同様スロースタートで未確認のセグメントを再送します。 F-RTOアルゴリズムのSACK強化バージョンと、スプリアスタイムアウトは重複ACKがRTO再送の後に到着した場合であっても検出することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies the F-RTO algorithm for TCP only, replacing the F-RTO functionality with TCP in RFC 4138 [SK05] and moving it from Experimental to Standards Track status. The algorithm can also be applied to the Stream Control Transmission Protocol (SCTP) [Ste07] that has acknowledgment and packet retransmission concepts similar to TCP. The considerations on applying F-RTO to SCTP are discussed in RFC 4138, but the F-RTO support for SCTP remains with Experimental status.",
+      "ja": "この文書では、[SK05] RFC 4138でTCPとF-RTOの機能を交換し、標準化過程の状態への実験から、それを移動する、唯一のTCPのためのF-RTOアルゴリズムを指定します。アルゴリズムはまた、TCPと同様の受信確認とパケット再送概念を有するストリーム制御伝送プロトコル（SCTP）[Ste07]に適用することができます。 SCTPにF-RTOを適用上の考慮事項は、RFC 4138で説明されていますが、SCTPのためのF-RTOのサポートは実験的なステータスで残っています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is organized as follows. Section 2 describes the basic F-RTO algorithm, and the SACK-enhanced F-RTO algorithm is given in Section 3. Section 4 discusses the possible actions to be taken after detecting a spurious RTO. Section 5 summarizes the experience with F-RTO implementations and the experimental results, and Section 6 discusses the security considerations.",
+      "ja": "次のようにこの文書は、組織化されています。セクション2は、基本的なF-RTOアルゴリズムを記述し、SACK増強F-RTOアルゴリズムは、3部4は、スプリアスRTOを検出した後に取られる可能なアクションを説明セクションに記載されています。第5節では、F-RTOの実装と実験結果と経験をまとめたものであり、第6節では、セキュリティの考慮事項について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Conventions and Terminology",
+      "section_title": true,
+      "ja": "1.1。表記と用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14, RFC 2119 [RFC2119] and indicate requirement levels for protocols.",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますBCP 14に記載されるように解釈されるべきで、RFC 2119 [RFC2119]とはプロトコルの要件レベルを示します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Basic F-RTO Algorithm",
+      "section_title": true,
+      "ja": "2.基本F-RTOアルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "A timeout is considered spurious if it would have been avoided had the sender waited longer for an acknowledgment to arrive [LM03]. F-RTO affects the TCP sender behavior only after a retransmission timeout. Otherwise, the TCP behavior remains the same. When the retransmission timer expires, the F-RTO algorithm monitors incoming acknowledgments, and if the TCP sender gets an acknowledgment for a segment that was not retransmitted due to the timeout, the F-RTO algorithm declares a timeout spurious. The actions taken in response to a spurious timeout are not specified in this document, but we discuss some alternatives in Section 4. This section introduces the algorithm and then discusses the different steps of the algorithm in more detail.",
+      "ja": "それは回避されていた場合はタイムアウトが送信者が[LM03]を到着する確認応答を長く待っていたスプリアスと考えられています。 F-RTOは再送タイムアウト後にTCPの送信者の行動に影響を与えます。それ以外の場合は、TCPの動作は同じまま。再送タイマが満了したときは、F-RTOアルゴリズムは、着信確認応答を監視し、TCPの送信側がタイムアウトに再送されていなかったセグメントの確認応答を取得する場合、F-RTOアルゴリズムは、スプリアスタイムアウトを宣言します。スプリアスタイムアウトに対応して取られたアクションは、この文書で指定されたが、我々はこのセクションでは、アルゴリズムを導入し、その後、より詳細に、アルゴリズムの異なる手順を説明します第4節では、いくつかの選択肢を議論されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Following the practice used with the Eifel Detection algorithm [LM03], we use the \"SpuriousRecovery\" variable to indicate whether the retransmission is declared spurious by the sender. This variable can be used as an input for a corresponding response algorithm. With F-RTO, the value of SpuriousRecovery can be either SPUR_TO (indicating a spurious retransmission timeout) or FALSE (indicating that the timeout is not declared spurious and the TCP sender should follow the conventional RTO recovery algorithm). In addition, we use the \"recover\" variable specified in the NewReno algorithm [FHG04].",
+      "ja": "アイフェル検出アルゴリズム[LM03]で使用する練習の後、我々は再送信が送信者によってスプリアス宣言されているかどうかを示すために「SpuriousRecovery」変数を使用します。この変数は、対応する応答アルゴリズムの入力として使用することができます。 F-RTOと、SpuriousRecoveryの値がSPUR_TO（スプリアス再送タイムアウトを示す）またはFALSE（偽タイムアウトが宣言されていないとTCP送信者は、従来のRTO回復アルゴリズムに従うべきであることを示す）のいずれかであり得ます。また、当社はNewRenoのアルゴリズム[FHG04]で指定した「回復」変数を使用します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. The Algorithm",
+      "section_title": true,
+      "ja": "2.1。アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "A TCP sender implementing the basic F-RTO algorithm MUST take the following steps after the retransmission timer expires. If the retransmission timer expires again during the execution of the F-RTO algorithm, the TCP sender MUST re-start the algorithm processing from step 1. If the sender implements some loss recovery algorithm other than Reno or NewReno [FHG04], the F-RTO algorithm SHOULD NOT be entered when earlier fast recovery is underway.",
+      "ja": "再送タイマが満了した後、基本的なF-RTOアルゴリズムを実装するTCPの送信者は、次の手順を実行する必要があります。再送タイマは、F-RTOアルゴリズムの実行中に再度有効期限が切れた場合は、送信者がリノまたはNewRenoの[FHG04]、F-以外のいくつかの損失回復アルゴリズムを実装している場合、TCPの送信者は、ステップ1からのアルゴリズム処理を再起動する必要があります以前の速い回復が進行中であるとき、RTOアルゴリズムは入力しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "The F-RTO algorithm takes different actions based on whether an incoming acknowledgment advances the cumulative acknowledgment point for a received in-order segment, or whether it is a duplicate acknowledgment to indicate an out-of-order segment. Duplicate acknowledgment is defined in [APB09]. The F-RTO algorithm does not specify actions for receiving a segment that neither acknowledges new data nor is a duplicate acknowledgment. The TCP sender SHOULD ignore such segments and wait for a segment that either acknowledges new data or is a duplicate acknowledgment.",
+      "ja": "F-RTOアルゴリズムは、受信確認応答が受信されたイン・オーダのセグメント、または、アウト・オブ・オーダのセグメントを示す重複確認応答であるかどうかについての累積確認応答ポイントを進めるかどうかに基づいて異なるアクションをとります。重複確認応答は、[APB09]で定義されています。 F-RTOアルゴリズムは、どちらも新しいデータを認めることも、重複確認応答であるセグメントを受信するためのアクションを指定していません。 TCPの送信者は、このようなセグメントを無視して、新しいデータを承認または重複確認応答のいずれかのセグメントを待つべき。"
+    },
+    {
+      "indent": 3,
+      "text": "1) When the retransmission timer expires, retransmit the first unacknowledged segment and set SpuriousRecovery to FALSE. If the TCP sender is already in RTO recovery AND \"recover\" is larger than or equal to SND.UNA (the oldest unacknowledged sequence number [Pos81]), do not enter step 2 of this algorithm. Instead, store the highest sequence number transmitted so far in variable \"recover\" and continue with slow-start retransmissions following the conventional RTO recovery algorithm.",
+      "ja": "再送タイマが満了すると1）、最初の不承認のセグメントを再送し、FALSEにSpuriousRecoveryを設定。 TCPの送信者がRTO回復にすでにあり、「回復する」よりも大きいかSND.UNA（最も古い未確認のシーケンス番号[Pos81]）に等しい場合、このアルゴリズムのステップ2を入力しないでください。代わりに、これまでの変数「回復」と従来のRTO回復アルゴリズム以下のスロースタートの再送信を続ける中、送信最大のシーケンス番号を格納します。"
+    },
+    {
+      "indent": 3,
+      "text": "2) When the first acknowledgment after the RTO retransmission arrives at the TCP sender, store the highest sequence number transmitted so far in variable \"recover\". The TCP sender chooses one of the following actions, depending on whether the ACK advances the window or whether it is a duplicate ACK.",
+      "ja": "RTO再送後の最初の確認応答がTCPの送信側に到着すると2）、これまでの変数「回復」で送信された最高のシーケンス番号を格納します。 TCPの送信側はACKがウィンドウを前進するかどうかにそれが重複ACKであるかどうかによって、次のいずれかのアクションを選択します。"
+    },
+    {
+      "indent": 6,
+      "text": "a) If the acknowledgment is a duplicate ACK, OR the Acknowledgment field covers \"recover\" but not more than \"recover\", OR the acknowledgment does not acknowledge all of the data that was retransmitted in step 1, revert to the conventional RTO recovery and continue by retransmitting unacknowledged data in slow start. Do not enter step 3 of this algorithm. The SpuriousRecovery variable remains as FALSE.",
+      "ja": "a）の承認が重複ACKであるか、確認応答フィールドが「回復」ではなく「回復」より、OR承認手順1で再送されたデータのすべてを認めていない、従来のRTO回復に戻すとカバーしていた場合スロースタートで未確認のデータを再送信することによって継続します。このアルゴリズムのステップ3を入力しないでください。 SpuriousRecovery変数はFALSEとして残っています。"
+    },
+    {
+      "indent": 6,
+      "text": "b) Else, if the acknowledgment advances the window AND the Acknowledgment field does not cover \"recover\", transmit up to two new (previously unsent) segments and enter step 3 of this algorithm. If the TCP sender does not have enough unsent data, it can send only one segment. In addition, the TCP sender MAY override the Nagle algorithm [Nag84] and immediately send a segment if needed. Note that sending two segments in this step is allowed by TCP congestion control requirements [APB09]: an F-RTO TCP sender simply chooses different segments to transmit.",
+      "ja": "確認ウィンドウ確認応答フィールドを進んだ場合b）のエルス、「回復」二つの新しい（以前に未送信）のセグメントまで送信し、このアルゴリズムのステップ3を入力してカバーしていません。 TCPの送信側が十分な未送信データがない場合は、それだけで一つのセグメントを送信することができます。また、TCPの送信者は、Nagleアルゴリズム[Nag84]をオーバーライドして、すぐに必要に応じてセグメントを送信することができます。 F-RTO TCP送信者は、単に送信する異なるセグメントを選択：このステップで二つのセグメントを送信するTCPの輻輳制御要件[APB09]によって許容されることに留意されたいです。"
+    },
+    {
+      "indent": 9,
+      "text": "If the TCP sender does not have any new data to send, or the advertised window prohibits new transmissions, the recommended action is to skip step 3 of this algorithm and continue with slow-start retransmissions, following the conventional RTO recovery algorithm. However, alternative ways of handling the window-limited cases that could result in better performance are discussed in Appendix A.",
+      "ja": "TCPの送信者が送信するための新たなデータを持っていない、または広告ウィンドウが新しい送信を禁止している場合は、推奨されるアクションは、このアルゴリズムのステップ3をスキップして、従来のRTO回復アルゴリズムを以下、スロースタートの再送信を継続することです。ただし、パフォーマンスが向上する可能性があり、ウィンドウが制限された場合を扱う別の方法は、付録Aで説明されています"
+    },
+    {
+      "indent": 3,
+      "text": "3) When the second acknowledgment after the RTO retransmission arrives at the TCP sender, the TCP sender either declares the timeout spurious, or starts retransmitting the unacknowledged segments.",
+      "ja": "3）RTO再送後の第二の肯定応答は、TCPの送信側でTCPの送信者を到着するといずれかのスプリアスタイムアウトを宣言し、または未確認のセグメントを再送信を開始します。"
+    },
+    {
+      "indent": 6,
+      "text": "a) If the acknowledgment is a duplicate ACK, set the congestion window to no more than 3 * MSS (where MSS indicates Maximum Segment Size), and continue with the slow-start algorithm retransmitting unacknowledged segments. The congestion window can be set to 3 * MSS, because two round-trip times have elapsed since the RTO, and a conventional TCP sender would have increased cwnd to 3 during the same time. Leave SpuriousRecovery set to FALSE.",
+      "ja": "肯定応答が重複ACKの場合A）、せいぜい3 * MSSは最大セグメントサイズを示すMSS（）に輻輳ウィンドウを設定し、未確認のセグメントを再送スロースタートアルゴリズムを続けます。 2往復時間がRTOから経過したため、輻輳ウィンドウは、3 * MSSに設定することができ、かつ従来のTCPの送信者は、同じ時間の間に3までにcwndを増加していたであろう。 SpuriousRecoveryはFALSEに設定しておきます。"
+    },
+    {
+      "indent": 6,
+      "text": "b) If the acknowledgment advances the window (i.e., if it acknowledges data that was not retransmitted after the timeout), declare the timeout spurious, set SpuriousRecovery to SPUR_TO, and set the value of the \"recover\" variable to SND.UNA (the oldest unacknowledged sequence number [Pos81]).",
+      "ja": "確認ウィンドウが進むb）は、タイムアウト後に再送されていなかったデータ）を承認した場合（すなわち、SPUR_TOにSpuriousRecoveryを設定スプリアスタイムアウトを宣言し、（SND.UNAに「回復」変数の値を設定します最も古い未確認のシーケンス番号[Pos81]）。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Discussion",
+      "section_title": true,
+      "ja": "2.2。討論"
+    },
+    {
+      "indent": 3,
+      "text": "The F-RTO sender takes cautious actions when it receives duplicate acknowledgments after a retransmission timeout. Because duplicate ACKs may indicate that segments have been lost, reliably detecting a spurious timeout is difficult due to the lack of additional information. Therefore, it is prudent to follow the conventional TCP recovery in those cases.",
+      "ja": "それは再送タイムアウトの後、重複確認応答を受信したときにF-RTOの送信側は慎重な行動を取ります。重複ACKはセグメントが失われていることを示す可能性があるので、確実にスプリアスタイムアウトを検出することにより、付加的な情報が不足することは困難です。したがって、これらの例では、従来のTCPの回復に従うことが賢明です。"
+    },
+    {
+      "indent": 3,
+      "text": "The condition in step 1 prevents the execution of the F-RTO algorithm in case a previous RTO recovery is underway when the retransmission timer expires, except in case the retransmission timer expires multiple times for the same segment. If the retransmission timer expires during an earlier RTO-based loss recovery, acknowledgments for retransmitted segments may falsely lead the TCP sender to declare the timeout spurious.",
+      "ja": "ステップ1における条件は、再送タイマが再送信タイマーは、同じセグメントに対して複数回満了した場合を除いて、期限切れになったときに、前のRTO回復が進行中である場合にはF-RTOアルゴリズムの実行を防止します。再送タイマが先にRTOベースの損失回復の間に期限が切れた場合、再送されたセグメントの確認応答が誤ってスプリアスタイムアウトを宣言するためにTCPの送信者を招くことがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the first acknowledgment after the RTO retransmission covers the \"recover\" point at algorithm step (2a), there is not enough evidence that a non-retransmitted segment has arrived at the receiver after the timeout. This is a common case when a fast retransmission is lost and has been retransmitted again after an RTO, while the rest of the unacknowledged segments were successfully delivered to the TCP receiver before the retransmission timeout. Therefore, the timeout cannot be declared spurious in this case.",
+      "ja": "RTO再送後の最初の承認がアルゴリズムのステップ（2A）で「回復」のポイントをカバーする場合、非再送されたセグメントは、タイムアウト後に受信機に到着したという十分な証拠はありません。これは、高速再送が失われ、未確認のセグメントの残りの部分が正常に再送タイムアウトの前にTCP受信機に配信された一方で、RTOの後に再び再送されてきた場合に一般的なケースです。そのため、タイムアウトはこの場合には、スプリアス宣言することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "If the first acknowledgment after the RTO retransmission does not acknowledge all of the data that was retransmitted in step 1, the TCP sender reverts to the conventional RTO recovery. Otherwise, a malicious receiver acknowledging partial segments could cause the sender to declare the timeout spurious in a case where data was lost.",
+      "ja": "RTO再送後の最初の確認手順1で再送されたデータのすべてを認めていない場合は、TCPの送信者は、従来のRTO回復に戻ります。それ以外の場合は、部分セグメントを認め悪質な受信機は、送信者が、データが失われた場合のスプリアスタイムアウトを宣言する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The TCP sender is allowed to send two new segments in algorithm branch (2b) because the conventional TCP sender would transmit two segments when the first new ACK arrives after the RTO retransmission. If sending new data is not possible in algorithm branch (2b), or if the receiver window limits the transmission, the TCP sender has to send something in order to prevent the TCP transfer from stalling. If no segments were sent, the pipe between sender and receiver might run out of segments, and no further acknowledgments would arrive. Therefore, in the window-limited case, the recommendation is to revert to the conventional RTO recovery with slow-start retransmissions. Appendix A discusses some alternative solutions for window-limited situations.",
+      "ja": "TCPの送信者は、最初の新しいACKがRTO再送後に到着したときに、従来のTCP送信者が二つのセグメントを送信してしまうため、アルゴリズムのブランチ（2B）に二つの新しいセグメントを送信することが許可されています。新しいデータを送信することは、アルゴリズムの枝でできない場合は、受信ウィンドウは、送信を制限している場合（図2b）、または、TCPの送信者は、失速からのTCP転送を防ぐために何かを送信する必要があります。何のセグメントが送信されなかった場合は、送信者と受信者の間のパイプは、セグメントが不足する可能性があり、それ以上の確認応答が到着しないだろう。したがって、ウィンドウが制限された場合に、推奨は、スロースタート再送を伴う従来のRTO回復に戻すことです。付録Aは、ウィンドウが制限された状況のために、いくつかの代替ソリューションについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "If the retransmission timeout is declared spurious, the TCP sender sets the value of the \"recover\" variable to SND.UNA in order to allow fast retransmit [FHG04]. The \"recover\" variable was proposed for avoiding unnecessary, multiple fast retransmits when the retransmission timer expires during fast recovery with NewReno TCP. Because the F-RTO sender retransmits only the segment that triggered the timeout, the problem of unnecessary multiple fast retransmits [FHG04] cannot occur. Therefore, if three duplicate ACKs arrive at the sender after the timeout, they probably indicate a packet loss, and thus fast retransmit should be used to allow efficient recovery. If there are not enough duplicate ACKs arriving at the sender after a packet loss, the retransmission timer expires again and the sender enters step 1 of this algorithm.",
+      "ja": "再送タイムアウトがスプリアス宣言されている場合、TCPの送信者は、高速再送[FHG04]できるようにするためにSND.UNAに「回復」変数の値を設定します。 「回復」変数は、再送タイマがNewRenoのTCPと高速回復中に期限切れになったときに不必要な、複数の高速再送を回避するために提案されました。 F-RTOの送信者がタイムアウトをトリガセグメントのみを再送信するので、不必要な複数の高速再送[FHG04]の問題が発生することができません。 3つの重複ACKがタイムアウト後に送信側に到着した場合はそのため、彼らはおそらくパケット損失を示し、これにより高速再送は、効率的な回収を可能にするために使用する必要があります。パケットロスの後に、送信者に届く十分な重複ACKが存在しない場合は、再送タイマが再び満了すると、送信者は、このアルゴリズムのステップ1に入ります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the timeout is declared spurious, the TCP sender cannot detect whether the unnecessary RTO retransmission was lost. In principle, the loss of the RTO retransmission should be taken as a congestion signal. Thus, there is a small possibility that the F-RTO sender will violate the congestion control rules, if it chooses to fully revert congestion control parameters after detecting a spurious timeout. The Eifel Detection algorithm has a similar property, while the DSACK option can be used to detect whether the retransmitted segment was successfully delivered to the receiver.",
+      "ja": "タイムアウトがスプリアス宣言されると、TCPの送信者は、不要なRTO再送が失われたかどうかを検出することはできません。原理的には、RTO再送の損失は、輻輳信号として解釈されるべきです。したがって、それは完全にスプリアスタイムアウトを検出した後、輻輳制御パラメータを戻すことを選択した場合、F-RTOの送信側は、輻輳制御ルールに違反することが小さい可能性があります。 DSACKオプションは再送セグメントが正常に受信機に配信されたか否かを検出するために使用することができるがアイフェル検出アルゴリズムは、同様の性質を有します。"
+    },
+    {
+      "indent": 3,
+      "text": "The F-RTO algorithm has a side effect on the TCP round-trip time measurement. Because the TCP sender can avoid most of the unnecessary retransmissions after detecting a spurious timeout, the sender is able to take round-trip time samples on the delayed segments. If the regular RTO recovery was used without TCP timestamps, this would not be possible due to the retransmission ambiguity. As a result, the RTO is likely to have more accurate and larger values with F-RTO than with the regular TCP after a spurious timeout that was triggered due to delayed segments. We believe this is an advantage in networks that are prone to delay spikes.",
+      "ja": "F-RTOアルゴリズムはTCPのラウンドトリップ時間測定の副作用があります。 TCPの送信者が偽のタイムアウトを検出した後、不要な再送信のほとんどを避けることができるため、送信者は遅れセグメント上のラウンドトリップ時間のサンプルを取ることが可能です。通常のRTO回復がTCPタイムスタンプせずに使用した場合、これは、再送曖昧に不可能であろう。結果として、RTOが原因遅延セグメントにトリガされたスプリアスタイムアウト後に正規TCPよりもF-RTOを用いてより正確でより大きな値を有する可能性があります。私たちは、これがスパイクを遅らせる傾向があるネットワークでは有利であると考えています。"
+    },
+    {
+      "indent": 3,
+      "text": "There are some situations where the F-RTO algorithm may not avoid unnecessary retransmissions after a spurious timeout. If packet reordering or packet duplication occurs on the segment that triggered the spurious timeout, the F-RTO algorithm may not detect the spurious timeout due to incoming duplicate ACKs. Additionally, if a spurious timeout occurs during fast recovery, the F-RTO algorithm often cannot detect the spurious timeout because the segments that were transmitted before the fast recovery trigger duplicate ACKs. However, we consider these cases rare, and note that in cases where F-RTO fails to detect the spurious timeout, it retransmits the unacknowledged segments in slow start, and thus performs the same as the regular RTO recovery.",
+      "ja": "F-RTOアルゴリズムがスプリアスタイムアウト後に不必要な再送信を回避しないかもしれないいくつかの状況があります。パケットの並べ替えまたはパケットの重複がスプリアスタイムアウトをトリガセグメントで発生した場合、F-RTOアルゴリズムによる着信重複ACKにスプリアスタイムアウトを検出しなくてもよいです。スプリアスタイムアウトが高速回復中に発生した場合、高速リカバリ・トリガーの前に送信されたセグメントはACKを複製するため、また、F-RTOアルゴリズムは、多くの場合、スプリアスタイムアウトを検出することはできません。しかし、私たちは、これらのケースは稀で考えると、F-RTOはスプリアスタイムアウトを検出するために、失敗した場合には、それはスロースタートで未確認のセグメントを再送するため、定期的なRTOの回復と同じように実行していることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3. SACK-Enhanced Version of the F-RTO Algorithm",
+      "section_title": true,
+      "ja": "F-RTOアルゴリズムの3 SACK-強化版"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes an alternative version of the F-RTO algorithm that uses the TCP Selective Acknowledgment Option [MMFR96]. By using the SACK option, the TCP sender detects spurious timeouts in most of the cases when packet reordering or packet duplication is present. If the SACK information acknowledges new data that was not transmitted after the RTO retransmission, the sender may declare the timeout spurious, even when duplicate ACKs follow the RTO.",
+      "ja": "このセクションでは、TCP選択的確認応答オプション[MMFR96]を使用してF-RTOアルゴリズムの代替バージョンを記述する。 SACKオプションを使用することにより、TCPの送信者は、パケットの並べ替えやパケット重複が存在するほとんどの場合スプリアスタイムアウトを検出します。 SACK情報は、RTO再送後に送信されなかった新しいデータを認識した場合、送信者は重複ACKがRTOをたどる場合でも、スプリアスタイムアウトを宣言してもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. The Algorithm",
+      "section_title": true,
+      "ja": "3.1。アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "Given that the TCP Selective Acknowledgment Option [MMFR96] is enabled for a TCP connection, a TCP sender MAY apply the SACK-enhanced F-RTO algorithm. If the sender applies the SACK-enhanced F-RTO algorithm, it MUST follow the steps below. This algorithm SHOULD NOT be applied if the TCP sender is already in loss recovery when a retransmission timeout occurs.",
+      "ja": "TCP選択確認応答オプションは、[MMFR96] TCP接続のために有効になっていることを考えると、TCPの送信者はSACK強化F-RTOアルゴリズムを適用することができます。送信者はSACK強化F-RTOアルゴリズムを適用する場合は、以下の手順に従わなければなりません。再送タイムアウトが発生したときにTCPの送信側が損失回復にすでに存在する場合は、このアルゴリズムが適用されるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The steps of the SACK-enhanced version of the F-RTO algorithm are as follows. If the retransmission timer expires again during the execution of the SACK-enhanced F-RTO algorithm, the TCP sender MUST re-start the algorithm processing from step 1.",
+      "ja": "次のようにF-RTOアルゴリズムのSACK-強化されたバージョンの手順は次のとおりです。再送タイマがSACK強化F-RTOアルゴリズムの実行中に再び期限が切れた場合、TCPの送信者は、ステップ1からのアルゴリズム処理を再起動する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1) When the retransmission timer expires, retransmit the first unacknowledged segment and set SpuriousRecovery to FALSE. Following the recommendation in the SACK specification [MMFR96], reset the SACK scoreboard. If \"RecoveryPoint\" is larger than or equal to SND.UNA, do not enter step 2 of this algorithm. Instead, set variable \"RecoveryPoint\" to indicate the highest sequence number transmitted so far and continue with slow-start retransmissions following the conventional RTO recovery algorithm.",
+      "ja": "再送タイマが満了すると1）、最初の不承認のセグメントを再送し、FALSEにSpuriousRecoveryを設定。 SACK仕様[MMFR96]で推薦に続き、SACKスコアボードをリセットします。 「RecoveryPointは」SND.UNA以上である場合には、このアルゴリズムのステップ2を入力しないでください。代わりに、設定された変数「RecoveryPointは、」これまでの送信シーケンス番号が最大を示し、従来のRTO回復アルゴリズム以下のスロースタートの再送信を続行します。"
+    },
+    {
+      "indent": 3,
+      "text": "2) Wait until the acknowledgment of the data retransmitted due to the timeout arrives at the sender. If duplicate ACKs arrive before the cumulative acknowledgment for retransmitted data, adjust the scoreboard according to the incoming SACK information. Stay in step 2 and wait for the next new acknowledgment. If the retransmission timeout expires again, go to step 1 of the algorithm. When a new acknowledgment arrives, set variable \"RecoveryPoint\" to indicate the highest sequence number transmitted so far.",
+      "ja": "タイムアウトによる再送データの確認応答が送信者に到着するまで2）待ってください。重複ACKが再送信されたデータの累積確認応答の前に到着した場合、着信SACK情報に応じてスコアボードを調整します。ステップ2に滞在し、次の新しい確認応答を待ちます。再送タイムアウトが再び有効期限が切れた場合、アルゴリズムの1に進みます。新しい承認が到着すると、これまでに送信され、最高のシーケンス番号を示すために、変数「RecoveryPoint」に設定してください。"
+    },
+    {
+      "indent": 6,
+      "text": "a) If the Cumulative Acknowledgment field covers \"RecoveryPoint\" but not more than \"RecoveryPoint\", revert to the conventional RTO recovery and set the congestion window to no more than 2 * MSS, like a regular TCP would do. Do not enter step 3 of this algorithm.",
+      "ja": "a）の場合は累積確認応答フィールドが「RecoveryPoint」ではなく「RecoveryPoint」よりも、通常のTCPが行うだろうと同じように、従来のRTO回復に戻すと、これ以上* 2よりもMSSに輻輳ウィンドウを設定をカバーしています。このアルゴリズムのステップ3を入力しないでください。"
+    },
+    {
+      "indent": 6,
+      "text": "b) Else, if the Cumulative Acknowledgment field does not cover \"RecoveryPoint\" but is larger than SND.UNA, transmit up to two new (previously unsent) segments and proceed to step 3. If the TCP sender is not able to transmit any previously unsent data -- either due to receiver window limitation or because it does not have any new data to send -- the recommended action is to refrain from entering step 3 of this algorithm. Rather, continue with slow-start retransmissions following the conventional RTO recovery algorithm.",
+      "ja": "B）そうでなければ、累積確認応答フィールドが「RecoveryPoint」をカバーしたがSND.UNAよりも大きい場合、二つの新しい（以前に未送信）のセグメントまで送信し、TCPの送信者が以前にいずれかを送信することができない場合にはステップ3に進まない場合には未送信データ - ウィンドウの制限を受信機に起因するか、送信するために新たなデータを持っていないので、どちらか - 推奨されるアクションは、このアルゴリズムのステップ3に入るのを控えることです。むしろ、従来のRTO回復アルゴリズム以下のスロースタートの再送信を続行します。"
+    },
+    {
+      "indent": 9,
+      "text": "It is also possible to apply some of the alternatives for handling window-limited cases discussed in Appendix A.",
+      "ja": "付録Aで説明するウィンドウが制限された場合を扱うための選択肢のいくつかを適用することも可能です"
+    },
+    {
+      "indent": 3,
+      "text": "3) The next acknowledgment arrives at the sender. Either a duplicate ACK or a new cumulative ACK (advancing the window) applies in this step. Other types of ACKs are ignored without any action.",
+      "ja": "3）次の確認は、送信側に到着します。重複ACKまたは（ウィンドウを進める）新たな累積ACKのどちらかが、この段階で適用されます。 ACKの他のタイプは、任意のアクションなしで無視されます。"
+    },
+    {
+      "indent": 6,
+      "text": "a) If the Cumulative Acknowledgment field or the SACK information covers more than \"RecoveryPoint\", set the congestion window to no more than 3 * MSS and proceed with the conventional RTO recovery, retransmitting unacknowledged segments. Take this branch also when the acknowledgment is a duplicate ACK and it does not acknowledge any new, previously unacknowledged data below \"RecoveryPoint\" in the SACK information. Leave SpuriousRecovery set to FALSE.",
+      "ja": "a）は、累積確認応答フィールドまたはSACK情報が「RecoveryPoint」以上を覆っている場合は、せいぜい3 * MSSに輻輳ウィンドウを設定し、未確認のセグメントを再送信する、従来のRTO回復を進めます。確認応答が重複ACKであり、それはSACK情報に「RecoveryPoint」は、以下のいずれかの新しい、以前に未確認のデータを確認していない場合も、このブランチを取ります。 SpuriousRecoveryはFALSEに設定しておきます。"
+    },
+    {
+      "indent": 6,
+      "text": "b) If the Cumulative Acknowledgment field or a SACK information in the ACK does not cover more than \"RecoveryPoint\" AND it acknowledges data that was not acknowledged earlier (either with cumulative acknowledgment or using SACK information), declare the timeout spurious and set SpuriousRecovery to SPUR_TO. The retransmission timeout can be declared spurious, because the segment acknowledged with this ACK was transmitted before the timeout.",
+      "ja": "b）はACKで累積確認応答フィールドまたはSACK情報は「RecoveryPoint」以上をカバーしていない、それは以前の（累積確認応答でまたはSACK情報を使用してのいずれかを認めていなかったデータを承認した場合）、タイムアウトがスプリアス宣言しにSpuriousRecoveryを設定SPUR_TO。セグメントはこのACKがタイムアウトする前に送信されたと認めたため、再送タイムアウトは、スプリアス宣言することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If there are unacknowledged holes between the received SACK information, those segments are retransmitted similarly to the conventional SACK recovery algorithm [BAFW03]. If the algorithm exits with SpuriousRecovery set to SPUR_TO, \"RecoveryPoint\" is set to SND.UNA, thus allowing fast recovery on incoming duplicate acknowledgments.",
+      "ja": "受信されたSACK情報との未確認の穴がある場合、これらのセグメントは、従来のSACK回復アルゴリズム[BAFW03]と同様に再送されます。 SpuriousRecoveryとアルゴリズムは終了がSPUR_TOに設定した場合、「RecoveryPointは」これ入ってくるの重複確認応答の高速リカバリが可能、SND.UNAに設定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Discussion",
+      "section_title": true,
+      "ja": "3.2。討論"
+    },
+    {
+      "indent": 3,
+      "text": "The SACK-enhanced algorithm works on the same principle as the basic algorithm, but by utilizing the additional information from the SACK option. When a genuine retransmission timeout occurs during a steady state of a connection, it can be assumed that there are no segments left in the pipe. Otherwise, the acknowledgments triggered by these segments would have triggered the SACK loss recovery or transmission of new segments. Therefore, if the F-RTO sender receives acknowledgments for segments transmitted before the retransmission timeout in response to the two new segments sent at the algorithm step 2, the normal operation of TCP has been just delayed, and the retransmission timeout is considered spurious. Note that this reasoning works only when the TCP sender is not in loss recovery at the time the retransmission timeout occurs. The condition in step 1 checking that \"RecoveryPoint\" is larger than or equal to SND.UNA prevents the execution of the F-RTO algorithm in case a previous loss recovery, either RTO recovery or SACK loss recovery, is underway when the retransmission timer expires. It, however, allows the execution of the F-RTO algorithm, if the retransmission timer expires multiple times for the same segment.",
+      "ja": "SACKが強化されたアルゴリズムは、基本的なアルゴリズムとしてではなく、SACKオプションから追加情報を利用することにより、同じ原理で動作します。本物再送タイムアウトは、接続の安定状態の間に起こる場合には、パイプ内に残さないセグメントが存在しないと仮定することができます。それ以外の場合は、これらのセグメントによってトリガ確認応答は、SACKの損失回復するか、新しいセグメントの送信をトリガしているだろう。 F-RTOの送信者がアルゴリズムのステップ2で送信された二つの新しいセグメントに応答して再送タイムアウトの前に送信されたセグメントの肯定応答を受信した場合従って、TCPの通常の動作だけ遅れており、再送タイムアウトが偽であると考えられます。 TCPの送信側が再送タイムアウトが発生した時点での損失回復していない場合にのみ、この推論が動作することに注意してください。ステップ1の条件が「RecoveryPoint」がより大きい又はいずれかの場合にF-RTOアルゴリズムの実行前損失回復を防止RTO回復またはSACK損失回復、再送タイマが満了したときに進行中であるSND.UNAに等しいことを確認します。再送タイマが同じセグメントに対して複数回満了した場合は、しかし、F-RTOアルゴリズムの実行を可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Taking Actions after Detecting Spurious RTO",
+      "section_title": true,
+      "ja": "スプリアスRTOを検出した後4.撮影アクション"
+    },
+    {
+      "indent": 3,
+      "text": "Upon a retransmission timeout, a conventional TCP sender assumes that outstanding segments are lost and starts retransmitting the unacknowledged segments. When the retransmission timeout is detected to be spurious, the TCP sender should not continue retransmitting based on the timeout. For example, if the sender was in congestion avoidance phase transmitting new, previously unsent segments, it should continue transmitting previously unsent segments in congestion avoidance.",
+      "ja": "再送タイムアウト時には、従来のTCPの送信者は、優れたセグメントが失われていることを前提とし未確認のセグメントを再送信を開始します。再送タイムアウトがスプリアスあることが検出された場合、TCPの送信者がタイムアウトに基づいて再送し続けるべきではありません。送信者が新しい、以前に未送信のセグメントを送信する輻輳回避フェーズにあった場合、それは輻輳回避で以前に未送信のセグメントを送信し続けなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "There are currently two alternatives specified for a spurious timeout response algorithm, the Eifel Response Algorithm [LG05], and an algorithm for adapting the retransmission timeout after a spurious RTO [BBA06]. If no specific response algorithm is implemented, the TCP SHOULD respond to spurious timeout conservatively, applying the TCP congestion control specification [APB09]. Different response algorithms for spurious retransmission timeouts have been analyzed in some research papers [GL03, Sar03] and IETF documents [SL03].",
+      "ja": "スプリアスタイムアウト応答アルゴリズム、アイフェル応答アルゴリズム[LG05]、およびスプリアスRTO [BBA06]の後に再送タイムアウトを適応させるためのアルゴリズムのために指定された2つの選択肢が現在ありません。具体的な応答アルゴリズムが実装されていない場合、TCPはTCP輻輳制御仕様[APB09]を適用し、控えめにスプリアスタイムアウトに応答する必要があります。スプリアス再送タイムアウトの異なる応答アルゴリズムは、いくつかの研究論文[GL03、Sar03]とIETFドキュメント[SL03]で分析されています。"
+    },
+    {
+      "indent": 1,
+      "text": "5. Evaluation of",
+      "section_title": true,
+      "ja": "5.評価"
+    },
+    {
+      "indent": 3,
+      "text": "F-RTO was first specified in an Experimental RFC (RFC 4138) that has been implemented in a number of operating systems since it was published. Gained experience has been documented in a separate document [KYHS07], and can be summarized as follows.",
+      "ja": "F-RTOは、最初、それが公開されたので、オペレーティングシステムの数に実装された実験的RFC（RFC 4138）で指定されました。得られた経験は、別の文書[KYHS07]に記載されており、次のように要約することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the TCP sender employs F-RTO, it is able to detect spurious RTOs and avoid the unnecessary retransmission of the whole window of data. Because F-RTO avoids the unnecessary retransmissions after a spurious RTO, it is able to adhere to the packet conservation principle, unlike a regular TCP that enters the slow-start recovery unnecessarily and inappropriately restarts the ACK clock while there are segments outstanding in the network. When a spurious RTO has been detected, a sender can select an appropriate congestion control response instead of setting the congestion window to one segment. Because F-RTO avoids unnecessary retransmissions, it is able to take the round-trip time of the delayed segments into account when calculating the RTO estimate, which may help in avoiding further spurious retransmission timeouts.",
+      "ja": "TCPの送信者がF-RTOを採用した場合、偽のRTOを検出し、データのウィンドウ全体の不必要な再送信を避けることができます。 F-RTOは、スプリアスRTO後に不要な再送信を回避しているので、スロースタート回復を不必要に入り、通常のTCPとは異なり、パケットの保全の原則を遵守することが可能であり、ネットワーク内で優秀なセグメントがある一方で、不適切ACKクロックを再開します。スプリアスRTOが検出された場合、送信側ではなく一つのセグメントに輻輳ウィンドウを設定する適切な輻輳制御応答を選択することができます。 F-RTOが不必要な再送信を回避しているので、さらにスプリアス再送タイムアウトを避けることに役立つ可能性RTO推定値を算出する際に考慮に遅れたセグメントのラウンドトリップ時間を取ることが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Experimental results with the basic F-RTO have been reported in an emulated network using a Linux implementation [SKR03]. Also, different congestion control responses along with the SACK-enhanced version of F-RTO were tested in a similar environment [Sar03]. There are publications analyzing F-RTO performance over commercial Wideband Code Division Multiple Access (W-CDMA) networks, and in an emulated High-Speed Downlink Packet Access (HSDPA) network [Yam05, Hok05]. Also, Microsoft reported positive experiences with their implementation of F-RTO at the IETF-68 meeting.",
+      "ja": "基本的なF-RTOとの実験結果は、Linuxの実装[SKR03]を使用してエミュレートネットワークに報告されています。また、F-RTOのSACK-強化されたバージョンと一緒に別の輻輳制御応答は、同様の環境[Sar03]で試験しました。商業用広帯域符号分割多元接続（W-CDMA）ネットワーク上でエミュレート高速ダウンリンクパケットアクセス（HSDPA）ネットワーク[Yam05、Hok05]でF-RTOのパフォーマンスを分析する出版物があります。また、マイクロソフトは、IETF-68会議でF-RTOのその実施に肯定的な経験を報告しました。"
+    },
+    {
+      "indent": 3,
+      "text": "It is known that some spurious RTOs may remain undetected by F-RTO if duplicate acknowledgments arrive at the sender immediately after the spurious RTO, for example due to packet reordering or packet loss. There are rare corner cases where F-RTO could \"hide\" a packet loss and therefore lead to inappropriate behavior with non-conservative congestion control response: first, if a massive packet reordering occurred so that the acknowledgment of RTO retransmission arrived at the sender before the acknowledgments of original transmissions, the sender might not detect the loss of the segment that triggered the RTO. Second, a malicious receiver could lead F-RTO to make a wrong conclusion after an RTO by acknowledging segments it has not received. Such a receiver would, however, risk breaking the consistency of the TCP state between the sender and receiver, causing the connection to become unusable, which cannot be of any benefit to the receiver. Therefore, we believe it is not likely that receivers would start employing such tricks on a significant scale. Finally, loss of the unnecessary RTO retransmission cannot be detected without using some explicit acknowledgment scheme such as DSACK. This is common to the other mechanisms for detecting spurious RTO, as well as to regular TCP that does not use DSACK. We note that if the congestion control response to spurious RTO is conservative enough, the above corner cases do not cause problems due to increased congestion.",
+      "ja": "重複確認応答パケットの並べ替えやパケット損失に起因する、例えば、すぐスプリアスRTO後に送信者に到着する場合、いくつかのスプリアスRTOSはF-RTOにより検出されないままであり得ることが知られています。 F-RTOは、パケットロスを「隠す」ため、非保守的な輻輳制御応答で不適切な行動につながる可能性がまれなコーナーケースがあります。大規模なパケットの並べ替えがそう起こった場合は、最初、RTO再送の確認は、送信者の前に到着していることオリジナルの送信の確認応答は、送信者はRTOをトリガし、セグメントの損失を検出しない場合があります。第二に、悪質な受信機は、受信していないセグメントを認めることにより、RTO後に間違った結論を作るためにF-RTOをつながる可能性があります。そのような受信機は、しかし、危険な接続が使用不能になることを引き起こして、送信側と受信側との間のTCP状態の一貫性を破壊、受信機への利益とすることができないであろう。したがって、我々は受信機が大きな規模で、このようなトリックを採用し始めるだろうとそうではないと信じています。最後に、不要なRTO再送の損失は、DSACKなどのいくつかの明示的な肯定応答方式を使用することなく検出することができません。これは、偽のRTOを検出するための他のメカニズムに、だけでなく、DSACKを使用していない通常のTCPに共通しています。私たちは、スプリアスRTOに輻輳制御応答が十分に保守的であれば、上記のコーナーケースが増え混雑に起因する問題を引き起こさないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The main security threat regarding F-RTO is the possibility that a receiver could mislead the sender into setting too large a congestion window after an RTO. There are two possible ways a malicious receiver could trigger a wrong output from the F-RTO algorithm. First, the receiver can acknowledge data that it has not received. Second, it can delay acknowledgment of a segment it has received earlier, and acknowledge the segment after the TCP sender has been deluded to enter algorithm step 3.",
+      "ja": "F-RTOに関する主要なセキュリティ上の脅威は、受信機がRTOの後にあまりにも大きな輻輳ウィンドウを設定するに送信者を誤解させることができる可能性があります。悪質な受信機はF-RTOアルゴリズムからの間違った出力を引き起こす可能性が2つの方法があります。まず、受信機は、受信していないデータを確認することができます。第二に、それが以前に受信したセグメントの確認応答を遅らせる、およびTCPの送信者がアルゴリズムのステップ3を入力するように惑わされた後のセグメントを確認することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the receiver acknowledges a segment it has not really received, the sender can be led to declare spurious timeout in the F-RTO algorithm, step 3. However, because the sender will have an incorrect state, it cannot retransmit the segment that has never reached the receiver. Therefore, this attack is unlikely to be useful for the receiver to maliciously gain a larger congestion window.",
+      "ja": "受信機はそれが本当に受信していないセグメントを承認した場合、送信者はF-RTOアルゴリズムでスプリアスタイムアウトを宣言するために導くことができ、ステップ3.しかし、送信者が間違った状態になりますので、それは決してありませんセグメントを再送することはできません受信機に到達しました。したがって、この攻撃が悪意大きな輻輳ウィンドウを得るために受信機のために有用である可能性は低いです。"
+    },
+    {
+      "indent": 3,
+      "text": "A common case for a retransmission timeout is that a fast retransmission of a segment is lost. If all other segments have been received, the RTO retransmission causes the whole window to be acknowledged at once. This case is recognized in F-RTO algorithm branch (2a). However, if the receiver only acknowledges one segment after receiving the RTO retransmission, and then the rest of the segments, it could cause the timeout to be declared spurious when it is not. Therefore, it is suggested that, when an RTO occurs during the fast recovery phase, the sender would not fully revert the congestion window even if the timeout was declared spurious. Instead, the sender would reduce the congestion window to 1.",
+      "ja": "再送タイムアウトのための一般的なケースは、セグメントの高速再送が失われることです。他のすべてのセグメントが受信されている場合は、RTO再送は、ウィンドウ全体が一度に認知されるようにします。このケースは、F-RTOアルゴリズムブランチ（2A）で認識されています。受信機のみRTO再送信を受信した後、一つのセグメントを認識し、セグメントの、その後残りの場合は、それがない場合、タイムアウトがスプリアス宣言する可能性があります。したがって、RTOは高速回復期中に発生した場合に、送信側は完全にタイムアウトがスプリアス宣言された場合でも、輻輳ウィンドウを元に戻すないだろう、ということを示唆しています。代わりに、送信者は1に輻輳ウィンドウを減少させるであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is more than one segment missing at the time of a retransmission timeout, the receiver does not benefit from misleading the sender to declare a spurious timeout because the sender would have to go through another recovery period to retransmit the missing segments, usually after an RTO has elapsed.",
+      "ja": "複数のセグメントが再送タイムアウトの時が欠落している場合は、送信者が後に通常、欠落したセグメントを再送信するために、別の回復期間を経る必要があるため、受信機は、スプリアスタイムアウトを宣言するために、送信者に誤解を招くから恩恵を受けていませんRTOが経過しました。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Acknowledgments",
+      "section_title": true,
+      "ja": "7.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Alfred Hoenes, Ilpo Jarvinen, and Murari Sridharan for the comments on this document.",
+      "ja": "作者はこのドキュメントへのコメントのためにアルフレッドHoenes、Ilpo Jarvinen、およびMurari Sridharanに感謝したいと思います。"
+    },
+    {
+      "indent": 3,
+      "text": "We are also thankful to Reiner Ludwig, Andrei Gurtov, Josh Blanton, Mark Allman, Sally Floyd, Yogesh Swami, Mika Liljeberg, Ivan Arias Rodriguez, Sourabh Ladha, Martin Duke, Motoharu Miyake, Ted Faber, Samu Kontinen, and Kostas Pentikousis who gave valuable feedback during the preparation of RFC 4138, the precursor of this document.",
+      "ja": "私たちは、与えたライナールートヴィヒ、アンドレイGurtov、ジョシュ・ブラントン、マーク・オールマン、サリー・フロイド、ヨーゲッシュスワミ、ミカLiljeberg、イヴァン・アリアス・ロドリゲス、Sourabh Ladha、マーティン・デューク、元治三宅、テッド・フェーバー、Samu Kontinen、およびコスタスPentikousisにも感謝していますRFC 4138の準備中に貴重なフィードバック、このドキュメントの前駆体。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Discussion of Window-Limited Cases",
+      "ja": "ウィンドウ-限られたケースの付録A.ディスカッション"
+    },
+    {
+      "indent": 3,
+      "text": "When the advertised window limits the transmission of two new previously unsent segments, or there are no new data to send, it is recommended in F-RTO algorithm step (2b) that the TCP sender continue with the conventional RTO recovery algorithm. The disadvantage is that the sender may continue unnecessary retransmissions due to possible spurious timeout. This section briefly discusses the options that can potentially improve performance when transmitting previously unsent data is not possible.",
+      "ja": "広告ウィンドウは、2つの新しい以前に未送信のセグメントの送信を制限するか、または送信する新しいデータが存在しない場合は、TCP送信者は、従来のRTO回復アルゴリズムを継続することをF-RTOアルゴリズムステップ（2B）で推奨されています。欠点は、送信者が原因の可能スプリアスタイムアウトに不要な再送を続けることです。このセクションでは、簡単にはできません以前に未送信データを送信する際に潜在的にパフォーマンスを向上させることができますオプションについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "- The TCP sender could reserve an unused space of a size of one or two segments in the advertised window to ensure the use of algorithms such as F-RTO or Limited Transmit [ABF01] in receiver window-limited situations. On the other hand, while doing this, the TCP sender should ensure that the window of outstanding segments is large enough for proper utilization of the available pipe.",
+      "ja": " - 広告ウィンドウ内の一つまたは二つのセグメントのサイズの未使用スペースを確保できたTCP送信者は、F-RTOまたは限定された送信【ABF01受信機ウィンドウ制限状況のようなアルゴリズムを使用することを確実にします。一方、これをやっている間、TCPの送信者は、優れたセグメントのウィンドウが使用可能なパイプの適切な利用のために十分な大きさであることを確認する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "- Use additional information if available, e.g., TCP timestamps with the Eifel Detection algorithm, for detecting a spurious timeout. However, Eifel detection may yield different results from F-RTO when ACK losses and an RTO occur within the same round-trip time [SKR03].",
+      "ja": " - 利用追加情報利用可能な場合には、例えば、TCPは、スプリアスタイムアウトを検出するため、アイフェル検出アルゴリズムを用いてタイムスタンプ。 ACK損失とRTOが同じラウンドトリップ時間[SKR03]内で発生した場合しかし、アイフェル検出は、F-RTOは異なる結果をもたらすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "- Retransmit data from the tail of the retransmission queue and continue with step 3 of the F-RTO algorithm. It is possible that the retransmission will be made unnecessarily. Furthermore, the operation of the SACK-based F-RTO algorithm would need to consider this case separately, to not use the retransmitted segment to indicate spurious timeout. Given these considerations, this option is not recommended.",
+      "ja": " - 再送信データ再送キューの最後尾からとF-RTOアルゴリズムのステップ3に進みます。再送信が不必要に行われることも可能です。さらに、SACKベースのF-RTOアルゴリズムの動作は、スプリアスタイムアウトを示すために再送セグメントを使用しないように、個別にこのケースを検討する必要があります。これらの考察を考えると、このオプションは推奨されません。"
+    },
+    {
+      "indent": 3,
+      "text": "- Send a zero-sized segment below SND.UNA, similar to a TCP Keep-Alive probe, and continue with step 3 of the F-RTO algorithm. Because the receiver replies with a duplicate ACK, the sender is able to detect whether the timeout was spurious from the incoming acknowledgment. This method does not send data unnecessarily, but it delays the recovery by one round-trip time in cases where the timeout was not spurious. Therefore, this method is not encouraged.",
+      "ja": " -  TCPキープアライブプローブと同様SND.UNA以下ゼロサイズのセグメントを送信し、F-RTOアルゴリズムのステップ3に進みます。受信機が重複ACKで応答するため、送信者は、タイムアウトが受信確認応答からのスプリアスであったかどうかを検出することができます。この方法では、不必要にデータを送信しませんが、それはタイムアウトが偽りではなかった場合に1往復時間で回復を遅らせます。したがって、この方法は推奨されません。"
+    },
+    {
+      "indent": 3,
+      "text": "- In receiver-limited cases, send one octet of new data, regardless of the advertised window limit, and continue with step 3 of the F-RTO algorithm. It is possible that the receiver will have free buffer space to receive the data by the time the segment has propagated through the network, in which case no harm is done. If the receiver is not capable of receiving the segment, it rejects the segment and sends a duplicate ACK.",
+      "ja": " - 受信制限のケースでは、関係なく、広告ウィンドウ限界の、新たなデータの1つのオクテットを送信し、F-RTOアルゴリズムのステップ3に進みます。受信機は害が行われない、その場合、セグメントは、ネットワークを介して伝播した時点でデータを受信するためのフリーバッファスペースを有することが可能です。受信機は、セグメントを受信可能でない場合は、セグメントを拒否し、重複ACKを送信します。"
+    },
+    {
+      "indent": 1,
+      "text": "Appendix B. Changes since",
+      "ja": "付録B.からの変更点"
+    },
+    {
+      "indent": 5,
+      "text": "Changes from RFC 4138 are summarized below, apart from minor\nediting and language improvements.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "* Modified the basic F-RTO algorithm and the SACK-enhanced F-RTO algorithm to prevent the TCP sender from applying the F-RTO algorithm if the retransmission timer expires when an earlier RTO recovery is underway, except when the retransmission timer expires multiple times for the same segment.",
+      "ja": "*以前のRTO回復は再送タイマを複数回満了したときを除いて、進行中であるとき、再送タイマが満了した場合、F-RTOアルゴリズムを適用することにより、TCPの送信者を防ぐために、基本的なF-RTOアルゴリズムとSACKが強化されたF-RTOアルゴリズムを修正同じセグメントについて。"
+    },
+    {
+      "indent": 3,
+      "text": "* Clarified behavior on multiple timeouts.",
+      "ja": "*複数のタイムアウトに行動を明らかにしました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Added a paragraph on acknowledgments that do not acknowledge new data but are not duplicate acknowledgments.",
+      "ja": "*新しいデータを認識しませんが、確認応答を重複していない受信確認の段落を追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Clarified the SACK-algorithm a bit, and added one paragraph of description of the basic idea of the algorithm.",
+      "ja": "* SACK-アルゴリズムを少し明確化、およびアルゴリズムの基本的な考え方の説明の1つの段落を追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Removed SCTP considerations.",
+      "ja": "* SCTPの考慮事項を削除しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Removed earlier Appendix sections, except Appendix C from RFC 4138, which is now Appendix A.",
+      "ja": "*付録のセクションでは、今、付録A.あるRFC 4138、から付録Cを除いて、以前の削除します"
+    },
+    {
+      "indent": 3,
+      "text": "* Clarified text about the possible response algorithms.",
+      "ja": "*可能な応答アルゴリズムに関するテキストを明確化。"
+    },
+    {
+      "indent": 3,
+      "text": "* Added section that summarizes the evaluation of RFC 4138.",
+      "ja": "* RFC 4138の評価をまとめたセクションを追加しました。"
+    },
+    {
+      "indent": 0,
+      "text": "References",
+      "ja": "リファレンス"
+    },
+    {
+      "indent": 0,
+      "text": "Normative References",
+      "ja": "引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[APB09] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, September 2009.",
+      "ja": "[APB09]オールマン、M.、パクソン、V.、およびE.ブラントン、 \"TCP輻輳制御\"、RFC 5681、2009年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[BAFW03] Blanton, E., Allman, M., Fall, K., and L. Wang, \"A Conservative Selective Acknowledgment (SACK)-based Loss Recovery Algorithm for TCP\", RFC 3517, April 2003.",
+      "ja": "[BAFW03]ブラントン、E.、オールマン、M.、秋、K.、およびL.王は、2003年4月、RFC 3517の \"保守的な選択的確認応答（SACK）は、TCPのために損失回復アルゴリズムをベース\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[FHG04] Floyd, S., Henderson, T., and A. Gurtov, \"The NewReno Modification to TCP's Fast Recovery Algorithm\", RFC 3782, April 2004.",
+      "ja": "[FHG04]フロイド、S.、ヘンダーソン、T.、およびA. Gurtov、 \"TCPの高速回復アルゴリズムにNewRenoの変更\"、RFC 3782、2004年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[MMFR96] Mathis, M., Mahdavi, J., Floyd, S., and A. Romanow, \"TCP Selective Acknowledgment Options\", RFC 2018, October 1996.",
+      "ja": "【MMFR96]マティス、M.、Mahdavi、J.、フロイド、S.、とA. Romanow、 \"TCPの選択確認応答オプション\"、RFC 2018、1996年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[PA00] Paxson, V. and M. Allman, \"Computing TCP's Retransmission Timer\", RFC 2988, November 2000.",
+      "ja": "[PA00]パクソン、V.とM.オールマン、 \"コンピューティングTCPの再送信タイマー\"、RFC 2988、2000年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Pos81] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "【Pos81]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 0,
+      "text": "Informative References",
+      "ja": "参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ABF01] Allman, M., Balakrishnan, H., and S. Floyd, \"Enhancing TCP's Loss Recovery Using Limited Transmit\", RFC 3042, January 2001.",
+      "ja": "[ABF01]オールマン、M.、バラクリシュナン、H.、およびS.フロイド、RFC 3042、2001年1月 \"株式会社ミットを使用したTCPの損失回復の強化\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[BA04] Blanton, E. and M. Allman, \"Using TCP Duplicate Selective Acknowledgement (DSACKs) and Stream Control Transmission Protocol (SCTP) Duplicate Transmission Sequence Numbers (TSNs) to Detect Spurious Retransmissions\", RFC 3708, February 2004.",
+      "ja": "[BA04]ブラントン、E.およびM.オールマン、RFC 3708、2004年2月「スプリアス再送を検出するためにTCP複製選択的確認応答（DSACKs）およびストリーム制御伝送プロトコル（SCTP）重複送信シーケンス番号（TSNを）の使用」。"
+    },
+    {
+      "indent": 3,
+      "text": "[BBA06] Blanton, J., Blanton, E., and M. Allman, \"Using Spurious Retransmissions to Adapt the Retransmission Timeout\", Work in Progress, December 2006.",
+      "ja": "[BBA06]ブラントン、J.、ブラントン、E.、およびM.オールマン、「再送信タイムアウトを適応するスプリアス再送を使用する」、進歩、2006年12月に作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[BBJ92] Jacobson, V., Braden, R., and D. Borman, \"TCP Extensions for High Performance\", RFC 1323, May 1992.",
+      "ja": "[BBJ92]ジェーコブソン、V.、ブレーデン、R.、およびD.ボーマン、 \"ハイパフォーマンスのためのTCP拡張\"、RFC 1323、1992年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[FMMP00] Floyd, S., Mahdavi, J., Mathis, M., and M. Podolsky, \"An Extension to the Selective Acknowledgement (SACK) Option for TCP\", RFC 2883, July 2000.",
+      "ja": "【FMMP00]フロイド、S.、Mahdavi、J.、マティス、M.、およびM.ポドルスキー、 \"TCPのための選択的確認応答（SACK）オプションの拡張\"、RFC 2883、2000年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[GL02] Gurtov A. and R. Ludwig, \"Evaluating the Eifel Algorithm for TCP in a GPRS Network\", In Proc. European Wireless, Florence, Italy, February 2002.",
+      "ja": "PROCで[GL02] Gurtov A.とR.ルートヴィヒ、 \"GPRSネットワークにおけるTCPのためのアイフェルアルゴリズムの評価\"、。ヨーロッパのワイヤレス、フィレンツェ、イタリア、2002年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[GL03] Gurtov A. and R. Ludwig, \"Responding to Spurious Timeouts in TCP\", In Proc. IEEE INFOCOM 03, San Francisco, CA, USA, March 2003.",
+      "ja": "PROCで \"TCPにおけるスプリアスタイムアウトに応答\" [GL03] Gurtov A.及びR.ルートヴィヒ、、。 IEEE INFOCOM 03、サンフランシスコ、CA、USA、2003年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Jac88] Jacobson, V., \"Congestion Avoidance and Control\", In Proc. ACM SIGCOMM 88.",
+      "ja": "【Jac88]ジェーコブソン、V.、 \"輻輳回避とコントロール\"、PROCで。 ACM SIGCOMM 88。"
+    },
+    {
+      "indent": 3,
+      "text": "[Hok05] Hokamura, A., et al., \"Performance Evaluation of F-RTO and Eifel Response Algorithms over W-CDMA packet network\", In Proc. Wireless Personal Multimedia Communications (WPMC'05), Sept. 2005.",
+      "ja": "【Hok05] Hokamura、A.、ら、Procで、 \"W-CDMAのパケットネットワークを介しF-RTOとアイフェル応答アルゴリズムの性能評価\"。無線パーソナルマルチメディア通信（WPMC'05）、2005年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[KYHS07] Kojo, M., Yamamoto, K., Hata, M., and P. Sarolahti, \"Evaluation of RFC 4138\", Work in Progress, November 2007.",
+      "ja": "[KYHS07]古城、M.、山本、K.、秦、M.、およびP. Sarolahti、 \"RFC 4138の評価\"、進歩、2007年11月に作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[LG05] Ludwig, R. and A. Gurtov, \"The Eifel Response Algorithm for TCP\", RFC 4015, February 2005.",
+      "ja": "[LG05]ルートヴィヒ、R.とA. Gurtov、 \"TCPのためのアイフェルレスポンスアルゴリズム\"、RFC 4015、2005年2月。"
+    },
+    {
+      "indent": 3,
+      "text": "[LK00] Ludwig R. and R.H. Katz, \"The Eifel Algorithm: Making TCP Robust Against Spurious Retransmissions\", ACM SIGCOMM Computer Communication Review, 30(1), January 2000.",
+      "ja": "[LK00]ルートヴィヒ・R.との相対湿度カッツ、 \"アイフェルアルゴリズム：スプリアス再送に対するTCPは堅牢にする\"、ACM SIGCOMMコンピュータコミュニケーションレビュー、30（1）、2000年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[LM03] Ludwig, R. and M. Meyer, \"The Eifel Detection Algorithm for TCP\", RFC 3522, April 2003.",
+      "ja": "[LM03]ルートヴィヒ、R.及びM.マイヤー、 \"TCPのためのアイフェル検出アルゴリズム\"、RFC 3522、2003年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Nag84] Nagle, J., \"Congestion control in IP/TCP internetworks\", RFC 896, January 1984.",
+      "ja": "[Nag84]ネーグル、J.、 \"IP / TCPインターネットワークにおける輻輳制御\"、RFC 896、1984年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SK05] Sarolahti, P. and M. Kojo, \"Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP and the Stream Control Transmission Protocol (SCTP)\", RFC 4138, August 2005.",
+      "ja": "[SK05] Sarolahti、P.とM.古城、 \"フォワードRTO-復旧（F-RTO）：TCPおよびストリーム制御伝送プロトコル（SCTP）とスプリアス再送タイムアウトを検出するためのアルゴリズム\"、RFC 4138、2005年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SKR03] Sarolahti, P., Kojo, M., and K. Raatikainen, \"F-RTO: An Enhanced Recovery Algorithm for TCP Retransmission Timeouts\", ACM SIGCOMM Computer Communication Review, 33(2), April 2003.",
+      "ja": "[SKR03] Sarolahti、P.、古城、M.、およびK. Raatikainen、 \"F-RTO：TCP再送信タイムアウトのための強化された回復アルゴリズム\"、ACM SIGCOMMコンピュータコミュニケーションレビュー、33（2）、2003年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Sar03] Sarolahti, P., \"Congestion Control on Spurious TCP Retransmission Timeouts\", In Proc. of IEEE Globecom 2003, San Francisco, CA, USA. December 2003.",
+      "ja": "[Sar03] Sarolahti、P.、PROCで、 \"スプリアスTCP再送タイムアウトの輻輳制御\"。 2003 GLOBECOM IEEE、サンフランシスコ、CA、USAの。 2003年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SL03] Swami Y. and K. Le, \"DCLOR: De-correlated Loss Recovery using SACK Option for spurious timeouts\", Work in Progress, September 2003.",
+      "ja": "「：スプリアスタイムアウトのSACKオプションを使用して無相関損失回復DCLOR」、進歩、2003年9月に作業[SL03]スワミY.とK.ル、。"
+    },
+    {
+      "indent": 3,
+      "text": "[Ste07] Stewart, R., Ed., \"Stream Control Transmission Protocol\", RFC 4960, September 2007.",
+      "ja": "[Ste07]スチュワート、R.、エド。、 \"ストリーム制御伝送プロトコル\"、RFC 4960、2007年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Yam05] Yamamoto, K., et al., \"Effects of F-RTO and Eifel Response Algorithms for W-CDMA and HSDPA networks\", In Proc. Wireless Personal Multimedia Communications (WPMC'05), September 2005.",
+      "ja": "【Yam05】山本、K.、ら、Procで、 \"W-CDMAやHSDPAネットワークのためのF-RTOとアイフェル応答アルゴリズムの影響\"。無線パーソナルマルチメディア通信（WPMC'05）、2005年9月。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Pasi Sarolahti Nokia Research Center P.O. Box 407 FI-00045 NOKIA GROUP Finland Phone: +358 50 4876607 EMail: pasi.sarolahti@iki.fi",
+      "ja": "パシSarolahtiノキア・リサーチセンター私書箱ボックス407 FI-00045 NOKIA GROUPフィンランド電話番号：+358 50 4876607 Eメール：pasi.sarolahti@iki.fi"
+    },
+    {
+      "indent": 3,
+      "text": "Markku Kojo University of Helsinki P.O. Box 68 FI-00014 UNIVERSITY OF HELSINKI Finland Phone: +358 9 19151305 EMail: kojo@cs.helsinki.fi",
+      "ja": "ヘルシンキの私書箱のマルック古城大学ボックス68 FI-00014ヘルシンキ大学、フィンランド電話：+358 9 19151305 Eメール：kojo@cs.helsinki.fi"
+    },
+    {
+      "indent": 3,
+      "text": "Kazunori Yamamoto NTT Docomo, Inc. 3-5 Hikarinooka, Yokosuka, Kanagawa, 239-8536, Japan Phone: +81-46-840-3812 EMail: yamamotokaz@nttdocomo.co.jp",
+      "ja": "かずのり やまもと んっｔ どこも、 いんｃ。 ３ー５ ひかりのおか、 よこすか、 かながわ、 ２３９ー８５３６、 じゃぱん Ｐほね： ＋８１ー４６ー８４０ー３８１２ えまいｌ： やまもとかｚ＠んっｔどこも。こ。ｊｐ"
+    },
+    {
+      "indent": 3,
+      "text": "Max Hata NTT Docomo, Inc. 3-5 Hikarinooka, Yokosuka, Kanagawa, 239-8536, Japan Phone: +81-46-840-3812 EMail: hatama@s1.nttdocomo.co.jp",
+      "ja": "まｘ はた んっｔ どこも、 いんｃ。 ３ー５ ひかりのおか、 よこすか、 かながわ、 ２３９ー８５３６、 じゃぱん Ｐほね： ＋８１ー４６ー８４０ー３８１２ えまいｌ： はたま＠ｓ１。んっｔどこも。こ。ｊｐ"
+    }
+  ]
+}
