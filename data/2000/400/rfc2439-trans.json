@@ -1,0 +1,1829 @@
+{
+  "title": {
+    "text": "RFC 2439 - BGP Route Flap Damping",
+    "ja": "RFC 2439 - BGPルートフラップダンピング"
+  },
+  "number": 2439,
+  "created_at": "2019-10-24 15:28:14.249956+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                       C. Villamizar\nRequest for Comments: 2439                                            ANS\nCategory: Standards Track                                      R. Chandra\n                                                                    Cisco\n                                                              R. Govindan\n                                                                      ISI\n                                                            November 1998",
+      "raw": true
+    },
+    {
+      "indent": 25,
+      "text": "BGP Route Flap Damping",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1998). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1998）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "A usage of the BGP routing protocol is described which is capable of reducing the routing traffic passed on to routing peers and therefore the load on these peers without adversely affecting route convergence time for relatively stable routes. This technique has been implemented in commercial products supporting BGP. The technique is also applicable to IDRP.",
+      "ja": "BGPルーティングプロトコルの使用は不利に比較的安定したルートのルート収束時間に影響を与えることなく、ピアしたがってこれらのピアの負荷をルーティングに渡さルーティングトラフィックを低減することが可能であるが記載されています。この手法は、BGPをサポートする商用製品に実装されています。技術はまた、IDRPに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The overall goals are:",
+      "ja": "全体的な目標は以下のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o to provide a mechanism capable of reducing router processing load caused by instability",
+      "ja": "oが不安定に起因するルータの処理負荷を低減することができるメカニズムを提供すること"
+    },
+    {
+      "indent": 3,
+      "text": "o in doing so prevent sustained routing oscillations",
+      "ja": "Oそうすることで持続的なルーティング発振を防ぎます"
+    },
+    {
+      "indent": 3,
+      "text": "o to do so without sacrificing route convergence time for generally well behaved routes.",
+      "ja": "一般的に行儀ルートのルート収束時間を犠牲にすることなく、そうするO。"
+    },
+    {
+      "indent": 3,
+      "text": "This must be accomplished keeping other goals of BGP in mind:",
+      "ja": "これは心の中でBGPの他の目標を維持達成されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o pack changes into a small number of updates",
+      "ja": "O更新の小さな数に変化を詰めます"
+    },
+    {
+      "indent": 3,
+      "text": "o preserve consistent routing o minimal addition space and computational overhead",
+      "ja": "O最小限の添加空間と計算オーバヘッドO一貫したルーティングを維持"
+    },
+    {
+      "indent": 3,
+      "text": "An excessive rate of update to the advertised reachability of a subset of Internet prefixes has been widespread in the Internet. This observation was made in the early 1990s by many people involved in Internet operations and remains the case. These excessive updates are not necessarily periodic so route oscillation would be a misleading term. The informal term used to describe this effect is \"route flap\". The techniques described here are now widely deployed and are commonly referred to as \"route flap damping\".",
+      "ja": "インターネットプレフィックスのサブセットの広告を出して到達可能性への更新の過剰率は、インターネットで普及しています。この観察は、インターネットの操作に関与する多くの人々によって1990年代初頭に作られた、ケースのままました。ルート振動が誤解を招く用語になるように、これらの過度の更新プログラムは、必ずしも定期的ではありません。この効果を記述するために使用される非公式の用語は、「ルートフラップ」です。ここで説明される技術は、現在広く展開されており、一般に「減衰経路フラップ」と呼ばれます。"
+    },
+    {
+      "indent": 0,
+      "text": "1 Overview",
+      "ja": "1。概要"
+    },
+    {
+      "indent": 3,
+      "text": "To maintain scalability of a routed internet, it is necessary to reduce the amount of change in routing state propagated by BGP in order to limit processing requirements. The primary contributors of processing load resulting from BGP updates are the BGP decision process and adding and removing forwarding entries.",
+      "ja": "ルーティングされたインターネットの拡張性を維持するためには、処理要件を制限するために、BGPによって伝播状態をルーティングの変化量を低減する必要があります。 BGPアップデートに起因処理負荷の主要な貢献者は、BGP決定プロセスであり、フォワーディングエントリを追加および削除します。"
+    },
+    {
+      "indent": 3,
+      "text": "Consider the following example. A widely deployed BGP implementation may tend to fail due to high routing update volume. For example, it may be unable to maintain it's BGP or IGP sessions if sufficiently loaded. The failure of one router can further contribute to the load on other routers. This additional load may cause failures in other instances of the same implementation or other implementations with a similar weakness. In the worst case, a stable oscillation could result. Such worse cases have already been observed in practice.",
+      "ja": "次の例を考えてみましょう。広く展開されているBGP実装が高いルーティング更新容量に失敗する傾向があります。例えば、十分にロードされた場合、それはBGPまたはIGPのセッションです維持できない可能性があります。 1つのルータの故障は、さらに他のルータの負荷に貢献することができます。この追加の負荷は、同様の弱点と同じ実装または他の実装の他のインスタンスの障害を引き起こす可能性があります。最悪の場合には、安定した振動が発生する可能性があります。このようなひどい場合は、すでに実際に観察されています。"
+    },
+    {
+      "indent": 3,
+      "text": "A BGP implementation must be prepared for a large volume of routing traffic. A BGP implementation cannot rely upon the sender to sufficiently shield it from route instabilities. The guidelines here are designed to prevent sustained oscillations, but do not eliminate the need for robust and efficient implementations. The mechanisms described here allow routing instability to be contained at an AS border router bordering the instability.",
+      "ja": "BGP実装は、トラフィックをルーティングする大量のために準備されなければなりません。 BGPの実装は十分にルートの不安定性から、それを保護するために、送信者に頼ることはできません。ここでのガイドラインは、持続的な振動を防止するために設計されているが、堅牢かつ効率的な実装の必要性がなくなるわけではありません。ここで説明するメカニズムは、ルーティングの不安定性が不安定に隣接AS境界ルータで含有させます。"
+    },
+    {
+      "indent": 3,
+      "text": "Even where BGP implementations are highly robust, the performance of the routing process is limited. Limiting the propagation of unnecessary change then becomes an issue of maintaining reasonable route change convergence time as a routing topology grows.",
+      "ja": "BGP実装は非常に頑強である場合でも、ルーティングプロセスの性能が制限されます。不必要な変更の伝播を制限することは、ルーティングトポロジが大きくなるにつれて、合理的な経路変更収束時間を維持する問題となります。"
+    },
+    {
+      "indent": 0,
+      "text": "2 Methods of Limiting Route Advertisement",
+      "ja": "ルートの通知を制限する2つの方法"
+    },
+    {
+      "indent": 3,
+      "text": "Two methods of controlling the frequency of route advertisement are described here. The first involves fixed timers. The fixed timer technique has no space overhead per route but has the disadvantage of slowing route convergence for the normal case where a route does not have a history of instability. The second method overcomes this limitation at the expense of maintaining some additional space overhead. The additional overhead includes a small amount of state per route and a very small processing overhead.",
+      "ja": "ルート広告の周波数を制御するための二つの方法がここで説明されています。最初は、固定されたタイマーを必要とします。固定タイマー技術は、ルートごとにスペースのオーバーヘッドを持っていませんが、ルートが不安定の歴史を持っていない通常の場合のルートの収束を遅らせるという欠点があります。第二の方法は、いくつかの追加のスペースオーバーヘッドを維持するための費用で、この制限を克服します。追加のオーバーヘッドは経路当たり状態少量の非常に小さな処理オーバーヘッドを含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible and desirable to combine both techniques. In practice, fixed timers have been set to very short time intervals and have proven useful to pack routes into a smaller number of updates when routes arrive in separate updates. The BGP protocol refers to this as packing Network Layer Reachability Information (NLRI) [5].",
+      "ja": "両方の技術を組み合わせることが可能であり、望ましいです。実際には、固定されたタイマーは、非常に短い時間間隔に設定され、ルートが別の更新に到着したときに更新の少ない数にルートをパックするために有用であることが証明されています。 BGPプロトコルは、パッキングネットワークレイヤ到達可能性情報（NLRI）のように、このことをいう[5]。"
+    },
+    {
+      "indent": 3,
+      "text": "Seldom are fixed timers set to the tens of minutes to hours that would be necessary to actually damp route flap. To do so would produce the undesirable effect of severely limiting routing convergence.",
+      "ja": "ほとんど実際に湿ったルートフラップに必要となる時間に数十分に設定タイマーを固定されていません。厳しく制限ルーティングコンバージェンスの望ましくない影響をもたらすだろう、そうするには。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1 Existing Fixed Timer Recommendations",
+      "section_title": true,
+      "ja": "2.1既存の固定タイマーの推奨事項"
+    },
+    {
+      "indent": 3,
+      "text": "BGP-3 does not make specific recommendations in this area [1]. The short section entitled \"Frequency of Route Selection\" simply recommends that something be done and makes broad statements regarding certain properties that are desirable or undesirable.",
+      "ja": "BGP-3は、この分野での具体的な提言をしない[1]。 「ルートの選択の頻度」と題する短いセクションでは、単に何かが行われることをお勧めしますし、望ましいまたは望ましくないある種の特性に関する広範な文になります。"
+    },
+    {
+      "indent": 3,
+      "text": "BGP4 retains the \"Frequency of Route Advertisement\" section and adds a \"Frequency of Route Origination\" section. BGP-4 describes a method of limiting route advertisement involving a fixed (configurable) MinRouteAdvertisementInterval timer and fixed MinASOriginationInterval timer [5]. The recommended timer values of MinRouteAdvertisementInterval is 30 seconds and MinASOriginationInterval is 15 seconds.",
+      "ja": "BGP4は、「ルート広告の頻度」を保持し、「ルートオリジネーションの頻度」を追加します。 BGP-4は、固定（設定）MinRouteAdvertisementIntervalタイマを含む経路広告を制限する方法を説明し、固定MinASOriginationIntervalタイマ[5]。 MinRouteAdvertisementIntervalの推奨タイマ値は30秒​​で、MinASOriginationIntervalは15秒です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2 Desirable Properties of Damping Algorithms",
+      "section_title": true,
+      "ja": "ダンピングアルゴリズムの2.2望ましい特性"
+    },
+    {
+      "indent": 3,
+      "text": "Before describing damping algorithms the objectives need to be clearly defined. Some key properties are examined to clarify the design rationale.",
+      "ja": "ダンピングのアルゴリズムを説明する前に目的を明確に定義する必要があります。いくつかの重要な特性は、設計根拠を明確にするために検討されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The overall objective is to reduce the route update load without limiting convergence time for well behaved routes. To accomplish this, criteria must be defined for well behaved and poorly behaved routes. An algorithm must be defined which allows poorly behaved routes to be identified. Ideally, this measure would be a prediction of the future stability of a route.",
+      "ja": "全体的な目的は、行儀ルートの収束時間を制限することなく、経路更新の負荷を低減することです。これを実現するために、基準は行儀悪いと行儀のルートを定義する必要があります。アルゴリズムは悪い行儀ルートが識別されることを可能にする定義する必要があります。理想的には、この措置は、ルートの将来の安定性を予測するだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Any delay in propagation of well behaved routes should be minimal. Some delay is tolerable to support better packing of updates. Delay of poorly behave routes should, if possible, be proportional to a measure of the expected future instability of the route. Delay in propagating an unstable route should cause the unstable route to be suppressed until there is some degree of confidence that the route has stabilized.",
+      "ja": "行儀経路の伝播の遅れは最小限であるべきです。いくつかの遅延は、更新のより良いパッキングをサポートすることが許容されます。悪い振る舞いルートの遅延は、可能な場合は、ルートの予想される将来の不安定性の尺度に比例するはずです。不安定なルートを伝播の遅延は、ルートが安定した信頼のある程度があるまで、不安定なルートを抑制することが原因となる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a large number of route changes are received in separate updates over some very short period of time and these updates have the potential to be combined into a single update then these should be packed as efficiently as possible before propagating further. Some small delay in propagating well behaved routes is tolerable and is necessary to allow better packing of updates.",
+      "ja": "ルート変更の多くは、時間のいくつかの非常に短い期間にわたって別個のアップデートで受信し、これらの更新は、これらがさらに伝播する前に、できるだけ効率的に充填されるべき単一の更新に結合する可能性を有している場合。行儀のルートを伝播するのいくつかの小さな遅延が許容され、更新のより良いパッキングを許可する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Where routes are unstable, use and announcement of the routes should be suppressed rather than suppressing their removal. Where one route to a destination is stable, and another route to the same destination is somewhat unstable, if possible, the unstable route should be suppressed more aggressively than if there were no alternate path.",
+      "ja": "ルートが不安定である場合、ルートの使用や発表が抑制さではなく、それらの除去を抑制しなければなりません。目的地への1つの経路が安定して、かつ可能な場合、同じ宛先への別の経路は、多少不安定である場合、不安定な経路は、より積極的に代替パスが存在しない場合に比べて抑制されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Routing consistency within an AS is very important. Only very minimal delay of internal BGP (IBGP) should be done. Routing consistency across AS boundaries is also very important. It is highly undesirable to advertise a route that is different from the route that is being used, except for a very minimal time. It is more desirable to suppress the acceptance of a route (and therefore the use of that route in the IGP) rather than suppress only the redistribution.",
+      "ja": "AS内で一貫性をルーティングすることは非常に重要です。内部BGP（IBGP）のごく最小限の遅延が行われるべきです。 ASの境界を越えて一貫性をルーティングすることも非常に重要です。非常に最小限の時間を除いて、使用されているルートと異なるルートをアドバタイズするために非常に望ましくありません。ルート（およびIGPにおけるその経路の従って使用）の受け入れを抑えるだけではなく再分配を抑制することがより望ましいです。"
+    },
+    {
+      "indent": 3,
+      "text": "It is clearly not possible to accurately predict the future stability of a route. The recent history of stability is generally regarded as a good basis for estimating the likelihood of future stability. The criteria that is used to distinguish well behaved from poorly behaved routes is therefore based on the recent history of stability of the route. There is no simple quantitative expression of recent stability so a figure of merit must be defined. Some desirable characteristics of this figure of merit would be that the farther in the past that instability occurred, the less it's affect on the figure of merit and that the instability measure would be cumulative rather than reflecting only the most recent event.",
+      "ja": "正確にルートの将来の安定性を予測することは明らかに可能ではありません。安定性の最近の歴史は、一般的に、将来の安定性の可能性を推定するための良い基礎とみなされています。悪い行儀のルートから行儀区別するために使用される基準は、したがって、ルートの安定性の最近の履歴に基づいています。性能指数を定義する必要がありますので、最新の安定性の単純な量的表現はありません。メリットのこの図のいくつかの望ましい特性は遠く過去の不安定性が発生したことは、あまりそれは性能指数に影響を与え、不安定尺度は、むしろのみ最新のイベントを反映したよりも累積なることだということでしょう。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithms should behave such that for routes which have a history of stability but make a few transitions, those transitions should be made quickly. If transitions continue, advertisement of the route should be suppressed. There should be some memory of prior instability. The degree to which prior instability is considered should be gradually reduced as long as the route remains announced and stable.",
+      "ja": "アルゴリズムは、安定性の歴史を持っているが、いくつかの遷移を作るルートについて、それらの遷移が早くなされるべきであるように振る舞うべき。遷移が継続した場合、ルートのアドバタイズメントが抑制されなければなりません。前不安定性のいくつかのメモリがあるはずです。前不安定性が考慮される程度は徐々に限りルートが発表され、安定した状態を保つように減少されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3 Design Choices",
+      "section_title": true,
+      "ja": "2.3設計の選択"
+    },
+    {
+      "indent": 3,
+      "text": "After routes have been accepted their readvertisement will be briefly suppressed to improve packing of updates. There may be a lengthy suppression of the acceptance of an external route. How long a route will be suppressed is based on a figure of merit that is expected to be correlated to the probability of future instability of a route. Routes with high figure of merit values will be suppressed. An exponential decay algorithm was chosen as the basis for reducing the figure of merit over time. These choices should be viewed as suggestions for implementation.",
+      "ja": "ルートが受け入れられた後にその再広告を簡単にアップデートのパッキングを改善するために抑制されます。外部ルートの受け入れの長い抑制があるかもしれません。どのくらいの経路が抑制されると、ルートの将来の不安定性の確率に相関することが予想される性能指数に基づいています。メリット値の高い数字を持つルートが抑制されます。指数関数的減衰アルゴリズムは、経時的な性能指数を減少させるための基礎として選択しました。これらの選択肢は、実装のための提案として表示する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An exponential decay function has the property that previous instability can be remembered for a fairly long time. The rate at which the instability figure of merit decays slows as time goes on. Exponential decay has the following property.",
+      "ja": "指数関数的減衰機能は、以前の不安定性は、かなり長い時間のために記憶することができますプロパティを持っています。時間が経つにつれてメリットの不安定フィギュアが減衰する速度が遅くなります。指数関数的減衰は、次のプロパティがあります。"
+    },
+    {
+      "indent": 9,
+      "text": "f(f(figure-of-merit, t1), t2) = f(figure-of-merit, t1+t2)",
+      "ja": "F（F（性能指数、T1）、T2）= F（性能指数、T1 + T2）"
+    },
+    {
+      "indent": 3,
+      "text": "This property allows the decay for a long period to be computed in a single operation regardless of the current value (figure-of-merit). As a performance optimization, the decay can be applied in fixed time increments. Given a desired decay half life, the decay for a single time increment can be computed ahead of time. The decay for multiple time increments is expressed below.",
+      "ja": "このプロパティは、長期間の減衰に関係なく現在の値（性能指数）の単一の操作で計算されることを可能にします。パフォーマンスの最適化として、減衰は、一定の時間単位で適用することができます。希望崩壊半減期を考えると、単一時間増分の減衰は、事前に計算することができます。複数の時間増分の減衰は以下表されます。"
+    },
+    {
+      "indent": 8,
+      "text": "f(figure-of-merit, n*t0) = f(figure-of-merit, t0)**n = K**n",
+      "ja": "F（オブ・メリットフィギュア、N * T 0）= F（性能指数、T0）** N = K ** N"
+    },
+    {
+      "indent": 3,
+      "text": "The values of K ** n can be precomputed for a reasonable number of \"n\" and stored in an array. The value of \"K\" is always less than one. The array size can be bounded since the value quickly approaches zero. This makes the decay easy to compute using an array bound check, an array lookup and a single multiply regardless as to how much time has elapsed.",
+      "ja": "Kの値** nが「N」の合理的な数のために予め計算し、配列に格納することができます。 「K」の値は常に1未満です。値が急速にゼロに近づくので、アレイのサイズが有界することができます。これは関係なく、経過どのくらいの時間として配列境界チェック、配列の検索および単一の乗算を使用して計算するの減衰が容易になります。"
+    },
+    {
+      "indent": 0,
+      "text": "3 Limiting Route Advertisements using Fixed Timers",
+      "ja": "3固定タイマーを使用してルート通知を制限"
+    },
+    {
+      "indent": 3,
+      "text": "This method of limiting route advertisements involves the use of fixed timers applied to the process of sending routes. It's primary purpose is to improve the packing of routes in BGP update messages. The delay in advertising a stable route should be bounded and minimal. The delay in advertising an unreachable need not be zero, but should also be bounded and should probably have a separate bound set less than or equal to the bound for a reachable advertisement.",
+      "ja": "経路広告を制限するこの方法は、ルートを送信する処理に適用される固定されたタイマーの使用を含みます。これは、主な目的は、BGPアップデートメッセージ内のルートのパッキングを改善することです。安定したルートをアドバタイズするの遅れが有界かつ最小限する必要があります。到達不能必要性を宣伝するの遅延はゼロであることが、また、有界しなければならないと、おそらく到達可能な広告のためのバウンドに別々のバインドされたセットは、以下の持っている必要がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The BGP protocol defines the use of a Routing Information Base (RIB). Routes that need to be readvertised can be marked in the RIB or an external set of structures maintained, which references the RIB.",
+      "ja": "BGPプロトコルは、ルーティング情報ベース（RIB）の使用を定義します。再び通知する必要があるルートがRIBやRIBを参照維持構造体の外部セット、でマークすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Periodically, a subset of the marked routes can be flushed. This is fairly straightforward and accomplishes the objectives. Computation for too simple an implementation may be order N squared. To avoid N squared performance, some form of data structure is needed to group routes with common attributes.",
+      "ja": "定期的に、マークされたルートのサブセットを洗い流すことができます。これはかなり簡単ですし、目的を達成します。あまりにも単純な実装のための計算はNの二乗ためかもしれません。 Nは、パフォーマンスを乗避けるために、データ構造のいくつかのフォームは、共通の属性を持つグループのルートに必要とされています。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation should pack updates efficiently, provide a minimum readvertisement delay, provide a bounds on the maximum readvertisement delay that would be experienced solely as a result of the algorithm used to provide a minimum delay, and must be computationally efficient in the presence of a very large number of candidates for readvertisement.",
+      "ja": "実装は、効率的にアップデートパック最小再広告遅延を提供する、最小の遅延を提供するために使用されるアルゴリズムの結果としてのみ経験される最大再広告遅延に境界を提供し、非常の存在下で計算的に効率的でなければならないべきです再広告の候補の数が多いです。"
+    },
+    {
+      "indent": 0,
+      "text": "4 Stability Sensitive Suppression of Route Advertisement",
+      "ja": "ルートの通知の4安定性敏感抑制"
+    },
+    {
+      "indent": 3,
+      "text": "This method of limiting route advertisements uses a measure of route stability applied on a per route basis. This technique is applied when receiving updates from external peers only (EBGP). Applying this technique to IBGP learned routes or to advertisement to IBGP or EBGP peers after making a route selection can result in routing loops.",
+      "ja": "経路広告を制限するこの方法は、経路ごとに適用されるルート安定性の尺度を使用します。外部ピアのみ（EBGP）から更新を受信すると、この技術が適用されます。 IBGPにこの手法を適用すると、ルートを学んだか、ルート選択を行った後IBGPまたはEBGPピアへの広告にすると、ルーティングループが発生することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A figure of merit based on a measure of instability is maintained on a per route basis. This figure of merit is used in the decision to suppress the use of the route. Routes with high figure of merit are suppressed. Each time a route is withdrawn, the figure of merit is incremented. While the route is not changing the figure of merit value is decayed exponentially with separate decay rates depending on whether the route is stable and reachable or has been stable and unreachable. The decay rate may be slower when the route is unreachable, or the stability figure of merit could remain fixed (not decay at all) while the route remains unreachable. Whether to decay unreachable routes at the same rate, a slower rate, or not at all is an implementation choice. Decaying at a slower rate is recommended.",
+      "ja": "不安定性の尺度に基づいて、性能指数は、経路ごとに維持されます。メリットのこの図は、経路の使用を抑制する決定に使用されます。高い性能指数を有するルートが抑制されます。ルートが取り出されるたびに、性能指数がインクリメントされます。ルートはメリット値の数字を変更しないいる間に経路が安定して到達可能であるか、または安定して到達不能になっているかどうかに応じて別の減衰率で指数関数的に減衰されます。経路が到達不能のまま経路が到達不能である、またはメリットの安定性図は、（全く減衰しない）固定されたままであることができるとき減衰速度が遅くてもよいです。同じ速度で到達不能ルートを減衰するかどうかは、ゆっくりとした速度、または全くないが、実装の選択です。遅い速度で減衰することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "A very efficient implementation is suggested in the following sections. The implementation only requires computation for the routes contained in an update, when an update is received or withdrawn (as opposed to the simplistic approach of periodically decaying each route). The suggested implementation involves only a small number of simple operations, and can be implemented using scaled integers.",
+      "ja": "非常に効率的な実装は、次のセクションで提案されています。実装は、（定期的に各経路を減衰するの単純なアプローチとは対照的に）更新が受信または撤回されている更新プログラムに含まれる経路の計算を必要とします。推奨される実装は、簡単な操作の少数を含む、スケーリングされた整数を使用して実施することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The behavior of unstable routes is fairly predictable. Severely flapping routes will often be advertised and withdrawn at regular time intervals corresponding to the timers of a particular protocol (the IGP or exterior protocol in use where the problem exists). Marginal circuits or mild congestion can result in a long term pattern of occasional brief route withdrawal or occasional brief connectivity.",
+      "ja": "不安定なルートの挙動はかなり予測可能です。重度フラッピングルートがしばしばアドバタイズし、特定のプロトコル（問題が存在し、使用中のIGPまたは外部プロトコル）のタイマーに対応する一定の時間間隔で採取されるであろう。限界回路または軽度の輻輳が時折簡単なルート撤退または時折簡単な接続の長期的なパターンになることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1 Single vs. Multiple Configuration Parameter Sets",
+      "section_title": true,
+      "ja": "4.1シングル対複数の設定パラメータセット"
+    },
+    {
+      "indent": 3,
+      "text": "The behavior of the algorithm is modified by a number of configurable parameters. It is possible to configure separate sets of parameters designed to handle short term severe route flap and chronic milder route flap (a pattern of occasional drops over a long time period). The former would require a fast decay and low threshold (allowing a small number of consecutive flaps to cause a route to be suppressed, but allowing it to be reused after a relatively short period of stability). The latter would require a very slow decay and a higher threshold and might be appropriate for routes for which there was an alternate path of similar bandwidth.",
+      "ja": "アルゴリズムの動作は、設定可能なパラメータの数によって修正されます。短期厳しいルートフラップおよび慢性穏やかなルートフラップ（長い時間にわたって時々滴のパターン）を処理するように設計されたパラメータの別のセットを構成することが可能です。前者は高速減衰と低閾値（連続フラップの小さな数を抑えることへのルートを生じさせる可能に、それは、安定性の比較的短い期間の後に再使用することを可能にする）を必要とするであろう。後者は非常に遅い減衰と高い閾値を必要とし、同様の帯域幅の代替パスが存在しているためルートに適切であるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "It may also be desirable to configure different thresholds for routes with roughly equivalent alternate paths than for routes where the alternate paths have a lower bandwidth or tend to be congested. This can be solved by associating a different set of parameters with different ranges of preference values. Parameter selection could be based on BGP LOCAL_PREF.",
+      "ja": "また、代替パスは、より低い帯域幅を有するか、混雑する傾向がある経路よりもほぼ同等の代替パスとの経路のために異なる閾値を設定することが望ましい場合があります。これは、嗜好値の異なる範囲を有するパラメータの異なるセットを関連付けることによって解決することができます。パラメータの選択は、BGP LOCAL_PREFに基づくことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Parameter selection could also be based on whether an alternate route was known. A route would be considered if, for any applicable parameter set, an alternate route with the specified preference value existed and the figure of merit associated with the parameter set did not indicate a need to suppress the route. A less aggressive suppression would be applied to the case where no alternate route at all existed. In the simplest case, a more aggressive suppression would be applied if any alternate route existed. Only the highest preference (most preferred) value needs to be specified, since the ranges may overlap.",
+      "ja": "パラメータの選択はまた、代替経路が知られていたかどうかに基づくことができます。該当するパラメータセットのために、指定された優先値を有する代替ルートが存在し、パラメータセットに関連付けられた性能指数が経路を抑制する必要性を示していなかった、場合ルートが考えられます。あまり積極的抑制は全く別の経路が存在しない場合に適用されます。任意の代替ルートが存在する場合、最も簡単な場合には、より積極的な抑制が適用されます。範囲が重複することができるので、唯一最高優先（最も好ましい）の値は、指定される必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "It might also be desirable to configure a different set of thresholds for routes which rely on switched services and may disconnect at times to reduce connect charges. Such routes might be expected to change state somewhat more often, but should be suppressed if continuous state changes indicate instability.",
+      "ja": "また、交換サービスに依存しており、接続料金を削減するための回で切断することがありルートのための閾値の異なるセットを構成することが望ましいかもしれません。このようなルートはやや頻繁に状態を変更することが予想されるかもしれないが、連続した状態の変化が不安定性を示す場合には抑制されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "While not essential, it might be desirable to be able to configure multiple sets of configuration parameters per route. It may also be desirable to be able to configure sets of parameters that only correspond to a set of routes (identified by AS path, peer router, specific destinations or other means). Experience may dictate how much flexibility is needed and how to best to set the parameters. Whether to allow different damping parameter sets for different routes, and whether to allow multiple figures of merit per route is an implementation choice.",
+      "ja": "必須ではないが、ルートごとの設定パラメータの複数のセットを設定することができるようにすることが望ましいかもしれません。またのみ（ASパス、ピアルータ、特定の宛先または他の手段によって識別される）ルートのセットに対応するパラメータのセットを構成することができることが望ましいかもしれません。経験は必要に応じて、どのように最善のパラメータを設定することで、どのくらいの柔軟性指示することができます。異なる経路に異なる減衰パラメータセットを許可するかどうかを、経路ごとにメリットの複数の図を許可するかどうかは実装上の選択です。"
+    },
+    {
+      "indent": 3,
+      "text": "Parameter selection can also be based on prefix length. The rationale is that longer prefixes tend to reach less end systems and are less important and these less important prefixes can be damped more aggressively. This technique is in fairly widespread use. Small sites or those with dense address allocation who are multihomed are often reachable by long prefixes which are not easily aggregated. These sites tend to dispute the choice of prefix length for parameter selection. Advocates of the technique point out that it encourages better aggregation.",
+      "ja": "パラメータの選択はまた、プレフィックス長に基づくことができます。根拠は長いプレフィックスが少ないエンドシステムに到達する傾向があり、それほど重要であり、これらの重要度の低いプレフィックスがより積極的に減衰させることができるということです。この技術はかなり普及しています。小規模サイトまたはマルチホームをしている者密なアドレス割り当てを持つものは、多くの場合、簡単に集約されていない長い接頭辞によって到達可能です。これらのサイトは、パラメータ選択のためのプレフィックス長の選択肢を争う傾向にあります。技術の支持者は、それがより良い凝集を促すことを指摘します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2 Configuration Parameters",
+      "section_title": true,
+      "ja": "4.2設定パラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "At configuration time, a number of parameters may be specified by the user. The configuration parameters are expressed in units meaningful to the user. These differ from the parameters used at run time which are in unit convenient for computation. The run time parameters are derived from the configuration parameters. Suggested configuration parameters are listed below.",
+      "ja": "設定時に、パラメータの数は、ユーザによって指定されてもよいです。構成パラメータは、ユーザにとって意味の単位で表されます。これらは、ユニット内の演算のために便利であり、実行時に使用されるパラメータとは異なります。実行時のパラメータは、設定パラメータから導出されています。推奨設定パラメータは以下のとおりです。"
+    },
+    {
+      "indent": 5,
+      "text": "cutoff threshold (cut)",
+      "ja": "カットオフ閾値（カット）"
+    },
+    {
+      "indent": 8,
+      "text": "This value is expressed as a number of route withdrawals. It is the value above which a route advertisement will be suppressed.",
+      "ja": "この値は、ルートの引き出しの数として表現されます。これは、経路広告が抑制される上記の値です。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse threshold (reuse)",
+      "ja": "リユースしきい値（リユース）"
+    },
+    {
+      "indent": 8,
+      "text": "This value is expressed as a number of route withdrawals. It is the value below which a suppressed route will now be used again.",
+      "ja": "この値は、ルートの引き出しの数として表現されます。それを抑制経路は今再び使用されるより低い値です。"
+    },
+    {
+      "indent": 5,
+      "text": "maximum hold down time (T-hold)",
+      "ja": "最大押し時間（T-ホールド）"
+    },
+    {
+      "indent": 8,
+      "text": "This value is the maximum time a route can be suppressed no matter how unstable it has been prior to this period of stability.",
+      "ja": "この値は、ルートは関係なく、それは安定性のこの期間に先立ってきたどのように不安定な抑制できない最大時間です。"
+    },
+    {
+      "indent": 5,
+      "text": "decay half life while reachable (decay-ok)",
+      "ja": "崩壊半減期到達しばらく（ディケイ-OK）"
+    },
+    {
+      "indent": 8,
+      "text": "This value is the time duration in minutes or seconds during which the accumulated stability figure of merit will be reduced by half if the route if considered reachable (whether suppressed or not).",
+      "ja": "この値は、ルート（抑制するか否か）到達可能と考えている場合ならばメリットの累積安定図を半分に減少される時分または秒の持続時間です。"
+    },
+    {
+      "indent": 5,
+      "text": "decay half life while unreachable (decay-ng)",
+      "ja": "到達不能（ディケイ-a）は崩壊半減期"
+    },
+    {
+      "indent": 8,
+      "text": "This value is the time duration in minutes or seconds during which the accumulated stability figure of merit will be reduced by half if the route if considered unreachable. If not specified or set to zero, no decay will occur while a route remains unreachable.",
+      "ja": "この値は、ルートがあれば到達不能と考えた場合のメリットの累積安定性の図は半分に削減される間、分、秒での時間です。指定された、またはゼロに設定されていない場合は経路が到達不能のまま、全く減衰が生じません。"
+    },
+    {
+      "indent": 5,
+      "text": "decay memory limit (Tmax-ok or Tmax-ng)",
+      "ja": "減衰メモリ制限（Tmaxの又はTmaxを-OK-A）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the maximum time that any memory of previous instability will be retained given that the route's state remains unchanged, whether reachable or unreachable. This parameter is generally used to determine array sizes.",
+      "ja": "これは、前の不安定性のいずれかのメモリが到達可能か到達不能かどうかの経路の状態は、変わらないままであること与えられ保持される最大時間です。このパラメータは、一般に、配列のサイズを決定するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "There may be multiple sets of the parameters above as described in Section 4.1. The configuration parameters listed below would be applied system wide. These include the time granularity of all computations, and the parameters used to control reevaluation of routes that have previously been suppressed.",
+      "ja": "セクション4.1で説明したように上記パラメータの複数の組が存在してもよいです。下記の構成パラメータは、システム全体に適用されます。これらは、すべての計算の時間粒度、及び以前に抑制されたルートの再評価を制御するために使用されるパラメータを含みます。"
+    },
+    {
+      "indent": 5,
+      "text": "time granularity (delta-t)",
+      "ja": "時間粒度（デルタT）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the time granularity in seconds used to perform all decay computations.",
+      "ja": "これは、すべての崩壊の計算を実行するために使用される秒の時間粒度です。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse list time granularity (delta-reuse)",
+      "ja": "リストの時間粒度を再使用（リユースデルタ）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the time interval between evaluations of the reuse lists. Each reuse lists corresponds to an additional time increment.",
+      "ja": "これは、再利用リストの評価の間の時間間隔です。各リユースリストは、追加の時間増分に対応しています。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse list memory reuse-list-max",
+      "ja": "リユースリストメモリの再利用リスト-MAX"
+    },
+    {
+      "indent": 8,
+      "text": "This is the time value corresponding to the last reuse list. This may be the maximum value of T-hold for all parameter sets of may be configured.",
+      "ja": "これが最後の再利用リストに対応する時間値です。これは、構成することができるすべてのパラメータセットのためのT-ホールドの最大値であってもよいです。"
+    },
+    {
+      "indent": 5,
+      "text": "number of reuse lists (reuse-list-size)",
+      "ja": "再利用リストの数（リユース・リスト・サイズ）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the number of reuse lists. It may be determined from reuse-list-max or set explicitly.",
+      "ja": "これは、再利用リストの数です。これは、再利用リスト-MAXから決定または明示的に設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A recommended optimization is described in Section 4.8.6 that involves an array referred to as the \"reuse index array\". A reuse index array is needed for each decay rate in use. The reuse index array is used to estimate which reuse list to place a route when it is suppressed. Proper placement avoids the need to periodically evaluate decay to determine if a route can be reused or when storage can be recovered. Using the reuse index array avoids the need to compute a logarithm to determine placement. One additional system wide parameter can be introduced.",
+      "ja": "推奨される最適化は、「再利用インデックス配列」と呼ばれる配列を含む、セクション4.8.6に記載されています。再利用インデックス配列は、使用中の各減衰率のために必要とされています。再利用インデックス配列は、それが抑制されたときにルートを配置するためにどの再利用リストを推定するために使用されます。適切な配置は、定期的にルートを再利用できるかどうか、ストレージが回収できるかを決定するために減衰を評価する必要性を回避することができます。再利用インデックス配列を使用すると、配置を決定するために対数を計算する必要がなくなります。一つの追加のシステム全体のパラメータを導入することができます。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse index array size (reuse-index-array-size)",
+      "ja": "再利用インデックス配列のサイズ（再利用インデックスアレイサイズ）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the size of reuse index arrays. This size determines the accuracy with which suppressed routes can be placed within the set of reuse lists when suppressed for a long time.",
+      "ja": "これは、再利用インデックス配列のサイズです。このサイズは、長時間抑制場合ルートが再利用リストのセット内に配置することができる抑制精度を決定します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3 Guidelines for Setting Parameters",
+      "section_title": true,
+      "ja": "パラメータを設定するためのガイドライン4.3"
+    },
+    {
+      "indent": 3,
+      "text": "The decay half life should be set to a time considerably longer than the period of the route flap it is intended to address. For example, if the decay is set to ten minutes and a route is withdrawn and readvertised exactly every ten minutes, the route would continue to flap if the cutoff was set to a value of 2 or above.",
+      "ja": "崩壊の半減期は、対処することを目的としてルートフラップの期間よりもかなり長い時間に設定する必要があります。減衰が10分に設定され、ルートが10分毎に取り出し、正確に再び通知された場合、例えば、経路は遮断が2以上の値に設定された場合、フラップし続けるであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "The stability figure of merit itself is an accumulated time decayed total. This must be kept in mind in setting the decay time, cutoff values and reuse values. The figure of merit is increased each time a route transitions from reachable to unreachable. The figure of merit is decayed at a rate proportional to its current value. Increasing the rate of route flap therefore increments the figure of merit more often and reaches a given threshhold in a shorter amount of time. When the response to a constant rate route flap is plotted this looks like a sawtooth with an abrupt rising edge and a decaying falling edge. Since the absolute decay amount is proportional to the figure of merit, at a continuous constant flap rate the baseline of the sawtooth will tend to stop rising and converge if not clipped by a ceiling value.",
+      "ja": "メリット自体の安定性図は、総減衰累積時間です。これは、減衰時間、カットオフ値と再利用値を設定する際に念頭に置いておく必要があります。性能指数は、到達不能に到達からたびにルート遷移を増加させます。性能指数は、その電流値に比例した速度で減衰されます。ルートフラップの速度を増加させると、したがってより頻繁に性能指数をインクリメントし、短い時間で指定されたこのアクションによって達します。一定の割合のルートフラップに対する応答がプロットされている場合、これは突然の立ち上がりエッジと立ち下がりエッジ崩壊とノコギリのように見えます。絶対減衰量が性能指数に比例するので、連続的な一定のフラップ速度で鋸歯状のベースラインが上昇を停止し、天井値でクリップされない場合に収束する傾向があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If clipped by a ceiling value, the sawtooth baseline will simply reach the ceiling faster at a higher rate of route flap. For example, if flapping at four times the decay rate the following progression occurs. When the route becomes unreachable the first time the value becomes 1. When the next flap occurs, one is added to the previous value, which has been decreased by the fourth root of 2 (the amount of decay that would occur in 1/4 of the half life time if decay is exponential). The sequence is 1, 1.84, 2.55, 3.14, 3.64, 4.06, 4.42, 4.71, 4.96, 5.17, ..., converging at about 6.285. If a route flaps at four times the decay rate, it will reach 3 in 4 cycles, 4 in 6 cycles, 5 in 10 cycles, and will converge at about 6.3. At twice the decay time, it will reach 3 in 7 cycles, and converge at a value of less than 3.5.",
+      "ja": "上限値でクリップされた場合は、鋸歯状のベースラインは、単にルートフラップの高いレートで速く天井に到達します。 4倍の減衰率でフラッピング場合たとえば、次の進行が起こります。ルートは次のフラップが発生したときの値が1になる初めて到達不能になったときに、一方が1/4で生じる減衰の2（量の4乗根の減少された前回値に加算されます減衰は指数関数的である場合には半減期）。シーケンスは1、1.84、2.55、3.14、3.64、4.06、4.42、4.71、4.96、5.17、...、およそ6.285で収束します。 4倍の減衰率でルートフラップ場合、それは3 4サイクル、4サイクル6で、5〜10でサイクルに到達し、そして約6.3に収束します。二回減衰時間で、それは3〜7でのサイクルに達し、3.5未満の値に収束します。"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 1 shows the stability figure of merit for route flap at a constant rate. The time axis is labeled in multiples of the decay half life. The plots represent route flap with a period of 1/2, 1/3, 1/4, and 1/8 times the decay half life. A ceiling of 4.5 was set, which can be seen to affect three of the plots, effectively limiting the time it takes to readvertise the route regardless of the prior history. With cutoff and reuse thresholds of 1.5 and 0.75, routes would be suppressed after being declared unreachable 2-3 times and be used again after approximately 2 decay half life periods of stability.",
+      "ja": "図1は、一定速度でルートフラップのためのメリットの安定性図を示しています。時間軸は、崩壊半減期の倍数で標識されています。プロットは1/2、1/3、1/4、1/8倍の崩壊半減期の周期でルートフラップを表します。 4.5の天井を効果的にそれは関係なく、以前の歴史のルートをreadvertiseするのにかかる時間を制限、プロットの3に影響を与えるために見ることができる、設定されました。 1.5と0.75のカットオフや再利用のしきい値と、ルートが到達不能に2-3回を宣言されると、再び安定した後、約2崩壊半減期の期間を使用することの後に抑制されるだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "This function can be expressed formally. Reachability of a route can be represented by a variable \"R\" with possible values of 0 and 1 representing unreachable and reachable. At a discrete time R can only have one value. The figure of merit is increased by 1 at each transition from R=1 to R=0 and clipped to a ceiling value. The decay in figure of merit can then be expressed over a set of discrete times as follows.",
+      "ja": "この機能は、正式に表現することができます。ルートの到達可能性は、0と1が到達不能と到達可能な表現の可能な値を持つ変数「R」で表すことができます。離散時点でRは、一つの値だけを持つことができます。性能指数は、R = 0、R = 1から各遷移において1だけ増加し、上限値にクリップされます。次のように性能指数における減衰は、次に離散時間のセットで表現することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "figure-of-merit(t) = K * figure-of-merit(t - delta-t) K = K1 for R=0 K=K2 for R=1",
+      "ja": "性能指数（T）= K *フィギュア・オブ・メリット（T  - デルタT）、R = 1、R = 0、K = K2のためのK = K1"
+    },
+    {
+      "indent": 3,
+      "text": "The four plots are presented vertically. Due to space limitations, only a limited set of points along the time axis are shown. The value of the figure of merit is given. Along side each value is a very low resolution strip chart made up of ASCII dots. This is just intended to give a rough feel for the rise and fall of the values. The strip charts are not displayed on an overlapping set of axes because the sawtooth waveforms cross each other quite frequently. At the very low resolution of these plots, the rise and fall of the baseline is evident, but the sawtooth nature is only observed in the printed value.",
+      "ja": "4つのプロットが縦に提示されています。紙面の都合に、時間軸に沿ったポイントの限られたセットが示されています。性能指数の値が与えられています。側面に沿ってそれぞれの値は、ASCIIドットで構成された非常に低い解像度のストリップチャートです。これは、単に値の上昇と下降のためのラフな感じを与えることを目的としています。鋸歯状波形はかなり頻繁に交差するので、ストリップチャートは軸の重複セットに表示されません。これらのプロットの非常に低い解像度では、ベースラインの立ち上がりと立ち下がりは明らかであるが、鋸歯状の性質がのみ印刷された値で観察されます。"
+    },
+    {
+      "indent": 3,
+      "text": "From the maximum hold time value (T-hold), a ratio of the reuse value to a ceiling can be determined. An integer value for the ceiling can then be chosen such that overflow will not be a problem and all other values can be scaled accordingly. If both cutoffs are specified or if multiple parameter sets are used the highest ceiling will be used.",
+      "ja": "最大保持時間値（T-ホールド）から、天井に再利用値の比を決定することができます。天井のための整数値は、次に、そのオーバーフローが問題になることはありません選択することができ、他のすべての値はそれに応じてスケーリングすることができます。両方のカットオフが指定されている場合は、複数のパラメータセットを使用している場合は、最も高い天井が使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "time figure-of-merit as a function of time (in minutes)",
+      "ja": "時間性能指数時間（分）の関数として"
+    },
+    {
+      "indent": 2,
+      "text": "0.00 0.000 . 0.000 . 0.000 . 0.000 . 0.08 0.000 . 0.000 . 0.000 . 0.000 . 0.16 0.000 . 0.000 . 0.000 . 0.973 . 0.24 0.000 . 0.000 . 0.000 . 0.920 . 0.32 0.000 . 0.000 . 0.946 . 1.817 . 0.40 0.000 . 0.953 . 0.895 . 2.698 . 0.48 0.000 . 0.901 . 0.847 . 2.552 . 0.56 0.953 . 0.853 . 1.754 . 3.367 . 0.64 0.901 . 0.807 . 1.659 . 4.172 . 0.72 0.853 . 1.722 . 1.570 . 3.947 . 0.80 0.807 . 1.629 . 2.444 . 4.317 . 0.88 0.763 . 1.542 . 2.312 . 4.469 . 0.96 0.722 . 1.458 . 2.188 . 4.228 . 1.04 1.649 . 2.346 . 3.036 . 4.347 . 1.12 1.560 . 2.219 . 2.872 . 4.112 . 1.20 1.476 . 2.099 . 2.717 . 4.257 . 1.28 1.396 . 1.986 . 3.543 . 4.377 . 1.36 1.321 . 2.858 . 3.352 . 4.141 . 1.44 1.250 . 2.704 . 3.171 . 4.287 . 1.52 2.162 . 2.558 . 3.979 . 4.407 . 1.60 2.045 . 2.420 . 3.765 . 4.170 . 1.68 1.935 . 3.276 . 3.562 . 4.317 . 1.76 1.830 . 3.099 . 4.356 . 4.438 . 1.84 1.732 . 2.932 . 4.121 . 4.199 . 1.92 1.638 . 2.774 . 3.899 . 3.972 . 2.00 1.550 . 2.624 . 3.688 . 3.758 . 2.08 1.466 . 2.483 . 3.489 . 3.555 . 2.16 1.387 . 2.349 . 3.301 . 3.363 . 2.24 1.312 . 2.222 . 3.123 . 3.182 . 2.32 1.242 . 2.102 . 2.955 . 3.010 . 2.40 1.175 . 1.989 . 2.795 . 2.848 . 2.48 1.111 . 1.882 . 2.644 . 2.694 . 2.56 1.051 . 1.780 . 2.502 . 2.549 . 2.64 0.995 . 1.684 . 2.367 . 2.411 . 2.72 0.941 . 1.593 . 2.239 . 2.281 . 2.80 0.890 . 1.507 . 2.118 . 2.158 . 2.88 0.842 . 1.426 . 2.004 . 2.042 . 2.96 0.797 . 1.349 . 1.896 . 1.932 . 3.04 0.754 . 1.276 . 1.794 . 1.828 . 3.12 0.713 . 1.207 . 1.697 . 1.729 . 3.20 0.675 . 1.142 . 1.605 . 1.636 . 3.28 0.638 . 1.081 . 1.519 . 1.547 . 3.36 0.604 . 1.022 . 1.437 . 1.464 . 3.44 0.571 . 0.967 . 1.359 . 1.385 .",
+      "ja": "0.00 0.000 . 0.000 . 0.000 . 0.000 . 0.08 0.000 . 0.000 . 0.000 . 0.000 . 0.16 0.000 . 0.000 . 0.000 . 0.973 . 0.24 0.000 . 0.000 . 0.000 . 0.920 . 0.32 0.000 . 0.000 . 0.946 . 1.817 . 0.40 0.000 . 0.953 . 0.895 . 2.698 . 0.48 0.000 . 0.901 . 0.847 . 2.552 . 0.56 0.953 . 0.853 . 1.754 . 3.367 . 0.64 0.901 . 0.807 . 1.659 . 4.172 . 0.72 0.853 . 1.722 . 1.570 . 3.947 . 0.80 0.807 . 1.629 . 2.444 . 4.317 . 0.88 0.763 . 1.542 . 2.312 . 4.469 . 0.96 0.722 . 1.458 . 2.188 . 4.228 . 1.04 1.649 . 2.346 . 3.036 . 4.347 . 1.12 1.560 . 2.219 . 2.872 . 4.112 . 1.20 1.476 . 2.099 . 2.717 . 4.257 . 1.28 1.396 . 1.986 . 3.543 . 4.377 . 1.36 1.321 . 2.858 . 3.352 . 4.141 . 1.44 1.250 . 2.704 . 3.171 . 4.287 . 1.52 2.162 . 2.558 . 3.979 . 4.407 . 1.60 2.045 . 2.420 . 3.765 . 4.170 . 1.68 1.935 . 3.276 . 3.562 . 4.317 . 1.76 1.830 . 3.099 . 4.356 . 4.438 . 1.84 1.732 . 2.932 . 4.121 . 4.199 . 1.92 1.638 . 2.774 . 3.899 . 3.972 . 2.00 1.550 . 2.624 . 3.688 . 3.758 . 2.08 1.466 . 2.483 . 3.489 . 3.555 . 2.16 1.387 . 2.349 . 3.301 . 3.363 . 2.24 1.312 . 2.222 . 3.123 . 3.182 . 2.32 1.242 . 2.102 . 2.955 . 3.010 . 2.40 1.175 . 1.989 . 2.795 . 2.848 . 2.48 1.111 . 1.882 . 2.644 . 2.694 . 2.56 1.051 . 1.780 . 2.502 . 2.549 . 2.64 0.995 . 1.684 . 2.367 . 2.411 . 2.72 0.941 . 1.593 . 2.239 . 2.281 . 2.80 0.890 . 1.507 . 2.118 . 2.158 . 2.88 0.842 . 1.426 . 2.004 . 2.042 . 2.96 0.797 . 1.349 . 1.896 . 1.932 . 3.04 0.754 . 1.276 . 1.794 . 1.828 . 3.12 0.713 . 1.207 . 1.697 . 1.729 . 3.20 0.675 . 1.142 . 1.605 . 1.636 . 3.28 0.638 . 1.081 . 1.519 . 1.547 . 3.36 0.604 . 1.022 . 1.437 . 1.464 . 3.44 0.571 . 0.967 . 1.359 . 1.385 ."
+    },
+    {
+      "indent": 3,
+      "text": "Figure 1: Instability figure of merit for flap at a constant rate",
+      "ja": "図1：一定速度でフラップのためのメリットの不安定フィギュア"
+    },
+    {
+      "indent": 2,
+      "text": "time figure-of-merit as a function of time (in minutes)",
+      "ja": "時間性能指数時間（分）の関数として"
+    },
+    {
+      "indent": 2,
+      "text": "0.00 0.000 . 0.000 . 0.000 . 0.20 0.000 . 0.000 . 0.000 . 0.40 0.000 . 0.000 . 0.000 . 0.60 0.000 . 0.000 . 0.000 . 0.80 0.000 . 0.000 . 0.000 . 1.00 0.999 . 0.999 . 0.999 . 1.20 0.971 . 0.971 . 0.929 . 1.40 0.945 . 0.945 . 0.809 . 1.60 0.919 . 0.865 . 0.704 . 1.80 0.894 . 0.753 . 0.613 . 2.00 1.812 . 1.657 . 1.535 . 2.20 1.762 . 1.612 . 1.428 . 2.40 1.714 . 1.568 . 1.244 . 2.60 1.667 . 1.443 . 1.083 . 2.80 1.622 . 1.256 . 0.942 . 3.00 1.468 . 1.094 . 0.820 . 3.20 2.400 . 2.036 . 1.694 . 3.40 2.335 . 1.981 . 1.475 . 3.60 2.271 . 1.823 . 1.284 . 3.80 2.209 . 1.587 . 1.118 . 4.00 1.999 . 1.381 . 0.973 . 4.20 2.625 . 2.084 . 1.727 . 4.40 2.285 . 1.815 . 1.503 . 4.60 1.990 . 1.580 . 1.309 . 4.80 1.732 . 1.375 . 1.139 . 5.00 1.508 . 1.197 . 0.992 . 5.20 1.313 . 1.042 . 0.864 . 5.40 1.143 . 0.907 . 0.752 . 5.60 0.995 . 0.790 . 0.654 . 5.80 0.866 . 0.688 . 0.570 . 6.00 0.754 . 0.599 . 0.496 . 6.20 0.656 . 0.521 . 0.432 . 6.40 0.571 . 0.454 . 0.376 . 6.60 0.497 . 0.395 . 0.327 . 6.80 0.433 . 0.344 . 0.285 . 7.00 0.377 . 0.299 . 0.248 . 7.20 0.328 . 0.261 . 0.216 . 7.40 0.286 . 0.227 . 0.188 . 7.60 0.249 . 0.197 . 0.164 . 7.80 0.216 . 0.172 . 0.142 . 8.00 0.188 . 0.150 . 0.124 .",
+      "ja": "0.00 0.000 . 0.000 . 0.000 . 0.20 0.000 . 0.000 . 0.000 . 0.40 0.000 . 0.000 . 0.000 . 0.60 0.000 . 0.000 . 0.000 . 0.80 0.000 . 0.000 . 0.000 . 1.00 0.999 . 0.999 . 0.999 . 1.20 0.971 . 0.971 . 0.929 . 1.40 0.945 . 0.945 . 0.809 . 1.60 0.919 . 0.865 . 0.704 . 1.80 0.894 . 0.753 . 0.613 . 2.00 1.812 . 1.657 . 1.535 . 2.20 1.762 . 1.612 . 1.428 . 2.40 1.714 . 1.568 . 1.244 . 2.60 1.667 . 1.443 . 1.083 . 2.80 1.622 . 1.256 . 0.942 . 3.00 1.468 . 1.094 . 0.820 . 3.20 2.400 . 2.036 . 1.694 . 3.40 2.335 . 1.981 . 1.475 . 3.60 2.271 . 1.823 . 1.284 . 3.80 2.209 . 1.587 . 1.118 . 4.00 1.999 . 1.381 . 0.973 . 4.20 2.625 . 2.084 . 1.727 . 4.40 2.285 . 1.815 . 1.503 . 4.60 1.990 . 1.580 . 1.309 . 4.80 1.732 . 1.375 . 1.139 . 5.00 1.508 . 1.197 . 0.992 . 5.20 1.313 . 1.042 . 0.864 . 5.40 1.143 . 0.907 . 0.752 . 5.60 0.995 . 0.790 . 0.654 . 5.80 0.866 . 0.688 . 0.570 . 6.00 0.754 . 0.599 . 0.496 . 6.20 0.656 . 0.521 . 0.432 . 6.40 0.571 . 0.454 . 0.376 . 6.60 0.497 . 0.395 . 0.327 . 6.80 0.433 . 0.344 . 0.285 . 7.00 0.377 . 0.299 . 0.248 . 7.20 0.328 . 0.261 . 0.216 . 7.40 0.286 . 0.227 . 0.188 . 7.60 0.249 . 0.197 . 0.164 . 7.80 0.216 . 0.172 . 0.142 . 8.00 0.188 . 0.150 . 0.124 ."
+    },
+    {
+      "indent": 10,
+      "text": "Figure 2: Separate decay constants when unreachable",
+      "ja": "図2：セパレート減衰定数際に到達不能"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 2 shows the effect of configuring separate decay rates to be used when the route is reachable or unreachable. The decay rate is 5 times slower when the route is unreachable. In the three case shown, the period of the route flap is equal to the decay half life but the route is reachable 1/8 of the time in one, reachable 1/2 the time in one, and reachable 7/8 of the time in the other. In the last case the route is not suppressed until after the third unreachable (when it is above the top threshold after becoming reachable again).",
+      "ja": "図2は、経路が到達可能または到達不能であるときに使用する別の減衰率の設定の効果を示します。ルートが到達不能であるとき、減衰率が5倍遅くなります。示す三場合には、ルートフラップの期間は、崩壊半減期に等しいが、ルートは、一時間の1/8、到達可能な1/2一時間、および時間の到達7/8到達可能です他のインチ最後のケースでは、経路は、第三の到達不能（それが再び到達可能になった後に上部閾値以上である場合）の後まで抑制されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The main point of Figure 2 is to show the effect of changing the duty cycle of the square wave in the variable \"R\" for a fixed frequency of the square wave. If the decay constants are chosen such that decay is slower when R=0 (the route is unreachable), then the figure of merit rises more slowly (more accurately, the baseline of the sawtooth waveform rises more slowly) if the route is reachable a larger percentage of the time. The effect when the route becomes persistently reachable again can be fairly negligible if the sawtooth is clipped by a ceiling value, but is more significant if a slow route flap rate or short interval of route flapping is such that the sawtooth does not reach the ceiling value. In Figure 2 the interval in which the routes are unstable is short enough that the ceiling value is not reached, therefore, the routes that are reachable for a greater percentage of the route flap cycle are reused (placed in the RIB and advertised to peers) sooner than others after the route becomes stable again (\"R\" becomes 1, indicating the announced state goes to reachable and remains there).",
+      "ja": "図2の主要点は、方形波の固定された周波数に対して、変数「R」の方形波のデューティ・サイクルを変化させる効果を示すことです。減衰定数が選択される場合、その結果減衰経路が到達可能Aである場合、R = 0（ルートが到達不能である）、次いで、性能指数は（より正確には、鋸歯状波形のベースラインはよりゆっくりと上昇）よりゆっくり上昇すると遅いです時間の大きな割合。ルートは鋸歯が上限値でクリップされている場合、かなり無視できる再び永続的に到達可能となるが、遅い経路フラップレートまたはルートフラッピングの短い間隔は鋸歯が上限値に達していないようなものである場合に、より顕著である効果。図2に経路が不安定された間隔が上限値に達していないことを十分に短く、したがって、ルート・フラップ・サイクルのより大きな割合のために到達可能な経路が（RIBに入れ、ピアにアドバタイズ）再利用されます早くルート後に他のものよりも再び安定する（「R」が発表した状態に到達することになり、そこに残って示し、1になります）。"
+    },
+    {
+      "indent": 3,
+      "text": "In both Figure 1 and Figure 2, routes would be suppressed. Routes flapping at the decay half life or less would be withdrawn two or three times and then remain withdrawn until they had remained stably announced and stable for on the order of 1 1/2 to 2 1/2 times the decay half life (given the ceiling in the example).",
+      "ja": "図1および図2の両方において、ルートは抑制されるであろう。崩壊半減期以下でフラッピングルートは、2〜3回を撤回されるだろうし、その後、彼らは残っ安定発表し、1 1/2 1/2倍崩壊半減期2のオーダーのための安定するまで与えられた（撤回されたまま例の天井）。"
+    },
+    {
+      "indent": 3,
+      "text": "The purpose of damping BGP route flap is to reduce the processor burden at the immediate router and the processor burden to downstream routers (BGP peer routers and peers of peers that will see the route announcements advertised by the immediate router). Computing a figure of merit at each discrete time interval using figure-of-merit(t) = K * figure-of-merit(t - delta-t) would be very inefficient and defeat the purpose. This problem is addressed by defering computation as long as possible and doing a single simple computation to compensate for the decay during the time that has elapsed since the figure of merit was last updated. The use of decay arrays provides the single simple calculation. The use of reuse lists (described later) provide a means to defer calculations. A route becomes usable if there was not further change for a period of time and the route is unreachable. The data structure storage is recovered if the route's state has not changed for a period of time and it has been unreachable. The reuse arrays provide a means to estimate how long a computation can be deferred if there is no further change.",
+      "ja": "BGPルートフラップダンピングの目的は、下流のルータ（BGPピアルータおよび即時ルータによってアドバタイズ経路アナウンスが表示されるピアのピア）に即時ルータにおける処理負荷及び処理負荷を低減することです。性能指数を用いて各離散的な時間間隔（T）= K *性能指数（T  - デルタT）での性能指数を計算することは非常に非効率的であること及び目的にそぐわないです。この問題は、できるだけ長い計算をdeferingし、性能指数が最後に更新されたからの経過時間の間に減衰を補償するための単一の簡単な計算を行うことによって対処されます。減衰アレイの使用は、単一の単純な計算を提供します。 （後述）の再利用リストの使用は、計算を延期するための手段を提供します。さらに、一定の期間が変更されなかった場合、経路が使用可能となり、経路が到達不能です。ルートの状態が一定期間変更されていない場合、データ構造記憶を回収し、それが到達不能になっています。再利用アレイはさらなる変化がない場合、計算を延期することができる時間の長さを推定するための手段を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "A larger time granularity will keep table storage down. The time granularity should be less than a minimal reasonable time between expected worse case route flaps. It might be reasonable to fix this parameter at compile time or set a default and strongly recommend that the user leave it alone. With an exponential decay, array size can be greatly reduced by setting a period of complete stability after which the decayed total will be considered zero rather than retaining a tiny quantity. Alternately, very long decays can be implemented by multiplying more than once if array bounds are exceeded.",
+      "ja": "大きな時間の粒度は、テーブルストレージを抑えるだろう。時間粒度は予想より悪い場合のルートフラップの間に最小の妥当な時間未満であるべきです。コンパイル時にこのパラメータを修正するか、デフォルトを設定し、強く、ユーザが一人でそれを残すことをお勧めするのが妥当かもしれません。指数関数的減衰と、配列のサイズを大幅に減衰合計がゼロとみなさなく小さな量を保持されるまでの完全な安定性の期間を設定することにより低減することができます。代わりに、非常に長い崩壊は、配列の範囲を超えている場合は、複数回掛けることで実現できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The reuse lists hold suppressed routes grouped according to how long it will be before the routes are eligible for reuse. Periodically each list will be advanced by one position and one list removed as described in Section 4.8.7. All of the suppressed routes in the removed list will be reevaluated and either used or placed in another list according to how much additional time must elapse before the route can be reused. The last list will always contain all the routes which will not be advertised for more time than is appropriate for the remaining list heads. When the last list advances to the front, some of the routes will not be ready to be used and will have to be requeued. The time interval for reconsidering suppressed routes and number of list heads should be configurable. Reasonable defaults might be 30 seconds and 64 list heads. A route suppressed for a long time would need to be reevaluated every 32 minutes.",
+      "ja": "再利用リストは、ルートが再利用の対象となる前になりますどのくらいの時間に応じてグループ化抑制のルートを保持します。定期的に各リストには、一つの位置、セクション4.8.7に記載したように除去つのリストだけ前進します。削除リスト中の抑制ルートのすべてのルートを再利用することができます前に、追加の時間が経過しなければならないどのくらいに応じて再評価し、別のリストで使用されるかのどちらかに置かれます。最後のリストは常に残りのリストの頭に適しているよりも多くの時間のためにアドバタイズされませんすべてのルートが含まれています。最後のリストは、前に進むと、ルートの一部は、使用する準備ができていないだろうし、キューに再登録する必要があります。抑制経路とリストヘッドの数を再考する時間間隔は設定可能であるべきです。適切なデフォルト値は30秒​​と64のリストヘッドであるかもしれません。長時間抑制のルートは、すべて32分を再評価する必要があろう。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4 Run Time Data Structures",
+      "section_title": true,
+      "ja": "4.4ランタイムデータ構造"
+    },
+    {
+      "indent": 3,
+      "text": "A fixed small amount of per system storage will be required. Where sets of multiple configuration parameters are used, storage will be required per set of parameters. A small amount of per route storage is required. A set of list heads is needed. These list heads are used to arrange suppressed routes according to the time remaining until they can be reused.",
+      "ja": "システムあたりの記憶の固定に少量が必要となります。複数の構成パラメータのセットを使用する場合、ストレージは、パラメータのセット毎に必要とされるであろう。経路記憶当たりの少量が必要とされます。リストヘッドのセットが必要とされています。これらのリストヘッドはそれらが再利用可能になるまでの残り時間に応じて抑制経路を配置するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A separate reuse list can be used to hold unreachable routes for the purpose of later recovering storage if they remain unreachable too long. This might be more accurately described as a recycling list. The advantage this would provide is making free data structures available as soon as possible. Alternately, the data structures can simply be placed on a queue and the storage recovered when the route hits the front of the queue and if storage is needed. The latter is less optimal but simple.",
+      "ja": "別の再利用リストは、彼らはあまりにも長い到達不能残っている場合は、後でストレージを回復する目的で、到達不能のルートを保持するために使用することができます。これは、より正確に、リサイクルリストとして記述される可能性があります。これが提供する利点は、できるだけ早く自由なデータ構造を利用できるようです。代わりに、データ構造は、単純にキューに置かれ、ストレージはルートがキューの先頭に当たったときに回復し、ストレージが必要な場合にすることができます。後者は、より最適ではなくシンプルです。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple sets of configuration parameters are allowed per route, there is a need for some means of associating more than one figure of merit and set of parameters with each route. Building a linked list of these objects seems like one of a number of reasonable implementations. Similarly, a means of associating a route to a reuse list is required. A small overhead will be required for the pointers needed to implement whatever data structure is chosen for the reuse lists. The suggested implementation uses a double linked lists and so requires two pointers per figure of merit.",
+      "ja": "構成パラメータの複数のセットを経路ごとに許可された場合、メリット及び各経路とパラメータのセットの複数の図形を関連付ける何らかの手段が必要とされています。これらのオブジェクトのリンクリストを構築することは、合理的な実装のうちの1つのように思えます。同様に、再利用リストにルートを関連付ける手段が必要です。小さなオーバーヘッドは再利用リストに選ばれているもののデータ構造を実装するために必要なポインタのために必要となります。提案実装は、二重リンクリストを使用していますので、性能指数ごとに2つのポインタが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Each set of configuration parameters can reference decay arrays and reuse arrays. These arrays should be shared among multiple sets of parameters since their storage requirement is not negligible. There will be only one set of reuse list heads for the entire router.",
+      "ja": "構成パラメータの各セットは、減衰アレイと再利用配列を参照することができます。それらのストレージ要件が無視できないので、これらのアレイは、パラメータの複数のセット間で共有されるべきです。ルータ全体のための再利用リストヘッドのセットが1つだけになります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.1 Data Structures for Configuration Parameter Sets",
+      "section_title": true,
+      "ja": "構成パラメータの設定4.4.1データ構造"
+    },
+    {
+      "indent": 3,
+      "text": "Based on the configuration parameters described in the previous section, the following values can be computed as scaled integers directly from the corresponding configuration parameters.",
+      "ja": "前のセクションで説明した構成パラメータに基づいて、次の値は、対応するコンフィギュレーションパラメータから直接スケーリングされた整数として計算することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o decay array scale factor (decay-array-scale-factor)",
+      "ja": "O減衰アレイスケールファクタ（減衰アレイスケールファクタ）"
+    },
+    {
+      "indent": 3,
+      "text": "o cutoff value (cut)",
+      "ja": "Oカットオフ値（カット）"
+    },
+    {
+      "indent": 3,
+      "text": "o reuse value (reuse)",
+      "ja": "Oの再利用値（リユース）"
+    },
+    {
+      "indent": 3,
+      "text": "o figure of merit ceiling (ceiling)",
+      "ja": "メリット天井のO図（天井）"
+    },
+    {
+      "indent": 3,
+      "text": "Each configuration parameter set will reference one or two decay arrays and one or two reuse arrays. Only one array will be needed if the decay rate is the same while a route is unreachable as while it is reachable, or if the stability figure of merit does not decay while a route is unreachable.",
+      "ja": "各構成パラメータセットは、1つのまたは2つの減衰アレイ1つのまたは2つの再利用の配列を参照します。減衰率が同じであれば、それが到達可能である一方として経路が到達不能である間、または経路が到達不能であるメリットの安定性図は減衰しない場合にのみつのアレイが必要とされるであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.2 Data Structures per Decay Array and Reuse Index Array",
+      "section_title": true,
+      "ja": "ディケイアレイと再利用指標配列あたり4.4.2データ構造"
+    },
+    {
+      "indent": 3,
+      "text": "The following are also computed from the configuration parameters though not as directly. The computation is described in Section 4.5.",
+      "ja": "以下もないように直接かかわらず、構成パラメータから計算されます。計算は、4.5節に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o decay rate per tick (decay-delta-t)",
+      "ja": "Oティックあたりの減衰率（減衰デルタ-T）"
+    },
+    {
+      "indent": 3,
+      "text": "o decay array size (decay-array-size)",
+      "ja": "O減衰アレイサイズ（減衰アレイサイズ）"
+    },
+    {
+      "indent": 3,
+      "text": "o decay array (decay[])",
+      "ja": "O減衰アレイ（崩壊[]）"
+    },
+    {
+      "indent": 3,
+      "text": "o reuse index array size (reuse-index-array-size) o reuse index array (reuse-index-array[])",
+      "ja": "O再利用インデックス配列サイズ（再利用インデックスアレイサイズ）Oの再利用インデックス配列（再利用インデックス配列[]）"
+    },
+    {
+      "indent": 3,
+      "text": "For each decay rate specified, an array will be used to store the value of a computed parameter raised to the power of the index of each array element. This is to speed computations. The decay rate per tick is an intermediate value expressed as a real number and used to compute the values stored in the decay arrays. The array size is computed from the decay memory limit configuration parameter expressed as an array size or as a maximum hold time.",
+      "ja": "指定された各減衰率のために、アレイは、各アレイ素子の指数乗計算パラメータの値を格納するために使用されるであろう。これは、計算を高速化することです。目盛り当たりの減衰率は、実数として表され、減衰アレイに格納された値を計算するために使用される中間値です。アレイのサイズは、アレイサイズとして、または最大保持時間として表さ減衰メモリ制限設定パラメータから計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The decay array size must be of sufficient size to accommodate the specified decay memory given the time granularity, or sufficient to hold the number of array elements until integer rounding produces a zero result if that value is smaller, or a implementation imposed reasonable size to prevent configurations which use excessive memory. Implementations may chose to make the array size shorter and multiply more than once when decaying a long time interval to reduce storage.",
+      "ja": "減衰アレイサイズは、時間粒度所与指定減衰メモリを収容するのに十分な大きさでなければならない、またはその値が小さいほど、または実装を防止するために合理的なサイズを課している場合、整数丸めがゼロの結果を生成するまでの配列要素の数を保持するのに十分過剰なメモリを使用する構成。実装は、配列のサイズを短くすることを選んだとストレージを減らすために長い時間間隔を減衰する際に複数回を乗算してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The reuse index arrays serve a similar purpose to the decay arrays. In BGP, a route is said to be \"used\" if it is considered the best route. In this context, if the route is \"used\" it is placed in the RIB and is eligible for advertisement to BGP peers. If a route is withdrawn (a BGP announcement is made by a peer indicating that it is no longer reachable), then it is no longer eligible for \"use\". When a route becomes reachable it may not be \"used\" immediately if the figure of merit indicates that a recent instability has occurred. After the route remains stable and the figure of merit decays below the \"reuse\" threshhold, the route is said to be eligible to be \"reused\" (treated as truly reachable, placed in the RIB and advertised to peers). The amount of time until a route can be reused can be determined using a array lookup. The array can be built given the decay rate. The array is indexed using a scaled integer proportional to the ratio between a current stability figure of merit value and the value needed for the route to be reused.",
+      "ja": "再利用インデックス配列は減衰アレイに類似の目的を果たします。 BGPでは、ルートは、それが最良のルートと見なされた場合、「使用」されると言われています。ルートは「使用」されている場合は、この文脈では、それがRIBに入れ、BGPピアに広告の対象となっています。経路が撤回された場合（BGPアナウンスメントは、それがもはや到達可能でないことを示すピアによって行われる）、それは「使用」のためにはもはや適格ではありません。ルートが到達可能になると、性能指数が最近の不安定性が発生したことを示す場合、直ちに「使用」することはできません。経路が安定したままであり、性能指数が「再利用」threshhold下に減衰した後に、ルートが（真の到達可能として扱われ、ピアにRIBに入れ、アドバタイズ）「再利用」の対象であると言われます。ルートが再利用できるまでの時間は、配列検索を使用して決定することができます。配列は、減衰率与え構築することができます。アレイは、メリット値の現在の安定図と再利用する経路に必要な値との比に比例したスケーリングされた整数を使用してインデックスされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.3 Per Route State",
+      "section_title": true,
+      "ja": "4.4.3パールート州"
+    },
+    {
+      "indent": 3,
+      "text": "Information must be maintained per some tuple representing a route. At the very minimum, the NLRI (BGP prefix and length) must be contained in the tuple. Different BGP attributes may be included or excluded depending on the specific situation. The AS path should also be contained in the tuple by default. The tuple may also optionally contain other BGP attributes such as MULTI_EXIT_DISCRIMINATOR (MED).",
+      "ja": "情報は、ルートを表すいくつかのタプルごとに維持しなければなりません。非常に最低でも、NLRI（BGPプレフィックスと長さ）のタプルに含まれなければなりません。異なるBGPは、特定の状況に応じて含めるか、または除外することができる属性。 ASパスは、デフォルトでタプルに含まれるべきです。タプルはまた、必要に応じて他のBGPはMULTI_EXIT_DISCRIMINATOR（MED）などの属性を含むことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The tuple representing a route for the purpose of route flap damping is:",
+      "ja": "減衰経路フラップの目的のための経路を表すタプルです。"
+    },
+    {
+      "indent": 6,
+      "text": "tuple entry            default      options\n-------------------------------------------\nNLRI\n  prefix               required\n  length               required\nAS path                included     option to exclude\nlast AS set in path    excluded     option to include\nnext hop               excluded     option to include\nMED                    excluded     option to include\n                                    in comparisons only",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The AS path is generally included in order to identify downstream instability which is not being damped or not being sufficiently damped and is alternating between a stable and an unstable path. Under rare circumstances it may be desirable to exclude AS path for all or a subset of prefixes. If an AS path ends in an AS set, in practice the path is always for an aggregate. Changes to the trailing AS set should be ignored. Ideally the AS path comparison should insure that at least one AS has remained constant in the old and new AS set, but completely ignoring the contents of a trailing AS set is also acceptable.",
+      "ja": "ASパスは、一般的に減衰されていないか、十分に減衰されず、安定および不安定経路交互下流不安定性を識別するために含まれています。まれな状況下では、すべてのパスまたはプレフィックスのサブセットとして除外することが望ましいことがあります。 ASパスがASセットで終わる場合、実際にはパスは、集約のために常にあります。セットAS末尾への変更は無視されるべきです。理想的にはASパスの比較は少なくとも一つのASがセットとして新旧で一定であったが、セットでも構わないとまったく末尾の内容を無視していることを保証すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Including next hop and MED changes can help suppress the use of an AS which is internally unstable or avoid a next hop which is closer to an unstable IGP path in the adjacent AS. If a large number of MED values are used, the increase in the amount of state may become a problem. For this reason MED is disabled by default and enabled only as part of the tuple comparison, using a single state entry regardless of MED value. Including MED will suppress the use of the adjacent AS even though the change need not be propagated further. Using MED is only a safe practice if a path is known to exist through another AS or where there are enough peering sites with the adjacent AS such that routes heard at only a subset of the peering sites will be suppressed.",
+      "ja": "ネクストホップおよびMEDの変更を含めると、内部的に不安定であるか、隣接ASで不安定なIGPパスに近いネクストホップを避けるASの使用を抑制することができます。 MED値の多数が使用される場合、状態量の増大が問題となります。この理由MEDは、デフォルトでは無効になっており、関係なく、MED値の単一の状態エントリを使用して、唯一のタプル比較の一部として有効。 MEDはASでも変更がさらに増殖する必要はないものの、隣接の使用を抑制します含みます。 MEDを使用すると、パスがピアリングサイトのサブセットのみに聞こえる経路が抑制されるように、隣接すると共に十分なピアリングサイトがある別のAS又は介して存在することが知られている場合にのみ安全なやり方です。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.4 Data Structures per Route",
+      "section_title": true,
+      "ja": "ルートごとの4.4.4データ構造"
+    },
+    {
+      "indent": 3,
+      "text": "The following information must be maintained per route. A route here is considered to be a tuple usually containing NLRI, next hop, and AS path as defined in Section 4.4.3.",
+      "ja": "以下の情報は、ルートごとに維持しなければなりません。 4.4.3項で定義されるように、ここでルートは通常NLRIを含むタプル、ネクストホップ、及び経路のように考えられます。"
+    },
+    {
+      "indent": 5,
+      "text": "stability figure of merit (figure-of-merit)",
+      "ja": "メリットの安定性指数（フィギュアオブメリット）"
+    },
+    {
+      "indent": 8,
+      "text": "Each route must have a stability figure of merit per applicable parameter set.",
+      "ja": "各ルートは、適用可能なパラメータセットあたりのメリットの安定性のフィギュアを持っている必要があります。"
+    },
+    {
+      "indent": 5,
+      "text": "last time updated (time-update)",
+      "ja": "最後に更新された時間（時間更新）"
+    },
+    {
+      "indent": 8,
+      "text": "The exact last time updated must be maintained to allow exponential decay of the accumulated figure of merit to be deferred until the route might reasonable be considered eligible for a change in status (having gone from unreachable to reachable or advancing within the reuse lists).",
+      "ja": "更新正確な最後の時間は、メリットの累積数字の指数関数的減衰が合理的に（到達可能する到達不能または再利用リストの中に進行するから消えていた）状態の変化の対象と考えられるかもしれないルートまで延期することができるように維持しなければなりません。"
+    },
+    {
+      "indent": 5,
+      "text": "config block pointer",
+      "ja": "configブロックポインタ"
+    },
+    {
+      "indent": 8,
+      "text": "Any implementation that supports multiple parameter sets must provide a means of quickly identifying which set of parameters corresponds to the route currently being considered. For implementations supporting only parameter sets where all routes must be treated the same, this pointer is not required.",
+      "ja": "複数のパラメータセットをサポートする任意の実装が迅速に現在検討されている経路に対応するパラメータのセットを同定する手段を提供しなければなりません。すべてのルートが同じに扱われなければならない唯一のパラメータセットをサポートする実装のために、このポインタが必要とされません。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse list traversal pointers",
+      "ja": "再利用リストトラバーサルのポインタ"
+    },
+    {
+      "indent": 8,
+      "text": "If doubly linked lists are used to implement reuse lists, then two pointers will be needed, previous and next. Generally there is a double linked list which is unused when a route is suppressed from use that can be used for reuse list traversal eliminating the need for additional pointer storage.",
+      "ja": "二重リンクリストは再利用リストを実装するために使用されている場合、2つのポインタは、前および次の必要とされるであろう。一般ルートが追加ポインタ記憶の必要性を排除する再利用リスト・トラバーサルのために使用することができ、使用が抑制されたときに使用されていない二重リンクリストが存在します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5 Processing Configuration Parameters",
+      "section_title": true,
+      "ja": "4.5処理の設定パラメータ"
+    },
+    {
+      "indent": 8,
+      "text": "From the configuration parameters, it is possible to precompute\na number of values that will be used repeatedly and retain these\nto speed later computations that will be required frequently.",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "Scaling is usually dependent on the highest value that figure-of-merit can attain, referred to here as the ceiling. The real number value of the ceiling will typically be determined by the following equation. The ceiling can also be configured to a specific value, which in turn dictates T-hold.",
+      "ja": "スケーリングは、天井とここで言うことの性能指数を達成することができる最高値、に通常依存しています。天井の実数値は、典型的には、下記の式によって決定されます。天井はまた、今度はT-ホールドを指示する特定の値に設定することができます。"
+    },
+    {
+      "indent": 12,
+      "text": "ceiling = reuse * (exp(T-hold/decay-half-life) * log(2))",
+      "ja": "天井=リユース*（EXP（T-ホールド/崩壊半減期）*ログ（2））"
+    },
+    {
+      "indent": 8,
+      "text": "In the above equation, reuse is the reuse threshhold described in Section 4.2.",
+      "ja": "上記式において、再利用は4.2節で説明した再利用threshholdあります。"
+    },
+    {
+      "indent": 8,
+      "text": "The methods of scaled integer arithmetic are not described in detail here. The methods of determining the real values are given. Translation into scaled integer values and the details of scaled integer arithmetic are left up to the individual implementations.",
+      "ja": "スケーリングされた整数演算の方法は、ここでは詳細に説明されていません。実際の値を決定する方法が与えられています。スケーリングされた整数値とスケーリングされた整数演算の詳細への翻訳は、個々の実装に任されています。"
+    },
+    {
+      "indent": 5,
+      "text": "The ceiling value can be set to be the largest integer that can fit in half the bits available for an unsigned integer. This will allow the scaled integers to be multiplied by the scaled decay value and then shifted down. Implementations may prefer to use real numbers or may use any integer scaling deemed appropriate for their architecture.",
+      "ja": "上限値は、符号なし整数のために利用可能な半分のビットに収まる最大の整数に設定することができます。これは、スケールの整数がスケーリング減衰値を掛けた後、シフトダウンできるようになります。実装は実数を使用することを好むか、または任意の整数スケーリングがそれらのアーキテクチャのために適切であると考え使用してもよいです。"
+    },
+    {
+      "indent": 5,
+      "text": "penalty value and thresholds (as proportional scaled integers)",
+      "ja": "（比例スケーリングされた整数として）ペナルティ値としきい値"
+    },
+    {
+      "indent": 8,
+      "text": "The figure of merit penalty for one route withdrawal and the cutoff values must be scaled according to the above scaling factor.",
+      "ja": "1つのルート離脱カットオフ値のメリットペナルティの図は、スケーリング係数に従ってスケーリングされなければなりません。"
+    },
+    {
+      "indent": 5,
+      "text": "decay rate per tick (decay[1])",
+      "ja": "目盛り当たりの減衰率（減衰[1]）"
+    },
+    {
+      "indent": 8,
+      "text": "The decay value per increment of time as defined by the time granularity must be determined (at least initially as a floating point number). The per tick decay is a number slightly less than one. It is the Nth root of the one half where N is the half life divided by the time granularity.",
+      "ja": "時間粒度によって定義される時間の増分当たりの減衰値は、（少なくとも最初は浮動小数点数など）を決定しなければなりません。目盛りあたりの減衰は1よりわずかに少ない数です。これは、Nは時間粒度で割った半減期で半分のN番目のルートです。"
+    },
+    {
+      "indent": 10,
+      "text": "decay[1] = exp ((1 / (decay-half-life/delta-t)) * log (1/2))",
+      "ja": "崩壊[1] EXP（（1 /（崩壊半減期/デルタT））*ログ（1/2））="
+    },
+    {
+      "indent": 5,
+      "text": "decay array size (decay-array-size)",
+      "ja": "減衰アレイサイズ（減衰アレイサイズ）"
+    },
+    {
+      "indent": 8,
+      "text": "The decay array size is the decay memory divided by the time granularity. If integer truncation brings the value of an array element to zero, the array can be made smaller. An implementation should also impose a maximum reasonable array size or allow more than one multiplication.",
+      "ja": "減衰アレイのサイズは時間粒度で割った減衰メモリです。整数切り捨てがゼロに配列要素の値をもたらした場合、配列を小さくすることができます。実装はまた、最大の合理的な配列サイズを課す又は複数の乗算を可能にすべきです。"
+    },
+    {
+      "indent": 23,
+      "text": "decay-array-size = (Tmax/delta-t)",
+      "ja": "減衰アレイサイズ=（Tmaxの/デルタT）"
+    },
+    {
+      "indent": 5,
+      "text": "decay array (decay[])",
+      "ja": "減衰アレイ（崩壊[]）"
+    },
+    {
+      "indent": 8,
+      "text": "Each i-th element of the decay array is the per tick delay raised to the i-th power. This might be best done by successive floating point multiplies followed by scaling and integer rounding or truncation. The array itself need only be computed at startup.",
+      "ja": "減衰アレイの各i番目の要素がi番目乗目盛り当たりの遅延です。これは最高のスケーリングと整数丸めまたは切り捨てに続く連続した浮動小数点乗算することにより行うことがあります。配列自体は起動時にのみ計算される必要があります。"
+    },
+    {
+      "indent": 28,
+      "text": "decay[i] = decay[1] ** i",
+      "ja": "崩壊[I] =ディケイ[1] ** I"
+    },
+    {
+      "indent": 0,
+      "text": "4.6 Building the Reuse Index Arrays",
+      "section_title": true,
+      "ja": "4.6再利用インデックス配列を構築"
+    },
+    {
+      "indent": 3,
+      "text": "The reuse lists may be accessed quite frequently if a lot of routes are flapping sufficiently to be suppressed. A method of speeding the determination of which reuse list to use for a given route is suggested. This method is introduced in Section 4.2, its configuration described in Section 4.4.2 and the algorithms described in Section 4.8.6 and Section 4.8.7. This section describes building",
+      "ja": "ルートの多くは十分に抑制されるようにフラッピングしている場合は、再利用リストは非常に頻繁にアクセスすることができます。所与の経路に使用する再利用リストの決意を高速化する方法が提案されています。この方法は、4.2節に導入され、その構成は、セクション4.4.2に記載されたアルゴリズムは、セクション4.8.6及びセクション4.8.7で説明します。このセクションでは、建物を記述する"
+    },
+    {
+      "indent": 3,
+      "text": "the reuse list index arrays.",
+      "ja": "再利用リストインデックス配列。"
+    },
+    {
+      "indent": 3,
+      "text": "A ratio of the figure of merit of the route under consideration to the cutoff value is used as the basis for an array lookup. The ratio is scaled and truncated to an integer and used to index the array. The array entry is an integer used to determine which reuse list to use.",
+      "ja": "カットオフ値に検討中の経路の性能指数の比率は、アレイのルックアップの基礎として使用されます。比がスケーリングされ、整数に切り捨てられたインデックスに配列を使用されています。アレイ・エントリは、使用する再利用リストを決定するために使用される整数です。"
+    },
+    {
+      "indent": 5,
+      "text": "reuse array maximum ratio (max-ratio)",
+      "ja": "再利用アレイ最大比（最大比）"
+    },
+    {
+      "indent": 8,
+      "text": "This is the maximum ratio between the current value of the stability figure of merit and the target reuse value that can be indexed by the reuse array. It may be limited by the ceiling imposed by the maximum hold time or by the amount of time that the reuse lists cover.",
+      "ja": "これは、メリットの安定図と再利用アレイによってインデックス付けすることができるターゲットの再利用値の現在値と最大値の比です。これは、最大保持時間によって、または再利用リストがカバーする時間の量によって課さ天井によって制限され得ます。"
+    },
+    {
+      "indent": 7,
+      "text": " max-ratio = min(ceiling/reuse, exp((1 / (half-life/reuse-array-time)) * log(2)))",
+      "ja": "最大比=分（天井/リユース、EXP（（1 /（半減期/再利用アレイ時間））*ログ（2）））"
+    },
+    {
+      "indent": 5,
+      "text": "reuse array scale factor ( scale-factor )",
+      "ja": "再利用アレイ倍率（スケール・ファクタ）"
+    },
+    {
+      "indent": 8,
+      "text": "Since the reuse array is an estimator, the reuse array scale factor has to be computed such that the full size of the reuse array is used.",
+      "ja": "再利用アレイは推定であるため、再利用アレイスケールファクタは再利用アレイのフルサイズが使用されるように計算されなければなりません。"
+    },
+    {
+      "indent": 12,
+      "text": "scale-factor = reuse-index-array-size / (max-ratio - 1)",
+      "ja": "スケールファクタ=再利用インデックス配列サイズ/（MAX-比 -  1）"
+    },
+    {
+      "indent": 5,
+      "text": "reuse index array (reuse-index-array[])",
+      "ja": "再利用インデックス配列（再利用インデックス配列[]）"
+    },
+    {
+      "indent": 8,
+      "text": "Each reuse index array entry should contain an index into the reuse list array pointing to one of the list heads. This index should corresponding to the reuse list that will be evaluated just after a route would be eligible for reuse given the ratio of current value of the stability figure of merit to target reuse value corresponding the the reuse array entry.",
+      "ja": "各再利用インデックス配列のエントリがリストヘッドの一つを指して再利用リストの配列へのインデックスが含まれている必要があります。このインデックスは、ルートが再利用アレイエントリを、対応する再利用値を標的とするメリットの安定性図の電流値の比を所定の再利用の対象となる直後に評価される再利用リストに対応するべきです。"
+    },
+    {
+      "indent": 7,
+      "text": " reuse-index-array[j] = integer((decay-half-life / reuse-time-granularity) * log(1/(reuse * (1 + (j / scale-factor)))) / log(1/2))",
+      "ja": "再利用インデックス配列[J] =整数（（崩壊半減期/再使用時間粒度）*ログ（1 /（再利用*（1 +（J /スケールファクタ））））/ログ（1 / 2））"
+    },
+    {
+      "indent": 3,
+      "text": "To determine which reuse queue to place a route which is being suppressed, the following procedure is used. Divide the current figure of merit by the cutoff. Subtract one. Multiply by the scale factor. This is the index into the reuse index array (reuse-index-array[]). The value fetched from the reuse index array (reuse-index-array[]) is an index into the array of reuse lists (reuse-array[]). If this index is off the end of the array use the last queue otherwise look in the array and pick the number of the queue from the array at that index. This is quite fast and well worth the setup and storage required.",
+      "ja": "抑制されているルートを配置するためにどの再利用キューを決定するために、以下の手順が使用されます。カットオフによるメリットの現在の姿を分割します。 1を引きます。スケールファクタで乗算します。これは、再利用インデックス配列（再利用インデックス配列[]）へのインデックスです。再利用インデックス配列（再利用インデックス配列[]）からフェッチされた値は、再利用リスト（再利用アレイ[]）の配列へのインデックスです。このインデックスは、最後のキューを使用して、配列の終わりを過ぎている場合はそれ以外の配列に見て、そのインデックスで配列からキューの数を選択します。これは非常に速く、必要なセットアップおよびストレージの価値があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7 A Sample Configuration",
+      "section_title": true,
+      "ja": "4.7設定例"
+    },
+    {
+      "indent": 3,
+      "text": "A simple example is presented here in which the space overhead is estimated for a set of configuration parameters. The design here assumes:",
+      "ja": "簡単な例をここに提示されている空間のオーバーヘッドは、構成パラメータのセットのために推定されています。ここでの設計では、前提としています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. there is a single parameter set used for all routes,",
+      "section_title": true,
+      "ja": "1.すべてのルートのために使用される単一のパラメータセットがあり、"
+    },
+    {
+      "indent": 3,
+      "text": "2. decay time for unreachable routes is slower than for reachable routes",
+      "ja": "到達不能経路2.減衰時間は、到達可能なルートよりも遅いです"
+    },
+    {
+      "indent": 3,
+      "text": "3. the arrays must be full size, rather than allow more than one multiply per decay operation to reduce the array size.",
+      "ja": "前記アレイは、減衰動作ごとに複数の乗算がアレイのサイズを縮小することを可能にするのではなく、フルサイズでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This example is used in later sections. The use of multiple parameter sets complicates the examples somewhat. Where multiple parameter sets are allowed for a single route, the decay portion of the algorithm is repeated for each parameter set. If different routes are allowed to have different parameter sets, the routes must have pointers to the parameter sets to keep the time to locate to a minimum, but the algorithms are otherwise unchanged.",
+      "ja": "この例では、後のセクションで使用されています。複数のパラメータセットの使用は幾分例を複雑にします。複数のパラメータセットは、単一のルートに許可されている場合、アルゴリズムの減衰部は、各パラメータセットに対して繰り返されます。別のルートが異なるパラメータセットを持つことが許可されている場合、ルートは最小限に見つけるための時間を維持するためにパラメータセットへのポインタを持っている必要がありますが、アルゴリズムは、そうでない場合は変更されません。"
+    },
+    {
+      "indent": 3,
+      "text": "A sample set of configuration parameters and a sample set of implementation parameters are provided in in the two following lists.",
+      "ja": "設定パラメータと実装パラメータのサンプルセットのサンプルセットは、次の二つのリストに設けられています。"
+    },
+    {
+      "indent": 5,
+      "text": "1. Configuration Parameters",
+      "section_title": true,
+      "ja": "1.設定パラメータ"
+    },
+    {
+      "indent": 8,
+      "text": "o cut = 1.25",
+      "ja": "カット= 1.25"
+    },
+    {
+      "indent": 8,
+      "text": "o reuse = 0.5",
+      "ja": "Oの再利用= 0.5"
+    },
+    {
+      "indent": 8,
+      "text": "o T-hold = 15 mins",
+      "ja": "O Tホールド= 15分"
+    },
+    {
+      "indent": 8,
+      "text": "o decay-ok = 5 min",
+      "ja": "崩壊-OK = 5分"
+    },
+    {
+      "indent": 8,
+      "text": "o decay-ng = 15 min",
+      "ja": "または崩壊の= 15分"
+    },
+    {
+      "indent": 8,
+      "text": "o Tmax-ok, Tmax-ng = 15, 30 mins",
+      "ja": "Tmaxの-OK O、Tmaxの-ngが15、30分を="
+    },
+    {
+      "indent": 5,
+      "text": "2. Implementation Parameters",
+      "section_title": true,
+      "ja": "2.実装のパラメータ"
+    },
+    {
+      "indent": 8,
+      "text": "o delta-t = 1 sec",
+      "ja": "またはデルタT = 1秒"
+    },
+    {
+      "indent": 8,
+      "text": "o delta-reuse = 15 sec o reuse-list-size = 256",
+      "ja": "Oデルタ再利用= 15秒Oの再利用リストサイズ= 256"
+    },
+    {
+      "indent": 8,
+      "text": "o reuse-index-array-size = 1,024",
+      "ja": "Oの再利用インデックスアレイサイズ= 1024"
+    },
+    {
+      "indent": 3,
+      "text": "Using these configuration and implementation parameters and the equations in Section 4.5, the space overhead can be computed. There is a fixed space overhead that is independent of the number of routes. There is a space requirement associated with a stable route. There is a larger space requirement associated with an unstable route. The space requirements for the parameters above are provide in the lists below.",
+      "ja": "これらの構成と実装のパラメータおよび4.5節で数式を使用して、スペースのオーバーヘッドを計算することができます。ルートの数に依存しない一定のスペースのオーバーヘッドがあります。安定したルートに関連付けられた空間の要件があります。不安定なルートに関連付けられた大きなスペース要件があります。上記のパラメータのためのスペース要件は、以下のリストに提供されています。"
+    },
+    {
+      "indent": 5,
+      "text": "1. fixed overhead (using parameters from previous example)",
+      "section_title": true,
+      "ja": "（前の例からのパラメータを使用して）1固定オーバーヘッド"
+    },
+    {
+      "indent": 8,
+      "text": "o 900 * integer - decay array",
+      "ja": "900 O *整数 - 崩壊配列"
+    },
+    {
+      "indent": 8,
+      "text": "o 1,800 * integer - decay array",
+      "ja": "1800 O *整数 - 崩壊配列"
+    },
+    {
+      "indent": 8,
+      "text": "o 120 * pointer - reuse list-heads",
+      "ja": "再利用リストヘッド -  120 *ポインタO"
+    },
+    {
+      "indent": 8,
+      "text": "o 2,048 * integer - reuse index arrays",
+      "ja": "2048 O *整数 - 索引アレイを再利用"
+    },
+    {
+      "indent": 5,
+      "text": "2. overhead per stable route",
+      "section_title": true,
+      "ja": "安定したルートあたり2オーバーヘッド"
+    },
+    {
+      "indent": 8,
+      "text": "o pointer - containing null entry",
+      "ja": "Oポインタ - ヌルエントリーを含みます"
+    },
+    {
+      "indent": 5,
+      "text": "3. overhead per unstable route",
+      "section_title": true,
+      "ja": "不安定なルートあたり3オーバーヘッド"
+    },
+    {
+      "indent": 8,
+      "text": "o pointer - to a damping structure containing the following",
+      "ja": "Oポインタ - 以下を含む制振構造に"
+    },
+    {
+      "indent": 8,
+      "text": "o integer - figure of merit + bit for state",
+      "ja": "O整数 - 状態に対するメリット+ビットの数字"
+    },
+    {
+      "indent": 8,
+      "text": "o integer - last time updated",
+      "ja": "O整数 - 前回更新"
+    },
+    {
+      "indent": 8,
+      "text": "o 2 * pointer - reuse list pointers (prev, next)",
+      "ja": "O 2 *ポインタ - （次へ前へ、）リストポインタを再利用"
+    },
+    {
+      "indent": 3,
+      "text": "The decay arrays are sized acording to delta-t and Tmax-ok or Tmax-ng. The number of reuse list-heads is based on delta-reuse and the greater of Tmax-ok or Tmax-ng. There are two reuse index arrays whose size is a configured parameter.",
+      "ja": "減衰アレイはデルタtとTmaxの-OK又はNGのTmax-た内容に応じて大きさです。再利用リストヘッドの数は、デルタ再利用とのTmax-OKかのTmax-NGの大きい基づいています。そのサイズが設定されたパラメータである2つの再利用インデックス配列があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 3 shows the behavior of the algorithm with the parameters given above. Four cases are given in this example. In all four, there is a twelve minute period of route oscillations. Two periods of oscillation are used, 2 minutes and 4 minutes. Two duty cycles are used, one in which the route is reachable during 20% of the cycle and the other where the route is reachable during 80% of the cycle. In all four cases, the route becomes suppressed after it becomes unreachable the second time. Once suppressed, it remains suppressed until some period after becoming stable. The routes which oscillate over a 4 minute period are no longer suppressed within 9-11 minutes after becoming stable. The routes with a 2 minute period of oscillation are suppressed for nearly the maximum 15 minute period after becoming stable.",
+      "ja": "図3は、上記で与えられたパラメータを持つアルゴリズムの挙動を示します。 4例は、この例に示されています。 4つのすべてでは、ルート振動の12分の期間があります。振動の二つの期間は、2分、4分を使用しています。二つのデューティサイクルがルートがルートは周期の80％の間に到達可能であるサイクルおよび他の20％の間に到達可能であるその一つに、使用されています。それは二度目到達不能になった後、4つのすべての場合において、経路が抑制なります。抑制されると、それは安定した後になって、いくつかの期間まで抑制されたまま。 4分間にわたって振動経路はもはや安定になった後9~11分以内に抑制されていません。発振の2分の周期を持つルートが安定になった後にほぼ最大15分間にわたり抑制されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8 Processing Routing Protocol Activity",
+      "section_title": true,
+      "ja": "4.8処理ルーティングプロトコルの活動"
+    },
+    {
+      "indent": 3,
+      "text": "The prior sections concentrate on configuration parameters and their relationship to the parameters and arrays used at run time and provide the algorithms for initializing run time storage. This section provides the steps taken in processing routing events and timer events when running.",
+      "ja": "前のセクションでは、構成パラメータ、実行時に使用されるパラメータと配列との関係に集中し、ランタイム・ストレージを初期化するためのアルゴリズムを提供します。このセクションでは、ルーティングイベントやタイマーイベント実行中の処理で撮影手順を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The routing events are:",
+      "ja": "ルーティングイベントは次のとおりです。"
+    },
+    {
+      "indent": 5,
+      "text": "1. A BGP peer or new route comes up for the first time (or after an extended down time) (Section 4.8.1)",
+      "ja": "1. A BGPピアまたは新しいルートを初めて起動した（またはダウン延長時間後）（4.8.1項）"
+    },
+    {
+      "indent": 5,
+      "text": "2. A route becomes unreachable (Section 4.8.2)",
+      "section_title": true,
+      "ja": "2.経路が到達不能（セクション4.8.2）となります"
+    },
+    {
+      "indent": 5,
+      "text": "3. A route becomes reachable again (Section 4.8.3)",
+      "section_title": true,
+      "ja": "3.ルートが再び到達可能になる（セクション4.8.3）"
+    },
+    {
+      "indent": 5,
+      "text": "4. A route changes (Section 4.8.4)",
+      "section_title": true,
+      "ja": "4.ルート変更（セクション4.8.4）"
+    },
+    {
+      "indent": 5,
+      "text": "5. A peer goes down (Section 4.8.5)",
+      "section_title": true,
+      "ja": "5.ピアがダウンする（4.8.5項）"
+    },
+    {
+      "indent": 5,
+      "text": "time figure-of-merit as a function of time (in minutes)",
+      "ja": "時間性能指数時間（分）の関数として"
+    },
+    {
+      "indent": 4,
+      "text": " 0.00 0.000 . 0.000 . 0.000 . 0.000 . 0.62 0.000 . 0.000 . 0.000 . 0.000 . 1.25 0.000 . 0.000 . 0.000 . 0.000 . 1.88 0.000 . 0.000 . 0.000 . 0.000 . 2.50 0.977 . 0.968 . 0.000 . 0.000 . 3.12 0.949 . 0.888 . 0.000 . 0.000 . 3.75 0.910 . 0.814 . 0.000 . 0.000 . 4.37 1.846 . 1.756 . 0.983 . 0.983 . 5.00 1.794 . 1.614 . 0.955 . 0.935 . 5.63 1.735 . 1.480 . 0.928 . 0.858 . 6.25 2.619 . 2.379 . 0.901 . 0.786 . 6.88 2.544 . 2.207 . 0.876 . 0.721 . 7.50 2.472 . 2.024 . 0.825 . 0.661 . 8.13 3.308 . 2.875 . 1.761 . 1.608 . 8.75 3.213 . 2.698 . 1.711 . 1.562 . 9.38 3.122 . 2.474 . 1.662 . 1.436 . 10.00 3.922 . 3.273 . 1.615 . 1.317 . 10.63 3.810 . 3.107 . 1.569 . 1.207 . 11.25 3.702 . 2.849 . 1.513 . 1.107 . 11.88 3.498 . 2.613 . 1.388 . 1.015 . 12.50 3.904 . 3.451 . 2.312 . 1.953 . 13.13 3.580 . 3.164 . 2.120 . 1.791 . 13.75 3.283 . 2.902 . 1.944 . 1.643 . 14.38 3.010 . 2.661 . 1.783 . 1.506 . 15.00 2.761 . 2.440 . 1.635 . 1.381 . 15.63 2.532 . 2.238 . 1.499 . 1.267 . 16.25 2.321 . 2.052 . 1.375 . 1.161 . 16.88 2.129 . 1.882 . 1.261 . 1.065 . 17.50 1.952 . 1.725 . 1.156 . 0.977 . 18.12 1.790 . 1.582 . 1.060 . 0.896 . 18.75 1.641 . 1.451 . 0.972 . 0.821 . 19.38 1.505 . 1.331 . 0.891 . 0.753 . 20.00 1.380 . 1.220 . 0.817 . 0.691 . 20.62 1.266 . 1.119 . 0.750 . 0.633 . 21.25 1.161 . 1.026 . 0.687 . 0.581 . 21.87 1.064 . 0.941 . 0.630 . 0.533 . 22.50 0.976 . 0.863 . 0.578 . 0.488 . 23.12 0.895 . 0.791 . 0.530 . 0.448 . 23.75 0.821 . 0.725 . 0.486 . 0.411 . 24.37 0.753 . 0.665 . 0.446 . 0.377 . 25.00 0.690 . 0.610 . 0.409 . 0.345 .",
+      "ja": "0.00 0.000 . 0.000 . 0.000 . 0.000 . 0.62 0.000 . 0.000 . 0.000 . 0.000 . 1.25 0.000 . 0.000 . 0.000 . 0.000 . 1.88 0.000 . 0.000 . 0.000 . 0.000 . 2.50 0.977 . 0.968 . 0.000 . 0.000 . 3.12 0.949 . 0.888 . 0.000 . 0.000 . 3.75 0.910 . 0.814 . 0.000 . 0.000 . 4.37 1.846 . 1.756 . 0.983 . 0.983 . 5.00 1.794 . 1.614 . 0.955 . 0.935 . 5.63 1.735 . 1.480 . 0.928 . 0.858 . 6.25 2.619 . 2.379 . 0.901 . 0.786 . 6.88 2.544 . 2.207 . 0.876 . 0.721 . 7.50 2.472 . 2.024 . 0.825 . 0.661 . 8.13 3.308 . 2.875 . 1.761 . 1.608 . 8.75 3.213 . 2.698 . 1.711 . 1.562 . 9.38 3.122 . 2.474 . 1.662 . 1.436 . 10.00 3.922 . 3.273 . 1.615 . 1.317 . 10.63 3.810 . 3.107 . 1.569 . 1.207 . 11.25 3.702 . 2.849 . 1.513 . 1.107 . 11.88 3.498 . 2.613 . 1.388 . 1.015 . 12.50 3.904 . 3.451 . 2.312 . 1.953 . 13.13 3.580 . 3.164 . 2.120 . 1.791 . 13.75 3.283 . 2.902 . 1.944 . 1.643 . 14.38 3.010 . 2.661 . 1.783 . 1.506 . 15.00 2.761 . 2.440 . 1.635 . 1.381 . 15.63 2.532 . 2.238 . 1.499 . 1.267 . 16.25 2.321 . 2.052 . 1.375 . 1.161 . 16.88 2.129 . 1.882 . 1.261 . 1.065 . 17.50 1.952 . 1.725 . 1.156 . 0.977 . 18.12 1.790 . 1.582 . 1.060 . 0.896 . 18.75 1.641 . 1.451 . 0.972 . 0.821 . 19.38 1.505 . 1.331 . 0.891 . 0.753 . 20.00 1.380 . 1.220 . 0.817 . 0.691 . 20.62 1.266 . 1.119 . 0.750 . 0.633 . 21.25 1.161 . 1.026 . 0.687 . 0.581 . 21.87 1.064 . 0.941 . 0.630 . 0.533 . 22.50 0.976 . 0.863 . 0.578 . 0.488 . 23.12 0.895 . 0.791 . 0.530 . 0.448 . 23.75 0.821 . 0.725 . 0.486 . 0.411 . 24.37 0.753 . 0.665 . 0.446 . 0.377 . 25.00 0.690 . 0.610 . 0.409 . 0.345 ."
+    },
+    {
+      "indent": 1,
+      "text": "Figure 3: Some fairly long route flap cycles, repeated for 12 minutes, followed by a period of stability.",
+      "ja": "図3：安定性の期間が続く12分間繰り返し、かなり長い経路フラップサイクル、。"
+    },
+    {
+      "indent": 3,
+      "text": "The reuse list is used to provide a means of fast evaluation of route that had been suppressed, but had been stable long enough to be reused again or had been suppressed long enough that it can be treated as a new route. The following two operations are described.",
+      "ja": "再利用リストは抑制されていたルートの速い評価する手段を提供するために使用されていますが、再び再利用するのに十分な長安定していたか、十分な長さ、それが新たなルートとして扱うことができることを抑制していました。次の二つの動作について説明します。"
+    },
+    {
+      "indent": 5,
+      "text": "1. Inserting into a reuse list (Section 4.8.6)",
+      "section_title": true,
+      "ja": "1.再利用リストに挿入する（セクション4.8.6）"
+    },
+    {
+      "indent": 5,
+      "text": "2. Reuse list processing every delta-t seconds (Section 4.8.7)",
+      "section_title": true,
+      "ja": "2.再利用リストのすべてのデルタt秒を処理する（セクション4.8.7）"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.1 Processing a New Peer or New Routes",
+      "section_title": true,
+      "ja": "4.8.1新しいピアや新ルートの処理"
+    },
+    {
+      "indent": 3,
+      "text": "When a peer comes up, no action is required if the routes had no previous history of instability, for example if this is the first time the peer is coming up and announcing these routes. For each route, the pointer to the damping structure would be zeroed and route used. The same action is taken for a new route or a route that has been down long enough that the figure of merit reached zero and the damping structure was deleted.",
+      "ja": "ピアがアップするときのルートはこれが初めてである場合ピアが上がってくると、これらのルートを発表している例えば、不安定性のない以前の歴史を持っていない場合、アクションは必要ありません。各経路について、制振構造体へのポインタがゼロにされるであろうし、ルートが使用します。同じアクションは、新しいルートや十分な長性能指数がゼロに達したと減衰構造が削除されたことがダウンしているルートのために取られています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.2 Processing Unreachable Messages",
+      "section_title": true,
+      "ja": "4.8.2処理不能メッセージ"
+    },
+    {
+      "indent": 3,
+      "text": "When a route is withdrawn or changed (Section 4.8.4 describes how a change is handled), the following procedure is used.",
+      "ja": "ルートは（セクション4.8.4に変更が処理される方法を説明）撤回又は変更された場合、以下の手順が使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is no previous stability history (the damping structure pointer is zero), then:",
+      "ja": "以前の安定性の履歴が存在しない場合、（制振構造ポインタはゼロです）。"
+    },
+    {
+      "indent": 5,
+      "text": "1. allocate a damping structure",
+      "section_title": true,
+      "ja": "1.制振構造体を割り当てます"
+    },
+    {
+      "indent": 5,
+      "text": "2. set figure-of-merit = 1",
+      "section_title": true,
+      "ja": "2.性能指数= 1"
+    },
+    {
+      "indent": 5,
+      "text": "3. withdraw the route",
+      "section_title": true,
+      "ja": "3.ルートを撤回"
+    },
+    {
+      "indent": 3,
+      "text": "Otherwise, if there is an existing damping structure, then:",
+      "ja": "それ以外の場合は、既存の制振構造は、その後、存在する場合："
+    },
+    {
+      "indent": 5,
+      "text": "1. set t-diff = t-now - t-updated",
+      "section_title": true,
+      "ja": "1.セットT-差分= T-今 -  T-更新"
+    },
+    {
+      "indent": 5,
+      "text": "2. if (t-diff puts you off the end of the array) {",
+      "section_title": true,
+      "ja": "2.もし{（T-diffはアレイの端を離れて置きます）"
+    },
+    {
+      "indent": 6,
+      "text": "setfigure-of-merit =1",
+      "ja": "setfigure・オブ・メリット= 1"
+    },
+    {
+      "indent": 4,
+      "text": "}else {",
+      "ja": "}他{"
+    },
+    {
+      "indent": 6,
+      "text": "setfigure-of-merit =figure-of-merit *decay-array-ok [t-diff ]+ 1",
+      "ja": "setfigure・オブ・メリット=フィギュア・オブ・メリット*減衰アレイ-OK [T-差分] + 1"
+    },
+    {
+      "indent": 6,
+      "text": "if(figure-of-merit >ceiling) {",
+      "ja": "IF（性能指数>天井）{"
+    },
+    {
+      "indent": 8,
+      "text": "setfigure-of-merit =ceiling",
+      "ja": "setfigure・オブ・メリット=天井"
+    },
+    {
+      "indent": 6,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 4,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 5,
+      "text": "3. remove the route from a reuse list if it is on one",
+      "section_title": true,
+      "ja": "それが1である場合3.再利用リストからルートを削除します"
+    },
+    {
+      "indent": 5,
+      "text": "4. withdraw the route unless it is already suppressed",
+      "section_title": true,
+      "ja": "それはすでに抑制されない限り、4ルートを撤回"
+    },
+    {
+      "indent": 3,
+      "text": "In either case then:",
+      "ja": "いずれの場合も、その後："
+    },
+    {
+      "indent": 5,
+      "text": "1. set t-updated = t-now",
+      "section_title": true,
+      "ja": "1.集合T-更新= tの-になりました"
+    },
+    {
+      "indent": 5,
+      "text": "2. insert into a reuse list (see Section 4.8.6)",
+      "section_title": true,
+      "ja": "2.再利用リストに挿入（セクション4.8.6を参照してください）"
+    },
+    {
+      "indent": 3,
+      "text": "If there was a stability history, the previous value of the stability figure of merit is decayed. This is done using the decay array (decay-array). The index is determined by subtracting the current time and the last time updated, then dividing by the time granularity. If the index is zero, the figure of merit is unchanged (no decay). If it is greater than the array size, it is zeroed. Otherwise use the index to fetch a decay array element and multiply the figure of merit by the array element. If using the suggested scaled integer method, shift down half an integer. Add the scaled penalty for one more unreachable (shown above as 1). If the result is above the ceiling replace it with the ceiling value. Now update the last time updated field (preferably taking into account how much time was truncated before doing the decay calculation).",
+      "ja": "安定性の歴史があった場合には、メリットの安定フィギュアの前回値が減衰しています。これは、減衰アレイ（減衰アレイ）を用いて行われます。インデックスは、時間粒度で割ること、次いで、現在時刻と最終更新時刻を減算することによって決定されます。インデックスがゼロである場合、性能指数は変化しない（NO減衰）です。それが配列のサイズよりも大きい場合は、それがゼロにされます。そうでなければ崩壊配列要素をフェッチし、配列要素によって性能指数を乗算するためにインデックスを使用します。提案スケール整数メソッドを使用している場合、半分の整数をシフトダウン。 （1として上に示されている）到達不能もう一つのためにスケーリングされたペナルティを加えます。結果は、天井の上にある場合は上限値で置き換えます。さて前回更新フィールド（好ましくは減衰計算を行う前に切り捨てられたどのくらいの時間を考慮に入れて）を更新。"
+    },
+    {
+      "indent": 3,
+      "text": "When a route becomes unreachable, alternate paths must be considered. This process is complicated slightly if different configuration parameters are used in the presence or absence of viable alternate paths. If all of these alternate paths have been suppressed because there had previously been an alternate route and the new route withdrawal changes that condition, the suppressed alternate paths must be reevaluated. They should be reevaluated in order of normal route preference. When one of these alternate routes is encountered that had been suppressed but is now usable since there is no alternate route, no further routes need to be reevaluated. This only applies if routes are given two different reuse thresholds, one for use when there is an alternate path and a higher threshold to use when suppressing the route would result in making the destination completely unreachable.",
+      "ja": "経路が到達不能になった場合に、代替パスを考慮しなければなりません。異なる構成パラメータが実行可能な代替パスの存在下または非存在下で使用される場合、このプロセスは少し複雑になります。これらの代替パスのすべてが抑制されている場合は、以前に存在し、代替ルートとなって、新たな路線撤退はその条件を変更していたので、抑制の代替パスが再評価されなければなりません。彼らは、通常のルートの優先順に再評価されなければなりません。これらの代替ルートの1つが抑制されたことに遭遇するが、何の代替経路が存在しないので、今利用可能である場合、さらなるルートが再評価する必要はありません。代替パスとの経路を抑制する宛先が完全に到達不能行うことになるときに使用されるより高い閾値が存在する場合のルートが2つの異なる再利用閾値、使用するための1つが与えられている場合にのみ適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.3 Processing Route Advertisements",
+      "section_title": true,
+      "ja": "4.8.3処理ルートの広告"
+    },
+    {
+      "indent": 3,
+      "text": "When a route is readvertised if there is no damping structure, then the procedure is the same as in Section 4.8.1.",
+      "ja": "何制振構造が存在しない場合、ルートが再び通知された場合、このプロシージャは、セクション4.8.1と同じです。"
+    },
+    {
+      "indent": 5,
+      "text": "1. don't create a new damping structure",
+      "section_title": true,
+      "ja": "1.新しい制振構造を作成しません"
+    },
+    {
+      "indent": 5,
+      "text": "2. use the route",
+      "section_title": true,
+      "ja": "2.ルートを使用"
+    },
+    {
+      "indent": 3,
+      "text": "If an damping structure exists, the figure of merit is decayed and the figure of merit and last time updated fields are updated. A decision is now made as to whether the route can be used immediately or needs to be suppressed for some period of time.",
+      "ja": "制振構造が存在する場合、性能指数は腐っと性能指数と最後の時間に更新フィールドが更新されます。決定は、今のルートは直ちに使用するか、またはある期間が抑制される必要があることができるか否かを判断します。"
+    },
+    {
+      "indent": 5,
+      "text": "1. set t-diff = t-now - t-updated",
+      "section_title": true,
+      "ja": "1.セットT-差分= T-今 -  T-更新"
+    },
+    {
+      "indent": 5,
+      "text": "2. if (t-diff puts you off the end of the array) {",
+      "section_title": true,
+      "ja": "2.もし{（T-diffはアレイの端を離れて置きます）"
+    },
+    {
+      "indent": 11,
+      "text": "set figure-of-merit =0",
+      "ja": "設定された性能指数= 0"
+    },
+    {
+      "indent": 9,
+      "text": "}else {",
+      "ja": "}他{"
+    },
+    {
+      "indent": 11,
+      "text": "set figure-of-merit= figure-of-merit* decay-array-ng[t-diff]",
+      "ja": "セット性能指数=フィギュア・オブ・メリット*減衰アレイ-NG [T-差分]"
+    },
+    {
+      "indent": 9,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 5,
+      "text": "3. if ( not suppressed and figure-of-merit < cut ) {",
+      "section_title": true,
+      "ja": "3.もし{（抑制されていないと性能指数<カット）"
+    },
+    {
+      "indent": 11,
+      "text": "use the route",
+      "ja": "ルートを使用"
+    },
+    {
+      "indent": 9,
+      "text": "}else if( suppressed and figure-of-merit< reuse) {",
+      "ja": "}そうであれば（抑制と性能指数<リユース）{"
+    },
+    {
+      "indent": 11,
+      "text": "set state tonot suppressed",
+      "ja": "抑制されないために状態を設定"
+    },
+    {
+      "indent": 11,
+      "text": "remove the route from a reuse list",
+      "ja": "再利用リストからルートを削除します"
+    },
+    {
+      "indent": 11,
+      "text": "use the route",
+      "ja": "ルートを使用"
+    },
+    {
+      "indent": 9,
+      "text": "}else {",
+      "ja": "}他{"
+    },
+    {
+      "indent": 11,
+      "text": "set state to suppressed",
+      "ja": "抑制に状態を設定"
+    },
+    {
+      "indent": 11,
+      "text": "don't use the route",
+      "ja": "ルートを使用しないでください"
+    },
+    {
+      "indent": 11,
+      "text": "insert into a reuse list (see Section 4.8.6)",
+      "ja": "再利用リストに挿入（セクション4.8.6を参照してください）"
+    },
+    {
+      "indent": 9,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 5,
+      "text": "4. if ( figure-of-merit > 0 ) {",
+      "section_title": true,
+      "ja": "4. IF（性能指数> 0）{"
+    },
+    {
+      "indent": 11,
+      "text": "set t-updated= t-now",
+      "ja": "セットT-更新= T-今"
+    },
+    {
+      "indent": 9,
+      "text": "}else {",
+      "ja": "}他{"
+    },
+    {
+      "indent": 11,
+      "text": "recover memory for damping struct",
+      "ja": "構造体を減衰するためのメモリを回復"
+    },
+    {
+      "indent": 11,
+      "text": "zero pointer to damping struct",
+      "ja": "制振構造体にゼロポインタ"
+    },
+    {
+      "indent": 9,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 3,
+      "text": "If the route is deemed usable, a search for the current best route must be made. The newly reachable route is then evaluated according to the BGP protocol rules for route selection.",
+      "ja": "ルートが使用可能と見なされた場合、現在の最適なルートの検索が行われなければなりません。新たに到達可能な経路は、その後、経路選択のためのBGPプロトコルルールに従って評価されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the new route is usable, the previous best route is examined. Prior to route comparisons, the current best route may have to be reevaluated if separate parameter sets are used depending on the presence or absence of an alternate route. If there had been no alternate the previous best route may be suppressed.",
+      "ja": "新しいルートが使用可能な場合、以前の最適なルートを調べています。ルートの比較の前に、現在の最良経路は、別個のパラメータセットは、代替ルートの有無に応じて使用される場合に再評価されなければなりません。何の代替がなかった場合は、前の最適なルートを抑制することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the new route is to be suppressed it is placed on a reuse list only if it would have been preferred to the current best route had the new route been accepted as stable. There is no reason to queue a route on a reuse list if after the route becomes usable it would not be used anyway due to the existence of a more preferred route. Such a route would not have to be reevaluated unless the preferred route became unreachable. As specified here, the less preferred route would be reevaluated and potentially used or potentially added to a reuse list when processing the withdrawal of a more preferred best route.",
+      "ja": "新しいルートが抑制されるのであれば、新しいルートが安定したものとして受け入れていたことが、現在の最適なルートに好まれていたであろう場合にのみ、再利用リスト上に置かれています。ルートが使用可能になった後、それが原因より好ましい経路の存在にとにかく使用されない場合は再利用リスト上のルートをキューイングする理由はありません。優先ルートが到達不能になった場合を除き、このようなルートを再評価する必要がないでしょう。ここで指定されるように、以下の好ましい経路は、再評価し、潜在的に使用されるか、またはより好ましく最良経路の離脱を処理する際に、潜在的に再利用リストに追加されるであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.4 Processing Route Changes",
+      "section_title": true,
+      "ja": "4.8.4処理ルートの変更"
+    },
+    {
+      "indent": 3,
+      "text": "If a route is replaced by a peer router by supplying a new path, the route that is being replaced should be treated as if an unreachable were received (see Section 4.8.2). This will occur when a peer somewhere back in the AS path is continuously switching between two AS paths and that peer is not damping route flap (or applying less damping). There is no way to determine if one AS path is stable and the other is flapping, or if they are both flapping. If the cycle is sufficiently short compared to convergence times neither route through that peer will deliver packets very reliably. Since there is no way to affect the peer such that it chooses the stable of the two AS paths, the only viable option is to penalize both routes by considering each change as an unreachable followed by a route advertisement.",
+      "ja": "ルートが新しいパスを供給することにより、ピアルータで置き換えられている場合、置換されているルートが到達不能（セクション4.8.2を参照）を受信したかのように扱われるべきです。これはどこバックAS経路におけるピアは連続パスのような2つの切り替えされ、そのピアがルートフラップダンピング（以下減衰を適用）されていない場合に発生します。 1つのASパスが安定しており、他のフラッピングしている、または、彼らは両方のフラッピングしている場合かどうかを判断する方法はありません。サイクルが収束時間に比べて十分短い場合、そのピア経由でもないルートが非常に確実にパケットを配信します。それはパスのような2つの安定を選択するようにピアに影響する方法がないので、唯一の実行可能な選択肢は、経路広告続い到達できないように、各変化を考慮することにより、両方のルートを不利にすることです。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.5 Processing A Peer Router Loss",
+      "section_title": true,
+      "ja": "4.8.5ピアルータ損失を処理"
+    },
+    {
+      "indent": 3,
+      "text": "When a peer routing session is broken, either all individual routes advertised by that peer may be marked as unstable, or the peering session itself may be marked as unstable. Marking the peer will save considerable memory. Since the individual routes are advertised as unreachable to routers beyond the immediate problem, per route state will be incurred beyond the peer immediately adjacent to the BGP session that went down. If the instability continues, the immediately adjacent router need only keep track of the peer stability history. The routers beyond that point will receive no further advertisements or withdrawal of routes and will dispose of the damping structure over time.",
+      "ja": "ピアルーティングセッションが切断され、いずれかそのピアによってアドバタイズされたすべての個別のルートが不安定としてマークされてもよいし、ピアリング・セッション自体が不安定としてマークすることができる場合。ピアをマークすると、かなりのメモリを節約します。個々のルートは当面の問題を超えてルータに到達不能として宣伝されているので、経路ごとに状態がダウンしたBGPセッションにすぐ隣接ピアを超えて発生します。不安定が続く場合は、すぐ隣のルータは、ピア安定履歴を追跡する必要が。その点を超えてルータが経路の更なる広告又は離脱を受けないであろうし、時間をかけて減衰構造を処分します。"
+    },
+    {
+      "indent": 3,
+      "text": "BGP notification through an optional transitive attribute that damping will already be applied may be considered in the future to reduce the number of routers that incur damping structure storage overhead.",
+      "ja": "減衰が既に適用されること任意推移属性を介してBGP通知は構造ストレージオーバーヘッド減衰招くルータの数を減らすために、将来的に考えることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.6 Inserting into the Reuse Timer List",
+      "section_title": true,
+      "ja": "4.8.6再利用タイマーリストに入れます"
+    },
+    {
+      "indent": 3,
+      "text": "The reuse lists are used to provide a means of fast evaluation of route that had been suppressed, but had been stable long enough to be reused again. The data structure consists of a series of list heads. Each list contains a set of routes that are scheduled for reevaluation at approximately the same time. The set of reuse list heads are treated as a circular array. Refer to Figure 4.",
+      "ja": "再利用リストは抑制されていたルートの速い評価する手段を提供するために使用されているが、十分な長さを再び再利用するために、安定していました。データ構造は、リストヘッドのシリーズで構成されています。各リストは、ほぼ同じ時刻に再評価のために予定されているルートのセットが含まれています。再利用リストヘッドのセットは、円形アレイとして扱われます。図4を参照します。"
+    },
+    {
+      "indent": 3,
+      "text": "A simple implementation of the circular array of list heads would be an array containing the list heads. An offset is used when accessing the array. The offset would identify the first list. The Nth list would be at the index corresponding to N plus the offset modulo the number of list heads. This design will be assumed in the examples that follow.",
+      "ja": "リストヘッドの円形のアレイの単純な実装では、リストヘッドを含む配列であろう。アレイにアクセスする際に使用されるオフセット。最初のリストを識別しますオフセット。 N番目のリストには、Nプラスオフセットを法にリストヘッドの数を対応するインデックスになります。この設計は、以下の例で想定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A key requirement is to be able to insert an entry in the most appropriate queue with a minimum of computation. The computation is given only the current value of figure-of-merit. Instead of a computation which would involve a logarithm, the reuse array (reuse-array[]) described in Section 4.6 is used. The array, scale, and bounds are precomputed to map figure-of-merit to the nearest list head without requiring a logarithm to be computed (see Section 4.5).",
+      "ja": "重要な要件は、計算を最小限に抑えて、最も適切なキューにエントリを挿入できるようにすることです。計算は、性能指数の電流値のみが与えられます。代わりに、対数、再利用アレイを含むであろう計算（再利用アレイは、[]）が使用され、セクション4.6で説明します。アレイ、スケール、及び境界を計算する対数を必要とせずに最も近いリストヘッドに性能指数をマッピングするために事前計算された（4.5節を参照）。"
+    },
+    {
+      "indent": 5,
+      "text": "  +-+    +-+    +-+          non-empty linked list means\n  | |    | |    | |     <--  that there are routes with\n  +-+    +-+    +-+          defered action to be taken\n   ^      ^      ^           N * delta-reuse seconds later.\n   |      |      |\n+------+------+------+------+------+      +------+\n| list | list | list | list | list |  ... | list |\n| head | head | head | head | head |  ... | head |\n+------+------+------+------+------+      +------+\n   ^      ^      ^      ^      ^             ^\n  Nth    1st    2nd    3rd    4th           N-1\n          |\n  offset to first list\n  (the offset is incremented every delta-reuse seconds)",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Figure 4: Reuse List Data Structures",
+      "ja": "図4：再利用リストデータ構造"
+    },
+    {
+      "indent": 3,
+      "text": "Note that in the following sections the operator prefix notation \"modulo a b\" means \"b % a\" in C language algebraic operator notation. For example, \"modulo 16 1023\" would be 15.",
+      "ja": "「Bモジュロ」以下のセクションでオペレータプレフィックス表記ことに注意するC言語の代数演算子表記「B％」を意味します。例えば、「16 1023を法」15になります。"
+    },
+    {
+      "indent": 5,
+      "text": "1. scale figure-of-merit for the index array lookup producing index",
+      "ja": "1.スケールフィギュア・オブ・メリット指数を生成する指数アレイルックアップ"
+    },
+    {
+      "indent": 5,
+      "text": "2. check index against the array bound",
+      "section_title": true,
+      "ja": "バインドされた配列に対する2.チェックインデックス"
+    },
+    {
+      "indent": 5,
+      "text": "3. if (within the array bound) {",
+      "section_title": true,
+      "ja": "3.（結合配列内）であれば{"
+    },
+    {
+      "indent": 11,
+      "text": "set index =reuse-array [index ]",
+      "ja": "セットインデックス=リユースアレイ[インデックス]"
+    },
+    {
+      "indent": 9,
+      "text": "}else {",
+      "ja": "}他{"
+    },
+    {
+      "indent": 11,
+      "text": "set index =reuse-list-size -1",
+      "ja": "セットインデックス=リユース・リスト・サイズ-1"
+    },
+    {
+      "indent": 9,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 5,
+      "text": "4. insert into the list",
+      "section_title": true,
+      "ja": "4.リストに挿入"
+    },
+    {
+      "indent": 11,
+      "text": "reuse-list[ moduloreuse-list-size (index +offset )]",
+      "ja": "再利用リスト[moduloreuseリストサイズ（インデックス+オフセット）]"
+    },
+    {
+      "indent": 3,
+      "text": "Choosing the correct reuse list involves only a multiply and shift to do the scaling, an integer truncation, then an array lookup in the reuse array (reuse-array[]). The value retrieved from the reuse array is used to select a reuse list. The reuse list is a circular list. The most common method of implementing a circular list is to use an array and apply an offset and modulo operation to pick the correct array entry. The offset is incremented to rotate the circular list.",
+      "ja": "正しい再利用リストを選択するだけ乗算およびスケーリングを行うためのシフト、整数切り捨て、再利用アレイ（リユースアレイ[]）で、アレイのルックアップを含みます。再利用アレイから取り出された値は、再利用リストを選択するために使用されます。再利用リストは循環リストです。円形のリストを実装する最も一般的な方法は、正しいアレイエントリを選択するために、アレイを使用してオフセット及びモジュロ演算を適用することです。オフセットは、循環リストを回転させるようにインクリメントされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8.7 Handling Reuse Timer Events",
+      "section_title": true,
+      "ja": "再利用タイマーイベントの処理4.8.7"
+    },
+    {
+      "indent": 3,
+      "text": "The granularity of the reuse timer should be more coarse than that of the decay timer. As a result, when the reuse timer fires, suppressed routes should be decayed by multiple increments of decay time. Some computation can be avoided by always inserting into the reuse list corresponding to one time increment past reuse eligibility. In cases where the reuse lists have a longer \"memory\" than the \"decay memory\" (described above), all of the routes in the first queue will be available for immediate reuse if reachable or the history entry could be disposed of if unreachable.",
+      "ja": "再利用タイマーの細かさは崩壊タイマーのそれよりも粗くする必要があります。再利用タイマ火災抑制ルートは減衰時間の倍数ずつ減衰されなければならない結果として。いくつかの計算は常に再利用資格過去1時間増分に対応する再利用リストに挿入することで回避できます。再利用リストは（前述の）「崩壊メモリ」より長い「記憶」を持っている場合には、最初のキューにあるすべてのルートは、到達不能ならば到達や履歴エントリを廃棄することができれば、すぐに再利用できるようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "When it is time to advance the lists, the first queue on the reuse list must be processed and the circular queue must be rotated. Using an array and an offset as a circular array (as described in Section 4.8.6), the algorithm below is repeated every delta-reuse seconds.",
+      "ja": "それはリストを進めるための時間である場合には、再利用リストの最初のキューが処理されなければならないと循環キューを回転させなければなりません。アレイを用いて（セクション4.8.6で説明したように）円形アレイとしてオフセット、以下のアルゴリズムは、すべてのデルタ再利用秒繰り返されます。"
+    },
+    {
+      "indent": 5,
+      "text": "1. save a pointer to the current zeroth queue head and zero the list head entry",
+      "ja": "1.現在のゼロ番目のキューの先頭へのポインタを保存し、リストの先頭エントリをゼロ"
+    },
+    {
+      "indent": 5,
+      "text": "2. set offset = modulo reuse-list-size ( offset + 1 ), thereby rotating the circular queue of list-heads",
+      "ja": "2.セットオフセット=モジュロ再利用リストサイズは、それによってリストヘッドの円形のキューを回転させる、（+ 1オフセット）"
+    },
+    {
+      "indent": 5,
+      "text": "3. if ( the saved list head pointer is non-empty )",
+      "section_title": true,
+      "ja": "3.もし（保存されたリストの先頭ポインタが非空です）"
+    },
+    {
+      "indent": 9,
+      "text": "for each entry {",
+      "ja": "各エントリの{"
+    },
+    {
+      "indent": 11,
+      "text": "sett-diff =t-now -t-updated",
+      "ja": "敷石-diffはT-今-t-更新します="
+    },
+    {
+      "indent": 11,
+      "text": "set figure-of-merit =figure-of-merit *decay-array-ok [t-diff ]",
+      "ja": "セット性能指数=フィギュア・オブ・メリット*減衰アレイ-OK [T-差分]"
+    },
+    {
+      "indent": 11,
+      "text": "sett-updated =t-now",
+      "ja": "T-今敷石更新="
+    },
+    {
+      "indent": 11,
+      "text": "if( figure-of-merit< reuse)",
+      "ja": "IF（性能指数<リユース）"
+    },
+    {
+      "indent": 13,
+      "text": "reuse the route",
+      "ja": "ルートを再利用"
+    },
+    {
+      "indent": 11,
+      "text": "else",
+      "ja": "他"
+    },
+    {
+      "indent": 13,
+      "text": "re-insert into another list (seeSection 4.8.6)",
+      "ja": "再挿入し、別のリスト（seeSection 4.8.6）へ"
+    },
+    {
+      "indent": 9,
+      "text": "}",
+      "ja": "｝"
+    },
+    {
+      "indent": 3,
+      "text": "The value of the zeroth list head would be saved and the array entry itself zeroed. The list heads would then be advanced by incrementing the offset. Starting with the saved head of the old zeroth list, each route would be reevaluated and used, disposed of entirely or requeued if it were not ready for reuse. If a route is used, it must be treated as if it were a new route advertisement as described in Section 4.8.3.",
+      "ja": "ゼロ番目のリストの先頭の値が保存されると、配列のエントリ自体はゼロ。リストヘッドは、オフセットをインクリメントすることによって進められるでしょう。古いゼロ番目のリストの保存された先頭から始めて、各ルートは完全に処分するか、再利用のための準備ができていなかった場合は再キューイング、再評価して使用されます。ルートが使用されている場合は、セクション4.8.3で説明したように、それは新しい経路広告であるかのように、それが処理されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5 Implementation Experience",
+      "ja": "5実装経験"
+    },
+    {
+      "indent": 3,
+      "text": "The first implementations of \"route flap damping\" were the route server daemon (rsd) coding by Ramesh Govindan (ISI) and the Cisco IOS implementation by Ravi Chandra. Both implementations first became available in 1995 and have been used extensively. The rsd implementation has been in use in route servers at the NSF funded Network Access Points (NAPs) and at other major Internet interconnects. The Cisco IOS version has been in use by Internet Service Providers worldwide. The rsd implementation has been integrated in releases of gated (see http://www.gated.org) and is available in commercial routers using gated.",
+      "ja": "「減衰経路フラップ」の最初の実装は、ラメシュ・ガバインダン（ISI）とラビチャンドラてCisco IOSの実装によってルート・サーバ・デーモン（RSD）をコードしました。どちらの実装は、最初に1995年に利用できるようになったし、広く使用されてきました。 RSDの実装では、NSF資金によるネットワークアクセスポイント（NAPの）で、その他の主要なインターネットの相互接続でルートサーバで使用されています。 Cisco IOSのバージョンは、世界中のインターネットサービスプロバイダによって使用されています。 RSDの実装では、ゲーティングのリリースに統合（http://www.gated.orgを参照）、ゲーティングを使用して、市販のルーターで利用可能ですされています。"
+    },
+    {
+      "indent": 3,
+      "text": "There are now more than 2 years of BGP route damping deployment experience. Some problems have occurred in deployment. So far these are solvable by careful implementation of the algorithm and by careful deployment. In some topologies coordinated deployment can be helpful and in all cases disclosure of the use of route damping and the parameters used is highly beneficial in debugging connectivity problems.",
+      "ja": "展開の経験をダンピングBGPルートの2年以上が存在することになります。いくつかの問題が展開で発生しています。これまでのところ、これらは、アルゴリズムを慎重に実装することにより、慎重展開することによって解決できます。配置を調整し、いくつかのトポロジにおいて有用であることができ、全ての場合において、経路減衰及び使用されるパラメータの使用の開示は、接続の問題をデバッグするのに非常に有益です。"
+    },
+    {
+      "indent": 3,
+      "text": "Some of the problems have occurred due to subtle implementation errors. Route damping should never be applied on IBGP learned routes. To do so can open the possibility for persistent route loops. When IBGP routes within an AS are inconsistent, route loops can easily form. Suppressing IBGP learned routes causes such inconsistencies. Implementations should disallow configuration of route damping on IBGP peers.",
+      "ja": "問題のいくつかは微妙な実装エラーが原因で発生しています。減衰ルートがIBGPに適用すべきではありませんルートを学びました。そうするためには、永続的なルートのループの可能性を開くことができます。 AS内のIBGPルートが一致しない場合、ルートループが容易に形成することができます。 IBGPルートを学んだの抑制は、このような矛盾が発生します。実装はIBGPピアにダンピングルートの設定を禁止すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Penalties for instability should only be applied when a route is removed or replaced and not when a route is added. If damping parameters are applied consistently, this implementation constraint will result in a stable secondary path being preferred over an unstable primary path due to damping of the primary path near the source.",
+      "ja": "ルートが追加されたときの経路を除去又は置換していない場合に不安定性に対する罰則は、適用されるべきです。減衰パラメータが一貫して適用されている場合、この実装制約が原因ソース周辺プライマリパスの減衰に不安定な主経路よりも好ましい安定な二次経路をもたらすであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "In topologies where multiple AS paths to a given destination exist flapping of the primary path can result in suppression of the secondary path. This can occur if no damping is being done near the cause of the route flap or if damping is being applied more aggressively by a distant AS. This problem can be solved in one of two ways. Damping can be done near the source of the route flap and the damping parameters can be made consistent. Alternately, a distant AS which insists on more aggressive damping parameters can disable penalizing routes on AS path change, penalizing routes only if they are withdrawn completely. In order to do so, the implementation must support this option (as described in Section 4.4.3).",
+      "ja": "特定の宛先へのパスなど、複数のプライマリパスのばたつきが存在するトポロジで二次経路の抑制をもたらすことができます。何の減衰が遠くASことで、より積極的に適用されているルートフラップの原因の近くや減衰場合は行われませんされている場合に発生する可能性があります。この問題は、次のいずれかの方法で解決することができます。減衰は、ルートフラップの源の近くに行うことができ、減衰パラメータが一致することができます。代わりに、遠くのどのAS彼らは完全に撤回された場合にのみルートを罰する、ASパス変更に不利ルートを無効にすることができ、より積極的な減衰パラメータを主張。 （4.4.3項で説明したように）そうするためには、実装は、このオプションをサポートしている必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Route flap should be damped near the source. Single homed destinations can be covered by static routes. Aggregation provides another means of damping. Providers should damp their own internal problems, however damping on IGP link state origination is not yet implemented by router vendors. Providers which use multiple AS within their own topology should damp between their own AS. Providers should damp adjacent providers AS.",
+      "ja": "ルートフラップが元の近くに減衰する必要があります。シングルホームの宛先は静的ルートで覆うことができます。凝集は、減衰の別の手段を提供します。プロバイダは、しかし、まだルータベンダによって実装されていないIGPリンク状態発信にダンピング、独自の内部の問題を減衰させる必要があります。自分のトポロジー内で複数のASを使用するプロバイダは、自分のAS間で減衰させる必要があります。プロバイダは、AS隣接するプロバイダを減衰させる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Damping provides a means to limit propagation excessive route change when connectivity is highly intermittent. Once a problem is corrected, damping state corresponding to the prefixes known to be damped due to the problem just fixed can be manually cleared. In order to determine where damping may have occurred after connectivity problems, providers should publish their damping parameters. Providers should be willing to manually clear damping on specific prefixes or AS paths at the request of other providers when the request is accompanied by credible assurance that the problem has truly been addressed.",
+      "ja": "減衰は、接続は非常に断続的である場合、伝播過剰な経路変更を制限する手段を提供します。問題が修正されたら、原因だけで固定の問題に減衰することが知られているプレフィックスに対応する減衰状態を手動でクリアすることができます。減衰は、接続の問題の後に発生した可能性がある場所を決定するために、プロバイダは、彼らの減衰パラメータを公開する必要があります。プロバイダは手動でクリアな特定の接頭辞や要求は問題が本当に解決されていることを確かな保証を伴う他のプロバイダの要求にASパス減衰して喜んでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "By damping their own routing information, providers can reduce their own need to make requests of other providers to clear damping state after correcting a problem. Providers should be pro-active and monitor what prefixes and paths are suppressed in addition to monitoring link states and BGP session state.",
+      "ja": "自分のルーティング情報を減衰することにより、プロバイダは、問題を修正した後の状態を減衰クリアするために、他のプロバイダの要求を行うために、独自の必要性を減らすことができます。プロバイダは、プロアクティブであり、リンク状態およびBGPセッションの状態を監視することに加えて、抑制されるものプレフィックスとパス監視すべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This work and this document may not have been completed without the advise, comments and encouragement of Yakov Rekhter (Cisco). Dennis Ferguson (MCI) provided a description of the algorithms in the gated BGP implementation and many valuable comments and insights. David Bolen (ANS) and Jordan Becker (ANS) provided valuable comments, particularly regarding early simulations. Over four years elapsed between the initial draft presented to the BGP WG (October 1993) and this iteration. At the time of this writing there is significant experience with two implementations, each having been deployed since 1995. One was led by Ramesh Govindan (ISI) for the NSF Routing Arbiter project. The second was led by Ravi Chandra (Cisco). Sean Doran (Sprintlink) and Serpil Bayraktar (ANS) were among the early independent testers of the Cisco pre-beta implementation. Valuable comments and implementation feedback were shared by many individuals on the IETF IDR WG and the RIPE Routing Work Group and in NANOG and IEPG.",
+      "ja": "この作品とこの文書は、ヤコフ・レックター（シスコ）のアドバイス、コメントや励ましなしで完了していないかもしれません。デニス・ファーガソン（MCI）は、ゲーティングBGPの実装と多くの貴重なコメントと洞察にアルゴリズムの説明を提供しました。デイビット・ボレン（ANS）とヨルダンベッカー（ANS）は、特に初期のシミュレーションについて、貴重なコメントを提供しました。 4年間でBGP WG（1993年10月）、この反復に提示最初のドラフトの間の経過。この記事の執筆時点では2つの実装、それぞれ1995年の一つは、NSFルーティングアービタプロジェクトのラメシュ・ガバインダン（ISI）が主導してから展開されていたとの豊富な経験があります。第二は、ラヴィチャンドラ（シスコ）によって導かれました。ショーン・ドラン（Sprintlink）とSerpil Bayraktar（ANS）は、シスコプレベータ実装の早期独立したテスト担当者の中にありました。貴重なコメントと実装のフィードバックは、IETF IDR WGとRIPEルーティング作業グループにし、NANOGとIEPGに多くの個人によって共有されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks also to Rob Coltun (Fore Systems), Sanjay Wadhwa (Fore), John Scudder (IENG), Eric Bennet (IENG) and Jayesh Bhatt (Bay Networks) for pointing out errors in the math uncovered during coding of more recent implementations. These errors appeared in the details of the implementation suggestion sections written after the first two implementations were completed. Thanks also to Vern Paxson for a very thorough review resulting in numerous clarifications to the document.",
+      "ja": "また、ロブColtun（フォアシステムズ）、サンジェイWadhwa（フォア）、ジョン・スカダー（IENG）、エリック・ベネット（IENG）とJayesh Bhattさん（ベイネットワーク）のおかげで、より最近の実装のコーディングの際に発見された数学のエラーを指摘して。これらのエラーは、最初の2つの実装が完了した後に書かれた実装提案セクションの詳細に登場しました。文書への多数の明確化が生じ非常に徹底的なレビューのためにも、バーン・パクソンに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "References",
+      "ja": "リファレンス"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Gross, P., and Y. Rekhter, \"Application of the border gateway protocol in the internet\", RFC 1268, October 1991.",
+      "ja": "[1]グロス、P.、およびY. Rekhter、 \"インターネットでのボーダゲートウェイ・プロトコルの応用\"、RFC 1268、1991年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] ISO/IEC. Iso/iec 10747 - information technology - telecommuni-cations and information exchange between systems - protocol for exchange of inter-domain routeing information among intermediate systems to support forwarding of iso 8473 pdus. Technical report, International Organization for Standardization, August 1994. ftp://merit.edu/pub/iso/idrp.ps.gz.",
+      "ja": "[2] ISO / IEC。 ISO / IEC 10747  - 情報技術 -  telecommuni-カチオンとシステム間の情報交換 -  ISO 8473台のPDUの転送をサポートするために、中間システム間で情報をrouteingするドメイン間の交換のためのプロトコル。技術レポート、標準化、8月1994 ftp://merit.edu/pub/iso/idrp.ps.gzのための国際機関。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Lougheed, K., and Y. Rekhter, \"A border gateway protocol 3 (BGP-3)\", RFC 1267, October 1991.",
+      "ja": "[3]ロッキード、K.、およびY. Rekhter、 \"ボーダー・ゲートウェイ・プロトコル3（BGP-3）\"、RFC 1267、1991年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Rekhter, Y., and P. Gross, \"Application of the border gateway protocol in the internet\", RFC 1772, March 1995.",
+      "ja": "[4] Rekhter、Y.、およびP.グロス、 \"インターネットでのボーダゲートウェイ・プロトコルの応用\"、RFC 1772、1995年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[5] Rekhter, Y., and T. Li, \"A border gateway protocol 4 (BGP-4)\", RFC 1771, March 1995.",
+      "ja": "[5] Rekhter、Y.、およびT.李、 \"ボーダーゲートウェイプロトコル4（BGP-4）\"、RFC 1771、1995年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[6] Rekhter, Y., and C. Topolcic,\"Exchanging routing information across provider boundaries in the CIDR environment\", RFC 1520, September 1993.",
+      "ja": "[6] Rekhter、Y.、およびC. Topolcicは、RFC 1520 \"CIDR環境でプロバイダ境界を越えてルーティング情報を交換する\"、1993年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[7] Traina, P., \"BGP-4 protocol analysis\", RFC 1774, March 1995.",
+      "ja": "[7] Trainaの、P.、 \"BGP-4プロトコル解析\"、RFC 1774、1995年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[8] Traina, P., \"Experience with the BGP-4 protocol\", RFC 1773, March 1995.",
+      "ja": "[8] Trainaの、P.、 \"BGP-4プロトコルの経験\"、RFC 1773、1995年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "Security Considerations",
+      "ja": "セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The practices outlined in this document do not further weaken the security of the routing protocols. Denial of service is possible in an already insecure routing environment but these practices only contribute to the persistence of such attacks and do not impact the methods of prevention and the methods of determining the source.",
+      "ja": "このドキュメントで説明プラクティスはさらにルーティングプロトコルのセキュリティを弱めないでください。サービスの拒否は、すでに不安定なルーティング環境で可能であるが、これらのプラクティスは、このような攻撃の持続性に貢献し、予防法やソースを決定する方法に影響を与えません。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Curtis Villamizar ANS",
+      "ja": "カーティスVillamizar ANS"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: curtis@ans.net",
+      "ja": "メールアドレス：curtis@ans.net"
+    },
+    {
+      "indent": 3,
+      "text": "Ravi Chandra Cisco Systems",
+      "ja": "ラヴィチャンドラシスコシステムズ"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: rchandra@cisco.com",
+      "ja": "メールアドレス：rchandra@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Ramesh Govindan ISI",
+      "ja": "ラメシュ・ガバインダンISI"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: govindan@isi.edu",
+      "ja": "メールアドレス：govindan@isi.edu"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (1998). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（1998）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    }
+  ]
+}

@@ -1,0 +1,727 @@
+{
+  "title": {
+    "text": "RFC 5625 - DNS Proxy Implementation Guidelines",
+    "ja": "RFC 5625 - DNSプロキシ実装のガイドライン"
+  },
+  "number": 5625,
+  "created_at": "2019-10-24 00:10:12.837049+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          R. Bellis\nRequest for Comments: 5625                                    Nominet UK\nBCP: 152                                                     August 2009\nCategory: Best Current Practice",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "DNS Proxy Implementation Guidelines",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document provides guidelines for the implementation of DNS proxies, as found in broadband gateways and other similar network devices.",
+      "ja": "ブロードバンドゲートウェイおよび他の同様のネットワーク機器で見られるように、この文書では、DNSプロキシの実装のためのガイドラインを提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet Best Current Practices for the Internet Community, and requests discussion and suggestions for improvements. Distribution of this memo is unlimited.",
+      "ja": "このドキュメントはインターネットコミュニティのためのインターネットBest Current Practicesを指定し、改善のための議論と提案を要求します。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2009 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2009 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents in effect on the date of publication of this document (http://trustee.ietf.org/license-info). Please review these documents carefully, as they describe your rights and restrictions with respect to this document.",
+      "ja": "この文書では、BCP 78と、この文書（http://trustee.ietf.org/license-info）の発行日に有効なIETFドキュメントに関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Terminology .....................................................3\n3. The Transparency Principle ......................................3\n4. Protocol Conformance ............................................4\n   4.1. Unexpected Flags and Data ..................................4\n   4.2. Label Compression ..........................................4\n   4.3. Unknown Resource Record Types ..............................4\n   4.4. Packet Size Limits .........................................4\n        4.4.1. TCP Transport .......................................5\n        4.4.2. Extension Mechanisms for DNS (EDNS0) ................6\n        4.4.3. IP Fragmentation ....................................6\n   4.5. Secret Key Transaction Authentication for DNS (TSIG) .......7\n5. DHCP's Interaction with DNS .....................................7\n   5.1. Domain Name Server (DHCP Option 6) .........................7\n   5.2. Domain Name (DHCP Option 15) ...............................8\n   5.3. DHCP Leases ................................................8\n6. Security Considerations .........................................9\n   6.1. Forgery Resilience .........................................9\n   6.2. Interface Binding .........................................10\n   6.3. Packet Filtering ..........................................10\n7. Acknowledgements ...............................................10\n8. References .....................................................11\n   8.1. Normative References ......................................11\n   8.2. Informative References ....................................12",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Research has found ([SAC035], [DOTSE]) that many commonly used broadband gateways (and similar devices) contain DNS proxies that are incompatible in various ways with current DNS standards.",
+      "ja": "研究は、一般的に使用されるブロードバンド・ゲートウェイ（と同様のデバイス）の多くは、現在のDNS標準とさまざまな方法で互換性のないDNSプロキシが含まれていること（[SAC035]、[DOTSE]）が見つかりました。"
+    },
+    {
+      "indent": 3,
+      "text": "These proxies are usually simple DNS forwarders, but typically do not have any caching capabilities. The proxy serves as a convenient default DNS resolver for clients on the LAN, but relies on an upstream resolver (e.g., at an ISP) to perform recursive DNS lookups.",
+      "ja": "これらのプロキシは、通常、単純なDNSフォワーダですが、典​​型的には、任意のキャッシュ機能を持っていません。プロキシは、LAN上のクライアントのための便利なデフォルトのDNSリゾルバとして機能するが、再帰的DNSルックアップを実行する（ISPで、例えば）上流リゾルバに依存しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that to ensure full DNS protocol interoperability it is preferred that client stub resolvers should communicate directly with full-feature, upstream recursive resolvers wherever possible.",
+      "ja": "可能な限りクライアントスタブリゾルバは、フル機能、上流の再帰リゾルバと直接通信することが好ましいフルDNSプロトコルの相互運用性を確保するためのことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "That notwithstanding, this document describes the incompatibilities that have been discovered and offers guidelines to implementors on how to provide better interoperability in those cases where the client must use the broadband gateway's DNS proxy.",
+      "ja": "それにもかかわらずは、この文書が発見された非互換性を説明し、クライアントは、ブロードバンドゲートウェイのDNSプロキシを使用しなければならないような場合には、より良い相互運用性を提供する方法についての実装者への指針を提供しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2.用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります[RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. The Transparency Principle",
+      "section_title": true,
+      "ja": "3.透明性の原則"
+    },
+    {
+      "indent": 3,
+      "text": "It is not considered practical for a simple DNS proxy to implement all current and future DNS features.",
+      "ja": "これは、現在および将来のすべてのDNS機能を実装するための簡単なDNSプロキシのために実用的とはみなされません。"
+    },
+    {
+      "indent": 3,
+      "text": "There are several reasons why this is the case:",
+      "ja": "これが事実である理由はいくつかあります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Broadband gateways usually have limited hardware resources.",
+      "ja": "Oブロードバンドゲートウェイは通常、ハードウェア・リソースが限られています。"
+    },
+    {
+      "indent": 3,
+      "text": "o Firmware upgrade cycles are long, and many users do not routinely apply upgrades when they become available.",
+      "ja": "Oファームウェアのアップグレードサイクルが長く、彼らが利用可能になったときに多くのユーザーが日常のアップグレードを適用しません。"
+    },
+    {
+      "indent": 3,
+      "text": "o No one knows what those future DNS features will be or how they might be implemented.",
+      "ja": "O誰もがこれらの将来のDNS機能がなるか、彼らがどのように実装されるかもしれないものを知っていません。"
+    },
+    {
+      "indent": 3,
+      "text": "o Doing so would substantially complicate the configuration user interface (UI) of the device.",
+      "ja": "Oそうすることで、実質的にデバイスのコンフィギュレーション・ユーザ・インターフェース（UI）を複雑にします。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, some modern DNS protocol extensions (see, e.g., EDNS0 below) are intended to be used as \"hop-by-hop\" mechanisms. If the DNS proxy is considered to be such a \"hop\" in the resolution chain, then for it to function correctly, it would need to be fully compliant with all such mechanisms.",
+      "ja": "さらに、いくつかの近代的なDNSプロトコルの拡張（例えば、EDNS0以下、参照）、「ホップバイホップ」メカニズムとして使用されることが意図されます。 DNSプロキシは、このような解像度のチェーンに「ホップ」と見なされた場合、それが正しく機能するためには、すべてのそのようなメカニズムに完全に準拠する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "[SAC035] shows that the more actively a proxy participates in the DNS protocol, the more likely it is that it will somehow interfere with the flow of messages between the DNS client and the upstream recursive resolvers.",
+      "ja": "[SAC035】より積極的プロキシはDNSプロトコルに関与することを示し、可能性が高いそれは何らかの形でDNSクライアントと上流再帰リゾルバ間のメッセージの流れを妨害することです。"
+    },
+    {
+      "indent": 3,
+      "text": "The role of the proxy should therefore be no more and no less than to receive DNS requests from clients on the LAN side, forward those verbatim to one of the known upstream recursive resolvers on the WAN side, and ensure that the whole response is returned verbatim to the original client.",
+      "ja": "プロキシの役割は、したがって、より多くのと、LAN側のクライアントからのDNS要求を受信WAN側に知られている上流の再帰リゾルバの一つにそのままそれらを転送し、全体の応答がそのまま返されることを保証するよりも劣らず一切あってはなりません元のクライアントへ。"
+    },
+    {
+      "indent": 3,
+      "text": "It is RECOMMENDED that proxies should be as transparent as possible, such that any \"hop-by-hop\" mechanisms or newly introduced protocol extensions operate as if the proxy were not there.",
+      "ja": "プロキシが存在しないかのように、任意の「ホップバイホップ」機構又は新たに導入されたプロトコルの拡張機能が動作するように、プロキシはできるだけ透明であることが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Except when required to enforce an active security or network policy (such as maintaining a pre-authentication \"walled garden\"), end-users SHOULD be able to send their DNS queries to specified upstream resolvers, thereby bypassing the proxy altogether. In this case, the gateway SHOULD NOT modify the DNS request or response packets in any way.",
+      "ja": "（例えば、事前認証「ウォールドガーデン」を維持するように）アクティブなセキュリティまたはネットワークポリシーを適用するために必要な場合を除いて、エンドユーザはそれによって完全にプロキシをバイパスし、指定された上流のレゾルバへのDNSクエリを送信することができるべきです。この場合、ゲートウェイは、任意の方法でDNS要求または応答パケットを変更しないでください。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Protocol Conformance",
+      "section_title": true,
+      "ja": "4.プロトコルコンフォーマンス"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Unexpected Flags and Data",
+      "section_title": true,
+      "ja": "4.1。予期しないフラグとデータ"
+    },
+    {
+      "indent": 3,
+      "text": "The Transparency Principle above, when combined with Postel's Robustness Principle [RFC0793], suggests that DNS proxies should not arbitrarily reject or otherwise drop requests or responses based on perceived non-compliance with standards.",
+      "ja": "ポステルの頑健性原理[RFC0793]と組み合わせて上記の透明性の原則は、DNSプロキシが任意に拒否するか、そうでない場合は標準と認識される非遵守に基づいて要求や応答を落としてはならないことを示唆しています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, some proxies have been observed to drop any packet containing either the \"Authentic Data\" (AD) or \"Checking Disabled\" (CD) bits from DNSSEC [RFC4035]. This may be because [RFC1035] originally specified that these unused \"Z\" flag bits \"MUST\" be zero. However, these flag bits were always intended to be reserved for future use, so refusing to proxy any packet containing these flags (now that uses for those flags have indeed been defined) is not appropriate.",
+      "ja": "例えば、いくつかのプロキシは、「本物のデータ」（AD）又はDNSSECから（CD）ビット[RFC4035]「無効確認」のいずれかを含む任意のパケットをドロップすることが観察されています。 [RFC1035]は、元々これらの未使用の「Z」フラグビットがゼロで「なければなりません」と指定されたためと考えられます。しかしながら、これらのフラグビットがいつも（今では、実際に定義されているそれらのフラグのために使用する）プロキシにこれらのフラグを含む任意のパケットを拒否することは適切ではない、将来の使用のために予約されることを意図しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, proxies MUST ignore any unknown DNS flags and proxy those packets as usual.",
+      "ja": "そのため、プロキシは未知のDNSフラグとプロキシいつものように、これらのパケットを無視しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Label Compression",
+      "section_title": true,
+      "ja": "4.2。ラベルの圧縮"
+    },
+    {
+      "indent": 3,
+      "text": "Compression of labels as per Section 4.1.4 of [RFC1035] is optional.",
+      "ja": "[RFC1035]のセクション4.1.4あたりとしてラベルの圧縮はオプションです。"
+    },
+    {
+      "indent": 3,
+      "text": "Proxies MUST forward packets regardless of the presence or absence of compressed labels therein.",
+      "ja": "プロキシは関係なく、その中に圧縮された標識の存在または非存在のパケットを転送しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Unknown Resource Record Types",
+      "section_title": true,
+      "ja": "4.3。不明なリソースレコードのタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3597] requires that resolvers MUST handle Resource Records (RRs) of unknown type transparently.",
+      "ja": "[RFC3597]はリゾルバが透過的に未知のタイプのリソースレコード（RR）を処理しなければならないことが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "All requests and responses MUST be proxied regardless of the values of the QTYPE and QCLASS fields.",
+      "ja": "すべての要求と応答は関係なく、QTYPEとQCLASSフィールドの値のプロキシなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, all responses MUST be proxied regardless of the values of the TYPE and CLASS fields of any Resource Record therein.",
+      "ja": "同様に、すべての応答に関係なく、その中に任意のリソースレコードのタイプとクラスフィールドの値のプロキシされなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Packet Size Limits",
+      "section_title": true,
+      "ja": "4.4。パケットサイズの制限"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] specifies that the maximum size of the DNS payload in a UDP packet is 512 octets. Where the required portions of a response would not fit inside that limit, the DNS server MUST set the",
+      "ja": "[RFC1035]はUDPパケット内のDNSペイロードの最大サイズが512個のオクテットであることを指定します。応答の必要な部分は、その制限内で収まらない場合は、DNSサーバが設定されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "\"TrunCation\" (TC) bit in the DNS response header to indicate that truncation has occurred. There are however two standard mechanisms (described in Sections 4.4.1 and 4.4.2) for transporting responses larger than 512 octets.",
+      "ja": "切り捨てが発生したことを示すためにDNS応答ヘッダー内の「切り捨て」（TC）ビット。 512オクテットよりも大きい応答を搬送する（セクション4.4.1および4.4.2に記載）は、2つの標準的なメカニズムがしかしあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Many proxies have been observed to truncate all responses at 512 octets, and others at a packet size related to the WAN MTU, in either case doing so without correctly setting the TC bit.",
+      "ja": "多くのプロキシは正しくTCビットを設定せずにそうすることのいずれかの場合には、WAN MTUに関連するパケット・サイズで512オクテット、および他のすべての応答を切り捨てることが観察されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Other proxies have been observed to remove the TC bit in server responses that correctly had the TC bit set by the server.",
+      "ja": "他のプロキシが正しく、サーバーによって設定されたTCビットを持っていたサーバーの応答でTCビットを削除することが観察されています。"
+    },
+    {
+      "indent": 3,
+      "text": "If a DNS response is truncated but the TC bit is not set, then client failures may result. In particular, a naive DNS client library might suffer crashes due to reading beyond the end of the data actually received.",
+      "ja": "DNS応答が切り捨てられますが、TCビットがセットされていない場合は、クライアントの障害が発生することがあります。特に、ナイーブDNSクライアントライブラリが原因実際に受信したデータの終わりを超えて読みにクラッシュを被る可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Since UDP packets larger than 512 octets are now expected in normal operation, proxies SHOULD NOT truncate UDP packets that exceed that size. See Section 4.4.3 for recommendations for packet sizes exceeding the WAN MTU.",
+      "ja": "UDPパケットがより大きい512個のオクテットは、現在、通常の動作で期待されているので、プロキシはそのサイズを超えるUDPパケットを切り捨てるべきではありません。 WAN MTUを超えるパケットサイズのための推奨事項については、4.4.3項を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If a proxy must unilaterally truncate a response, then the proxy MUST set the TC bit. Similarly, proxies MUST NOT remove the TC bit from responses.",
+      "ja": "プロキシが一方的に応答を切り捨てる必要がある場合は、プロキシはTCビットを設定しなければなりません。同様に、プロキシは応答からTCビットを削除してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.1. TCP Transport",
+      "section_title": true,
+      "ja": "4.4.1。 TCPトランスポート"
+    },
+    {
+      "indent": 3,
+      "text": "Should a UDP query fail because of truncation, the standard fail-over mechanism is to retry the query using TCP, as described in Section 6.1.3.2 of [RFC1123].",
+      "ja": "UDPクエリが原因で切り捨ての障害が発生すると、標準のフェイルオーバーメカニズムは[RFC1123]のセクション6.1.3.2で説明したように、TCPを使用してクエリを再試行することです。"
+    },
+    {
+      "indent": 3,
+      "text": "Whilst TCP transport is not strictly mandatory, it is supported by the vast majority of stub resolvers and recursive servers. Lack of support in the proxy prevents this fail-over mechanism from working.",
+      "ja": "TCPトランスポートは厳密に必須ではありませんであるが、それはスタブリゾルバと再帰的なサーバの大半でサポートされています。プロキシでのサポートの欠如は、作業からこのフェイルオーバーメカニズムを防ぐことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS proxies MUST therefore be prepared to receive and forward queries over TCP.",
+      "ja": "DNSプロキシは、したがって、受信およびTCP上でクエリを転送するために準備しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that it is unlikely that a client would send a request over TCP unless it had already received a truncated UDP response. Some \"smart\" proxies have been observed to first forward any request received over TCP to an upstream resolver over UDP, only for the response to be truncated, causing the proxy to retry over TCP. Such behaviour increases network traffic and causes delay in DNS resolution since the initial UDP request is doomed to fail.",
+      "ja": "すでに切り捨てUDP応答を受信して​​いない限り、クライアントはTCP上でリクエストを送信するとは考えにくいことに注意してください。いくつかの「スマート」プロキシは、TCPを超える再試行するプロキシを引き起こして、応答が切り捨てられるだけのために、最初にすべての要求はUDP上で上流のリゾルバにTCPを介して受信転送することが観察されています。このような行動は、ネットワークトラフィックが増加し、初期UDP要求は失敗する運命にあるため、DNS解決の遅れの原因となります。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, whenever a proxy receives a request over TCP, the proxy SHOULD forward the query over TCP and SHOULD NOT attempt the same query over UDP first.",
+      "ja": "プロキシがTCPでリクエストを受信するたびにそのため、プロキシは、TCP上でクエリを転送する必要があり、最初のUDP上の同じクエリを試みるべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.2. Extension Mechanisms for DNS (EDNS0)",
+      "section_title": true,
+      "ja": "4.4.2。 DNS用拡張メカニズム（EDNS0）"
+    },
+    {
+      "indent": 3,
+      "text": "The \"Extension Mechanism for DNS\" [RFC2671] was introduced to allow the transport of larger DNS packets over UDP and also to allow for additional request and response flags.",
+      "ja": "「DNS用拡張メカニズム」[RFC2671]はUDP上大きいDNSパケットの輸送を可能にするために導入し、また、追加の要求と応答フラグを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "A client may send an OPT Resource Record (OPT RR) in the Additional Section of a request to indicate that it supports a specific receive buffer size. The OPT RR also includes the \"DNSSEC OK\" (DO) flag used by DNSSEC to indicate that DNSSEC-related RRs should be returned to the client.",
+      "ja": "クライアントは、それが特定の受信バッファサイズをサポートしていることを示すために、要求の追加セクションにOPTリソースレコード（OPT RRを）送ることができます。 OPT RRはまたDNSSEC関連のRRがクライアントに返されるべきであることを示すためにDNSSECによって使用される、「DNSSEC OK」（DO）フラグを含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "However, some proxies have been observed to either reject (with a FORMERR response code) or black-hole any packet containing an OPT RR. As per Section 4.1, proxies MUST NOT refuse to proxy such packets.",
+      "ja": "しかし、いくつかのプロキシはOPT RRを含む任意のパケット（FORMERR応答コードで）拒否またはブラックホールのいずれかに観察されています。セクション4.1に従って、プロキシはプロキシそのようなパケットを拒否してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.3. IP Fragmentation",
+      "section_title": true,
+      "ja": "4.4.3。 IPフラグメンテーション"
+    },
+    {
+      "indent": 3,
+      "text": "Support for UDP packet sizes exceeding the WAN MTU depends on the gateway's algorithm for handling fragmented IP packets. Several methods are possible:",
+      "ja": "WAN MTUを超えるUDPパケットサイズのサポートは、断片化されたIPパケットを処理するためのゲートウェイのアルゴリズムに依存します。いくつかの方法が考えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Fragments are dropped.",
+      "section_title": true,
+      "ja": "1.フラグメントは廃棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Fragments are forwarded individually as they're received.",
+      "section_title": true,
+      "ja": "彼らが受け取っているとして2フラグメントは、個別に転送されます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Complete packets are reassembled on the gateway and then re-fragmented (if necessary) as they're forwarded to the client.",
+      "ja": "彼らはクライアントに転送している3.完全なパケットを（必要ならば）ゲートウェイ上で再度組み立てた後、再断片化されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Method 1 above will cause compatibility problems with EDNS0 unless the DNS client is configured to advertise an EDNS0 buffer size limited to the WAN MTU less the size of the IP header. Note that RFC 2671 does recommend that the path MTU should be taken into account when using EDNS0.",
+      "ja": "DNSクライアントがIPヘッダのより少ないサイズWAN MTUに制限EDNS0バッファサイズをアドバタイズするように構成されていない限り、方法1は、上記EDNS0との互換性の問題を引き起こすであろう。 RFC 2671がEDNS0を使用した場合、パスMTUが考慮されるべきであることをお勧めしないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Also, whilst the EDNS0 specification allows for a buffer size of up to 65535 octets, most common DNS server implementations do not support a buffer size above 4096 octets.",
+      "ja": "EDNS0仕様は、最大65535オクテットのバッファサイズを可能にしながらも、最も一般的なDNSサーバの実装は、4096オクテット以上のバッファサイズをサポートしていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore (irrespective of which of the above methods is in use), proxies SHOULD be capable of forwarding UDP packets up to a payload size of at least 4096 octets.",
+      "ja": "従って（かかわらず使用されている上記の方法のうち）、プロキシは少なくとも4096オクテットのペイロードサイズにUDPパケットを転送することができなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "NB: in theory, IP fragmentation may also occur if the LAN MTU is smaller than the WAN MTU, although the author has not observed such a configuration in use on any residential broadband service.",
+      "ja": "NB：著者はあらゆる家庭用ブロードバンドサービスに使用されているような構成を認められていないがLAN MTUは、WAN MTUよりも小さい場合は理論的には、IPフラグメンテーションが発生することがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Secret Key Transaction Authentication for DNS (TSIG)",
+      "section_title": true,
+      "ja": "4.5。 DNSのための秘密鍵トランザクション認証（TSIG）"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2845] defines TSIG, which is a mechanism for authenticating DNS requests and responses at the packet level.",
+      "ja": "[RFC2845]は、パケットレベルでのDNS要求と応答を認証するための機構であるTSIGを、定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "Any modifications made to the DNS portions of a TSIG-signed query or response packet (with the exception of the Query ID) will cause a TSIG authentication failure.",
+      "ja": "（クエリIDを除く）TSIG署名クエリーまたは応答パケットのDNS部分に行われた変更は、TSIG認証失敗の原因となります。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS proxies MUST implement Section 4.7 of [RFC2845] and either forward packets unchanged (as recommended above) or fully implement TSIG.",
+      "ja": "DNSプロキシは、[RFC2845]のセクション4.7を実装し、いずれかのパケットを転送不変（上記推奨されるように）、または完全TSIGを実装しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "As per Section 4.3, DNS proxies MUST be capable of proxying packets containing TKEY [RFC2930] Resource Records.",
+      "ja": "4.3節に従って、DNSプロキシはTKEY [RFC2930]リソースレコードを含むパケットをプロキシすることができなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "NB: any DNS proxy (such as those commonly found in WiFi hotspot \"walled gardens\") that transparently intercepts all DNS queries and that returns unsigned responses to signed queries, will also cause TSIG authentication failures.",
+      "ja": "NB：透過的にすべてのDNSクエリを傍受し、それが署名したクエリに符号なしの応答を返します（たとえば、一般的にWiFiホットスポット「壁に囲まれた庭園」に見られるような）任意のDNSプロキシは、またTSIG認証の失敗の原因となります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. DHCP's Interaction with DNS",
+      "section_title": true,
+      "ja": "DNSとDHCPの対話5."
+    },
+    {
+      "indent": 3,
+      "text": "Whilst this document is primarily about DNS proxies, most consumers rely on DHCP [RFC2131] to obtain network configuration settings. Such settings include the client machine's IP address, subnet mask, and default gateway, but also include DNS-related settings.",
+      "ja": "この文書はDNSプロキシについて、主であるが、ほとんどの消費者は、ネットワークの構成設定を取得するためにDHCP [RFC2131]に依存しています。このような設定は、クライアントマシンのIPアドレス、サブネットマスク、デフォルトゲートウェイを含むが、DNS関連の設定が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is therefore appropriate to examine how DHCP affects client DNS configuration.",
+      "ja": "DHCPクライアントのDNS設定をどのように影響するかを検討することが適切です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Domain Name Server (DHCP Option 6)",
+      "section_title": true,
+      "ja": "5.1。ドメインネームサーバ（DHCPオプション6）"
+    },
+    {
+      "indent": 3,
+      "text": "Most gateways default to supplying their own IP address in the DHCP \"Domain Name Server\" option [RFC2132]. The net result is that without explicit re-configuration many DNS clients will, by default, send queries to the gateway's DNS proxy. This is understandable behaviour given that the correct upstream settings are not usually known at boot time.",
+      "ja": "DHCP「ドメインネームサーバ」オプション[RFC2132]で独自のIPアドレスを供給するほとんどのゲートウェイのデフォルト。最終結果は、明示的に再設定することなく、多くのDNSクライアントは、デフォルトでは、ゲートウェイのDNSプロキシにクエリを送信することです。これは正しい上流の設定は通常、ブート時に知られていないことを考えると理解しやすい動作です。"
+    },
+    {
+      "indent": 3,
+      "text": "Most gateways learn their own DNS settings via values supplied by an ISP via DHCP or PPP over the WAN interface. However, whilst many gateways do allow the device administrator to override those values, some gateways only use those supplied values to affect the proxy's own forwarding function, and do not offer these values via DHCP.",
+      "ja": "ほとんどのゲートウェイは、WANインターフェイス上でDHCPまたはPPP経由でISPによって提供される値を経由して、独自のDNS設定を学びます。多くのゲートウェイは、デバイスの管理者は、これらの値を上書きすることができませんしながらしかし、一部のゲートウェイは、プロキシ自身の転送機能に影響を与えるために、これらの指定された値を使用して、DHCP経由でこれらの値を提供していません。"
+    },
+    {
+      "indent": 3,
+      "text": "When using such a device, the only way to avoid using the DNS proxy is to hard-code the required values in the client operating system. This may be acceptable for a desktop system but it is inappropriate for mobile devices that are regularly used on many different networks.",
+      "ja": "このようなデバイスを使用する場合は、DNSプロキシを使用しないようにする唯一の方法は、ハードコードするクライアント・オペレーティング・システムで必要な値です。これは、デスクトップシステム用に許容可能であるが、それは定期的に多くの異なるネットワーク上で使用されているモバイルデバイスには不適切です。"
+    },
+    {
+      "indent": 3,
+      "text": "As per Section 3, end-users SHOULD be able to send their DNS queries directly to specified upstream resolvers, ideally without hard-coding those settings in their stub resolver.",
+      "ja": "第3節ごとのように、エンド・ユーザーは、自分のスタブリゾルバでこれらの設定をハードコーディングすることなく、理想的には、指定された上流のレゾルバに直接自分のDNSクエリを送信することができるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "It is therefore RECOMMENDED that gateways SHOULD support device-administrator configuration of values for the \"Domain Name Server\" DHCP option.",
+      "ja": "したがって、ゲートウェイは「ドメインネームサーバ」DHCPオプションの値のデバイス管理者の設定をサポートすることをお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Domain Name (DHCP Option 15)",
+      "section_title": true,
+      "ja": "5.2。ドメイン名（DHCPオプション15）"
+    },
+    {
+      "indent": 3,
+      "text": "A significant amount of traffic to the DNS Root Name Servers is for invalid top-level domain names, and some of that traffic can be attributed to particular equipment vendors whose firmware defaults this DHCP option to specific values.",
+      "ja": "DNSルートネームサーバへのトラフィックのかなりの量は、無効なトップレベルドメイン名のためであり、そのトラフィックのいくつかは、そのファームウェアのデフォルト特定の値に、このDHCPオプションを特定の機器ベンダーに起因することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since no standard exists for a \"local\" scoped domain name suffix, it is RECOMMENDED that the default value for this option SHOULD be empty, and that this option MUST NOT be sent to clients when no value is configured.",
+      "ja": "標準的には、「ローカル」スコープのドメイン名サフィックスのために存在していないので、このオプションのデフォルト値は空にすることを推奨し、そして何も値が設定されていない場合は、このオプションは、クライアントに送信されてはならないこと。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. DHCP Leases",
+      "section_title": true,
+      "ja": "5.3。 DHCPのリース"
+    },
+    {
+      "indent": 3,
+      "text": "It is noted that some DHCP servers in broadband gateways offer, by default, their own IP address for the \"Domain Name Server\" option (as described above) but then automatically start offering the upstream servers' addresses once they've been learnt over the WAN interface.",
+      "ja": "（上記のような）ブロードバンドゲートウェイでのいくつかのDHCPサーバは、デフォルトでは、「ドメインネームサーバ」オプションのために独自のIPアドレスを提供することを指摘したが、その後、自動的に、彼らは上で学習されてきた後、上流のサーバのアドレスを提供開始していますWANインターフェイス。"
+    },
+    {
+      "indent": 3,
+      "text": "In general, this behaviour is highly desirable, but the effect for the end-user is that the settings used depend on whether the DHCP lease was obtained before or after the WAN link was established.",
+      "ja": "一般に、この現象は非常に望ましいが、エンドユーザのための効果は、使用される設定は、DHCPリースの前またはWANリンクが確立された後に得られたかどうかに依存することです。"
+    },
+    {
+      "indent": 3,
+      "text": "If the DHCP lease is obtained whilst the WAN link is down, then the DHCP client (and hence the DNS client) will not receive the correct values until the DHCP lease is renewed.",
+      "ja": "WANリンクがダウンしている間、DHCPリースが得られた場合のDHCPリースが更新されるまで、DHCPクライアント（したがって、DNSクライアント）が正しい値を受け取ることができません。"
+    },
+    {
+      "indent": 3,
+      "text": "Whilst no specific recommendations are given here, vendors may wish to give consideration to the length of DHCP leases and to whether some mechanism for forcing a DHCP lease renewal might be appropriate.",
+      "ja": "具体的な勧告は、ここで指定されていない一方で、ベンダーは、DHCPリースの長さにし、DHCPリースの更新を強制するためのいくつかのメカニズムが適切かもしれないかどうかに配慮することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Another possibility is that the learnt upstream values might be persisted in non-volatile memory such that on reboot the same values can be automatically offered via DHCP. However, this does run the risk that incorrect values are initially offered if the device is moved or connected to another ISP.",
+      "ja": "別の可能性は、学んだ上流の値が再起動時に同じ値が自動的にDHCP経由で提供することができるような不揮発性メモリに永続化されるかもしれないということです。しかし、これは、デバイスが移動または別のISPに接続されている場合、誤った値が最初に提供されている危険性がありますありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Alternatively, the DHCP server might only issue very short (i.e., 60 second) leases while the WAN link is down, only reverting to more typical lease lengths once the WAN link is up and the upstream DNS servers are known. Indeed, with such a configuration it may be possible to avoid the need to implement a DNS proxy function in the broadband gateway at all.",
+      "ja": "また、DHCPサーバにのみだけ、より一般的なリースWANのリンクが立ち上がっていて、上流のDNSサーバが知られた後の長さに戻す、（すなわち、60秒）のWANリンクがダウンしている間、リース、非常に短い発行するかもしれません。実際、このような構成で、すべてでブロードバンドゲートウェイでのDNSプロキシ機能を実装する必要性を回避することが可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document introduces no new protocols. However, there are some security-related recommendations for vendors that are listed here.",
+      "ja": "この文書は、新しいプロトコルを導入していません。しかし、ここに記載されているベンダーのためのいくつかのセキュリティ関連の推奨事項があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Forgery Resilience",
+      "section_title": true,
+      "ja": "6.1。偽造回復力"
+    },
+    {
+      "indent": 3,
+      "text": "Whilst DNS proxies are not usually full-feature resolvers, they nevertheless share some characteristics with them.",
+      "ja": "DNSプロキシは通常、フル機能のリゾルバではない一方で、彼らはそれにもかかわらず、彼らといくつかの特徴を共有します。"
+    },
+    {
+      "indent": 3,
+      "text": "Notwithstanding the recommendations above about transparency, many DNS proxies are observed to pick a new Query ID for outbound requests to ensure that responses are directed to the correct client.",
+      "ja": "透明性上記の勧告にもかかわらず、多くのDNSプロキシは、応答が正しいクライアントに向けられていることを確認するために、発信要求のための新しいクエリIDを選択することが観察されています。"
+    },
+    {
+      "indent": 3,
+      "text": "NB: changing the Query ID is acceptable and compatible with proxying TSIG-signed packets since the TSIG signature calculation is based on the original message ID, which is carried in the TSIG RR.",
+      "ja": "NB：クエリIDを変更することが許容されるとTSIG署名計算はTSIG RRで運ばれる元のメッセージIDに基づいているので、TSIG署名パケットをプロキシと互換性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "It has been standard guidance for many years that each DNS query should use a randomly generated Query ID. However, many proxies have been observed picking sequential Query IDs for successive requests.",
+      "ja": "これは、各DNSクエリがランダムに生成されたクエリIDを使用する必要があり、多くの年のための標準的な指針となっています。しかし、多くのプロキシは、連続した要求に対してシーケンシャルクエリIDを選んで観察されています。"
+    },
+    {
+      "indent": 3,
+      "text": "It is strongly RECOMMENDED that DNS proxies follow the relevant recommendations in [RFC5452], particularly those in Section 9.2 relating to randomisation of Query IDs and source ports. This also applies to source port selection within any NAT function.",
+      "ja": "強くDNSプロキシは、特にセクション9.2でクエリIDと送信元ポートのランダム化に関連する、[RFC5452]に関連する推奨事項に従うことが推奨されます。これはまた、任意のNAT機能の中にポートの選択をソースに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a DNS proxy is running on a broadband gateway with NAT that is compliant with [RFC4787], then it SHOULD also follow the recommendations in Section 10 of [RFC5452] concerning how long DNS state is kept.",
+      "ja": "DNSプロキシは[RFC4787]に準拠しているNATのブロードバンドゲートウェイ上で実行されている場合、それはまた、DNSの状態が保たれているどのくらいの期間に関する[RFC5452]のセクション10の勧告に従うべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Interface Binding",
+      "section_title": true,
+      "ja": "6.2。インターフェイスのバインド"
+    },
+    {
+      "indent": 3,
+      "text": "Some gateways have been observed to have their DNS proxy listening on both internal (LAN) and external (WAN) interfaces. In this configuration, it is possible for the proxy to be used to mount reflector attacks as described in [RFC5358].",
+      "ja": "いくつかのゲートウェイは、その両方の内部（LAN）上のDNSプロキシのリスニングと外部（WAN）のインターフェイスを持つことが観察されています。プロキシは[RFC5358]に記載されているように反射攻撃をマウントするために使用されるため、この構成では、それが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "The DNS proxy in a gateway SHOULD NOT, by default, be accessible from the WAN interfaces of the device.",
+      "ja": "ゲートウェイにおけるDNSプロキシは、デフォルトでは、デバイスのWANインターフェイスからアクセスされるべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Packet Filtering",
+      "section_title": true,
+      "ja": "6.3。パケットフィルタリング"
+    },
+    {
+      "indent": 3,
+      "text": "The Transparency and Robustness Principles are not entirely compatible with the deep packet-inspection features of security appliances such as firewalls, which are intended to protect systems on the inside of a network from rogue traffic.",
+      "ja": "透明性と堅牢性の原則は、そのような不正なトラフィックからネットワークの内側にシステムを保護することを意図しているファイアウォールなどのセキュリティアプライアンスのディープパケットインスペクション機能と完全に互換性がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "However, a clear distinction may be made between traffic that is intrinsically malformed and that which merely contains unexpected data.",
+      "ja": "しかし、明確な区別は本質的に不正な、単に予期しないデータが含まれているものであるトラフィックの間で行うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Examples of malformed packets that MAY be dropped include:",
+      "ja": "破棄される可能性があり、不正な形式のパケットの例は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o invalid compression pointers (i.e., those that point outside of the current packet or that might cause a parsing loop)",
+      "ja": "O無効圧縮ポインタ（すなわち、現在のパケットの外側点又はそれが解析ループを引き起こす可能性のあるもの）"
+    },
+    {
+      "indent": 3,
+      "text": "o incorrect counts for the Question, Answer, Authority, and Additional Sections (although care should be taken where truncation is a possibility)",
+      "ja": "O間違った質問のカウント、回答、権限、および追加セクション（切捨てが可能であるところには注意しなければならないが）"
+    },
+    {
+      "indent": 3,
+      "text": "Dropped packets will cause the client to repeatedly retransmit the original request, with the client only detecting the error after several retransmit intervals.",
+      "ja": "繰り返しクライアントにのみ、いくつかの再送信間隔の後にエラーを検出すると、元の要求を再送信するようにドロップされたパケットは、クライアントの原因となります。"
+    },
+    {
+      "indent": 3,
+      "text": "In these circumstances, proxies SHOULD synthesise a suitable DNS error response to the client (i.e., SERVFAIL) instead of dropping the packet completely. This will allow the client to detect the error immediately.",
+      "ja": "このような状況では、プロキシは、代わりに完全にパケットを落とすのクライアント（すなわち、SERVFAIL）に適切なDNSエラー応答を合成するべきです。これは、クライアントがすぐにエラーを検出することができるようになります。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Acknowledgements",
+      "section_title": true,
+      "ja": "7.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The author would particularly like to acknowledge the assistance of Lisa Phifer of Core Competence. In addition, the author is grateful for the feedback from the members of the DNSEXT Working Group.",
+      "ja": "著者は、特にコア・コンピタンスのリサ・ファイファーの支援を承認したいと思います。また、著者はDNSEXTワーキンググループのメンバーからのフィードバックに感謝です。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8.参照文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0793] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "[RFC0793]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, November 1987.",
+      "ja": "[RFC1035] Mockapetris、P.、 \"ドメイン名 - 実装及び仕様\"、STD 13、RFC 1035、1987年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1123] Braden, R., \"Requirements for Internet Hosts - Application and Support\", STD 3, RFC 1123, October 1989.",
+      "ja": "[RFC1123]ブレーデン、R.、 \"インターネットホストのための要件 - 、アプリケーションとサポート\"、STD 3、RFC 1123、1989年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2131] Droms, R., \"Dynamic Host Configuration Protocol\", RFC 2131, March 1997.",
+      "ja": "[RFC2131] Droms、R.、 \"動的ホスト構成プロトコル\"、RFC 2131、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2132] Alexander, S. and R. Droms, \"DHCP Options and BOOTP Vendor Extensions\", RFC 2132, March 1997.",
+      "ja": "[RFC2132]アレクサンダー、S.とR. Droms、 \"DHCPオプションとBOOTPベンダー拡張機能\"、RFC 2132、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2671] Vixie, P., \"Extension Mechanisms for DNS (EDNS0)\", RFC 2671, August 1999.",
+      "ja": "[RFC2671]いるVixie、P.、 \"DNS用拡張メカニズム（EDNS0）\"、RFC 2671、1999年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2845] Vixie, P., Gudmundsson, O., Eastlake, D., and B. Wellington, \"Secret Key Transaction Authentication for DNS (TSIG)\", RFC 2845, May 2000.",
+      "ja": "[RFC2845]いるVixie、P.、グドムンソン、O.、イーストレイク、D.、およびB.ウェリントン、 \"DNSのための秘密鍵トランザクション認証（TSIG）\"、RFC 2845、2000年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2930] Eastlake, D., \"Secret Key Establishment for DNS (TKEY RR)\", RFC 2930, September 2000.",
+      "ja": "[RFC2930]イーストレイク、D.、 \"DNSのための秘密鍵確立（TKEYのRR）\"、RFC 2930、2000年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3597] Gustafsson, A., \"Handling of Unknown DNS Resource Record (RR) Types\", RFC 3597, September 2003.",
+      "ja": "[RFC3597]グスタフソン、A.、 \"未知のDNSリソースレコード（RR）の取扱いタイプ\"、RFC 3597、2003年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4035] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"Protocol Modifications for the DNS Security Extensions\", RFC 4035, March 2005.",
+      "ja": "[RFC4035]アレンズ、R.、Austeinと、R.、ラーソン、M.、マッシー、D.、およびS.ローズ、 \"DNSセキュリティ拡張のためのプロトコル変更\"、RFC 4035、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4787] Audet, F. and C. Jennings, \"Network Address Translation (NAT) Behavioral Requirements for Unicast UDP\", BCP 127, RFC 4787, January 2007.",
+      "ja": "[RFC4787] Audet、F.とC.ジェニングス、 \"ネットワークアドレス変換（NAT）ユニキャストUDPのための行動の要件\"、BCP 127、RFC 4787、2007年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5358] Damas, J. and F. Neves, \"Preventing Use of Recursive Nameservers in Reflector Attacks\", BCP 140, RFC 5358, October 2008.",
+      "ja": "[RFC5358]ダマ、J.およびF.ネベス、 \"反射攻撃に再帰ネームサーバの使用を防止する\"、BCP 140、RFC 5358、2008年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5452] Hubert, A. and R. van Mook, \"Measures for Making DNS More Resilient against Forged Answers\", RFC 5452, January 2009.",
+      "ja": "[RFC5452]ヒューバート、A.とR.バンムック、RFC 5452、2009年1月 \"鍛造回答に対するDNSは、より弾力性を作るための措置\"。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[DOTSE] Ahlund and Wallstrom, \"DNSSEC Tests of Consumer Broadband Routers\", February 2008, <http://www.iis.se/docs/Routertester_en.pdf>.",
+      "ja": "[DOTSE] AhlundとWallstrom、 \"消費者ブロードバンドルータのDNSSECテスト\"、2008年2月、<http://www.iis.se/docs/Routertester_en.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SAC035] Bellis, R. and L. Phifer, \"Test Report: DNSSEC Impact on Broadband Routers and Firewalls\", September 2008, <http://www.icann.org/committees/security/sac035.pdf>.",
+      "ja": "[SAC035]ベリス、R.とL.ファイファー、 \"テストレポート：ブロードバンドルータやファイアウォールのDNSSECへの影響\"、2008年9月、<http://www.icann.org/committees/security/sac035.pdf>。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Ray Bellis Nominet UK Edmund Halley Road Oxford OX4 4DQ United Kingdom",
+      "ja": "レイ・ベリスNominet英国エドモンド・ハレー道路オックスフォードOX4 4DQイギリス"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +44 1865 332211 EMail: ray.bellis@nominet.org.uk URI: http://www.nominet.org.uk/",
+      "ja": "電話：+44 1865 332211 Eメール：ray.bellis@nominet.org.uk URI：http://www.nominet.org.uk/"
+    }
+  ]
+}

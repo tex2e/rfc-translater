@@ -1,0 +1,1885 @@
+{
+  "title": {
+    "text": "RFC 5041 - Direct Data Placement over Reliable Transports",
+    "ja": "RFC 5041 - 信頼性の高いトランスポート上で直接データの配置"
+  },
+  "number": 5041,
+  "created_at": "2019-10-22 09:17:35.079011+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                            H. Shah\nRequest for Comments: 5041                          Broadcom Corporation\nCategory: Standards Track                                   J. Pinkerton\n                                                   Microsoft Corporation\n                                                                R. Recio\n                                                         IBM Corporation\n                                                               P. Culley\n                                                 Hewlett-Packard Company\n                                                            October 2007",
+      "raw": true
+    },
+    {
+      "indent": 12,
+      "text": "Direct Data Placement over Reliable Transports",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The Direct Data Placement protocol provides information to Place the incoming data directly into an upper layer protocol's receive buffer without intermediate buffers. This removes excess CPU and memory utilization associated with transferring data through the intermediate buffers.",
+      "ja": "直接データ配置プロトコルは中間バッファなしで上位層プロトコルの受信バッファに直接入ってくるデータを配置するための情報を提供します。これは、中間バッファを介してデータを転送するに関連付けられている余分なCPUとメモリ使用率を削除します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n   1.1. Architectural Goals ........................................3\n   1.2. Protocol Overview ..........................................4\n   1.3. DDP Layering ...............................................6\n2. Glossary ........................................................7\n   2.1. General ....................................................7\n   2.2. LLP ........................................................9\n   2.3. Direct Data Placement (DDP) ................................9\n3. Reliable Delivery LLP Requirements .............................12\n4. Header Format ..................................................13\n   4.1. DDP Control Field .........................................13\n   4.2. DDP Tagged Buffer Model Header ............................14\n   4.3. DDP Untagged Buffer Model Header ..........................16\n   4.4. DDP Segment Format ........................................17\n5. Data Transfer ..................................................18\n   5.1. DDP Tagged or Untagged Buffer Models ......................18\n        5.1.1. Tagged Buffer Model ................................18",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "        5.1.2. Untagged Buffer Model ..............................18\n   5.2. Segmentation and Reassembly of a DDP Message ..............19\n   5.3. Ordering Among DDP Messages ...............................21\n   5.4. DDP Message Completion and Delivery .......................21\n6. DDP Stream Setup and Teardown ..................................22\n   6.1. DDP Stream Setup ..........................................22\n   6.2. DDP Stream Teardown .......................................22\n        6.2.1. DDP Graceful Teardown ..............................22\n        6.2.2. DDP Abortive Teardown ..............................23\n7. Error Semantics ................................................24\n   7.1. Errors Detected at the Data Sink ..........................24\n   7.2. DDP Error Numbers .........................................25\n8. Security Considerations ........................................26\n   8.1. Protocol-Specific Security Considerations .................26\n   8.2. Association of an STag and a DDP Stream ...................26\n   8.3. Security Requirements .....................................27\n        8.3.1. RNIC Requirements ..................................28\n        8.3.2. Privileged Resources Manager Requirement ...........29\n   8.4. Security Services for DDP .................................30\n        8.4.1. Available Security Services ........................30\n        8.4.2. Requirements for IPsec Services for DDP ............30\n9. IANA Considerations ............................................31\n10. References ....................................................32\n   10.1. Normative References .....................................32\n   10.2. Informative References ...................................33\n Appendix A. Receive Window Sizing ................................34\n Appendix B. Contributors .........................................34",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Table of Figures",
+      "ja": "図の表"
+    },
+    {
+      "indent": 4,
+      "text": "Figure 1: DDP Layering ............................................6\nFigure 2: MPA, DDP, and RDMAP Header Alignment ....................7\nFigure 3: DDP Control Field ......................................13\nFigure 4: Tagged Buffer DDP Header ...............................15\nFigure 5: Untagged Buffer DDP Header .............................16\nFigure 6: DDP Segment Format .....................................17",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Note: The capitalization of certain words in this document indicates they are being used with the specific meaning given in the glossary (Section 2).",
+      "ja": "注意：この文書に記載されている特定の単語の総額は、彼らは、用語集（第2節）で与えられた特定の意味で使用されていることを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Direct Data Placement Protocol (DDP) enables an Upper Layer Protocol (ULP) to send data to a Data Sink without requiring the Data Sink to Place the data in an intermediate buffer - thus, when the data arrives at the Data Sink, the network interface can Place the data directly into the ULP's buffer. This can enable the Data Sink to consume substantially less memory bandwidth than a buffered model because the Data Sink is not required to move the data from the intermediate buffer to the final destination. Additionally, this can enable the network protocol to consume substantially fewer CPU cycles than if the CPU was used to move the data, and this can remove the bandwidth limitation of only being able to move data as fast as the CPU can copy the data.",
+      "ja": "従って、データはデータシンク、ネットワークインターフェースに到着したとき - ダイレクトデータプレースメントプロトコル（DDP）は、中間バッファにデータを配置するために、データシンクを必要とせずに、データシンクにデータを送信する上位層プロトコル（ULP）を可能にしますULPのバッファにデータを直接配置することができます。これは、データシンクは最終的な宛先に中間バッファからデータを移動する必要がないので、緩衝モデルよりも実質的に少ないメモリ帯域幅を消費するために、データシンクを可能にすることができます。また、これは、CPUがデータを移動させるために使用された場合よりも実質的に少ないCPUサイクルを消費するネットワークプロトコルを有効にすることができ、これはデータのみをコピーすることができ、CPUと同じ高速でデータを移動することができるの帯域幅制限を除去することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP preserves ULP record boundaries (messages) while providing a variety of data transfer mechanisms and completion mechanisms to be used to transfer ULP messages.",
+      "ja": "ULPメッセージを転送するために使用するデータ転送機構と完了様々なメカニズムを提供しながら、DDPはULPレコード境界（メッセージ）を保存します。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Architectural Goals",
+      "section_title": true,
+      "ja": "1.1。建築目標"
+    },
+    {
+      "indent": 3,
+      "text": "DDP has been designed with the following high-level architectural goals:",
+      "ja": "DDPは、以下の高レベルアーキテクチャの目標に設計されています："
+    },
+    {
+      "indent": 6,
+      "text": "* Provide a buffer model that enables the Local Peer to Advertise a named buffer (i.e., a Tag for a buffer) to the Remote Peer, such that across the network the Remote Peer can Place data into the buffer at Remote-Peer-specified locations. This is referred to as the Tagged Buffer Model.",
+      "ja": "*という名前のバッファを宣伝するためにローカルピアを可能にバッファモデルを提供する（すなわち、バッファ用タグ）リモートピアに、ネットワーク経由でリモートピアは、リモートピアが指定した場所にあるバッファにデータを置くことができるような。これは、タグ付きバッファモデルと呼ばれています。"
+    },
+    {
+      "indent": 6,
+      "text": "* Provide a second receive buffer model that preserves ULP message boundaries from the Remote Peer and keeps the Local Peer's buffers anonymous (i.e., Untagged). This is referred to as the Untagged Buffer Model.",
+      "ja": "*リモートピアからULPメッセージの境界を維持し、続けて受信バッファ2モデルを提供するローカルピアのバッファ（すなわち、タグなし）匿名。これは、タグなしのバッファモデルと呼ばれています。"
+    },
+    {
+      "indent": 6,
+      "text": "* Provide reliable, in-order Delivery semantics for both Tagged and Untagged Buffer Models.",
+      "ja": "*タグ付きおよびタグなしバッファモデルの両方のための信頼性の高い、順序どおりの配信セマンティクスを提供します。"
+    },
+    {
+      "indent": 6,
+      "text": "* Provide segmentation and reassembly of ULP messages.",
+      "ja": "* ULPメッセージのセグメント化と再構築を提供します。"
+    },
+    {
+      "indent": 6,
+      "text": "* Enable the ULP Buffer to be used as a reassembly buffer, without a need for a copy, even if incoming DDP Segments arrive out of order. This requires the protocol to separate Data Placement of ULP Payload contained in an incoming DDP Segment from Data Delivery of completed ULP Messages.",
+      "ja": "*の着信DDPセグメントは、順不同で到着した場合でも、コピーを必要とせず、組立バッファとして使用することがULPバッファーを有効にします。これが完了ULPメッセージのデータ配信から受信DDPセグメントに含まULPペイロードのデータ配置を分離するためのプロトコルを必要とします。"
+    },
+    {
+      "indent": 6,
+      "text": "* If the Lower Layer Protocol (LLP) supports multiple LLP Streams within an LLP Connection, provide the above capabilities independently on each LLP Stream and enable the capability to be exported on a per-LLP-Stream basis to the ULP.",
+      "ja": "*下位レイヤプロトコル（LLP）はLLP接続内で複数のLLPのストリームをサポートしている場合は、各LLPストリーム上で独立して上記の機能を提供し、ULPにあたり-LLP-ストリームベースでエクスポートする機能を有効にします。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Protocol Overview",
+      "section_title": true,
+      "ja": "1.2。プロトコルの概要"
+    },
+    {
+      "indent": 3,
+      "text": "DDP supports two basic data transfer models - a Tagged Buffer data transfer model and an Untagged Buffer data transfer model.",
+      "ja": "タグ付きバッファのデータ転送モデルとタグなしのバッファのデータ転送モデル -  DDPは、2つの基本的なデータ転送モデルをサポートしています。"
+    },
+    {
+      "indent": 3,
+      "text": "The Tagged Buffer data transfer model requires the Data Sink to send the Data Source an identifier for the ULP Buffer, referred to as a Steering Tag (STag). The STag is transferred to the Data Source using a ULP-defined method. Once the Data Source ULP has an STag for a destination ULP Buffer, it can request that DDP send the ULP data to the destination ULP Buffer by specifying the STag to DDP. Note that the Tagged Buffer does not have to be filled starting at the beginning of the ULP Buffer. The ULP Data Source can provide an arbitrary offset into the ULP Buffer.",
+      "ja": "タグ付きバッファデータ転送モデルは、データソースにステアリングタグ（のSTag）と呼ばULPバッファの識別子を、送信するデータシンクを必要とします。 STagはULP-定義されたメソッドを使用してデータソースに転送されます。データソースのULPは、宛先ULPバッファ用のSTagを持っていたら、それはDDPがDDPへのSTagを指定することにより、宛先ULPバッファーへのULPデータを送信するように要求することができます。タグ付きバッファはULPバッファの先頭から始まる満たされなければならないことに注意してください。 ULPデータソースは、ULPバッファに任意のオフセットを提供することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The Untagged Buffer data transfer model enables data transfer to occur without requiring the Data Sink to Advertise a ULP Buffer to the Data Source. The Data Sink can queue up a series of receive ULP Buffers. An Untagged DDP Message from the Data Source consumes an Untagged Buffer at the Data Sink. Because DDP is message oriented, even if the Data Source sends a DDP Message payload smaller than the receive ULP Buffer, the partially filled receive ULP Buffer is delivered to the ULP anyway. If the Data Source sends a DDP Message payload larger than the receive ULP Buffer, it results in an error.",
+      "ja": "タグなしバッファデータ転送モデルは、データソースへのULPバッファーをアドバタイズするために、データシンクを必要とせずに発生するデータ転送を可能にします。データシンクは、受信ULP一連のバッファをキューすることができます。データソースからのタグなしDDPメッセージは、データシンクでタグなしのバッファを消費します。 DDPは、データソースは、部分的に満たされたULPバッファーがとにかくULPに配信され、受信、受信ULPバッファーよりも小さいDDPメッセージのペイロードを送信した場合でも、メッセージ指向であるため。データソースは、受信ULPバッファーより大きいDDPメッセージのペイロードを送信した場合、それはエラーになります。"
+    },
+    {
+      "indent": 3,
+      "text": "There are several key differences between the Tagged and Untagged Buffer Model:",
+      "ja": "タグ付きおよびタグなしのバッファモデル間のいくつかの重要な違いがあります。"
+    },
+    {
+      "indent": 6,
+      "text": "* For the Tagged Buffer Model, the Data Source specifies which received Tagged Buffer will be used for a specific Tagged DDP Message (sender-based ULP Buffer management). For the Untagged Buffer Model, the Data Sink specifies the order in which Untagged Buffers will be consumed as Untagged DDP Messages are received (receiver-based ULP Buffer management).",
+      "ja": "*タグ付きバッファモデルの場合、データソースは、タグ付きバッファは、特定のタグ付きDDPメッセージ（送信者ベースのULPバッファ管理）のために使用される受信を指定します。タグなしバッファモデルでは、データシンクは、タグなしDDPメッセージが（受信機ベースのULPバッファ管理）に受信されるタグなしバッファが消費される順序を指定します。"
+    },
+    {
+      "indent": 6,
+      "text": "* For the Tagged Buffer Model, the ULP at the Data Sink must Advertise the ULP Buffer to the Data Source through a ULP specific mechanism before data transfer can occur. For the Untagged Buffer Model, data transfer can occur without an end-to-end explicit ULP Buffer Advertisement. Note, however, that the ULP needs to address flow control issues.",
+      "ja": "データ転送が発生する前に*タグ付きバッファモデルについては、データシンクのULPは、ULP特定のメカニズムを介してデータソースへのULPバッファーを宣伝する必要があります。タグなしバッファモデルでは、データ転送は、エンドツーエンドの明示的なULPバッファ広告なしで起こり得ます。 ULPは、フロー制御の問題に対処する必要があること、しかし、注意してください。"
+    },
+    {
+      "indent": 6,
+      "text": "* For the Tagged Buffer Model, a DDP Message can start at an arbitrary offset within the Tagged Buffer. For the Untagged Buffer Model, a DDP Message can only start at offset 0.",
+      "ja": "*タグ付きバッファモデル、DDPメッセージのタグ付きバッファ内の任意のオフセットで開始することができます。タグなしのバッファモデルの場合、DDPメッセージは0のオフセットで開始することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "* The Tagged Buffer Model allows multiple DDP Messages targeted to a Tagged Buffer with a single ULP Buffer Advertisement. The Untagged Buffer Model requires associating a receive ULP Buffer for each DDP Message targeted to an Untagged Buffer.",
+      "ja": "*タグ付きバッファモデルは、単一のULPバッファー広告でタグ付けされたバッファを標的とする多数のDDPメッセージを可能にします。タグなしのバッファモデルはタグなしのバッファを標的とする各DDPメッセージの受信ULPバッファーを関連付ける必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "Either data transfer model Places a ULP Message into a DDP Message. Each DDP Message is then sliced into DDP Segments that are intended to fit within a lower-layer-protocol's (LLP) Maximum Upper Layer Protocol Data Unit (MULPDU). Thus, the ULP can post arbitrarily sized ULP Messages, containing up to 2^32 - 1 octets of ULP Payload, and DDP slices the ULP message into DDP Segments, which are reassembled transparently at the Data Sink.",
+      "ja": "どちらのデータ転送モデルは、DDPメッセージにULPメッセージを配置します。各DDPメッセージは、その後、下位層プロトコルの（LLP）最大上位層プロトコルデータユニット（MULPDU）内に収まるように意図されているDDPセグメントにスライスされます。データシンクに透過再構成されDDPセグメントにULPメッセージをULPペイロードの1オクテット、およびDDPスライス - したがって、ULPは2 ^ 32までを含む、任意のサイズULPメッセージを投稿することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP provides in-order delivery for the ULP. However, DDP differentiates between Data Delivery and Data Placement. DDP provides enough information in each DDP Segment to allow the ULP Payload in each inbound DDP Segment payloads to be directly Placed into the correct ULP Buffer, even when the DDP Segments arrive out-of-order. Thus, DDP enables the reassembly of ULP Payload contained in DDP Segments of a DDP Message into a ULP Message to occur within the ULP Buffer, therefore eliminating the traditional copy out of the reassembly buffer into the ULP Buffer.",
+      "ja": "DDPは、ULPのための順序どおりの配信を提供します。しかし、DDPは、データ配信とデータの配置を区別します。 DDPは、DDPセグメントは、アウト・オブ・オーダー到着した場合でも、各インバウンドDDPセグメントのペイロードにULPペイロードは、直接正しいULPバッファに配置することができるように、各DDPセグメントに十分な情報を提供します。したがって、DDPは、従って、ULPバッファに再構成バッファのうち伝統的なコピーを排除し、ULPバッファ内で発生するULPメッセージにDDPメッセージのDDPセグメントに含まULPペイロードの再組み立てを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "A DDP Message's payload is Delivered to the ULP when:",
+      "ja": "DDPメッセージのペイロードは、ときULPに配信されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* all DDP Segments of a DDP Message have been completely received, and the payload of the DDP Message has been Placed into the associated ULP Buffer,",
+      "ja": "* DDPメッセージの全てのDDPセグメントが完全に受信されており、DDPメッセージのペイロードは、関連ULPバッファに配置されました、"
+    },
+    {
+      "indent": 6,
+      "text": "* all prior DDP Messages have been Placed, and",
+      "ja": "*以前のすべてのDDPメッセージが置かれている、と"
+    },
+    {
+      "indent": 6,
+      "text": "* all prior DDP Message Deliveries have been performed.",
+      "ja": "*以前のすべてのDDPメッセージ配信が行われてきました。"
+    },
+    {
+      "indent": 3,
+      "text": "The LLP under DDP may support a single LLP Stream of data per connection (e.g., TCP [TCP]) or multiple LLP Streams of data per connection (e.g., SCTP [SCTP]). But in either case, DDP is specified such that each DDP Stream is independent and maps to a single LLP Stream. Within a specific DDP Stream, the LLP Stream is required to provide in-order, reliable Delivery. Note that DDP has no ordering guarantees between DDP Streams.",
+      "ja": "DDP下LLP接続（例えば、TCP [TCP]）または接続ごとにデータの複数のLLPストリームごとのデータの単一LLPストリームをサポートすることができる（例えば、SCTP [SCTP]）。しかし、いずれの場合も、DDPは、各DDPストリームが独立しており、単一LLPストリームにマップするよう指定されています。特定のDDPストリーム内、LLPストリームは、順序、信頼性の高い配信を提供するために必要とされます。 DDPは、DDPストリームの間には順序の保証がないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A DDP protocol could potentially run over reliable Delivery LLPs or unreliable Delivery LLPs. This specification requires reliable, in order Delivery LLPs.",
+      "ja": "DDPプロトコルは、潜在的に信頼性の高い配信LLPSや信頼性のない配信LLPS上で実行することができます。この仕様は、次の送達LLPSで、信頼性が必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. DDP Layering",
+      "section_title": true,
+      "ja": "1.3。 DDPレイヤリング"
+    },
+    {
+      "indent": 3,
+      "text": "DDP is intended to be LLP independent, subject to the requirements defined in section 3. However, DDP was specifically defined to be part of a family of protocols that were created to work well together, as shown in Figure 1, DDP Layering. For LLP protocol definitions of each LLP, see Marker PDU Aligned Framing for TCP Specification [MPA] and Stream Control Transmission Protocol (SCTP) Direct Data Placement (DDP) Adaptation [SCTPDDP].",
+      "ja": "DDPは、しかしながら、セクション3で定義された要件に従う独立LLP、であることが意図され、DDPは、具体的には、図1、DDPレイヤリングに示すように、一緒にうまく機能するために作成されたプロトコルのファミリーの一部であると定義しました。各々のLLPのLLPプロトコル定義については、TCP仕様のマーカーPDU配向フレーミング[MPA]およびストリーム制御伝送プロトコル（SCTP）直接データ配置（DDP）適応[SCTPDDP]を参照。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP enables direct data Placement capability for any ULP, but it has been specifically designed to work well with Remote Direct Memory Access Protocol (RDMAP) (see [RDMAP]), and is part of the iWARP protocol suite.",
+      "ja": "DDPはどんなULPのために直接データ配置機能を有効にしますが、それを具体的に（[RDMAP]を参照）リモートダイレクトメモリアクセスプロトコル（RDMAP）とうまく動作するように設計されており、iWARPのプロトコルスイートの一部です。"
+    },
+    {
+      "indent": 5,
+      "text": "                  +-------------------+\n                  |                   |\n                  |     RDMA ULP      |\n                  |                   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                 |                   |\n|      ULP        |       RDMAP       |\n|                 |                   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                     |\n|           DDP protocol              |\n|                                     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                 |                   |\n|       MPA       |                   |\n|                 |                   |\n|                 |                   |\n+-+-+-+-+-+-+-+-+-+       SCTP        |\n|                 |                   |\n|       TCP       |                   |\n|                 |                   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Figure 1: DDP Layering",
+      "ja": "図1：DDP階層化"
+    },
+    {
+      "indent": 3,
+      "text": "If DDP is layered below RDMAP and on top of MPA and TCP, then the respective headers and payload are arranged as follows (Note: For clarity, MPA header and CRC are included, but framing markers are not shown.):",
+      "ja": "DDPはRDMAP以下およびMPAとTCPの上部に積層されている場合、それぞれのヘッダおよびペイロードは次のように配置されている（注：明確にするため、MPAヘッダおよびCRCが含まれているが、フレーミングマーカーが示されていません）。"
+    },
+    {
+      "indent": 4,
+      "text": "  0                   1                   2                   3\n  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n//                           TCP Header                        //\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|         MPA Header            |                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +\n|                                                               |\n//                        DDP Header                           //\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n//                        RDMAP Header                         //\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n//                                                             //\n//                        RDMAP ULP Payload                    //\n//                                                             //\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                         MPA CRC                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Figure 2: MPA, DDP, and RDMAP Header Alignment",
+      "ja": "図2：MPA、DDP、およびRDMAPヘッダーの整列"
+    },
+    {
+      "indent": 0,
+      "text": "2. Glossary",
+      "section_title": true,
+      "ja": "2.用語集"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. General",
+      "section_title": true,
+      "ja": "2.1。一般的な"
+    },
+    {
+      "indent": 3,
+      "text": "Advertisement (Advertised, Advertise, Advertisements, Advertises) - The act of informing a Remote Peer that a local RDMA Buffer is available to it. A Node makes available an RDMA Buffer for incoming RDMA Read or RDMA Write access by informing its RDMA/DDP peer of the Tagged Buffer identifiers (STag, base address, length). This Advertisement of Tagged Buffer information is not defined by RDMA/DDP and is left to the ULP. A typical method would be for the Local Peer to embed the Tagged Buffer's Steering Tag, address, and length in a Send message destined for the Remote Peer.",
+      "ja": "広告（アドバタイズ、宣伝、広告、アドバタイズ） - ローカルRDMAバッファがそれに利用可能であること、リモートピアに通知する行為。ノードは、タグ付きバッファ識別子（婚前、ベースアドレス、長さ）のそのRDMA / DDPピアに通知することにより、着信RDMA読み取り又はRDMA書き込みアクセスのためにRDMAバッファ利用可能にします。タグ付きバッファ情報のこの広告は、RDMA / DDPによって定義されていないとULPに任されています。ローカルピアがリモートピア宛ての送信メッセージにタグ付けバッファのステアリングタグ、アドレス、および長さを埋め込むための典型的な方法は次のようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Data Delivery (Delivery, Delivered, Delivers) - Delivery is defined as the process of informing the ULP or consumer that a particular message is available for use. This is specifically different from \"Placement\", which may generally occur in any order, while the order of \"Delivery\" is strictly defined. See \"Data Placement\".",
+      "ja": "データ配信（配信、配信、配信） - 送達はULPまたは特定のメッセージが使用可能であることを消費者に通知するプロセスとして定義されます。 「配信」の順序を厳密に定義されているが、これは、一般的に任意の順序で発生することがあり、「配置」、より具体的に異なっています。 「データの配置」を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Data Sink - The peer receiving a data payload. Note that the Data Sink can be required to both send and receive RDMA/DDP Messages to transfer a data payload.",
+      "ja": "データシンク - データペイロードを受信するピア。データシンクがデータペイロードを転送するRDMA / DDPメッセージを送受信するために、両方の必要とされることができることに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Data Source - The peer sending a data payload. Note that the Data Source can be required to both send and receive RDMA/DDP Messages to transfer a data payload.",
+      "ja": "データソース - データペイロードを送信ピア。データソースは、データペイロードを転送するRDMA / DDPメッセージを送受信するには、両方必要になることができることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Delivery (Delivered, Delivers) - See Data Delivery in Section 2.1.",
+      "ja": "配信（配信、実現） - セクション2.1でのデータ配信を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "iWARP - A suite of wire protocols comprised of RDMAP [RDMAP], DDP (this specification), and Marker PDU Aligned Framing for TCP (MPA) [MPA]. The iWARP protocol suite may be layered above TCP, SCTP, or other transport protocols.",
+      "ja": "iWARPの -  RDMAP [RDMAP]、DDP（本明細書）、及びTCPのマーカーPDU配向フレーミング（MPA）[MPA]からなるワイヤプロトコルのスイート。 iWARPのプロトコルスイートは、TCP、SCTP、又は他のトランスポートプロトコルの上に積層してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Local Peer - The RDMA/DDP protocol implementation on the local end of the connection. Used to refer to the local entity when describing a protocol exchange or other interaction between two Nodes.",
+      "ja": "ローカルピア - 接続のローカルエンドでRDMA / DDPプロトコルの実装。 2つのノード間のプロトコル交換または他の相互作用を記述するときに、ローカルエンティティを参照するために使用。"
+    },
+    {
+      "indent": 3,
+      "text": "Node - A computing device attached to one or more links of a network. A Node in this context does not refer to a specific application or protocol instantiation running on the computer. A Node may consist of one or more RDMA Enabled Network Interface Controllers (RNICs) installed in a host computer.",
+      "ja": "ノード - ネットワークの1つ以上のリンクに取り付けられたコンピューティングデバイス。この文脈において、ノードは、コンピュータ上で実行されている特定のアプリケーションまたはプロトコルのインスタンスを指すものではありません。ノードは、ホストコンピュータにインストール一つ以上のRDMA対応ネットワーク・インタフェース・コントローラ（RNICs）から構成されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Placement (Placed, Places) - See \"Data Placement\" in Section 2.3",
+      "ja": "配置（、場所を置き） -  2.3節の「データの配置」を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Remote Peer - The RDMA/DDP protocol implementation on the opposite end of the connection. Used to refer to the remote entity when describing protocol exchanges or other interactions between two Nodes.",
+      "ja": "リモートピア - 接続の反対側の端部にRDMA / DDPプロトコルの実装。 2つのノード間のプロトコル交換又は他の相互作用を記述するときに、リモートエンティティを参照するために使用。"
+    },
+    {
+      "indent": 3,
+      "text": "RNIC - RDMA Enabled Network Interface Controller. In this context, this would be a network I/O adapter or embedded controller with iWARP functionality.",
+      "ja": "RNIC  -  RDMAは、ネットワークインタフェースコントローラを有効に。この文脈では、これは、iWARPの機能を備えたネットワークI / Oアダプタまたは埋め込みコントローラであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "ULP - Upper Layer Protocol. The protocol layer above the protocol layer currently being referenced. The ULP for RDMA/DDP is expected to be an Operating System (OS), application, adaptation layer, or proprietary device. The RDMA/DDP documents do not specify a ULP -- they provide a set of semantics that allow a ULP to be designed to utilize RDMA/DDP.",
+      "ja": "ULP  - 上位層プロトコル。現在参照されているプロトコル層の上のプロトコル層。 RDMA / DDPのためのULPは、オペレーティングシステム（OS）、アプリケーション、アダプテーション層、または独自のデバイスであると予想されます。 RDMA / DDP文書はULPを指定していない - 彼らはULPはRDMA / DDPを利用するように設計することができるように意味のセットを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "ULP Message - The ULP data that is handed to a specific protocol layer for transmission. Data boundaries are preserved as they are transmitted through iWARP.",
+      "ja": "ULPメッセージ - 送信のための特定のプロトコル層に渡されるULPデータ。彼らはiWARPのを介して送信されるデータの境界は保持されます。"
+    },
+    {
+      "indent": 3,
+      "text": "ULP Payload - The ULP data that is contained within a single protocol segment or packet (e.g., a DDP Segment).",
+      "ja": "ULPペイロード - 単一のプロトコルセグメントまたはパケット（例えば、DDPセグメント）内に含まれるULPデータ。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. LLP",
+      "section_title": true,
+      "ja": "2.2。 LLP"
+    },
+    {
+      "indent": 3,
+      "text": "LLP - Lower Layer Protocol. The protocol layer beneath the protocol layer currently being referenced. For example, for DDP, the LLP is SCTP DDP Adaptation, MPA, or other transport protocols. For RDMA, the LLP is DDP.",
+      "ja": "LLP  - 下位層プロトコル。現在参照されているプロトコル層の下のプロトコル層。例えば、DDPのために、LLPは、SCTP DDP適応、MPA、または他のトランスポートプロトコルです。 RDMAのために、LLPはDDPです。"
+    },
+    {
+      "indent": 3,
+      "text": "LLP Connection - Corresponds to an LLP transport-level connection between the peer LLP layers on two nodes.",
+      "ja": "LLP接続 -  2つのノードのピアLLP層の間LLPトランスポートレベルの接続に対応します。"
+    },
+    {
+      "indent": 3,
+      "text": "LLP Stream - Corresponds to a single LLP transport-level stream between the peer LLP layers on two Nodes. One or more LLP Streams may map to a single transport-level LLP Connection. For transport protocols that support multiple streams per connection (e.g., SCTP), an LLP Stream corresponds to one transport-level stream.",
+      "ja": "LLPストリーム - 二つのノードのピアLLP層の間の単一LLPトランスポートレベルのストリームに対応します。一つ以上のLLPストリームは、単一のトランスポート・レベルのLLP Connectionにマッピングすることができます。接続ごとに複数のストリーム（例えば、SCTP）をサポートするトランスポートプロトコルのために、LLPストリームは、一つのトランスポート・レベル・ストリームに対応します。"
+    },
+    {
+      "indent": 3,
+      "text": "MULPDU - Maximum Upper Layer Protocol Data Unit (MULPDU). The current maximum size of the record that is acceptable for DDP to pass to the LLP for transmission.",
+      "ja": "MULPDU  - 最大上位層プロトコルデータユニット（MULPDU）。 DDPは、送信のためにLLPに渡すために許容されるレコードの現在の最大サイズ。"
+    },
+    {
+      "indent": 3,
+      "text": "ULPDU - Upper Layer Protocol Data Unit. The data record defined by the layer above MPA.",
+      "ja": "ULPDU  - 上位層プロトコルデータユニット。 MPA上の層によって定義されるデータレコード。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Direct Data Placement (DDP)",
+      "section_title": true,
+      "ja": "2.3。直接データ配置（DDP）"
+    },
+    {
+      "indent": 3,
+      "text": "Data Placement (Placement, Placed, Places) - For DDP, this term is specifically used to indicate the process of writing to a Data Buffer by a DDP implementation. DDP Segments carry Placement information, which may be used by the receiving DDP implementation to perform Data Placement of the DDP Segment ULP Payload. See \"Data Delivery\" and \"Direct Data Placement\".",
+      "ja": "データ配置（配置、置き、場所） -  DDPの場合、この用語は、特にDDP実装によってデータバッファへの書き込みのプロセスを示すために使用されます。 DDPセグメントのDDPセグメントULPペイロードのデータ配置を実行するために受信DDP実装によって使用することができる配置情報を運びます。 「データ配信」と「直接データの配置」を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Abortive Teardown - The act of closing a DDP Stream without attempting to complete in-progress and pending DDP Messages.",
+      "ja": "DDP頓挫ティアダウン - 進行中の完了しようとすると、DDPメッセージを保留することなく、DDPストリームを閉じるの行為。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Graceful Teardown - The act of closing a DDP Stream such that all in-progress and pending DDP Messages are allowed to complete successfully.",
+      "ja": "DDP優雅なティアダウン - すべては進行中と保留中のDDPメッセージ正常に完了することが許可されていることをDDPストリームは、このようなクローズの行為。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Control Field - A fixed 8-bit field in the DDP Header.",
+      "ja": "DDP制御フィールド -  DDPヘッダ内の固定の8ビットのフィールド。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Header - The header present in all DDP Segments. The DDP Header contains control and Placement fields that are used to define the final Placement location for the ULP Payload carried in a DDP Segment.",
+      "ja": "DDPヘッダ - 全DDPセグメントのヘッダに存在します。 DDPヘッダDDPセグメントで運ばULPペイロードのための最終的な配置位置を定義するために使用される制御及び配置フィールドを含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Message - A ULP-defined unit of data interchange, which is subdivided into one or more DDP Segments. This segmentation may occur for a variety of reasons, including segmentation to respect the maximum segment size of the underlying transport protocol.",
+      "ja": "DDPメッセージ - 一つ以上のDDPセグメントに細分化されたデータ交換のULP-定義ユニット。このセグメンテーションは、基礎となるトランスポートプロトコルの最大セグメントサイズを尊重するセグメントを含む、さまざまな理由で発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Segment - The smallest unit of data transfer for the DDP protocol. It includes a DDP Header and ULP Payload (if present). A DDP Segment should be sized to fit within the Lower Layer Protocol MULPDU.",
+      "ja": "DDPセグメント -  DDPプロトコルのデータ転送の最小単位。これは、DDPヘッダとULPペイロードを（存在する場合）を含みます。 DDPセグメントは、下位層プロトコルMULPDU内に収まるようにサイズ決めされなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Stream - A sequence of DDP messages whose ordering is defined by the LLP. For SCTP, a DDP Stream maps directly to an SCTP stream. For MPA, a DDP Stream maps directly to a TCP connection, and a single DDP Stream is supported. Note that DDP has no ordering guarantees between DDP Streams.",
+      "ja": "DDPストリーム - 発注LLPによって定義されるDDPメッセージのシーケンス。 SCTPのために、DDPストリームは、SCTPストリームに直接マップします。 MPAのために、DDP StreamがTCPコネクションに直接マップ、単一のDDP Streamがサポートされています。 DDPは、DDPストリームの間には順序の保証がないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Stream Identifier (ID) - An identifier for a DDP Stream.",
+      "ja": "DDPストリーム識別フィエル（ID） -  DDPストリームのために同定さFIER。"
+    },
+    {
+      "indent": 3,
+      "text": "Direct Data Placement - A mechanism whereby ULP data contained within DDP Segments may be Placed directly into its final destination in memory without processing of the ULP. This may occur even when the DDP Segments arrive out of order. Out-of-order Placement support may require the Data Sink to implement the LLP and DDP as one functional block.",
+      "ja": "直接データ配置 -  DDPセグメント内に含まれるULPデータはULPの処理を行わずにメモリにその最終的な宛先に直接配置することができる機構。 DDPセグメントは順序が狂って到着する場合にも発生する可能性があります。アウトオブオーダー配置のサポートは、一つの機能ブロックとしてLLPおよびDDPを実装するために、データシンクが必要な場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Direct Data Placement Protocol (DDP) - Also, a wire protocol that supports Direct Data Placement by associating explicit memory buffer placement information with the LLP payload units.",
+      "ja": "直接データ配置プロトコル（DDP） - また、LLPペイロードユニットと、明示的なメモリ・バッファ配置情報を関連付けることにより、直接データ配置をサポートワイヤプロトコル。"
+    },
+    {
+      "indent": 3,
+      "text": "Message Offset (MO) - For the DDP Untagged Buffer Model, specifies the offset, in octets, from the start of a DDP Message.",
+      "ja": "メッセージオフセット（MO） -  DDPタグなしバッファモデルの場合、DDPメッセージを開始してから、オクテットで、オフセットを指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Message Sequence Number (MSN) - For the DDP Untagged Buffer Model, specifies a sequence number that is increasing with each DDP Message.",
+      "ja": "メッセージシーケンス番号（MSN） -  DDPタグなしバッファモデルに対しては、各DDPメッセージで増加しているシーケンス番号を指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Protection Domain (PD) - A mechanism used to associate a DDP Stream and an STag. Under this mechanism, the use of an STag is valid on a DDP Stream if the STag has the same Protection Domain Identifier (PD ID) as the DDP Stream.",
+      "ja": "保護ドメイン（PD） -  DDPストリームのSTagを関連付けるために使用されるメカニズム。 STagがDDPストリームと同じ保護ドメイン識別子（PD ID）を持っている場合、このメカニズムの下で、のSTagの使用は、DDPストリーム上で有効です。"
+    },
+    {
+      "indent": 3,
+      "text": "Protection Domain Identifier (PD ID) - An identifier for the Protection Domain.",
+      "ja": "保護ドメイン識別子（PD ID） - 保護ドメインの識別子。"
+    },
+    {
+      "indent": 3,
+      "text": "Queue Number (QN) - For the DDP Untagged Buffer Model, identifies a destination Data Sink queue for a DDP Segment.",
+      "ja": "キュー番号（QN） -  DDPタグなしバッファモデルについては、DDPセグメントの宛先データシンクキューを識別する。"
+    },
+    {
+      "indent": 3,
+      "text": "Steering Tag - An identifier of a Tagged Buffer on a Node, valid as defined within a protocol specification.",
+      "ja": "ステアリングタグ - プロトコル仕様内で定義されるように有効なノードにタグ付けバッファの識別子。"
+    },
+    {
+      "indent": 3,
+      "text": "STag - Steering Tag",
+      "ja": "STag  - ステアリングタグ"
+    },
+    {
+      "indent": 3,
+      "text": "Tagged Buffer - A buffer that is explicitly Advertised to the Remote Peer through exchange of an STag, Tagged Offset, and length.",
+      "ja": "バッファタグ付けされた - 明示のSTagの交換を介してリモートピアにアドバタイズされるバッファを、オフセット、および長さがタグ付けされました。"
+    },
+    {
+      "indent": 3,
+      "text": "Tagged Buffer Model - A DDP data transfer model used to transfer Tagged Buffers from the Local Peer to the Remote Peer.",
+      "ja": "リモートピアにローカルピアからタグ付きバッファを転送するために使用されるDDPデータ転送モデル - バッファモデルをタグ付き。"
+    },
+    {
+      "indent": 3,
+      "text": "Tagged DDP Message - A DDP Message that targets a Tagged Buffer.",
+      "ja": "タグ付きDDPメッセージ - タグ付きバッファを対象とDDPメッセージ。"
+    },
+    {
+      "indent": 3,
+      "text": "Tagged Offset (TO) - The offset within a Tagged Buffer on a Node.",
+      "ja": "ノード上のタグ付けバッファ内のオフセット - （TO）オフセットタグ付けされています。"
+    },
+    {
+      "indent": 3,
+      "text": "ULP Buffer - A buffer owned above the DDP layer and Advertised to the DDP layer either as a Tagged Buffer or an Untagged ULP Buffer.",
+      "ja": "ULPバッファ -  DDP層の上に所有され、DDP層のいずれかにタグ付けバッファまたはタグなしULPバッファとしてアドバタイズバッファ。"
+    },
+    {
+      "indent": 3,
+      "text": "ULP Message Length - The total length, in octets, of the ULP Payload contained in a DDP Message.",
+      "ja": "ULPメッセージ長 -  DDPメッセージに含まULPペイロードのオクテットにおける全長、。"
+    },
+    {
+      "indent": 3,
+      "text": "Untagged Buffer - A buffer that is not explicitly Advertised to the Remote Peer.",
+      "ja": "タグなしバッファ - 明示的にリモートピアにアドバタイズされていないバッファ。"
+    },
+    {
+      "indent": 3,
+      "text": "Untagged Buffer Model - A DDP data transfer model used to transfer Untagged Buffers from the Local Peer to the Remote Peer.",
+      "ja": "タグなしバッファモデル -  DDPデータ転送モデルは、リモートピアにローカルピアからタグなしのバッファを転送するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Untagged DDP Message - A DDP Message that targets an Untagged Buffer.",
+      "ja": "タグなしDDPメッセージ - タグなしバッファを対象とDDPメッセージ。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Reliable Delivery LLP Requirements",
+      "section_title": true,
+      "ja": "3.信頼できる配信LLPの要件"
+    },
+    {
+      "indent": 3,
+      "text": "Any protocol that can serve as an LLP to DDP MUST meet the following requirements.",
+      "ja": "DDPへのLLPとして機能することができ、任意のプロトコルには、次の要件を満たす必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. LLPs MUST expose MULPDU and MULPDU changes. This is required so that the DDP layer can perform segmentation aligned with the MULPDU and can adapt as MULPDU changes come about. The corner case of how to handle outstanding requests during a MULPDU change is covered by the requirements below.",
+      "ja": "1. LLPSはMULPDUとMULPDU変更を公開する必要があります。 DDP層はMULPDUに合わせセグメンテーションを行うことが可能とMULPDUの変更は約来るように適応できるように、これが必要です。 MULPDU変更時に未処理の要求を処理する方法のコーナーケースは、以下の要件によって覆われています。"
+    },
+    {
+      "indent": 3,
+      "text": "2. In the event of a MULPDU change, DDP MUST NOT be required by the LLP to re-segment DDP Segments that have been previously posted to the LLP. Note that under pathological conditions the LLP may change the Advertised MULPDU more frequently than the queue of previously posted DDP Segment transmit requests is flushed. Under this pathological condition, the LLP transmit queue can contain DDP Messages for which multiple updates to the corresponding MULPDU have occurred subsequent to posting of the messages. Thus, there may be no correlation between the queued DDP Segment(s) and the LLP's current value of MULPDU.",
+      "ja": "2. MULPDUの変更の場合には、DDPは、以前LLPに掲示されているLLPへの再セグメントDDPセグメントによって必要とされてはなりません。病理学的条件の下でLLPは、以前にDDPセグメントを掲載するキューよりも頻繁にアドバタイズMULPDUを変更することがありますフラッシュされる要求を送信します。この病理学的条件の下では、LLPの送信キューは、対応するMULPDUに複数の更新がメッセージの投稿の後に発生したためDDPメッセージを含めることができます。このように、キューに入れられたDDPセグメント（S）とMULPDUのLLPの現在の値との間には相関関係がなくてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The LLP MUST ensure that, if it accepts a DDP Segment, it will transfer it reliably to the receiver or return with an error stating that the transfer failed to complete.",
+      "ja": "3. LLPは、DDPセグメントを受け入れる場合、それは受信機に確実にそれを転送したり、転送が完了するまでに失敗したというエラーを返します、確実にしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The LLP MUST preserve DDP Segment and Message boundaries at the Data Sink.",
+      "ja": "4. LLPは、データシンクでDDPセグメントとメッセージ境界を保存しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The LLP MAY provide the incoming segments out of order for Placement, but if it does, it MUST also provide information that specifies what the sender-specified order was.",
+      "ja": "5. LLPは、配置のための順序が狂っ入ってくるセグメントを提供することができるが、それがない場合、それはまた、送信者指定の順序が何であったかを指定する情報を提供しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "6. LLP MUST provide a strong digest (at least equivalent to CRC32-C) to cover at least the DDP Segment. It is believed that some of the existing data integrity digests are not sufficient, and that direct memory transfer semantics requires a stronger digest than, for example, a simple checksum.",
+      "ja": "6. LLPは、少なくともDDPセグメントをカバーするために（CRC32-Cと少なくとも同等の）強いダイジェストを提供しなければなりません。既存のデータの整合性ダイジェストの一部が十分でないと考えられ、そのダイレクトメモリ転送のセマンティクスは、例えば、簡単なチェックサムをよりダイジェスト強く必要としています。"
+    },
+    {
+      "indent": 3,
+      "text": "7. On receive, the LLP MUST provide the length of the DDP Segment received. This ensures that DDP does not have to carry a length field in its header.",
+      "ja": "受信7.、LLPは、DDPセグメントの長さは、受信提供しなければなりません。これは、DDPは、そのヘッダの長さフィールドを持ち歩く必要がないことを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "8. If an LLP does not support teardown of an LLP Stream independent of other LLP Streams, and a DDP error occurs on a specific DDP Stream, then the LLP MUST label the associated LLP Stream as an erroneous LLP Stream and MUST NOT allow any further data transfer on that LLP Stream after DDP requests the associated DDP Stream to be torn down.",
+      "ja": "8. LLPは他のLLPストリームのLLPストリーム独立のティアダウンをサポートしていない、およびDDPエラーが特定DDPストリームで発生し、その後、LLPは、誤ったLLPストリームとして関連LLPストリームを標識しなければならないし、任意にさらに許可しない必要がある場合DDPは、関連DDPストリームを要求した後、そのLLPストリーム上のデータ転送が取り壊されます。"
+    },
+    {
+      "indent": 3,
+      "text": "9. For a specific LLP Stream, the LLP MUST provide a mechanism to indicate that the LLP Stream has been gracefully torn down. For a specific LLP Connection, the LLP MUST provide a mechanism to indicate that the LLP Connection has been gracefully torn down.",
+      "ja": "9.特定のLLPストリームのため、LLPは、LLPストリームが正常取り壊されたことを示すためのメカニズムを提供しなければなりません。特定のLLP接続の場合、LLPは、LLP Connectionが正常に解体されたことを示すための機構を提供しなければなりません。"
+    },
+    {
+      "indent": 7,
+      "text": "Note that, if the LLP does not allow an LLP Stream to be torn\ndown independently of the LLP Connection, the above requirements\nallow the LLP to notify DDP of both events at the same time.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "10. For a specific LLP Connection, when all LLP Streams are either gracefully torn down or are labeled as erroneous LLP Streams, the LLP Connection MUST be torn down.",
+      "ja": "全てのLLPストリームがいずれかの正常切断され又は誤っLLPストリームとして標識される場合、特定のLLP接続の10は、LLPの接続が切断されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "11. The LLP MUST NOT pass a duplicate DDP Segment to the DDP layer after it has passed all the previous DDP Segments to the DDP layer and the associated ordering information for the previous DDP Segments and the current DDP Segment.",
+      "ja": "それはDDP層と関連する発注情報以前のDDPセグメントのため、現在のDDPセグメントにすべての以前のDDPセグメントを通過した後11. LLPはDDP層に重複したDDPセグメントを渡してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Header Format",
+      "section_title": true,
+      "ja": "4.ヘッダー形式"
+    },
+    {
+      "indent": 3,
+      "text": "DDP has two different header formats: one for Data Placement into Tagged Buffers, and the other for Data Placement into Untagged Buffers. See Section 5.1 for a description of the two models.",
+      "ja": "タグ付きバッファにデータを配置するための1つ、およびタグなしのバッファにデータを配置するための他の：DDPは、二つの異なるヘッダフォーマットを有しています。二つのモデルの詳細については、セクション5.1を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. DDP Control Field",
+      "section_title": true,
+      "ja": "4.1。 DDP制御フィールド"
+    },
+    {
+      "indent": 3,
+      "text": "The first 8 bits of the DDP Header carry a DDP Control Field that is common between the two formats. It is shown below in Figure 3, offset by 16 bits to accommodate the MPA header defined in [MPA]. The MPA header is only present if DDP is layered on top of MPA.",
+      "ja": "DDPヘッダの最初の8ビットは、二つのフォーマットの間で共通であるDDP制御フィールドを運びます。これは、[MPA]で定義されたMPAヘッダに対応するために16ビットオフセット、図3で以下に示されています。 DDPは、MPAの上部に積層されている場合MPAヘッダのみ存在しています。"
+    },
+    {
+      "indent": 6,
+      "text": "0                   1                   2                   3\n0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n                               +-+-+-+-+-+-+-+-+\n                               |T|L| Rsvd  |DV |\n                               +-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 24,
+      "text": "Figure 3: DDP Control Field",
+      "ja": "図3：DDPコントロールフィールド"
+    },
+    {
+      "indent": 3,
+      "text": "T - Tagged flag: 1 bit.",
+      "ja": "T  - タグ付きフラグ：1ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "Specifies the Tagged or Untagged Buffer Model.  If set to one,\nthe ULP Payload carried in this DDP Segment MUST be Placed into a\nTagged Buffer.",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "If set to zero, the ULP Payload carried in this DDP Segment MUST be Placed into an Untagged Buffer.",
+      "ja": "ゼロに設定されている場合、このDDPセグメントで運ばULPペイロードは、タグなしのバッファに配置されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "L - Last flag: 1 bit.",
+      "ja": "L  - 最終フラグ：1ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "Specifies whether the DDP Segment is the last segment of a DDP\nMessage.  It MUST be set to one on the last DDP Segment of every\nDDP Message.  It MUST NOT be set to one on any other DDP Segment.",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "The DDP Segment with the L bit set to 1 MUST be posted to the LLP after all other DDP Segments of the associated DDP Message have been posted to the LLP. For an Untagged DDP Message, the DDP Segment with the L bit set to 1 MUST carry the highest MO.",
+      "ja": "1に設定Lビットを有するDDPセグメントは、関連DDPメッセージの他の全てのDDPセグメントがLLPに掲示された後LLPに掲示されなければなりません。タグなしDDPメッセージを1に設定Lビットを有するDDPセグメントが最も高いMOを運ばなければなりません。"
+    },
+    {
+      "indent": 7,
+      "text": "If the Last flag is set to one, the DDP Message payload MUST be Delivered to the ULP after:",
+      "ja": "最終フラグが1に設定されている場合は、DDPメッセージペイロードは後にULPに送達されなければなりません。"
+    },
+    {
+      "indent": 7,
+      "text": "o Placement of all DDP Segments of this DDP Message and all prior DDP Messages, and",
+      "ja": "このDDPメッセージの全てのDDPセグメントおよび全ての前DDPメッセージの配置、およびo"
+    },
+    {
+      "indent": 7,
+      "text": "o Delivery of each prior DDP Message.",
+      "ja": "各前DDPメッセージのO配信。"
+    },
+    {
+      "indent": 7,
+      "text": "If the Last flag is set to zero, the DDP Segment is an intermediate DDP Segment.",
+      "ja": "最終フラグがゼロに設定されている場合、DDPセグメントが中間DDPセグメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "Rsvd - Reserved: 4 bits.",
+      "ja": "RSVD  - 予約：4ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "Reserved for future use by the DDP protocol.  This field MUST be\nset to zero on transmit, and not checked on receive.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "DV - Direct Data Placement Protocol Version: 2 bits.",
+      "ja": "DV  - 直接データ配置プロトコルバージョン：2ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The version of the DDP Protocol in use.  This field MUST be set\nto one to indicate the version of the specification described in\nthis document.  The value of DV MUST be the same for all the DDP\nSegments transmitted or received on a DDP Stream.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "4.2. DDP Tagged Buffer Model Header",
+      "section_title": true,
+      "ja": "4.2。 DDPタグ付きバッファモデルヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 4 shows the DDP Header format that MUST be used in all DDP Segments that target Tagged Buffers. It includes the DDP Control Field previously defined in Section 4.1. (Note: In Figure 4, the DDP Header is offset by 16 bits to accommodate the MPA header defined in [MPA]. The MPA header is only present if DDP is layered on top of MPA.)",
+      "ja": "図4は、タグ付きバッファを標的とする全てのDDPセグメントで使用しなければならないDDPヘッダフォーマットを示しています。これは、以前にセクション4.1で定義されたDDP制御フィールドを含んでいます。 （注：DDPは、MPAの上部に積層されている場合は、図4において、DDPヘッダが[MPA]で定義されたMPAヘッダに対応するために16ビットだけオフセットされるMPAヘッダのみ存在しています。）"
+    },
+    {
+      "indent": 4,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n                                +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n                                |T|L| Rsvd  | DV|   RsvdULP     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                              STag                             |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+                               TO                              +\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 21,
+      "text": "Figure 4: Tagged Buffer DDP Header",
+      "ja": "図4：タグ付けバッファDDPヘッダ"
+    },
+    {
+      "indent": 3,
+      "text": "T is set to one.",
+      "ja": "Tは1に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "RsvdULP - Reserved for use by the ULP: 8 bits.",
+      "ja": "RsvdULP  -  ULPで使用するために予約：8ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The RsvdULP field is opaque to the DDP protocol and can be\nstructured in any way by the ULP.  At the Data Source, DDP MUST\nset RsvdULP Field to the value specified by the ULP.  It is\ntransferred unmodified from the Data Source to the Data Sink.  At\nthe Data Sink, DDP MUST provide the RsvdULP field to the ULP when\nthe DDP Message is delivered.  Each DDP Segment within a specific\nDDP Message MUST contain the same value for this field.  The Data\nSource MUST ensure that each DDP Segment within a specific DDP\nMessage contains the same value for this field.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "STag - Steering Tag: 32 bits.",
+      "ja": "STag  - ステアリングタグ：32ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The Steering Tag identifies the Data Sink's Tagged Buffer.  The\nSTag MUST be valid for this DDP Stream.  The STag is associated\nwith the DDP Stream through a mechanism that is outside the scope\nof the DDP Protocol specification.  At the Data Source, DDP MUST\nset the STag field to the value specified by the ULP.  At the\nData Sink, the DDP MUST provide the STag field when the ULP\nMessage is delivered.  Each DDP Segment within a specific DDP\nMessage MUST contain the same value for this field and MUST be\nthe value supplied by the ULP.  The Data Source MUST ensure that\neach DDP Segment within a specific DDP Message contains the same\nvalue for this field.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "TO - Tagged Offset: 64 bits.",
+      "ja": "TO  - オフセットタグ：64ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The Tagged Offset specifies the offset, in octets, within the\nData Sink's Tagged Buffer, where the Placement of ULP Payload\ncontained in the DDP Segment starts.  A DDP Message MAY start at\nan arbitrary TO within a Tagged Buffer.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "4.3. DDP Untagged Buffer Model Header",
+      "section_title": true,
+      "ja": "4.3。 DDPタグなしバッファモデルヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 5 shows the DDP Header format that MUST be used in all DDP Segments that target Untagged Buffers. It includes the DDP Control Field previously defined in Section 4.1. (Note: In Figure 5, the DDP Header is offset by 16 bits to accommodate the MPA header defined in [MPA]. The MPA header is only present if DDP is layered on top of MPA.)",
+      "ja": "図5は、タグなしバッファを標的とする全てのDDPセグメントで使用しなければならないDDPヘッダフォーマットを示しています。これは、以前にセクション4.1で定義されたDDP制御フィールドを含んでいます。 （注：DDPは、MPAの上部に積層されている場合は、図5において、DDPヘッダが[MPA]で定義されたMPAヘッダに対応するために16ビットだけオフセットされるMPAヘッダのみ存在しています。）"
+    },
+    {
+      "indent": 4,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n                                +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n                                |T|L| Rsvd  | DV| RsvdULP[0:7]  |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                            RsvdULP[8:39]                      |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                               QN                              |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                              MSN                              |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                              MO                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 19,
+      "text": "Figure 5: Untagged Buffer DDP Header",
+      "ja": "図5：タグなしバッファDDPヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "T is set to zero.",
+      "ja": "Tはゼロに設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "RsvdULP - Reserved for use by the ULP: 40 bits.",
+      "ja": "RsvdULP  -  ULPによる使用のために予約さ：40ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The RsvdULP field is opaque to the DDP protocol and can be\nstructured in any way by the ULP.  At the Data Source, DDP MUST\nset RsvdULP Field to the value specified by the ULP.  It is\ntransferred unmodified from the Data Source to the Data Sink.  At\nthe Data Sink, DDP MUST provide RsvdULP field to the ULP when the\nULP Message is Delivered.  Each DDP Segment within a specific DDP\nMessage MUST contain the same value for the RsvdULP field.  At\nthe Data Sink, the DDP implementation is NOT REQUIRED to verify\nthat the same value is present in the RsvdULP field of each DDP\nSegment within a specific DDP Message and MAY provide the value\nfrom any one of the received DDP Segment to the ULP when the ULP\nMessage is Delivered.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "QN - Queue Number: 32 bits.",
+      "ja": "QN  - キュー番号：32ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The Queue Number identifies the Data Sink's Untagged Buffer queue\nreferenced by this header.  Each DDP segment within a specific\nDDP message MUST contain the same value for this field and MUST\nbe the value supplied by the ULP at the Data Source.  The Data\nSource MUST ensure that each DDP Segment within a specific DDP\nMessage contains the same value for this field.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "MSN - Message Sequence Number: 32 bits.",
+      "ja": "MSN  - メッセージシーケンス番号：32ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The Message Sequence Number specifies a sequence number that MUST\nbe increased by one (modulo 2^32) with each DDP Message targeting\nthe specific Queue Number on the DDP Stream associated with this\nDDP Segment.  The initial value for MSN MUST be one.  The MSN\nvalue MUST wrap to 0 after a value of 0xFFFFFFFF.  Each DDP\nsegment within a specific DDP message MUST contain the same value\nfor this field.  The Data Source MUST ensure that each DDP\nSegment within a specific DDP Message contains the same value for\nthis field.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "MO - Message Offset: 32 bits.",
+      "ja": "MO  - メッセージオフセット：32ビット。"
+    },
+    {
+      "indent": 7,
+      "text": "The Message Offset specifies the offset, in octets, from the\nstart of the DDP Message represented by the MSN and Queue Number\non the DDP Stream associated with this DDP Segment.  The MO\nreferencing the first octet of the DDP Message MUST be set to\nzero by the DDP layer.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "4.4. DDP Segment Format",
+      "section_title": true,
+      "ja": "4.4。 DDPセグメント形式"
+    },
+    {
+      "indent": 3,
+      "text": "Each DDP Segment MUST contain a DDP Header. Each DDP Segment may also contain ULP Payload. Following is the DDP Segment format:",
+      "ja": "各DDPセグメントは、DDPヘッダーを含まなければなりません。各DDPセグメントはまた、ULPペイロードが含まれていてもよいです。 DDPセグメントの形式は、次のとおりです。"
+    },
+    {
+      "indent": 8,
+      "text": "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|  DDP  |                                       |\n| Header|           ULP Payload (if any)        |\n|       |                                       |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Figure 6: DDP Segment Format",
+      "ja": "図6：DDPセグメント形式"
+    },
+    {
+      "indent": 0,
+      "text": "5. Data Transfer",
+      "section_title": true,
+      "ja": "5.データ転送"
+    },
+    {
+      "indent": 3,
+      "text": "DDP supports multi-segment DDP Messages. Each DDP Message is composed of one or more DDP Segments. Each DDP Segment contains a DDP Header. The DDP Header contains the information required by the receiver to Place any ULP Payload included in the DDP Segment.",
+      "ja": "DDPは、マルチセグメントDDPメッセージをサポートしています。各DDPメッセージは、一つ以上のDDPセグメントで構成されています。各DDPセグメントは、DDPヘッダーが含まれています。 DDPヘッダDDPセグメントに含まれる任意のULPペイロードを配置するために受信機が必要とする情報を含んでいます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. DDP Tagged or Untagged Buffer Models",
+      "section_title": true,
+      "ja": "5.1。 DDPタグ付きまたはタグなしバッファモデル"
+    },
+    {
+      "indent": 3,
+      "text": "DDP uses two basic buffer models for the Placement of the ULP Payload: Tagged Buffer Model and Untagged Buffer Model.",
+      "ja": "タグ付きバッファモデルとタグなしのバッファモデル：DDPはULPペイロードの配置のための2つの基本的なバッファモデルを使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.1. Tagged Buffer Model",
+      "section_title": true,
+      "ja": "5.1.1。タグ付けされたバッファモデル"
+    },
+    {
+      "indent": 3,
+      "text": "The Tagged Buffer Model is used by the Data Source to transfer a DDP Message into a Tagged Buffer at the Data Sink that has been previously Advertised to the Data Source. An STag identifies a Tagged Buffer. For the Placement of a DDP Message using the Tagged Buffer Model, the STag is used to identify the buffer, and the TO is used to identify the offset within the Tagged Buffer into which the ULP Payload is transferred. The protocol used to Advertise the Tagged Buffer is outside the scope of this specification (i.e., ULP specific). A DDP Message can start at an arbitrary TO within a Tagged Buffer.",
+      "ja": "タグ付きバッファモデルは、以前のデータソースにアドバタイズされたデータシンクでタグ付けバッファにDDPメッセージを転送するデータソースで使用されています。 STagは、タグ付きのバッファを識別します。タグ付きバッファモデルを使用して、DDPメッセージを配置するため、のSTagはバッファを識別するために使用され、及びTOはULPペイロードが転送されるにタグ付けバッファ内のオフセットを識別するために使用されます。タグ付きバッファを宣伝するために使用されるプロトコルは、本明細書（すなわち、ULPの特定）の範囲外です。 DDPメッセージはタグ付きバッファ内の任意のTOで開始することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, a Tagged Buffer can potentially be written multiple times. This might be done for error recovery or because a buffer is being re-used after some ULP specific synchronization mechanism.",
+      "ja": "また、タグ付きバッファは、潜在的に複数回書き込むことができます。これは、エラー回復のためにまたはバッファは、いくつかのULP特有の同期メカニズム後に再使用されているために行われる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.2. Untagged Buffer Model",
+      "section_title": true,
+      "ja": "5.1.2。タグなしバッファモデル"
+    },
+    {
+      "indent": 3,
+      "text": "The Untagged Buffer Model is used by the Data Source to transfer a DDP Message to the Data Sink into a queued buffer.",
+      "ja": "タグなしのバッファモデルをキューに入れられたバッファへのデータシンクにDDPメッセージを転送するためにデータソースによって使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The DDP Queue Number is used by the ULP to separate ULP messages into different queues of receive buffers. For example, if two queues were supported, the ULP could use one queue to post buffers handed to it by the application above the ULP, and it could use the other queue for buffers that are only consumed by ULP-specific control messages. This enables the separation of ULP control messages from opaque ULP Payload when using Untagged Buffers.",
+      "ja": "DDPキュー番号は、受信バッファの異なるキューにULPメッセージを分離するためにULPによって使用されます。 2つのキューがサポートされていた場合たとえば、ULPは、ULP上記アプリケーションによってそれに渡さバッファを投稿する1つのキューを使用することができ、それが唯一のULP特有の制御メッセージによって消費されているバッファのために他のキューを使用することができます。タグなしバッファを使用する場合には、不透明なULPペイロードからULP制御メッセージの分離を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "The DDP Message Sequence Number can be used by the Data Sink to identify the specific Untagged Buffer. The protocol used to communicate how many buffers have been queued is outside the scope of this specification. Similarly, the exact implementation of the buffer queue is outside the scope of this specification.",
+      "ja": "DDPメッセージシーケンス番号は、特定のタグなしのバッファを識別するために、データシンクによって使用することができます。キューイングされているどのように多くのバッファを通信するために使用されるプロトコルは、本明細書の範囲外です。同様に、バッファキューの正確な実装は、本明細書の範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Segmentation and Reassembly of a DDP Message",
+      "section_title": true,
+      "ja": "5.2。 DDPメッセージのセグメンテーションと再構築"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Source, the DDP layer MUST segment the data contained in a ULP message into a series of DDP Segments, where each DDP Segment contains a DDP Header and ULP Payload, and MUST be no larger than the MULPDU value Advertised by the LLP. The ULP Message Length MUST be less than 2^32. At the Data Source, the DDP layer MUST send all the data contained in the ULP message. At the Data Sink, the DDP layer MUST Place the ULP Payload contained in all valid incoming DDP Segments associated with a DDP Message into the ULP Buffer.",
+      "ja": "データソース、DDP層MUSTセグメントDDPセグメントの系列にULPメッセージに含まれるデータであり、ここで各DDPセグメントがDDPヘッダとULPペイロードを含み、LLPによってアドバタイズMULPDU値より大きくてはなりません。 ULPメッセージ長は2 ^ 32未満でなければなりません。データソースでは、DDP層は、ULPメッセージに含まれるすべてのデータを送らなければなりません。データシンクで、DDP層はULPバッファにDDPメッセージに関連付けられたすべての有効な受信DDPセグメントに含まULPペイロードを配置する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Message segmentation at the Data Source is accomplished by identifying a DDP Message (which corresponds one-to-one with a ULP Message) uniquely and then, for each associated DDP Segment of a DDP Message, by specifying an octet offset for the portion of the ULP Message contained in the DDP Segment.",
+      "ja": "データソースでDDPメッセージセグメント化は、の部分のためのオフセットオクテットを指定することによって、DDPメッセージの各関連DDPセグメントについて、一意にした後（一対一ULPメッセージに相当）DDPメッセージを識別することによって達成されます。 ULPメッセージは、DDPセグメントに含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "For an Untagged DDP Message, the combination of the QN and MSN uniquely identifies a DDP Message. The octet offset for each DDP Segment of a Untagged DDP Message is the MO field. For each DDP Segment of a Untagged DDP Message, the MO MUST be set to the octet offset from the first octet in the associated ULP Message (which is defined to be zero) to the first octet in the ULP Payload contained in the DDP Segment.",
+      "ja": "タグなしDDPメッセージを、QNとMSNの組み合わせが一意DDPメッセージを識別する。タグなしDDPメッセージの各DDPセグメントのオフセットオクテットは、MOのフィールドです。タグなしDDPメッセージの各DDPセグメントについて、MOは、DDPセグメントに含まULPペイロード内の最初のオクテット（ゼロであると定義される）関連ULPメッセージの最初のオクテットからオフセットオクテットに設定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the ULP Untagged Message was 2048 octets, and the MULPDU was 1500 octets, the Data Source would generate two DDP Segments, one with MO = 0, containing 1482 octets of ULP Payload, and a second with MO = 1482, containing 566 octets of ULP Payload. In this example, the amount of ULP Payload for the first DDP Segment was calculated as:",
+      "ja": "ULPタグなしメッセージが2048オクテットであり、MULPDUが1500オクテットである場合、例えば、データソース1482 ULPペイロードのオクテット、及び= 1482 MOと第、を含むを含む2つのDDPセグメント= 0 MOとのいずれかを生成しますULPペイロードの566オクテット。この例では、最初のDDPセグメントのULPペイロードの量は以下のように計算しました："
+    },
+    {
+      "indent": 9,
+      "text": "1482 = 1500 (MULPDU) - 18 (for the DDP Header)",
+      "ja": "= 1500 1482（MULPDU） -  18（DDPヘッダ用）"
+    },
+    {
+      "indent": 3,
+      "text": "For a Tagged DDP Message, the STag and TO, combined with the in-order delivery characteristics of the LLP, are used to segment and reassemble the ULP Message. Because the initial octet offset (the TO field) can be non-zero, recovery of the original ULP Message boundary cannot be done in the general case without an additional ULP Message.",
+      "ja": "タグ付きDDPメッセージのSTagおよびTOため、LLPの順序配信の特性と組み合わせ、セグメントに使用され、ULPメッセージを再構築しています。初期オフセットオクテット（フィールドへの）非ゼロとすることができるので、オリジナルのULPメッセージ境界の回復は、追加のULPメッセージなしで一般的なケースで行うことはできません。"
+    },
+    {
+      "indent": 7,
+      "text": "Implementers' note: One implementation, valid for some ULPs such\nas RDMAP, is to not directly support recovery of the ULP Message\nboundary for a Tagged DDP Message.  For example, the ULP may wish\nto have the Local Peer use small buffers at the Data Source even\nwhen the ULP at the Data Sink has Advertised a single large\nTagged Buffer for this data transfer.  In this case, the ULP may\nchoose to use the same STag for multiple consecutive ULP\nMessages.  Thus, a non-zero initial TO and re-use of the STag effectively enable the ULP to implement segmentation and\nreassembly due to ULP-specific constraints.  See [RDMAP] for\ndetails of how this is done.",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "A different implementation of a ULP could use an Untagged DDP Message (sent after the Tagged DDP Message) that details the initial TO for the STag that was used in the Tagged DDP Message. And finally, another implementation of a ULP could choose to always use an initial TO of zero such that no additional message is required to convey the initial TO used in a Tagged DDP Message.",
+      "ja": "ULPの異なる実装は、タグ付きDDPメッセージの中で使用されたのSTagのために当初の詳細を（タグ付きDDPメッセージの後に送信された）タグなしDDPメッセージを使用することができます。そして最後に、ULPの別の実装は、常に追加のメッセージがタグ付きDDPメッセージで使用するための初期を伝えるために必要とされないように、ゼロのために、初期の使用を選択することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Regardless of whether the ULP chooses to recover the original ULP Message boundary at the Data Sink for a Tagged DDP Message, DDP supports segmentation and reassembly of the Tagged DDP Message. The STag is used to identify the ULP Buffer at the Data Sink, and the TO is used to identify the octet-offset within the ULP Buffer referenced by the STag. The ULP at the Data Source MUST specify the STag and the initial TO when the ULP Message is handed to DDP.",
+      "ja": "かかわらず、ULPは、タグ付きDDPメッセージのデータシンクでオリジナルのULPメッセージ境界を回復することを選択したかどうかの、DDPは、タグ付きDDPメッセージのセグメント化と再構築をサポートしています。 STagは、データシンクでULPバッファを識別するために使用され、及びTOはオクテットのオフセットのSTagによって参照ULPバッファ内を識別するために使用されます。データソースのULPは、ULPメッセージは、DDPに渡された場合とのSTagと初期を指定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "For each DDP Segment of a Tagged DDP Message, the TO MUST be set to the octet offset from the first octet in the associated ULP Message to the first octet in the ULP Payload contained in the DDP Segment, plus the TO assigned to the first octet in the associated ULP Message.",
+      "ja": "タグ付きDDPメッセージ、DDPセグメントに含まULPペイロードの最初のオクテットに関連ULPメッセージ内の最初のオクテットからオフセットオクテットに設定する必要があり、プラスへの最初のオクテットに割り当てられた各DDPセグメントについて関連するULPメッセージインチ"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the ULP Tagged Message was 2048 octets with an initial TO of 16384, and the MULPDU was 1500 octets, the Data Source would generate two DDP Segments: one with TO = 16384, containing the first 1486 octets of ULP payload, and a second with TO = 17870, containing 562 octets of ULP payload. In this example, the amount of ULP payload for the first DDP Segment was calculated as:",
+      "ja": "ULPタグ付きメッセージ16384のTO初期と2048オクテットであり、MULPDUが1500オクテットである場合、例えば、データ・ソースは、二つのDDPセグメント生成する：ULPペイロードの最初の1486個のオクテットを含む、= 16384とのいずれかを、そしてULPペイロードの562個のオクテットを含むTO = 17870と第二、。この例では、最初のDDPセグメントのULPペイロードの量は以下のように計算しました："
+    },
+    {
+      "indent": 9,
+      "text": "1486 = 1500 (MULPDU) - 14 (for the DDP Header)",
+      "ja": "= 1500 1486（MULPDU） -  14（DDPヘッダ用）"
+    },
+    {
+      "indent": 3,
+      "text": "A zero-length DDP Message is allowed and MUST consume exactly one DDP Segment. Only the DDP Control and RsvdULP Fields MUST be valid for a zero-length Tagged DDP Segment. The STag and TO fields MUST NOT be checked for a zero-length Tagged DDP Message.",
+      "ja": "ゼロ長DDPメッセージが許可され、正確に一つのDDPセグメントを消費しなければなりません。のみDDPコントロールとRsvdULPフィールドは長さゼロのタグ付きDDPセグメントに対して有効である必要があります。 STagとフィールドTOは長さゼロのタグ付きDDPメッセージをチェックしてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "For either Untagged or Tagged DDP Messages, the Data Sink is not required to verify that the entire ULP Message has been received.",
+      "ja": "タグなしまたはタグのどちらかDDPメッセージのために、データシンクは、全体のULPメッセージが受信されていることを確認する必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Ordering Among DDP Messages",
+      "section_title": true,
+      "ja": "5.3。 DDPメッセージの中で注文"
+    },
+    {
+      "indent": 3,
+      "text": "Messages passed through the DDP MUST conform to the ordering rules defined in this section.",
+      "ja": "DDPを通過したメッセージは、このセクションで定義された順序規則に従わなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Source, DDP:",
+      "ja": "データソース、DDP時："
+    },
+    {
+      "indent": 6,
+      "text": "* MUST transmit DDP Messages in the order they were submitted to the DDP layer,",
+      "ja": "*は、彼らはDDP層に提出されたために、DDPメッセージを伝えなければなりません"
+    },
+    {
+      "indent": 6,
+      "text": "* SHOULD transmit DDP Segments within a DDP Message in increasing MO order for Untagged DDP Messages, and in increasing TO order for Tagged DDP Messages.",
+      "ja": "*タグなしDDPメッセージ用のMOの昇順にDDPメッセージ内のDDPセグメントを送信し、タグ付きDDPメッセージでのご注文で増加にすべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Sink, DDP (Note: The following rules are motivated by LLP implementations that separate Placement and Delivery.):",
+      "ja": "データシンク、DDPで（注：以下の規則は、配置および配信を分離LLP実装によって動機付けされます。）。"
+    },
+    {
+      "indent": 6,
+      "text": "* MAY perform Placement of DDP Segments out of order,",
+      "ja": "*ご注文のうち、DDPセグメントの配置を行う場合があり、"
+    },
+    {
+      "indent": 6,
+      "text": "* MAY perform Placement of a DDP Segment more than once,",
+      "ja": "*複数回DDPセグメントの配置を実行するかもしれ、"
+    },
+    {
+      "indent": 6,
+      "text": "* MUST Deliver a DDP Message to the ULP at most once,",
+      "ja": "*高々度ULPにDDPメッセージを配信しなければなりません、"
+    },
+    {
+      "indent": 6,
+      "text": "* MUST Deliver DDP Messages to the ULP in the order they were sent by the Data Source.",
+      "ja": "*彼らはデータソースによって送信された順にUL​​PにDDPメッセージを配信しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. DDP Message Completion and Delivery",
+      "section_title": true,
+      "ja": "5.4。 DDPメッセージ完了と配信"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Source, DDP Message transfer is considered completed when the reliable, in-order transport LLP has indicated that the transfer will occur reliably. Note that this in no way restricts the LLP from buffering the data at either the Data Source or Data Sink. Thus, at the Data Source, completion of a DDP Message does not necessarily mean that the Data Sink has received the message.",
+      "ja": "信頼性は、インオーダー輸送LLPは、転送が確実に起こるであろうことが示されたときのデータソースでは、DDPメッセージの転送が完了したとみなされます。これは決して、データソースまたはデータシンクのいずれかでデータをバッファからLLPを制限することに注意してください。このように、データ・ソースで、DDPメッセージの終了は必ずしもデータシンクがメッセージを受信したことを意味するものではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Sink, DDP MUST Deliver a DDP Message if and only if all of the following are true:",
+      "ja": "データシンクでは、DDPは、DDPメッセージを配信しなければならない場合は、次のすべてに該当する場合にのみ："
+    },
+    {
+      "indent": 6,
+      "text": "* the last DDP Segment of the DDP Message had its Last flag set,",
+      "ja": "* DDP Messageの最後のDDPセグメントは、その最後のフラグが設定されていました"
+    },
+    {
+      "indent": 6,
+      "text": "* all of the DDP Segments of the DDP Message have been Placed,",
+      "ja": "* DDPメッセージのDDPセグメントの全てが配置されており、"
+    },
+    {
+      "indent": 6,
+      "text": "* all preceding DDP Messages have been Placed, and",
+      "ja": "*すべての先行DDPメッセージが置かれている、と"
+    },
+    {
+      "indent": 6,
+      "text": "* each preceding DDP Message has been Delivered to the ULP.",
+      "ja": "*各先行するDDPメッセージがULPに配信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Sink, DDP MUST provide the ULP Message Length to the ULP when an Untagged DDP Message is Delivered. The ULP Message Length may be calculated by adding the MO and the ULP Payload length in the last DDP Segment (with the Last flag set) of an Untagged DDP Message.",
+      "ja": "タグなしDDPのメッセージが配信されると、データシンクでは、DDPはULPにULPメッセージの長さを提供しなければなりません。 ULPメッセージ長は、タグなしDDPメッセージの（最終フラグが設定された）最後のDDPセグメントにMO及びULPペイロード長を加算することによって計算することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "At the Data Sink, DDP MUST provide the RsvdULP Field of the DDP Message to the ULP when the DDP Message is delivered.",
+      "ja": "DDPメッセージが配信されると、データシンクでは、DDPはULPにDDPメッセージのRsvdULP場を提供しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. DDP Stream Setup and Teardown",
+      "section_title": true,
+      "ja": "6. DDPストリームセットアップとティアダウン"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes LLP independent issues related to DDP Stream setup and teardown.",
+      "ja": "このセクションでは、DDPストリームのセットアップとティアダウンに関連LLPの独立問題について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. DDP Stream Setup",
+      "section_title": true,
+      "ja": "6.1。 DDPストリームセットアップ"
+    },
+    {
+      "indent": 3,
+      "text": "It is expected that the ULP will use a mechanism outside the scope of this specification to establish an LLP Connection, and that the LLP Connection will support one or more LLP Streams (e.g., MPA/TCP or SCTP). After the LLP sets up the LLP Stream, it will enable a DDP Stream on a specific LLP Stream at an appropriate point.",
+      "ja": "ULPはLLP接続を確立するために、この仕様の範囲外の機構を使用すること、およびLLP接続は、1つまたは複数のLLPストリーム（例えば、MPA / TCP又はSCTP）をサポートすることが期待されます。 LLPがLLPストリームをセットアップした後、それは適切な時点で特定LLPストリーム上DDPストリームを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "The ULP is required to enable both endpoints of an LLP Stream for DDP data transfer at the same time, in both directions; this is necessary so that the Data Sink can properly recognize the DDP Segments.",
+      "ja": "ULPは、両方向に同時にDDPデータ転送のためのLLP流の両方のエンドポイントを有効にするために必要とされます。データシンクが適切にDDPセグメントを認識できるようにするために必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. DDP Stream Teardown",
+      "section_title": true,
+      "ja": "6.2。 DDPストリームのティアダウン"
+    },
+    {
+      "indent": 3,
+      "text": "DDP MUST NOT independently initiate Stream Teardown. DDP either responds to a stream being torn down by the LLP or processes a request from the ULP to tear down a stream. DDP Stream teardown disables DDP capabilities on both endpoints. For connection-oriented LLPs, DDP Stream teardown MAY result in underlying LLP Connection teardown.",
+      "ja": "DDPは、独立してストリームティアダウンを開始してはなりません。 DDPは、LLPによって解体されたストリームに応答またはストリームを切断するULPからの要求を処理するのいずれか。 DDPストリームティアダウンは、両方のエンドポイント上のDDP機能を無効にします。接続指向LLPSの場合、DDPストリームティアダウンは、基礎となるLLP接続の切断をもたらすことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.1. DDP Graceful Teardown",
+      "section_title": true,
+      "ja": "6.2.1。 DDP優雅なティアダウン"
+    },
+    {
+      "indent": 3,
+      "text": "It is up to the ULP to ensure that DDP teardown happens on both endpoints of the DDP Stream at the same time; this is necessary so that the Data Sink stops trying to interpret the DDP Segments.",
+      "ja": "それはDDPのティアダウンが同時にDDPストリームの両方のエンドポイントに起こることを保証するためにULP次第です。データシンクは、DDPセグメントを解釈しようとして停止するように、これは必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "If the Local Peer ULP indicates graceful teardown, the DDP layer on the Local Peer SHOULD ensure that all ULP data would be transferred before the underlying LLP Stream and Connection are torn down, and any further data transfer requests by the Local Peer ULP MUST return an error.",
+      "ja": "ローカルピアULPは優雅なティアダウンを示している場合は、ローカルピア上のDDP層は、基礎となるLLPストリームとの接続が切断され、そしてローカルピアULPによって任意のさらなるデータ転送要求を返さなければならない前に、すべてのULPデータが転送されることを保証しなければなりませんエラー。"
+    },
+    {
+      "indent": 3,
+      "text": "If the DDP layer on the Local Peer receives a graceful teardown request from the LLP, any further data received after the request is considered an error and MUST cause the DDP Stream to be abortively torn down.",
+      "ja": "ローカルピア上のDDP層はLLPから優雅なティアダウン要求を受信した場合、要求はエラーとみなされ、DDPストリームがabortively解体させなければなりませんした後、任意のさらなるデータが受信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "If the Local Peer LLP supports a half-closed LLP Stream, on the receipt of an LLP graceful teardown request of the DDP Stream, DDP SHOULD indicate the half-closed state to the ULP, and continue to process outbound data transfer requests normally. Following this event, when the Local Peer ULP requests graceful teardown, DDP MUST indicate to the LLP that it SHOULD perform a graceful close of the other half of the LLP Stream.",
+      "ja": "ローカルピアLLPが半分閉じLLPストリームをサポートしている場合は、DDPストリームのLLP優雅なティアダウン要求の受信時に、DDPはULPにハーフクローズ状態を示し、通常はアウトバウンドデータ転送要求を処理し続けるべきです。ローカルピアULPは優雅なティアダウンを要求したときに、このイベントに続いて、DDPは、LLPストリームの残り半分の優雅なクローズを実行する必要があることをLLPに示す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the Local Peer LLP supports a half-closed LLP Stream, on the receipt of a ULP graceful half-closed teardown request of the DDP Stream, DDP SHOULD keep data reception enabled on the other half of the LLP Stream.",
+      "ja": "ローカルピアLLPが半分閉じLLPストリームをサポートしている場合は、DDPストリームのULP優雅なハーフクローズティアダウン要求の受信時に、DDPは、LLPストリームの残りの半分で有効になってデータ受信を維持する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.2. DDP Abortive Teardown",
+      "section_title": true,
+      "ja": "6.2.2。 DDP頓挫ティアダウン"
+    },
+    {
+      "indent": 3,
+      "text": "As previously mentioned, DDP does not independently terminate a DDP Stream. Thus, any of the following fatal errors on a DDP Stream MUST cause DDP to indicate to the ULP that a fatal error has occurred:",
+      "ja": "前述したように、DDPは、独立してDDPストリームを終了しません。このように、DDPストリーム上で、次の致命的なエラーのいずれかがDDPは、致命的なエラーが発生したULPに示すために、原因としなければなりません："
+    },
+    {
+      "indent": 6,
+      "text": "* Underlying LLP Connection or LLP Stream is lost.",
+      "ja": "* LLP接続の基礎となるか、LLP Streamが失われます。"
+    },
+    {
+      "indent": 6,
+      "text": "* Underlying LLP reports a fatal error.",
+      "ja": "*基礎LLPは、致命的なエラーを報告します。"
+    },
+    {
+      "indent": 6,
+      "text": "* DDP Header has one or more invalid fields.",
+      "ja": "* DDPヘッダーは、1つ以上の無効なフィールドがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the LLP indicates to the ULP that a fatal error has occurred, the DDP layer SHOULD report the error to the ULP (see Section 7.2, DDP Error Numbers) and complete all outstanding ULP requests with an error. If the underlying LLP Stream is still intact, DDP SHOULD continue to allow the ULP to transfer additional DDP Messages on the outgoing half connection after the fatal error was indicated to the ULP. This enables the ULP to transfer an error syndrome to the Remote Peer. After indicating to the ULP a fatal error has occurred, the DDP Stream MUST NOT be terminated until the Local Peer ULP indicates to the DDP layer that the DDP Stream should be abortively torn down.",
+      "ja": "LLPは、致命的なエラーが発生したことをULPに示している場合、DDP層はULPにエラーを報告し（7.2節、DDPのエラー番号を参照）、エラーのあるすべての未処理のULP要求を完了する必要があります。基礎となるLLPストリームは無傷のままであれば、DDPは、致命的なエラーがULPに示された後ULPは、発信半分接続で追加のDDPメッセージを転送できるようにするために継続する必要があります。これは、リモートピアに誤りシンドロームを転送するためにULPを可能にします。ローカルピアULPはDDPストリームがabortively取り壊されるべきDDP層に示すまで、致命的なエラーが発生したULPに指示した後、DDP Streamが終了してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Error Semantics",
+      "section_title": true,
+      "ja": "7.エラーセマンティクス"
+    },
+    {
+      "indent": 3,
+      "text": "All LLP errors reported to DDP SHOULD be passed up to the ULP.",
+      "ja": "DDPに報告されたすべてのLLPエラーはULPに渡されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Errors Detected at the Data Sink",
+      "section_title": true,
+      "ja": "7.1。データシンクで検出されたエラー"
+    },
+    {
+      "indent": 3,
+      "text": "For non-zero-length Untagged DDP Segments, the DDP Segment MUST be validated before Placement by verifying:",
+      "ja": "非ゼロ長タグなしDDPセグメントに対して、DDPセグメントを確認することによって配置する前に検証しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The QN is valid for this stream.",
+      "section_title": true,
+      "ja": "1. QNは、このストリームのために有効です。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The QN and MSN have an associated buffer that allows Placement of the payload.",
+      "ja": "2. QNとMSNは、ペイロードの配置を可能に関連するバッファを有します。"
+    },
+    {
+      "indent": 7,
+      "text": "Implementers' note: DDP implementations SHOULD consider lack of\nan associated buffer as a system fault.  DDP implementations MAY\ntry to recover from the system fault using LLP means in a ULP-\ntransparent way.  DDP implementations SHOULD NOT permit system\nfaults to occur repeatedly or frequently.  If there is not an\nassociated buffer, DDP implementations MAY choose to disable the\nstream for the reception and report an error to the ULP at the\nData Sink.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "3. The MO falls in the range of legal offsets associated with the Untagged Buffer.",
+      "ja": "前記MOは、タグなしのバッファに関連付けられた法的​​オフセットの範囲です。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The sum of the DDP Segment payload length and the MO falls in the range of legal offsets associated with the Untagged Buffer.",
+      "ja": "4. DDPセグメントペイロードの長さの和とMOは、タグなしのバッファに関連付けられた法的​​オフセットの範囲です。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The Message Sequence Number falls in the range of legal Message Sequence Numbers, for the queue defined by the QN. The legal range is defined as being between the MSN value assigned to the first available buffer for a specific QN and the MSN value assigned to the last available buffer for a specific QN.",
+      "ja": "5.メッセージシーケンス番号は、QNによって定義されたキューのために、法律上のメッセージのシーケンス番号の範囲に入ります。法的範囲は、特定のQN及び特定QNのための最後の利用可能なバッファに割り当てられたMSNの値の最初の使用可能なバッファに割り当てられたMSNの値の間にあると定義されます。"
+    },
+    {
+      "indent": 7,
+      "text": "Implementers' note: for a typical Queue Number, the lower limit\nof the Message Sequence Number is defined by whatever DDP\nMessages have already been completed.  The upper limit is defined\nby however many message buffers are currently available for that\nqueue.  Both numbers change dynamically as new DDP Messages are\nreceived and completed, and new buffers are added.  It is up to\nthe ULP to ensure that sufficient buffers are available to handle\nthe incoming DDP Segments.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "For non-zero-length Tagged DDP Segments, the segment MUST be validated before Placement by verifying:",
+      "ja": "非ゼロ長タグ付きDDPセグメントについて、セグメントを確認することによって配置する前に検証しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The STag is valid for this stream.",
+      "section_title": true,
+      "ja": "1.のSTagは、このストリームのために有効です。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The STag has an associated buffer that allows Placement of the payload.",
+      "ja": "2.のSTagは、ペイロードの配置を可能に関連するバッファを有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The TO falls in the range of legal offsets registered for the STag.",
+      "ja": "3には、のSTagのために登録された法的なオフセットの範囲内です。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The sum of the DDP Segment payload length and the TO falls in the range of legal offsets registered for the STag.",
+      "ja": "4. DDPセグメントペイロード長の合計とTOはのSTagのために登録された法的なオフセットの範囲内です。"
+    },
+    {
+      "indent": 3,
+      "text": "5. A 64-bit unsigned sum of the DDP Segment payload length and the TO does not wrap.",
+      "ja": "5. DDPセグメントペイロード長との64ビット符号なし合計が折り返されません。"
+    },
+    {
+      "indent": 3,
+      "text": "If the DDP layer detects any of the receive errors listed in this section, it MUST cease placing the remainder of the DDP Segment and report the error(s) to the ULP. The DDP layer SHOULD include in the error report the DDP Header, the type of error, and the length of the DDP segment, if available. DDP MUST silently drop any subsequent incoming DDP Segments. Since each of these errors represents a failure of the sending ULP or protocol, DDP SHOULD enable the ULP to send one additional DDP Message before terminating the DDP Stream.",
+      "ja": "DDP層は、このセクションに記載されている受信エラーのいずれかを検出した場合、それは、DDPセグメントの残りの部分を確定停止し、ULPにエラー（複数可）を報告しなければなりません。利用可能な場合DDP層は、エラーレポートDDPヘッダ、エラーの種類、およびDDPセグメントの長さに含めるべきです。 DDPは静かに後続の受信DDPセグメントをドロップしなければなりません。これらのエラーのそれぞれが送信ULPまたはプロトコルの失敗を表すので、DDPは、DDPストリームを終了する前に一つの追加DDPメッセージを送信するULPを有効にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. DDP Error Numbers",
+      "section_title": true,
+      "ja": "7.2。 DDPのエラー番号"
+    },
+    {
+      "indent": 3,
+      "text": "The following error numbers MUST be used when reporting errors to the ULP. They correspond to the checks enumerated in section 7.1. Each error is subdivided into a 4-bit Error Type and an 8-bit Error Code.",
+      "ja": "ULPにエラーを報告すると、次のエラー番号を使用しなければなりません。彼らは、セクション7.1に列挙チェックに相当します。各エラーが4ビットのエラータイプと8ビット・エラー・コードに細分されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Error    Error\nType     Code        Description\n----------------------------------------------------------\n0x0      0x00        Local Catastrophic",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "0x1 Tagged Buffer Error 0x00 Invalid STag 0x01 Base or bounds violation 0x02 STag not associated with DDP Stream 0x03 TO wrap 0x04 Invalid DDP version",
+      "ja": "0x1のタグ付けバッファエラー0x00の無効なのSTag 0x01のベースまたは境界違反が0x02のSTagは0x04が無効なDDPのバージョンをラップするDDPストリーム0x03を関連付けられていません"
+    },
+    {
+      "indent": 3,
+      "text": "0x2 Untagged Buffer Error 0x01 Invalid QN 0x02 Invalid MSN - no buffer available 0x03 Invalid MSN - MSN range is not valid 0x04 Invalid MO 0x05 DDP Message too long for available buffer 0x06 Invalid DDP version",
+      "ja": "0x2のタグなしバッファエラー0x01を無効QN 0x02の無効MSN  - 利用できるバッファなし0x03の無効MSN  -  MSN範囲が利用可能なバッファ0x06の無効なDDPバージョンのために長すぎる0x04を無効MO 0x05のDDPメッセージは有効ではありません"
+    },
+    {
+      "indent": 3,
+      "text": "0x3 Rsvd Reserved for the use by the LLP",
+      "ja": "LLPで使用するために0x3のRSVD予約"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This section discusses both protocol-specific considerations and the implications of using DDP with existing security mechanisms. The security requirements for the DDP implementation are provided at the end of the section. A more detailed analysis of the security issues around the implementation and the use of the DDP can be found in [RDMASEC].",
+      "ja": "このセクションでは、プロトコル固有の考慮事項および既存のセキュリティメカニズムとDDPを使用することの影響の両方を論じています。 DDP実装のためのセキュリティ要件は、セクションの端に設けられています。実装とDDPの使用の周りのセキュリティ問題のより詳細な分析は、[RDMASEC]で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The IPsec requirements for RDDP are based on the version of IPsec specified in RFC 2401 [IPSEC] and related RFCs, as profiled by RFC 3723 [RFC3723], despite the existence of a newer version of IPsec specified in RFC 4301 [RFC4301] and related RFCs [RFC4303], [RFC4306]. One of the important early applications of the RDDP protocols is their use with iSCSI [iSER]; RDDP's IPsec requirements follow those of IPsec in order to facilitate that usage by allowing a common profile of IPsec to be used with iSCSI and the RDDP protocols. In the future, RFC 3723 may be updated to the newer version of IPsec; the IPsec security requirements of any such update should apply uniformly to iSCSI and the RDDP protocols.",
+      "ja": "RFC 4301で指定されたIPSecの新しいバージョンが存在する[RFC4301]と関連するにもかかわらず、RFC 3723によって[RFC3723]をプロファイルとしてRDDPのIPsec要件は、RFC 2401で指定されたIPsec [IPSEC]および関連するRFCのバージョンに基づいていますRFC [RFC4303]、[RFC4306]。 RDDPプロトコルの重要な初期の用途の一つは、iSCSI [のiSER]との使用です。 RDDPのIPsecの要件は、IPsecの共通プロファイルを可能にすることにより、その使用を容易にするためのIPsecのものをiSCSIとRDDPプロトコルで使用するに従​​ってください。将来的には、RFC 3723は、IPsecの新しいバージョンに更新することができます。そのような更新のIPsecセキュリティ要件は、iSCSIとRDDPプロトコルに均一に適用されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Protocol-Specific Security Considerations",
+      "section_title": true,
+      "ja": "8.1。プロトコル固有のセキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The vulnerabilities of DDP to active third-party interference are no greater than any other protocol running over transport protocols such as TCP and SCTP over IP. A third party, by injecting spoofed packets into the network that are Delivered to a DDP Data Sink, could launch a variety of attacks that exploit DDP-specific behavior. Since DDP directly or indirectly exposes memory addresses on the wire, the Placement information carried in each DDP Segment must be validated, including invalid STag and octet-level granularity base and bounds check, before any data is Placed. For example, a third-party adversary could inject random packets that appear to be valid DDP Segments and corrupt the memory on a DDP Data Sink. Since DDP is IP transport protocol independent, communication security mechanisms such as IPsec [IPSEC] may be used to prevent such attacks.",
+      "ja": "アクティブサードパーティ干渉DDPの脆弱性は、IP上のTCPとSCTPなどのトランスポートプロトコル上で動作する他のプロトコルよりも大きくありません。第三者は、DDPデータシンクに配信されているネットワークに偽装されたパケットを注入することにより、DDP固有の動作を悪用した攻撃のさまざまなを起動できます。 DDPは、直接的または間接的にワイヤ上のメモリ・アドレスを公開しているので、各DDPセグメントで運ばれる配置情報が無効のSTagおよびオクテットレベル粒状ベースと境界の任意のデータが配置される前に、確認を含め、検証されなければなりません。たとえば、サードパーティの敵は、有効なDDPセグメントとDDPデータシンク上の破損したメモリのように見えるのランダムなパケットを挿入できます。 DDPは、IPトランスポートプロトコル独立しているため、このようなIPsecの[IPSEC]のような通信のセキュリティメカニズムは、そのような攻撃を防ぐために使用されてもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Association of an STag and a DDP Stream",
+      "section_title": true,
+      "ja": "8.2。 STagとDDPストリームの協会"
+    },
+    {
+      "indent": 3,
+      "text": "There are several mechanisms for associating an STag and a DDP Stream. Two required mechanisms for this association are a Protection Domain (PD) association and a DDP Stream association.",
+      "ja": "STagとDDPストリームを関連付けるためのいくつかのメカニズムがあります。この関連付けのために必要な2つのメカニズムは、保護ドメイン（PD）と関連DDPストリーム関連付けています。"
+    },
+    {
+      "indent": 3,
+      "text": "Under the Protection Domain (PD) association, a unique Protection Domain Identifier (PD ID) is created and used locally to associate an STag with a set of DDP Streams. Under this mechanism, the use of the STag is only permitted on the DDP Streams that have the same PD ID as the STag. For an incoming DDP Segment of a Tagged DDP Message on a",
+      "ja": "保護ドメイン（PD）関連の下では、一意の保護ドメイン識別子（PD ID）が作成され、DDPストリームのセットとのSTagを関連付けるために局所的に使用されます。この機構の下、のSTagの使用は、唯一のSTagと同じPD IDを持つDDPストリームに対して許可されています。上のタグ付きDDPメッセージの入って来るDDPセグメントの"
+    },
+    {
+      "indent": 3,
+      "text": "DDP Stream, if the PD ID of the DDP Stream is not the same as the PD ID of the STag targeted by the Tagged DDP Message, then the DDP Segment is not Placed, and the DDP layer MUST surface a local error to the ULP. Note that the PD ID is locally defined and cannot be directly manipulated by the Remote Peer.",
+      "ja": "DDPストリームのPD IDは、タグ付きDDPメッセージによってターゲットのSTagのPD IDと同じでない場合DDPストリームは、その後、DDPセグメントが配置されていない、およびDDP層はULPにローカルエラー表面なければなりません。 PD IDはローカルに定義され、直接リモートピアによって操作することができないことに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Under the DDP Stream association, a DDP Stream is identified locally by a unique DDP Stream identifier (ID). An STag is associated with a DDP Stream by using a DDP Stream ID. In this case, for an incoming DDP Segment of a Tagged DDP Message on a DDP Stream, if the DDP Stream ID of the DDP Stream is not the same as the DDP Stream ID of the STag targeted by the Tagged DDP Message, then the DDP Segment is not Placed and the DDP layer MUST surface a local error to the ULP. Note that the DDP Stream ID is locally defined and cannot be directly manipulated by the Remote Peer.",
+      "ja": "DDPストリーム・アソシエーションの下で、DDPストリームは一意DDPストリーム識別子（ID）によって局所的に識別されます。 STagはDDPストリームIDを使用してDDPストリームに関連付けられています。この場合、タグ付きDDPメッセージの受信DDPセグメントのDDPストリーム上、DDPストリームのDDPストリームIDは、タグ付きDDPメッセージのターゲットのSTagのDDPストリームIDは、DDPと同じでない場合セグメントが配置されていないとDDP層はULPにローカルエラー表面なければなりません。 DDPストリームIDがローカルに定義されており、直接リモートピアによって操作することができないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A ULP SHOULD associate an STag with at least one DDP Stream. DDP MUST support Protection Domain association and DDP Stream association mechanisms for associating an STag and a DDP Stream.",
+      "ja": "ULPは、少なくとも一つのDDPストリームでのSTagを関連付けるべきです。 DDPは、DDPのSTagおよびストリームを関連付けるための保護ドメインの会合およびDDPストリーム関連付けメカニズムをサポートしなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Security Requirements",
+      "section_title": true,
+      "ja": "8.3。セキュリティ要件"
+    },
+    {
+      "indent": 3,
+      "text": "[RDMASEC] defines the security model and general assumptions for RDMAP/DDP. This subsection provides the security requirements for the DDP implementation. For more details on the type of attacks, type of attackers, trust models, and resource sharing for the DDP implementation, the reader is referred to [RDMASEC].",
+      "ja": "【RDMASEC] RDMAP / DDPのセキュリティモデルと一般的な仮定を定義します。ここでは、DDP実装のためのセキュリティ要件を提供します。 DDP実装の攻撃、攻撃の種類、信頼モデル、およびリソース共有のタイプの詳細については、読者は[RDMASEC]と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP has several mechanisms that deal with a number of attacks. These attacks include, but are not limited to:",
+      "ja": "DDPは、多くの攻撃に対処するいくつかのメカニズムを持っています。これらの攻撃は、これらに限定されないが："
+    },
+    {
+      "indent": 3,
+      "text": "1. Connection to/from an unauthorized or unauthenticated endpoint. 2. Hijacking of a DDP Stream. 3. Attempts to read or write from unauthorized memory regions. 4. Injection of RDMA Messages within a stream on a multi-user operating system by another application.",
+      "ja": "不正または認証されていないエンドポイントから/への接続1.。 DDPストリームの2ハイジャック。 3.試みが読み取りまたは不正なメモリ領域から書き込みます。別のアプリケーションでのマルチユーザ・オペレーティング・システム上のストリーム内のRDMAメッセージの4注射。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP relies on the LLP to establish the LLP Stream over which DDP Messages will be carried. DDP itself does nothing to authenticate the validity of the LLP Stream of either of the endpoints. It is the responsibility of the ULP to validate the LLP Stream. This is highly desirable due to the nature of DDP.",
+      "ja": "DDPは、DDPメッセージが運ばれるその上LLPストリームを確立するために、LLPに依存しています。 DDP自体は、エンドポイントのいずれかのLLPストリームの妥当性を認証するために何もしません。 LLPストリームを検証するためのULPの責任です。これは、DDPの性質のために非常に望ましいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Hijacking of an DDP Stream would require that the underlying LLP Stream is hijacked. This would require knowledge of Advertised Buffers in order to directly Place data into a user buffer. Therefore, this is constrained by the same techniques mentioned to guard against attempts to read or write from unauthorized memory regions.",
+      "ja": "DDPストリームのハイジャックは、基礎となるLLPストリームがハイジャックされていることが必要となります。これは、直接ユーザバッファにデータを配置するためにアドバタイズバッファの知識を必要とするであろう。したがって、これは、読み取りまたは不正なメモリ領域から書き込もう防ぐために上述と同じ技術によって制約されます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP does not require a node to open its buffers to arbitrary attacks over the DDP Stream. It may access ULP memory only to the extent that the ULP has enabled and authorized it to do so. The STag access control model is defined in [RDMASEC]. Specific security operations include:",
+      "ja": "DDPは、DDPストリームを介して任意の攻撃にそのバッファを開くためにノードを必要としません。それだけでULPが有効であり、そうすることを許可している程度にULPメモリにアクセスすることがあります。 STagアクセス制御モデルは、[RDMASEC]で定義されています。具体的なセキュリティ・オペレーションは、次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. STags are only valid over the exact byte range established by the ULP. DDP MUST provide a mechanism for the ULP to establish and revoke the TO range associated with the ULP Buffer referenced by the STag. 2. STags are only valid for the duration established by the ULP. The ULP may revoke them at any time, in accordance with its own upper layer protocol requirements. DDP MUST provide a mechanism for the ULP to establish and revoke STag validity. 3. DDP MUST provide a mechanism for the ULP to communicate the association between a STag and a specific DDP Stream. 4. A ULP may only expose memory to remote access to the extent that it already had access to that memory itself. 5. If an STag is not valid on a DDP Stream, DDP MUST pass the invalid access attempt to the ULP. The ULP may provide a mechanism for terminating the DDP Stream.",
+      "ja": "1.スタッグスはULPによって確立された正確なバイト範囲でのみ有効です。 DDPは、ULPはのSTagによって参照ULPバッファに関連付けられたレンジに確立し、失効させるための機構を提供しなければなりません。 2.スタッグスはULPによって確立された期間にのみ有効です。 ULPは、それ自身の上位層プロトコルの要件に応じて、いつでも取り消すことができます。 DDPは、確立し、クワガタ有効性を取り消すULPのためのメカニズムを提供しなければなりません。 3. DDPは、ULPはのSTagおよび特定DDPストリームとの関連付けを通信するためのメカニズムを提供しなければなりません。 4. A ULPは、それが既にそのメモリ自体へのアクセスを持っていた範囲へのリモートアクセスにメモリを公開することがあります。 5.のSTagはDDPストリーム上で有効でない場合、DDPはULPへの不正なアクセスの試みを渡す必要があります。 ULPは、DDPストリームを終了するための機構を提供することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Further, DDP provides a mechanism that directly Places incoming payloads in user-mode ULP Buffers. This avoids the risks of prior solutions that relied upon exposing system buffers for incoming payloads.",
+      "ja": "さらに、DDPは、直接ユーザーモードULPバッファに着信ペイロードを配置メカニズムを提供します。これは、着信ペイロードのためのシステムバッファをさらす依拠従来の解決策のリスクを回避できます。"
+    },
+    {
+      "indent": 3,
+      "text": "For the DDP implementation, two components MUST be provided: an RDMA-enabled NIC (RNIC) and a Privileged Resource Manager (PRM).",
+      "ja": "DDPの実装のために、2つのコンポーネントが提供されなければならない：RDMA対応NIC（RNIC）および特権リソースマネージャ（PRM）を。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3.1. RNIC Requirements",
+      "section_title": true,
+      "ja": "8.3.1。 RNIC要件"
+    },
+    {
+      "indent": 3,
+      "text": "The RNIC MUST implement the DDP wire Protocol and perform the security semantics described below.",
+      "ja": "RNICは、DDPワイヤプロトコルを実装し、以下のセキュリティセマンティクスを実行しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1. An RNIC MUST ensure that a specific DDP Stream in a specific Protection Domain cannot access an STag in a different Protection Domain.",
+      "ja": "1.アンRNICは、特定の保護ドメイン内の特定のDDPストリームが異なる保護ドメインでのSTagにアクセスできないことを保証しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. An RNIC MUST ensure that if an STag is limited in scope to a single DDP Stream, no other DDP Stream can use the STag.",
+      "ja": "2.アンRNICはのSTagが単一のDDPストリームに範囲が限定されている場合、他のDDPストリームがのSTagを使用しないことを保証しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "3. An RNIC MUST ensure that a Remote Peer is not able to access memory outside the buffer specified when the STag was enabled for remote access.",
+      "ja": "3.アンRNICは、リモートピアがのSTagは、リモートアクセスのために有効にしたときに指定したバッファ外のメモリにアクセスすることができないようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "4. An RNIC MUST provide a mechanism for the ULP to establish and revoke the association of a ULP Buffer to an STag and TO range.",
+      "ja": "4.アンRNICはULPが確立したSTagにULPバッファの関連付けを取り消すとレンジにするためのメカニズムを提供しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "5. An RNIC MUST provide a mechanism for the ULP to establish and revoke read, write, or read and write access to the ULP Buffer referenced by an STag.",
+      "ja": "5.アンRNICはULPが確立し、読み取り取り消し、書き込み、またはのSTagによって参照ULPバッファへのアクセスを読み書きするための機構を提供しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "6. An RNIC MUST ensure that the network interface can no longer modify an Advertised Buffer after the ULP revokes remote access rights for an STag.",
+      "ja": "【請求項6】RNICはULPがのSTagのためのリモートアクセス権を取り消した後に、ネットワーク・インタフェースは、もは​​やアドバタイズバッファを変更することはできないことを保証しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "7. An RNIC MUST NOT enable firmware to be loaded on the RNIC directly from an untrusted Local Peer or Remote Peer, unless the Peer is properly authenticated (by a mechanism outside the scope of this specification. The mechanism presumably entails authenticating that the remote ULP has the right to perform the update), and the update is done via a secure protocol, such as IPsec.",
+      "ja": "ピアが適切にこの仕様の範囲外の機構によって（認証されていない限り7アンRNICは、直接信頼されていないローカルピアまたはリモートピアからRNICにロードされるファームウェアを有効にしてはいけません。メカニズムは、おそらくリモートULPことを認証伴い）更新を実行する権利を有しており、更新がIPsecなどのセキュアプロトコルを介して行われます。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3.2. Privileged Resources Manager Requirement",
+      "section_title": true,
+      "ja": "8.3.2。特権リソースマネージャの要件"
+    },
+    {
+      "indent": 3,
+      "text": "The PRM MUST implement the security semantics described below.",
+      "ja": "PRMは、下記のセキュリティセマンティクスを実装しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "1. All Non-Privileged ULP interactions with the RNIC Engine that could affect other ULPs MUST be done using the Privileged Resource Manager as a proxy.",
+      "ja": "1.他のULPに影響を与える可能性がRNICエンジンを搭載したすべての非特権ULP相互作用は、プロキシとして特権リソースマネージャを使用して行われなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. All ULP resource allocation requests for scarce resources MUST also be done using a Privileged Resource Manager.",
+      "ja": "希少資源のため2.すべてのULPリソース割り当て要求も特権リソースマネージャを使用して行われなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The Privileged Resource Manager MUST NOT assume different ULPs share Partial Mutual Trust unless there is a mechanism to ensure that the ULPs do indeed share partial mutual trust.",
+      "ja": "ULPは確かに部分的相互信頼を共有しないことを保証するメカニズムがない限り、3特権Resource Managerが異なるのULPは、部分的な相互信頼を共有すると仮定してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "4. If Non-Privileged ULPs are supported, the Privileged Resource Manager MUST verify that the Non-Privileged ULP has the right to access a specific Data Buffer before allowing an STag for which the ULP has access rights to be associated with a specific Data Buffer.",
+      "ja": "4.非特権のULPがサポートされている場合は、特権リソースマネージャは、非特権ULPは、ULPは、特定のデータ・バッファに関連付けられるアクセス権を持っているのSTagを許可する前に、特定のデータバッファにアクセスする権利を持っていることを確かめなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The Privileged Resource Manager SHOULD prevent a Local Peer from allocating more than its fair share of resources. If an RNIC provides the ability to share receive buffers across multiple DDP Streams, the combination of the RNIC and the Privileged Resource",
+      "ja": "5.特権リソースマネージャは、資源の公正なシェア以上を割り当てるからローカルピアを防ぐべきです。 RNICは、複数のDDPストリーム、RNICの組み合わせと特権リソース間で受信バッファを共有する機能を提供する場合"
+    },
+    {
+      "indent": 7,
+      "text": "Manager MUST be able to detect if the Remote Peer is attempting\nto consume more than its fair share of resources so that the\nLocal Peer can apply countermeasures to detect and prevent the\nattack.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "8.4. Security Services for DDP",
+      "section_title": true,
+      "ja": "8.4。 DDPのためのセキュリティサービス"
+    },
+    {
+      "indent": 3,
+      "text": "DDP uses IP-based network services; therefore, all exchanged DDP Segments are vulnerable to spoofing, tampering and information disclosure attacks. If a DDP Stream may be subject to impersonation attacks, or stream hijacking attacks, it is highly RECOMMENDED that the DDP Stream be authenticated, integrity protected, and protected from replay attacks. It MAY use confidentiality protection to protect from eavesdropping.",
+      "ja": "DDPは、IPベースのネットワークサービスを使用しています。従って、全ての改ざんや情報開示攻撃、DDPセグメントがスプーフィングに対して脆弱で交換しました。 DDPストリームは、偽装攻撃、またはストリームのハイジャック攻撃を受ける可能性がある場合は、非常にDDPストリームは、認証された完全性保護、およびリプレイ攻撃から保護することが推奨されます。これは、盗聴から保護するために機密性保護を使用するかもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4.1. Available Security Services",
+      "section_title": true,
+      "ja": "8.4.1。利用可能なセキュリティサービス"
+    },
+    {
+      "indent": 3,
+      "text": "IPsec can be used to protect against the packet injection attacks outlined above. Because IPsec is designed to secure arbitrary IP packet streams, including streams where packets are lost, DDP can run on top of IPsec without any change.",
+      "ja": "IPsecは上記で概説したパケットインジェクション攻撃から保護するために使用することができます。 IPsecはパケットが失われたストリームを含む、任意のIPパケットストリームを保護するように設計されているので、DDPは、そのままのIPsecの上で実行することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP security may also profit from SSL or TLS security services provided for TCP or SCTP based ULPs [TLS] as well as from DTLS [DTLS] security services provided beneath the transport protocol. See [RDMASEC] for further discussion of these approaches and the rationale for selection of IPsec security services for the RDDP protocols.",
+      "ja": "DDPセキュリティはまた、TCPやSCTPトランスポートプロトコルの下に設けベースのULP [TLS]などからDTLS [DTLS]セキュリティサービスのために提供するSSLやTLSのセキュリティサービスから利益があります。さらに、これらのアプローチの議論とRDDPプロトコルのIPsecセキュリティサービスの選択のための理論的根拠のために[RDMASEC]を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4.2. Requirements for IPsec Services for DDP",
+      "section_title": true,
+      "ja": "8.4.2。 DDPのためのIPsecサービスの要件"
+    },
+    {
+      "indent": 3,
+      "text": "IPsec packets are processed (e.g., integrity checked and possibly decrypted) in the order they are received, and a DDP Data Sink will process the decrypted DDP Segments contained in these packets in the same manner as DDP Segments contained in unsecured IP packets.",
+      "ja": "IPsecパケットは、それらが受信された順序で（例えば、整合性がチェックされ、おそらく復号化）処理され、そしてDDPデータシンクは、保護されていないIPパケットに含まれるDDPセグメントと同様に、これらのパケットに含まれる復号化されたDDPセグメントを処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "The IP Storage working group has defined the normative IPsec requirements for IP Storage [RFC3723]. Portions of this specification are applicable to the DDP. In particular, a compliant implementation of IPsec services MUST meet the requirements as outlined in Section 2.3 of [RFC3723]. Without replicating the detailed discussion in [RFC3723], this includes the following requirements:",
+      "ja": "IPストレージワーキンググループはIPストレージのための規範のIPsec要件[RFC3723]を定義しました。この仕様の一部はDDPにも適用可能です。 [RFC3723]のセクション2.3に概説されるように、特に、IPsecのサービスの準拠した実装は、要件を満たさなければなりません。 [RFC3723]で詳細な議論を複製することなく、これは、次の要件が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The implementation MUST support IPsec ESP [RFC2406], as well as the replay protection mechanisms of IPsec. When ESP is utilized, per-packet data origin authentication, integrity, and replay protection MUST be used.",
+      "ja": "1.インプリメンテーションは、IPsec ESP [RFC2406]、並びにのIPsecのリプレイ保護メカニズムをサポートしなければなりません。 ESPを利用する場合、パケット単位のデータ発信元認証、完全性、および再生保護を使用しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. It MUST support ESP in tunnel mode and MAY implement ESP in transport mode.",
+      "ja": "2.これは、トンネルモードでESPをサポートしなければならないし、トランスポートモードでESPを実施することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. It MUST support IKE [RFC2409] for peer authentication, negotiation of security associations, and key management, using the IPsec DOI [RFC2407].",
+      "ja": "3.それは、IPsec DOI [RFC2407]を使用して、ピア認証、セキュリティ協会の交渉、および鍵管理のためのIKE [RFC2409]をサポートしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "4. It MUST NOT interpret the receipt of an IKE delete message as a reason for tearing down the DDP stream. Since IPsec acceleration hardware may only be able to handle a limited number of active IPsec Security Associations (SAs), idle SAs may be dynamically brought down and a new SA be brought up again, if activity resumes.",
+      "ja": "4.これは、IKEの領収書を解釈してはいけませんDDPストリームを切断する理由としてメッセージを削除します。 IPsecの加速ハードウェアのみアクティブIPsecセキュリティアソシエーション（SA）を限られた数を扱うことができるかもしれないので、アイドルSAは動的に下げてもよく、活動が再開した場合、新しいSAは、再度起動されます。"
+    },
+    {
+      "indent": 3,
+      "text": "5. It MUST support peer authentication using a pre-shared key, and MAY support certificate-based peer authentication using digital signatures. Peer authentication using the public key encryption methods [RFC2409] SHOULD NOT be used.",
+      "ja": "5.それは、事前共有キーを使用してピア認証をサポートしなければなりません、そして、デジタル署名を使用して証明書ベースのピア認証をサポートするかもしれません。公開鍵暗号方式[RFC2409]を使用してピア認証を使用しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "6. It MUST support IKE Main Mode and SHOULD support Aggressive Mode. IKE Main Mode with pre-shared key authentication SHOULD NOT be used when either of the peers uses a dynamically assigned IP address.",
+      "ja": "6.これは、IKEメインモードをサポートしなければならないし、アグレッシブモードをサポートする必要があります。ピアのいずれかが動的に割り当てられたIPアドレスを使用する場合、事前共有鍵認証とIKEメインモードを使用しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "7. Access to locally stored secret information (pre-shared or private key for digital signing) must be suitably restricted, since compromise of the secret information nullifies the security properties of the IKE/IPsec protocols.",
+      "ja": "ローカルに保存された秘密情報へのアクセス7.（事前共有またはデジタル署名用の秘密鍵）は、適切に秘密情報の妥協がIKE / IPsecプロトコルのセキュリティプロパティを無効にするので、制限しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "8. It MUST follow the guidelines of Section 2.3.4 of [RFC3723] on the setting of IKE parameters to achieve a high level of interoperability without requiring extensive configuration.",
+      "ja": "8.広範な構成を必要とすることなく相互運用性の高いレベルを達成するために、IKEパラメータの設定に[RFC3723]のセクション2.3.4のガイドラインに従わなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, implementation and deployment of the IPsec services for DDP should follow the Security Considerations outlined in Section 5 of [RFC3723].",
+      "ja": "さらに、DDPのIPsecサービスの実装と展開は、[RFC3723]のセクション5で概説したセキュリティに関する注意事項に従ってください。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document requests no direct action from IANA. The following consideration is listed here as commentary.",
+      "ja": "このドキュメントは、IANAからの直接行動を要求しません。以下の考察は解説としてここに記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "If DDP were enabled a priori for a ULP by connecting to a well-known port, this well-known port would be registered for the DDP with IANA. The registration of the well-known port would be the responsibility of the ULP specification.",
+      "ja": "DDPは、よく知られたポートに接続することにより、ULPのためのアプリオリを有効にした場合は、このよく知られたポートは、IANAとDDPのために登録されます。よく知られているポートの登録はULP仕様の責任になります。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2406] Kent, S. and Atkinson, R., \"IP Encapsulating Security Payload (ESP)\", RFC 2406, November 1998.",
+      "ja": "[RFC2406]ケント、S.とアトキンソン、R.、 \"IPカプセル化セキュリティペイロード（ESP）\"、RFC 2406、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2407] Piper, D., \"The Internet IP Security Domain of Interpretation of ISAKMP\", RFC 2407, November 1998.",
+      "ja": "\"ISAKMPの解釈のインターネットIPセキュリティー領域\" [RFC2407]パイパー、D.、RFC 2407、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2409] Harkins, D. and Carrel, D., \"The Internet Key Exchange (IKE)\", RFC 2409, November 1998.",
+      "ja": "[RFC2409]ハーキン、D.とカレル、D.、 \"インターネット鍵交換（IKE）\"、RFC 2409、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3723] Aboba, B., Tseng, J., Walker, J., Rangan, V., Travostino, F., \"Securing Block Storage Protocols over IP\", RFC 3723, April 2004.",
+      "ja": "[RFC3723] Aboba、B.、ツェン、J.、ウォーカー、J.、Rangan、V.、Travostino、F.、 \"IP上のセキュリティブロックストレージプロトコル\"、RFC 3723、2004年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPSEC] Kent, S. and R. Atkinson, \"Security Architecture for the Internet Protocol\", RFC 2401, November 1998.",
+      "ja": "[IPSEC]ケント、S.とR.アトキンソン、 \"インターネットプロトコルのためのセキュリティー体系\"、RFC 2401、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[MPA] Culley, P., Elzur, U., Recio, R., Bailey, S., and J. Carrier, \"Marker PDU Aligned Framing for TCP Specification\", RFC 5044, October 2007.",
+      "ja": "[MPA] Culley、P.、Elzur、U.、Recio、R.、ベイリー、S.、およびJ.キャリア、 \"TCP仕様のためのマーカーPDUアラインフレーミング\"、RFC 5044、2007年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RDMAP] Recio, R., Culley, P., Garcia, D., and J. Hilland, \"A Remote Direct Memory Access Protocol Specification\", RFC 5040, October 2007.",
+      "ja": "[RDMAP] Recio、R.、Culley、P.、ガルシア、D.、およびJ. Hilland、 \"リモートダイレクトメモリアクセスプロトコル仕様\"、RFC 5040、2007年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RDMASEC] Pinkerton, J. and E. Deleganes, \"Direct Data Placement Protocol (DDP) / Remote Direct Memory Access Protocol (RDMAP) Security\", RFC 5042, October 2007.",
+      "ja": "[RDMASEC]ピンカートン、J.およびE. Deleganes、 \"直接データ配置プロトコル（DDP）/リモートダイレクトメモリアクセスプロトコル（RDMAP）セキュリティ\"、RFC 5042、2007年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SCTP] Stewart, R., Ed., \"Stream Control Transmission Protocol\", RFC 4960, September 2007.",
+      "ja": "[SCTP]スチュワート、R.、エド。、 \"ストリーム制御伝送プロトコル\"、RFC 4960、2007年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SCTPDDP] Bestler, C. and R. Stewart, \"Stream Control Transmission Protocol (SCTP) Direct Data Placement (DDP) Adaptation\", RFC 5043, October 2007.",
+      "ja": "[SCTPDDP] Bestler、C.とR.スチュワート、 \"ストリーム制御伝送プロトコル（SCTP）直接データ配置（DDP）適応\"、RFC 5043、2007年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[TCP] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "[TCP]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4301] Kent, S. and K. Seo, \"Security Architecture for the Internet Protocol\", RFC 4301, December 2005.",
+      "ja": "[RFC4301]ケント、S.とK. Seo、 \"インターネットプロトコルのためのセキュリティアーキテクチャ\"、RFC 4301、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4303] Kent, S., \"IP Encapsulating Security Payload (ESP)\", RFC 4303, December 2005.",
+      "ja": "[RFC4303]ケント、S.、 \"IPカプセル化セキュリティペイロード（ESP）\"、RFC 4303、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4306] Kaufman, C., \"Internet Key Exchange (IKEv2) Protocol\", RFC 4306, December 2005.",
+      "ja": "[RFC4306]カウフマン、C.、 \"インターネットキーエクスチェンジ（IKEv2の）プロトコル\"、RFC 4306、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[DTLS] Rescorla, E. and N. Modadugu, \"Datagram Transport Layer Security\", RFC 4347, April 2006.",
+      "ja": "[DTLS]レスコラ、E.およびN. Modadugu、 \"データグラムトランスポート層セキュリティ\"、RFC 4347、2006年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[TLS] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.1\", RFC 4346, April 2006.",
+      "ja": "[TLS]ダークス、T.およびE.レスコラ、 \"トランスポート層セキュリティ（TLS）プロトコルバージョン1.1\"、RFC 4346、2006年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[iSER] Ko, M., Chadalapaka, M., Hufferd, J., Elzur, U., Shah, H., and P. Thaler, \"Internet Small Computer System Interface (iSCSI) Extensions for Remote Direct Memory Access (RDMA)\", RFC 5046, October 2007.",
+      "ja": "[のiSER]コ、M.、Chadalapaka、M.、Hufferd、J.、Elzur、U.、シャー、H.、およびP.ターラー、「インターネット小型コンピュータシステムインタフェース（iSCSIの）リモートダイレクトメモリアクセスのための拡張機能（RDMA ）」、RFC 5046、2007年10月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Receive Window Sizing",
+      "ja": "付録A.ウィンドウサイズを受信します"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix provides guidance to LLP implementers.",
+      "ja": "この付録では、LLPの実装へのガイダンスを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "Reliable, sequenced, LLPs include a mechanism to Advertise the amount of receive buffer space a sender may consume. This is generally called a \"receive window\".",
+      "ja": "信頼性の高い、配列決定され、LLPSは、送信者が消費される可能性があり、バッファスペースを受け取るの量を宣伝するための機構を含みます。これは、一般的に「受信ウィンドウ」と呼ばれています。"
+    },
+    {
+      "indent": 3,
+      "text": "DDP allows data to be transferred directly to predefined buffers at the Data Sink. Accordingly, the LLP receive window size need not be affected by the reception of a DDP Segment, if that segment is placed before additional segments arrive.",
+      "ja": "DDPは、データはデータシンクで事前に定義されたバッファに直接転送することができます。従って、LLPは、追加のセグメントが到着する前に、そのセグメントが配置されている場合、ウィンドウサイズは、DDPセグメントの受信によって影響される必要はない受け取ります。"
+    },
+    {
+      "indent": 3,
+      "text": "The LLP implementation SHOULD maintain an Advertised receive window large enough to enable a reasonable number of segments to be outstanding at one time. The amount to Advertise depends on the desired data rate, and the expected or actual round-trip delay between endpoints.",
+      "ja": "LLPの実装では、アドバタイズが一度に未処理であることがセグメントの合理的な数を可能にするのに十分な大きさのウィンドウを受信維持すべきです。アドバタイズする量は、所望のデータレート、およびエンドポイント間の期待されるまたは実際の往復遅延に依存します。"
+    },
+    {
+      "indent": 3,
+      "text": "The amount of actual buffers maintained to \"back up\" the receive window is left up to the implementation. This amount will depend on the rate that DDP Segments can be retired; there may be some cases where segment processing cannot keep up with the incoming packet rate. If this occurs, one reasonable way to slow the incoming packet rate is to reduce the receive window.",
+      "ja": "実際のバッファの量は、「バックアップ」を受信ウィンドウが実装に任されているために維持しました。この量は、DDPセグメントを引退することが可能な速度に依存します。セグメント処理は、着信パケット速度に追いつくことができないいくつかのケースがあるかもしれません。この問題が発生した場合、着信パケットの速度を遅くする一つの合理的な方法は、受信ウィンドウを削減することです。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the LLP should take care to comply with the applicable RFCs; for instance, for TCP, receivers are highly discouraged from \"shrinking\" the receive window (reducing the right edge of the window after it has been Advertised).",
+      "ja": "LLPは、該当するRFCに準拠するように注意する必要があることに注意してください。例えば、TCPのために、受信機は高度に（それがアドバタイズされた後、ウィンドウの右端を低減する）受信ウィンドウ「収縮」から推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Contributors",
+      "ja": "付録B.協力者"
+    },
+    {
+      "indent": 3,
+      "text": "Many thanks to the following individuals for their contributions.",
+      "ja": "彼らの貢献のために以下の個人に感謝します。"
+    },
+    {
+      "indent": 3,
+      "text": "John Carrier Cray Inc. 411 First Avenue S, Suite 600 Seattle, WA 98104-2860 Phone: 206-701-2090 EMail: carrier@cray.com",
+      "ja": "ジョン・キャリアのCray Inc.の411まずアベニューS、スイート600シアトル、WA 98104から2860電話：206-701-2090 Eメール：carrier@cray.com"
+    },
+    {
+      "indent": 3,
+      "text": "Hari Ghadia Gen10 Technology, Inc. 1501 W Shady Grove Road Grand Prairie, TX 75050 Phone: (972) 301 3630 EMail: hghadia@gen10technology.com",
+      "ja": "ハリGhadia GEN10テクノロジー株式会社1501年Wシェイディグローブグランドプレーリー、TX 75050電話：（972）301 3630 Eメール：hghadia@gen10technology.com"
+    },
+    {
+      "indent": 3,
+      "text": "Caitlin Bestler Broadcom Corporation 16215 Alton Parkway Irvine, CA 92619-7013 USA Phone: +1 (949) 926-6383 EMail: caitlinb@Broadcom.com",
+      "ja": "ケイトリンBestlerブロードコム・コーポレーション16215アルトンパークウェイアーバイン、CA 92619から7013 USA電話：+1（949）926から6383 Eメール：caitlinb@Broadcom.com"
+    },
+    {
+      "indent": 3,
+      "text": "Uri Elzur Broadcom Corporation 5300 California Avenue Irvine, CA 92617, USA Phone: 949.926.6432 EMail: uri@broadcom.com",
+      "ja": "ウリElzurブロードコム・コーポレーション5300カリフォルニアアベニューアーバイン、CA 92617、USA電話：949.926.6432 Eメール：uri@broadcom.com"
+    },
+    {
+      "indent": 3,
+      "text": "Mike Penna Broadcom Corporation 16215 Alton Parkway Irvine, CA 92619-7013 USA Phone: +1 (949) 926-7149 EMail: MPenna@Broadcom.com",
+      "ja": "マイク・ペンナブロードコム・コーポレーション16215アルトンパークウェイアーバイン、CA 92619から7013 USA電話：+1（949）926から7149 Eメール：MPenna@Broadcom.com"
+    },
+    {
+      "indent": 3,
+      "text": "Patricia Thaler Broadcom Corporation 16215 Alton Parkway Irvine, CA 92619-7013 USA Phone: +1 (949) 926-8635 EMail: pthaler@broadcom.com",
+      "ja": "パトリシア・ターラーブロードコム・コーポレーション16215アルトンパークウェイアーバイン、CA 92619から7013 USA電話：+1（949）926から8635 Eメール：pthaler@broadcom.com"
+    },
+    {
+      "indent": 3,
+      "text": "Ted Compton EMC Corporation Research Triangle Park, NC 27709 USA Phone: +1 (919) 248-6075 EMail: compton_ted@emc.com",
+      "ja": "テッド・コンプトンEMCコーポレーションリサーチトライアングルパーク、NC 27709 USA電話：+1（919）248から6075 Eメール：compton_ted@emc.com"
+    },
+    {
+      "indent": 3,
+      "text": "Jim Wendt Hewlett-Packard Company 8000 Foothills Boulevard Roseville, CA 95747-5668 USA Phone: +1 (916) 785-5198 EMail: jim_wendt@hp.com",
+      "ja": "ジム・ウェント、米国Hewlett-Packard Company 8000フットヒルズ大通りローズ、CA 95747から5668 USA電話：+1（916）785から5198 Eメール：jim_wendt@hp.com"
+    },
+    {
+      "indent": 3,
+      "text": "Mike Krause Hewlett-Packard Company, 43LN 19410 Homestead Road Cupertino, CA 95014 USA Phone: +1 (408) 447-3191 EMail: krause@cup.hp.com",
+      "ja": "マイク・クラウゼ、米国Hewlett-Packard Company、43LN 19410ホームステッド道路クパチーノ、CA 95014 USA電話：+1（408）447から3191 Eメール：krause@cup.hp.com"
+    },
+    {
+      "indent": 3,
+      "text": "Dave Minturn Intel Corporation MS JF1-210 5200 North East Elam Young Parkway Hillsboro, OR 97124 USA Phone: +1 (503) 712-4106 EMail: dave.b.minturn@intel.com",
+      "ja": "デイブMinturnのインテルコーポレーションMS JF1-210 5200ノース・イースト・エラムヤングパークウェイヒルズボロ、OR 97124 USA電話：+1（503）712から4106 Eメール：dave.b.minturn@intel.com"
+    },
+    {
+      "indent": 3,
+      "text": "Howard C. Herbert Intel Corporation MS CH7-404 5000 West Chandler Blvd. Chandler, AZ 85226 USA Phone: +1 (480) 554-3116 EMail: howard.c.herbert@intel.com",
+      "ja": "ハワードC.ハーバートインテル社MS CH7-404 5000ウェスト・チャンドラーブルバードチャンドラー、AZ 85226 USA電話：+1（480）554から3116 Eメール：howard.c.herbert@intel.com"
+    },
+    {
+      "indent": 3,
+      "text": "Tom Talpey Network Appliance 1601 Trapelo Road #16 Waltham, MA 02451 USA Phone: +1 (781) 768-5329 EMail: thomas.talpey@netapp.com",
+      "ja": "トムTalpeyネットワーク・アプライアンス1601 Trapelo道＃16ウォルサム、MA 02451 USA電話：+1（781）768から5329 Eメール：thomas.talpey@netapp.com"
+    },
+    {
+      "indent": 3,
+      "text": "Dwight Barron Hewlett-Packard Company 20555 SH 249 Houston, TX 77070-2698 USA Phone: +1 (281) 514-2769 EMail: Dwight.Barron@Hp.com",
+      "ja": "ドワイト・バロン、米国Hewlett-Packard Company 20555 SH 249ヒューストン、TX 77070から2698 USA電話：+1（281）514から2769 Eメール：Dwight.Barron@Hp.com"
+    },
+    {
+      "indent": 3,
+      "text": "Dave Garcia 24100 Hutchinson Rd. Los Gatos, CA 95033 USA Phone: +1 (831) 247-4464 Email: Dave.Garcia@StanfordAlumni.org",
+      "ja": "デイブ・ガルシア24100ハッチンソンRdのロスガトス、CA 95033 USA電話:. +1（831）247から4464 Eメール：Dave.Garcia@StanfordAlumni.org"
+    },
+    {
+      "indent": 3,
+      "text": "Jeff Hilland Hewlett-Packard Company 20555 SH 249 Houston, TX 77070-2698 USA Phone: +1 (281) 514-9489 EMail: jeff.hilland@hp.com",
+      "ja": "ジェフHilland米国Hewlett-Packard Company 20555 SH 249ヒューストン、TX 77070から2698 USA電話：+1（281）514から9489 Eメール：jeff.hilland@hp.com"
+    },
+    {
+      "indent": 3,
+      "text": "Barry Reinhold Lamprey Networks Durham, NH 03824 USA Phone: +1 (603) 868-8411 EMail: bbr@LampreyNetworks.com",
+      "ja": "バリー・ラインホルト・ヤツメウナギネットワークダーラム、NH 03824 USA電話：+1（603）868から8411 Eメール：bbr@LampreyNetworks.com"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Hemal Shah Broadcom Corporation 5300 California Avenue Irvine, CA 92617 USA Phone: +1 (949) 926-6941 EMail: hemal@broadcom.com",
+      "ja": "Hemalシャーブロードコム・コーポレーション5300カリフォルニアアベニューアーバイン、CA 92617 USA電話：+1（949）926から6941 Eメール：hemal@broadcom.com"
+    },
+    {
+      "indent": 3,
+      "text": "James Pinkerton Microsoft Corporation One Microsoft Way Redmond, WA 98052 USA Phone: +1 (425) 705-5442 EMail: jpink@microsoft.com",
+      "ja": "ジェームズ・ピンカートンマイクロソフト社1マイクロソフト道、レッドモンド、ワシントン98052 USA電話：+1（425）705から5442 Eメール：jpink@microsoft.com"
+    },
+    {
+      "indent": 3,
+      "text": "Renato Recio IBM Corporation 11501 Burnett Road Austin, TX 78758 USA Phone: +1 (512) 838-1365 EMail: recio@us.ibm.com",
+      "ja": "レナートRecio IBMコーポレーション11501バーネット道路オースティン、TX 78758 USA電話：+1（512）838から1365 Eメール：recio@us.ibm.com"
+    },
+    {
+      "indent": 3,
+      "text": "Paul R. Culley Hewlett-Packard Company 20555 SH 249 Houston, TX 77070-2698 USA Phone: +1 (281) 514-5543 EMail: paul.culley@hp.com",
+      "ja": "ポール・R. Culley、米国Hewlett-Packard Company 20555 SH 249ヒューストン、TX 77070から2698 USA電話：+1（281）514から5543 Eメール：paul.culley@hp.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    }
+  ]
+}
