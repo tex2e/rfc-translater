@@ -1,0 +1,377 @@
+{
+  "title": {
+    "text": "RFC 6479 - IPsec Anti-Replay Algorithm without Bit Shifting",
+    "ja": "RFC 6479 - ビットシフトせずにIPsecアンチリプレイアルゴリズム"
+  },
+  "number": 6479,
+  "created_at": "2019-10-31 16:11:31.424129+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Independent Submission                                          X. Zhang\nRequest for Comments: 6479                                       T. Tsou\nCategory: Informational                           Futurewei Technologies\nISSN: 2070-1721                                             January 2012",
+      "raw": true
+    },
+    {
+      "indent": 12,
+      "text": "IPsec Anti-Replay Algorithm without Bit Shifting",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document presents an alternate method to do the anti-replay checks and updates for IP Authentication Header (AH) and Encapsulating Security Protocol (ESP). The method defined in this document obviates the need for bit shifting and it reduces the number of times an anti-replay window is adjusted.",
+      "ja": "この文書では、IP認証ヘッダ（AH）とカプセル化セキュリティプロトコル（ESP）のためのアンチリプレイのチェックと更新を行うための別の方法を提示しています。この文書で定義された方法は、ビットシフトを不要にし、それはアンチリプレイウィンドウを調整する回数を減少させます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for informational purposes.",
+      "ja": "このドキュメントはインターネット標準化過程仕様ではありません。それは、情報提供の目的のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This is a contribution to the RFC Series, independently of any other RFC stream. The RFC Editor has chosen to publish this document at its discretion and makes no statement about its value for implementation or deployment. Documents approved for publication by the RFC Editor are not a candidate for any level of Internet Standard; see Section 2 of RFC 5741.",
+      "ja": "これは、独立して、他のRFCストリームの、RFCシリーズへの貢献です。 RFC Editorはその裁量でこの文書を公開することを選択し、実装や展開のためにその値についての声明を出すていません。 RFC編集者によって公表のために承認されたドキュメントは、インターネット標準の任意のレベルの候補ではありません。 RFC 5741のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc6479.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc6479で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2012 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2012 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Description of New Anti-Replay Algorithm ........................3\n3. Example of New Anti-Replay Algorithm ............................5\n4. Security Considerations .........................................9\n5. Normative References ............................................9\n6. Acknowledgements ................................................9",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "\"IP Authentication Header\" [RFC4302] and \"IP Encapsulating Security Payload (ESP)\" [RFC4303] define an anti-replay service that employs a sliding window mechanism. The mechanism, when enabled by a receiver, uses an anti-replay window of size W. This window limits how far out of order a packet can be, relative to the packet with the highest sequence number that has been authenticated so far. The window can be represented by a range [WB, WT], where WB=WT-W+1. The whole anti-replay window can be thought of as a string of bits. The value of each bit indicates whether or not a packet with that sequence number has been received and authenticated, so that the replay packet can be detected and rejected. If the packet is received, the receiver gets the sequence number S in the packet. If S is inside window (S<=WT and S>=WB), then the receiver checks the corresponding bit (location is S-WB) in the window to see if this S has already been seen. If S<WB, the packet is dropped. If S>WT and is validated, the window is advanced by (S-WT) bits. The new window becomes [WB+S-WT, S]. The new bits in this new window are set to indicate that no packets with those sequence numbers have been received. The typical implementation (for example, the integrity algorithm [RFC4302]) is done by shifting (S-WT) bits. In normal cases, the packets arrive in order, which results in continuous updates and bit-shifting operations.",
+      "ja": "「IP認証ヘッダ」[RFC4302]及び「IPカプセル化セキュリティペイロード（ESP）」[RFC4303]はスライディングウィンドウメカニズムを採用アンチリプレイサービスを定義します。受信機によってイネーブル機構は、これまでに認証された最も高いシーケンス番号を有するパケットに対してパケットがいかに遠いためのアウトサイズW.このウィンドウ限界のアンチリプレイウィンドウを使用します。ウィンドウは範囲[WB、WT]、WB = WT-W + 1によって表すことができます。全体のアンチリプレイウィンドウは、ビット列と考えることができます。リプレイパケットを検出し、排除することができるように、各ビットの値は、そのシーケンス番号を持つパケットを受信し、認証されたか否かを示します。パケットを受信した場合、受信機は、パケットのシーケンス番号Sを取得します。 Sがウィンドウ内にある場合（S <= WT及びS> = WB）、受信機は、これは既に見られたSかどうかを確認するウィンドウで（場所はS-WBである）の対応するビットをチェックします。 S <WB場合、パケットはドロップされます。 S> WTと検証された場合、ウィンドウは（S-WT）ビットによって進められます。新しいウィンドウが[WB + S-WT、S]となります。この新しいウィンドウで新しいビットは、これらのシーケンス番号を持つパケットが受信されていないことを示すために設定されています。典型的な実装（例えば、完全性アルゴリズム[RFC4302]）を（S-WT）ビットをシフトすることによって行われます。通常のケースでは、パケットは、継続的な更新及びビットシフト操作をもたらすために到着します。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4302] and [RFC4303] define minimum window sizes of 32 and 64. But no requirement is established for minimum or recommended window sizes beyond 64 packets. The window size needs to be based on reasonable expectations for packet re-ordering. For a high-end, multi-core network processor with multiple crypto cores, a window size bigger than 64 or 128 is needed due to the varied IPsec processing latency caused by different cores. In such a case, the window sliding is tremendously costly even with hardware acceleration to do the bit shifting. This document describes an alternate method to avoid bit shifting. It only discusses the anti-replay processing at the receiving side. The processing is always safe and has no interoperability effects. Even with a window size bigger than the usual 32- or 64-bit window, no interoperability issues are caused.",
+      "ja": "[RFC4302]及び[RFC4303]は32と64の最小ウィンドウサイズを定義しかし必要は64個のパケットを超えて最小または推奨ウィンドウサイズのために確立されていません。ウィンドウサイズは、パケットの再順序付けのための合理的な期待に基づいてする必要があります。複数の暗号化コアを有するハイエンドマルチコアネットワークプロセッサのために、64または128よりも大きなウィンドウサイズは、異なるコアによって生じる変化IPsec処理レイテンシに必要とされます。このような場合には、スライディングウィンドウは、偶数ビットシフトを行うためのハードウェアアクセラレーションと途方もなく高価です。この文書では、ビットシフトを回避するための別の方法を記載しています。それだけで、受信側でリプレイ処理について説明します。処理は、常に安全であり、何の相互運用性の効果を持っていません。でも、いつもの32ビットまたは64ビットのウィンドウよりも大きなウィンドウサイズで、何の相互運用性の問題は生じません。"
+    },
+    {
+      "indent": 3,
+      "text": "Any node employing practices that potentially cause reordering beyond the usual 32- or 64-bit window may lead to interoperability or performance problems, however. For instance, if either the sending node or routers along the path cause significant re-ordering, this can lead to inability of the receiving IPsec endpoint to process the packets, as many current implementations do not support the extensions defined in this memo. Similarly, such reordering can cause significant problems for transport and upper-layer protocols, and is generally best avoided.",
+      "ja": "任意のノードが潜在しかし、相互運用性やパフォーマンスの問題につながる可能性が通常の32ビットまたは64ビットのウィンドウを超えて並べ替え原因プラクティスを採用します。パスに沿って送信ノードまたはルータのどちらかが、重要な並べ替えが発生した場合、多くの現在の実装では、このメモで定義された拡張をサポートしていないとして例えば、これは、パケットを処理する受信のIPsecエンドポイントのできないことにつながることができます。同様に、このような並べ替えは、トランスポートと上位層プロトコルのための重大な問題を引き起こす可能性があり、一般的に最善の回避です。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Description of the New Anti-Replay Algorithm",
+      "section_title": true,
+      "ja": "新しいアンチリプレイアルゴリズムの0002"
+    },
+    {
+      "indent": 3,
+      "text": "Here we present an easy way to update the window index only, while also reducing the number window updates. The basic idea is illustrated in the following figures. Suppose that we configure the window size W, which consists of M-1 blocks, where M is a power of two (2). Each block contains N bits, where N is also a power of two (2). It can be a byte (8 bit) or word (32 bit), or multiple words. The supported sliding window size is (M-1)*N. However, it covers up M blocks (four blocks as shown in Figure 1). All these M blocks are circulated and become a ring of blocks, each with N bits. In this way, the supported sliding window (M-1 blocks) is always a subset window of the actual window when the window slides.",
+      "ja": "また、多数のウィンドウの更新を削減しながら、ここでは、ウィンドウのみインデックスを更新するための簡単な方法を提示します。基本的な考え方は、以下の図に示されています。我々は、Mが2の累乗であるM-1ブロックで構成ウィンドウサイズWを、設定したとする（2）。各ブロックは、Nは、2つ（2）のパワーであるNビットを含んでいます。これは、バイト（8ビット）やワード（32ビット）、又は複数の単語であってもよいです。サポートされているスライディングウィンドウサイズは、（M-1）* Nです。 （図1に示すように、4つのブロック）ただし、Mブロックをカバーします。これらのすべてのMブロックは循環とNビットのブロックの環、それぞれなっています。このように、サポートされているスライディングウィンドウ（M-1ブロック）は、常に実際のウィンドウと、ウィンドウスライドのサブセットウィンドウです。"
+    },
+    {
+      "indent": 3,
+      "text": "Initially, the actual window is defined by a low- and high-end index [WB, WT], as illustrated in Figure 1.",
+      "ja": "図1に示すように、最初に、実際のウィンドウは、低および高終了インデックス[WB、WT]によって定義されます。"
+    },
+    {
+      "indent": 6,
+      "text": "+--------+--------+--------+--------+\n|xxxxxxcc|cccccccc|cccccccc|ccccc100|\n+--------+--------+--------+--------+\n       ^                         ^\n       |                         |\n       WB                        WT",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "Figure 1: The sliding window [WB, WT] in which WT is the last validated sequence number, and the supported window size W is WT-WB+1. (x=don't care bit, c=check bit)",
+      "ja": "図1：WTは、最後の検証シーケンス番号であり、サポートされているウィンドウサイズWは、WT-WB + 1であるスライディング・ウィンドウ[WB、WT]。 （X =気にしないビット、C =チェックビット）"
+    },
+    {
+      "indent": 3,
+      "text": "If we receive a packet with the sequence number (S) greater than WT, we slide the window. But we only change the window index by adding the difference (S-WT) to both WT and WB (WB is automatically changed as the window size is fixed). So, S becomes the largest sequence number of the received packets. Figure 2 shows the case that the packet with sequence number S=WT+1 is received.",
+      "ja": "我々はWTよりも大きなシーケンス番号（S）でパケットを受信した場合、我々はウィンドウをスライドさせます。しかし、我々は、（ウィンドウサイズが固定されているようにWBが自動的に変更される）WTとWBの両方に差（S-WT）を添加することにより、ウィンドウインデックスを変更します。だから、Sは、受信したパケットの最大シーケンス番号になります。図2は、シーケンス番号S = WT + 1を持つパケットを受信した場合を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "+--------+--------+--------+--------+\n|xxxxxxcc|cccccccc|cccccccc|ccccc110|\n+--------+--------+--------+--------+\n        ^                         ^\n        |                         |\n        WB                        WT",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "Figure 2: The sliding window [WB, WT] after S=WT+1",
+      "ja": "図2：S後のスライディングウィンドウ[WB、WT] = WT + 1"
+    },
+    {
+      "indent": 3,
+      "text": "If S is in a different block from where WT is, we have to initialize all bit values in the blocks to 0 without bit shifting. If S passes several blocks, we have to initialize several blocks instead of only one block. Figure 3 shows that the sequence number already passed the block boundary. Immediately after the update, all the check bits should be 0 in the block where WT resides.",
+      "ja": "Sは、WTがある場所とは異なるブロックにある場合、我々はビットシフトせずに0にブロック内のすべてのビット値を初期化しなければなりません。 Sは、いくつかのブロックを通過した場合、我々は代わりに一つだけのブロックのいくつかのブロックを初期化する必要があります。図3は、シーケンス番号が既にブロック境界を通過したことを示しています。直ちに更新後、すべてのチェック・ビットは、WTが存在するブロックに0であるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "+--------+--------+--------+--------+\n|ccc10000|xxxxcccc|cccccccc|cccccccc|\n+--------+--------+--------+--------+\n    ^         ^\n    |         |\n    WT        WB",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "Figure 3: The sliding window [WB, WT] after S passes the boundary",
+      "ja": "図3：スライディングウィンドウ[WB、WT] Sが境界を通過した後に"
+    },
+    {
+      "indent": 3,
+      "text": "After the update, the new window still covers the configured window. This means the configured sub-window also slides, conforming to the sliding window protocol. The actual effect is somewhat like shifting the block. In this way, the bit shifting is deemed unnecessary.",
+      "ja": "更新後、新しいウィンドウがまだ構成されたウィンドウをカバーしています。これはまた、構成サブウィンドウを意味スライディングウィンドウプロトコルに準拠し、スライド。実際の効果は多少ブロックをシフトするようなものです。このように、ビットシフトは不要であると考えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is also easier and much faster to check the window with the sequence number because the sequence number check does not depend on the lowest index WB. Instead, it only depends on the sequence number of the received packet. If we receive a sequence number S, the bit location is the lowest several bits of the sequence number, which only depends on the block size (N). The block index is several bits before the location bits, which only depends on the window size (M).",
+      "ja": "シーケンス番号チェックが最低指数WBに依存しないので、シーケンス番号とウィンドウを確認することも簡単に、はるかに高速です。代わりに、それだけで受信したパケットのシーケンス番号に依存します。我々は、シーケンス番号Sを受信した場合、ビット位置は、ブロックサイズ（N）に依存するシーケンス番号の最下位数ビットです。ブロックインデックスは、ウィンドウ・サイズ（M）に依存する位置ビット、前にいくつかのビットです。"
+    },
+    {
+      "indent": 3,
+      "text": "We do not specify how many redundancy bits are needed, except that it should be a power of two (2) for computation efficiency. If the microprocessor is 32 bits, 32 might be a better choice while 64 might be better for 64-bit microprocessor. For a microprocessor with cache support, one cache line is also a good choice. It also depends on the size of the sliding window. If we have N redundancy bits (for example, 32 bits in the above description), we only need 1/N times update of blocks, comparing to the bit-shifting algorithm in [RFC4302].",
+      "ja": "それは2つ（2）の力であるべきことを除いて私たちは、計算効率のために、ビットが必要とされているどのように多くの冗長性を指定しないでください。マイクロプロセッサが32ビットである場合、32 64、64ビットマイクロプロセッサのためのより良いかもしれないしながら、より良い選択かもしれません。キャッシュをサポートしているマイクロプロセッサの場合、1つのキャッシュラインも良い選択です。また、スライディングウィンドウのサイズに依存します。我々は、N個の冗長ビット（以上の説明では、例えば、32ビット）がある場合、我々は[RFC4302]でのビットシフトアルゴリズムと比較し、ブロックの1 / N回の更新を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The cost of this method is extra byte(s) being used as a redundant window. The cost will be minimal if the window size is big enough. Actually, the extra redundant bits are not completely wasted. We could reuse the unused bits in the block where index WB resides, i.e., the supported window size could be (M-1)*N, plus the unused bits in the last block.",
+      "ja": "この方法のコストは、冗長ウィンドウとして使用され、余分なバイト（S）です。ウィンドウサイズが十分に大きい場合にはコストが最小限になります。実際には、余分な冗長ビットが完全に無駄になりません。我々は、インデックスWBが存在するブロック内の未使用のビットを再利用することができ、すなわち、サポートされているウィンドウのサイズは、（M-1）* N、プラス最後のブロックの未使用のビットであってもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Example of the New Anti-Replay Algorithm",
+      "section_title": true,
+      "ja": "新しいアンチリプレイアルゴリズムの3例"
+    },
+    {
+      "indent": 3,
+      "text": "Here is the example code to implement the algorithm of anti-replay checks and updates, which is described in the previous sections.",
+      "ja": "ここで、前のセクションで説明されているアンチリプレイチェック及び更新のアルゴリズムを実装するためのコード例です。"
+    },
+    {
+      "indent": 0,
+      "text": "<CODE BEGINS>",
+      "ja": "<CODEが開始されます>"
+    },
+    {
+      "indent": 0,
+      "text": "/**\n * Copyright (c) 2012 IETF Trust and the persons identified as\n * authors of the code. All rights reserved.\n *\n * Redistribution and use in source and binary forms, with or without\n * modification, is permitted pursuant to, and subject to the license\n * terms contained in, the Simplified BSD License set forth in Section\n * 4.c of the IETF Trust's Legal Provisions Relating to IETF Documents\n * (http://trustee.ietf.org/license-info).\n *\n */",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "/**\n * In this algorithm, the hidden window size must be a power of two,\n * for example, 1024 bits.  The redundant bits must also be a power of\n * two, for example 32 bits.  Thus, the supported anti-replay window\n * size is the hidden window size minus the redundant bits.  It is 992\n * in this example.  The size of the integer depends on microprocessor\n * architecture.  In this example, we assume that the software runs on\n * a 32-bit microprocessor.  So the size of the integer is 32.  In order\n * to convert the bitmap into an array of integers, the total number of\n * integers is the hidden window size divided by the size of the\n * integer.\n *",
+      "raw": true
+    },
+    {
+      "indent": 1,
+      "text": "* struct ipsec_sa contains the window and window related parameters, * such as the window size and the last acknowledged sequence number. * * all the value of macro can be changed, but must follow the rule * defined in the algorithm. */",
+      "ja": "*構造体ipsec_saは、ウィンドウのサイズと最後に認めたシーケンス番号として*、ウィンドウとウィンドウ関連のパラメータが含まれています。 *マクロのすべての値を変更することができますが、*アルゴリズムで定義されたルールに従わなければなりません。 * /"
+    },
+    {
+      "indent": 0,
+      "text": "#define SIZE_OF_INTEGER       32 /** 32-bit microprocessor */\n#define BITMAP_LEN            (1024/ SIZE_OF_INTEGER)\n                                /** in terms of the 32-bit integer */\n#define BITMAP_INDEX_MASK     (IPSEC_BITMAP_LEN-1)\n#define REDUNDANT_BIT_SHIFTS  5\n#define REDUNDANT_BITS        (1<<REDUNDANT_BIT_SHIFTS)\n#define BITMAP_LOC_MASK       (IPSEC_REDUNDANT_BITS-1)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "int\nipsec_check_replay_window (struct ipsec_sa *ipsa,\n                           uint32_t sequence_number)\n{\n    int bit_location;\n    int index;",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * replay shut off\n */\nif (ipsa->replaywin_size == 0) {\n    return 1;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * first == 0 or wrapped\n */\nif (sequence_number == 0) {\n    return 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * first check if the sequence number is in the range\n */\nif (sequence_number>ipsa->replaywin_lastseq) {\n    return 1;  /** larger is always good */\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * The packet is too old and out of the window\n */\nif ((sequence_number + ipsa->replaywin_size) <\n    ipsa->replaywin_lastseq) {\n      return 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * The sequence is inside the sliding window\n * now check the bit in the bitmap\n * bit location only depends on the sequence number\n */\nbit_location = sequence_number&BITMAP_LOC_MASK;\nindex = (sequence_number>>REDUNDANT_BIT_SHIFTS)&BITMAP_INDEX_MASK;",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/*\n * this packet has already been received\n */\nif (ipsa->replaywin_bitmap[index]&(1<<bit_location)) {\n    return 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": " return 1; }",
+      "ja": "1を返します。 }"
+    },
+    {
+      "indent": 0,
+      "text": "int\nipsec_update_replay_window (struct ipsec_sa *ipsa,\n                            uint32_t sequence_number)\n{\n    int bit_location;\n    int index, index_cur, id;\n    int diff;",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "if (ipsa->replaywin_size == 0) {  /** replay shut off */\n    return 1;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "if (sequence_number == 0) {\n    return 0;     /** first == 0 or wrapped */\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * the packet is too old, no need to update\n */\nif ((ipsa->replaywin_size + sequence_number) <\n    ipsa->replaywin_lastseq) {\n       return 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "/**\n * now update the bit\n */\nindex = (sequence_number>>REDUNDANT_BIT_SHIFTS);",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "/**\n * first check if the sequence number is in the range\n */\nif (sequence_number>ipsa->replaywin_lastseq) {\n    index_cur = ipsa->replaywin_lastseq>>REDUNDANT_BIT_SHIFTS;\n    diff = index - index_cur;\n    if (diff > BITMAP_LEN) {  /* something unusual in this case */\n        diff = BITMAP_LEN;\n    }",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "for (id = 0; id < diff; ++id) {\n    ipsa->replaywin_bitmap[(id+index_cur+1)&BITMAP_INDEX_MASK]\n        = 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": " ipsa->replaywin_lastseq = sequence_number; }",
+      "ja": "ipsa-> replaywin_lastseq = SEQUENCE_NUMBER。 }"
+    },
+    {
+      "indent": 4,
+      "text": "index &= BITMAP_INDEX_MASK;\nbit_location = sequence_number&BITMAP_LOC_MASK;",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "    /* this packet has already been received */\n    if (ipsa->replaywin_bitmap[index]&(1<<bit_location)) {\n    return 0;\n}",
+      "raw": true
+    },
+    {
+      "indent": 4,
+      "text": "ipsa->replaywin_bitmap[index] |= (1<<bit_location);",
+      "ja": "ipsa-> replaywin_bitmap [インデックス] | =（1 << bit_location）。"
+    },
+    {
+      "indent": 0,
+      "text": " return 1; }",
+      "ja": "1を返します。 }"
+    },
+    {
+      "indent": 0,
+      "text": "<CODE ENDS>",
+      "ja": "<CODEはENDS>"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 4,
+      "text": "This document does not change [RFC4302] or [RFC4303].  It provides\nan alternate method for anti-replay.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "5. Acknowledgements",
+      "section_title": true,
+      "ja": "5.謝辞"
+    },
+    {
+      "indent": 4,
+      "text": "The idea in this document came from the software design on one\nhigh-performance multi-core network processor.  The new network\nprocessor core integrates a dozen of crypto core in a distributed\nway, which makes hardware anti-replay service impossible.",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "6. Normative References",
+      "section_title": true,
+      "ja": "6.引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4302] Kent, S., \"IP Authentication Header\", RFC 4302, December 2005.",
+      "ja": "[RFC4302]ケント、S.、 \"IP認証ヘッダー\"、RFC 4302、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4303] Kent, S., \"IP Encapsulating Security Payload (ESP)\", RFC 4303, December 2005.",
+      "ja": "[RFC4303]ケント、S.、 \"IPカプセル化セキュリティペイロード（ESP）\"、RFC 4303、2005年12月。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Xiangyang Zhang Futurewei Technologies 2330 Central Expressway Santa Clara, California 95051 USA",
+      "ja": "ξ威勢の張将来の技術2330年、中央高速道路サンタクララ、カリフォルニア95051 USAなど"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1-408-330-4545 EMail: xiangyang.zhang@huawei.com",
+      "ja": "電話：+ 1-408-330-4545 Eメール：xiangyang.zhang@huawei.com"
+    },
+    {
+      "indent": 3,
+      "text": "Tina Tsou (Ting Zou) Futurewei Technologies 2330 Central Expressway Santa Clara, California 95051 USA",
+      "ja": "ティナT検索（さえティンZ）は、将来の技術2330年、中央高速道路サンタクララ、カリフォルニア95051 USAです"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1-408-859-4996 EMail: tena@huawei.com",
+      "ja": "電話：+ 1-408-859-4996 Eメール：tena@huawei.com"
+    }
+  ]
+}
