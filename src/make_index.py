@@ -15,7 +15,7 @@ def make_index():
         with open(filename) as f:
             html = f.read()
         m = re.search(r'<title>([^<]*)</title>', html)
-        title = m[1].replace('日本語訳', '')
+        title = m[1].replace('日本語訳', '').strip()
         m = re.match(r'rfc(\d+).html', rfcfile)
         if m:
             filenum = int(m[1])
