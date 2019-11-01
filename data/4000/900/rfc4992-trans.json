@@ -1,0 +1,1563 @@
+{
+  "title": {
+    "text": "RFC 4992 - XML Pipelining with Chunks for the Internet Registry Information Service",
+    "ja": "RFC 4992 - インターネットレジストリ情報サービスのためのチャンクを持つXMLパイプライン"
+  },
+  "number": 4992,
+  "created_at": "2019-10-29 22:41:57.972580+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          A. Newton\nRequest for Comments: 4992                                VeriSign, Inc.\nUpdates: 3981                                                August 2007\nCategory: Standards Track",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "         XML Pipelining with Chunks\nfor the Internet Registry Information Service",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a simple TCP transfer protocol for the Internet Registry Information Service (IRIS). Data is transferred between clients and servers using chunks to achieve pipelining.",
+      "ja": "この文書は、インターネットレジストリ情報サービス（IRIS）のためのシンプルなTCP転送プロトコルを記述します。データは、パイプライン化を達成するためにチャンクを使用してクライアントとサーバ間で転送されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n2. Document Terminology ............................................3\n3. Request Block (RQB) .............................................4\n4. Response Blocks .................................................4\n   4.1. Response Block (RSB) .......................................5\n   4.2. Connection Response Block (CRB) ............................5\n5. Block Header ....................................................6\n6. Chunks ..........................................................7\n   6.1. No Data Types ..............................................9\n   6.2. Version Information Types ..................................9\n   6.3. Size Information Types .....................................9\n   6.4. Other Information Types ...................................10\n   6.5. SASL Types ................................................11\n   6.6. Authentication Success Information Types ..................12\n   6.7. Authentication Failure Information Types ..................12\n   6.8. Application Data Types ....................................12\n7. Idle Sessions ..................................................13\n8. Closing Sessions Due to an Error ...............................13\n9. Use over TLS ...................................................13\n10. Update to RFC 3981 ............................................13\n11. IRIS Transport Mapping Definitions ............................14\n   11.1. URI Scheme ...............................................14\n   11.2. Application Protocol Label ...............................14\n12. Internationalization Considerations ...........................14\n13. IANA Considerations ...........................................14\n   13.1. XPC URI Scheme Registration ..............................14\n   13.2. XPCS URI Scheme Registration .............................15\n   13.3. S-NAPTR XPC Registration .................................15\n   13.4. S-NAPTR XPCS Registration ................................15\n   13.5. Well-Known TCP Port Registration for XPC .................16\n   13.6. Well-Known TCP Port Registration for XPCS ................16\n14. Security Considerations .......................................17\n   14.1. Security Mechanisms ......................................17\n   14.2. SASL Compliance ..........................................18\n15. References ....................................................19\n   15.1. Normative References .....................................19\n   15.2. Informative References ...................................19\nAppendix A. Examples ..............................................20\nAppendix B. Contributors ..........................................28",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Using S-NAPTR [5], IRIS has the ability to define the use of multiple application transports (or transfer protocols) for different types of registry services, all at the discretion of the server operator. The TCP transfer protocol defined in this document is completely modular and may be used by any registry types.",
+      "ja": "S-NAPTRを使用すると、[5]、IRISは、すべてのサーバーのオペレータの裁量で、レジストリサービスの異なるタイプの複数のアプリケーション・トランスポート（または転送プロトコル）の使用を定義する能力を有します。この文書で定義されたTCP転送プロトコルは、完全にモジュール式であり、任意のレジストリタイプによって使用されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "This transfer protocol defines simple framing for sending XML in chunks so that XML fragments may be acted upon (or pipelined) before the reception of the entire XML instance. This document calls this XML pipelining with chunks (XPC) and its use with IRIS as IRIS-XPC.",
+      "ja": "この転送プロトコルは、XMLフラグメントが作用（又はパイプライン）全体XMLインスタンスを受信する前にすることができるようにチャンクでXMLを送信するための単純なフレーミングを定義します。この文書では、XMLチャンクとのパイプライン（XPC）とIRIS  -  XPCとしてIRISでの使用を呼び出します。"
+    },
+    {
+      "indent": 3,
+      "text": "XPC is for use with simple request and response interactions between clients and servers. Clients send a series of requests to a server in data blocks. The server will respond to each data block individually with a corresponding data block, but through the same connection. Request and response data blocks are sent using the TCP SEND function and received using the TCP RECEIVE function.",
+      "ja": "XPCは、クライアントとサーバ間の単純な要求と応答の対話で使用するためです。クライアントは、データ・ブロック内のサーバーへの一連の要求を送信します。サーバは、個別に対応するデータブロックと、各データブロックに応答するが、同じ接続を介してであろう。リクエストとレスポンスのデータ・ブロックは、TCP SEND機能を使用して送信し、TCP受信機能を使用して受信されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The lifecycle of an XPC session has the following phases:",
+      "ja": "XPCセッションのライフサイクルは、次のフェーズがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. A client establishes a TCP connection with a server.",
+      "section_title": true,
+      "ja": "1.クライアントはサーバとのTCP接続を確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The server sends a connection response block (CRB).",
+      "section_title": true,
+      "ja": "2.サーバは、接続応答ブロック（CRB）を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The client sends a request block (RQB). In this request, the client can set a \"keep open\" flag requesting that the server keep the XPC session open following the response to this request.",
+      "ja": "3.クライアントは、要求ブロック（RQB）を送信します。この要求では、クライアントは、サーバがこの要求に応答して、次のオープンXPCセッションを維持することを要求する「オープン続ける」フラグを設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The server responds with a response block (RSB). In this response, the server can indicate to the client whether or not the XPC session will be closed.",
+      "ja": "4.サーバは、応答ブロック（RSB）で応答します。この応答では、サーバーは、XPCセッションがクローズされるかどうかをクライアントに知らせることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "5. If the XPC session is not to be terminated, then the lifecycle repeats from step 3.",
+      "ja": "5. XPCセッションが終了しない場合には、そのライフサイクルは、ステップ3から繰り返します。"
+    },
+    {
+      "indent": 3,
+      "text": "6. The TCP connection is closed.",
+      "section_title": true,
+      "ja": "6. TCP接続が閉じられています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Document Terminology",
+      "section_title": true,
+      "ja": "2.ドキュメントの用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [8].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119に記載されるように解釈される[8]。"
+    },
+    {
+      "indent": 3,
+      "text": "Octet fields with numeric values are given according to the conventions in RFC 1166 [12]: the leftmost bit of the whole field is the most significant bit; when a multi-octet quantity is transmitted the most significant octet is transmitted first. Bits signifying flags in an octet are numbered according to the conventions of RFC 1166 [12]: bit 0 is the most significant bit and bit 7 is the least significant bit. When a diagram describes a group of octets, the order of transmission for the octets starts from the left.",
+      "ja": "数値を持つオクテットフィールドは、[12] RFC 1166に規則に従って与えられている：全フィールドの左端のビットが最上位ビットです。マルチオクテット量を送信する際に最も重要なオクテットが最初に送信されます。オクテットのフラグを意味するビットがRFC 1166 [12]の規則に従って番号付けされる：ビット0が最上位ビットであり、ビット7は最下位ビットです。図はオクテットのグループを記載する場合、オクテットのための送信の順序は、左から始まります。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Request Block (RQB)",
+      "section_title": true,
+      "ja": "3.要求ブロック（RQB）"
+    },
+    {
+      "indent": 3,
+      "text": "The format for the request block (RQB) is as follows:",
+      "ja": "次のように要求ブロック（RQB）の形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "      +--------+-----------+-----------+-------------+\nfield | header | authority | authority | chunks 1..n |\n      |        |  length   |           |             |\n      +--------+-----------+-----------+-------------+\noctets    1         1         0..255      variable",
+      "raw": true
+    },
+    {
+      "indent": 31,
+      "text": "Request Block",
+      "ja": "要求ブロック"
+    },
+    {
+      "indent": 3,
+      "text": "These fields have the following meanings:",
+      "ja": "これらのフィールドは以下の意味があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o header - as described in Section 5.",
+      "ja": "ヘッダO  - セクション5に記載されているように。"
+    },
+    {
+      "indent": 3,
+      "text": "o authority length - the length of the authority field in this request block.",
+      "ja": "O権限長 - この要求ブロックにおける権限フィールドの長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "o authority - a string of octets describing the authority against which this request is to be executed. See [1] for the definition and description of an authority. The number of octets in this string MUST be no more and no less than the number specified by the authority length.",
+      "ja": "O権限 - この要求が実行されるに対して権限を記述する一連の八重奏。権限の定義と説明については、[1]を参照してください。この文字列内のオクテットの数はこれ以上と権限の長さで指定した数より少なくてはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "o chunks 1..n - the request data broken into chunks (Section 6).",
+      "ja": "Oチャンクは1..N  - チャンク（第6節）に分け要求データ。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Response Blocks",
+      "section_title": true,
+      "ja": "4.レスポンスブロック"
+    },
+    {
+      "indent": 3,
+      "text": "There are two types of blocks used by a server to respond to a client. The first type is a response block (RSB) defined in Section 4.1. It is used by a server to respond to request blocks (RQBs). The second type is a specialized version of a response block called a connection response block (CRB) defined in Section 4.2. It is sent by a server to a client when a connection is established to initiate protocol negotiation. Conceptually, a CRB is a type of RQB; they share the same format, but a CRB is constrained in conveying only specific information and is only sent at the beginning of the session lifecycle.",
+      "ja": "クライアントに応答するサーバによって使用されるブロックの2種類があります。第一のタイプは、（RSB）セクション4.1で定義された応答ブロックです。ブロック（RQBsを）要求に応答するサーバーによって使用されます。第二のタイプは、セクション4.2で定義された接続応答ブロック（CRB）と呼ばれる応答ブロックの特殊なバージョンです。接続は、プロトコルのネゴシエーションを開始するために設立されたときにサーバからクライアントに送信されます。概念的には、CRBはRQBのタイプです。彼らは同じフォーマットを共有しますが、CRBは、特定の情報だけを伝えるに拘束され、唯一のセッションのライフサイクルの開始時に送信されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Response Block (RSB)",
+      "section_title": true,
+      "ja": "4.1。応答ブロック（RSB）"
+    },
+    {
+      "indent": 3,
+      "text": "The format for the response block (RSB) is as follows:",
+      "ja": "次のように応答ブロック（RSB）の形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "      +--------+-------------+\nfield | header | chunks 1..n |\n      |        |             |\n      +--------+-------------+\noctets    1       variable",
+      "raw": true
+    },
+    {
+      "indent": 30,
+      "text": "Response Block",
+      "ja": "応答ブロック"
+    },
+    {
+      "indent": 3,
+      "text": "These fields have the following meanings:",
+      "ja": "これらのフィールドは以下の意味があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o header - as described in Section 5.",
+      "ja": "ヘッダO  - セクション5に記載されているように。"
+    },
+    {
+      "indent": 3,
+      "text": "o chunks 1..n - the response data broken into chunks (Section 6).",
+      "ja": "Oチャンクは1..N  - チャンク（第6節）に分け応答データ。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers SHOULD NOT send an RSB to a client until they have received the entire RQB. Servers that do begin sending an RSB before the reception of the entire RQB must consider that clients will not be expected to start processing the RSB until they have fully sent the RQB, and that the RSB may fill the client's TCP buffers.",
+      "ja": "彼らは全体のRQBを受け取るまで、サーバーはクライアントにRSB送るべきではありません。全体のRQBの受信前に、RSBの送信を開始しないサーバーは、彼らが完全にRQBを送った、とRSBクライアントのTCPバッファを埋めることをするまで、クライアントはRSBの処理を開始すると予想されないことを考慮しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Connection Response Block (CRB)",
+      "section_title": true,
+      "ja": "4.2。接続応答ブロック（CRB）"
+    },
+    {
+      "indent": 3,
+      "text": "A connection response block (CRB) is a response block sent by a server to a client in response to the client initiating a session. A connection response block has the same format as a response block (RSB) (Section 4.1). The only difference is that it is constrained in one of two ways:",
+      "ja": "接続応答ブロック（CRB）は、セッションを開始するクライアントに応じて、サーバーからクライアントに送信された応答ブロックです。接続応答ブロックは、応答ブロック（RSB）（セクション4.1）と同じフォーマットを有します。唯一の違いは、それが次のいずれかの方法で制約されていることです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. It contains only one chunk (see Section 6) containing version information (see Section 6.2) and the keep-open (KO) flag in the block header (see Section 5) has a value of 1 (meaning the connection is not closing). Servers MUST use this type of CRB to indicate service availability.",
+      "ja": "1.それだけで1つのチャンクが含まれているバージョン情報（セクション6.2を参照）、ブロックヘッダ内のキープオープン（KO）フラグを含む（セクション6を参照）（セクション5を参照）を閉鎖されていない接続を意味する1の値を有します（ ）。サーバーは、サービスの可用性を示すために、CRBのこのタイプを使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. It contains only one chunk (see Section 6) containing a system error (see 'system-error' under Section 6.4) and the keep-open (KO) flag in the block header (see Section 5) has a value of 0 (meaning the server will close the connection immediately after sending the CRB). Servers MUST use this type of CRB when they can accept connections but cannot process requests.",
+      "ja": "2.それだけで1つのチャンクを含むシステムエラーを含む（セクション6を参照）、ブロックヘッダ内のキープオープン（KO）フラグ（セクション6.4の下に「システム・エラー」を参照）（第5節参照）0の値を有します（サーバーを意味するCRBを送信した後にすぐに接続を閉じます）。彼らは接続を受け入れることができますが、要求を処理できない場合、サーバは、CRBのこのタイプを使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Block Header",
+      "section_title": true,
+      "ja": "5.ブロックヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Each data block starts with a one-octet header called the block header. This header has the same format for both request and response data blocks, though some of the bits in the header only have meaning in one type of data block. The bits are ordered according to the convention given in RFC 1166 [12], where bit 0 is the most significant bit and bit 7 is the least significant bit. Each bit in the block header has the following meaning:",
+      "ja": "各データブロックはブロックヘッダと呼ばれる1オクテットのヘッダから始まります。ヘッダ内のビットの一部のみデータブロックの一種で意味しているものの、このヘッダには、要求と応答の両方のデータブロックについて同じフォーマットを有します。ビットは、ビット0が最上位ビットであり、ビット7は最下位ビットであり、RFC 1166 [12]で与えられた規則に従って順序付けられます。ブロックヘッダ内の各ビットは、以下の意味を有します。"
+    },
+    {
+      "indent": 3,
+      "text": "o bits 0 and 1 - version (V field) - If 0 (both bits are zero), the protocol is the version defined in this document. Otherwise, the rest of the bits in the header and the block may be interpreted as another version. If a server receives a request for a version it does not support, it SHOULD follow the behavior described in Section 8.",
+      "ja": "Oビット0および1  - バージョン（Vフィールド） -  0（両方のビットがゼロである）場合、プロトコルは本書で定義されたバージョンです。そうでない場合は、ヘッダ及びブロック内のビットの残りは別のバージョンとして解釈することができます。サーバーがサポートしていないバージョンの要求を受信した場合、それはセクション8で説明した動作に従ってください。"
+    },
+    {
+      "indent": 3,
+      "text": "o bit 2 - keep open (KO flag) - This flag is used to request that a connection stay open by a client and to indicate that a connection will stay open by a server, depending on the type of block. In a request block (RQB): a value of 1 indicates that a client is requesting that the server not close the TCP session, and a value of 0 indicates the client will expect their server to close the TCP session immediately after sending the corresponding response. In a response block (RSB) or a connection response block (CRB): a value of 1 indicates that the server expects the client to keep the TCP session open for the server to receive another request, and a value of 0 indicates that the server expects the client to close the TCP session immediately following this block.",
+      "ja": "O 2ビット - （KOフラグ）をオープンに保つ - このフラグは、接続がクライアントによって開いたまま、接続がブロックのタイプに応じて、サーバが開いたままであろうことを示すようにすることを要求するために使用されます。要求ブロック（RQB）の場合：1の値は、クライアントがサーバがTCPセッションを閉じていないことを要求している、と0の値は、クライアントが自分のサーバーはすぐに対応する応答を送信した後にTCPセッションを閉じることを期待することを示していることを示しています。応答ブロック（RSB）又は接続応答ブロック（CRB）において、1の値は、サーバは、クライアントが別の要求を受信するサーバのオープンTCPセッションを維持するために期待していることを示し、0の値は、サーバーことを示していますクライアントはすぐにこのブロック以下のTCPセッションを終了する予定。"
+    },
+    {
+      "indent": 3,
+      "text": "o bits 3, 4, 5, 6, and 7 - reserved - These MUST be 0. If a server receives a request in which any of these bits is set to 1 and the server does not understand the purpose for the value, the server SHOULD follow the behavior described in Section 8.",
+      "ja": "Oビット3、4、5、6、7  - 予約済み - サーバーは、これらのビットのいずれかが1に設定され、サーバは、値の目的を理解しないで要求を受信した場合、これらは0でなければなりません、サーバー第8章で説明した動作に従ってください。"
+    },
+    {
+      "indent": 3,
+      "text": "      +---------+-----------+----------+\nfield | Version | Keep Open | reserved |\n      |   (V)   |   (KO)    |          |\n      +---------+-----------+----------+\nbits    0 and 1       2        3 - 7",
+      "raw": true
+    },
+    {
+      "indent": 31,
+      "text": "Block Header",
+      "ja": "ブロックヘッダー"
+    },
+    {
+      "indent": 0,
+      "text": "6. Chunks",
+      "section_title": true,
+      "ja": "6.チャンク"
+    },
+    {
+      "indent": 3,
+      "text": "Request and response blocks break down the request and response XML data into chunks. Request and response blocks MUST always have a minimum of 1 chunk. Each chunk has a one-octet descriptor. The first bit of the descriptor determines if the chunk is the last chunk in the block.",
+      "ja": "リクエストとレスポンスのブロックはチャンクにリクエストとレスポンスのXMLデータを分解する。リクエストとレスポンスのブロックは常に1つのチャンクの最小値を持たなければなりません。各チャンクは、1オクテットの記述があります。チャンクは、ブロック内の最後のチャンクである場合に記述の最初のビットを決定します。"
+    },
+    {
+      "indent": 3,
+      "text": "The bits of the chunk descriptor octet are ordered according to the convention given in RFC 1166 [12], where bit 0 is the most significant bit and bit 7 is the least significant bit. The bits of the chunk descriptor octet have the following meaning:",
+      "ja": "チャンク記述子オクテットのビットは、ビット0が最上位ビットであり、ビット7は最下位ビットであり、RFC 1166 [12]で与えられた規則に従って順序付けられます。チャンクディスクリプタオクテットのビットは、次のような意味を持ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "o bit 0 - last chunk (LC flag) - If 1, this chunk is the last chunk in the block.",
+      "ja": "Oビット0  - 最後のチャンク（LCフラグ） -  1の場合、このチャンクはブロック内の最後のチャンクです。"
+    },
+    {
+      "indent": 3,
+      "text": "o bit 1 - data complete (DC flag) - If 1, the data in this chunk represents the end of the data for the chunk type given. If this bit is never set to 1 in any chunk descriptor for chunks of the same type in a block, clients and servers MUST NOT assume the data will continue in another block. If the block transitions from one type of chunk to another without signaling completion of the data, clients and servers MUST assume that the remaining data will not be sent in a remaining chunk.",
+      "ja": "O 1ビット - データの完全な（DCフラグ） -  1の場合、このチャンクのデータは、所与のチャンクタイプのデータの終わりを表します。このビットがブロック内の同じタイプのチャンクのための任意のチャンクディスクリプタで1に設定されていない場合は、クライアントとサーバは、データが別のブロックに続けると仮定してはいけません。データの終了をシグナリングせずに別のチャンクの一種からブロック遷移した場合、クライアントとサーバは、残りのデータが残っているチャンクで送信されないと仮定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o bits 2, 3, and 4 - reserved - These MUST be 0.",
+      "ja": "Oビット2、3、及び4  - 予約 - これらは0でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o bits 5, 6, and 7 - chunk type (CT field) - determines the type of data carried in the chunk. These are the binary values for the chunk types:",
+      "ja": "Oビット5、6、7  - チャンクタイプ（CTフィールドが） - チャンクで搬送されたデータの種別を判定する。これらは、チャンクタイプのバイナリ値は以下のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "* 000 - no data or 'nd' type (see Section 6.1)",
+      "ja": "* 000  - データなしまたは 'ND' タイプ（6.1節を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 001 - version information or 'vi' type (see Section 6.2)",
+      "ja": "* 001  - バージョン情報や 'VI' タイプ（セクション6.2を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 010 - size information or 'si' type (see Section 6.3)",
+      "ja": "* 010  - サイズ情報または 'SI' タイプ（6.3節を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 011 - other information or 'oi' type (see Section 6.4)",
+      "ja": "* 011  - その他の情報や 'OI' タイプ（6.4節を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 100 - SASL (Simple Authentication and Security Layer) data or 'sd' type (see Section 6.5)",
+      "ja": "* 100  -  SASL（簡易認証セキュリティー層）のデータまたは「SD」タイプ（6.5節を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 101 - authentication success information or 'as' type (see Section 6.6)",
+      "ja": "* 101  - タイプ「」として認証成功情報または（セクション6.6を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 110 - authentication failure information or 'af' type (see Section 6.7)",
+      "ja": "* 110  - 認証失敗情報や「AF」タイプ（6.7節を参照してください）"
+    },
+    {
+      "indent": 6,
+      "text": "* 111 - application data or 'ad' type (see Section 6.8)",
+      "ja": "* 111  - アプリケーションデータや「広告」タイプ（6.8節を参照してください）"
+    },
+    {
+      "indent": 3,
+      "text": "      +------------+---------------+----------+------------+\nfield | Last Chunk | Data Complete | reserved | Chunk Type |\n      |    (LC)    |     (DC)      |          |    (CT)    |\n      +------------+---------------+----------+------------+\nbits         0             1          2 - 4       5 - 7",
+      "raw": true
+    },
+    {
+      "indent": 29,
+      "text": "Chunk Descriptor",
+      "ja": "チャンクディスクリプタ"
+    },
+    {
+      "indent": 3,
+      "text": "A block MAY have multiple types of chunks, but all chunks of the same type MUST be contiguous in a block and MUST be ordered in the block in the order in which their data is to be interpreted. Contiguous chunks must be ordered by type within a block in the following way:",
+      "ja": "ブロックは、チャンクの複数のタイプを有することができるが、同じタイプのすべてのチャンクはブロックに連続している必要がありそしてそれらのデータが解釈されるべきであるために、ブロックに注文する必要があります。連続したチャンクは次のようにブロック内の種類によって注文する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. authentication-related chunks - either SASL data chunks (type 100), authentication success information chunks (type 101), or authentication failure information chunks (type 110), but not more than one type. During the setup of security mechanisms using these chunks, clients MUST NOT send subsequent requests until they have received either an authentication success or failure chunk.",
+      "ja": "1.認証関連チャンク -  SASLデータチャンク（タイプ100）、認証成功情報チャンク（タイプ101）、又は認証失敗情報チャンク（タイプ110）ではなく、一種類以上のいずれか。彼らは、認証の成功または失敗のチャンクのいずれかを受け取るまで、これらのチャンクを使用して、セキュリティ・メカニズムのセットアップ中に、クライアントはその後の要求を送ってはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. data chunks - either no data chunks (type 000) or application data chunks (type 111), but not both.",
+      "ja": "2.データチャンク - ないデータチャンク（タイプ000）またはアプリケーション・データ・チャンク（タイプ111）、両方ではなくいずれか。"
+    },
+    {
+      "indent": 3,
+      "text": "3. information chunks - either version information (type 001) or other information (type 011), but not both.",
+      "ja": "3.情報チャンク - バージョン情報（タイプ001）または他の情報（タイプ011）、両方ではなくいずれか。"
+    },
+    {
+      "indent": 3,
+      "text": "A block MUST have at least one type of the above chunks.",
+      "ja": "ブロックは、上記チャンクの少なくとも一つの型でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The format for a chunk is as follows:",
+      "ja": "以下のようにチャンクの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "      +-----------+------------+--------+\nfield | chunk     | chunk data | chunk  |\n      | descriptor| length     | data   |\n      +-----------+------------+--------+\noctets      1            2      variable",
+      "raw": true
+    },
+    {
+      "indent": 35,
+      "text": "chunk",
+      "ja": "チャンク"
+    },
+    {
+      "indent": 3,
+      "text": "These fields have the following meanings:",
+      "ja": "これらのフィールドは以下の意味があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o chunk descriptor - as described above. o chunk data length - the length of the data of the chunk. o chunk data - the data of the chunk.",
+      "ja": "Oチャンク記述子 - 上記のように。 Oチャンクデータ長 - チャンクのデータの長さ。 Oチャンクデータ - チャンクのデータ。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. No Data Types",
+      "section_title": true,
+      "ja": "6.1。いいえデータ型ません"
+    },
+    {
+      "indent": 3,
+      "text": "Servers and clients MUST ignore data in chunk types labeled no data. There is no requirement for these types of chunks to be zero length. A client MAY send \"no data\" to a server, and the server MUST respond with either a chunk of the same type or other information (Section 6.4).",
+      "ja": "サーバとクライアントはデータをラベル付けしないチャンクタイプのデータを無視しなければなりません。ゼロの長さにチャンクこれらのタイプのための要件はありません。クライアントはサーバーに「何のデータを」送信しないかもしれない、とサーバーは、同じタイプのチャンクやその他の情報（6.4節）のいずれかで応じなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Version Information Types",
+      "section_title": true,
+      "ja": "6.2。バージョン情報の種類"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks of this type contain XML conformant to the schema specified in [9] and MUST have the <versions> element as the root element.",
+      "ja": "このタイプのチャンクは、[9]で指定されたスキーマに準拠するXMLを含む、ルート要素として<バージョン>要素を持たなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In the context of IRIS-XPC, the protocol identifiers for these elements are as follows:",
+      "ja": "次のようにIRIS-XPCの文脈では、これらの要素のためのプロトコル識別子は以下のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o <transferProtocol> - the value \"iris.xpc1\" to indicate the protocol specified in this document.",
+      "ja": "O <transferProtocol>  - この文書で指定されたプロトコルを示す値「iris.xpc1」。"
+    },
+    {
+      "indent": 3,
+      "text": "o <application> - the XML namespace identifier for IRIS [1].",
+      "ja": "O <アプリケーション>  -  IRIS用のXML名前空間識別子[1]。"
+    },
+    {
+      "indent": 3,
+      "text": "o <dataModel> - the XML namespace identifier for IRIS registries.",
+      "ja": "O <データモデル>  -  IRISレジストリのXML名前空間識別子。"
+    },
+    {
+      "indent": 3,
+      "text": "In the context of IRIS-XPC, the authentication mechanism identifiers are the SASL mechanism names found in the IANA SASL mechanism registry defined by RFC 4422 [10].",
+      "ja": "IRIS-XPCの文脈では、認証機構識別子は、RFC 4422 [10]によって定義されたIANA SASL機構レジストリで見つかったSASL機構名です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines no extension identifiers.",
+      "ja": "この文書には、拡張識別子を定義していません。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MAY send a block with this type of chunk to a server. These chunks SHOULD be zero length, and servers MUST ignore any data in them. When a server receives a chunk of this type, it MUST respond with a chunk of this type. This interchange allows a client to query the version information of a server.",
+      "ja": "クライアントは、サーバーへのチャンクのこのタイプのブロックを送信することができます。これらのチャンクは長さがゼロであるべきであり、サーバはそれらのいずれかのデータを無視しなければなりません。サーバーは、このタイプのチャンクを受信すると、このタイプの塊で応じなければなりません。この交換は、クライアントがサーバーのバージョン情報を照会することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The octet sizes for the 'requestSizeOctets' and 'responseSizeOctets' attributes of the <tranferProtocol> element are defined in Section 6.3.",
+      "ja": "「requestSizeOctets」と<tranferProtocol>要素の 'responseSizeOctetsの属性のためのオクテットのサイズは、6.3節で定義されています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Size Information Types",
+      "section_title": true,
+      "ja": "6.3。サイズ情報タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks of this type contain XML conformant to the schema specified in RFC 4991 [9] and MUST have the <size> element as the root element.",
+      "ja": "このタイプのチャンクがRFC 4991で指定されたスキーマに準拠するXMLを含む[9]と、ルート要素としての<size>の要素がなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Octet counts provided by this information are defined as the sum of the count of all chunk data of a particular chunk type. For instance, if an XML instance is broken up into chunks of 20, 30, and 40 octets, the octet count would be 90 (20 + 30 + 40).",
+      "ja": "この情報によって提供さオクテット数は、特定のチャンクタイプのすべてのチャンクデータの数の合計として定義されています。 XMLインスタンスが20、30、及び40オクテットのチャンクに分割されている場合、例えば、オクテット数は90（20 + 30 + 40）であろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT send chunks of this type, and servers MAY close down a session using the procedure in Section 8 if a chunk of this type is received.",
+      "ja": "クライアントは、このタイプの塊を送ってはいけませんし、このタイプのチャンクを受信した場合、サーバは、セクション8の手順を使用してセッションを閉鎖するかもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. Other Information Types",
+      "section_title": true,
+      "ja": "6.4。その他の情報の種類"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks of this type contain XML conformant to the schema specified in RFC 4991 [9] and MUST have the <other> element as the root element.",
+      "ja": "このタイプのチャンクは、RFC 4991で指定されたスキーマに準拠するXMLを含む[9]と、ルート要素としての<その他>要素がなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The values for the 'type' attribute of <other> are as follows:",
+      "ja": "次のように<その他>の「タイプ」属性の値は、次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "'block-error' - indicates there was an error decoding a block. Servers SHOULD send a block error in the following cases:",
+      "ja": "「ブロック誤り」 - ブロックを復号エラーが発生したことを示します。サーバーは、次の場合にブロックエラーを送信する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "1. When a request block is received containing a chunk of this type.",
+      "ja": "要求ブロックは、このタイプのチャンクを含む受信された1。"
+    },
+    {
+      "indent": 6,
+      "text": "2. When a request block is received containing authentication success (see Section 6.6) or authentication failure (see Section 6.7) information.",
+      "ja": "要求ブロックは認証成功（セクション6.6を参照）、または認証失敗（セクション6.7を参照）の情報を含む受信される2。"
+    },
+    {
+      "indent": 6,
+      "text": "3. When a request block is received containing size information (see Section 6.3).",
+      "ja": "3.要求ブロックを含むサイズ情報を受信すると（セクション6.3を参照）。"
+    },
+    {
+      "indent": 6,
+      "text": "4. When reserved bits in the request block are 1.",
+      "section_title": true,
+      "ja": "要求ブロック内の4予約ビットが1です。"
+    },
+    {
+      "indent": 6,
+      "text": "5. When a block has not been received in its entirety and the TCP session has been idle for a specific period of time (i.e., a data block has been received but no terminating chunk for the data block has been received). Two minutes is RECOMMENDED for this timeout value. Note, there is a difference between an idle condition due to the incomplete reception of a data block and an idle condition between request/response transactions associated with keeping the session open. For the latter, see Section 7.",
+      "ja": "前記ブロックは、その全体が受信されていないとTCPセッションが一定期間アイドル状態になっている場合（即ち、データブロックが受信されているが、データブロックのない終端チャンクを受信しました）。 2分は、このタイムアウト値を推奨します。アイドル状態の間の差が原因のデータブロックの不完全受信とオープンセッションを維持するに関連付けられている要求/応答トランザクションの間アイドル状態にあり、注意してください。後者については、セクション7を参照してください。"
+    },
+    {
+      "indent": 6,
+      "text": "'data-error' - indicates there was an error parsing data in chunks containing application or SASL data (e.g., XML is not valid in application data).",
+      "ja": "「データエラー」 - （例えば、XMLは、アプリケーションデータに有効でない）アプリケーションまたはSASLデータを含むチャンクでデータを構文解析エラーが発生したことを示します。"
+    },
+    {
+      "indent": 6,
+      "text": "'system-error' - indicates that the receiver cannot process the request due to a condition not related to this protocol. Servers SHOULD send a system-error when they are capable of responding to requests but not capable of processing requests.",
+      "ja": "「システムエラー」 - 受信機は、このプロトコルに関連しない条件による要求を処理できないことを示しています。彼らは要求に応答することができるが、処理要求することができないとき、サーバーはシステム・エラーを送るべきです。"
+    },
+    {
+      "indent": 6,
+      "text": "'authority-error' - indicates that the intended authority specified in the corresponding request is not served by the receiver. Servers SHOULD send an authority error when they receive a request directed to an authority other than those they serve.",
+      "ja": "「権威-エラー」 - 対応する要求に指定された意図権限が受信機によって提供されていないことを示しています。彼らは、彼らが仕える以外の機関に向け、要求を受信したときにサーバーが権限エラーを送るべきです。"
+    },
+    {
+      "indent": 6,
+      "text": "'idle-timeout' - indicates that an XPC session has been idle for too long. Usage of this value is defined in Section 7. Note, there is a difference between an idle condition due to the incomplete reception of a data block and an idle condition between request/response transactions associated with keeping the session open. For the former, see 'block-error' above.",
+      "ja": "「アイドルタイムアウト」 -  XPCセッションが長すぎるためにアイドル状態になっていることを示しています。この値の使用はセクション7メモで定義され、によるデータブロックの不完全受信とオープンセッションを維持するに関連付けられている要求/応答トランザクションの間アイドル状態に、アイドル状態の間に差があります。元の場合は、上記の「ブロック・エラー」を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT send chunks of this type, and servers MAY close down a session using the procedure in Section 8 if a chunk of this type is received.",
+      "ja": "クライアントは、このタイプの塊を送ってはいけませんし、このタイプのチャンクを受信した場合、サーバは、セクション8の手順を使用してセッションを閉鎖するかもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.5. SASL Types",
+      "section_title": true,
+      "ja": "6.5。 SASLタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "The SASL chunk type allows clients and servers to exchange SASL data.",
+      "ja": "SASLチャンクタイプは、クライアントとサーバは、SASLデータを交換することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The format for the data of this type of chunk is as follows:",
+      "ja": "次のようにチャンクのこの種のデータの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "      +-----------+-----------+-----------+-----------+\nfield | mechanism | mechanism | mechanism | mechanism |\n      |   name    |   name    |   data    |   data    |\n      |  length   |           |  length   |           |\n      +-----------+-----------+-----------+-----------+\noctets     1        variable       2        variable",
+      "raw": true
+    },
+    {
+      "indent": 28,
+      "text": "SASL Authentication",
+      "ja": "SASL認証"
+    },
+    {
+      "indent": 3,
+      "text": "These fields have the following meaning:",
+      "ja": "これらのフィールドは、以下の意味があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o mechanism name length - the length of the SASL mechanism name.",
+      "ja": "Oメカニズム名の長さ -  SASLメカニズム名の長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "o mechanism name - the name of the SASL mechanism as registered in the IANA SASL mechanism registry defined by [10].",
+      "ja": "Oメカニズム名 -  [10]によって定義されたIANA SASL機構レジストリに登録されたSASL機構の名前。"
+    },
+    {
+      "indent": 3,
+      "text": "o mechanism data length - the length of the SASL data.",
+      "ja": "Oメカニズムデータ長 -  SASLデータの長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "o mechanism data - the data used for SASL.",
+      "ja": "O機構データ -  SASLのために使用されるデータ。"
+    },
+    {
+      "indent": 3,
+      "text": "These fields MUST NOT span multiple chunks. Therefore, it should be noted that SASL data length exceeding the length of the chunk minus the length of SASL profile name minus one is an error.",
+      "ja": "これらのフィールドは、複数のチャンクにまたがってはなりません。したがって、チャンクの長さマイナスSASLプロファイル名の長さから1を引いたものを超えるSASLデータ長が誤りであることに留意すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Depending on the nature of the SASL mechanism being used, SASL data is sent from clients to servers and from servers to clients and may require multiple request/response transactions to complete. However, once a SASL exchange is complete and a server can determine authentication status, the server MUST send either authentication success information (see Section 6.6) or authentication failure information (see Section 6.7).",
+      "ja": "使用されているSASLメカニズムの性質に応じて、SASLデータは、クライアントからサーバーへとサーバーからクライアントに送信され、完了するために、複数の要求/応答トランザクションが必要な場合があります。しかし、一度SASL交換が完了すると、サーバが認証状態を調べることができ、サーバーは認証成功情報（セクション6.6を参照）、または認証失敗情報（6.7節を参照）のどちらかを送らなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "When used as an initial challenge response for SASL mechanisms that support such a feature, the mechanism data length may be set to a decimal value of 65,535 to indicate an absent initial response. A value of 0 indicates an empty initial response.",
+      "ja": "そのような機能をサポートするSASL機構の初期チャレンジレスポンスとして使用する場合、機構のデータ長が不在の初期応答を示すために、65,535の小数点以下の値に設定してもよいです。 0の値は、空の初期応答を示しています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6. Authentication Success Information Types",
+      "section_title": true,
+      "ja": "6.6。認証成功情報タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks of this type contain XML conformant to the schema specified in RFC 4991 [9] and MUST have the <authenticationSuccess> element as the root element.",
+      "ja": "このタイプのチャンクは、RFC 4991で指定されたスキーマに準拠するXMLを含む[9]と、ルート要素として<authenticationSuccess>要素がなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This type of chunk is only sent from a server to a client. If a client sends it to a server, this will result in a block error (see 'block-error' in Section 6.4). The usage of this chunk type is defined in Section 6.5. A server MAY close down a session due to reception of this type of chunk using the procedure in Section 8.",
+      "ja": "チャンクのこのタイプは、唯一のサーバからクライアントに送信されます。クライアントがサーバに送信した場合、これは（セクション6.4で「ブロック・エラー」を参照）、ブロックエラーになります。このチャンクタイプの使用方法は、6.5節で定義されています。サーバは、第8章の手順を使用して起因するチャンクのこのタイプの受信にセッションを閉鎖するかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "SASL mechanisms may use the <data> child element to pass back arbitrary binary data as base 64 binary. The absence of this element indicates the absence of such data, where as the presence of the element with no content indicates an empty data set.",
+      "ja": "SASL機構は、ベース64バイナリとして任意のバイナリデータをバック渡す<データ>子要素を使用してもよいです。この要素の欠如はないコンテンツを持つ要素の存在は、空のデータセットを示すようなデータが存在しないことを示しています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.7. Authentication Failure Information Types",
+      "section_title": true,
+      "ja": "6.7。認証失敗情報タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Chunks of this type contain XML conformant to the schema specified in RFC 4991 [9] and MUST have the <authenticationFailure> element as the root element.",
+      "ja": "このタイプのチャンクは、RFC 4991で指定されたスキーマに準拠するXMLを含む[9]と、ルート要素として<のauthenticationFailure>要素がなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This type of chunk is only sent from a server to a client. If a client sends it to a server, this will result in a block error (see 'block-error' in Section 6.4). The usage of this chunk type is defined in Section 6.5. A server MAY close down a session due to reception of this type of chunk using the procedure in Section 8.",
+      "ja": "チャンクのこのタイプは、唯一のサーバからクライアントに送信されます。クライアントがサーバに送信した場合、これは（セクション6.4で「ブロック・エラー」を参照）、ブロックエラーになります。このチャンクタイプの使用方法は、6.5節で定義されています。サーバは、第8章の手順を使用して起因するチャンクのこのタイプの受信にセッションを閉鎖するかもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8. Application Data Types",
+      "section_title": true,
+      "ja": "6.8。アプリケーションのデータ型"
+    },
+    {
+      "indent": 3,
+      "text": "These chunks contain application data. For IRIS, these are IRIS [1] XML instances.",
+      "ja": "これらのチャンクは、アプリケーションデータが含まれています。 IRISのために、これらは、IRIS [1] XMLインスタンスです。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Idle Sessions",
+      "section_title": true,
+      "ja": "7.アイドルセッション"
+    },
+    {
+      "indent": 3,
+      "text": "If a server needs to close a connection due to it being idle, it SHOULD do the following:",
+      "ja": "サーバはそれがアイドルであることに起因する接続をクローズする必要がある場合、それは次のことを行う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Send an unsolicited response block containing an idle timeout error (see 'idle-timeout' in Section 6.4) with the keep-open (KO) flag in the block header (Section 5) set to a value of 0.",
+      "ja": "1.アイドルタイムアウトエラーを含む未承諾応答ブロックを送信0の値に設定されたブロックヘッダ内のキープオープン（KO）フラグ（セクション5）と（セクション6.4の「アイドルタイムアウト」を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Close the TCP connection.",
+      "section_title": true,
+      "ja": "2. TCPコネクションを閉じます。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Closing Sessions Due to an Error",
+      "section_title": true,
+      "ja": "エラーのため8.閉会セッション"
+    },
+    {
+      "indent": 3,
+      "text": "If a server is to close a session due to an error, it SHOULD do the following:",
+      "ja": "サーバがエラーのためにセッションを終了する場合は、次のことを行う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Send a response block containing either a block-error or data-error (see Section 6.4) or version information (see Section 6.2) with the keep-open (KO) flag in the block header (Section 5) set to a value of 0.",
+      "ja": "1の値に設定されたブロックヘッダ（セクション5）にキープオープン（KO）フラグと（セクション6.2を参照）、ブロックエラーまたはデータエラーのいずれかを含む応答ブロック（セクション6.4を参照）、またはバージョン情報を送信します0の。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Close the TCP connection.",
+      "section_title": true,
+      "ja": "2. TCPコネクションを閉じます。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Use over TLS",
+      "section_title": true,
+      "ja": "TLSを超える9."
+    },
+    {
+      "indent": 3,
+      "text": "XPC may be tunneled over TLS [4] by establishing a TLS session immediately after a TCP session is opened and before any blocks are sent. This type of session is known as XPCS.",
+      "ja": "XPCは、[4] TCPセッションが開かれ、任意のブロックの前に送信された直後にTLSセッションを確立することによって、TLS上でトンネリングすることができます。セッションのこのタイプは、XPCSとして知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "When using TLS, a convention must be established to allow a client to authenticate the validity of a server. XPCS uses the same convention as described by IRIS-BEEP [2].",
+      "ja": "TLSを使用する場合は、規則では、クライアントがサーバの正当性を認証できるようにするために確立されなければなりません。 IRIS-BEEP [2]で説明したようにXPCSは同じ規則を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "TLS enables authentication and confidentiality.",
+      "ja": "TLSは、認証と機密保持を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers should note that while XPC and XPCS have separate URI scheme names and S-NAPTR application protocol labels, both are identified with the same <transferProtocol> value in version information chunks (see Section 6.2).",
+      "ja": "実装は、XPCとXPCSは別個URIスキーム名およびS-NAPTRアプリケーションプロトコルラベルを有するが、両方ともバージョン情報チャンク（セクション6.2を参照）で同じ<transferProtocol>値で識別されることに注意すべきです。"
+    },
+    {
+      "indent": 1,
+      "text": "10. Update to",
+      "section_title": true,
+      "ja": "10. Updateへ"
+    },
+    {
+      "indent": 3,
+      "text": "Section 6.2 of RFC 3981 [1] (IRIS-CORE) states that IRIS-BEEP [2] is the default transport for IRIS. This document revises RFC 3981 and specifies IRIS-XPC as the default transport for IRIS. The TCP well-known port registration is specified in Section 13.5.",
+      "ja": "RFC 3981のセクション6.2 [1]（IRIS-CORE）IRIS-BEEP [2] IRISのデフォルトの輸送であると述べています。この文書は、RFC 3981を改訂し、IRISのデフォルトのトランスポートとしてIRIS  -  XPCを指定します。 TCPのよく知られたポートの登録は、13.5節で指定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "11. IRIS Transport Mapping Definitions",
+      "section_title": true,
+      "ja": "11. IRIS交通マッピング定義"
+    },
+    {
+      "indent": 3,
+      "text": "This section lists the definitions required by IRIS [1] for transport mappings.",
+      "ja": "このセクションでは、トランスポートマッピング用IRIS [1]で必要な定義を示しています。"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. URI Scheme",
+      "section_title": true,
+      "ja": "11.1。 URIスキーム"
+    },
+    {
+      "indent": 3,
+      "text": "See Section 13.1 and Section 13.2.",
+      "ja": "セクション13.1と13.2を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Application Protocol Label",
+      "section_title": true,
+      "ja": "11.2。アプリケーションプロトコルラベル"
+    },
+    {
+      "indent": 3,
+      "text": "See Section 13.3 and Section 13.4.",
+      "ja": "セクション13.3と13.4を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "12. Internationalization Considerations",
+      "section_title": true,
+      "ja": "12.国際化に関する注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "XML processors are obliged to recognize both UTF-8 and UTF-16 [3] encodings. Use of the XML defined by [9] MUST NOT use any other character encodings other than UTF-8 or UTF-16.",
+      "ja": "XMLプロセッサは、[3]のエンコーディングUTF-8およびUTF-16の両方を認識するように義務付けられています。定義されたXMLを使用すると、[9] UTF-8またはUTF-16以外の他の文字エンコーディングを使用してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "13. IANA Considerations",
+      "section_title": true,
+      "ja": "13. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "13.1. XPC URI Scheme Registration",
+      "section_title": true,
+      "ja": "13.1。 XPC URIスキームの登録"
+    },
+    {
+      "indent": 3,
+      "text": "URL scheme name: iris.xpc",
+      "ja": "URLスキーム名：iris.xpc"
+    },
+    {
+      "indent": 3,
+      "text": "Status: permanent",
+      "ja": "ステータス：永久"
+    },
+    {
+      "indent": 3,
+      "text": "URL scheme syntax: defined in [1].",
+      "ja": "URLスキームの構文：[1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Character encoding considerations: as defined in RFC 3986 [6].",
+      "ja": "文字エンコーディングの考慮事項：RFC 3986で定義されている[6]。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: identifies IRIS XML using chunks over TCP",
+      "ja": "意図している用法：TCP上のチャンクを使用してIRISのXMLを特定"
+    },
+    {
+      "indent": 3,
+      "text": "Applications using this scheme: defined in IRIS [1].",
+      "ja": "この方式を使用したアプリケーション：IRIS [1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: n/a",
+      "ja": "相互運用性に関する注意事項：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Security Considerations: defined in Section 14.",
+      "ja": "セキュリティに関する注意事項：セクション14で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Relevant Publications: IRIS [1].",
+      "ja": "関連出版物：IRIS [1]。"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 3,
+      "text": "Author/Change controller: the IESG",
+      "ja": "著者/変更コントローラ：IESG"
+    },
+    {
+      "indent": 0,
+      "text": "13.2. XPCS URI Scheme Registration",
+      "section_title": true,
+      "ja": "13.2。 XPCS URIスキームの登録"
+    },
+    {
+      "indent": 3,
+      "text": "URL scheme name: iris.xpcs",
+      "ja": "URLスキーム名：iris.xpcs"
+    },
+    {
+      "indent": 3,
+      "text": "Status: permanent",
+      "ja": "ステータス：永久"
+    },
+    {
+      "indent": 3,
+      "text": "URL scheme syntax: defined in [1].",
+      "ja": "URLスキームの構文：[1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Character encoding considerations: as defined in RFC 3986 [6].",
+      "ja": "文字エンコーディングの考慮事項：RFC 3986で定義されている[6]。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: identifies IRIS XML using chunks over TLS",
+      "ja": "意図している用法：TLSの上にチャンクを使用してIRISのXMLを特定"
+    },
+    {
+      "indent": 3,
+      "text": "Applications using this scheme: defined in IRIS [1].",
+      "ja": "この方式を使用したアプリケーション：IRIS [1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: n/a",
+      "ja": "相互運用性に関する注意事項：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Security Considerations: defined in Section 14.",
+      "ja": "セキュリティに関する注意事項：セクション14で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Relevant Publications: IRIS [1].",
+      "ja": "関連出版物：IRIS [1]。"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 3,
+      "text": "Author/Change controller: the IESG",
+      "ja": "著者/変更コントローラ：IESG"
+    },
+    {
+      "indent": 0,
+      "text": "13.3. S-NAPTR XPC Registration",
+      "section_title": true,
+      "ja": "13.3。 S-NAPTR XPC登録"
+    },
+    {
+      "indent": 3,
+      "text": "Application Protocol Label (see [5]): iris.xpc",
+      "ja": "アプリケーションプロトコルラベル（[5]参照）：iris.xpc"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: identifies an IRIS server using XPC",
+      "ja": "使用目的：XPCを使用してIRISサーバーを識別"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: n/a",
+      "ja": "相互運用性に関する注意事項：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Security Considerations: defined in Section 14.",
+      "ja": "セキュリティに関する注意事項：セクション14で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Relevant Publications: IRIS [1].",
+      "ja": "関連出版物：IRIS [1]。"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 3,
+      "text": "Author/Change controller: the IESG",
+      "ja": "著者/変更コントローラ：IESG"
+    },
+    {
+      "indent": 0,
+      "text": "13.4. S-NAPTR XPCS Registration",
+      "section_title": true,
+      "ja": "13.4。 S-NAPTR XPCS登録"
+    },
+    {
+      "indent": 3,
+      "text": "Application Protocol Label (see [5]): iris.xpcs",
+      "ja": "アプリケーションプロトコルラベル（[5]参照）：iris.xpcs"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage: identifies an IRIS server using secure XPCS",
+      "ja": "意図している用法：安全なXPCSを使用してIRISサーバーを識別"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations: n/a",
+      "ja": "相互運用性に関する注意事項：N / A"
+    },
+    {
+      "indent": 3,
+      "text": "Security Considerations: defined in Section 14.",
+      "ja": "セキュリティに関する注意事項：セクション14で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Relevant Publications: IRIS [1].",
+      "ja": "関連出版物：IRIS [1]。"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 3,
+      "text": "Author/Change controller: the IESG",
+      "ja": "著者/変更コントローラ：IESG"
+    },
+    {
+      "indent": 0,
+      "text": "13.5. Well-Known TCP Port Registration for XPC",
+      "section_title": true,
+      "ja": "13.5。 XPCのための周知のTCPポートの登録"
+    },
+    {
+      "indent": 3,
+      "text": "Protocol Number: TCP",
+      "ja": "プロトコル番号：TCP"
+    },
+    {
+      "indent": 3,
+      "text": "TCP Port Number: 713",
+      "ja": "TCPポート番号：713"
+    },
+    {
+      "indent": 3,
+      "text": "Message Formats, Types, Opcodes, and Sequences: defined in Section 4.2, Section 3, and Section 4.1.",
+      "ja": "メッセージフォーマット、タイプ、オペコード、およびシーケンス：4.2節、第3節、および4.1節で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Functions: defined in IRIS [1].",
+      "ja": "機能：IRIS [1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Use of Broadcast/Multicast: none",
+      "ja": "ブロードキャスト/マルチキャストの利用：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Proposed Name: IRIS over XPC",
+      "ja": "提案名：XPC以上IRIS"
+    },
+    {
+      "indent": 3,
+      "text": "Short name: iris.xpc",
+      "ja": "短い名前：iris.xpc"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 0,
+      "text": "13.6. Well-Known TCP Port Registration for XPCS",
+      "section_title": true,
+      "ja": "13.6。 XPCSのための周知のTCPポートの登録"
+    },
+    {
+      "indent": 3,
+      "text": "Protocol Number: TCP",
+      "ja": "プロトコル番号：TCP"
+    },
+    {
+      "indent": 3,
+      "text": "TCP Port Number: 714",
+      "ja": "TCPポート番号：714"
+    },
+    {
+      "indent": 3,
+      "text": "Message Formats, Types, Opcodes, and Sequences: defined in Sections 9, 4.2, 3, and 4.1.",
+      "ja": "メッセージフォーマット、タイプ、オペコード、および配列：セクション9、4.2、3、4.1で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Functions: defined in IRIS [1].",
+      "ja": "機能：IRIS [1]で定義されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Use of Broadcast/Multicast: none",
+      "ja": "ブロードキャスト/マルチキャストの利用：なし"
+    },
+    {
+      "indent": 3,
+      "text": "Proposed Name: IRIS over XPCS",
+      "ja": "提案名：XPCS以上IRIS"
+    },
+    {
+      "indent": 3,
+      "text": "Short name: iris.xpcs",
+      "ja": "短い名前：iris.xpcs"
+    },
+    {
+      "indent": 3,
+      "text": "Contact Information: Andrew Newton <andy@hxr.us>",
+      "ja": "お問い合わせ先：アンドリュー・ニュートン<andy@hxr.us>"
+    },
+    {
+      "indent": 0,
+      "text": "14. Security Considerations",
+      "section_title": true,
+      "ja": "14.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers should be fully aware of the security considerations given by IRIS [1] and TLS [4]. With respect to server authentication with the use of TLS, see Section 6 of IRIS-BEEP [2].",
+      "ja": "実装は、[4] [1]及びTLS IRISによって与えられたセキュリティ上の考慮事項を十分に認識すべきです。 TLSを用いてサーバ認証に対して、IRIS-BEEP [2]のセクション6を参照。"
+    },
+    {
+      "indent": 0,
+      "text": "14.1. Security Mechanisms",
+      "section_title": true,
+      "ja": "14.1。セキュリティメカニズム"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD be prepared to use the following security mechanisms in the following manner:",
+      "ja": "クライアントは、次のように次のセキュリティ・メカニズムを使用するように準備する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o SASL/DIGEST-MD5 - for user authentication without the need of session encryption.",
+      "ja": "O SASL / DIGEST-MD5  - ユーザ認証のためのセッションの暗号化の必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o SASL/OTP - for user authentication without the need of session encryption.",
+      "ja": "O SASL / OTP  - ユーザ認証のためのセッションの暗号化の必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_3DES_EDE_CBC_SHA cipher - for encryption.",
+      "ja": "暗号化のために -  O TLSは、TLS_RSA_WITH_3DES_EDE_CBC_SHA暗号を使用しました。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_3DES_EDE_CBC_SHA cipher with client-side certificates - for encryption and user authentication.",
+      "ja": "O TLSは、クライアント側の証明書を使用してTLS_RSA_WITH_3DES_EDE_CBC_SHA暗号を使用して - 暗号化とユーザー認証のために。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_AES_128_CBC_SHA cipher - for encryption. See [7].",
+      "ja": "暗号化のために -  O TLSはTLS_RSA_WITH_AES_128_CBC_SHA暗号を使用しました。 [7]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_AES_128_CBC_SHA cipher with client-side certificates - for encryption and user authentication. See [7].",
+      "ja": "O TLSは、クライアント側の証明書を使用してTLS_RSA_WITH_AES_128_CBC_SHA暗号を使用して - 暗号化とユーザー認証のために。 [7]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_AES_256_CBC_SHA cipher - for encryption. See [7].",
+      "ja": "暗号化のために -  O TLSはTLS_RSA_WITH_AES_256_CBC_SHA暗号を使用しました。 [7]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "o TLS using the TLS_RSA_WITH_AES_256_CBC_SHA cipher with client-side certificates - for encryption and user authentication. See [7].",
+      "ja": "O TLSは、クライアント側の証明書を使用してTLS_RSA_WITH_AES_256_CBC_SHA暗号を使用して - 暗号化とユーザー認証のために。 [7]を参照してください。"
+    },
+    {
+      "indent": 6,
+      "text": "Anonymous client access SHOULD be considered in one of two methods:",
+      "ja": "匿名クライアントのアクセスは、二つの方法のいずれかで考慮されるべきです："
+    },
+    {
+      "indent": 3,
+      "text": "1. When no authentication has been used.",
+      "section_title": true,
+      "ja": "認証が使用されていない1。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Using the SASL anonymous profile: SASL/ANONYMOUS",
+      "section_title": true,
+      "ja": "2. SASL匿名のプロファイルを使用：SASL / ANONYMOUSを"
+    },
+    {
+      "indent": 3,
+      "text": "As specified by SASL/PLAIN, clients MUST NOT use the SASL/PLAIN mechanism without first encrypting the TCP session (e.g., such as with TLS). Clients MUST implement SASL/PLAIN and TLS using the TLS_RSA_WITH_3DES_EDE_CBC_SHA cipher.",
+      "ja": "SASL / PLAINによって指定されるように、クライアントは最初に（例えば、TLSのように）TCPセッションを暗号化することなく、SASL / PLAINメカニズムを使用してはいけません。クライアントは、TLS_RSA_WITH_3DES_EDE_CBC_SHA暗号を使用してSASL / PLAINおよびTLSを実装しなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "14.2. SASL Compliance",
+      "section_title": true,
+      "ja": "14.2。 SASLコンプライアンス"
+    },
+    {
+      "indent": 3,
+      "text": "The following list details the compliance of IRIS-XPC for use with SASL, as specified by RFC 4422 [10], Section 4.",
+      "ja": "RFC 4422 [10]、セクション4で指定された以下のリストは、SASLで使用するためのIRIS-XPCのコンプライアンスを詳述します。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The SASL service name to be used by IRIS-XPC is \"iris-xpc\".",
+      "section_title": true,
+      "ja": "1. IRIS  -  XPCが使用するSASLのサービス名は \"アイリス-XPC\" です。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Section 6.2 describes the negotiation facility used to determine the available security mechanisms. This facility may be used both before the initiation of SASL exchanges and after the installation of security mechanisms.",
+      "ja": "2. 6.2節には、利用可能なセキュリティメカニズムを決定するために使用さネゴシエーション機能を説明します。この機能は、SASL交換の開始前とセキュリティメカニズムの設置後の両方に使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "3.",
+      "section_title": true,
+      "ja": "３。"
+    },
+    {
+      "indent": 8,
+      "text": "a) Section 6.5 describes the mechanism to initiate\n   authentication exchanges.",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "b) Section 6.5 describes the mechanism to transfer server challenges and client responses.",
+      "ja": "b）は6.5節では、サーバー上の課題とクライアントの応答を転送するメカニズムについて説明します。"
+    },
+    {
+      "indent": 8,
+      "text": "c) Section 6.6 and Section 6.7 describe the mechanisms to indicate the outcome of an authentication exchange. Section 6.6 describes how additional data may be carried with this message.",
+      "ja": "C）セクション6.6およびセクション6.7は、認証交換の結果を示すための機構を記載しています。 6.6節では、追加のデータは、このメッセージを表示して行うことができる方法を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. Non-empty authorization identity strings used within IRIS-XPC MUST be normalized according to RFC 4013 [11]. The semantics of the non-empty authorization identity strings is server dependent, and clients MUST use the values for these strings as given by configuration or the user.",
+      "ja": "IRIS-XPC内で使用される前記非エンプティ認証アイデンティティ文字列は、RFC 4013 [11]に従って正規化されなければなりません。空でない認証アイデンティティ文字列の意味は、サーバに依存し、そしてクライアントが構成や、ユーザによって与えられるようにこれらの文字列の値を使用しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "5. Clients or servers wishing to abort an ongoing authentication exchange MUST close the connection.",
+      "ja": "5.クライアントまたはサーバが接続を閉じる必要があります継続的な認証交換を中止したいです。"
+    },
+    {
+      "indent": 3,
+      "text": "6. After new security layers are negotiated, they take effect on the first octet following the authentication success (as) (Section 6.6) chunk sent by the server and on the first octet sent after receipt of the authentication success (as) chunk sent by the client.",
+      "ja": "新しいセキュリティ層がネゴシエートされている6の後、彼らは（など）認証成功後の最初のオクテットの影響により送信された（ような）チャンクサーバによって、認証成功の受領後に送信される最初のオクテットに送られた（6.6節）チャンクを取りますクライアント。"
+    },
+    {
+      "indent": 3,
+      "text": "7. IRIS-XPC can be used with both TLS and SASL. When used in combination, TLS MUST always be applied before any SASL mechanism.",
+      "ja": "7. IRIS-XPCは、TLSとSASLの両方で使用することができます。組み合わせて使用​​する場合、TLSは、常に任意のSASLメカニズムの前に適用されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "8. IRIS-XPC does not support multiple SASL authentications. However, if TLS is being used in combination with SASL, TLS authentication MUST occur before any SASL authentication.",
+      "ja": "8. IRIS  -  XPCは、複数のSASL認証をサポートしていません。 TLSは、SASLと組み合わせて使用​​されている場合は、TLS認証は任意のSASL認証の前に行われなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "15. References",
+      "section_title": true,
+      "ja": "15.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "15.1. Normative References",
+      "section_title": true,
+      "ja": "15.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Newton, A. and M. Sanz, \"IRIS: The Internet Registry Information Service (IRIS) Core Protocol\", RFC 3981, January 2005.",
+      "ja": "[1]ニュートン、A.とM.サンス、 \"IRIS：インターネットレジストリ情報サービス（IRIS）コアプロトコル\"、RFC 3981、2005年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Newton, A. and M. Sanz, \"Using the Internet Registry Information Service over the Blocks Extensible Exchange Protocol\", RFC 3983, January 2005.",
+      "ja": "[2]ニュートン、A.とM.サンス、RFC 3983「ブロック拡張可能交換プロトコルを介してインターネットレジストリ情報サービスの使用」を、2005年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[3] The Unicode Consortium, \"The Unicode Standard, Version 3\", ISBN 0-201-61633-5, 2000, <The Unicode Standard, Version 3>.",
+      "ja": "[3]ユニコードコンソーシアム、 \"Unicode規格、バージョン3\"、ISBN 0-201-61633-5、2000年、<Unicode標準、バージョン3>。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.1\", RFC 4346, April 2006.",
+      "ja": "[4]ダークス、T.およびE.レスコラ、 \"トランスポート層セキュリティ（TLS）プロトコルバージョン1.1\"、RFC 4346、2006年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[5] Daigle, L. and A. Newton, \"Domain-Based Application Service Location Using SRV RRs and the Dynamic Delegation Discovery Service (DDDS)\", RFC 3958, January 2005.",
+      "ja": "[5] Daigle氏、L.とA.ニュートン、RFC 3958、2005年1月 \"SRVのRRを使用したアプリケーションサービスの場所とダイナミックな委譲発見サービス（DDDS）をドメインベース\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[6] Berners-Lee, T., Fielding, R., and L. Masinter, \"Uniform Resource Identifier (URI): Generic Syntax\", STD 66, RFC 3986, January 2005.",
+      "ja": "[6]バーナーズ - リー、T.、フィールディング、R.、およびL. Masinter、 \"ユニフォームリソース識別子（URI）：汎用構文\"、STD 66、RFC 3986、2005年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[7] Chown, P., \"Advanced Encryption Standard (AES) Ciphersuites for Transport Layer Security (TLS)\", RFC 3268, June 2002.",
+      "ja": "[7]、RFC 3268、2002年6月のchown、P.、 \"トランスポート層セキュリティ（TLS）用のAdvanced Encryption Standard（AES）暗号の組み合わせを\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[8] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", RFC 2119, BCP 14, March 1997.",
+      "ja": "[8]ブラドナーのは、S.は、RFC 2119、BCP 14、1997年3月 \"のRFCsにおける使用のためのレベルを示すために\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[9] Newton, A., \"A Common Schema for Internet Registry Information Service Transfer Protocols\", RFC 4991, August 2007.",
+      "ja": "[9]ニュートン、A.、RFC 4991「インターネットレジストリ情報サービスの転送プロトコルのための共通スキーマ」、2007年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[10] Melnikov, A. and K. Zeilenga, \"Simple Authentication and Security Layer (SASL)\", RFC 4422, June 2006.",
+      "ja": "[10]メルニコフ、A.およびK. Zeilenga、 \"簡易認証セキュリティー層（SASL）\"、RFC 4422、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[11] Zeilenga, K., \"SASLprep: Stringprep Profile for User Names and Passwords\", RFC 4013, February 2005.",
+      "ja": "[11] Zeilenga、K.、 \"SASLprep：ユーザ名とパスワードのためのstringprepプロフィール\"、RFC 4013、2005年2月。"
+    },
+    {
+      "indent": 0,
+      "text": "15.2. Informative References",
+      "section_title": true,
+      "ja": "15.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[12] Kirkpatrick, S., Stahl, M., and M. Recker, \"Internet numbers\", RFC 1166, July 1990.",
+      "ja": "[12]カークパトリック、S.、スタール、M.、およびM.レッカー、 \"インターネット番号\"、RFC 1166、1990年7月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Examples",
+      "ja": "付録A.例"
+    },
+    {
+      "indent": 3,
+      "text": "This section gives examples of IRIS-XPC sessions. Lines beginning with \"C:\" denote data sent by the client to the server, and lines beginning with \"S:\" denote data sent by the server to the client. Following the \"C:\" or \"S:\", the line contains either octet values in hexadecimal notation with comments or XML fragments. No line contains both octet values with comments and XML fragments. Comments are contained within parentheses.",
+      "ja": "このセクションでは、IRIS-XPCセッションの例を示します。始まる行は、「C：」で始まるサーバにクライアントから送信されたデータ、およびライン表す「S：」をサーバからクライアントに送信されたデータを示します。又は「S」：「C」以下、行はコメントやXMLフラグメントと16進数のいずれか含まオクテット値。何行はコメントとXMLフラグメントの両方のオクテット値が含まれていません。コメントは括弧内に含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "It should also be noted that flag values of \"yes\" and \"no\" reflect binary values 1 and 0.",
+      "ja": "またのフラグ値が「はい」と「いいえ」のバイナリ値1と0を反映することに留意されるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following example demonstrates an IRIS client issuing two requests in one XPC session. In the first request, the client is requesting status information for \"example.com\". This request and its response are transferred with one chunk. In the second request, the client is requesting status information for \"milo.example.com\", \"felix.example.com\", and \"hobbes.example.com\". This request and its response are transferred with three chunks.",
+      "ja": "次の例では、1つのXPCセッションで2つの要求を発行するIRISクライアントを示しています。最初の要求では、クライアントは「example.com」のステータス情報を要求しています。この要求とその応答は、1つのチャンクで転送されます。 2番目の要求では、クライアントは「milo.example.com」、「felix.example.com」、および「hobbes.example.com」のステータス情報を要求しています。この要求とその応答は3つのチャンクで転送されます。"
+    },
+    {
+      "indent": 3,
+      "text": "S: (connection response block) S: 0x20 (block header: V=0,KO=yes) S: (chunk 1) S: 0xC1 (LC=yes,DC=yes,CT=vi) S: 0x01 0xBF (chunk length=447) S: (Version Information) S: <?xml version=\"1.0\"?> S: <versions xmlns=\"urn:ietf:params:xml:ns:iris-transport\"> S: <transferProtocol protocolId=\"iris.xpc1\" S: authenticationIds=\"PLAIN EXTERNAL\"> S: <application protocolId=\"urn:ietf:params:xml:ns:iris1\" S: extensionIds=\"http://example.com/SIMPLEBAG\"> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dchk1\"/> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dreg1\"/> S: </application> S: </transferProtocol> S: </versions>",
+      "ja": "S：（接続応答ブロック）S：0x20に（ブロックヘッダ：V = 0、KO = YES）、S：（チャンク1）S：0xC1（LC = YES、DC = YES、CT = VI）S：0x01の0xbfの（チャンク長さ= 447）S：（バージョン情報）S：の<？xml version = \"1.0\"？> S：<バージョンのxmlns = \"壷：IETF：のparams：XML：NS：アイリス輸送\"> S：<transferProtocol protocolId = \"iris.xpc1\" S：authenticationIds = \"PLAIN EXTERNAL\"> S <アプリケーションprotocolId = \"URN：IETF：paramsは：XML：NS：iris1\" S：extensionIds = \"http://example.com/SIMPLEBAG\"> S <データモデルprotocolId = \"URN：IETF：paramsは：XML：NS：dchk1\" /> S <データモデルprotocolId = \"URN：IETF：paramsは：XML：NS：DREG1\" /> S </アプリケーション> S < / transferProtocol> S：</バージョン>"
+    },
+    {
+      "indent": 3,
+      "text": "C: (request block) C: 0x20 (block header: V=0,KO=yes) C: 0x0B (authority length=11) C: (authority=\"example.com\") C: 0x65 0x78 0x61 0x6D 0x70 0x6C 0x65 0x23 0x63 0x6F 0x6D C: (chunk 1) C: 0xC7 (LC=yes,DC=yes,CT=ad) C: 0x01 0x53 (chunk length=339) C: (IRIS XML request)",
+      "ja": "C：（要求ブロック）C：0x20に（ブロックヘッダ：V = 0、KO = YES）C：0x0Bの（権限長= 11）C：（権限= \"example.com\"）C：0x65 0x78との0x61 0x6D 0x70 0x6C 0x65 0x23は0x63 0x6F 0x6DのC：（チャンク1）C：0xC7に（LC = YES、DC = YES、CTは= AD）C：0x01の$ 53（チャンク長さ= 339）C：（IRIS XML要求）"
+    },
+    {
+      "indent": 3,
+      "text": "C: <request xmlns=\"urn:ietf:params:xml:ns:iris1\" C: xsi:schemaLocation=\"urn:ietf:params:xml:ns:iris1 iris.xsd\" > C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"example.com\" /> C: </searchSet> C: </request>",
+      "ja": "C：<要求のxmlns = \"URN：IETF：paramsは：XML：NS：iris1\" C：XSI：のschemaLocation = \"URN：IETF：paramsは：XML：NS：iris1 iris.xsd\"> C <searchSet> C < lookupEntity C：registryType = \"壷：IETF：のparams：XML：NS：dchk1\" C：entityClass = \"ドメイン名\" C：エンティティネーム= \"example.com\" /> C：</ searchSet> C：</リクエスト>"
+    },
+    {
+      "indent": 3,
+      "text": "S: (response block) S: 0x20 (block header: V=0,KO=yes) S: (chunk 1) S: 0xC7 (LC=yes,DC=yes,CT=ad) S: 0x01 0xE0 (chunk length=480) S: (IRIS XML response) S: <iris:response xmlns:iris=\"urn:ietf:params:xml:ns:iris1\"> S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: </iris:response>",
+      "ja": "S：（応答ブロック）S：0x20に（ブロックヘッダ：V = 0、KO = YES）、S：（チャンク1）S：0xC7に（LC = YES、DC = YES、CT = AD）S：0x01の0xE0となっ（チャンク長= 480）S（IRIS XML応答）S：<アイリス：応答のxmlns：アイリス= \"URN：IETF：paramsは：XML：NS：iris1\"> S <アイリス：たresultSet> S <アイリス：回答> S： <ドメイン権限= \"example.com\" registryType = S \"dchk1\"：entityClass = \"ドメイン名\" エンティティネーム= \"example.com-1\" のS：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF：のparams： XML：NS：dchk1\" > S：<ドメイン名> example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え> S：</アイリス：たresultSet> S：</アイリス：レスポンス>"
+    },
+    {
+      "indent": 3,
+      "text": "C: (request block) C: 0x00 (block header: V=0,KO=no) C: 0x0B (authority length=11) C: (authority=\"example.com\") C: 0x65 0x78 0x61 0x6D 0x70 0x6C 0x65 0x23 0x63 0x6F 0x6D C: (chunk 1) C: 0x07 (LC=no,DC=no,CT=ad) C: 0x01 0x4E (chunk length=339) C: (IRIS XML request) C: <request xmlns=\"urn:ietf:params:xml:ns:iris1\" C: xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" C: xsi:schemaLocation=\"urn:ietf:params:xml:ns:iris1 iris.xsd\" > C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\"",
+      "ja": "C：（要求ブロック）C：0×00（ブロックヘッダ：V = 0、KO = NO）C：0x0Bの（権限長= 11）C：（権限= \"example.com\"）C：0x65 0x78との0x61 0x6D 0x70 0x6C 0x65 0x23は0x63 0x6F 0x6DのC：（チャンク1）C：0x07の（LC =なし、DC =なし、CT = AD）C：0x01での0x4E（チャンク長さ= 339）C：（IRIS XML要求）C <リクエストのxmlns =」 URN：IETF：paramsは：XML：NS：iris1\" C：のxmlns：XSI = \"http://www.w3.org/2001/XMLSchema-instance\" C：XSI：のschemaLocation = \"URN：IETF：paramsは：XML： NS：iris1 iris.xsd」> C：<searchSet> C：<lookupEntity C：registryType = \"壷：IETF：のparams：XML：NS：dchk1\" C：entityClass = \"ドメイン名\""
+    },
+    {
+      "indent": 3,
+      "text": "C: entityName=\"milo.example.com\" /> C: </searchSet> C: (chunk 2) C: 0x07 (LC=no,DC=no,CT=ad) C: 0x00 0xA9 (chunk length=169) C: (IRIS XML request) C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"felix.example.com\" /> C: </searchSet> C: (chunk 3) C: 0xC7 (LC=yes,DC=yes,CT=ad) C: 0x00 0xB5 (chunk length=181) C: (IRIS XML request) C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"hobbes.example.com\" /> C: </searchSet> C:</request>",
+      "ja": "C：エンティティネーム= \"milo.example.com\" /> C </ searchSet> C：（チャンク2）C：0x07の（LC =なし、DC =なし、CT = AD）C：0x00の0xA9（チャンク長= 169 ）C：（IRIS XML要求）C <searchSet> C <lookupEntity C：registryType = \"URN：IETF：paramsは：XML：NS：dchk1\" C：entityClass = \"ドメイン名\" C：エンティティネーム= \"フェリックス。 example.com」/> C </ searchSet> C：（チャンク3）C：0xC7に（LC = YES、DC = YES、CT = AD）C：0x00の0xB5（チャンク長さ= 181）C：（IRIS XML要求）C <searchSet> C <lookupEntity C：registryType = \"URN：IETF：paramsは：XML：NS：dchk1\" C：entityClass = \"ドメイン名\" C：エンティティネーム= \"hobbes.example.com\" /> C </ searchSet> C </リクエスト>"
+    },
+    {
+      "indent": 3,
+      "text": "S: (response block) S: 0x00 (block header: V=0,KO=no) S: (chunk 1) S: 0x07 (LC=no,DC=no,CT=ad) S: 0x01 0xDA (chunk length=474) S: (IRIS XML response) S: <iris:response xmlns:iris=\"urn:ietf:params:xml:ns:iris1\"> S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"milo.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>milo.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: (chunk 2) S: 0x07 (LC=no,DC=no,CT=ad) S: 0x01 0xA2 (chunk length=418) S: (IRIS XML response)",
+      "ja": "S：（応答ブロック）S：0×00（ブロックヘッダ：= 0 V、KO = NO）S：（チャンク1）S：0x07の（LC =なし、DC =なし、CT = AD）S：0x01の0xDA（チャンク長= 474）S：（IRIS XMLレスポンス）S：<アイリス：レスポンスのxmlns：アイリス= \"壷：IETF：のparams：XML：NS：iris1\"> S：<アイリス：たresultSet> S：<アイリス：答> S： <ドメイン権限= \"example.com\" registryType = S \"dchk1\"：entityClass = \"ドメイン名\" エンティティネーム= \"milo.example.com-1\" のS：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF： params：XML：NS：dchk1\" > S：<ドメイン名> milo.example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え> S </アイリス：たresultSet> S：（チャンク2）S：0x07の（LC =なし、DC =なし、CT = AD）S：0x01の0xA2（チャンク長さ= 418）S（IRIS XML応答）"
+    },
+    {
+      "indent": 3,
+      "text": "S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"felix.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>felix.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: (chunk 3) S: 0xC7 (LC=yes,DC=yes,CT=ad) S: 0x01 0xB5 (chunk length=437) S: (IRIS XML response) S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" S: entityName=\"hobbes.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>hobbes.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: </iris:response>",
+      "ja": "S：<アイリス：たresultSet> S：<アイリス：答> S：<ドメイン権限= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" エンティティネーム= \"felix.example.com-1\" S：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF：のparams：XML：NS：dchk1\"> S：<ドメイン名> felix.example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え> S：</アイリス：たresultSet> S：（チャンク3）S：0xC7に（LC =はい、DC =はい、CT =広告） S：0x01の0xB5（チャンク長= 437）S：（IRIS XMLレスポンス）S：<アイリス：たresultSet> S：<アイリス：答> S：<ドメインオーソリティ= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" S：エンティティネーム= \"hobbes.example.com-1\" のS：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF：のparams：XML：NS：dchk1\"> S：<ドメイン名>ホッブズ.example.comと</ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え> S：</アイリス：たresultSet> S：< /アイリス：レスポンス>"
+    },
+    {
+      "indent": 29,
+      "text": "Example 1",
+      "ja": "例1"
+    },
+    {
+      "indent": 3,
+      "text": "In the following example, an IRIS client requests domain status information for \"milo.example.com\", \"felix.example.com\", and \"hobbes.example.com\" in one request. The request is sent with one chunk; however, the answer is returned in three chunks.",
+      "ja": "次の例では、IRISクライアントは一つのリクエストで「milo.example.com」、「felix.example.com」、および「hobbes.example.com」のドメインステータス情報を要求します。リクエストは、1つのチャンクで送信されます。しかし、答えは3つのチャンクで返されます。"
+    },
+    {
+      "indent": 3,
+      "text": "S: (connection response block) S: 0x20 (block header: V=0,KO=yes) S: (chunk 1) S: 0xC1 (LC=yes,DC=yes,CT=vi) S: 0x01 0xBF (chunk length=447) S: (Version Information) S: <?xml version=\"1.0\"?> S: <versions xmlns=\"urn:ietf:params:xml:ns:iris-transport\">",
+      "ja": "S：（接続応答ブロック）S：0x20に（ブロックヘッダ：V = 0、KO = YES）、S：（チャンク1）S：0xC1（LC = YES、DC = YES、CT = VI）S：0x01の0xbfの（チャンク長さ= 447）S：（バージョン情報）S：の<？xml version = \"1.0\"？> S：<バージョンのxmlns = \"壷：IETF：のparams：XML：NS：アイリス輸送\">"
+    },
+    {
+      "indent": 3,
+      "text": "S: <transferProtocol protocolId=\"iris.xpc1\" S: authenticationIds=\"PLAIN EXTERNAL\"> S: <application protocolId=\"urn:ietf:params:xml:ns:iris1\" S: extensionIds=\"http://example.com/SIMPLEBAG\"> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dchk1\"/> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dreg1\"/> S: </application> S: </transferProtocol> S: </versions>",
+      "ja": "S：<transferProtocol protocolId = \"iris.xpc1\" S：authenticationIdsは= \"PLAIN EXTERNAL\"> S：<アプリケーションprotocolId = \"壷：IETF：のparams：XML：NS：iris1\" S：extensionIds = \"のhttp：//例。 COM / SIMPLEBAG \"> S：<データモデルprotocolId =\" 壷：IETF：のparams：XML：NS：dchk1 \"/> S：<データモデルprotocolId =\" 壷：IETF：のparams：XML：NS：DREG1\" /> S：< /アプリケーション> S：</ transferProtocol> S：</バージョン>"
+    },
+    {
+      "indent": 3,
+      "text": "C: (request block) C: 0x00 (block header: V=0,KO=no) C: 0x0B (authority length=11) C: (authority=\"example.com\") C: 0x65 0x78 0x61 0x6D 0x70 0x6C 0x65 0x23 0x63 0x6F 0x6D C: (chunk 1) C: 0xC7 (LC=yes,DC=yes,CT=ad) C: 0x02 0xAB (chunk length=683) C: (IRIS XML request) C: <request xmlns=\"urn:ietf:params:xml:ns:iris1\" C: xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" C: xsi:schemaLocation=\"urn:ietf:params:xml:ns:iris1 iris.xsd\" > C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"milo.example.com\" /> C: </searchSet> C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"felix.example.com\" /> C: </searchSet> C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"hobbes.example.com\" /> C: </searchSet> C: </request>",
+      "ja": "C：（要求ブロック）C：0×00（ブロックヘッダ：V = 0、KO = NO）C：0x0Bの（権限長= 11）C：（権限= \"example.com\"）C：0x65 0x78との0x61 0x6D 0x70 0x6C 0x65 0x23は0x63 0x6F 0x6DのC：（チャンク1）C：0xC7に（LC = YES、DC = YES、CT = AD）C：0x02の0xAB（チャンク長さ= 683）C：（IRIS XML要求）C <リクエストのxmlns =」 URN：IETF：paramsは：XML：NS：iris1\" C：のxmlns：XSI = \"http://www.w3.org/2001/XMLSchema-instance\" C：XSI：のschemaLocation = \"URN：IETF：paramsは：XML： NS：iris1 iris.xsd \"> C：<searchSet> C：<lookupEntity C：registryType = \"壷：IETF：のparams：XML：NS：dchk1\" C：entityClass = \"ドメイン名\" C：エンティティネーム=\" マイロ。 example.com」/> C：</ searchSet> C：<searchSet> C：<lookupEntity C：registryType = \"壷：IETF：のparams：XML：NS：dchk1\" C：entityClass = \"ドメイン名\" C：エンティティネーム= \"felix.example.com\" /> C </ searchSet> C <searchSet> C <lookupEntity C：registryType = \"URN：IETF：paramsは：XML：NS：dchk1\" C：entityClass = \"ドメイン名\"C：エンティティネーム=\" hobbes.example.com」/> C </ searchSet> C </リクエスト>"
+    },
+    {
+      "indent": 3,
+      "text": "S: (response block) S: 0x00 (block header: V=0,KO=no) S: (chunk 1) S: 0x07 (LC=no,DC=no,CT=ad) S: 0x01 0xDA (chunk length=474) S: (IRIS XML response)",
+      "ja": "S：（応答ブロック）S：0×00（ブロックヘッダ：= 0 V、KO = NO）S：（チャンク1）S：0x07の（LC =なし、DC =なし、CT = AD）S：0x01の0xDA（チャンク長= 474）S（IRIS XML応答）"
+    },
+    {
+      "indent": 3,
+      "text": "S: <iris:response xmlns:iris=\"urn:ietf:params:xml:ns:iris1\"> S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"milo.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>milo.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: (chunk 2) S: 0x07 (LC=no,DC=no,CT=ad) S: 0x01 0xA2 (chunk length=418) S: (IRIS XML response) S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"felix.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>felix.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: (chunk 3) S: 0xC7 (LC=yes,DC=yes,CT=ad) S: 0x01 0xB5 (chunk length=437) S: (IRIS XML response) S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" S: entityName=\"hobbes.example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>hobbes.example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer>",
+      "ja": "S：<アイリス：レスポンスのxmlns：アイリス= \"壷：IETF：のparams：XML：NS：iris1\"> S：<アイリス：たresultSet> S：<アイリス：答> S：<ドメインオーソリティ= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" エンティティネーム= \"milo.example.com-1\" S：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF：のparams：XML：NS：dchk1\"> S ：<ドメイン名> milo.example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え> S：</アイリス：たresultSet> S：（チャンク2）S：0x07の（LC =なし、DC =なし、CT = AD）S：0x01の0xA2（チャンク長さ= 418）S（IRIS XML応答）S：<アイリス：たresultSet> S： <アイリス：答> S：<ドメインオーソリティ= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" エンティティネーム= \"felix.example.com-1\" S：temporaryReference = \"真\" S： xmlns = \"壷：IETF：のparams：XML：NS：dchk1\"> S：<ドメイン名> felix.example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：< /ドメイン> S：</アイリス：答え> S：</アイリス：たresultSet> S：（チャンク3）S：0xC7に（LC =はい、DC =はい、CT =広告）S：0x01の0xB5（チャンク長= 437 ）S：（IRIS XMLレスポンス）S： <アイリス：たresultSet> S：<アイリス：答> S：<ドメイン権限= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" S：エンティティネーム= \"hobbes.example.com-1\" S：temporaryReference = \"true\" をS：のxmlns = \"壷：IETF：のparams：XML：NS：dchk1\"> S：<ドメイン名> hobbes.example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S：</アイリス：答え>"
+    },
+    {
+      "indent": 3,
+      "text": "S: </iris:resultSet> S: </iris:response>",
+      "ja": "S：</アイリス：たresultSet> S：</アイリス：レスポンス>"
+    },
+    {
+      "indent": 28,
+      "text": "Example 2",
+      "ja": "例2"
+    },
+    {
+      "indent": 3,
+      "text": "In the following example, an IRIS client sends a request containing SASL/PLAIN authentication data and a domain status check for \"example.com\". The server responds with authentication success information and the domain status of \"example.com\". Note that the client requests that the connection stay open for further requests, but the server does not honor this request.",
+      "ja": "次の例では、IRISクライアントはSASL / PLAIN認証データと「example.com」のドメインステータスチェックを含む要求を送信します。サーバーは認証成功情報と、「example.com」のドメインの状態で応答します。クライアントは、接続がさらに要求のために開いたままにすることを要求したが、サーバーがこの要求を尊重しないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "S: (connection response block) S: 0x20 (block header: V=0,KO=yes) S: (chunk 1) S: 0xC1 (LC=yes,DC=yes,CT=vi) S: 0x01 0xBF (chunk length=447) S: (Version Information) S: <?xml version=\"1.0\"?> S: <versions xmlns=\"urn:ietf:params:xml:ns:iris-transport\"> S: <transferProtocol protocolId=\"iris.xpc1\" S: authenticationIds=\"PLAIN EXTERNAL\"> S: <application protocolId=\"urn:ietf:params:xml:ns:iris1\" S: extensionIds=\"http://example.com/SIMPLEBAG\"> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dchk1\"/> S: <dataModel protocolId=\"urn:ietf:params:xml:ns:dreg1\"/> S: </application> S: </transferProtocol> S: </versions>",
+      "ja": "S：（接続応答ブロック）S：0x20に（ブロックヘッダ：V = 0、KO = YES）、S：（チャンク1）S：0xC1（LC = YES、DC = YES、CT = VI）S：0x01の0xbfの（チャンク長さ= 447）S：（バージョン情報）S：の<？xml version = \"1.0\"？> S：<バージョンのxmlns = \"壷：IETF：のparams：XML：NS：アイリス輸送\"> S：<transferProtocol protocolId = \"iris.xpc1\" S：authenticationIds = \"PLAIN EXTERNAL\"> S <アプリケーションprotocolId = \"URN：IETF：paramsは：XML：NS：iris1\" S：extensionIds = \"http://example.com/SIMPLEBAG\"> S <データモデルprotocolId = \"URN：IETF：paramsは：XML：NS：dchk1\" /> S <データモデルprotocolId = \"URN：IETF：paramsは：XML：NS：DREG1\" /> S </アプリケーション> S < / transferProtocol> S：</バージョン>"
+    },
+    {
+      "indent": 3,
+      "text": "C: (request block) C: 0x00 (block header: V=0,KO=no) C: 0x0B (authority length=11) C: (authority=\"example.com\") C: 0x65 0x78 0x61 0x6D 0x70 0x6C 0x65 0x23 0x63 0x6F 0x6D C: (chunk 1) C: 0x44 (LC=no,DC=yes,CT=sd) C: 0x00 0x11 (chunk length=11) C: (SASL data) C: 0x05 (mechanism length=5) C: (mechanism name=\"PLAIN\") C: 0x50 0x4C 0x41 0x49 0x43 C: 0x00 0x0A (sasl PLAIN data length=10) C: (sasl PLAIN data: authcid=\"bob\") C: (sasl PLAIN data: authzid=NULL) C: (sasl PLAIN data: password=\"kEw1\") C: 0x62 0x6F 0x62 0x20 0x00 0x20 0x6B 0x45 0x77 0x31 C: (chunk 2)",
+      "ja": "C：（要求ブロック）C：0×00（ブロックヘッダ：V = 0、KO = NO）C：0x0Bの（権限長= 11）C：（権限= \"example.com\"）C：0x65 0x78との0x61 0x6D 0x70 0x6C 0x65 0x23は0x63 0x6F 0x6DのC：（チャンク1）C：0x44の（LC =なし、DC = YES、CT = SD）C：0x00から0x11を（チャンク長= 11）C（SASLデータ）C：0x05の（機構長= 5 ）C：（機構名= \"普通\"）C：0x50を0x4C 0x41から0x49 0x43このC：0x00では0x0A（SASL PLAINデータ長= 10）C（SASL PLAINデータ：authcid = \"ボブ\"）C：（SASL PLAINデータ： authzidは= NULL）C：（SASL PLAINデータ：パスワード= \"kEw1\"）C：0x62 0x6F 0x62 0x20の0x00から0x20の0x6B 0x45 0x77 0x31 C：（チャンク2）"
+    },
+    {
+      "indent": 3,
+      "text": "C: 0xC7 (LC=yes,DC=yes,CT=ad) C: 0x01 0x53 (chunk length=339) C: (IRIS XML request) C: <request xmlns=\"urn:ietf:params:xml:ns:iris1\" C: xsi:schemaLocation=\"urn:ietf:params:xml:ns:iris1 iris.xsd\" > C: <searchSet> C: <lookupEntity C: registryType=\"urn:ietf:params:xml:ns:dchk1\" C: entityClass=\"domain-name\" C: entityName=\"example.com\" /> C: </searchSet> C: </request>",
+      "ja": "C：0xC7に（LC = YES、DC = YES、CT = AD）C：0x01の$ 53（チャンク長さ= 339）C：（IRIS XML要求）C <リクエストのxmlns = \"URN：IETF：paramsは：XML：NS： iris1\" C：XSI：のschemaLocation = \"URN：IETF：paramsは：XML：NS：iris1 iris.xsd\"> C <searchSet> C <lookupEntity C：registryType = \"URN：IETF：paramsは：XML：NS：dchk1 \"C：entityClass =\" ドメイン名」C：エンティティネーム= \"example.com\" /> C：</ searchSet> C：</リクエスト>"
+    },
+    {
+      "indent": 3,
+      "text": "S: (response block) S: 0x00 (block header: V=0,KO=no) S: (chunk 1) S: 0x45 (LC=no,DC=yes,CT=as) S: 0x00 0xD0 (chunk length=208) S: (authentication success response) S: <?xml version=\"1.0\"?> S: <authenticationSuccess S: xmlns=\"urn:ietf:params:xml:ns:iris-transport\"> S: <description language=\"en\"> S: user 'bob' authenticates via password S: </description> S: </authenticationSuccess> S: (chunk 2) S: 0xC7 (LC=yes,DC=yes,CT=ad) S: 0x01 0xE0 (chunk length=480) S: (IRIS XML response) S: <iris:response xmlns:iris=\"urn:ietf:params:xml:ns:iris1\"> S: <iris:resultSet> S: <iris:answer> S: <domain authority=\"example.com\" registryType=\"dchk1\" S: entityClass=\"domain-name\" entityName=\"example.com-1\" S: temporaryReference=\"true\" S: xmlns=\"urn:ietf:params:xml:ns:dchk1\"> S: <domainName>example.com</domainName> S: <status> S: <assignedAndActive/> S: </status> S: </domain> S: </iris:answer> S: </iris:resultSet> S: </iris:response>",
+      "ja": "S：（応答ブロック）S：0×00（ブロックヘッダ：V = 0、KOは= NO）S：（チャンク1）S：0x00の0xD0（チャンク長：0x45 S（LC =なし、DC = YES、CT =など） = 208）S：（認証成功応答）S：<？xmlのバージョン= \"1.0\"> S：<authenticationSuccess S：のxmlns = \"壷：IETF：のparams：XML：NS：アイリス輸送\"> S：<説明言語= \"EN\"> S：ユーザのボブ」はパスワードSを経由して認証します：</記述> S：</ authenticationSuccess> S：（チャンク2）S：0xC7に（LC =はい、DC =はい、CT =広告）S ：0x01の0xE0となっ（チャンク長さ= 480）S（IRIS XML応答）S：<アイリス：応答のxmlns：アイリス= \"URN：IETF：paramsは：XML：NS：iris1\"> S <アイリス：たresultSet> S <アイリス：答> S：<ドメイン権限= \"example.com\" registryType = \"dchk1\" S：entityClass = \"ドメイン名\" エンティティネーム= \"example.com-1\" S：temporaryReference = \"true\" をS：のxmlns =」 URN：IETF：のparams：XML：NS：dchk1\" > S：<ドメイン名> example.com </ドメイン名> S：<状態> S：<assignedAndActive /> S：</ステータス> S：</ドメイン> S： </アイリス：答え> S：</アイリス：たresultSet> S：</アイリス：レスポンス>"
+    },
+    {
+      "indent": 28,
+      "text": "Example 3",
+      "ja": "例3"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Contributors",
+      "ja": "付録B.協力者"
+    },
+    {
+      "indent": 3,
+      "text": "Substantive contributions to this document have been provided by the members of the IETF's CRISP Working Group, especially Robert Martin-Legene, Milena Caires, and David Blacka.",
+      "ja": "このドキュメントへの実質的な貢献はIETFのCRISPワーキンググループのメンバー、特にロバート・マーティン・Legene、ミレーナCaires、とDavid Blackaによって提供されています。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Andrew L. Newton VeriSign, Inc. 21345 Ridgetop Circle Sterling, VA 20166 USA",
+      "ja": "アンドリュー・L.ニュートンベリサイン社21345 Ridgetopサークルスターリング、VA 20166 USA"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 703 948 3382 EMail: andy@hxr.us URI: http://www.verisignlabs.com/",
+      "ja": "電話：+1 703 948 3382 Eメール：andy@hxr.us URI：http://www.verisignlabs.com/"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

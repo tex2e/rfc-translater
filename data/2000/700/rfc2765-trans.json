@@ -1,0 +1,1176 @@
+{
+  "title": {
+    "text": "RFC 2765 - Stateless IP/ICMP Translation Algorithm (SIIT)",
+    "ja": "RFC 2765 - ステートレスIP / ICMP翻訳アルゴリズム（SIIT）"
+  },
+  "number": 2765,
+  "created_at": "2019-10-29 23:42:06.543639+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                     E. Nordmark\nRequest for Comments: 2765                           Sun Microsystems\nCategory: Standards Track                               February 2000",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Stateless IP/ICMP Translation Algorithm (SIIT)",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2000). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2000）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies a transition mechanism algorithm in addition to the mechanisms already specified in [TRANS-MECH]. The algorithm translates between IPv4 and IPv6 packet headers (including ICMP headers) in separate translator \"boxes\" in the network without requiring any per-connection state in those \"boxes\". This new algorithm can be used as part of a solution that allows IPv6 hosts, which do not have a permanently assigned IPv4 addresses, to communicate with IPv4-only hosts. The document neither specifies address assignment nor routing to and from the IPv6 hosts when they communicate with the IPv4-only hosts.",
+      "ja": "この文書は、すでに[TRANS-MECH]で指定されたメカニズムに加えて、遷移機構アルゴリズムを指定します。アルゴリズムは、これらの「ボックス」内の任意の接続ごとの状態を必要とすることなく、ネットワーク内の別のトランスレータ「ボックス」内の（ICMPヘッダを含む）、IPv4およびIPv6パケットヘッダー間の変換します。この新しいアルゴリズムは、IPv4のみのホストと通信するために、永続的に割り当てられたIPv4アドレスを持っていないIPv6ホストを可能にするソリューションの一部として使用することができます。文書でもないし、彼らはIPv4のみのホストと通信するときのIPv6ホストからのアドレスの割り当てやルーティングを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the NGTRANS working group. Some text has been extracted from an old Internet Draft titled \"IPAE: The SIPP Interoperability and Transition Mechanism\" authored by R. Gilligan, E. Nordmark, and B. Hinden. George Tsirtsis provides the figures for Section 1. Keith Moore provided a careful review of the document.",
+      "ja": "この文書では、NGTRANSワーキンググループの製品です。 R.ギリガン、E. Nordmarkと、およびB. Hindenとによって執筆：一部のテキストは、「SIPP相互運用性と移行メカニズムIPAE」と題した古いインターネットドラフトから抽出されました。ジョージTsirtsisは、第1節キースムーアの数値は、文書の慎重な検討を提供しています。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction and Motivation..............................    2\n   1.1.  Applicability and Limitations.......................    5\n   1.2.  Assumptions.........................................    7\n   1.3.  Impact Outside the Network Layer....................    7\n2.  Terminology..............................................    8\n   2.1.  Addresses...........................................    9\n   2.2.  Requirements........................................    9\n3.  Translating from IPv4 to IPv6............................    9\n   3.1.  Translating IPv4 Headers into IPv6 Headers..........   11\n   3.2.  Translating UDP over IPv4...........................   13\n   3.3.  Translating ICMPv4 Headers into ICMPv6 Headers......   13\n   3.4.  Translating ICMPv4 Error Messages into ICMPv6.......   16\n   3.5.  Knowing when to Translate...........................   16\n4.  Translating from IPv6 to IPv4............................   17\n   4.1.  Translating IPv6 Headers into IPv4 Headers..........   18\n   4.2.  Translating ICMPv6 Headers into ICMPv4 Headers......   20\n   4.3.  Translating ICMPv6 Error Messages into ICMPv4.......   22\n   4.4.  Knowing when to Translate...........................   22\n5.  Implications for IPv6-Only Nodes.........................   22\n6.  Security Considerations..................................   23\nReferences...................................................   24\nAuthor's Address.............................................   25\nFull Copyright Statement.....................................   26",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction and Motivation",
+      "section_title": true,
+      "ja": "1.はじめと動機"
+    },
+    {
+      "indent": 3,
+      "text": "The transition mechanisms specified in [TRANS-MECH] handle the case of dual IPv4/IPv6 hosts interoperating with both dual hosts and IPv4-only hosts, which is needed early in the transition to IPv6. The dual hosts are assigned both an IPv4 and one or more IPv6 addresses. As the number of available globally unique IPv4 addresses becomes smaller and smaller as the Internet grows there will be a desire to take advantage of the large IPv6 address and not require that every new Internet node have a permanently assigned IPv4 address.",
+      "ja": "[TRANS-MECH]で指定された移行メカニズムデュアルホストの両方とIPv6への移行の早い段階で必要とされるホスト、IPv4専用と相互運用デュアルIPv4 / IPv6ホストの場合を扱います。デュアルホストは、IPv4と1つのまたは複数のIPv6アドレスの両方が割り当てられています。インターネットが大規模なIPv6アドレスを利用したいことと、すべての新しいインターネットノードは、永続的に割り当てられたIPv4アドレスを持っていることを必要としません成長に合わせて利用できるグローバルにユニークなIPv4アドレスの数がますます小さくなるにつれて。"
+    },
+    {
+      "indent": 3,
+      "text": "There are several different scenarios where there might be IPv6-only hosts that need to communicate with IPv4-only hosts. These IPv6 hosts might be IPv4-capable, i.e. include an IPv4 implementation but not be assigned an IPv4 address, or they might not even include an IPv4 implementation.",
+      "ja": "IPv4のみのホストと通信する必要があるIPv6のみのホストがあるかもしれないいくつかの異なるシナリオがあります。これらのIPv6ホストがIPv4対応、すなわちIPv4の実装を含むかもしれないが、IPv4アドレスを割り当てられない、または彼らもIPv4の実装を含んでいない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "- A completely new network with new devices that all support IPv6. In this case it might be beneficial to not have to configure the routers within the new network to route IPv4 since none of the hosts in the new network are configured with IPv4 addresses. But these new IPv6 devices might occasionally need to communicate with some IPv4 nodes out on the Internet.",
+      "ja": " - すべてのIPv6をサポートする新しいデバイスと完全に新しいネットワーク。この場合には、IPv4アドレスで構成されている新しいネットワーク内のホストのいずれためのIPv4ルートに新しいネットワーク内のルータを構成する必要はないことが有益であるかもしれません。しかし、これらの新しいIPv6デバイスは、時折、いくつかのIPv4は、インターネット上でのノードと通信する必要がある場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "- An existing network where a large number of IPv6 devices are added. The IPv6 devices might have both an IPv4 and an IPv6 protocol stack but there is not enough global IPv4 address space to give each one of them a permanent IPv4 address. In this case it is more likely that the routers in the network already route IPv4 and are upgraded to dual routers.",
+      "ja": " -  IPv6デバイスの多数が追加され、既存のネットワーク。 IPv6デバイスは、IPv4およびIPv6プロトコルスタックの両方を持っているかもしれないが、それらの一つ一つに永久的なIPv4アドレスを与えるために十分なグローバルIPv4アドレス空間はありません。この場合、既にネットワーク内のルータの経路IPv4とデュアルルーターにアップグレードされている可能性が高いです。"
+    },
+    {
+      "indent": 3,
+      "text": "However, there are other potential solutions in this area:",
+      "ja": "しかし、この地域の他の潜在的な解決策があります。"
+    },
+    {
+      "indent": 3,
+      "text": "- If there is no IPv4 routing inside the network i.e., the cloud that contains the new devices, some possible solutions are to either use the translators specified in this document at the boundary of the cloud, or to use Application Layer Gateways (ALG) on dual nodes at the cloud's boundary. The ALG solution is less flexible in that it is application protocol specific and it is also less robust since an ALG box is likely to be a single point of failure for a connection using that box.",
+      "ja": " - ネットワークすなわち内部には、IPv4ルーティング、新しいデバイスが含まれている雲が存在しない場合は、いくつかの可能な解決策は、雲の境界で、この文書で指定された翻訳者を使用するか、または上のアプリケーション層ゲートウェイ（ALG）を使用しています雲の境界でデュアルノード。それは特定のアプリケーションプロトコルであり、ALGボックスは、そのボックスを使用して接続するための単一障害点である可能性があるので、それはまた、よりロバストであるという点で、ALG溶液が少なく柔軟です。"
+    },
+    {
+      "indent": 3,
+      "text": "- Otherwise, if IPv4 routing is supported inside the cloud and the implementations support both IPv6 and IPv4 it might suffice to have a mechanism for allocating a temporary address IPv4 and use IPv4 end to end when communicating with IPv4-only nodes. However, it would seem that such a solution would require the pool of temporary IPv4 addresses to be partitioned across all the subnets in the cloud which would either require a larger pool of IPv4 addresses or result in cases where communication would fail due to no available IPv4 address for the node's subnet.",
+      "ja": " -  IPv4ルーティングクラウド内に支持されており、実装がIPv6とIPv4の両方をサポートしている場合それ以外の場合は、一時IPv4アドレスを割り当てるための機構を有しており、IPv4専用ノードと通信するときに終了するのIPv4エンドを使用するのに十分かもしれません。しかし、そのような解決策は、一時のIPv4のプールは、IPv4アドレスの大きなプールを必要としたり、通信が原因なし利用できるIPv4のに失敗する場合につながるいずれかのクラウド内のすべてのサブネット間で分割されるようにアドレスが必要となるように思わノードのサブネットのアドレス。"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an algorithm that is one of the components needed to make IPv6-only nodes interoperate with IPv4-only nodes. Other components, not specified in this document, are a mechanism for the IPv6-only node to somehow acquire a temporary IPv4 address, and a mechanism for providing routing (perhaps using tunneling) to and from the temporary IPv4 address assigned to the node.",
+      "ja": "この文書は、IPv6専用ノードがIPv4専用ノードと相互運用するために必要な要素の一つであるアルゴリズムを指定します。本書で指定されていない他の構成要素は、何らかの方法で一時的IPv4アドレスを取得するためのIPv6専用ノード、ノードに割り当てられた一時的なIPv4アドレスにから（おそらくトンネリングを使用して）ルーティングを提供するためのメカニズムのためのメカニズムです。"
+    },
+    {
+      "indent": 3,
+      "text": "The temporary IPv4 address will be used as an IPv4-translated IPv6 address and the packets will travel through a stateless IP/ICMP translator that will translate the packet headers between IPv4 and IPv6 and translate the addresses in those headers between IPv4 addresses on one side and IPv4-translated or IPv4-mapped IPv6 addresses on the other side.",
+      "ja": "仮のIPv4アドレスは、IPv4変換されたIPv6アドレスとして使用され、パケットがIPv4とIPv6の間でパケットヘッダを翻訳し、片側にIPv4アドレスの間に、これらのヘッダのアドレスを変換しますステートレスIP / ICMPトランスレータを通過しますと、 IPv4の翻訳またはIPv4マップIPv6は反対側に対処します。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification does not cover how an IPv6 node can acquire a temporary IPv4 address and how such a temporary address be registered in the DNS. The DHCP protocol, perhaps with some extensions, could probably be used to acquire temporary addresses with short leases but that is outside the scope of this document. Also, the mechanism for routing this IPv4-translated IPv6 address in the site is not specified in this document.",
+      "ja": "この仕様は、IPv6ノードは、一時IPv4アドレスとどのような一時的アドレスをDNSに登録することを取得することができる方法をカバーしていません。 DHCPプロトコルは、おそらくいくつかの拡張機能で、おそらく短いリースで一時アドレスを取得するために使用できるが、それはこの文書の範囲外です。また、サイトでは、このIPv4に変換されたIPv6アドレスをルーティングするためのメカニズムは、この文書で指定されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The figures below show how the Stateless IP/ICMP Translation algorithm (SIIT) can be used initially for small networks (e.g., a single subnet) and later for a site which has IPv6-only hosts in a dual IPv4/IPv6 network. This use assumes a mechanism for the IPv6 nodes to acquire a temporary address from the pool of IPv4 addresses. Note that SIIT is not likely to be useful later during transition when most of the Internet is IPv6 and there are only small islands of IPv4 nodes, since such use would either require the IPv6 nodes to acquire temporary IPv4 addresses from a \"distant\" SIIT box operated by a different administration, or require that the IPv6 routing contain routes for IPv6-mapped addresses. (The latter is known to be a very bad idea due to the size of the IPv4 routing table that would potentially be injected into IPv6 routing in the form of IPv4-mapped addresses.)",
+      "ja": "デュアルIPv4 / IPv6ネットワークにおいてIPv6のみのホストを持っているサイトのステートレスIP / ICMP翻訳アルゴリズム（SIIT）が小さいネットワークのために最初に使用することができる方法を示し、以下に図面（例えば、単一のサブネット）以降。この使用は、IPv4アドレスのプールから一時的なアドレスを取得するためのIPv6ノードのためのメカニズムを想定しています。 SIITは、インターネットのほとんどがIPv6のときの遷移中に、後に有用である可能性が高いではないことに注意し、このような使用は、いずれかの「遠い」SIITボックスから、一時的なIPv4アドレスを取得するためにIPv6ノードを必要とするため、IPv4ノードの小さな島々は、唯一の存在異なる投与によって操作、またはIPv6ルーティングはIPv6にマッピングされたアドレスのルートを含んでいることを必要とします。 （後者は、潜在的にIPv4マップアドレスの形でIPv6ルーティングに注入されることになるIPv4ルーティングテーブルのサイズに起因する非常に悪い考えであることが知られています。）"
+    },
+    {
+      "indent": 6,
+      "text": "                               ___________\n                              /           \\\n[IPv6 Host]---[SIIT]---------< IPv4 network>--[IPv4 Host]\n                 |            \\___________/\n          (pool of IPv4 addresses)",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "IPv4-translatable -> IPv4->IPv4 addresser IPv4-mapped",
+      "ja": "IPv4に翻訳可能 - > IPv4-> IPv4の差出人IPv4マップ"
+    },
+    {
+      "indent": 11,
+      "text": "Figure 1. Using SIIT for a single IPv6-only subnet.",
+      "ja": "シングルIPv6のみのサブネットのSIITを使用して図1。"
+    },
+    {
+      "indent": 6,
+      "text": "               ___________              ___________\n              /           \\            /           \\\n[IPv6 Host]--< Dual network>--[SIIT]--< IPv4 network>--[IPv4 Host]\n              \\___________/     |      \\___________/\n                       (pool of IPv4 addresses)",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "IPv4-translatable -> IPv4->IPv4 addresser IPv4-mapped",
+      "ja": "IPv4に翻訳可能 - > IPv4-> IPv4の差出人IPv4マップ"
+    },
+    {
+      "indent": 4,
+      "text": "Figure 2. Using SIIT for an IPv6-only or dual cloud (e.g. a site) which contains some IPv6-only hosts as well as IPv4 hosts.",
+      "ja": "いくつかのIPv6は、IPv4のみのホストとしてもホスト含まIPv6のみまたはデュアルクラウド（例えばサイト）のためSIITを使用する図2。"
+    },
+    {
+      "indent": 3,
+      "text": "The protocol translators are assumed to fit around some piece of topology that includes some IPv6-only nodes and that may also include IPv4 nodes as well as dual nodes. There has to be a translator on each path used by routing the \"translatable\" packets in and out of this cloud to ensure that such packets always get translated. This does not require a translator at every physical connection between the cloud and the rest of the Internet since the routing can be used to deliver the packets to the translator.",
+      "ja": "プロトコルトランスレータは、いくつかのIPv6専用ノードを含むトポロジのいくつかの部分の周りに適合するように想定され、それはまた、IPv4のノードと同様にデュアルノード含んでもよいです。このようなパケットは常に変換されますことを確実にするためにこの雲のうち、「翻訳可能」パケットをルーティングで使用される各パスの翻訳者が存在しなければなりません。ルーティングは、翻訳者にパケットを配信するために使用することができますので、これは、クラウドやインターネットの残りの部分との間のすべての物理的な接続で翻訳者を必要としません。"
+    },
+    {
+      "indent": 3,
+      "text": "The IPv6-only node communicating with an IPv4 node through a translator will see an IPv4-mapped address for the peer and use an IPv4-translatable address for its local address for that communication. When the IPv6-only node sends packets the IPv4-mapped address indicates that the translator needs to translate the packets. When the IPv4 node sends packets those will translated to have the IPv4-translatable address as a destination; it is not possible to use an IPv4-mapped or an IPv4-compatible address as a destination since that would either route the packet back to the translator (for the IPv4-mapped address) or make the packet be encapsulated in IPv4 (for the IPv4-compatible address). Thus this specification introduces the new notion of an IPv4-translatable address.",
+      "ja": "トランスレータを介してIPv4ノードと通信するIPv6専用ノードは、ピアのIPv4マップアドレスを参照し、その通信のためにそのローカルアドレスのIPv4-並進アドレスを使用します。 IPv6のみのノードがパケットを送信するとIPv4マップアドレスは、翻訳者がパケットを変換する必要があることを示しています。 IPv4ノードがパケットを送信するとき、それらは、宛先としてのIPv4翻訳可能アドレスを有するように変換されます。そのどちらかだろう（IPv4マップアドレスの）バック翻訳者へのルートパケットまたはIPv4にカプセル化されたパケットを作るためIPv4の（マップされたIPv4または宛先としてIPv4互換アドレスを使用することは不可能です互換アドレス）。したがって、この仕様は、IPv4翻訳可能アドレスの新しい概念を導入しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Applicability and Limitations",
+      "section_title": true,
+      "ja": "1.1。適用性と制限事項"
+    },
+    {
+      "indent": 3,
+      "text": "The use of this translation algorithm assumes that the IPv6 network is somehow well connected i.e. when an IPv6 node wants to communicate with another IPv6 node there is an IPv6 path between them. Various tunneling schemes exist that can provide such a path, but those mechanisms and their use is outside the scope of this document.",
+      "ja": "この変換アルゴリズムの使用は、IPv6ノードは、それらの間のIPv6経路が存在する別のIPv6ノードと通信したいときにIPv6ネットワークが何らかの形でよく、すなわち接続されていることを想定しています。様々なトンネリング方式は、そのような経路を提供することができる存在するが、これらのメカニズムおよびそれらの使用は、この文書の範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "The IPv6 protocol [IPv6] has been designed so that the TCP and UDP pseudo-header checksums are not affected by the translations specified in this document, thus the translator does not need to modify normal TCP and UDP headers. The only exceptions are unfragmented IPv4 UDP packets which need to have a UDP checksum computed since a pseudo-header checksum is required for UDP in IPv6. Also, ICMPv6 include a pseudo-header checksum but it is not present in ICMPv4 thus the checksum in ICMP messages need to be modified by the translator. In addition, ICMP error messages contain an IP header as part of the payload thus the translator need to rewrite those parts of the packets to make the receiver be able to understand the included IP header. However, all of the translator's operations, including path MTU discovery, are stateless in the sense that the translator operates independently on each packet and does not retain any state from one packet to another. This allows redundant translator boxes without any coordination and a given TCP connection can have the two directions of packets go through different translator boxes.",
+      "ja": "TCPとUDP疑似ヘッダチェックサムは、この文書で指定された翻訳に影響されないように、IPv6プロトコル[IPv6は】このように翻訳者が通常のTCPとUDPヘッダを変更する必要がなく、設計されています。唯一の例外は、疑似ヘッダチェックサムがIPv6にUDPのために必要とされるので、計算されたUDPチェックサムを持っている必要が断片化されていないのIPv4 UDPパケットです。また、ICMPメッセージにおけるこのようチェックサムのICMPv6擬似ヘッダチェックサムを含むが、ICMPv4の中に存在しない翻訳者によって修正される必要があります。また、ICMPエラーメッセージは、このようにトランスレータは、受信機が含まれるIPヘッダを理解することができるようにするためにパケットのそれらの部分を書き換える必要がペイロードの一部としてIPヘッダを含みます。しかし、パスMTUディスカバリを含む翻訳者の操作のすべては、翻訳者が各パケットに独立して動作し、1つのパケットから別の任意の状態を保持しないという意味ではステートレスです。これは、任意の調整なしに冗長翻訳ボックスを可能にし、特定のTCP接続はパケットの二つの方向が異なる翻訳者ボックスを通過することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The translating function as specified in this document does not translate any IPv4 options and it does not translate IPv6 routing headers, hop-by-hop extension headers, or destination options headers. It could be possible to define a translation between source routing in IPv4 and IPv6. However such a translation would not be semantically correct due to the slight differences between the IPv4 and IPv6 source routing. Also, the usefulness of source routing when going through a header translator might be limited since all the IPv6-only routers would need to have an IPv4-translated IPv6 address since the IPv4-only node will send a source route option containing only IPv4 addresses.",
+      "ja": "この文書で指定されている翻訳機能は、任意のIPv4オプションを変換せず、IPv6ルーティングヘッダ、ホップバイホップ拡張ヘッダ、または宛先オプションヘッダを変換しません。 IPv4とIPv6のルーティングソース間の変換を定義することが可能である可能性があります。しかしながら、そのような翻訳が原因IPv4とIPv6ソースルーティングの間にわずかな違いに意味的に正確ではないであろう。 IPv4のみのノードはIPv4アドレスのみを含むソースルートオプションをお送りしますので、すべてのIPv6専用ルーターがIPv4翻訳IPv6アドレスを持っている必要がありますので、また、ヘッダトランスレータを経由するソースルーティングの有用性が制限される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "At first sight it might appear that the IPsec functionality [IPv6-SA, IPv6-ESP, IPv6-AH] can not be carried across the translator. However, since the translator does not modify any headers above the logical IP layer (IP headers, IPv6 fragment headers, and ICMP messages) packets encrypted using ESP in Transport-mode can be carried through the translator. [Note that this assumes that the key management can operate between the IPv6-only node and the IPv4-only node.] The AH computation covers parts of the IPv4 header fields such as IP addresses, and the identification field (fields that are either immutable or predictable by the sender) [IPv6-AUTH]. While the SIIT algorithm is specified so that those IPv4 fields can be predicted by the IPv6 sender it is not possible for the IPv6 receiver to determine the value of the IPv4 Identification field in packets sent by the IPv4 node. Thus as the translation algorithm is specified in this document it is not possible to use end-to-end AH through the translator.",
+      "ja": "一見IPsec機能[IPv6の-SA、IPv6の-ESP、IPv6の-AH]は翻訳者間で実施することができないように見えるかもしれません。翻訳者は、トランスポート・モードでESP使用して暗号化された任意の論理IP層以上のヘッダ（IPヘッダ、IPv6のフラグメントヘッダー、およびICMPメッセージ）パケットを変更しないので、トランスレータを通じて行うことができます。 【これは鍵管理がIPv6専用ノードとIPv4専用ノードとの間に動作することができると仮定することに注意してください。] AH計算は、IPアドレスとしてIPv4ヘッダフィールドの一部、および識別フィールド（不変のいずれかであるフィールドをカバーまたは送信者によって予測可能）のIPv6-AUTH]。 SIITアルゴリズムが指定されている間、それらのIPv4フィールドは、IPv6送信者によって予測することができるように、IPv6の受信機がIPv4ノードによって送信されたパケットにIPv4の識別フィールドの値を決定することは不可能です。変換アルゴリズムは、この文書で指定されているようしたがって、翻訳者によるエンドツーエンドのAHを使用することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "For ESP Tunnel-mode to work through the translator the IPv6 node would have to be able to both parse and generate \"inner\" IPv4 headers since the inner IP will be encrypted together with the transport protocol.",
+      "ja": "ESPトンネルモードはトランスレータを介して動作するためのIPv6ノードは、解析および内側IPは、トランスポートプロトコルと一緒に暗号化されるので、「内側」のIPv4ヘッダを生成するために、両方できなければならないであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Thus in practise, only ESP transport mode is relatively easy to make work through a translator.",
+      "ja": "このように実際には、唯一のESPトランスポートモードは、翻訳者による作業を行うことが比較的容易です。"
+    },
+    {
+      "indent": 3,
+      "text": "IPv4 multicast addresses can not be mapped to IPv6 multicast addresses. For instance, ::ffff:224.1.2.3 is an IPv4 mapped IPv6 address with a class D address, however it is not an IPv6 multicast address. While the IP/ICMP header translation aspect of this memo in theory works for multicast packets this address mapping limitation makes it impossible to apply the techniques in this memo for multicast traffic.",
+      "ja": "IPv4マルチキャストアドレスは、IPv6マルチキャストアドレスにマッピングすることはできません。例えば、:: FFFF：224.1.2.3がIPv4であるがしかし、それはIPv6マルチキャストアドレスでない、クラスDアドレスとIPv6アドレスをマッピングされました。理論的にはこのメモのIP / ICMPヘッダ変換側面は、マルチキャストパケットのために動作しますが、このアドレスマッピング制限は、それが不可能なマルチキャストトラフィックのためにこのメモで技術を適用することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Assumptions",
+      "section_title": true,
+      "ja": "1.2。仮定"
+    },
+    {
+      "indent": 3,
+      "text": "The IPv6 nodes using the translator must have an IPv4-translated IPv6 address while it is communicating with IPv4-only nodes.",
+      "ja": "IPv6は、それがIPv4専用ノードと通信している間のIPv4翻訳IPv6アドレスを持たなければならないトランスレータを使用してノード。"
+    },
+    {
+      "indent": 3,
+      "text": "The use of the algorithm assumes that there is an IPv4 address pool used to generate IPv4-translated addresses. Routing needs to be able to route any IPv4 packets, whether generated \"outside\" or \"inside\" the translator, destined to addresses in this pool towards the translator. This implies that the address pool can not be assigned to subnets but must be separated from the IPv4 subnets used on the \"inside\" of the translator.",
+      "ja": "アルゴリズムの使用は、IPv4変換されたアドレスを生成するために使用されるIPv4アドレスプールがあることを前提としています。ルーティングは、翻訳者に向かって、このプール内のアドレス宛て、「外部」または「内部」翻訳を生成するかどうか、任意のIPv4パケットをルーティングすることができる必要があります。これは、アドレスプールがサブネットに割り当てることはできませんが、翻訳者の「内側」で使用のIPv4サブネットから分離されなければならないことを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "Fragmented IPv4 UDP packets that do not contain a UDP checksum (i.e. the UDP checksum field is zero) are not of significant use over wide-areas in the Internet and will not be translated by the translator. An informal trace [MILLER] in the backbone showed that out of 34,984,468 IP packets there were 769 fragmented UDP packets with a zero checksum. However, all of them were due to malicious or broken behavior; a port scan and first fragments of IP packets that are not a multiple of 8 bytes.",
+      "ja": "UDPチェックサムが含まれていない断片化されたIPv4 UDPパケット（すなわちUDPチェックサムフィールドがゼロである）は、インターネットでのワイドエリア上で重要な用途ではなく、翻訳者による翻訳されることはありません。バックボーンで非公式のトレース[MILLER]は34984468個のIPパケットのうち、ゼロチェックサムと769個の断片化されたUDPパケットがあったことを示しました。しかし、それらのすべてが悪質なまたは壊れて行動によるものでした。 8バイトの倍数でないポートスキャンとIPパケットの最初のフラグメント。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Impact Outside the Network Layer",
+      "section_title": true,
+      "ja": "1.3。ネットワーク層の外側への影響"
+    },
+    {
+      "indent": 3,
+      "text": "The potential existence of stateless IP/ICMP translators is already taken care of from a protocol perspective in [IPv6]. However, an IPv6 node that wants to be able to use translators needs some additional logic in the network layer.",
+      "ja": "ステートレスIP / ICMP翻訳者の潜在的な存在が、すでに[たIPv6]のプロトコルの視点からの世話をしています。しかし、翻訳者を使用できるようにしたいと考えてIPv6ノードは、ネットワーク層でのいくつかの追加のロジックを必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The network layer in an IPv6-only node, when presented by the application with either an IPv4 destination address or an IPv4-mapped IPv6 destination address, is likely to drop the packet and return some error message to the application. In order to take advantage of translators such a node should instead send an IPv6 packet where the destination address is the IPv4-mapped address and the source address is the node's temporarily assigned IPv4-translated address. If the node does not have a temporarily assigned IPv4-translated address it should acquire one using mechanisms that are not discussed in this document.",
+      "ja": "IPv4宛先アドレスまたはIPv4射影IPv6宛先アドレスのいずれかを使用してアプリケーションによって提示されたIPv6専用ノードにネットワーク層は、パケットをドロップし、アプリケーションにいくつかのエラーメッセージを返す可能性があります。翻訳者のようなノードを利用するために代わりに宛先アドレスがIPv4マップアドレスであり、送信元アドレスは、ノードの一時的に割り当てられたIPv4翻訳アドレスであるIPv6パケットを送信する必要があります。ノードは、一時的に割り当てられたIPv4翻訳アドレスを持っていない場合は、このドキュメントで説明されていない機構を用いたものを取得しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the above also applies to a dual IPv4/IPv6 implementation node which is not configured with any IPv4 address.",
+      "ja": "上記は、また、任意のIPv4アドレスで構成されていないデュアルIPv4 / IPv6実装のノードに適用されることに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "There are no extra changes needed to applications to operate through a translator beyond what applications already need to do to operate on a dual node. The applications that have been modified to work on a dual node already have the mechanisms to determine whether they are communicating with an IPv4 or an IPv6 peer. Thus if the applications need to modify their behavior depending on the type of the peer, such as ftp determining whether to fallback to using the PORT/PASV command when EPRT/EPSV fails (as specified in [FTPEXT]), they already need to do that when running on dual nodes and the presense of translators does not add anything. For example, when using the socket API [BSDAPI] the applications know that the peer is IPv6 if they get an AF_INET6 address from the name service and the address is not an IPv4-mapped address (i.e., IN6_IS_ADDR_V4MAPPED returns false). If this is not the case, i.e., the address is AF_INET or an IPv4-mapped IPv6 address, the peer is IPv4.",
+      "ja": "アプリケーションはすでにデュアルノード上で動作するために必要なものを超えて通訳を介して動作するアプリケーションに必要な余分な変更はありません。デュアルノードで動作するように修飾されたアプリケーションは、既にそれらがIPv4またはIPv6ピアと通信しているかどうかを決定するための機構を有しています。アプリケーションが（[FTPEXT]で指定されるように）EPRT / EPSVが失敗したときPORT / PASVコマンドを使用してフォールバックするかどうかを決定FTPなど、ピアの種類に応じてその動作を変更する必要がある場合はこのように、彼らはすでに行う必要がデュアルノードと翻訳者のpresense上で動作しているときには何も追加しないこと。ソケットAPIを使用する場合、例えば、[BSDAPI]アプリケーションは、ネームサービスからAF_INET6アドレスを取得する場合、ピアがIPv6であり、アドレス（すなわち、IN6_IS_ADDR_V4MAPPEDがfalseを返す）IPv4マップアドレスでないことを知っています。そうでない場合、すなわち、アドレスがAF_INETまたはIPv4射影IPv6アドレスである、ピアは、IPv4です。"
+    },
+    {
+      "indent": 3,
+      "text": "One way of viewing the translator, which might help clarify why applications do not need to know that a translator is used, is to look at the information that is passed from the transport layer to the network layer. If the transport passes down an IPv4 address (whether or not is in the IPv4-mapped encoding) this means that at some point there will be IPv4 packets generated. In a dual node the generation of the IPv4 packets takes place in the sending node. In an IPv6-only node conceptually the only difference is that the IPv4 packet is generated by the translator - all the information that the transport layer passed to the network layer will be conveyed to the translator in some form. That form just \"happens\" to be in the form of an IPv6 header.",
+      "ja": "アプリケーションは、翻訳者が使用されていることを知っている必要はありません理由を明確に役立つかもしれないトランスレータを、閲覧する一つの方法は、ネットワーク層へのトランスポート層から渡された情報を見ることです。輸送は、IPv4アドレス（IPv4マップ符号化であるか否か）をダウン合格した場合、これはいくつかの点で発生IPv4パケットが存在するであろうことを意味します。デュアルノードにはIPv4パケットの生成は送信ノードで行われます。ネットワーク層に渡されるトランスポート層は、何らかの形で翻訳者に伝達されることをすべての情報を -  IPv6専用ノードに概念的に唯一の違いは、IPv4パケットは、トランスレータによって生成されることです。その形態は、単にIPv6ヘッダの形であることが「起こります」。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2.用語"
+    },
+    {
+      "indent": 3,
+      "text": "This documents uses the terminology defined in [IPv6] and [TRANS-MECH] with these clarifications:",
+      "ja": "この文書では、これらの明確化と、[IPv6の]で定義された用語を使用して、[TRANS-MECH]："
+    },
+    {
+      "indent": 9,
+      "text": "IPv4 capable node:\n        A node which has an IPv4 protocol stack.\n        In order for the stack to be usable the node must be\n        assigned one or more IPv4 addresses.",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "IPv4 enabled node: A node which has an IPv4 protocol stack and is assigned one or more IPv4 addresses. Both IPv4-only and IPv6/IPv4 nodes are IPv4 enabled.",
+      "ja": "IPv4のノードを有効に：IPv4プロトコルスタックを有し、一つ以上のIPv4アドレスが割り当てられているノード。両方のIPv4のみとIPv6 / IPv4ノードのIPv4が有効になっています。"
+    },
+    {
+      "indent": 9,
+      "text": "IPv6 capable node: A node which has an IPv6 protocol stack. In order for the stack to be usable the node must be assigned one or more IPv6 addresses.",
+      "ja": "IPv6の可能なノード：IPv6プロトコルスタックを持つノード。スタックが使用可能にするために、ノードは、1つのまたは複数のIPv6アドレスが割り当てられなければなりません。"
+    },
+    {
+      "indent": 9,
+      "text": "IPv6 enabled node: A node which has an IPv6 protocol stack and is assigned one or more IPv6 addresses. Both IPv6-only and IPv6/IPv4 nodes are IPv6 enabled.",
+      "ja": "IPv6は、ノードを有効に：IPv6プロトコルスタックを有し、および1つまたは複数のIPv6アドレスが割り当てられているノード。両方のIPv6のみとIPv6 / IPv4ノードIPv6が有効になっています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Addresses",
+      "section_title": true,
+      "ja": "2.1。アドレス"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to the forms of addresses defined in [ADDR-ARCH] this document also introduces the new form of IPv4-translated address. This is needed to avoid using IPv4-compatible addresses outside the intended use of automatic tunneling. Thus the address forms are:",
+      "ja": "[ADDR-ARCH]で定義されたアドレスの形態に加えて、この文書はまた、IPv4に変換されたアドレスの新たな形態を導入します。これは、自動トンネリングの使用目的外のIPv4互換アドレスの使用を避けるために必要とされます。したがって、アドレス形式は以下のとおりです。"
+    },
+    {
+      "indent": 9,
+      "text": "IPv4-mapped:\n        An address of the form 0::ffff:a.b.c.d which refers\n        to a node that is not IPv6-capable.  In addition to\n        its use in the API this protocol uses IPv4-mapped\n        addresses in IPv6 packets to refer to an IPv4 node.",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "IPv4-compatible: An address of the form 0::0:a.b.c.d which refers to an IPv6/IPv4 node that supports automatic tunneling. Such addresses are not used in this protocol.",
+      "ja": "IPv4互換：フォームのアドレス0 :: 0：自動トンネリングをサポートしていたIPv6 / IPv4ノードを指すA.B.C.D。このようなアドレスは、このプロトコルで使用されていません。"
+    },
+    {
+      "indent": 9,
+      "text": "IPv4-translated: An address of the form 0::ffff:0:a.b.c.d which refers to an IPv6-enabled node. Note that the prefix 0::ffff:0:0:0/96 is chosen to checksum to zero to avoid any changes to the transport protocol's pseudo header checksum.",
+      "ja": "IPv4の翻訳：0：A.B.C.D IPv6対応のノードを指す形0 :: FFFFのアドレス。 0：0：0/96がゼロにチェックサムに選択されるトランスポートプロトコルの疑似ヘッダチェックサムの変更を避けるために、接頭辞0 :: FFFFことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Requirements",
+      "section_title": true,
+      "ja": "2.2。必要条件"
+    },
+    {
+      "indent": 3,
+      "text": "The keywords MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, MAY, and OPTIONAL, when they appear in this document, are to be interpreted as described in [KEYWORDS].",
+      "ja": "彼らは、この文書に表示される[キーワード]で説明したように解釈される際のキーワードは、REQUIREDは、、、、、MAY、推奨、およびオプションのすべきでないないものとものとしてはなりませんしなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Translating from IPv4 to IPv6",
+      "section_title": true,
+      "ja": "3. IPv4からIPv6への翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "When an IPv4-to-IPv6 translator receives an IPv4 datagram addressed to a destination that lies outside of the attached IPv4 island, it translates the IPv4 header of that packet into an IPv6 header. It then forwards the packet based on the IPv6 destination address. The original IPv4 header on the packet is removed and replaced by an IPv6 header. Except for ICMP packets the transport layer header and data portion of the packet are left unchanged.",
+      "ja": "IPv4からIPv6トランスレータが取り付けられたIPv4島の外側にある宛先宛のIPv4データグラムを受信すると、IPv6ヘッダにそのパケットのIPv4ヘッダを変換します。その後、IPv6宛先アドレスに基づいてパケットを転送します。パケットに元のIPv4ヘッダを除去し、IPv6ヘッダーに置き換えられています。 ICMPパケットを除いたパケットのトランスポート層ヘッダとデータ部分が変更されません。"
+    },
+    {
+      "indent": 8,
+      "text": "+-------------+                 +-------------+\n|    IPv4     |                 |    IPv6     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|  Transport  |                 |  Fragment   |\n|   Layer     |      ===>       |   Header    |\n|   Header    |                 |(not always) |\n+-------------+                 +-------------+\n|             |                 |  Transport  |\n~    Data     ~                 |   Layer     |\n|             |                 |   Header    |\n+-------------+                 +-------------+\n                                |             |\n                                ~    Data     ~\n                                |             |\n                                +-------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "IPv4-to-IPv6 Translation",
+      "ja": "IPv4のツーIPv6変換"
+    },
+    {
+      "indent": 3,
+      "text": "One of the differences between IPv4 and IPv6 is that in IPv6 path MTU discovery is mandatory but it is optional in IPv4. This implies that IPv6 routers will never fragment a packet - only the sender can do fragmentation.",
+      "ja": "IPv4とIPv6の間の違いの1つはIPv6のパスにMTUの発見は必須ですが、それはIPv4のオプションであるということです。送信者だけが断片化を行うことができます - これはIPv6ルータがパケットをフラグメント化しないことを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "When the IPv4 node performs path MTU discovery (by setting the DF bit in the header) the path MTU discovery can operate end-to-end i.e. across the translator. In this case either IPv4 or IPv6 routers might send back ICMP \"packet too big\" messages to the sender. When these ICMP errors are sent by the IPv6 routers they will pass through a translator which will translate the ICMP error to a form that the IPv4 sender can understand. In this case an IPv6 fragment header is only included if the IPv4 packet is already fragmented.",
+      "ja": "IPv4ノードは、（ヘッダ内のDFビットを設定することにより）、パスMTU探索を行う場合、パスMTUディスカバリ、すなわちトランスレータを横切ってエンドツーエンドの操作を行うことができます。この場合、IPv4またはIPv6のいずれかのルータが送信者にICMP「のパケットが大きすぎる」のメッセージを送り返すことがあります。これらのICMPエラーがIPv6ルータによって送信されたとき、彼らは、IPv4送信者が理解できる形式にICMPエラーを翻訳する翻訳者を通過することになります。 IPv4パケットがすでにフラグメント化されているこの場合のIPv6フラグメントヘッダのみが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "However, when the IPv4 sender does not perform path MTU discovery the translator has to ensure that the packet does not exceed the path MTU on the IPv6 side. This is done by fragmenting the IPv4 packet so that it fits in 1280 byte IPv6 packet since IPv6 guarantees that 1280 byte packets never need to be fragmented. Also, when the IPv4 sender does not perform path MTU discovery the translator MUST always include an IPv6 fragment header to indicate that the sender allows fragmentation. That is needed should the packet pass through an IPv6-to-IPv4 translator.",
+      "ja": "IPv4送信者がパスMTUディスカバリを実行していない場合しかし、翻訳者はパケットがIPv6側のパスMTUを超えていないことを保証しなければなりません。これは、IPv6が1280個のバイトのパケットをフラグメント化する必要がないことを保証するので、それは1280バイトIPv6パケットに収まるようにIPv4パケットを断片化することによって行われます。 IPv4の送信者がパスMTU探索を行わない場合にも、翻訳者は常に、送信者が断片化を可能にすることを示すためのIPv6フラグメントヘッダを含まなければなりません。パケットがIPv6からIPv4トランスレーターを通過する必要があることが必要とされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The above rules ensure that when packets are fragmented either by the sender or by IPv4 routers that the low-order 16 bits of the fragment identification is carried end-end to ensure that packets are correctly reassembled. In addition, the rules use the presence of an",
+      "ja": "上記の規則は、確実にそのパケットは送信者又は断片識別の下位16ビットはパケットが正しく再組み立てされることを保証するために、エンド・エンドを実施するIPv4ルーターのいずれかによって断片化される場合。また、ルールが存在することを使用します"
+    },
+    {
+      "indent": 3,
+      "text": "IPv6 fragment header to indicate that the sender might not be using path MTU discovery i.e. the packet should not have the DF flag set should it later be translated back to IPv4.",
+      "ja": "IPv6のフラグメントヘッダは、送信者が、それは後でのIPv4に翻訳されるべきDFフラグが設定されているべきではない、すなわち、パケットの経路MTUディスカバリを使用していないかもしれないことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Other than the special rules for handling fragments and path MTU discovery the actual translation of the packet header consists of a simple mapping as defined below. Note that ICMP packets require special handling in order to translate the content of ICMP error message and also to add the ICMP pseudo-header checksum.",
+      "ja": "以下に定義されるように、パケットヘッダの実際の翻訳をフラグメントを処理し、パスMTU発見のための特別な規則以外は、単純なマッピングから成ります。 ICMPパケットは、ICMPエラーメッセージの内容を変換するために特別な処理を必要とし、また、ICMP擬似ヘッダチェックサムを追加することに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Translating IPv4 Headers into IPv6 Headers",
+      "section_title": true,
+      "ja": "3.1。 IPv6ヘッダーにはIPv4ヘッダを翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "If the DF flag is not set and the IPv4 packet will result in an IPv6 packet larger than 1280 bytes the IPv4 packet MUST be fragmented prior to translating it. Since IPv4 packets with DF not set will always result in a fragment header being added to the packet the IPv4 packets must be fragmented so that their length, excluding the IPv4 header, is at most 1232 bytes (1280 minus 40 for the IPv6 header and 8 for the Fragment header). The resulting fragments are then translated independently using the logic described below.",
+      "ja": "DFフラグが設定されておらず、IPv4パケットをIPv6パケットにつながる場合よりも大きい1280バイトのIPv4パケットは、それを翻訳する前に断片化されなければなりません。 DF設定されていないとIPv4パケットは、常にフラグメントヘッダをもたらすので、IPv4パケットが断片化されなければならないパケットに追加されるので、その長さは、IPv4ヘッダを除く、IPv6ヘッダと8のための最も1232バイト（1280マイナス40であることフラグメントヘッダの場合）。得られた断片は、その後独立して以下に説明する論理を使用して翻訳されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the DF bit is set and the packet is not a fragment (i.e., the MF flag is not set and the Fragment Offset is zero) then there is no need to add a fragment header to the packet. The IPv6 header fields are set as follows:",
+      "ja": "DFビットが設定され、パケットが断片ではない（つまりは、MFフラグがセットされておらず、オフセットフラグメントがゼロ）である場合、パケットにフラグメントヘッダを追加する必要がありません。次のようにIPv6ヘッダのフィールドが設定されています。"
+    },
+    {
+      "indent": 9,
+      "text": "Version:\n        6",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "Traffic Class: By default, copied from IP Type Of Service and Precedence field (all 8 bits are copied). According to [DIFFSERV] the semantics of the bits are identical in IPv4 and IPv6. However, in some IPv4 environments these fields might be used with the old semantics of \"Type Of Service and Precedence\". An implementation of a translator SHOULD provide the ability to ignore the IPv4 \"TOS\" and always set the IPv6 traffic class to zero.",
+      "ja": "トラフィッククラス：デフォルトでは、サービスおよび優先フィールドのIPタイプからコピーされた（全8ビットがコピーされます）。 [DIFFSERV]に記載のビットの意味は、IPv4とIPv6で同一です。ただし、一部のIPv4の中で、これらのフィールドは、「サービスと優先順位の種類」の古いセマンティクスで使用されるかもしれない環境。翻訳者の実装は、IPv4の「TOS」を無視し、常にゼロにIPv6トラフィッククラスを設定する機能を提供する必要があります。"
+    },
+    {
+      "indent": 9,
+      "text": "Flow Label: 0 (all zero bits)",
+      "ja": "フローラベル：0（すべてゼロのビット）"
+    },
+    {
+      "indent": 9,
+      "text": "Payload Length: Total length value from IPv4 header, minus the size of the IPv4 header and IPv4 options, if present.",
+      "ja": "ペイロード長：IPv4ヘッダから全長値、マイナスIPv4ヘッダとIPv4オプションのサイズ、存在する場合。"
+    },
+    {
+      "indent": 9,
+      "text": "Next Header: Protocol field copied from IPv4 header",
+      "ja": "次ヘッダー：IPv4ヘッダからコピーされたプロトコルフィールド"
+    },
+    {
+      "indent": 9,
+      "text": "Hop Limit: TTL value copied from IPv4 header. Since the translator is a router, as part of forwarding the packet it needs to decrement either the IPv4 TTL (before the translation) or the IPv6 Hop Limit (after the translation). As part of decrementing the TTL or Hop Limit the translator (as any router) needs to check for zero and send the ICMPv4 or ICMPv6 \"ttl exceeded\" error.",
+      "ja": "ホップリミット：IPv4ヘッダからコピーされたTTL値。翻訳者は、それがIPv4 TTL（変換前）または（変換後）は、IPv6ホップ限界のいずれかを減少する必要があるパケットを転送の一部として、ルータからです。 TTLをデクリメントまたはホップリミット（任意のルータなど）翻訳者の一環としてゼロをチェックし、ICMPv4のか、ICMPv6のエラーを「TTLを超え、」送信する必要があります。"
+    },
+    {
+      "indent": 9,
+      "text": "Source Address: The low-order 32 bits is the IPv4 source address. The high-order 96 bits is the IPv4-mapped prefix (::ffff:0:0/96)",
+      "ja": "ソースアドレス：下位32ビットは、IPv4ソースアドレスです。上位96ビットIPv4マッププレフィックス（:: FFFF：0：0/96）であります"
+    },
+    {
+      "indent": 9,
+      "text": "Destination Address: The low-order 32 bits is the IPv4 destination address. The high-order 96 bits is the IPv4- translated prefix (0::ffff:0:0:0/96)",
+      "ja": "宛先アドレス：下位32ビットは、IPv4宛先アドレスです。 96ビット上位のIPv4-プレフィックス翻訳（0 :: FFFF：0：0：0/96）"
+    },
+    {
+      "indent": 3,
+      "text": "If IPv4 options are present in the IPv4 packet, they are ignored i.e., there is no attempt to translate them. However, if an unexpired source route option is present then the packet MUST instead be discarded, and an ICMPv4 \"destination unreachable/source route failed\" (Type 3/Code 5) error message SHOULD be returned to the sender.",
+      "ja": "IPv4オプションは、IPv4パケット内に存在している場合、それらは無視され、すなわち、それらを変換する試みはありません。しかし、期限が切れていない送信元経路オプションが存在する場合、パケットは代わりに捨てなければなりません、そしてICMPv4の（タイプ3 /コード5）「宛先到達不能/ソースルートが失敗しました」のエラーメッセージが送信者に返されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is need to add a fragment header (the DF bit is not set or the packet is a fragment) the header fields are set as above with the following exceptions:",
+      "ja": "フラグメントヘッダを追加することが必要とされている場合（DFビットが設定されていないか、パケットがフラグメントである）ヘッダフィールドは、以下の例外を除いて、上記のように設定されています。"
+    },
+    {
+      "indent": 6,
+      "text": "IPv6 fields:",
+      "ja": "IPv6のフィールド："
+    },
+    {
+      "indent": 10,
+      "text": "Payload Length:\n        Total length value from IPv4 header, plus 8 for the\n        fragment header, minus the size of the IPv4 header\n        and IPv4 options, if present.",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "Next Header: Fragment Header (44).",
+      "ja": "次ヘッダー：フラグメントヘッダ（44）。"
+    },
+    {
+      "indent": 6,
+      "text": "Fragment header fields:",
+      "ja": "フラグメントヘッダフィールド："
+    },
+    {
+      "indent": 10,
+      "text": "Next Header:\n        Protocol field copied from IPv4 header.",
+      "raw": true
+    },
+    {
+      "indent": 10,
+      "text": "Fragment Offset: Fragment Offset copied from the IPv4 header.",
+      "ja": "フラグメントオフセット：断片はIPv4ヘッダからコピーされたオフセット。"
+    },
+    {
+      "indent": 10,
+      "text": "M flag: More Fragments bit copied from the IPv4 header.",
+      "ja": "Mフラグ：ビットIPv4ヘッダからコピーされた複数の断片。"
+    },
+    {
+      "indent": 10,
+      "text": "Identification: The low-order 16 bits copied from the Identification field in the IPv4 header. The high-order 16 bits set to zero.",
+      "ja": "識別：IPv4ヘッダ内の識別フィールドからコピーされた下位16ビット。上位16ビットはゼロに設定します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Translating UDP over IPv4",
+      "section_title": true,
+      "ja": "3.2。 IPv4の上でUDPの翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP packet has a zero UDP checksum then a valid checksum must be calculated in order to translate the packet. A stateless translator can not do this for fragmented packets but [MILLER] indicates that fragmented UDP packets with a zero checksum appear to only be used for malicious purposes. Thus this is not believed to be a noticeable limitation.",
+      "ja": "UDPパケットがゼロUDPチェックサムを持っている場合、有効なチェックサムは、パケットを変換するために計算されなければなりません。ステートレストランスレータは断片化されたパケットのためにこれを行うことはできませんが、[MILLER]はゼロサムと断片化されたUDPパケットのみ悪質な目的のために使用されるように見えることを示しています。したがって、これは顕著な制限ではないと考えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a translator receives the first fragment of a fragmented UDP IPv4 packet and the checksum field is zero the translator SHOULD drop the packet and generate a system management event specifying at least the IP addresses and port numbers in the packet. When it receives fragments other than the first it SHOULD silently drop the packet, since there is no port information to log.",
+      "ja": "翻訳者は、断片化UDP IPv4パケットの最初のフラグメントを受信し、チェックサムフィールドがゼロである場合、トランスレータはパケットをドロップし、IPアドレスとポート番号少なくともパケットに指定システム管理イベントを生成する必要があります。それは最初以外のフラグメントを受信した場合にログに記録する一切のポート情報がないので、それは静かに、パケットを廃棄すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "When a translator receives an unfragmented UDP IPv4 packet and the checksum field is zero the translator MUST compute the missing UDP checksum as part of translating the packet. Also, the translator SHOULD maintain a counter of how many UDP checksums are generated in this manner.",
+      "ja": "翻訳者は断片化されていないUDP IPv4パケットを受信して​​、チェックサムフィールドはゼロには翻訳者がパケットを翻訳するの一環として、不足しているUDPチェックサムを計算しなければならないときに。また、翻訳者はこのようにして生成されているどのように多くのUDPチェックサムのカウンタを維持する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Translating ICMPv4 Headers into ICMPv6 Headers",
+      "section_title": true,
+      "ja": "3.3。 ICMPv6のヘッダにICMPv4のヘッダを翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "All ICMP messages that are to be translated require that the ICMP checksum field be updated as part of the translation since ICMPv6, unlike ICMPv4, has a pseudo-header checksum just like UDP and TCP.",
+      "ja": "翻訳されるすべてのICMPメッセージは、ICMPチェックサムフィールドはICMPv6のは、ICMPv4のとは異なり、単にUDPやTCPなどの疑似ヘッダチェックサムを持っているので、翻訳の一部として更新する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition all ICMP packets need to have the Type value translated and for ICMP error messages the included IP header also needs translation.",
+      "ja": "また、すべてのICMPパケットはType値が翻訳されている必要がありおよびICMPエラーメッセージのために含まれるIPヘッダはまた、翻訳を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The actions needed to translate various ICMPv4 messages are:",
+      "ja": "様々なICMPv4のメッセージを翻訳するために必要なアクションは次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "ICMPv4 query messages:",
+      "ja": "ICMPv4のクエリーメッセージ："
+    },
+    {
+      "indent": 8,
+      "text": "Echo and Echo Reply (Type 8 and Type 0) Adjust the type to 128 and 129, respectively, and adjust the ICMP checksum both to take the type change into account and to include the ICMPv6 pseudo-header.",
+      "ja": "エコーおよびエコー応答（タイプ8およびタイプ0）は、それぞれ、128および129にタイプを調整し、両方が考慮型の変化を取るとのICMPv6疑似ヘッダを含むようにICMPチェックサムを調整します。"
+    },
+    {
+      "indent": 8,
+      "text": "Information Request/Reply (Type 15 and Type 16) Obsoleted in ICMPv4. Silently drop.",
+      "ja": "情報要求/（タイプ15とタイプ16）ICMPv4ので廃止を返信します。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Timestamp and Timestamp Reply (Type 13 and Type 14) Obsoleted in ICMPv6. Silently drop.",
+      "ja": "ICMPv6ので廃止タイムスタンプとタイムスタンプ応答（タイプ13及びタイプ14）。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Address Mask Request/Reply (Type 17 and Type 18) Obsoleted in ICMPv6. Silently drop.",
+      "ja": "アドレスマスク要求/応答（タイプ17と18を入力）のICMPv6で廃止。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "ICMP Router Advertisement (Type 9) Single hop message. Silently drop.",
+      "ja": "ICMPルーターアドバタイズ（タイプ9）シングルホップメッセージ。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "ICMP Router Solicitation (Type 10) Single hop message. Silently drop.",
+      "ja": "ICMPルータ要請（タイプ10）シングルホップメッセージ。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Unknown ICMPv4 types Silently drop.",
+      "ja": "不明なICMPv4のタイプはサイレントドロップします。"
+    },
+    {
+      "indent": 6,
+      "text": "IGMP messages:",
+      "ja": "IGMPメッセージ："
+    },
+    {
+      "indent": 11,
+      "text": "While the MLD messages [MLD] are the logical IPv6\ncounterparts for the IPv4 IGMP messages all the \"normal\" IGMP\nmessages are single-hop messages and should be silently\ndropped by the translator.  Other IGMP messages might be used\nby multicast routing protocols and, since it would be a\nconfiguration error to try to have router adjacencies across\nIPv4/IPv6 translators those packets should also be silently\ndropped.",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "ICMPv4 error messages:",
+      "ja": "ICMPv4のエラーメッセージ："
+    },
+    {
+      "indent": 8,
+      "text": "Destination Unreachable (Type 3) For all that are not explicitly listed below set the Type to 1.",
+      "ja": "明示的に以下に記載されていないこと、すべての送信先到達不能（タイプ3）が1に種類を設定します。"
+    },
+    {
+      "indent": 11,
+      "text": "Translate the code field as follows: Code 0, 1 (net, host unreachable): Set Code to 0 (no route to destination).",
+      "ja": "次のようにコードフィールドを翻訳：コード0、1（ネット、ホスト到達不能）：0に設定されたコード（目的地までのルート）。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 2 (protocol unreachable): Translate to an ICMPv6 Parameter Problem (Type 4, Code 1) and make the Pointer point to the IPv6 Next Header field.",
+      "ja": "コード2（プロトコル到達不能）：ICMPv6のパラメータ問題（タイプ4、コード1）に翻訳し、IPv6の次のヘッダフィールドへのポインタポイントを作ります。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 3 (port unreachable): Set Code to 4 (port unreachable).",
+      "ja": "コード3（ポート到達不能）：4（到達不能ポート）にコードを設定。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 4 (fragmentation needed and DF set): Translate to an ICMPv6 Packet Too Big message (Type 2) with code 0. The MTU field needs to be adjusted for the difference between the IPv4 and IPv6 header sizes. Note that if the IPv4 router did not set the MTU field i.e. the router does not implement [PMTUv4], then the translator must use the plateau values specified in [PMTUv4] to determine a likely path MTU and include that path MTU in the ICMPv6 packet. (Use the greatest plateau value that is less than the returned Total Length field.)",
+      "ja": "コード4（フラグメンテーション必要とDFセット）：MTUフィールドは、IPv4およびIPv6ヘッダのサイズとの差を調整する必要があるコード0でのICMPv6パケット過大メッセージ（タイプ2）に翻訳します。 IPv4ルーターは、ルーター、すなわち、MTUフィールドを設定しなかった場合は、[PMTUv4]、その後、翻訳者が可能性が高いパスMTUを決定したICMPv6パケットでそのパスMTUを含めるために、[PMTUv4]で指定されたプラトー値を使用する必要があります実装していないことに注意してください。 （返された全長フィールド未満の最大プラトー値を使用してください。）"
+    },
+    {
+      "indent": 14,
+      "text": "Code 5 (source route failed): Set Code to 0 (no route to destination). Note that this error is unlikely since source routes are not translated.",
+      "ja": "コード5（ソースルートが失敗しました）：コードセット0（宛先へのルート）に。ソースルートが翻訳されていないので、このエラーがそうであることに注意してください。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 6,7: Set Code to 0 (no route to destination).",
+      "ja": "コード6,7：0にコードを設定（目的地までのルート）。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 8: Set Code to 0 (no route to destination).",
+      "ja": "コード8：0にコードを設定（目的地までのルート）。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 9, 10 (communication with destination host administratively prohibited): Set Code to 1 (communication with destination administratively prohibited)",
+      "ja": "コード9、10（宛先ホストとの通信が管理上禁止）：コードセット1（宛先との通信が管理上禁止）"
+    },
+    {
+      "indent": 14,
+      "text": "Code 11, 12: Set Code to 0 (no route to destination).",
+      "ja": "コード11、12：0コードを設定（目的地へのNoルート）。"
+    },
+    {
+      "indent": 8,
+      "text": "Redirect (Type 5) Single hop message. Silently drop.",
+      "ja": "（タイプ5）シングルホップメッセージをリダイレクトします。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Source Quench (Type 4) Obsoleted in ICMPv6. Silently drop.",
+      "ja": "ソースクエンチのICMPv6で廃止（タイプ4）。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Time Exceeded (Type 11) Set the Type field to 3. The Code field is unchanged.",
+      "ja": "時間超過（タイプ11）は、Typeフィールドコードフィールドは変更されません3に設定します。"
+    },
+    {
+      "indent": 8,
+      "text": "Parameter Problem (Type 12) Set the Type field to 4. The Pointer needs to be updated to point to the corresponding field in the translated include IP header.",
+      "ja": "パラメータ問題（タイプ12）4.ポインタにタイプフィールドを設定するには、変換されたIPヘッダの対応するフィールドを指し示すように更新する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Translating ICMPv4 Error Messages into ICMPv6",
+      "section_title": true,
+      "ja": "3.4。 ICMPv6のにICMPv4のエラーメッセージの翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "There are some differences between the IPv4 and the IPv6 ICMP error message formats as detailed above. In addition, the ICMP error messages contain the IP header for the packet in error which needs to be translated just like a normal IP header. The translation of this \"packet in error\" is likely to change the length of the datagram thus the Payload Length field in the outer IPv6 header might need to be updated.",
+      "ja": "IPv4および上記で詳述したようIPv6のICMPエラーメッセージ形式の間にいくつかの違いがあります。また、ICMPエラーメッセージは、通常のIPヘッダのように翻訳される必要があるエラーでパケットのIPヘッダを含みます。この「エラーでパケット」の翻訳は、このように外側のIPv6ヘッダーのペイロード長フィールドを更新する必要があるかもしれませんデータグラムの長さを変更する可能性があります。"
+    },
+    {
+      "indent": 8,
+      "text": "+-------------+                 +-------------+\n|    IPv4     |                 |    IPv6     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|   ICMPv4    |                 |   ICMPv6    |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|    IPv4     |      ===>       |    IPv6     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|   Partial   |                 |   Partial   |\n|  Transport  |                 |  Transport  |\n|   Layer     |                 |   Layer     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "IPv4-to-IPv6 ICMP Error Translation",
+      "ja": "IPv4のツーのIPv6 ICMPエラー翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "The translation of the inner IP header can be done by recursively invoking the function that translated the outer IP headers.",
+      "ja": "内側のIPヘッダの変換は、再帰的に外側のIPヘッダを翻訳機能を呼び出すことによって行うことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.5. Knowing when to Translate",
+      "section_title": true,
+      "ja": "3.5。とき変換するために知って"
+    },
+    {
+      "indent": 3,
+      "text": "The translator is assumed to know the pool(s) of IPv4 address that are used to represent the internal IPv6-only nodes. Thus if the IPv4 destination field contains an address that falls in these configured sets of prefixes the packet needs to be translated to IPv6.",
+      "ja": "トランスレータは、内部IPv6専用ノードを表すために使用されるIPv4アドレスのプール（単数または複数）を知っているものとします。従ってIPv4宛先フィールドは、パケットがIPv6に変換する必要があるプレフィックスのこれらの構成設定に入るアドレスが含まれている場合。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Translating from IPv6 to IPv4",
+      "section_title": true,
+      "ja": "4. IPv6のからのIPv4に翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "When an IPv6-to-IPv4 translator receives an IPv6 datagram addressed to an IPv4-mapped IPv6 address, it translates the IPv6 header of that packet into an IPv4 header. It then forwards the packet based on the IPv4 destination address. The original IPv6 header on the packet is removed and replaced by an IPv4 header. Except for ICMP packets the transport layer header and data portion of the packet are left unchanged.",
+      "ja": "IPv6からIPv4トランスレータは、IPv4射影IPv6アドレス宛のIPv6データグラムを受信すると、IPv4ヘッダにそのパケットのIPv6ヘッダを変換します。その後、IPv4宛先アドレスに基づいてパケットを転送します。パケット上のオリジナルのIPv6ヘッダを除去し、IPv4ヘッダーに置き換えられています。 ICMPパケットを除いたパケットのトランスポート層ヘッダとデータ部分が変更されません。"
+    },
+    {
+      "indent": 8,
+      "text": "+-------------+                 +-------------+\n|    IPv6     |                 |    IPv4     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|  Fragment   |                 |  Transport  |\n|   Header    |      ===>       |   Layer     |\n|(if present) |                 |   Header    |\n+-------------+                 +-------------+\n|  Transport  |                 |             |\n|   Layer     |                 ~    Data     ~\n|   Header    |                 |             |\n+-------------+                 +-------------+\n|             |\n~    Data     ~\n|             |\n+-------------+",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "IPv6-to-IPv4 Translation",
+      "ja": "IPv6のツーIPv4の翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "There are some differences between IPv6 and IPv4 in the area of fragmentation and the minimum link MTU that effect the translation. An IPv6 link has to have an MTU of 1280 bytes or greater. The corresponding limit for IPv4 is 68 bytes. Thus, unless there were special measures, it would not be possible to do end-to-end path MTU discovery when the path includes an IPv6-to-IPv4 translator since the IPv6 node might receive ICMP \"packet too big\" messages originated by an IPv4 router that report an MTU less than 1280. However, [IPv6] requires that IPv6 nodes handle such an ICMP \"packet too big\" message by reducing the path MTU to 1280 and including an IPv6 fragment header with each packet. This allows end-to-end path MTU discovery across the translator as long as the path MTU is 1280 bytes or greater. When the path MTU drops below the 1280 limit the IPv6 sender will originate 1280 byte packets that will be fragmented by IPv4 routers along the path after being translated to IPv4.",
+      "ja": "断片化の面積と最小リンクMTUその効果訳でIPv6とIPv4の間にいくつかの違いがあります。 IPv6リンク1280バイト以上のMTUを持っている必要があります。 IPv4の対応する限界は68バイトです。特別な措置があった場合を除きIPv6ノードは、ANによって発信ICMP「パケットが大きすぎる」のメッセージを受け取ることがありますので、パスがIPv6からIPv4トランスレータを含む場合にはこのように、エンド・ツー・エンドのパスMTUディスカバリを行うことは可能ではないでしょうしかしながらMTU未満1280、[IPv6を】報告IPv4ルータは、IPv6ノード1280へのパスMTUを低減し、各パケットにIPv6のフラグメントヘッダを含めることによって、このようなICMP「パケットが大きすぎる」メッセージを処理することを必要とします。これは、長い経路MTUは1280バイト以上であるように翻訳を横切るエンドツーエンドパスMTU探索を可能にします。パスMTU 1280限界を下回ったときのIPv6送信者は、IPv4に変換された後の経路に沿ったIPv4ルータによって断片化される1280個のバイトのパケットを発信します。"
+    },
+    {
+      "indent": 3,
+      "text": "The only drawback with this scheme is that it is not possible to use PMTU to do optimal UDP fragmentation (as opposed to completely avoiding fragmentation) at sender since the presence of an IPv6",
+      "ja": "この方式での唯一の欠点は、IPv6の存在するので、送信側で（完全に断片化を回避するために反対に）最適なUDP断片化を行うためにPMTUを使用することはできないということです"
+    },
+    {
+      "indent": 3,
+      "text": "Fragment header is interpreted that is it OK to fragment the packet on the IPv4 side. Thus if a UDP application wants to send large packets independent of the PMTU, the sender will only be able to determine the path MTU on the IPv6 side of the translator. If the path MTU on the IPv4 side of the translator is smaller then the IPv6 sender will not receive any ICMP \"too big\" errors and can not adjust the size fragments it is sending.",
+      "ja": "フラグメントヘッダはIPv4の側にパケットを断片化することがOKであると解釈されます。 UDPアプリケーションは、PMTUの独立した大規模なパケットを送信したい場合はこのように、送信者は翻訳者のIPv6の側のパスMTUを決定することができるであろう。翻訳者のIPv4の側のパスMTUがIPv6送信元、その後も小さい場合には、任意のICMP「大きすぎる」エラーを受信しませんし、それが送信されたサイズの断片を調整することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Other than the special rules for handling fragments and path MTU discovery the actual translation of the packet header consists of a simple mapping as defined below. Note that ICMP packets require special handling in order to translate the content of ICMP error message and also to add the ICMP pseudo-header checksum.",
+      "ja": "以下に定義されるように、パケットヘッダの実際の翻訳をフラグメントを処理し、パスMTU発見のための特別な規則以外は、単純なマッピングから成ります。 ICMPパケットは、ICMPエラーメッセージの内容を変換するために特別な処理を必要とし、また、ICMP擬似ヘッダチェックサムを追加することに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Translating IPv6 Headers into IPv4 Headers",
+      "section_title": true,
+      "ja": "4.1。 IPv4のヘッダにIPv6ヘッダーの翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "If there is no IPv6 Fragment header the IPv4 header fields are set as follows:",
+      "ja": "何のIPv6フラグメントヘッダが存在しない場合、次のようIPv4ヘッダフィールドは設定されます。"
+    },
+    {
+      "indent": 9,
+      "text": "Version:\n        4",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "Internet Header Length: 5 (no IPv4 options)",
+      "ja": "インターネットヘッダ長：5（無IPv4オプション）"
+    },
+    {
+      "indent": 9,
+      "text": "Type of Service and Precedence: By default, copied from the IPv6 Traffic Class (all 8 bits). According to [DIFFSERV] the semantics of the bits are identical in IPv4 and IPv6. However, in some IPv4 environments these bits might be used with the old semantics of \"Type Of Service and Precedence\". An implementation of a translator SHOULD provide the ability to ignore the IPv6 traffic class and always set the IPv4 \"TOS\" to zero.",
+      "ja": "サービスと優先順位の種類：デフォルトでは、IPv6のトラフィッククラス（全8ビット）からコピーしました。 [DIFFSERV]に記載のビットの意味は、IPv4とIPv6で同一です。ただし、一部のIPv4の中でこれらのビットは、「サービスと優先順位の種類」の古いセマンティクスで使用されるかもしれない環境。翻訳者の実装は、IPv6トラフィッククラスを無視し、常にゼロにIPv4の「TOS」を設定する機能を提供する必要があります。"
+    },
+    {
+      "indent": 9,
+      "text": "Total Length: Payload length value from IPv6 header, plus the size of the IPv4 header.",
+      "ja": "全長：ペイロード長IPv6ヘッダからの値、プラスIPv4ヘッダのサイズ。"
+    },
+    {
+      "indent": 9,
+      "text": "Identification: All zero.",
+      "ja": "同定：すべてゼロ。"
+    },
+    {
+      "indent": 9,
+      "text": "Flags: The More Fragments flag is set to zero. The Don't Fragments flag is set to one.",
+      "ja": "フラグ：複数のフラグメントフラグがゼロに設定されています。断片はいけないフラグが1に設定されています。"
+    },
+    {
+      "indent": 9,
+      "text": "Fragment Offset: All zero.",
+      "ja": "フラグメントオフセット：すべてゼロ。"
+    },
+    {
+      "indent": 9,
+      "text": "Time to Live: Hop Limit value copied from IPv6 header. Since the translator is a router, as part of forwarding the packet it needs to decrement either the IPv6 Hop Limit (before the translation) or the IPv4 TTL (after the translation). As part of decrementing the TTL or Hop Limit the translator (as any router) needs to check for zero and send the ICMPv4 or ICMPv6 \"ttl exceeded\" error.",
+      "ja": "生存時間：IPv6ヘッダからコピーされたホップ制限値。翻訳者は、それがIPv6ホップリミット（変換前）または（変換後）のIPv4 TTLのいずれかを減少する必要があるパケットを転送の一部として、ルータからです。 TTLをデクリメントまたはホップリミット（任意のルータなど）翻訳者の一環としてゼロをチェックし、ICMPv4のか、ICMPv6のエラーを「TTLを超え、」送信する必要があります。"
+    },
+    {
+      "indent": 9,
+      "text": "Protocol: Next Header field copied from IPv6 header.",
+      "ja": "プロトコル：IPv6ヘッダからコピーされた次ヘッダフィールド。"
+    },
+    {
+      "indent": 9,
+      "text": "Header Checksum: Computed once the IPv4 header has been created.",
+      "ja": "ヘッダチェックサム：IPv4ヘッダが作成されている一度計算。"
+    },
+    {
+      "indent": 9,
+      "text": "Source Address: If the IPv6 source address is an IPv4-translated address then the low-order 32 bits of the IPv6 source address is copied to the IPv4 source address. Otherwise, the source address is set to 0.0.0.0. The use of 0.0.0.0 is to avoid completely dropping e.g. ICMPv6 error messages sent by IPv6-only routers which makes e.g. traceroute present something for the IPv6-only hops.",
+      "ja": "ソースアドレス：IPv6ソースアドレスはIPv6ソースアドレスの下位32ビットはIPv4ソースアドレスにコピーされたIPv4翻訳アドレスである場合。それ以外の場合は、送信元アドレスが0.0.0.0に設定されています。 0.0.0.0の使用は、例えば、落下完全に回避することです例えば作るIPv6のみのルータによって送信されたICMPv6エラーメッセージIPv6のみのホップのためのtraceroute存在の何か。"
+    },
+    {
+      "indent": 9,
+      "text": "Destination Address: IPv6 packets that are translated have an IPv4-mapped destination address. Thus the low-order 32 bits of the IPv6 destination address is copied to the IPv4 destination address.",
+      "ja": "宛先アドレス：翻訳されたIPv6パケットをIPv4マップ宛先アドレスを持っています。したがってIPv6宛先アドレスの下位32ビットがIPv4宛先アドレスにコピーされます。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of an IPv6 hop-by-hop options header, destination options header, or routing header with the Segments Left field equal to zero are present in the IPv6 packet, they are ignored i.e., there is no attempt to translate them. However, the Total Length field and the Protocol field would have to be adjusted to \"skip\" these extension headers.",
+      "ja": "ゼロに等しくフィールドを左セグメントとIPv6のホップバイホップオプションヘッダの宛先オプションヘッダ、又はルーティングヘッダのいずれかがIPv6パケット内に存在する場合、それらはそれらを変換する試みがない、すなわち無視されます。しかし、全長フィールドとプロトコルフィールドは、これらの拡張ヘッダーを「スキップ」するように調整しなければならないであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "If a routing header with a non-zero Segments Left field is present then the packet MUST NOT be translated, and an ICMPv6 \"parameter problem/ erroneous header field encountered\" (Type 4/Code 0) error message, with the Pointer field indicating the first byte of the Segments Left field, SHOULD be returned to the sender.",
+      "ja": "非ゼロのセグメント左フィールドとルーティングヘッダが存在する場合、パケットは変換してはいけません、とICMPv6のポインタフィールドが示すと、（タイプ4 /コード0）エラーメッセージ「パラメータ問題/誤ったヘッダフィールドに遭遇しました」フィールドを左セグメントの最初のバイトは、送信者に返されるべきである（SHOULD）。"
+    },
+    {
+      "indent": 3,
+      "text": "If the IPv6 packet contains a Fragment header the header fields are set as above with the following exceptions:",
+      "ja": "IPv6パケットは、フラグメントヘッダが含まれている場合、ヘッダフィールドは、以下の例外を除いて、上記のように設定されています。"
+    },
+    {
+      "indent": 9,
+      "text": "Total Length:\n        Payload length value from IPv6 header, minus 8 for\n        the Fragment header, plus the size of the IPv4\n        header.",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "Identification: Copied from the low-order 16-bits in the Identification field in the Fragment header.",
+      "ja": "識別：フラグメントヘッダ内の識別フィールドに下位16ビットからコピー。"
+    },
+    {
+      "indent": 9,
+      "text": "Flags: The More Fragments flag is copied from the M flag in the Fragment header. The Don't Fragments flag is set to zero allowing this packet to be fragmented by IPv4 routers.",
+      "ja": "フラグ：モアフラグメントフラグがフラグメントヘッダ内のMフラグからコピーされます。フラグメントしないフラグは、このパケットがIPv4ルータによって断片化されることを可能にゼロに設定されています。"
+    },
+    {
+      "indent": 9,
+      "text": "Fragment Offset: Copied from the Fragment Offset field in the Fragment Header.",
+      "ja": "フラグメントオフセット：フラグメントヘッダのフラグメントオフセットフィールドからコピーされます。"
+    },
+    {
+      "indent": 9,
+      "text": "Protocol: Next Header value copied from Fragment header.",
+      "ja": "プロトコル：フラグメントヘッダからコピーされた次のヘッダー値。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Translating ICMPv6 Headers into ICMPv4 Headers",
+      "section_title": true,
+      "ja": "4.2。 ICMPv4のヘッダへのICMPv6ヘッダーの翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "All ICMP messages that are to be translated require that the ICMP checksum field be updated as part of the translation since ICMPv6, unlike ICMPv4, has a pseudo-header checksum just like UDP and TCP.",
+      "ja": "翻訳されるすべてのICMPメッセージは、ICMPチェックサムフィールドはICMPv6のは、ICMPv4のとは異なり、単にUDPやTCPなどの疑似ヘッダチェックサムを持っているので、翻訳の一部として更新する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition all ICMP packets need to have the Type value translated and for ICMP error messages the included IP header also needs translation.",
+      "ja": "また、すべてのICMPパケットはType値が翻訳されている必要がありおよびICMPエラーメッセージのために含まれるIPヘッダはまた、翻訳を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The actions needed to translate various ICMPv6 messages are:",
+      "ja": "様々なICMPv6メッセージを翻訳するために必要なアクションは次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "ICMPv6 informational messages:",
+      "ja": "ICMPv6の情報メッセージ："
+    },
+    {
+      "indent": 8,
+      "text": "Echo Request and Echo Reply (Type 128 and 129) Adjust the type to 0 and 8, respectively, and adjust the ICMP checksum both to take the type change into account and to exclude the ICMPv6 pseudo-header.",
+      "ja": "エコー要求およびエコー応答（128と129を入力し）、それぞれ0及び8にタイプを調整し、考慮型の変化を取るとのICMPv6疑似ヘッダを除外するために、両方のICMPチェックサムを調整します。"
+    },
+    {
+      "indent": 8,
+      "text": "MLD Multicast Listener Query/Report/Done (Type 130, 131, 132) Single hop message. Silently drop.",
+      "ja": "完了MLDマルチキャストリスナクエリ/レポート/（タイプ130、131、132）シングルホップメッセージ。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Neighbor Discover messages (Type 133 through 137) Single hop message. Silently drop.",
+      "ja": "近隣発見メッセージ（タイプ137を通じて133）シングルホップメッセージ。サイレントドロップします。"
+    },
+    {
+      "indent": 8,
+      "text": "Unknown informational messages Silently drop.",
+      "ja": "不明な情報メッセージは黙ってドロップします。"
+    },
+    {
+      "indent": 6,
+      "text": "ICMPv6 error messages:",
+      "ja": "ICMPv6エラーメッセージ："
+    },
+    {
+      "indent": 8,
+      "text": "Destination Unreachable (Type 1) Set the Type field to 3. Translate the code field as follows: Code 0 (no route to destination): Set Code to 1 (host unreachable).",
+      "ja": "1に設定されたコード（到達不能ホスト）：宛先到達不能（タイプ1）3にTypeフィールドを設定し、次のようにコードフィールドを翻訳：コード0（目的地までのルート）。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 1 (communication with destination administratively\nprohibited):\n       Set Code to 10 (communication with destination host\n       administratively prohibited).",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "Code 2 (beyond scope of source address): Set Code to 1 (host unreachable). Note that this error is very unlikely since the IPv4-translatable source address is considered to have global scope.",
+      "ja": "コード2（送信元アドレスの範囲を超えて）：（到達不能ホスト）1にコードを設定。 IPv4に翻訳可能な送信元アドレスがグローバルスコープを持っていると考えられるので、このエラーが非常に低いことに注意してください。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 3 (address unreachable): Set Code to 1 (host unreachable).",
+      "ja": "コード3（到達不能アドレス）：コードセット1（到達不可能ホスト）。"
+    },
+    {
+      "indent": 14,
+      "text": "Code 4 (port unreachable): Set Code to 3 (port unreachable).",
+      "ja": "コード4（ポート到達不能）：3（到達不能ポート）にコードを設定。"
+    },
+    {
+      "indent": 8,
+      "text": "Packet Too Big (Type 2) Translate to an ICMPv4 Destination Unreachable with code 4. The MTU field needs to be adjusted for the difference between the IPv4 and IPv6 header sizes taking into account whether or not the packet in error includes a Fragment header.",
+      "ja": "パケット過大（タイプ2）MTUフィールドがエラーでパケットがフラグメントヘッダを含むか否かを考慮して、IPv4とIPv6ヘッダのサイズとの差を調整する必要があるコード4と到達不能ICMPv4の宛先に翻訳します。"
+    },
+    {
+      "indent": 8,
+      "text": "Time Exceeded (Type 3) Set the Type to 11. The Code field is unchanged.",
+      "ja": "時間超過（タイプ3）はコードフィールドは変更されません11にタイプを設定します。"
+    },
+    {
+      "indent": 8,
+      "text": "Parameter Problem (Type 4) If the Code is 1 translate this to an ICMPv4 protocol unreachable (Type 3, Code 2). Otherwise set the Type to 12 and the Code to zero. The Pointer needs to be updated to point to the corresponding field in the translated include IP header.",
+      "ja": "パラメータ問題（タイプ4）コード1これはICMPv4のプロトコル到達不能（タイプ3、コード2）に変換された場合。それ以外の場合はゼロに12のタイプとコードを設定します。ポインタは、変換されたIPヘッダの対応するフィールドを指し示すように更新する必要があります。"
+    },
+    {
+      "indent": 8,
+      "text": "Unknown error messages Silently drop.",
+      "ja": "不明なエラーメッセージがサイレントドロップします。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Translating ICMPv6 Error Messages into ICMPv4",
+      "section_title": true,
+      "ja": "4.3。 ICMPv4のにICMPv6のエラーメッセージの翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "There are some differences between the IPv4 and the IPv6 ICMP error message formats as detailed above. In addition, the ICMP error messages contain the IP header for the packet in error which needs to be translated just like a normal IP header. The translation of this \"packet in error\" is likely to change the length of the datagram thus the Total Length field in the outer IPv4 header might need to be updated.",
+      "ja": "IPv4および上記で詳述したようIPv6のICMPエラーメッセージ形式の間にいくつかの違いがあります。また、ICMPエラーメッセージは、通常のIPヘッダのように翻訳される必要があるエラーでパケットのIPヘッダを含みます。この「エラーでパケット」の翻訳は、このように、外側のIPv4ヘッダーの全長フィールドを更新する必要があるかもしれないデータグラムの長さを変更する可能性があります。"
+    },
+    {
+      "indent": 8,
+      "text": "+-------------+                 +-------------+\n|    IPv6     |                 |    IPv4     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|   ICMPv6    |                 |   ICMPv4    |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|    IPv6     |      ===>       |    IPv4     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+\n|   Partial   |                 |   Partial   |\n|  Transport  |                 |  Transport  |\n|   Layer     |                 |   Layer     |\n|   Header    |                 |   Header    |\n+-------------+                 +-------------+",
+      "raw": true
+    },
+    {
+      "indent": 14,
+      "text": "IPv6-to-IPv4 ICMP Error Translation",
+      "ja": "IPv6のツーIPv4のICMPエラー翻訳"
+    },
+    {
+      "indent": 3,
+      "text": "The translation of the inner IP header can be done by recursively invoking the function that translated the outer IP headers.",
+      "ja": "内側のIPヘッダの変換は、再帰的に外側のIPヘッダを翻訳機能を呼び出すことによって行うことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Knowing when to Translate",
+      "section_title": true,
+      "ja": "4.4。とき変換するために知って"
+    },
+    {
+      "indent": 3,
+      "text": "When the translator receives an IPv6 packet with an IPv4-mapped destination address the packet will be translated to IPv4.",
+      "ja": "翻訳者は、IPv4マップの宛先アドレスを持つIPv6パケットを受信すると、パケットは、IPv4に変換されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Implications for IPv6-Only Nodes",
+      "section_title": true,
+      "ja": "IPv6のみのノード5.影響"
+    },
+    {
+      "indent": 3,
+      "text": "An IPv6-only node which works through SIIT translators need some modifications beyond a normal IPv6-only node.",
+      "ja": "SIITトランスレータを介して動作IPv6のみのノードは、通常のIPv6のみのノードを超えたいくつかの変更を必要としています。"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in Section 1.3 the application protocols need to handle operation on a dual stack node. In addition the protocol stack needs to be able to: o Determine when an IPv4-translatable address needs to be allocated and the allocation needs to be refreshed/renewed. This can presumably be done without involving the applications by e.g. handling this under the socket API. For instance, when the connect or sendto socket calls are invoked they could check if the destination is an IPv4-mapped address and in that case allocate/refresh the IPv4-translatable address.",
+      "ja": "セクション1.3で指定されているようにアプリケーションプロトコルは、デュアルスタックノード上で操作を処理する必要があります。 IPv4に翻訳可能アドレスが割り当てられる必要があり、割り当てが更新/リフレッシュする必要があるときにO決定：またプロトコルスタックはできる必要があります。これはおそらく、例えばによって、アプリケーションを介さずに行うことができますソケットAPIの下でこれを取り扱います。例えば、接続またはソケットのsendtoコールが呼び出されたときには、宛先がIPv4マップアドレスであるかどうかをチェックし、その場合の可能性/ IPv4に翻訳可能アドレスをリフレッシュ割り当てます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Ensure, as part of the source address selection mechanism, that when the destination address is an IPv4-mapped address the source address MUST be an IPv4-translatable address. And an IPv4- translatable address MUST NOT be used with other forms of IPv6 destination addresses.",
+      "ja": "O宛先アドレスがIPv4マップアドレスである場合、ソースアドレス選択メカニズムの一部として、送信元アドレスは、IPv4アドレスで並進しなければならないことを、確認します。そして、IPv4-翻訳可能アドレスは、IPv6宛先アドレスの他の形態で使用してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "o Should the peer have AAAA/A6 address records the application (or resolver) SHOULD never fall back to looking for A address records even if communication fails using the available AAAA/A6 records. The reason for this restriction is to prevent traffic between two IPv6 nodes (which AAAA/A6 records in the DNS) from accidentally going through SIIT translators twice; from IPv6 to IPv4 and to IPv6 again. It is considered preferable to instead signal a failure to communicate to the application.",
+      "ja": "OピアはAAAA / A6アドレスが通信可能AAAA / A6レコードを使用して失敗した場合でも、アドレスレコードを探しにフォールバックすることはありませんアプリケーション（またはリゾルバ）を記録している必要があります。この制限の理由は、誤って二回SIITトランスレータを通過するから、2つのIPv6ノード（DNSでのAAAA / A6レコード）間のトラフィックを阻止することです。 IPv6のからのIPv4へと再びIPv6へ。その代わりに、アプリケーションとの通信に失敗したことを知らせるために好ましいと考えられます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The use of stateless IP/ICMP translators does not introduce any new security issues beyond the security issues that are already present in the IPv4 and IPv6 protocols and in the routing protocols which are used to make the packets reach the translator.",
+      "ja": "ステートレスIP / ICMPトランスレータの使用は、すでにIPv4とIPv6のプロトコルで、パケットがトランスレータを到達させるために使用されているルーティングプロトコルに存在するセキュリティ上の問題を越えた新たなセキュリティ上の問題を紹介しません。"
+    },
+    {
+      "indent": 3,
+      "text": "As the Authentication Header [IPv6-AUTH] is specified to include the IPv4 Identification field and the translating function not being able to always preserve the Identification field, it is not possible for an IPv6 endpoint to compute AH on received packets that have been translated from IPv4 packets. Thus AH does not work through a translator.",
+      "ja": "認証ヘッダ[たIPv6-AUTH]はIPv4の識別フィールドと常に識別フィールドを保持することができない翻訳機能を含むように指定されているように、それから翻訳された受信パケットにAHを計算するIPv6のエンドポイントのために不可能ですIPv4パケット。したがって、AHは、翻訳者を介して動作しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Packets with ESP can be translated since ESP does not depend on header fields prior to the ESP header. Note that ESP transport mode is easier to handle than ESP tunnel mode; in order to use ESP tunnel mode the IPv6 node needs to be able to generate an inner IPv4 header when transmitting packets and remove such an IPv4 header when receiving packets.",
+      "ja": "ESPは、ESPヘッダの前のヘッダフィールドに依存しないので、ESPを持つパケットを翻訳することができます。 ESPトランスポートモードは、ESPトンネルモードよりも取り扱いが容易であることに注意してください。 ESPトンネルモードを使用するために、IPv6ノードは、パケットを受信した場合、このようなIPv4ヘッダがパケットを送信する場合、内側IPv4ヘッダを生成して除去することができる必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "References",
+      "ja": "リファレンス"
+    },
+    {
+      "indent": 3,
+      "text": "[KEYWORDS] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[キーワード]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6] Deering, S. and R. Hinden, Editors, \"Internet Protocol, Version 6 (IPv6) Specification\", RFC 2460, December 1998.",
+      "ja": "[IPv6の]デアリング、S.とR. Hindenと、エディタ、 \"インターネットプロトコルバージョン6（IPv6）の仕様\"、RFC 2460、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv4] Postel, J., \"Internet Protocol\", STD 5, RFC 791, September 1981.",
+      "ja": "【のIPv4]ポステル、J.、 \"インターネットプロトコル\"、STD 5、RFC 791、1981年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ADDR-ARCH] Deering, S. and R. Hinden, Editors, \"IP Version 6 Addressing Architecture\", RFC 2373, July 1998.",
+      "ja": "[ADDR-ARCH]デアリング、S.とR. Hindenと、エディターズ、 \"IPバージョン6アドレス指定アーキテクチャ\"、RFC 2373、1998年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[TRANS-MECH] Gilligan, R. and E. Nordmark, \"Transition Mechanisms for IPv6 Hosts and Routers\", RFC 1933, April 1996.",
+      "ja": "[TRANS-MECH]ギリガン、R.およびE. Nordmarkと、 \"IPv6ホストとルータの移行メカニズム\"、RFC 1933、1996年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[DISCOVERY] Narten, T., Nordmark, E. and W. Simpson, \"Neighbor Discovery for IP Version 6 (IPv6)\", RFC 2461, December 1998.",
+      "ja": "[DISCOVERY] Narten氏、T.、Nordmarkと、E.およびW.シンプソン、 \"IPバージョン6のための近隣探索（IPv6）の\"、RFC 2461、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6-SA] Atkinson, R., \"Security Architecture for the Internet Protocol\", RFC 2401, November 1998.",
+      "ja": "[IPv6の-SA]アトキンソン、R.、 \"インターネットプロトコルのためのセキュリティー体系\"、RFC 2401、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6-AUTH] Atkinson, R., \"IP Authentication Header\", RFC 2402, November 1998.",
+      "ja": "[IPv6の-AUTH]アトキンソン、R.、 \"IP認証ヘッダー\"、RFC 2402、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6-ESP] Atkinson, R., \"IP Encapsulating Security Payload (ESP)\", RFC 2406, November 1998.",
+      "ja": "[IPv6の-ESP]アトキンソン、R.、 \"IPカプセル化セキュリティペイロード（ESP）\"、RFC 2406、1998年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ICMPv4] Postel, J., \"Internet Control Message Protocol\", STD 5, RFC 792, September 1981.",
+      "ja": "[ICMPv4の]ポステル、J.、 \"インターネット制御メッセージプロトコル\"、STD 5、RFC 792、1981年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[ICMPv6] Conta, A. and S. Deering, \"Internet Control Message Protocol (ICMPv6) for the Internet Protocol Version 6 (IPv6)\", RFC 2463, December 1998.",
+      "ja": "、RFC 2463 \"インターネットプロトコルバージョン6（IPv6）のためのインターネット制御メッセージプロトコル（ICMPv6の）\"【のICMPv6]コンタ、A.、およびS.デアリング、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[IGMP] Deering, S., \"Host extensions for IP multicasting\", STD 5, RFC 1112, August 1989.",
+      "ja": "[IGMP]デアリング、S.、 \"IPマルチキャスティングのためのホスト拡大\"、STD 5、RFC 1112、1989年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[PMTUv4] Mogul, J. and S. Deering, \"Path MTU Discovery\", RFC 1191, November 1990.",
+      "ja": "【PMTUv4】モーグル、J.およびS.デアリング、 \"パスMTUディスカバリ\"、RFC 1191、1990年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[PMTUv6] McCann, J., Deering, S. and J. Mogul, \"Path MTU Discovery for IP version 6\", RFC 1981, August 1996.",
+      "ja": "[PMTUv6]マッキャン、J.、デアリング、S.とJ.ムガール人、RFC 1981 \"IPバージョン6のパスMTUディスカバリー\"、1996年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[DIFFSERV] Nichols, K., Blake, S., Baker, F. and D. Black, \"Definition of the Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers\", RFC 2474, December 1998.",
+      "ja": "[DIFFSERV]ニコルズ、K.、ブレイク、S.、ベイカー、F.とD.黒、 \"IPv4とIPv6ヘッダーとの差別化されたサービス分野（DS分野）の定義\"、RFC 2474、1998年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[MLD] Deering, S., Fenner, W. and B. Haberman, \"Multicast Listener Discovery (MLD) for IPv6\", RFC 2710, October 1999.",
+      "ja": "\"IPv6のためのマルチキャストリスナー発見（MLD）\" [MLD]デアリング、S.、フェナー、W.およびB.ハーバーマン、RFC 2710、1999年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[FTPEXT] Allman, M., Ostermann, S. and C. Metz, \"FTP Extensions for IPv6 and NATs.\", RFC 2428, September 1998.",
+      "ja": "[FTPEXT]オールマン、M.、Ostermann、S.とC.メッツ、 \"IPv6とNATsのためのFTP拡張機能。\"、RFC 2428、1998年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[MILLER] G. Miller, Email to the ngtrans mailing list on 26 March 1999.",
+      "ja": "[MILLER] G. Miller氏は、1999年3月26日にメーリングリストNGTRANSにメールで。"
+    },
+    {
+      "indent": 3,
+      "text": "[BSDAPI] Gilligan, R., Thomson, S., Bound, J. and W. Stevens, \"Basic Socket Interface Extensions for IPv6\", RFC 2553, March 1999.",
+      "ja": "[BSDAPI]ギリガン、R.、トムソン、S.、バウンド、J.とW.スティーブンス、 \"IPv6の基本的なソケットインタフェース拡張\"、RFC 2553、1999年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Erik Nordmark Sun Microsystems, Inc. 901 San Antonio Road Palo Alto, CA 94303 USA",
+      "ja": "エリックNordmarkとサン・マイクロシステムズ株式会社901サンアントニオの道パロアルト、CA 94303 USA"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 650 786 5166 Fax: +1 650 786 5896 EMail: nordmark@sun.com",
+      "ja": "電話：+1 650 786 5166ファックス：+1 650 786 5896 Eメール：nordmark@sun.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2000). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2000）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

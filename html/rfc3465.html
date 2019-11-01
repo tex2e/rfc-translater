@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>RFC 3465 - TCP Congestion Control with Appropriate Byte Counting (ABC) 日本語訳</title>
+
+  
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="master.css">
+  <script src="index.js"></script>
+
+  <script>
+    var host = window.location.hostname;
+    if (host != "localhost") {
+      (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+      })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+      ga('create', 'UA-75892425-1', 'auto');
+      ga('send', 'pageview');
+    }
+  </script>
+
+</head>
+<body>
+    <nav class="navbar navbar-expand navbar-light bg-light">
+    <a class="navbar-brand" href="index.html">RFC Trans</a>
+    <div class="collapse navbar-collapse" id="navbarText">
+      <div class="navbar-nav mr-auto">
+        <a class="nav-item nav-link" href="privacy-policy.html">Privacy Policy</a>
+        <a class="nav-item nav-link" href="contact.html">Contact</a>
+      </div>
+      <div class="navbar-nav ml-auto">
+        <span class="navbar-text"><small>@tex2e</small></span>
+      </div>
+    </div>
+  </nav>
+
+  <div style="height: 1ex;"></div>
+  <div class="container">
+    <div class="row">
+      <div class="col-sm-12 col-md-12">
+        <div class="alert alert-info" role="alert">
+          <h4 class="alert-heading">RFC 3465 - TCP Congestion Control with Appropriate Byte Counting (ABC) 日本語訳</h4>
+          <span class="URL">URL :
+            <a href="https://tools.ietf.org/html/rfc3465">
+              https://tools.ietf.org/html/rfc3465
+            </a>
+          </span><br>
+          <span class="title_ja">
+            タイトル : <strong>RFC 3465 - 適切なバイトカウントを持つTCPの輻輳制御（ABC）</strong></span><br>
+          <span class="updated_by">翻訳編集 : 自動生成</span><br>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+Network Working Group                                          M. Allman
+Request for Comments: 3465                                  BBN/NASA GRC
+Category: Experimental                                     February 2003
+        </pre>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+      TCP Congestion Control with Appropriate Byte Counting (ABC)
+        </pre>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Status of this Memo
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+このメモの位置付け
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This memo defines an Experimental Protocol for the Internet community. It does not specify an Internet standard of any kind. Discussion and suggestions for improvement are requested. Distribution of this memo is unlimited.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+このメモはインターネットコミュニティのためにExperimentalプロトコルを定義します。それはどんな種類のインターネット標準を指定しません。改善のための議論や提案が要求されています。このメモの配布は無制限です。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Copyright Notice
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+著作権表示
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Copyright (C) The Internet Society (2003). All Rights Reserved.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+著作権（C）インターネット協会（2003）。全著作権所有。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Abstract
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+抽象
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document proposes a small modification to the way TCP increases its congestion window. Rather than the traditional method of increasing the congestion window by a constant amount for each arriving acknowledgment, the document suggests basing the increase on the number of previously unacknowledged bytes each ACK covers. This change improves the performance of TCP, as well as closes a security hole TCP receivers can use to induce the sender into increasing the sending rate too rapidly.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+このドキュメントでは、TCPが輻輳ウィンドウを大きくする方法に小さな変更を提案しています。むしろ各到着確認応答を一定量混雑ウィンドウを増加させる従来の方法よりも、文書が以前に不承認のバイト各ACKカバーの数の増加を基づか示唆する。この変更は、TCPのパフォーマンスが向上だけでなく、セキュリティホールのTCP受信機があまりにも急速に送信レートを上げるに送信者を誘導するために使用することができます閉じます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Terminology
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+用語
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Much of the language in this document is taken from [RFC2581].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書に記載されている言語の多くは、[RFC2581]から取得されます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in [RFC2119].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書のキーワード &#34;MUST&#34;、 &#34;MUST NOT&#34;、 &#34;REQUIRED&#34;、、、、 &#34;べきではない&#34; &#34;べきである&#34; &#34;ないもの&#34; &#34;ものとし&#34;、 &#34;推奨&#34;、 &#34;MAY&#34;、および &#34;OPTIONAL&#34; はあります[RFC2119]に記載されているように解釈されます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+1 Introduction
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+1はじめに
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document proposes a modification to the algorithm for increasing TCP&#39;s congestion window (cwnd) that improves both performance and security. Rather than increasing a TCP&#39;s congestion window based on the number of acknowledgments (ACKs) that arrive at the data sender (per the current specification [RFC2581]), the congestion window is increased based on the number of bytes acknowledged by the arriving ACKs. The algorithm improves performance by mitigating the impact of delayed ACKs on the growth of cwnd. At the same time, the algorithm provides cwnd growth in direct relation to the probed capacity of a network path, therefore providing a more measured response to ACKs that cover only small amounts of data (less than a full segment size) than ACK counting. This more appropriate cwnd growth can improve both performance and can prevent inappropriate cwnd growth in response to a misbehaving receiver. On the other hand, in some cases the modified cwnd growth algorithm causes larger bursts of segments to be sent into the network. In some cases this can lead to a non-negligible increase in the drop rate and reduced performance (see section 4 for a larger discussion of the issues).
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書では、パフォーマンスとセキュリティの両方を向上させ、TCPの輻輳ウィンドウ（CWND）を増加させるためのアルゴリズムに変更を提案しています。むしろ、（現在の仕様に従って、[RFC2581]）は、データ送信側に到着肯定応答（ACKの）の数に基づいて、TCPの輻輳ウィンドウを増加させるよりも、輻輳ウィンドウは到着のACKによって承認されたバイト数に基づいて増加します。アルゴリズムは、CWNDの成長に対する遅延ACKの影響を緩和することにより、パフォーマンスを向上させることができます。同時に、アルゴリズムは、したがって、ACK計数よりもデータのごく少量（全セグメントサイズ未満）を覆うのACKに対してより測定された応答を提供する、ネットワーク経路の探査能力に直接関係でCWND成長を提供します。このより適切なCWND成長は両方のパフォーマンスを向上させることができ、不正動作する受信機に応答して、不適切なCWNDの成長を防止することができます。一方、いくつかの場合において修飾CWND成長アルゴリズムは、セグメントのより大きなバーストがネットワークに送信させます。これは無視できないドロップ率の増加及び性能低下につながる可能性がある場合に（問題の大きな議論のセクション4を参照）。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document is organized as follows. Section 2 outlines the modified algorithm for increasing TCP&#39;s congestion window. Section 3 discusses the advantages of using the modified algorithm. Section 4 discusses the disadvantages of the approach outlined in this document. Section 5 outlines some of the fairness issues that must be considered for the modified algorithm. Section 6 discusses security considerations.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+次のようにこの文書は、組織化されています。第2節では、TCPの輻輳ウィンドウを増大させるための修正されたアルゴリズムを概説します。セクション3は、変更されたアルゴリズムを使用することの利点を説明します。第4章では、本書で概説したアプローチの欠点を説明します。第5節では、修正されたアルゴリズムのために考慮されなければならない、公平性の問題のいくつかを概説します。第6節は、セキュリティ上の考慮事項について説明します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Statement of Intent
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+主旨書
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This specification contains an algorithm improving the performance of TCP which is understood to be effective and safe, but which has not been widely deployed. One goal of publication as an Experimental RFC is to be prudent, and encourage use and deployment prior to publication in the standards track. It is the intent of the Transport Area to re-submit this specification as an IETF Proposed Standard in the future, after more experience has been gained.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この仕様は、有効かつ安全であると理解されているTCPのパフォーマンスを向上するアルゴリズムが含まれていますが、これは広く展開されていません。実験的RFCとして公表の一つの目標は、賢明では、前の基準トラックでの出版物への使用と導入を奨励することです。より多くの経験が得られた後、将来的にはIETFのProposed Standardとして、この明細書を再提出する交通エリアの意図です。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+2 A Modified Algorithm for Increasing the Congestion Window
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+2 Aは、輻輳ウィンドウを増加させるためのアルゴリズムを修正し
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+As originally outlined in [Jac88] and specified in [RFC2581], TCP uses two algorithms for increasing the congestion window. During steady-state, TCP uses the Congestion Avoidance algorithm to linearly increase the value of cwnd. At the beginning of a transfer, after a retransmission timeout or after a long idle period (in some implementations), TCP uses the Slow Start algorithm to increase cwnd exponentially. According to RFC 2581, slow start bases the cwnd increase on the number of incoming acknowledgments. During congestion avoidance RFC 2581 allows more latitude in increasing cwnd, but traditionally implementations have based the increase on the number of arriving ACKs. In the following two subsections, we detail modifications to these algorithms to increase cwnd based on the number of bytes being acknowledged by each arriving ACK, rather than by the number of ACKs that arrive. We call these changes &#34;Appropriate Byte Counting&#34; (ABC) [All99].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+元々[Jac88]と[RFC2581]で指定に概説するように、TCPは、輻輳ウィンドウを増加させるための2つのアルゴリズムを使用します。定常状態では、TCPは、直線的にcwndの値を大きくする輻輳回避アルゴリズムを使用しています。転送の開始時に、再送タイムアウト後、または（いくつかの実装では）長いアイドル期間の後に、TCPは、指数関数的にcwndを増やすためにスロースタートアルゴリズムを使用しています。 RFC 2581によると、受信確認応答の数には、スロースタート拠点のcwndの増加。輻輳回避RFC 2581中のcwndを増加させる、より自由度を可能にするが、伝統的な実装は、到着ACKの数の増加をベースとしています。次の2つのサブセクションでは、我々これらのアルゴリズムの詳細の変更は各到着ACKによってではなく、到着するACKの数によって承認されているバイト数に基づいて輻輳ウィンドウを増加させます。私たちは、「適切なバイトカウント」（ABC）[All99]これらの変更を呼び出します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.1 Congestion Avoidance
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.1輻輳回避
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC 2581 specifies that cwnd should be increased by 1 segment per round-trip time (RTT) during the congestion avoidance phase of a transfer. Traditionally, TCPs have approximated this increase by increasing cwnd by 1/cwnd for each arriving ACK. This algorithm opens cwnd by roughly 1 segment per RTT if the receiver ACKs each incoming segment and no ACK loss occurs. However, if the receiver implements delayed ACKs [Bra89], the receiver returns roughly half as many ACKs, which causes the sender to open cwnd more conservatively (by approximately 1 segment every second RTT). The approach that this document suggests is to store the number of bytes that have been ACKed in a &#34;bytes_acked&#34; variable in the TCP control block. When bytes_acked becomes greater than or equal to the value of the congestion window, bytes_acked is reduced by the value of cwnd. Next, cwnd is incremented by a full-sized segment (SMSS). The algorithm suggested above is specifically allowed by RFC 2581 during congestion avoidance because it opens the window by at most 1 segment per RTT.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC 2581は、CWNDは、転送の輻輳回避フェーズの間のラウンドトリップ時間（RTT）あたり1つのセグメントだけ増加するように指定します。伝統的に、TCPは各到着ACKのために1 / CWNDでのcwndを増加させることにより、この増加に近似しています。各受信セグメントのACK受信なしACK損失が発生した場合、このアルゴリズムは、RTTあたりおおよそ1セグメントによってCWNDを開きます。受信機は、遅延ACK [Bra89]を実装する場合は、受信機は、送信者が（約1セグメント毎秒RTTによって）より控えめCWND開かせる多くのACK、とほぼ半分を返します。この文書は示唆していることのアプローチは、TCP制御ブロックにおける「bytes_acked」変数にACKされたバイト数を格納することです。 bytes_ackedより大きい又は輻輳ウィンドウの値と等しくなると、CWNDの値によってbytes_acked低減されます。次に、CWNDは、フルサイズのセグメント（SMSS）だけインクリメントされます。それはRTTごとに最大で1セグメントによってウィンドウを開くため、上記提案のアルゴリズムは、具体的には、輻輳回避中にRFC 2581で許可されます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.2 Slow Start
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.2スロースタート
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC 2581 states that the sender increments the congestion window by at most, 1*SMSS bytes for each arriving acknowledgment during slow start. This document proposes that a TCP sender SHOULD increase cwnd by the number of previously unacknowledged bytes ACKed by each incoming acknowledgment, provided the increase is not more than L bytes. Choosing the limit on the increase, L, is discussed in the next subsection. When the number of previously unacknowledged bytes ACKed is less than or equal to 1*SMSS bytes, or L is less than or equal to 1*SMSS bytes, this proposal is no more aggressive (and possibly less aggressive) than allowed by RFC 2581. However, increasing cwnd by more than 1*SMSS bytes in response to a single ACK is more aggressive than allowed by RFC 2581. The more aggressive version of the slow start algorithm still falls within the spirit of the principles outlined in [Jac88] (i.e., of no more than doubling the cwnd per RTT), and this document proposes ABC for experimentation in shared networks, provided an appropriate limit is applied (see next section).
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC 2581は、送信者がすることで輻輳ウィンドウをインクリメントすることを述べて、せいぜい、スロースタート時の各到着確認のための1 *のSMSSバイト。この文書では、TCP送信側は、各受信確認応答ACKさによって以前に未確認のバイトの数でCWNDを増やす必要があり、Lバイト以下であるの増加を提供することを提案しています。増加、Lの制限を選択すると、次のサブセクションで説明されています。 ACKさ以前に未確認のバイト数がより少ない又は1 *のSMSSバイトに等しい、又はLよりも小さいか1 *のSMSSバイトに等しい場合、この提案は、RFC 2581で許可さを超えない積極的な（そしておそらくあまりアグレッシブ）ではありません。しかし、単一のACKに応答して1つの以上*のSMSSバイトによってCWNDが増加すると、RFC 2581で許可されてスロースタートアルゴリズムのより積極的なバージョンは、依然として[Jac88]に概説された原理の精神内に入るよりも攻撃的である（すなわち、 ）RTTあたりCWNDを倍を超えないのが、この文書が共有ネットワークでの実験のためのABCを提案し、（次のセクションを参照）、適切な制限が適用されました。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.3 Choosing the Limit
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.3リミットを選びます
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The limit, L, chosen for the cwnd increase during slow start, controls the aggressiveness of the algorithm. Choosing L=1*SMSS bytes provides behavior that is no more aggressive than allowed by RFC 2581. However, ABC with L=1*SMSS bytes is more conservative in a
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+スロースタート時のcwndの増加のために選択された限界、Lは、アルゴリズムの攻撃性を制御します。 L = 1つの* SMSSバイトを選択することがRFC 2581で許可さ以下で攻撃的でない動作を提供し、ABCは、L = 1 * SMSSバイトでより保守的です
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+number of key ways (as discussed in the next section) and therefore, this document suggests that even though with L=1*SMSS bytes TCP stacks will see little performance change, ABC SHOULD be used.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+（次のセクションで説明したように）とキーいくつかの方法は、したがって、この文書は、L = 1 * SMSSバイトでTCPスタックはほとんど性能変化が表示されていても、ABCを使用すべきことを示唆しています。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+A very large L could potentially lead to large line-rate bursts of traffic in the face of a large amount of ACK loss or in the case when the receiver sends &#34;stretch ACKs&#34; (ACKs for more than the two full-sized segments allowed by the delayed ACK algorithm) [Pax97].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+受信機により許可され2つのフルサイズのセグメントよりは、「ストレッチのACK」（ACKを送信するときに非常に大きなLは、潜在的にACK損失の大量の顔または場合におけるトラフィックの大ラインレートバーストにつながる可能性遅延ACKアルゴリズム）[Pax97]。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document specifies that TCP implementations MAY use L=2*SMSS bytes and MUST NOT use L &gt; 2*SMSS bytes. This choice balances between being conservative (L=1*SMSS bytes) and being potentially very aggressive. In addition, L=2*SMSS bytes exactly balances the negative impact of the delayed ACK algorithm (as discussed in more detail in section 3.2). Note that when L=2*SMSS bytes cwnd growth is roughly the same as the case when the standard algorithms are used in conjunction with a receiver that transmits an ACK for each incoming segment [All98] (assuming no or small amounts of ACK loss in both cases).
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+このドキュメントでは、TCPの実装は、L = 2 * SMSSバイトを使用するかもしれし、L&gt; 2 * SMSSバイトを使用してはならないことを指定します。保守的な（L = 1 * SMSSバイト）であり、かつ潜在的に非常に積極的であるとの間のこの選択残高。 （セクション3.2でより詳細に議論するように）また、L = 2 * SMSSバイトが正確に遅延ACKアルゴリズムの負の影響のバランスをとります。注L = 2 * SMSSバイトのCWND成長はおおよそ標準アルゴリズムが各受信セグメント[All98]（NO仮定又はACK損失の少量のためのACKを送信する受信機と組み合わせて使用​​される場合と同じである場合にどちらの場合も）。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The exception to the above suggestion is during a slow start phase that follows a retransmission timeout (RTO). In this situation, a TCP MUST use L=1*SMSS as specified in RFC 2581 since ACKs for large amounts of previously unacknowledged data are common during this phase of a transfer. These ACKs do not necessarily indicate how much data has left the network in the last RTT, and therefore ABC cannot accurately determine how much to increase cwnd. As an example, say segment N is dropped by the network, and segments N+1 and N+2 arrive successfully at the receiver. The sender will receive only two duplicate ACKs and therefore must rely on the retransmission timer (RTO) to detect the loss. When the RTO expires, segment N is retransmitted. The ACK sent in response to the retransmission will be for segment N+2. However, this ACK does not indicate that three segments have left the network in the last RTT, but rather only a single segment left the network. Therefore, the appropriate cwnd increment is at most 1*SMSS bytes.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+上記提案の例外は、再送タイムアウト（RTO）を以下のスロースタートフェーズの間です。 RFC 2581で指定されている以前に未確認の大量のデータのためのACKが転送のこの段階の間に共通しているため、このような状況では、TCPは、L = 1 *のSMSSを使用しなければなりません。これらのACKは必ずしも最後のRTTでネットワークを残しているどのくらいのデータを示すものではありませんので、ABCは正確にcwndを増やすためにどのくらいかを決定することはできません。一例として、セグメントNがネットワークによって廃棄され言う、セグメントN + 1及びN + 2の受信機に正常に到着します。送信者は2つだけ重複ACKを受信しますので、損失を検出するために、再送タイマー（RTO）に依存しなければなりません。 RTOが満了すると、セグメントNが再送されます。再送に応答して送信されたACKセグメントN + 2のためであろう。しかし、このACKは三つのセグメントが最後のRTTでネットワークを残しているのではなく、唯一の単一のセグメントがネットワークに残っていることを示すものではありません。したがって、適切にcwndの増加は、ほとんど1 *のSMSSバイトです。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.4 RTO Implications
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2.4 RTOへの影響
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[Jac88] shows that increases in cwnd of more than a factor of two in succeeding RTTs can cause spurious retransmissions on slow links where the bandwidth dominates the RTT, assuming the RTO estimator given in [Jac88] and [RFC2988]. ABC stays within this limit of no more than doubling cwnd in successive RTTs by capping the increase (no matter what L is employed) by the number of previously unacknowledged bytes covered by each incoming ACK.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+【Jac88]のRTTを後続に2倍以上のCWNDに増加ショーは[Jac88]及び[RFC2988]所与RTO推定を仮定すると、帯域幅がRTTを支配低速リンク上のスプリアス再送を引き起こす可能性があります。 ABCは、それぞれの受信ACKによって覆わ以前に未確認のバイトの数で（関係なく使用されているものをL）の増加をキャッピングしないことにより、連続のRTTにCWNDを倍を超えないのこの制限内に留まります。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+3 Advantages
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+3つの利点
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This section outlines several advantages of using the ABC algorithm to increase cwnd, rather than the standard ACK counting algorithm given in [RFC2581].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+このセクションではなく、[RFC2581]で与えられた標準のACK計数アルゴリズムより、CWNDを増加させるためにABCアルゴリズムを用いていくつかの利点を概説します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.1 More Appropriate Congestion Window Increase
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.1より適切な輻輳ウィンドウの増加
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The ABC algorithm outlined in section 2 increases TCP&#39;s cwnd in proportion to the amount of data actually sent into the network. ACK counting, on the other hand, increments cwnd by a constant upon the arrival of each ACK. For instance, consider an interactive telnet connection (e.g., ssh or telnet) in which ACKs generally cover only a few bytes of data, but cwnd is increased by 1*SMSS bytes for each ACK received. When a large amount of data needs to be transmitted (e.g., displaying a large file) the data is sent in one large burst because the cwnd grows by 1*SMSS bytes per ACK rather than based on the actual amount of capacity used. Such a line-rate burst of data can potentially cause a large amount of segment loss.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+セクション2に概説ABCアルゴリズムは、実際にネットワークに送信されるデータの量に比例してTCPのCWNDが増加します。 ACKのカウントが、一方、各ACKの到着時定数によってCWNDをインクリメントします。例えば、対話型telnet接続（例えば、SSHまたはTelnet）を考慮し、一般のACKたデータのわずか数バイトをカバーするが、CWNDは、ACKが受信毎に1 *のSMSSバイトによって増大されます。大量のデータを送信する必要があるときCWNDが使用容量の実際の量に基づいて、ACKなく当たり1 *のSMSSバイトが成長するため、データを1つの大きなバーストで送信される（例えば、大きなファイルを表示します）。データのそのようなラインレートバーストは、潜在的に、セグメント損失の大量を引き起こす可能性があります。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Congestion Window Validation (CWV) [RFC2861] addresses the above problem as well. CWV limits the amount of unused cwnd a TCP connection can accumulate. ABC can be used in conjunction with CWV to obtain an accurate measure of the network path.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+輻輳ウィンドウ検証（CWV）[RFC2861]は同様に、上記の問題に対処します。 CWVは、TCPコネクションが蓄積することができ、未使用のCWNDの量を制限します。 ABCは、ネットワークパスの正確な測定値を得るためにCWVと組み合わせて使用​​することができます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2 Mitigate the Impact of Delayed ACKs and Lost ACKs
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2遅延ACKと失われたACKの影響を軽減
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Delayed ACKs [RFC1122,RFC2581] allow a TCP receiver to refrain from sending an ACK for each incoming segment. However, a receiver SHOULD send an ACK for every second full-sized segment that arrives. Furthermore, a receiver MUST NOT withhold an ACK for more than 500 ms. By reducing the number of ACKs sent to the data originator the receiver is slowing the growth of the congestion window under an ACK counting system. Using ABC with L=2*SMSS bytes can roughly negate the negative impact imposed by delayed ACKs by allowing cwnd to be increased for ACKs that are withheld by the receiver. This allows the congestion window to grow in a manner similar to the case when the receiver ACKs each incoming segment, but without adding extra traffic to the network. Simulation studies have shown increased throughput when a TCP sender uses ABC when compared to the standard ACK counting algorithm [All99], especially for short transfers that never leave the initial slow start period.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+遅延のACK [RFC1122、RFC2581] TCP受信機は、各受信セグメントのACKを送信することを控えることを可能にします。しかしながら、受信機は、到着毎秒フルサイズのセグメントに対するACKを送るべきです。さらに、受信機は、500の以上のMSに対するACKを保留してはいけません。データ送信ACKの数を減らすことによって、受信機がACK計数システムの下で輻輳ウィンドウの成長が鈍化している発信。 L = 2 * SMSSバイトでABCを使用すると、おおよそのcwndが受信機によって保留されたACKのために増加させることができるようにすることで、遅延ACKによって課される負の影響を打ち消すことができます。これは、輻輳ウィンドウは、受信機の各受信セグメントのACKが、ネットワークに余計なトラフィックを追加することなくとき場合と同様に成長することを可能にします。シミュレーション研究は、特に初期のスロースタート期間を離れることはない短い転送のために、標準のACKカウントアルゴリズム[All99]と比較すると、TCPの送信者がABCを使用する場合、スループットの向上を示しています。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Note that delayed ACKs should not be an issue during slow start-based loss recovery, as RFC 2581 recommends that receivers should not delay ACKs that cover out-of-order segments. Therefore, as discussed above, ABC with L &gt; 1*SMSS bytes is inappropriate for such slow start based loss recovery and MUST NOT be used.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC 2581として、スロースタート・ベースの損失回復時の問題にはなりませんACKを遅らせ注受信機がアウトオブオーダーのセグメントをカバーするACKを遅らせるべきではないことをお勧めします。上述したようしたがって、ABCは、L&gt; 1 * SMSSバイトでそのようなスロースタート基づく損失回復のために不適切であり、使用してはいけません。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Note: In the case when an entire window of data is lost, a TCP receiver will likely generate delayed ACKs and an L &gt; 1*SMSS bytes would be safe. However, detecting this scenario is difficult. Therefore to keep ABC conservative, this document mandates that L MUST NOT be &gt; 1*SMSS bytes in any slow start-based loss recovery.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+注意：データのウィンドウ全体が失われた場合には、TCP受信機はおそらく遅延ACKを生成し、L&gt; 1 * SMSSのバイトが安全だろう。ただし、このシナリオを検出することは困難です。したがって、Lは、任意のスロースタートベースの損失回復に&gt; 1 * SMSSのバイトにすることはできませんABCの保守的な、この文書の義務を維持します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+ACK loss can also retard the growth of a congestion window that increases based on the number of ACKs that arrive. When counting ACKs, dropped ACKs represent forever-missed opportunities to increase cwnd. Using ABC with L &gt; 1*SMSS bytes allows the sender to mitigate the effect of lost ACKs.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+ACK損失も到着するACKの数に基づいて増加輻輳ウィンドウの成長を遅らせることができます。 ACKをカウントすると、ACKがCWNDを高めるために永遠に - 逃したチャンスを表して落としました。 L&gt; 1 *のSMSSバイトでABCを使用すると、送信者が失われたACKの影響を軽減することができます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.3 Prevents Attacks from Misbehaving Receivers
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.3誤動作レシーバからの攻撃を防ぎ
+        </h5>
+      </div>
+
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[SCWA99] outlines several methods for a receiver to induce a TCP sender into violating congestion control and transmitting data at a potentially inappropriate rate. One of the outlined attacks is &#34;ACK Division&#34;. This scheme involves the receiver sending multiple ACKs for each incoming data segment, each ACKing only a small portion of the original TCP data segment. Since TCP senders have traditionally used ACK counting to increase cwnd, ACK division causes inappropriately rapid cwnd growth and, in turn, a potentially inappropriate sending rate. A TCP sender that uses ABC can prevent this attack from being used to undermine standard congestion control because the cwnd increase is based on the number of bytes ACKed, rather than the number of ACKs received.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+【SCWA99】輻輳制御を違反し、潜在的に不適切なレートでデータを送信するにTCP送信者を誘導するための受信機のためのいくつかの方法を概説します。概説攻撃の一つは、「ACK課」です。この方式は、各着信データ・セグメントは、元のTCPデータセグメントの各々の肯定応答（ACK）小さな部分のみのために複数のACKを送信する受信機を含みます。 TCPの送信者は、伝統的にACKがにcwndを増加するためにカウントを使用しておりますので、ACK部門が不適切に急速にcwndの成長と、今度は、潜在的に不適切な送信レートを引き起こします。 CWNDの増加がACKされたバイト数に基づいているので、ABCを使用するTCP送信者は、標準的な輻輳制御を弱体化させるために使用されているから、この攻撃を防ぐことができ、よりもむしろACKの数は、受信されました。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+To prevent misbehaving receivers from inducing inappropriate sender behavior, this document suggests TCP implementations use ABC, even if L=1*SMSS bytes (i.e., not allowing ABC to provide more aggressive cwnd growth than allowed by RFC 2581).
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+不適切な送信側の動作を誘導するから誤動作の受信を防止するために、このドキュメントは、TCP実装がL = 1 * SMSSバイト（すなわち、RFC 2581で許可さよりABCはより積極的なCWNDの成長を提供することができない）場合であっても、ABCを使用示唆する。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+4 Disadvantages
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+4つのデメリット
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The main disadvantages of using ABC with L=2*SMSS bytes are an increase in the burstiness of TCP and a small increase in the overall loss rate. [All98] discusses the two ways that ABC increases the burstiness of the TCP sender. First, the &#34;micro burstiness&#34; of the connection is increased. In other words, the number of segments sent in response to each incoming ACK is increased by at most 1 segment when using ABC with L=2*SMSS bytes in conjunction with a receiver that is sending delayed ACKs. During slow start this translates into an increase from sending 2 back-to-back segments to sending 3 back-to-back packets in response to an ACK for a single packet. Or, an increase from 3 packets to 4 packets when receiving a delayed ACK for two outstanding packets. Note that ACK loss can cause larger bursts. However, ABC only increases the burst size by at most 1*SMSS bytes per ACK received when compared to the standard behavior. This slight increase in the burstiness should only cause problems for devices that have very small buffers. In addition, ABC increases the &#34;macro burstiness&#34; of the TCP sender in response to delayed ACKs in slow start. Rather than increasing cwnd by roughly 1.5 times per RTT, ABC roughly doubles the congestion window every RTT. However, doubling cwnd every RTT fits within the spirit of slow start, as originally outlined [Jac88].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+L = 2 * SMSSバイトでABCを使用することの主な欠点は、TCPのバースト性の増加と全体的な損失率のわずかな増加です。 【All98]はABCがTCP送信者のバースト性を増加させる2つの方法について説明します。まず、接続の「マイクロバーストは、」増加しています。遅延ACKを送信して受信機に関連して、L = 2 * SMSSバイトでABCを使用する場合言い換えれば、各受信ACKに応答して送信されるセグメントの数は、最大で1セグメントだけ増加されます。低速時に、これは、単一のパケットに対するACKに応答して3バックツーバックパケットを送信する2背中合わせのセグメントを送信することから増加につながり始めます。または、4つのパケットに3つのパケットから上昇2つの未処理パケットに対する遅延ACKを受信します。 ACK損失が大きくなるバーストを引き起こす可能性があることに注意してください。しかし、ABCは、標準の動作と比較した場合、ACKが受信さ当たり最大で1つの*のSMSSバイトがバーストサイズを増加させます。バースト性のこのわずかな増加は、ごく小さなバッファを持っているデバイスのための問題を起こす必要があります。また、ABCは、スロースタートで遅れたACKに応じて、TCP送信者の「マクロバースト性」を高めます。むしろRTTあたりおよそ1.5倍のcwndを増やすよりも、ABCはおおよそ輻輳ウィンドウごとにRTTを倍増します。しかし、すべてのRTTをcwndを倍にすることは、もともと[Jac88]概説として、スロースタートの精神の範囲内に収まります。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+With the increased burstiness comes a modest increase in the loss rate for a TCP connection employing ABC (see the next section for a short discussion on the fairness of ABC to non-ABC flows). The additional loss can be directly attributable to the increased aggressiveness of ABC. During slow start cwnd is increased more rapidly. Therefore when loss occurs cwnd is larger and more drops are likely. Similarly, a congestion avoidance cycle takes roughly half, as long when using ABC and delayed ACKs when compared to an ACK counting implementation. In other words, a TCP sender reaches the capacity of the network path, drops a packet and reduces the congestion window by half roughly twice as often when using ABC. However, as discussed above, in spite of the additional loss an ABC TCP sender generally obtains better overall performance than a non-ABC TCP [All99].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+増加したバーストでABCを採用したTCP接続の損失率の緩やかな増加は、（非ABCフローにABCの公正性に関する短い議論のための次のセクションを参照）しています。追加損失は、ABCの増加攻撃性に直接起因することができます。スロースタートのcwndの間、より急速に増加しています。損失が発生したときにそのためにcwndは、滴がそうであるより大きく、よりです。同様に、輻輳回避サイクルであればABCを使用する場合、約半分を受け取り、実装をカウントACKと比較した場合、ACKを遅延しました。言い換えれば、TCPの送信者は、ネットワーク経路の容量に到達したパケットを廃棄し、およそ2倍の頻度でABCを使用するときに半分に輻輳ウィンドウを削減します。付加的な損失にもかかわらず、上述したようしかし、ABC TCP送信者は、一般に、非ABC TCP [All99]よりも優れた全体的なパフォーマンスを得ます。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Due to the increase in the packet drop rate we suggest ABC be implemented in conjunction with selective acknowledgments [RFC2018].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+私たちはABCが選択的確認応答[RFC2018]と組み合わせて実装することを提案パケット廃棄率の増加に起因します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+5 Fairness Considerations
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+5つの公平性の考慮事項
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[All99] presents several simple simulations conducted to measure the impact of ABC on competing traffic (both ABC and non-ABC). The experiments show that while ABC increases the drop rate for the connection using ABC, competing traffic is not greatly effected. The experiments show that standard TCP and ABC both obtain roughly the same throughput, regardless of the variant of the competing traffic. The simulations also reaffirm that ABC outperforms non-ABC TCP in an environment with varying types of TCP connections. On the other hand, the simulations presented in [All99] are not necessarily realistic. Therefore we are encouraging more experimentation in the Internet.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+【All99]は、競合するトラフィック上のABCの影響を測定するために行われ、いくつかの単純なシミュレーション（ABCおよび非ABC両方）を提示します。実験は、ABCは、トラフィックが大幅に影響されていない競合、ABCを使用して接続するためのドロップ率を増加させながら、ことを示しています。実験は、標準のTCPとABCは、両方に関係なく、競合するトラフィックの変種の、ほぼ同じスループットを得ることを示しています。シミュレーションはまた、ABCは、TCP接続の種類を変化させた環境で、非ABC TCPよりも優れていることを再確認します。一方、[All99]に提示シミュレーションは必ずしも現実的ではありません。そこで我々は、インターネットでより多くの実験を奨励しています。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+6 Security Considerations
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+6セキュリティについての考慮事項
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+As discussed in section 3.3, ABC protects a TCP sender from a misbehaving receiver that induces the sender into transmitting at an inappropriate rate with an &#34;ACK division&#34; attack. This, in turn, protects the network from an overly aggressive sender.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+セクション3.3で議論したように、ABCは、「ACK分割」攻撃との不適切な速度で伝送中に送信者を誘導する不正動作する受信機からのTCP送信者を保護します。これは、順番に、過度に攻撃的な送信者からネットワークを保護します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+7 Conclusions
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+7つの結論
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document RECOMMENDS that all TCP stacks be modified to use ABC with L=1*SMSS bytes. This change does not increase the aggressiveness of TCP. Furthermore, simulations of ABC with L=2*SMSS bytes show a promising performance improvement that we encourage researchers to experiment with in the Internet.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書は、すべてのTCPスタックは、L = 1 * SMSSバイトでABCを使用するように変更することをお勧めします。この変更は、TCPの攻撃性を増加させません。さらに、LとABCのシミュレーション= 2 * SMSSバイトは、我々は、インターネットでの実験を、研究者を奨励する有望なパフォーマンスの改善を示します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Acknowledgments
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+謝辞
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document has benefited from discussions with and encouragement from Sally Floyd. Van Jacobson and Reiner Ludwig provided valuable input on the implications of byte counting on the RTO. Reiner Ludwig and Kostas Pentikousis provided valuable feedback on a draft of this document.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書では、との協議・サリー・フロイドからの励ましの恩恵を受けています。ヴァンヤコブソンとライナールートヴィヒは、RTOのバイトカウントの意味で貴重な入力を提供します。ライナールートヴィヒとコスタスPentikousisは、この文書の草案について、貴重なフィードバックを提供します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Normative References
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+引用規格
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC1122] Braden, R., Ed., &#34;Requirements for Internet Hosts -- Communication Layers&#34;, STD 3, RFC 1122, October 1989.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC1122]ブレーデン、R.、エド、 &#34;インターネットホストのための要件 - 通信層&#34;。、STD 3、RFC 1122、1989年10月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2119] Bradner, S., &#34;Key words for use in RFCs to Indicate Requirement Levels&#34;, BCP 14, RFC 2119, March 1997.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2119]ブラドナーの、S.、 &#34;要件レベルを示すためにRFCsにおける使用のためのキーワード&#34;、BCP 14、RFC 2119、1997年3月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2581] Allman, M., Paxson, V. and W. Stevens, &#34;TCP Congestion Control&#34;, RFC 2581, April 1999.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2581]オールマン、M.、パクソン、V.とW.スティーブンス、 &#34;TCP輻輳制御&#34;、RFC 2581、1999年4月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Informative References
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+参考文献
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[All98] Mark Allman. On the Generation and Use of TCP Acknowledgments. ACM Computer Communication Review, 29(3), July 1998.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[All98]マークオールマン。世代オンとTCP謝辞の使用。 ACMコンピュータコミュニケーションレビュー、29（3）、1998年7月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[All99] Mark Allman. TCP Byte Counting Refinements. ACM Computer Communication Review, 29(3), July 1999.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[All99]マークオールマン。 TCPバイトカウントの改良。 ACMコンピュータコミュニケーションレビュー、29（3）、1999年7月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[Jac88] Van Jacobson. Congestion Avoidance and Control. ACM SIGCOMM 1988.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+【Jac88]バン・ジェイコブソン。輻輳回避とコントロール。 ACM SIGCOMM 1988。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[Pax97] Vern Paxson. Automated Packet Trace Analysis of TCP Implementations. ACM SIGCOMM, September 1997.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+【Pax97]バーン・パクソン。 TCP実装の自動化されたパケットトレース解析。 ACM SIGCOMM、1997年9月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2018] Mathis, M., Mahdavi, J., Floyd, S. and A. Romanow, &#34;TCP Selective Acknowledgment Options&#34;, RFC 2018, October 1996.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2018]マティス、M.、Mahdavi、J.、フロイド、S.とA. Romanow、 &#34;TCPの選択確認応答オプション&#34;、RFC 2018、1996年10月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2861] Handley, M., Padhye, J. and S. Floyd, &#34;TCP Congestion Window Validation&#34;, RFC 2861, June 2000.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[RFC2861]ハンドレー、M.、Padhye、J.及びS.フロイド、 &#34;TCP輻輳ウィンドウ検証&#34;、RFC 2861、2000年6月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[SCWA99] Stefan Savage, Neal Cardwell, David Wetherall, Tom Anderson. TCP Congestion Control with a Misbehaving Receiver. ACM Computer Communication Review, 29(5), October 1999.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+[SCWA99]ステファン・サヴェージ、ニールカードウェル、デイビット・ウェザーオール、トム・アンダーソン。ふらちなレシーバとのTCP輻輳制御。 ACMコンピュータコミュニケーションレビュー、29（5）、1999年10月。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Author&#39;s Address
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+著者のアドレス
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Mark Allman BBN Technologies/NASA Glenn Research Center Lewis Field 21000 Brookpark Rd. MS 54-5 Cleveland, OH 44135
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+マーク・オールマンBBNテクノロジーズ/ NASAグレンリサーチセンタールイス・フィールド21000ブルックパークRdを。 MS 54-5クリーブランド、オハイオ州44135
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Fax: 216-433-8705 Phone: 216-433-6586 EMail: mallman@bbn.com http://roland.grc.nasa.gov/~mallman
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+ファックス：216-433-8705電話：216-433-6586 Eメール：mallman@bbn.com http://roland.grc.nasa.gov/~mallman
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Full Copyright Statement
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+完全な著作権声明
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Copyright (C) The Internet Society (2003). All Rights Reserved.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+著作権（C）インターネット協会（2003）。全著作権所有。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+This document and the information contained herein is provided on an &#34;AS IS&#34; basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Acknowledgement
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+了承
+        </p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+Funding for the RFC Editor function is currently provided by the Internet Society.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text">
+RFC Editor機能のための基金は現在、インターネット協会によって提供されます。
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="footer"></div>
+</body>
+</html>

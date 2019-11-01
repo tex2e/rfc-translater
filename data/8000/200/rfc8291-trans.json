@@ -1,0 +1,723 @@
+{
+  "title": {
+    "text": "RFC 8291 - Message Encryption for Web Push",
+    "ja": "RFC 8291 - ウェブプッシュのためのメッセージの暗号化"
+  },
+  "number": 8291,
+  "created_at": "2019-10-29 17:40:32.484727+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        M. Thomson\nRequest for Comments: 8291                                       Mozilla\nCategory: Standards Track                                  November 2017\nISSN: 2070-1721",
+      "raw": true
+    },
+    {
+      "indent": 20,
+      "text": "Message Encryption for Web Push",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a message encryption scheme for the Web Push protocol. This scheme provides confidentiality and integrity for messages sent from an application server to a user agent.",
+      "ja": "この文書では、Webプッシュプロトコル用メッセージの暗号化方式を説明しています。この方式では、ユーザエージェントにアプリケーションサーバーから送信されるメッセージの機密性と整合性を提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8291.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttps://www.rfc-editor.org/info/rfc8291で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2017 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2017 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（https://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n   1.1. Notational Conventions .....................................3\n2. Push Message Encryption Overview ................................3\n   2.1. Key and Secret Distribution ................................4\n3. Push Message Encryption .........................................4\n   3.1. Diffie-Hellman Key Agreement ...............................5\n   3.2. Push Message Authentication ................................5\n   3.3. Combining Shared and Authentication Secrets ................5\n   3.4. Encryption Summary .........................................6\n4. Restrictions on Use of \"aes128gcm\" Content Coding ...............7\n5. Push Message Encryption Example .................................8\n6. IANA Considerations .............................................8\n7. Security Considerations .........................................8\n8. References .....................................................10\n   8.1. Normative References ......................................10\n   8.2. Informative References ....................................11\nAppendix A.  Intermediate Values for Encryption ...................12\nAuthor's Address ..................................................13",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The Web Push protocol [RFC8030] is an intermediated protocol by necessity. Messages from an application server are delivered to a user agent (UA) via a push service, as shown in Figure 1.",
+      "ja": "ウェブプッシュプロトコル[RFC8030]は必要が仲介するプロトコルです。図1に示すように、アプリケーションサーバからのメッセージは、プッシュサービスを介してユーザエージェント（UA）に配信されます。"
+    },
+    {
+      "indent": 4,
+      "text": "+-------+           +--------------+       +-------------+\n|  UA   |           | Push Service |       | Application |\n+-------+           +--------------+       +-------------+\n    |                      |                      |\n    |        Setup         |                      |\n    |<====================>|                      |\n    |           Provide Subscription              |\n    |-------------------------------------------->|\n    |                      |                      |\n    :                      :                      :\n    |                      |     Push Message     |\n    |    Push Message      |<---------------------|\n    |<---------------------|                      |\n    |                      |                      |",
+      "raw": true
+    },
+    {
+      "indent": 33,
+      "text": "Figure 1",
+      "ja": "図1"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how messages sent using this protocol can be secured against inspection, modification, and forgery by a push service.",
+      "ja": "この文書では、このプロトコルを使用して送信されたメッセージは、プッシュサービスにより検査、修正、および偽造から保護する方法について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Web Push messages are the payload of an HTTP message [RFC7230]. These messages are encrypted using an encrypted content encoding [RFC8188]. This document describes how this content encoding is applied and describes a recommended key management scheme.",
+      "ja": "ウェブプッシュメッセージは、HTTPメッセージ[RFC7230]のペイロードです。これらのメッセージは暗号化されたコンテンツのエンコード[RFC8188]を使用して暗号化されています。この文書では、このコンテンツのエンコーディングが適用され、推奨される鍵管理スキームを説明している方法について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Multiple users of Web Push at the same user agent often share a central agent that aggregates push functionality. This agent can enforce the use of this encryption scheme by applications that use push messaging. An agent that only delivers messages that are properly encrypted strongly encourages the end-to-end protection of messages.",
+      "ja": "同じユーザーエージェントでのWebプッシュの複数のユーザーが、多くの場合、プッシュ機能を集約する中央エージェントを共有しています。このエージェントはプッシュメッセージングを使用するアプリケーションによって、この暗号化方式の使用を強制することができます。適切に強力に暗号化されているだけメッセージを配信エージェントがメッセージのエンド・ツー・エンドの保護を奨励しています。"
+    },
+    {
+      "indent": 3,
+      "text": "A web browser that implements the Push API [API] can enforce the use of encryption by forwarding only those messages that were properly encrypted.",
+      "ja": "プッシュAPI [API]を実装するWebブラウザが適切に暗号化されたメッセージのみを転送することによって、暗号化の使用を強制することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Notational Conventions",
+      "section_title": true,
+      "ja": "1.1。表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、 \"SHALL\"、 \"SHOULD\"、 \"ないもの\"、 \"推奨\" \"ない（SHOULD NOT）\"、 \"MAY\"、 \"推奨NOT\"、および「OPTIONAL BCP 14に記載されているように「この文書に解釈されるべきである[RFC2119]、[RFC8174]と、ここで示されるように、それらは、すべて大文字で表示された場合にのみ。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses the terminology from [RFC8030], primarily \"user agent\", \"push service\", and \"application server\".",
+      "ja": "この文書では、[RFC8030]、主に「ユーザーエージェント」、「プッシュサービス」、および「アプリケーションサーバ」からの用語を使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Push Message Encryption Overview",
+      "section_title": true,
+      "ja": "2.プッシュメッセージの暗号化の概要"
+    },
+    {
+      "indent": 3,
+      "text": "Encrypting a push message uses Elliptic Curve Diffie-Hellman (ECDH) [ECDH] on the P-256 curve [FIPS186] to establish a shared secret (see Section 3.1) and a symmetric secret for authentication (see Section 3.2).",
+      "ja": "プッシュメッセージを暗号化する（第3.2節を参照）、共有秘密を確立するP-256曲線[FIPS186]（セクション3.1を参照）と認証のための対称秘密の[ECDH】楕円曲線ディフィ - ヘルマン（ECDH）を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "A user agent generates an ECDH key pair and authentication secret that it associates with each subscription it creates. The ECDH public key and the authentication secret are sent to the application server with other details of the push subscription.",
+      "ja": "ユーザエージェントは、それが作成し、各サブスクリプションに関連付けられていることECDH鍵ペアと認証秘密を生成します。 ECDH公開鍵と認証秘密は、プッシュサブスクリプションのその他の詳細とアプリケーションサーバに送信されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When sending a message, an application server generates an ECDH key pair and a random salt. The ECDH public key is encoded into the \"keyid\" parameter of the encrypted content coding header, and the salt is encoded into the \"salt\" parameter of that same header (see Section 2.1 of [RFC8188]). The ECDH key pair can be discarded after encrypting the message.",
+      "ja": "メッセージを送信する場合、アプリケーションサーバーはECDH鍵ペアとランダム塩を生成します。 ECDH公開鍵は、ヘッダ符号化、暗号化コンテンツの「鍵ID」パラメータに符号化され、塩がその同じヘッダの「塩」パラメータ（[RFC8188]のセクション2.1を参照）に符号化されます。 ECDH鍵ペアは、メッセージを暗号化した後に廃棄することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The content of the push message is encrypted or decrypted using a content encryption key and nonce. These values are derived by taking the \"keyid\" and \"salt\" as input to the process described in Section 3.",
+      "ja": "プッシュメッセージの内容は、コンテンツの暗号化鍵とナンスを使用して暗号化や復号化されます。これらの値は、セクション3で説明したプロセスへの入力として「鍵ID」と「塩」を取ることによって導出されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Key and Secret Distribution",
+      "section_title": true,
+      "ja": "2.1。鍵と秘密配布"
+    },
+    {
+      "indent": 3,
+      "text": "The application using the subscription distributes the subscription public key and authentication secret to an authorized application server. This could be sent along with other subscription information that is provided by the user agent, such as the push subscription URI.",
+      "ja": "サブスクリプションを使用するアプリケーションは、許可されたアプリケーションサーバーへのサブスクリプション公開鍵と認証秘密を配布しています。これは、プッシュサブスクリプションURIとして、ユーザエージェントによって提供される他のサブスクリプション情報と一緒に送ることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An application MUST use an authenticated, confidentiality-protected communications medium for this purpose. In addition to the reasons described in [RFC8030], this use ensures that the authentication secret is not revealed to unauthorized entities, which would allow those entities to generate push messages that will be accepted by the user agent.",
+      "ja": "アプリケーションは、この目的のために認証され、機密保護された通信媒体を使用しなければなりません。 [RFC8030]で説明する理由のほかに、この使用は、認証秘密がこれらのエンティティは、ユーザエージェントによって受け入れられるプッシュメッセージを生成できるようになる不正なエンティティに明らかにされていないことを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "Most applications that use push messaging have a preexisting relationship with an application server that can be used for distribution of subscription data. An authenticated communication mechanism that provides adequate confidentiality and integrity protection, such as HTTPS [RFC2818], is sufficient.",
+      "ja": "プッシュメッセージングを使用するほとんどのアプリケーションは、サブスクリプション・データの配信のために使用することができるアプリケーションサーバとの既存の関係を持っています。そのようなHTTPS [RFC2818]などの適切な機密性と完全性保護を提供する認証された通信メカニズムは、十分です。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Push Message Encryption",
+      "section_title": true,
+      "ja": "3.プッシュメッセージの暗号化"
+    },
+    {
+      "indent": 3,
+      "text": "Push message encryption happens in four phases:",
+      "ja": "プッシュメッセージの暗号化は、4つのフェーズで行われます"
+    },
+    {
+      "indent": 3,
+      "text": "o A shared secret is derived using ECDH [ECDH] (see Section 3.1 of this document).",
+      "ja": "O共有秘密はECDH [ECDH]を（この文書のセクション3.1を参照）を使用して導出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o The shared secret is then combined with the authentication secret to produce the input keying material (IKM) used in [RFC8188] (see Section 3.3 of this document).",
+      "ja": "O共有秘密は、入力キーイングマテリアル[RFC8188]で使用される（IKM）を生成する認証秘密と組み合わされる（この文書のセクション3.3を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "o A content encryption key and nonce are derived using the process in [RFC8188].",
+      "ja": "Oコンテンツ暗号化キー及びノンスは[RFC8188]での処理を用いて導出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Encryption or decryption follows according to [RFC8188].",
+      "ja": "O暗号化または復号化は[RFC8188]に従って続きます。"
+    },
+    {
+      "indent": 3,
+      "text": "The key derivation process is summarized in Section 3.4. Restrictions on the use of the encrypted content coding are described in Section 4.",
+      "ja": "鍵導出プロセスは、3.4節に要約されています。暗号化されたコンテンツの符号化の使用上の制限は、セクション4で説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Diffie-Hellman Key Agreement",
+      "section_title": true,
+      "ja": "3.1。 Diffie-Hellman鍵"
+    },
+    {
+      "indent": 3,
+      "text": "For each new subscription that the user agent generates for an application, it also generates a P-256 [FIPS186] key pair for use in ECDH [ECDH].",
+      "ja": "ユーザエージェントは、アプリケーションのために生成する各新しいサブスクリプションのために、それはまた、[ECDH] ECDHにおける使用のためのP-256 [FIPS186]鍵ペアを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "When sending a push message, the application server also generates a new ECDH key pair on the same P-256 curve.",
+      "ja": "プッシュメッセージを送信する場合、アプリケーションサーバは、同じP-256曲線上の新しいECDH鍵ペアを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "The ECDH public key for the application server is included as the \"keyid\" parameter in the encrypted content coding header (see Section 2.1 of [RFC8188]).",
+      "ja": "アプリケーションサーバのECDH公開鍵は、ヘッダ符号化、暗号化コンテンツの「鍵ID」パラメータ（[RFC8188]のセクション2.1を参照）として含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "An application server combines its ECDH private key with the public key provided by the user agent using the process described in [ECDH]; on receipt of the push message, a user agent combines its private key with the public key provided by the application server in the \"keyid\" parameter in the same way. These operations produce the same value for the ECDH shared secret.",
+      "ja": "アプリケーションサーバは、[ECDH]に記載された方法を使用して、ユーザエージェントによって提供された公開鍵とのECDH秘密鍵を組み合わせます。プッシュメッセージの受信時に、ユーザエージェントは、同じように「鍵ID」パラメータで、アプリケーション・サーバーが提供する公開鍵と秘密鍵を兼ね備えています。これらの操作は、ECDH共有秘密に同じ値を生成します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Push Message Authentication",
+      "section_title": true,
+      "ja": "3.2。メッセージ認証を押してください"
+    },
+    {
+      "indent": 3,
+      "text": "To ensure that push messages are correctly authenticated, a symmetric authentication secret is added to the information generated by a user agent. The authentication secret is mixed into the key derivation process described in Section 3.3.",
+      "ja": "そのプッシュメッセージが正しく認証されていることを確認するには、左右対称の認証秘密は、ユーザエージェントによって生成された情報に付加されます。認証秘密は、セクション3.3で説明鍵導出プロセスに混合されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A user agent MUST generate and provide a hard-to-guess sequence of 16 octets that is used for authentication of push messages. This SHOULD be generated by a cryptographically strong random number generator [RFC4086].",
+      "ja": "ユーザエージェントは、プッシュメッセージの認証に使用される16オクテットのハードに推測シーケンスを生成し、提供しなければなりません。これは暗号的に強い乱数ジェネレータ[RFC4086]によって生成されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Combining Shared and Authentication Secrets",
+      "section_title": true,
+      "ja": "3.3。共有と認証秘密を組み合わせます"
+    },
+    {
+      "indent": 3,
+      "text": "The shared secret produced by ECDH is combined with the authentication secret using the HMAC-based key derivation function (HKDF) [RFC5869]. This produces the input keying material used by [RFC8188].",
+      "ja": "ECDHによって産生さ共有秘密は、HMACベースの鍵導出関数（HKDF）[RFC5869]を使用して、認証秘密と組み合わされます。これは、[RFC8188]によって使用される入力キーイングマテリアルを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "The HKDF function uses the SHA-256 hash algorithm [FIPS180-4] with the following inputs:",
+      "ja": "HKDF関数は、次の入力を[FIPS180-4] SHA-256ハッシュアルゴリズムを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "salt: the authentication secret",
+      "ja": "塩：認証秘密"
+    },
+    {
+      "indent": 3,
+      "text": "IKM: the shared secret derived using ECDH info: the concatenation of the ASCII-encoded string \"WebPush: info\" (this string is not NUL-terminated), a zero octet, the user agent ECDH public key, and the application server ECDH public key, (both ECDH public keys are in the uncompressed point form defined in [X9.62]. That is:",
+      "ja": "IKM：ASCIIでエンコードされた文字列の連結「WebPush：：情報」（この文字列はNULで終了ではありません）、ゼロオクテット、ユーザエージェントECDH公開鍵、およびアプリケーション・サーバーのECDH公開ECDH情報を使用して導出共有秘密キー、（両方のECDH公開鍵が[X9.62]で定義された非圧縮点状にされていることです。"
+    },
+    {
+      "indent": 3,
+      "text": "key_info = \"WebPush: info\" || 0x00 || ua_public || as_public",
+      "ja": "key_info = \"WebPush：インフォ\" || 0x00の|| ua_public || as_public"
+    },
+    {
+      "indent": 3,
+      "text": "L: 32 octets (i.e., the output is the length of the underlying SHA-256 HMAC function output)",
+      "ja": "L：32個のオクテット（すなわち、出力は、基礎となるSHA-256 HMAC関数出力の長さ）"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Encryption Summary",
+      "section_title": true,
+      "ja": "3.4。暗号化の概要"
+    },
+    {
+      "indent": 3,
+      "text": "This results in a final content encryption key and nonce generation using the following sequence, which is shown here in pseudocode with HKDF expanded into separate discrete steps using HMAC with SHA-256:",
+      "ja": "これは、SHA-256でHMACを使用して別々の離散的なステップに拡張HKDFと擬似コードにここに示され、以下の配列を使用して、最終的なコンテンツ暗号化キー及びノンス生成、になります。"
+    },
+    {
+      "indent": 6,
+      "text": "-- For a user agent: ecdh_secret = ECDH(ua_private, as_public) auth_secret = random(16) salt = <from content coding header>",
+      "ja": " - ユーザーエージェントの場合：ecdh_secret = ECDH（ua_private、as_public）auth_secret =ランダム（16）塩= <コンテンツ符号化ヘッダから>"
+    },
+    {
+      "indent": 6,
+      "text": "-- For an application server: ecdh_secret = ECDH(as_private, ua_public) auth_secret = <from user agent> salt = random(16)",
+      "ja": " - アプリケーションサーバの場合：ecdh_secret = ECDH（as_private、ua_public）auth_secret = <ユーザエージェントから>塩=ランダム（16）"
+    },
+    {
+      "indent": 6,
+      "text": "-- For both:",
+      "ja": " -  両方のための："
+    },
+    {
+      "indent": 6,
+      "text": "## Use HKDF to combine the ECDH and authentication secrets # HKDF-Extract(salt=auth_secret, IKM=ecdh_secret) PRK_key = HMAC-SHA-256(auth_secret, ecdh_secret) # HKDF-Expand(PRK_key, key_info, L_key=32) key_info = \"WebPush: info\" || 0x00 || ua_public || as_public IKM = HMAC-SHA-256(PRK_key, key_info || 0x01)",
+      "ja": "## HKDF使用してECDH、認証秘密＃1 HKDF抽出物（塩= auth_secret、IKM = ecdh_secret）PRK_key = HMAC-SHA-256（auth_secret、ecdh_secret）＃1 HKDF-展開（PRK_key、key_info、L_key = 32）key_infoを結合します= \"WebPush：インフォ\" || 0x00の|| ua_public || IKM as_public = HMAC-SHA-256（PRK_key、key_info || 0x01の）"
+    },
+    {
+      "indent": 6,
+      "text": "## HKDF calculations from RFC 8188 # HKDF-Extract(salt, IKM) PRK = HMAC-SHA-256(salt, IKM) # HKDF-Expand(PRK, cek_info, L_cek=16) cek_info = \"Content-Encoding: aes128gcm\" || 0x00 CEK = HMAC-SHA-256(PRK, cek_info || 0x01)[0..15] # HKDF-Expand(PRK, nonce_info, L_nonce=12) nonce_info = \"Content-Encoding: nonce\" || 0x00 NONCE = HMAC-SHA-256(PRK, nonce_info || 0x01)[0..11]",
+      "ja": "RFC 8188＃1 HKDF抽出物から## HKDF計算（塩、IKM）PRK = HMAC-SHA-256（塩、IKM）＃1 HKDF-展開（PRK、cek_info、L_cek = 16）cek_info = \"コンテンツエンコード：aes128gcm\" || 0x00のCEK = HMAC-SHA-256（PRK、0x01の|| cek_info）[0..15]＃1 HKDF-展開（PRK、nonce_info、L_nonce = 12）nonce_info = \"コンテンツエンコード：ノンス\" || 0x00のNONCE（0x01の|| nonce_info PRK）= HMAC-SHA-256 [0..11]"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this omits the exclusive-OR of the final nonce with the record sequence number, since push messages contain only a single record (see Section 4) and the sequence number of the first record is zero.",
+      "ja": "プッシュメッセージは、単一のレコードを含む（セクション4を参照）、最初のレコードのシーケンス番号がゼロであるので、これは、排他的ORレコードシーケンス番号を有する最終的なノンスのを省略していることに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Restrictions on Use of \"aes128gcm\" Content Coding",
+      "section_title": true,
+      "ja": "コーディング「aes128gcm」コンテンツの使用に関する制限事項4。"
+    },
+    {
+      "indent": 3,
+      "text": "An application server MUST encrypt a push message with a single record. This allows for a minimal receiver implementation that handles a single record. An application server MUST set the \"rs\" parameter in the \"aes128gcm\" content coding header to a size that is greater than the sum of the lengths of the plaintext, the padding delimiter (1 octet), any padding, and the authentication tag (16 octets).",
+      "ja": "アプリケーションサーバは、単一のレコードでプッシュメッセージを暗号化する必要があります。これは、単一のレコードを処理し、最小限の受信機の実装が可能になります。アプリケーションサーバは、平文の長さの合計よりも大きいサイズ、パディングデリミタ（1つのオクテット）、任意のパディング、および認証タグにヘッダをコード「aes128gcm」コンテンツ（の「RS」パラメータを設定する必要があります16オクテット）。"
+    },
+    {
+      "indent": 3,
+      "text": "A push message MUST include the application server ECDH public key in the \"keyid\" parameter of the encrypted content coding header. The uncompressed point form defined in [X9.62] (that is, a 65-octet sequence that starts with a 0x04 octet) forms the entirety of the \"keyid\". Note that this means that the \"keyid\" parameter will not be valid UTF-8 as recommended in [RFC8188].",
+      "ja": "プッシュメッセージは、暗号化されたコンテンツの符号化ヘッダの「鍵ID」パラメータでアプリケーションサーバECDH公開鍵を含まなければなりません。 [X9.62（すなわち、0x04のオクテットから始まる65オクテットのシーケンス）で定義されて圧縮されていない点形態「鍵ID」の全体を形成します。これは[RFC8188]で推奨されているように「鍵ID」パラメータが有効なUTF-8ではないだろう、ということを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "A push service is not required to support more than 4096 octets of payload body (see Section 7.2 of [RFC8030]). Absent header (86 octets), padding (minimum 1 octet), and expansion for AEAD_AES_128_GCM (16 octets), this equates to, at most, 3993 octets of plaintext.",
+      "ja": "プッシュサービスは、（[RFC8030]のセクション7.2を参照）、ペイロード本体以上4096個のオクテットをサポートするために必要とされません。 AEAD_AES_128_GCM（16オクテット）のために存在しないヘッダ（86オクテット）、パディング（最小1つのオクテット）、および拡張が、これは、最大で、平文の3993オクテット等しいです。"
+    },
+    {
+      "indent": 3,
+      "text": "An application server MUST NOT use other content encodings for push messages. In particular, content encodings that compress could result in leaking of push message contents. The Content-Encoding header field therefore has exactly one value, which is \"aes128gcm\". Multiple \"aes128gcm\" values are not permitted.",
+      "ja": "アプリケーションサーバは、プッシュメッセージのために他のコンテンツのエンコーディングを使用してはなりません。具体的には、圧縮コンテンツのエンコーディングは、プッシュメッセージ内容の漏洩につながる可能性があります。コンテンツエンコードヘッダフィールドは、したがって、「aes128gcm」である1つの値を有します。複数の「aes128gcm」の値が許可されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "A user agent is not required to support multiple records. A user agent MAY ignore the \"rs\" parameter. If a record size is unchecked, decryption will fail with high probability for all valid cases. The padding delimiter octet MUST be checked; values other than 0x02 MUST cause the message to be discarded.",
+      "ja": "ユーザエージェントは、複数のレコードをサポートする必要はありません。ユーザエージェントは、「RS」パラメータを無視してもよいです。レコードサイズがチェックされていない場合、復号化は、すべての有効なケースのための高確率で失敗します。パディング区切りオクテットをチェックしなければなりません。 0×02以外の値は、メッセージが破棄させなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Push Message Encryption Example",
+      "section_title": true,
+      "ja": "5.プッシュメッセージの暗号化の例"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows a push message being sent to a push service.",
+      "ja": "次の例では、プッシュサービスに送信されるプッシュメッセージを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "POST /push/JzLQ3raZJfFBR0aqvOMsLrt54w4rJUsV HTTP/1.1 Host: push.example.net TTL: 10 Content-Length: 145 Content-Encoding: aes128gcm",
+      "ja": "POST /プッシュ/ JzLQ3raZJfFBR0aqvOMsLrt54w4rJUsV HTTP / 1.1ホスト：push.example.net TTL：10のContent-Length：145コンテンツエンコード：aes128gcm"
+    },
+    {
+      "indent": 3,
+      "text": "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27ml mlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPT pK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN",
+      "ja": "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27ml mlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPT pK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-FN"
+    },
+    {
+      "indent": 3,
+      "text": "This example shows the ASCII-encoded string, \"When I grow up, I want to be a watermelon\". The content body is shown here with line wrapping and URL-safe base64url [RFC4648] encoding to meet presentation constraints.",
+      "ja": "この例では、「私が育つとき、私はスイカになりたい」、ASCIIでエンコードされた文字列を示します。コンテンツ本体は、行の折り返しやプレゼンテーションの制約を満たすためにエンコードするURLセーフbase64url [RFC4648]とここに示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The keys used are shown below using the uncompressed form [X9.62] encoded using base64url.",
+      "ja": "使用するキーはbase64urlを使用して符号化非圧縮形式[X9.62]を用いて、以下に示されています。"
+    },
+    {
+      "indent": 6,
+      "text": "Authentication Secret: BTBZMqHH6r4Tts7J_aSIgg Receiver: private key: q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94 public key: BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx aOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4 Sender: private key: yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw public key: BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIg Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8",
+      "ja": "認証シークレット：BTBZMqHH6r4Tts7J_aSIgg受信機：秘密鍵：q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94公開鍵：BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx aOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4送信者：秘密鍵：yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-ORW公開鍵：BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIg Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8"
+    },
+    {
+      "indent": 3,
+      "text": "Intermediate values for this example are included in Appendix A.",
+      "ja": "この例の中間値は、付録Aに含まれています"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not require any IANA actions.",
+      "ja": "このドキュメントは、IANAのアクションを必要としません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The privacy and security considerations of [RFC8030] all apply to the use of this mechanism.",
+      "ja": "[RFC8030]のプライバシーとセキュリティの考慮事項はすべて、このメカニズムの使用に適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The Security Considerations section of [RFC8188] describes the limitations of the content encoding. In particular, no HTTP header fields are protected by the content encoding scheme. A user agent MUST consider HTTP header fields to have come from the push service.",
+      "ja": "[RFC8188]のSecurity Considerations部は、コンテンツのエンコードの制限について説明します。具体的には、いかなるHTTPヘッダフィールドは、コンテンツの符号化方式で保護されていません。ユーザエージェントは、プッシュサービスから来ているようにHTTPヘッダフィールドを考慮する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Though header fields might be necessary for processing an HTTP response correctly, they are not needed for correct operation of the protocol. An application on the user agent that uses information from header fields to alter their processing of a push message is exposed to a risk of attack by the push service.",
+      "ja": "ヘッダフィールドが正しくHTTPレスポンスを処理するために必要になることがありますが、それらは、プロトコルの正しい操作のために必要されていません。プッシュ・メッセージのそれらの処理を変更するためのヘッダフィールドからの情報を使用してユーザエージェント上のアプリケーションは、プッシュサービスによる攻撃の危険にさらされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The timing and length of communication cannot be hidden from the push service. While an outside observer might see individual messages intermixed with each other, the push service will see which application server is talking to which user agent and the subscription that is used. Additionally, the length of messages could be revealed unless the padding provided by the content encoding scheme is used to obscure length.",
+      "ja": "通信のタイミング及び長さは、プッシュサービスから隠すことができません。外部の観察者が互いに混在個々のメッセージが表示される場合がありますが、プッシュサービスは、ユーザエージェントと使用されているサブスクリプションに話されているアプリケーションサーバーが表示されます。コンテンツの符号化方式によって提供されるパディングが曖昧な長さに使用されない限り、また、メッセージの長さは明らかにすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The user agent and application MUST verify that the public key they receive is on the P-256 curve. Failure to validate a public key can allow an attacker to extract a private key. The appropriate validation procedures are defined in Section 4.3.7 of [X9.62] and, alternatively, in Section 5.6.2.3 of [KEYAGREEMENT]. This process consists of three steps:",
+      "ja": "ユーザーエージェントとアプリケーションは、彼らが受け取る公開鍵は、P-256曲線上にあることを確かめなければなりません。公開鍵を検証するために失敗すると、攻撃者が秘密鍵を抽出できるようにすることができます。適切な検証手順は、[するKeyAgreement]のセクション5.6.2.3に、あるいは、[X9.62]のセクション4.3.7で定義されています。このプロセスは、3つのステップから構成されています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Verify that Y is not the point at infinity (O),",
+      "section_title": true,
+      "ja": "1. Yが無限大（O）の点ではないことを確認し、"
+    },
+    {
+      "indent": 3,
+      "text": "2. Verify that for Y = (x, y), both integers are in the correct interval,",
+      "ja": "2、Y =（X、Y）のために、両方の整数が正しい間隔であることを確認し"
+    },
+    {
+      "indent": 3,
+      "text": "3. Ensure that (x, y) is a correct solution to the elliptic curve equation.",
+      "ja": "3.（x、y）は、楕円曲線の方程式に正しい解であることを確認してください。"
+    },
+    {
+      "indent": 3,
+      "text": "For these curves, implementers do not need to verify membership in the correct subgroup.",
+      "ja": "これらの曲線のために、実装者は正しいサブグループのメンバーシップを確認する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "In the event that this encryption scheme would need to be replaced, a new content coding scheme could be defined. In order to manage progressive deployment of the new scheme, the user agent can expose information on the content coding schemes that it supports. The \"supportedContentEncodings\" parameter of the Push API [API] is an example of how this might be done.",
+      "ja": "この暗号化方式を交換する必要があるだろうという場合には、新しいコンテンツ符号化方式を定義することができました。新制度の漸進的な展開を管理するために、ユーザエージェントは、それがサポートするコンテンツ符号化方式に関する情報を公開することができます。プッシュAPI [API]の「supportedContentEncodings」パラメータは、これが行われるかもしれない方法の例です。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8.参照文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[ECDH] SECG, \"SEC 1: Elliptic Curve Cryptography\", Version 2.0, May 2009, <http://www.secg.org/>.",
+      "ja": "[ECDH] SECG、 \"SEC 1：楕円曲線暗号\"、バージョン2.0、2009年5月、<http://www.secg.org/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[FIPS180-4] National Institute of Standards and Technology (NIST), \"Secure Hash Standard (SHS)\", FIPS PUB 180-4, DOI 10.6028/NIST.FIPS.180-4, August 2015.",
+      "ja": "[FIPS180-4]米国国立標準技術研究所（NIST）は、FIPS PUB 180-4の、DOI 10.6028 / NIST.FIPS.180-4、2015年8月 \"ハッシュ規格（SHS）を固定します\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[FIPS186] National Institute of Standards and Technology (NIST), \"Digital Signature Standard (DSS)\", FIPS PUB 186-4, DOI 10.6028/NIST.FIPS.186-4, July 2013.",
+      "ja": "[FIPS186]アメリカ国立標準技術研究所（NIST）、 \"デジタル署名標準（DSS）\"、FIPS PUBの186から4、DOI 10.6028 / NIST.FIPS.186-4、2013年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake 3rd, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, DOI 10.17487/RFC4086, June 2005, <https://www.rfc-editor.org/info/rfc4086>.",
+      "ja": "[RFC4086]イーストレーク3日、D.、シラー、J.、およびS.クロッカー、 \"セキュリティのためにランダム要件\"、BCP 106、RFC 4086、DOI 10.17487 / RFC4086、2005年6月、<HTTPS：//www.rfc-editor .ORG /情報/ RFC4086>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5869] Krawczyk, H. and P. Eronen, \"HMAC-based Extract-and-Expand Key Derivation Function (HKDF)\", RFC 5869, DOI 10.17487/RFC5869, May 2010, <https://www.rfc-editor.org/info/rfc5869>.",
+      "ja": "[RFC5869] Krawczyk、H.、およびP. Eronen、 \"HMACベースの抽出物と、拡大鍵導出関数（HKDF）\"、RFC 5869、DOI 10.17487 / RFC5869、2010年5月、<HTTPS：//www.rfc-editor .ORG /情報/ rfc5869>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8030] Thomson, M., Damaggio, E., and B. Raymor, Ed., \"Generic Event Delivery Using HTTP Push\", RFC 8030, DOI 10.17487/RFC8030, December 2016, <https://www.rfc-editor.org/info/rfc8030>.",
+      "ja": "[RFC8030]トムソン、M.、Damaggio、E.、およびB. Raymor、エド、 \"ジェネリックイベント配信HTTPプッシュを使用した\"、RFC 8030、DOI 10.17487 / RFC8030、2016年12月、<HTTPS：。//www.rfc- editor.org/info/rfc8030>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B.、 \"RFC 2119個のキーワードに小文字VS大文字の曖昧さ\"、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8188] Thomson, M., \"Encrypted Content-Encoding for HTTP\", RFC 8188, DOI 10.17487/RFC8188, June 2017, <https://www.rfc-editor.org/info/rfc8188>.",
+      "ja": "[RFC8188]トムソン、M.、 \"HTTPのための暗号化コンテンツ・エンコード\"、RFC 8188、DOI 10.17487 / RFC8188、2017年6月、<https://www.rfc-editor.org/info/rfc8188>。"
+    },
+    {
+      "indent": 3,
+      "text": "[X9.62] ANSI, \"Public Key Cryptography for the Financial Services Industry: the Elliptic Curve Digital Signature Algorithm (ECDSA)\", ANSI X9.62, 2005.",
+      "ja": "[X9.62] ANSI、 \"金融サービス業界向け公開鍵暗号：楕円曲線デジタル署名アルゴリズム（ECDSA）\"、ANSI X9.62、2005。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[API] Beverloo, P., Thomson, M., van Ouwerkerk, M., Sullivan, B., and E. Fullea, \"Push API\", October 2017, <https://www.w3.org/TR/push-api/>.",
+      "ja": "[API] Beverloo、P.、トムソン、M.、バンOuwerkerk、M.、サリバン、B.、およびE. Fullea、 \"プッシュAPI\"、2017年10月、<https://www.w3.org/TR/プッシュAPI />。"
+    },
+    {
+      "indent": 3,
+      "text": "[KEYAGREEMENT] Barker, E., Chen, L., Roginsky, A., and M. Smid, \"Recommendation for Pair-Wise Key Establishment Schemes Using Discrete Logarithm Cryptography\", NIST Special Publication 800-56A, Revision 2, DOI 10.6028/NIST.SP.800-56Ar2, May 2013.",
+      "ja": "[するKeyAgreement]バーカー、E.、チェン、L.、Roginsky、A.、およびM. SMID、 \"離散対数暗号を使用してペアワイズ鍵確立スキームのための勧告\" は、NIST Special Publication 800-56A、リビジョン2、DOI 10.6028 /NIST.SP.800-56Ar2、2013年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2818] Rescorla, E., \"HTTP Over TLS\", RFC 2818, DOI 10.17487/RFC2818, May 2000, <https://www.rfc-editor.org/info/rfc2818>.",
+      "ja": "[RFC2818]レスコラ、E.、 \"TLSオーバーHTTP\"、RFC 2818、DOI 10.17487 / RFC2818、2000年5月、<https://www.rfc-editor.org/info/rfc2818>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4648] Josefsson, S., \"The Base16, Base32, and Base64 Data Encodings\", RFC 4648, DOI 10.17487/RFC4648, October 2006, <https://www.rfc-editor.org/info/rfc4648>.",
+      "ja": "[RFC4648] Josefsson氏、S.、 \"Base16、Base32、およびBase64でデータエンコーディング\"、RFC 4648、DOI 10.17487 / RFC4648、2006年10月、<https://www.rfc-editor.org/info/rfc4648>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7230] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing\", RFC 7230, DOI 10.17487/RFC7230, June 2014, <https://www.rfc-editor.org/info/rfc7230>.",
+      "ja": "[RFC7230]フィールディング、R.、エド。及びJ. Reschke、編、 \"ハイパーテキスト転送プロトコル（HTTP / 1.1）：メッセージの構文およびルーティング\"、RFC 7230、DOI 10.17487 / RFC7230、2014年6月、<https://www.rfc-editor.org/info/ rfc7230>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Intermediate Values for Encryption",
+      "ja": "暗号化のための付録A.中間値"
+    },
+    {
+      "indent": 3,
+      "text": "The intermediate values calculated for the example in Section 5 are shown here. The base64url values in these examples include whitespace that can be removed.",
+      "ja": "第5の例について計算した中間値は、ここで示されています。これらの例でbase64url値を除去することができる空白を含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "The following are inputs to the calculation:",
+      "ja": "計算への入力は、次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "Plaintext: V2hlbiBJIGdyb3cgdXAsIEkgd2FudCB0byBiZSBhIHdhdGVybWVsb24",
+      "ja": "プレーンテキスト：V2hlbiBJIGdyb3cgdXAsIEkgd2FudCB0byBiZSBhIHdhdGVybWVsb24"
+    },
+    {
+      "indent": 3,
+      "text": "Application server public key (as_public): BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIg Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8",
+      "ja": "アプリケーションサーバの公開鍵（as_public）：BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIg Dll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8"
+    },
+    {
+      "indent": 3,
+      "text": "Application server private key (as_private): yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw",
+      "ja": "アプリケーションサーバの秘密鍵（as_private）：yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-ORW"
+    },
+    {
+      "indent": 3,
+      "text": "User agent public key (ua_public): BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx aOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+      "ja": "ユーザーエージェントの公開鍵（ua_public）：BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcx aOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4"
+    },
+    {
+      "indent": 3,
+      "text": "User agent private key (ua_private): q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94",
+      "ja": "ユーザーエージェントの秘密鍵（ua_private）：q1dXpw3UpT5VOmu_cf_v6ih07Aems3njxI-JWgLcM94"
+    },
+    {
+      "indent": 3,
+      "text": "Salt: DGv6ra1nlYgDCS1FRnbzlw",
+      "ja": "塩：DGv6ra1nlYgDCS1FRnbzlw"
+    },
+    {
+      "indent": 3,
+      "text": "Authentication secret (auth_secret): BTBZMqHH6r4Tts7J_aSIgg",
+      "ja": "認証秘密（auth_secret）：BTBZMqHH6r4Tts7J_aSIgg"
+    },
+    {
+      "indent": 3,
+      "text": "Note that knowledge of just one of the private keys is necessary. The application server randomly generates the salt value, whereas salt is input to the receiver.",
+      "ja": "ただ一つの秘密鍵の知識が必要であることに注意してください。塩は、受信機に入力される一方、アプリケーションサーバは、ランダムに、ソルト値を生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "This produces the following intermediate values:",
+      "ja": "これは、次の中間値を生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "Shared ECDH secret (ecdh_secret): kyrL1jIIOHEzg3sM2ZWRHDRB62YACZhhSlknJ672kSs",
+      "ja": "共有ECDH秘密（ecdh_secret）：kyrL1jIIOHEzg3sM2ZWRHDRB62YACZhhSlknJ672kSs"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudorandom key (PRK) for key combining (PRK_key): Snr3JMxaHVDXHWJn5wdC52WjpCtd2EIEGBykDcZW32k",
+      "ja": "組み合わせキーの擬似ランダムキー（PRK）（PRK_key）：Snr3JMxaHVDXHWJn5wdC52WjpCtd2EIEGBykDcZW32k"
+    },
+    {
+      "indent": 3,
+      "text": "Info for key combining (key_info): V2ViUHVzaDogaW5mbwAEJXGyvs3942BVG q8e0PTNNmwR zr5VX4m8t7GGpTM5FzFo7OLr4BhZe9MEebhuPI-OztV3 ylkYfpJGmQ22ggCLDgT-M_SrDepxkU21WCP3O1SUj0Ew bZIHMtu5pZpTKGSCIA5Zent7wmC6HCJ5mFgJkuk5cwAv MBKiiujwa7t45ewP",
+      "ja": "V2ViUHVzaDogaW5mbwAEJXGyvs3942BVG q8e0PTNNmwR zr5VX4m8t7GGpTM5FzFo7OLr4BhZe9MEebhuPI-OztV3 ylkYfpJGmQ22ggCLDgT-M_SrDepxkU21WCP3O1SUj0Ew bZIHMtu5pZpTKGSCIA5Zent7wmC6HCJ5mFgJkuk5cwAv MBKiiujwa7t45ewP：キー（key_info）を結合するための情報"
+    },
+    {
+      "indent": 3,
+      "text": "Input keying material for content encryption key derivation (IKM): S4lYMb_L0FxCeq0WhDx813KgSYqU26kOyzWUdsXYyrg",
+      "ja": "コンテンツ暗号化鍵の導出（IKM）の入力鍵材料：S4lYMb_L0FxCeq0WhDx813KgSYqU26kOyzWUdsXYyrg"
+    },
+    {
+      "indent": 3,
+      "text": "PRK for content encryption (PRK): 09_eUZGrsvxChDCGRCdkLiDXrReGOEVeSCdCcPBSJSc",
+      "ja": "コンテンツの暗号化のためのPRK（PRK）：09_eUZGrsvxChDCGRCdkLiDXrReGOEVeSCdCcPBSJSc"
+    },
+    {
+      "indent": 3,
+      "text": "Info for content encryption key derivation (cek_info): Q29udGVudC1FbmNvZGluZzogYWVzMTI4Z2NtAA",
+      "ja": "コンテンツの暗号化キー導出（cek_info）のための情報：Q29udGVudC1FbmNvZGluZzogYWVzMTI4Z2NtAA"
+    },
+    {
+      "indent": 3,
+      "text": "Content encryption key (CEK): oIhVW04MRdy2XN9CiKLxTg",
+      "ja": "コンテンツ暗号化キー（CEK）：oIhVW04MRdy2XN9CiKLxTg"
+    },
+    {
+      "indent": 3,
+      "text": "Info for content encryption nonce derivation (nonce_info): Q29udGVudC1FbmNvZGluZzogbm9uY2UA",
+      "ja": "コンテンツ暗号化ナンス導出（nonce_info）のための情報：Q29udGVudC1FbmNvZGluZzogbm9uY2UA"
+    },
+    {
+      "indent": 3,
+      "text": "Nonce (NONCE): 4h_95klXJ5E_qnoN",
+      "ja": "使節（使節）4h_95klXJ5E_qnoN"
+    },
+    {
+      "indent": 3,
+      "text": "The salt, record size of 4096, and application server public key produce an 86-octet header of:",
+      "ja": "塩、4096のレコード・サイズ、及びアプリケーションサーバ公開鍵は86オクテットのヘッダを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z 9KsN6nGRTbVYI_c7VJSPQTBtkgcy27ml mlMoZIIgDll6e3vCYLocInmYWAmS6Tlz AC8wEqKK6PBru3jl7A8",
+      "ja": "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z 9KsN6nGRTbVYI_c7VJSPQTBtkgcy27ml mlMoZIIgDll6e3vCYLocInmYWAmS6Tlz AC8wEqKK6PBru3jl7A8"
+    },
+    {
+      "indent": 3,
+      "text": "The push message plaintext has the padding delimiter octet (0x02) appended to produce:",
+      "ja": "プッシュメッセージの平文は、パディングデリミタオクテット（0×02）を生成するために添付しています。"
+    },
+    {
+      "indent": 3,
+      "text": "V2hlbiBJIGdyb3cgdXAsIEkgd2FudCB0 byBiZSBhIHdhdGVybWVsb24C",
+      "ja": "V2hlbiBJIGdyb3cgdXAsIEkgd2FudCB0 byBiZSBhIHdhdGVybWVsb24C"
+    },
+    {
+      "indent": 3,
+      "text": "The plaintext is then encrypted with AES-GCM, which emits ciphertext of:",
+      "ja": "平文は、その後の暗号文を発するAES-GCMで暗号化されています。"
+    },
+    {
+      "indent": 3,
+      "text": "8pfeW0KbunFT06SuDKoJH9Ql87S1QUrd irN6GcG7sFz1y1sqLgVi1VhjVkHsUoEs bI_0LpXMuGvnzQ",
+      "ja": "8pfeW0KbunFT06SuDKoJH9Ql87S1QUrd irN6GcG7sFz1y1sqLgVi1VhjVkHsUoEs bI_0LpXMuGvnzQ"
+    },
+    {
+      "indent": 3,
+      "text": "The header and ciphertext are concatenated and produce the result shown in Section 5.",
+      "ja": "ヘッダおよび暗号文が連結され、セクション5に示される結果をもたらします。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Martin Thomson Mozilla",
+      "ja": "マーティン・トムソンのMozilla"
+    },
+    {
+      "indent": 3,
+      "text": "Email: martin.thomson@gmail.com",
+      "ja": "メール：martin.thomson@gmail.com"
+    }
+  ]
+}

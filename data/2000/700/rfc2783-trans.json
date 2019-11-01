@@ -1,0 +1,1657 @@
+{
+  "title": {
+    "text": "RFC 2783 - Pulse-Per-Second API for UNIX-like Operating Systems, Version 1.0",
+    "ja": "RFC 2783 - UNIXライクなオペレーティングシステムのためのパルス毎秒API、バージョン1.0"
+  },
+  "number": 2783,
+  "created_at": "2019-10-30 04:20:13.957253+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          J. Mogul\nRequest for Comments: 2783                                   Compaq WRL\nCategory: Informational                                        D. Mills\n                                                 University of Delaware\n                                                          J. Brittenson\n                                                                    Sun\n                                                               J. Stone\n                                                               Stanford\n                                                               U. Windl\n                                                Universitaet Regensburg\n                                                             March 2000",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Pulse-Per-Second API for UNIX-like Operating Systems, Version 1.0",
+      "ja": "UNIXライクなオペレーティングシステムのためのパルス毎秒API、バージョン1.0"
+    },
+    {
+      "indent": 0,
+      "text": "Status of this Memo",
+      "ja": "このメモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2000). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2000）。全著作権所有。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 1589 describes a UNIX kernel implementation model for high-precision time-keeping. This model is meant for use in conjunction with the Network Time Protocol (NTP, RFC 1305), or similar time synchronization protocols. One aspect of this model is an accurate interface to the high-accuracy, one pulse-per-second (PPS) output typically available from precise time sources (such as a GPS or GOES receiver). RFC 1589 did not define an API for managing the PPS facility, leaving implementors without a portable means for using PPS sources. This document specifies such an API.",
+      "ja": "RFC 1589は、高精度の計時用のUNIXカーネルの実装モデルについて説明します。このモデルは、ネットワークタイムプロトコル（NTP、RFC 1305）、または類似の時刻同期プロトコルと組み合わせて使用​​するためのものです。このモデルの一の局面は、（例えばGPS又は受信機を行くように）正確な時刻ソースから一般的に入手可能な高精度、一つのパルス毎秒（PPS）出力の精度のインタフェースです。 RFC 1589は、PPSソースを使用するためのポータブル手段なしに実装を残し、PPS施設を管理するためのAPIを定義していませんでした。この文書では、このようなAPIを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1 Introduction...................................................  2\n2 Data types for representing timestamps.........................  4\n2.1 Resolution...................................................  4\n2.2 Time scale...................................................  5\n3 API............................................................  5\n3.1 PPS abstraction..............................................  6\n3.2 New data structures..........................................  7\n3.3 Mode bit definitions......................................... 10\n3.4 New functions................................................ 12\n3.4.1 New functions: obtaining PPS sources....................... 13\n3.4.2 New functions: setting PPS parameters...................... 14\n3.4.3 New functions: access to PPS timestamps.................... 16\n3.4.4 New functions: disciplining the kernel timebase............ 18\n3.5 Compliance rules............................................. 20\n3.5.1 Functions.................................................. 20\n3.5.2 Mode bits.................................................. 20\n3.6 Examples..................................................... 21\n4 Security Considerations........................................ 24\n5 Acknowledgements............................................... 24\n6 References..................................................... 25\n7 Authors' Addresses............................................. 26\nA. Extensions and related APIs................................... 27\nA.1 Extension: Parameters for the \"echo\" mechanism............... 27\nA.2 Extension: Obtaining information about external clocks....... 27\nA.3 Extension: Finding a PPS source.............................. 28\nB. Example implementation: PPSDISC Line discipline............... 29\nB.1 Example...................................................... 29\nC. Available implementations..................................... 30\nFull Copyright Statement......................................... 31",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1 Introduction",
+      "ja": "1はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 1589 [4] describes a model and programming interface for generic operating system software that manages the system clock and timer functions. The model provides improved accuracy and stability for most workstations and servers using the Network Time Protocol (NTP) [3] or similar time synchronization protocol. The model supports the use of external timing sources, such as the precision pulse-per-second (PPS) signals typically available from precise time sources (such as a GPS or GOES receiver).",
+      "ja": "RFC 1589 [4]は、システムクロックとタイマー機能を管理する一般的なオペレーティングシステムソフトウェアのためのモデルとプログラミングインタフェースについて説明します。モデルは、ネットワークタイムプロトコル（NTP）[3]又は同様の時間同期プロトコルを使用して、ほとんどのワークステーションとサーバのための改良された精度と安定性を提供します。モデルは、正確な時刻源（GPSなどまたは受信機をGOES）から典型的に利用可能な高精度パルス毎秒（PPS）信号などの外部タイミングソースの使用をサポートします。"
+    },
+    {
+      "indent": 3,
+      "text": "However, RFC 1589 did not define an application programming interface (API) for the PPS facility. This document specifies such an interface, for use with UNIX (or UNIX-like) operating systems. Such systems often conform to the \"Single UNIX Specification\" [5], sometimes known as POSIX.",
+      "ja": "ただし、RFC 1589には、PPS施設のためのアプリケーション・プログラミング・インターフェース（API）を定義していませんでした。このドキュメントは、UNIX（またはUNIXライクな）オペレーティング・システムで使用するために、そのようなインタフェースを指定します。このようなシステムは、多くの場合、時々、POSIXとして知られている、[5]「単一UNIX仕様」に準拠しています。"
+    },
+    {
+      "indent": 3,
+      "text": "One convenient means to provide a PPS signal to a computer system is to connect that signal to a modem-control pin on a serial-line interface to the computer. The Data Carrier Detect (DCD) pin is frequently used for this purpose. Typically, the time-code output of the time source is transmitted to the computer over the same serial line. The computer detects a signal transition on the DCD pin, usually by receiving an interrupt, and records a timestamp as soon as possible.",
+      "ja": "コンピュータシステムにPPS信号を提供するために、一つの便利な手段コンピュータへシリアル・ライン・インターフェース上のモデム制御ピンにその信号を接続することです。データキャリア検出（DCD）ピンは、この目的のために頻繁に使用されています。典型的には、時刻源のタイムコード出力は、同じシリアル回線を介してコンピュータに送信されます。コンピュータは通常、割り込みを受信することにより、DCDピンの信号遷移を検出し、できるだけ早くタイムスタンプを記録します。"
+    },
+    {
+      "indent": 3,
+      "text": "Although existing practice has focussed on the use of serial lines and DCD transitions, PPS signals might also be delivered by other kinds of devices. The API specified in this document does not require the use of a serial line, although it may be somewhat biased in that direction.",
+      "ja": "既存の練習は、シリアルラインとDCD遷移の使用に焦点を当てているが、PPS信号も他の種類のデバイスによって提供される可能性があります。それはその方向にややバイアスされてもよいが、この文書で指定されたAPIは、シリアル回線を使用する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The typical use of this facility is for the operating system to record (\"capture\") a high-resolution timestamp as soon as possible after it detects a PPS signal transition (usually indicated by an interrupt). This timestamp can then be made available, with less stringent delay constraints, to time-related software. The software can compare the captured timestamp to the received time-code to accurately discover the offset between the system clock and the precise time source.",
+      "ja": "この機能の典型的な使用は、オペレーティングシステムは、それが（通常は割り込みによって示される）PPS信号遷移を検出した後、できるだけ早く高分解能タイムスタンプ（「捕捉」）を記録するためのものです。このタイムスタンプは、時間関連のソフトウェアに、あまり厳しい遅延制約で、利用することができます。ソフトウェアは、正確にシステムクロックと正確な時間ソースとの間のオフセットを検出するために受信したタイムコードにキャプチャタイムスタンプを比較することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The operating system may also deliver the PPS event to a kernel procedure, called the \"in-kernel PPS consumer.\" One example would be the \"hardpps()\" procedure, described in RFC 1589, which is used to discipline the kernel's internal timebase.",
+      "ja": "また、カーネルのプロシージャにPPSのイベントを送出することができるオペレーティングシステムは、「カーネル内PPS消費者」と呼ば一例としては、カーネルの内部タイムベースを統制するために使用されたRFC 1589に記載されている「hardpps（）」の手順、だろう。"
+    },
+    {
+      "indent": 3,
+      "text": "The API specified in this document allows for one or more signal sources attached to a computer system to provide PPS inputs, at the option of user-level software. User-level software may obtain signal-transition timestamps for any of these PPS sources. User-level software may optionally specify at most one of these PPS sources to be used to discipline the system's internal timebase.",
+      "ja": "この文書で指定されたAPIは、ユーザーレベルのソフトウェアのオプションで、PPS入力を提供するために、コンピュータ・システムに取り付けられた1つの以上の信号源を可能にします。ユーザーレベルのソフトウェアは、これらのPPSソースのいずれかの信号遷移タイムスタンプを取得してもよいです。ユーザーレベルのソフトウェアは、必要に応じて、システムの内部タイムベースを統制するために使用されるこれらのPPSソースの最大で1つを指定することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Although the primary purpose of this API is for capturing true pulse-per-second events, the API may also be used for accurately timestamping events of other periods, or even aperiodic events, when these can be expressed as signal transitions.",
+      "ja": "このAPIの主な目的は、真のパルス毎秒イベントを捕捉するためであるが、APIはまた、正確にこれらの信号遷移のように表すことができる他の期間、あるいは非周期的イベントのイベントをタイムスタンプするために使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not define internal details of how the API must be implemented, and does not specify constraints on the accuracy, resolution, or latency of the PPS feature. However, the utility of this feature is inversely proportional to the delay (and variance of delay), and implementors are encouraged to take this seriously.",
+      "ja": "このドキュメントでは、APIを実装しなければならないかの内部の詳細を定義していない、とPPS機能の精度、解像度、または、待ち時間に制約を指定していません。ただし、この機能の有用性は、遅延（遅延の変動）に反比例し、実装者は真剣にこれを取ることが奨励されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In principle, the rate of events to be captured, or the frequency of the signals, can range from once per day (or less often) to several thousand per second. However, since in most implementations the timestamping function will be implemented as a processor interrupt at a relatively high priority, it is prudent to limit the rate of such events. This may be done either by mechanisms in the hardware that generates the signals, or by the operating system.",
+      "ja": "原理的には、捕捉されるイベントのレート、又は信号の周波数は、毎秒数千に（あまりまたは）一回から一日の範囲であり得ます。ほとんどの実装でタイムスタンプ機能は、比較的高い優先度でプロセッサ割り込みとして実施されるので、そのようなイベントのレートを制限することが賢明です。これは、信号を生成するハードウェア機構によって、またはオペレーティングシステムのいずれかによって行うことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2 Data types for representing timestamps",
+      "ja": "タイムスタンプを表す2つのデータ・タイプ"
+    },
+    {
+      "indent": 3,
+      "text": "Computer systems use various representations of time. Because this API is concerned with the provision of high-accuracy, high-resolution time information, the choice of representation is significant. (Here we consider only binary representations, not human-format representations.)",
+      "ja": "コンピュータシステムは、時間の様々な表現を使用しています。このAPIは、高精度、高分解能の時間情報の提供に関係しているので、表現の選択が重要です。 （ここでは、唯一のバイナリ表現ではなく、人間形式の表現を検討してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "The two interesting questions are:",
+      "ja": "2つの、興味深い質問があります："
+    },
+    {
+      "indent": 6,
+      "text": "1. what is the resolution of the representation?",
+      "section_title": true,
+      "ja": "1.表現の解像度は何ですか？"
+    },
+    {
+      "indent": 6,
+      "text": "2. what time scale is represented?",
+      "section_title": true,
+      "ja": "2.どのような時間スケールが示されていますか？"
+    },
+    {
+      "indent": 3,
+      "text": "These questions often lead to contentious arguments. Since this API is intended for use with NTP and POSIX-compliant systems, however, we can limit the choices to representations compatible with existing NTP and POSIX practice, even if that practice is considered \"wrong\" in some quarters.",
+      "ja": "これらの質問は、しばしば論争の引数につながります。このAPIは、NTPとPOSIX準拠のシステムで使用するためのものですので、しかし、我々はその練習は、いくつかの方面では「間違った」と見なされた場合でも、既存のNTPとPOSIXの練習と互換性のある表現に選択肢を制限することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1 Resolution",
+      "section_title": true,
+      "ja": "2.1解像度"
+    },
+    {
+      "indent": 3,
+      "text": "In the NTP protocol, \"timestamps are represented as a 64-bit unsigned fixed-point number, in seconds relative to 0h on 1 January 1900. The integer part is in the first 32 bits and the fraction part in the last 32 bits [...] The precision of this representation is about 200 picoseconds\" [3].",
+      "ja": "NTPプロトコルでは、「タイムスタンプは64ビットの符号なしの固定小数点数として表される、1900年1月1日に0hに相対秒の整数部は、[最後の32ビットの最初の32ビット、小数部です。 ..]この表現の精度は、約200ピコ秒である」[3]。"
+    },
+    {
+      "indent": 3,
+      "text": "However, most computer systems cannot measure time to this resolution (this represents a clock rate of 5 GHz). The POSIX gettimeofday() function returns a \"struct timeval\" value, with a resolution of 1 microsecond. The POSIX clock_gettime() function returns a \"struct timespec\" value, with a resolution of 1 nanosecond.",
+      "ja": "しかし、ほとんどのコンピュータシステムは、（これは5 GHz帯のクロック・レートを表します）、この解像度までの時間を測定することはできません。 POSIXにはgettimeofday（）関数は、1マイクロ秒の分解能で、「いるstruct timeval」の値を返します。 POSIXのにclock_gettime（）関数は、1ナノ秒の分解能で、「構造体TIMESPEC」の値を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "This API uses an extensible representation, but defaults to the \"struct timespec\" representation.",
+      "ja": "このAPIは、拡張可能な表現を使用していますが、「構造体のtimespec」表現にデフォルト設定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2 Time scale",
+      "section_title": true,
+      "ja": "2.2時間スケール"
+    },
+    {
+      "indent": 3,
+      "text": "Several different time scales have been proposed for use in computer systems. UTC and TAI are the two obvious candidates.",
+      "ja": "いくつかの異なる時間スケールは、コンピュータ・システムで使用するために提案されてきました。 UTCとTAIは2つの明白な候補です。"
+    },
+    {
+      "indent": 3,
+      "text": "Some people would prefer the use of TAI, which is identical to UTC except that it does not correct for leap seconds. Their preference for TAI stems from the difficulty of computing precise time differences when leap seconds are involved, especially when using times in the future (for which the exact number of leap seconds is, in general, unknowable).",
+      "ja": "一部の人々は、それがうるう秒を修正しないことを除いて、UTCと同じですTAIの使用を好むだろう。 TAIのための彼らの好みは（そのためにうるう秒の正確な数は、一般的には、不可知である）、将来的に時間を使用する場合は特に、うるう秒が含まれる場合、正確な時間差を計算することの難しさに起因しています。"
+    },
+    {
+      "indent": 3,
+      "text": "However, POSIX and NTP both use UTC, albeit with different base dates. Given that support for TAI would, in general, require other changes to the POSIX specification, this API uses the POSIX base date of 00:00 January 1, 1970 UTC, and conforms to the POSIX use of the UTC time scale.",
+      "ja": "しかし、POSIXとNTPは、両方の異なる基準日とはいえ、UTCを使用します。 TAIのサポートがあろうと考えると、一般的には、POSIX仕様にその他の変更を必要とし、このAPIは、1970年1月1日00:00 UTCのPOSIXベースの日付を使用して、UTCの時間スケールのPOSIXの使用に準拠しています。"
+    },
+    {
+      "indent": 0,
+      "text": "3 API",
+      "ja": "3 API"
+    },
+    {
+      "indent": 3,
+      "text": "A PPS facility can be used in two different ways:",
+      "ja": "PPS機能は2つの異なる方法で使用することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "1. An application can obtain a timestamp, using the system's internal timebase, for the most recent PPS event.",
+      "ja": "1.アプリケーションは、最新のPPSのイベントのために、システムの内部タイムベースを使用して、タイムスタンプを取得することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "2. The kernel may directly utilize PPS events to discipline its internal timebase, thereby providing highly accurate time to all applications.",
+      "ja": "2.カーネルは直接それによってすべてのアプリケーションに非常に正確な時間を提供し、その内部タイムベースを訓練するためにPPSのイベントを利用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This API supports both uses, individually or in combination. The timestamping feature may be used on any number of PPS sources simultaneously; the timebase-disciplining feature may be used with at most one PPS source.",
+      "ja": "このAPIは、個別にまたは組み合わせて、両方の使用をサポートしています。タイムスタンプ機能は、同時にPPS源の任意の数の上で使用することができます。タイムベース-懲戒機能は、最大1つのPPSソースと一緒に使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Although the proper implementation of this API requires support from the kernel of a UNIX system, this document defines the API in terms of a set of library routines. This gives the implementor some freedom to divide the effort between kernel code and library code (different divisions might be appropriate on microkernels and monolithic kernels, for example).",
+      "ja": "このAPIの適切な実装がUNIXシステムのカーネルからの支援が必要であるが、この文書は、ライブラリルーチンのセットの面でAPIを定義します。これは、実装者にカーネルコードとライブラリコード（別の部署には、例えば、マイクロカーネルとモノリシックカーネルに適切であるかもしれない）の間の努力を分割するためにいくつかの自由を与えます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1 PPS abstraction",
+      "section_title": true,
+      "ja": "3.1 PPSの抽象化"
+    },
+    {
+      "indent": 3,
+      "text": "A PPS signal consists of a series of pulses, each with an \"asserted\" (logical true) phase, and a \"clear\" (logical false) phase. The two phases may be of different lengths. The API may capture an \"assert timestamp\" at the moment of the transition into the asserted phase, and a \"clear timestamp\" at the moment of the transition into the clear phase.",
+      "ja": "PPS信号は一連のパルスで構成され、「アサート」（論理真）相、及び「クリア」（論理偽）相とそれぞれ。二相は、異なる長さのものであってもよいです。 APIは、明確な相への移行の瞬間にアサート相への移行の瞬間に「アサートタイムスタンプ」、および「クリアタイムスタンプ」を取り込むことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The specific assignment of the logical values \"true\" and \"false\" with specific voltages of a PPS signal, if applicable, is outside the scope of this specification. However, these assignments SHOULD be consistent with applicable standards. Implementors of PPS sources SHOULD document these assignments.",
+      "ja": "PPS信号の特定電圧に「真」および「偽」の論理値の具体的な割り当て、該当する場合は、本明細書の範囲外です。しかし、これらの割り当ては、適用規格と一致する必要があります。 PPSソースの実装者は、これらの割り当てをドキュメント化する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "Reminder to implementors of DCD-based PPS support: TTL and RS-232C (V.24/V.28) interfaces both define the \"true\" state as the one having the highest positive voltage. TTL defines a nominal absence of voltage as the \"false\" state, but RS-232C (V.24/V.28) defines the \"false\" state by the presence of a negative voltage.",
+      "ja": "DCDベースPPSサポートの実装にリマインダー：TTLとRS-232C（V.24 / V.28）インターフェイスの両方の最高の正の電圧を有するものとして、「真」の状態を定義します。 TTLは「偽」状態として電圧の公称不在を規定するが、RS-232C（V.24 / V.28）は、負電圧の存在によって「偽」状態を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "The API supports the direct provision of PPS events (and timestamps) to an in-kernel PPS consumer. This could be the function called \"hardpps()\", as described in RFC 1589 [4], but the API does not require the kernel implementation to use that function name internally. The current version of the API supports at most one in-kernel PPS consumer, and does not provide a way to explicitly name it. The implementation SHOULD impose access controls on the use of this feature.",
+      "ja": "APIは、カーネル内PPSの消費者へのPPSのイベント（タイムスタンプ）の直接の提供をサポートしています。 RFC 1589で説明したようにこれは、[4]、「hardpps（）」という関数かもしれないが、APIは、内部的にその関数名を使用するようにカーネルの実装を必要としません。 APIの現在のバージョンでは、最大で1つのカーネル内PPSの消費者をサポートし、明示的に名前を付ける方法を提供していません。実装は、この機能の利用にはアクセス制御を課すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "The API optionally supports an \"echo\" feature, in which events on the incoming PPS signal may be reflected through software, after the capture of the corresponding timestamp, to an output signal pin. This feature may be used to discover an upper bound on the actual delay between the edges of the PPS signal and the capture of the timestamps; such information may be useful in precise calibration of the system.",
+      "ja": "APIは、必要に応じて、「エコー」機能をサポートしている着信PPS信号上のイベントは、出力信号端子に、対応するタイムスタンプを捕捉した後、ソフトウェアを介して反射されてもよいです。この特徴は、PPS信号とタイムスタンプの捕獲のエッジ間の実際の遅延の上限を発見するために使用することができます。そのような情報は、システムの正確な較正に有用であり得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "The designation of an output pin for the echo signal, and sense and shape of the output transition, is outside the scope of this specification, but SHOULD be documented for each implementation. The output pin MAY also undergo transitions at other times besides those caused by PPS input events.",
+      "ja": "エコー信号の出力ピンの指定、および出力遷移のセンスおよび形状は、本明細書の範囲外であるが、各実装のために文書化されるべきです。出力ピンは、PPS入力イベントによって引き起こされたもの以外の時間で遷移を受け得ます。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: this allows an implementation of the echo feature to generate an output pulse per input pulse, or an output edge per input pulse, or an output pulse per input edge. It also allows the same signal pin to be used for several purposes simultaneously.",
+      "ja": "注：これは、入力パルス当たりの出力パルス、または入力パルス当たりの出力エッジ、または入力エッジ当たりの出力パルスを生成するためにエコー機能の実装を可能にします。それはまた、同一の信号ピンは、同時にいくつかの目的のために使用されることを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "Also, the API optionally provides an application with the ability to specify an offset value to be applied to captured timestamps. This can be used to correct for cable and/or radio-wave propagation delays, or to compensate for systematic jitter in the external signal. The implementation SHOULD impose access controls on the use of this feature.",
+      "ja": "また、APIは、必要に応じて捕捉タイムスタンプに適用されるオフセット値を指定する機能を持つアプリケーションを提供します。これは、ケーブルおよび/または無線波伝搬遅延を補正するために、または外部信号の系統的ジッタを補償するために使用することができます。実装は、この機能の利用にはアクセス制御を課すべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2 New data structures",
+      "section_title": true,
+      "ja": "3.2新しいデータ構造"
+    },
+    {
+      "indent": 3,
+      "text": "The data structure declarations and symbol definitions for this API will appear in the header file <sys/timepps.h>. The header file MUST define all constants described in this specification, even if they are not supported by the implementation.",
+      "ja": "このAPIのためのデータ構造の宣言とシンボル定義はヘッダファイルは<sys / timepps.h>に表示されます。ヘッダ・ファイルは、それらが実装によってサポートされていなくても、本明細書に記載された全ての定数を定義しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The API includes several implementation-specific types:",
+      "ja": "APIは、いくつかの実装固有の種類が含まれています。"
+    },
+    {
+      "indent": 6,
+      "text": "typedef ... pps_handle_t;       /* represents a PPS source */",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "typedef unsigned ... pps_seq_t; /* sequence number */",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The \"pps_handle_t\" type is an opaque scalar type used to represent a PPS source within the API.",
+      "ja": "「pps_handle_t」型は、API内のPPS源を表すために使用される不透明なスカラ型です。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"pps_seq_t\" type is an unsigned integer data type of at least 32 bits.",
+      "ja": "「pps_seq_t」型は、少なくとも32ビットの符号なし整数データ型です。"
+    },
+    {
+      "indent": 3,
+      "text": "The precise declaration of the pps_handle_t and pps_seq_t types is system-dependent.",
+      "ja": "pps_handle_tとpps_seq_tタイプの正確な宣言はシステム依存性です。"
+    },
+    {
+      "indent": 3,
+      "text": "The API imports the standard POSIX definition for this data type:",
+      "ja": "APIは、このデータ型の標準POSIX定義をインポートします："
+    },
+    {
+      "indent": 6,
+      "text": "struct timespec {\n        time_t  tv_sec;         /* seconds */\n        long    tv_nsec;        /* nanoseconds */\n};",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The API defines this structure as an internal (not \"on the wire\") representation of the NTP \"64-bit unsigned fixed-point\" timestamp format [3]:",
+      "ja": "APIは、NTPの内部（ない「ワイヤー上」）表現としてこの構造を定義「64ビットの符号なしの固定小数点」タイムスタンプ形式[3]："
+    },
+    {
+      "indent": 6,
+      "text": "typedef struct ntp_fp {\n        unsigned int    integral;\n        unsigned int    fractional;\n} ntp_fp_t;",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The two fields in this structure may be declared as any unsigned integral type, each of at least 32 bits.",
+      "ja": "この構造体の2つのフィールドは、少なくとも32ビットの各々、任意の符号なし整数型として宣言されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The API defines this new union as an extensible type for representing times:",
+      "ja": "APIは、時間を表すための拡張型としてこの新しい組合を定義します。"
+    },
+    {
+      "indent": 6,
+      "text": "typedef union pps_timeu {\n        struct timespec tspec;\n        ntp_fp_t        ntpfp;\n        unsigned long   longpad[3];\n} pps_timeu_t;",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Future revisions of this specification may add more fields to this union.",
+      "ja": "この仕様の今後の改正は、この組合に複数のフィールドを追加することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: adding a field to this union that is larger than 3*sizeof(long) will break binary compatibility.",
+      "ja": "注意：3 *のはsizeof（長い）は、バイナリ互換性を壊すだろうよりも大きくなって、この組合にフィールドを追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "The API defines these new data structures:",
+      "ja": "APIは、これらの新しいデータ構造を定義します。"
+    },
+    {
+      "indent": 6,
+      "text": "typedef struct {\n    pps_seq_t   assert_sequence;        /* assert event seq # */\n    pps_seq_t   clear_sequence;         /* clear event seq # */\n    pps_timeu_t assert_tu;\n    pps_timeu_t clear_tu;\n    int         current_mode;           /* current mode bits */\n} pps_info_t;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "#define assert_timestamp assert_tu.tspec #define clear_timestamp clear_tu.tspec",
+      "ja": "#define assert_timestamp assert_tu.tspecの#define clear_timestamp clear_tu.tspec"
+    },
+    {
+      "indent": 6,
+      "text": "#define assert_timestamp_ntpfp assert_tu.ntpfp #define clear_timestamp_ntpfp clear_tu.ntpfp",
+      "ja": "#define assert_timestamp_ntpfp assert_tu.ntpfpの#define clear_timestamp_ntpfp clear_tu.ntpfp"
+    },
+    {
+      "indent": 6,
+      "text": "typedef struct {\n    int         api_version;            /* API version # */\n    int         mode;                   /* mode bits */\n    pps_timeu_t assert_off_tu;\n    pps_timeu_t clear_off_tu;\n} pps_params_t;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "#define assert_offset assert_off_tu.tspec #define clear_offset clear_off_tu.tspec",
+      "ja": "#define assert_offset assert_off_tu.tspecの#define clear_offset clear_off_tu.tspec"
+    },
+    {
+      "indent": 6,
+      "text": "#define assert_offset_ntpfp assert_off_tu.ntpfp #define clear_offset_ntpfp clear_off_tu.ntpfp",
+      "ja": "#define assert_offset_ntpfp assert_off_tu.ntpfpの#define clear_offset_ntpfp clear_off_tu.ntpfp"
+    },
+    {
+      "indent": 3,
+      "text": "The \"pps_info_t\" type is returned on an inquiry to PPS source. It contains the timestamps for the most recent assert event, and the most recent clear event. The order in which these events were actually received is defined by the timetamps, not by any other aspect of the specification. Each timestamp field represents the value of the operating system's internal timebase when the timestamped event occurred, or as close as possible to that time (with the optional addition of a specified offset). The current_mode field contains the value of the mode bits (see section 3.3) at the time of the most recent transition was captured for this PPS source. An application can use current_mode to discover the format of the timestamps returned.",
+      "ja": "「pps_info_t」タイプは、PPSソースへの問い合わせで返されます。これは、最新のアサートイベントのタイムスタンプ、および最新の明確なイベントが含まれています。これらのイベントは、実際に受信された順序ではない仕様の他の態様により、timetampsによって定義されます。各タイムスタンプフィールドは、（指定されたオフセットのオプションを加えて）その時間にできるだけ近いタイムスタンプ付きのイベントが発生したオペレーティングシステムの内部タイムベースの値を表し、または。 current_modeフィールドは、このPPSソースに捕獲された最新の遷移時のモードビットの値（セクション3.3を参照）を含みます。アプリケーションは、返されたタイムスタンプのフォーマットを発見するためにcurrent_modeを使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The assert_sequence number increases once per captured assert timestamp. Its initial value is undefined. If incremented past the largest value for the type, the next value is zero. The clear_sequence number increases once per captured clear timestamp. Its initial value is undefined, and may be different from the initial value of assert_sequence. If incremented past the largest value for the type, the next value is zero. Due to possible signal loss or excessive signal noise, the assert-sequence number and the clear-sequence number might not always increase in step with each other.",
+      "ja": "assert_sequence番号が取り込まアサートタイムスタンプごとに一度増加します。その初期値は不定です。タイプの最大値を超えてインクリメント場合は、次の値がゼロです。 clear_sequence番号が取り込まクリアタイムスタンプごとに一度増加します。その初期値は不定であり、そしてassert_sequenceの初期値と異なっていてもよいです。タイプの最大値を超えてインクリメント場合は、次の値がゼロです。可能な信号損失または過度の信号ノイズに起因し、アサート・シーケンス番号とクリアシーケンス番号は常に互いにステップで増加しないかもしれません。"
+    },
+    {
+      "indent": 6,
+      "text": "Note that these sequence numbers are most useful in applications where events other than PPS transitions are to be captured, which might be involved in a precision stopwatch application, for example. In such cases, the sequence numbers may be used to detect overruns, where the application has missed one or more events. They may also be used to detect an excessive event rate, or to detect that an event has failed to occur between two calls to the time_pps_fetch() function (defined later).",
+      "ja": "これらのシーケンス番号は、例えば、高精度ストップウォッチアプリケーションに関与する可能性があるPPS遷移以外のイベントが捕捉される用途において最も有用であることに留意されたいです。このような場合、シーケンス番号は、アプリケーションが1つまたは複数のイベントを逃したオーバーランを検出するために使用することができます。彼らはまた、過剰なイベント率を検出するために用いてもよいし、イベントが（後で定義）time_pps_fetch（）関数への2回の呼び出しの間に発生するように失敗したことを検出します。"
+    },
+    {
+      "indent": 6,
+      "text": "In order to obtain an uninterrupted series of sequence numbers (and hence of event timestamps), it may be necessary to sample the pps_info_t values at a rate somewhat faster than the underlying event rate. For example, an application interested in both assert and clear timestamps may need to sample at least twice per second. Proper use of the sequence numbers allows an application to discover if it has missed any event timestamps due to an insufficient sampling rate.",
+      "ja": "（したがって、イベントのタイムスタンプの）シーケンス番号の途切れのない一連を得るためには、基礎となる事象率よりも幾分速い速度でpps_info_t値をサンプリングする必要があるかもしれません。例えば、アサート及びクリアタイムスタンプの両方に興味があるアプリケーションは、毎秒少なくとも二回サンプリングする必要があるかもしれません。シーケンス番号の適切な使用は、それが不十分なサンプリングレートに起因するすべてのイベントのタイムスタンプを逃した場合、アプリケーションを発見することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The pps_params_t data type is used to discover and modify parameters of a PPS source. The data type includes a mode field, described in section 3.3. It also includes an api_version field, a read-only value giving the version of the API. Currently, the only defined value is:",
+      "ja": "pps_params_tデータ型はPPS源のパラメータを検出し、修正するために使用されます。データ型は、セクション3.3で説明したモードフィールドを含みます。また、api_versionフィールド、APIのバージョンを与える読み取り専用の値が含まれています。現在、唯一の定義された値は次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "#define PPS_API_VERS_1 1",
+      "ja": "#define PPS_API_VERS_1 1"
+    },
+    {
+      "indent": 3,
+      "text": "This field is present to enable binary compatibility with future versions of the API.",
+      "ja": "このフィールドは、APIの将来のバージョンとのバイナリ互換性を可能にするために存在しています。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: the term \"read-only\" in this specification means that an application cannot modify the relevant data item; only the implementation can modify the value. The implementation MUST ignore attempts by the application to modify a read-only field.",
+      "ja": "注意：用語「読み取り専用」この仕様では、アプリケーションが、関連するデータ項目を変更することができないことを意味します。唯一の実装では、値を変更することができます。実装は、読み取り専用フィールドを修正するために、アプリケーションによって試みを無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "As an OPTIONAL feature of the API, the implementation MAY support adding offsets to the timestamps that are captured. (Values of type \"struct timespec\" can represent negative offsets.) The assert_offset field of a pps_params_t value specifies a value to be added to generate a captured assert_timestamp. The clear_offset of a pps_params_t value field specifies a value to be added to generate a captured clear_timestamp. Since the offsets, if any, apply to all users of a given PPS source, the implementation SHOULD impose access controls on the use of this feature; for example, allowing only the super-user to set the offset values. The default value for both offsets is zero.",
+      "ja": "APIのオプション機能として、実装が捕獲されているタイムスタンプにオフセットを追加をサポートするかもしれません。 （タイプ「構造体TIMESPEC」の値が負のオフセットを表すことができる。）pps_params_t値のassert_offsetフィールドは、値が取り込まassert_timestampを生成するために添加することを指定します。 pps_params_t値フィールドのclear_offsetが捕捉clear_timestampを生成するために加算する値を指定します。オフセットので、もしあれば、与えられたPPSソースのすべてのユーザーに適用され、実装は、この機能の利用にはアクセス制御を課すべきです。例えば、スーパユーザだけがオフセット値を設定することができます。両方のオフセットのデフォルト値はゼロです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3 Mode bit definitions",
+      "section_title": true,
+      "ja": "3.3モードビット定義"
+    },
+    {
+      "indent": 3,
+      "text": "A set of mode bits is associated with each PPS source.",
+      "ja": "モードビットのセットは、各PPS源と関連しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The bits in the mode field of the pps_params_t type are:",
+      "ja": "pps_params_t型のモードフィールドのビットは、次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "/* Device/implementation parameters */\n#define PPS_CAPTUREASSERT       0x01\n#define PPS_CAPTURECLEAR        0x02\n#define PPS_CAPTUREBOTH         0x03",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "#define PPS_OFFSETASSERT 0x10 #define PPS_OFFSETCLEAR 0x20",
+      "ja": "#define PPS_OFFSETASSERTの0x10 0x20のに#define PPS_OFFSETCLEAR"
+    },
+    {
+      "indent": 6,
+      "text": "#define PPS_CANWAIT 0x100 #define PPS_CANPOLL 0x200",
+      "ja": "#define PPS_CANWAITは0x100に#define PPS_CANPOLLは0x200"
+    },
+    {
+      "indent": 6,
+      "text": "/* Kernel actions */\n#define PPS_ECHOASSERT          0x40\n#define PPS_ECHOCLEAR           0x80",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* Timestamp formats */\n#define PPS_TSFMT_TSPEC         0x1000\n#define PPS_TSFMT_NTPFP         0x2000",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "These mode bits are divided into three categories:",
+      "ja": "これらのモードビットは、次の3つのカテゴリに分類されます。"
+    },
+    {
+      "indent": 6,
+      "text": "1. Device/implementation parameters: These are parameters either of the device or of the implementation. If the implementation allows these to be changed, then these bits are read/write for users with sufficient privilege (such as the super-user), and read-only for other users. If the implementation does not allow these bits to be changed, they are read-only.",
+      "ja": "1.デバイス/実装パラメータ：これらは、デバイスまたは実装のいずれかのパラメータです。実装は、これらは、これらのビットは、（例えば、スーパーユーザなど）に十分な権限を持つユーザーのための読み取り/書き込みされ、変更、および読み取り専用、他のユーザのためにすることを可能にする場合。実装はこれらのビットを変更することが許可されていない場合、彼らは読み取り専用です。"
+    },
+    {
+      "indent": 6,
+      "text": "2. Kernel actions: These bits specify certain kernel actions to be taken on arrival of a signal. If the implementation supports one of these actions, then the corresponding bit is read/write for users with sufficient privilege (such as the super-user), and read-only for other users. If the implementation does not support the action, the corresponding bit is always zero.",
+      "ja": "2.カーネルアクション：これらのビットは信号の到着時に取るべき特定のカーネル・アクションを指定します。実装はこれらのいずれかの操作をサポートしている場合、対応するビットは、（スーパーユーザとして）十分な権限を持つユーザーのためのリード/ライトされており、読み取り専用で、他のユーザーのために。実装がアクションをサポートしていない場合は、対応するビットは常にゼロです。"
+    },
+    {
+      "indent": 6,
+      "text": "3. Timestamp formats: These bits indicate the set of timestamp formats available for the device. They are always read-only.",
+      "ja": "3.タイムスタンプ形式：これらのビットは、デバイスの利用可能なタイムスタンプ形式のセットを示します。彼らは常に読み取り専用です。"
+    },
+    {
+      "indent": 3,
+      "text": "In more detail, the meanings of the Device/implementation parameter mode bits are:",
+      "ja": "より詳細には、デバイス/実装パラメータモードビットの意味は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_CAPTUREASSERT If this bit is set, the assert timestamp for the associated PPS source will be captured.",
+      "ja": "このビットが設定されているPPS_CAPTUREASSERT場合、関連したPPSソースのアサートタイムスタンプがキャプチャされます。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_CAPTURECLEAR If this bit is set, the clear timestamp for the associated PPS source will be captured.",
+      "ja": "このビットが設定されている場合PPS_CAPTURECLEARは、関連付けられたPPSソースの明確なタイムスタンプがキャプチャされます。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_CAPTUREBOTH Defined as the union of PPS_CAPTUREASSERT and PPS_CAPTURECLEAR, for convenience.",
+      "ja": "PPS_CAPTUREBOTHは便宜上、PPS_CAPTUREASSERTとPPS_CAPTURECLEARの労働組合として定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_OFFSETASSERT If set, the assert_offset value is added to the current value of the operating system's internal timebase in order to generate the captured assert_timestamp.",
+      "ja": "PPS_OFFSETASSERT設定した場合、assert_offset値が取り込まassert_timestampを生成するために、オペレーティング・システムの内部タイムベースの現在値に加算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_OFFSETCLEAR If set, the clear_offset value is added to the current value of the operating system's internal timebase in order to generate the captured clear_timestamp.",
+      "ja": "PPS_OFFSETCLEAR設定した場合、clear_offset値が取り込まclear_timestampを生成するために、オペレーティング・システムの内部タイムベースの現在値に加算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_CANWAIT If set, the application may request that the time_pps_fetch() function (see section 3.4.3) should block until the next timestamp arrives. Note: this mode bit is read-only.",
+      "ja": "PPS_CANWAIT設定した場合、アプリケーションは次のタイムスタンプが到着するまでtime_pps_fetch（）関数（セクション3.4.3を参照）をブロックすることを要求することができます。注意：このモードビットは読み出し専用です。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_CANPOLL This bit is reserved for future use. An application SHOULD NOT depend on any functionality implied either by its presence or by its absence.",
+      "ja": "PPS_CANPOLLこのビットは将来の使用のために予約されています。アプリケーションは、その存在によって、またはその不在のいずれかによって暗示機能に依存すべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "If neither PPS_CAPTUREASSERT nor PPS_CAPTURECLEAR is set, no valid timestamp will be available via the API.",
+      "ja": "PPS_CAPTUREASSERTもPPS_CAPTURECLEARどちらも設定されている場合は、有効なタイムスタンプは、APIを介して利用できなくなります。"
+    },
+    {
+      "indent": 3,
+      "text": "The meanings of the Kernel action mode bits are:",
+      "ja": "カーネルの動作モードビットの意味は以下のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_ECHOASSERT If set, after the capture of an assert timestamp, the implementation generates a signal transition as rapidly as possible on an output signal pin. This MUST NOT affect the delay between the PPS source's transition to the asserted phase and the capture of the assert timestamp.",
+      "ja": "PPS_ECHOASSERT設定されている場合、アサートタイムスタンプの捕獲後に、実装は、出力信号ピンにできるだけ迅速に信号遷移を生成します。これは、PPSソースのアサート相への移行とアサートタイムスタンプのキャプチャ間の遅延に影響してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_ECHOCLEAR If set, after the capture of a clear timestamp, the implementation generates a signal transition as rapidly as possible on an output signal pin. This MUST NOT affect the delay between the PPS source's transition to the clear phase and the capture of the clear timestamp.",
+      "ja": "PPS_ECHOCLEAR設定した場合、明確なタイムスタンプの捕獲後に、実装は、出力信号ピンにできるだけ迅速に信号遷移を生成します。これは、PPSソースの明確なフェーズへの移行とクリアタイムスタンプのキャプチャ間の遅延に影響してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "The timestamp formats are:",
+      "ja": "タイムスタンプの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_TSFMT_TSPEC Timestamps and offsets are represented as values of type \"struct timespec\". All implementations MUST support this format, and this format is the default unless an application specifies otherwise.",
+      "ja": "PPS_TSFMT_TSPECタイムスタンプとオフセットは、「構造体TIMESPEC」型の値として表現されています。すべての実装がこの形式をサポートしなければならない、とアプリケーションが別の方法で指定しない限り、このフォーマットがデフォルトです。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_TSFMT_NTPFP Timestamps and offsets are represented as values of type \"ntp_fp_t\", which corresponds to the NTP \"64-bit unsigned fixed-point\" timestamp format [3]. Support for this format is OPTIONAL.",
+      "ja": "PPS_TSFMT_NTPFPタイムスタンプとオフセットがNTPに対応するタイプの値「ntp_fp_t」として表され、「64ビットの符号なしの固定小数点」タイムスタンプ形式[3]。この形式のサポートはオプションです。"
+    },
+    {
+      "indent": 3,
+      "text": "Other timestamp format bits may be defined as fields are added to the \"pps_timeu_t\" union.",
+      "ja": "フィールドは「pps_timeu_t」組合に追加される他のタイムスタンプ形式ビットが定義されてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The operating system may implement all of these mode bits, or just a subset of them. If an attempt is made to set an unsupported mode bit, the API will return an error. If an attempt is made to modify a read-only mode bit, the API will return an error.",
+      "ja": "オペレーティング・システムは、これらのモードビットのすべて、またはそれらのサブセットのみを実装することができます。試行がサポートされていないモードビットを設定するためになされた場合、APIはエラーを返します。試みが読み取り専用モードビットを変更するためになされた場合、APIはエラーを返します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4 New functions",
+      "section_title": true,
+      "ja": "3.4の新機能"
+    },
+    {
+      "indent": 3,
+      "text": "In the description of functions that follows, we use the following function parameters:",
+      "ja": "以下の機能の説明では、我々は次の関数のパラメータを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "filedes A file descriptor (type: int), for a serial line or other source of PPS events.",
+      "ja": "シリアルラインやPPSのイベントの他のソースのため：（INTタイプ）、ファイルディスクリプタをfiledesが。"
+    },
+    {
+      "indent": 3,
+      "text": "ppshandle A variable of type \"pps_handle_t\", as defined in section 3.2.",
+      "ja": "セクション3.2で定義されるように、タイプ「pps_handle_t」の変数をppshandle。"
+    },
+    {
+      "indent": 3,
+      "text": "ppsinfobuf A record of type \"pps_info_t\", as defined in section 3.2.",
+      "ja": "セクション3.2で定義されているように、タイプ「pps_info_t」の記録をppsinfobuf。"
+    },
+    {
+      "indent": 3,
+      "text": "ppsparams A record of type \"pps_params_t\", as defined in section 3.2.",
+      "ja": "セクション3.2で定義されているように、タイプ「pps_params_t」の記録をppsparams。"
+    },
+    {
+      "indent": 3,
+      "text": "tsformat An integer with exactly one of the timestamp format bits set.",
+      "ja": "設定されたタイムスタンプフォーマットのビットのうちの正確に1つ有する整数TSFORMAT。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4.1 New functions: obtaining PPS sources",
+      "section_title": true,
+      "ja": "3.4.1の新機能：取得PPSソース"
+    },
+    {
+      "indent": 3,
+      "text": "The API includes functions to create and destroy PPS source \"handles\".",
+      "ja": "APIはPPSソース「ハンドル」を作成し、破壊するための関数が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "SYNOPSIS",
+      "ja": "SYNOPSIS"
+    },
+    {
+      "indent": 6,
+      "text": "int time_pps_create(int filedes, pps_handle_t *handle);\nint time_pps_destroy(pps_handle_t handle);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "DESCRIPTION",
+      "ja": "DESCRIPTION"
+    },
+    {
+      "indent": 3,
+      "text": "All of the other functions in the PPS API operate on PPS handles (type: pps_handle_t). The time_pps_create() is used to convert an already-open UNIX file descriptor, for an appropriate special file, into a PPS handle.",
+      "ja": "PPS APIの他の機能はすべて、PPSハンドル（：pps_handle_tタイプ）で動作します。 time_pps_createは（）PPSハンドルに、適切な特別なファイルのために、既に開いているUNIXのファイル記述子を変換するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The definition of what special files are appropriate for use with the PPS API is outside the scope of this specification, and may vary based on both operating system implementation, and local system configuration. One typical case is a serial line, whose DCD pin is connected to a source of PPS events.",
+      "ja": "特殊ファイルはPPSのAPIでの使用に適しているかの定義は、この仕様の範囲外であり、オペレーティングシステムの実装、およびローカルシステム構成の両方に基づいて異なる場合があります。一つの典型的なケースは、そのDCDピンPPSのイベントのソースに接続されたシリアルライン、です。"
+    },
+    {
+      "indent": 3,
+      "text": "The mode in which the UNIX file descriptor was originally opened affects what operations are allowed on the PPS handle. The time_pps_setparams() and time_pps_kcbind() functions (see sections 3.4.2 and 3.4.4) SHOULD be prohibited by the implementation if the descriptor is open only for reading (O_RDONLY).",
+      "ja": "UNIXのファイル記述子が最初に開かれたモードでは、操作がPPSハンドル上で許可されているものに影響します。記述子のみ（O_RDONLY）を読み出すために開いている場合time_pps_setparams（）とtime_pps_kcbind（）関数は、（セクション3.4.2と3.4.4を参照）の実装により禁止されていること。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: operations on a descriptor opened with an inappropriate mode might fail with EBADF.",
+      "ja": "注意：不適切なモードで開かれた記述子の操作はEBADFで失敗する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The time_pps_destroy() function makes the PPS handle unusable, and frees any storage that might have been allocated for it. It does not close the associated file descriptor, nor does it change any of the parameter settings for the PPS source.",
+      "ja": "time_pps_destroy（）関数は、PPSが使用できなく取り扱いになり、それに割り当てられている可能性のあるストレージを解放します。これは、関連するファイルディスクリプタをクローズしません。また、PPSソースのパラメータ設定を変更しません。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: If this API is adapted to an operating system that does not follow UNIX conventions for representing an accessible PPS source as an integer file descriptor, the time_pps_create() function may take different parameters from those shown here.",
+      "ja": "注意：このAPIは、整数のファイル記述子としてアクセス可能PPSソースを表現するためにUNIXの規則に従っていないオペレーティングシステムに適用されている場合は、time_pps_create（）関数は、ここに示したものとは異なるパラメータがかかる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "RETURN VALUES",
+      "ja": "戻り値"
+    },
+    {
+      "indent": 3,
+      "text": "On successful completion, the time_pps_create() function returns 0. Otherwise, a value of -1 is returned and errno is set to indicate the error.",
+      "ja": "正常終了、time_pps_create（）関数は-1の値が返され、errnoはエラーを示すように設定され、そうでなければ0を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "If called with a valid handle parameter, the time_pps_destroy() function returns 0. Otherwise, it returns -1.",
+      "ja": "有効なハンドルのパラメータを指定して呼び出された場合、time_pps_destroy（）関数は、それ以外の場合は0を返し、それは-1を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "ERRORS",
+      "ja": "エラー"
+    },
+    {
+      "indent": 3,
+      "text": "If the time_pps_create() function fails, errno may be set to one of the following values:",
+      "ja": "time_pps_create（）関数が失敗した場合、errnoは次のいずれかの値に設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[EBADF] The filedes parameter is not a valid file descriptor.",
+      "ja": "[EBADF] filedesがパラメータが有効なファイルディスクリプタではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EOPNOTSUPP] The use of the PPS API is not supported for the file descriptor.",
+      "ja": "[EOPNOTSUPP] PPSのAPIの使用は、ファイルディスクリプタのためにサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EPERM] The process's effective user ID does not have the required privileges to use the PPS API.",
+      "ja": "[EPERM]プロセスの実効ユーザIDは、PPSのAPIを使用するために必要な権限を持っていません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4.2 New functions: setting PPS parameters",
+      "section_title": true,
+      "ja": "3.4.2の新機能：設定PPSパラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "The API includes several functions use to set or obtain the parameters of a PPS source.",
+      "ja": "APIは、いくつかの機能は、PPS源のパラメータを設定または取得するために使用が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "SYNOPSIS",
+      "ja": "SYNOPSIS"
+    },
+    {
+      "indent": 6,
+      "text": "int time_pps_setparams(pps_handle_t handle,\n                        const pps_params_t *ppsparams);\nint time_pps_getparams(pps_handle_t handle,\n                        pps_params_t *ppsparams);\nint time_pps_getcap(pps_handle_t handle, int *mode);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "DESCRIPTION",
+      "ja": "DESCRIPTION"
+    },
+    {
+      "indent": 3,
+      "text": "A suitably privileged application may use time_pps_setparams() to set the parameters (mode bits and timestamp offsets) for a PPS source. The pps_params_t type is defined in section 3.2; mode bits are defined in section 3.3. An application may use time_pps_getparams() to discover the current settings of the PPS parameters. An application that needs to change only a subset of the existing parameters must first call time_pps_getparams() to obtain the current parameter values, then set the new values using time_pps_setparams().",
+      "ja": "好適特権アプリケーションは、PPS源のパラメータ（モードビット及びタイムスタンプオフセット）を設定する）（time_pps_setparamsを使用することができます。 pps_params_tタイプはセクション3.2で定義されています。モードビットは、セクション3.3で定義されています。アプリケーションは、PPSパラメータの現在の設定を発見するtime_pps_getparams（）を使用してもよいです。既存のパラメータのサブセットのみを変更する必要があるアプリケーションは、まず現在のパラメータ値を得るために）（time_pps_getparamsを呼び出す必要があり、次いでtime_pps_setparams（）を使用して新しい値を設定します。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: a call to time_pps_setparams() replaces the current values of all mode bits with those specified via the ppsparams argument, except those bits whose state cannot be changed. Bits might be read-only due to access controls, or because they are fixed by the implementation.",
+      "ja": "注：time_pps_setparams（）の呼び出しは、その状態を変更することはできませんこれらのビットを除いて、ppsparams引数で指定されたものと、すべてのモードビットの現在値を置換します。ビットが原因のアクセスコントロールに読み取り専用される可能性があります、またはそれらは実装によって固定されているので。"
+    },
+    {
+      "indent": 3,
+      "text": "The timestamp format of the assert_offset and clear_offset fields is defined by the mode field. That is, on a call to time_pps_setparams(), the kernel interprets the supplied offset values using the timestamp format given in the mode field of the ppsparams argument. If the requested timestamp format is not supported, the time_pps_setparams() function has no effect and returns an error value. On a call to time_pps_getparams(), the kernel provides the timestamp format of the offsets by setting one of the timestamp format bits in the mode field.",
+      "ja": "assert_offsetとclear_offsetフィールドのタイムスタンプ形式は、モードフィールドによって定義されます。すなわちtime_pps_setparams（）、カーネルはppsparams引数のモードフィールドに指定されたタイムスタンプ形式を使用して供給されたオフセット値を解釈への呼び出しです。要求されたタイムスタンプ形式がサポートされていない場合、time_pps_setparams（）関数は影響を及ぼさないとエラー値を返します。 time_pps_getparams（）の呼び出しに、カーネルモードフィールドのタイムスタンプ形式のビットのうちの1つを設定することにより、オフセットのタイムスタンプ形式を提供します。"
+    },
+    {
+      "indent": 6,
+      "text": "Note: an application that uses time_pps_getparams() to read the current offset values cannot specify which format is used. The implementation SHOULD return the offsets using the same timestamp format as was used when the offsets were set.",
+      "ja": "注：現在のオフセット値は、フォーマットが使用されるかを指定することができない読み取るためtime_pps_getparamsを使用するアプリケーションを（）。実装は、オフセットを設定したときに使用したのと同じタイムスタンプ形式を使用してオフセットを返すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "An application wishing to discover which mode bits it may set, with its current effective user ID, may call time_pps_getcap(). This function returns the set of mode bits that may be set by the application, without generating an EINVAL or EPERM error, for the specified PPS source. It does not return the current values for the mode bits. A call to time_pps_getcap() returns the mode bits corresponding to all supported timestamp formats.",
+      "ja": "それが設定され得るモードビットを発見することを望むアプリケーションが、現在の有効なユーザIDと、）（time_pps_getcap呼び出すことができます。この関数は、指定されたPPSソースに対して、EINVALまたはEPERMエラーを生成せずに、アプリケーションによって設定されるモードビットのセットを返します。これは、モードビットの現在の値を返しません。 time_pps_getcap（）の呼び出しは、すべてのサポートされているタイムスタンプ・フォーマットに対応するモードビットを返します。"
+    },
+    {
+      "indent": 3,
+      "text": "The time_pps_getcap() function MAY ignore the mode in which the associated UNIX file descriptor was opened, so the application might still receive an EBADF error on a call to time_pps_setparams(), even if time_pps_getcap() says that the chosen mode bits are allowed.",
+      "ja": "time_pps_getcap（）が選ばれたモードビットが許可されていることを言っても、）time_pps_getcap（）関数は、関連するUNIXファイル記述子が開かれたモードを無視するかもしれ、そのアプリケーションがまだtime_pps_setparams（への呼び出しでEBADFエラーを受け取ることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The mode bits returned by time_pps_getcap() for distinct PPS handles may differ, reflecting the specific capabilities of the underlying hardware connection to the PPS source, or of the source itself.",
+      "ja": "異なるPPSハンドル用time_pps_getcap（）によって返されたモードビットは、ソース自体のPPS源に基盤となるハードウェアの接続の特定の機能を反映し、異なっていてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "RETURN VALUES",
+      "ja": "戻り値"
+    },
+    {
+      "indent": 3,
+      "text": "On successful completion, the time_pps_setparams(), time_pps_getparams(), and time_pps_getcap() functions return 0. Otherwise, a value of -1 is returned and errno is set to indicate the error.",
+      "ja": "正常終了、time_pps_setparams（）、time_pps_getparams（）、及びtime_pps_getcap（）関数は-1の値が返され、errnoはエラーを示すように設定され、そうでなければ0を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "ERRORS",
+      "ja": "エラー"
+    },
+    {
+      "indent": 3,
+      "text": "If the time_pps_setparams(), time_pps_getparams(), or time_pps_getcap() function fails, errno may be set to one of the following values:",
+      "ja": "time_pps_setparams（）、time_pps_getparams（）、またはtime_pps_getcap（）関数が失敗した場合、errnoには、次のいずれかの値に設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[EBADF] The handle parameter is not associated with a valid file descriptor, or the descriptor is not open for writing.",
+      "ja": "[EBADF]ハンドルパラメータが有効なファイルディスクリプタに関連付けられていない、または記述子が書き込み用にオープンではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EFAULT] A parameter points to an invalid address.",
+      "ja": "[EFAULT]パラメータが無効なアドレスを指します。"
+    },
+    {
+      "indent": 3,
+      "text": "[EOPNOTSUPP] The use of the PPS API is not supported for the associated file descriptor.",
+      "ja": "[EOPNOTSUPP] PPSのAPIを使用すると、関連するファイルディスクリプタのためにサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EINVAL] The operating system does not support all of the requested mode bits.",
+      "ja": "[EINVAL]オペレーティングシステムは、要求されたモードビットのすべてをサポートしていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EPERM] The process's effective user ID does not have the required privileges to use the PPS API, or to set the given mode bits.",
+      "ja": "[EPERM]プロセスの実効ユーザIDは、PPSのAPIを使用するために必要な権限を持っていない、または指定されたモードビットを設定します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4.3 New functions: access to PPS timestamps",
+      "section_title": true,
+      "ja": "3.4.3の新機能：PPSタイムスタンプへのアクセス"
+    },
+    {
+      "indent": 3,
+      "text": "The API includes one function that gives applications access to PPS timestamps. As an implementation option, the application may request the API to block until the next timestamp is captured. (The API does not directly support the use of the select() or poll() system calls to wait for PPS events.)",
+      "ja": "APIはPPSタイムスタンプへのアプリケーションへのアクセスを与える一つの機能が含まれています。実装オプションとして、アプリケーションは、次のタイムスタンプがキャプチャされるまでブロックするAPIを要求することができます。 （APIは、直接（選択の使用をサポートしていません）やpoll（）システムは、PPSのイベントを待つために呼び出されます。）"
+    },
+    {
+      "indent": 3,
+      "text": "SYNOPSIS",
+      "ja": "SYNOPSIS"
+    },
+    {
+      "indent": 6,
+      "text": "int time_pps_fetch(pps_handle_t handle, const int tsformat, pps_info_t *ppsinfobuf, const struct timespec *timeout);",
+      "ja": "int型time_pps_fetch（pps_handle_tハンドル、のconst int型TSFORMAT、pps_info_t * ppsinfobuf、constの構造体TIMESPEC *タイムアウト）。"
+    },
+    {
+      "indent": 3,
+      "text": "DESCRIPTION",
+      "ja": "DESCRIPTION"
+    },
+    {
+      "indent": 3,
+      "text": "An application may use time_pps_fetch() to obtain the most recent timestamps captured for the PPS source specified by the handle parameter. The tsformat parameter specifies the desired timestamp format; if the requested timestamp format is not supported, the call fails and returns an error value. The application MUST specify exactly one timestamp format.",
+      "ja": "アプリケーションは、ハンドルパラメータで指定されたPPSソースのキャプチャ最新のタイムスタンプを取得するためにtime_pps_fetch（）を使用することができます。 TSFORMATパラメータは、所望のタイムスタンプ形式を指定します。要求されたタイムスタンプ形式がサポートされていない場合、呼び出しは失敗し、エラー値を返します。アプリケーションは、1つのタイムスタンプの形式を指定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This function blocks until either a timestamp is captured from the PPS source, or until the specified timeout duration has expired. If the timeout parameter is a NULL pointer, the function simply blocks until a timestamp is captured. If the timeout parameter specifies a delay of zero, the function returns immediately.",
+      "ja": "この機能ブロックは、までのいずれかのタイムスタンプはPPS源から捕捉される、または指定されたタイムアウト期間が経過するまで。タイムスタンプがキャプチャされるまで、タイムアウトパラメータがNULLポインタ、関数単にブロックである場合。タイムアウトパラメータがゼロの遅延を指定した場合、関数はすぐに戻ります。"
+    },
+    {
+      "indent": 3,
+      "text": "Support for blocking behavior is an implementation option. If the PPS_CANWAIT mode bit is clear, and the timeout parameter is either NULL or points to a non-zero value, the function returns an EOPNOTSUPP error. An application can discover whether the feature is implemented by using time_pps_getcap() to see if the PPS_CANWAIT mode bit is set.",
+      "ja": "行動を阻止するためのサポートは実装オプションです。 PPS_CANWAITモードビットがクリアされ、タイムアウトパラメータがゼロ以外の値にNULLまたは点のいずれかである場合、関数はEOPNOTSUPPエラーを返します。アプリケーションは、機能がPPS_CANWAITモードビットが設定されているかどうかを確認するためにtime_pps_getcap（）を使用して実装されているかどうかを発見することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The result is stored in the ppsinfobuf parameter, whose fields are defined in section 3.2. If the function returns as the result of a timeout or error, the contents of the ppsinfobuf are undefined.",
+      "ja": "結果は、そのフィールドのセクション3.2で定義されているppsinfobufパラメータに格納されています。関数がタイムアウトまたはエラーの結果として返された場合、ppsinfobufの内容は不定です。"
+    },
+    {
+      "indent": 3,
+      "text": "If this function is invoked before the system has captured a timestamp for the signal source, the ppsinfobuf returned will have its timestamp fields set to the time format's base date (e.g., for PPS_TSFMT_TSPEC, both the tv_sec and tv_nsec fields will be zero).",
+      "ja": "システムは、信号源のタイムスタンプを獲得する前に、この関数が呼び出された場合、返さppsinfobufは、時刻形式の基準日に設定されたタイムスタンプフィールドを有するであろう（例えば、PPS_TSFMT_TSPECため、tv_secのとt​​v_nsecフィールドの両方がゼロになります）。"
+    },
+    {
+      "indent": 3,
+      "text": "RETURN VALUES",
+      "ja": "戻り値"
+    },
+    {
+      "indent": 3,
+      "text": "On successful completion, the time_pps_fetch() function returns 0. Otherwise, a value of -1 is returned and errno is set to indicate the error.",
+      "ja": "正常終了、time_pps_fetch（）関数は-1の値が返され、errnoはエラーを示すように設定され、そうでなければ0を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "ERRORS",
+      "ja": "エラー"
+    },
+    {
+      "indent": 3,
+      "text": "If the time_pps_fetch() function fails, errno may be set to one of the following values:",
+      "ja": "time_pps_fetch（）関数が失敗した場合、errnoは次のいずれかの値に設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[EBADF] The handle parameter is not associated with a valid file descriptor.",
+      "ja": "[EBADF]ハンドルパラメータが有効なファイルディスクリプタに関連付けられていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EFAULT] A parameter points to an invalid address.",
+      "ja": "[EFAULT]パラメータが無効なアドレスを指します。"
+    },
+    {
+      "indent": 3,
+      "text": "[EINTR] A signal was delivered before the time limit specified by the timeout parameter expired and before a timestamp has been captured.",
+      "ja": "タイムアウトパラメータで指定された時間制限が満了タイムスタンプがキャプチャされる前に前[EINTR]信号を送達しました。"
+    },
+    {
+      "indent": 3,
+      "text": "[EINVAL] The requested timestamp format is not supported.",
+      "ja": "[EINVAL]要求されたタイムスタンプ形式がサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EOPNOTSUPP] The use of the PPS API is not supported for the associated file descriptor.",
+      "ja": "[EOPNOTSUPP] PPSのAPIを使用すると、関連するファイルディスクリプタのためにサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[ETIMEDOUT] The timeout duration has expired.",
+      "ja": "[ETIMEDOUT]タイムアウト期間が満了しています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4.4 New functions: disciplining the kernel timebase",
+      "section_title": true,
+      "ja": "3.4.4の新機能：カーネルのタイムベースを懲戒"
+    },
+    {
+      "indent": 3,
+      "text": "The API includes one OPTIONAL function to specify if and how a PPS source is provided to a kernel consumer of PPS events, such as the code used to discipline the operating system's internal timebase.",
+      "ja": "APIは、どのようにPPSソースは、オペレーティング・システムの内部タイムベースを訓練するために使用されるコードとしてPPSイベントのカーネル消費者に提供されるかどうかを指定する一つのオプション機能を含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "SYNOPSIS",
+      "ja": "SYNOPSIS"
+    },
+    {
+      "indent": 3,
+      "text": " int time_pps_kcbind(pps_handle_t handle, const int kernel_consumer, const int edge, const int tsformat); DESCRIPTION",
+      "ja": "int型time_pps_kcbind（pps_handle_tハンドルのconst int型kernel_consumer、CONST INTエッジ、のconst int型TSFORMAT）。 DESCRIPTION"
+    },
+    {
+      "indent": 3,
+      "text": "An application with appropriate privileges may use time_pps_kcbind() to bind a kernel consumer to the PPS source specified by the handle.",
+      "ja": "適切な権限を持つアプリケーションは、ハンドルによって指定されたPPSソースにカーネルコンシューマをバインドするtime_pps_kcbind（）を使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The kernel consumer is identified by the kernel_consumer parameter. In the current version of the API, the possible values for this parameter are:",
+      "ja": "カーネルの消費者はkernel_consumerパラメータによって識別されます。 APIの現在のバージョンでは、このパラメータに指定できる値は次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "#define PPS_KC_HARDPPS 0 #define PPS_KC_HARDPPS_PLL 1 #define PPS_KC_HARDPPS_FLL 2",
+      "ja": "#define PPS_KC_HARDPPS 0の#define PPS_KC_HARDPPS_PLL 1の#define PPS_KC_HARDPPS_FLL 2"
+    },
+    {
+      "indent": 3,
+      "text": "with these meanings:",
+      "ja": "これらの意味を持ちます："
+    },
+    {
+      "indent": 3,
+      "text": "PPS_KC_HARDPPS The kernel's hardpps() function (or equivalent).",
+      "ja": "カーネルのhardpps（）関数（または同等の）PPS_KC_HARDPPS。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_KC_HARDPPS_PLL A variant of hardpps() constrained to use a phase-locked loop.",
+      "ja": "PPS_KC_HARDPPS_PLL位相ロック・ループを使用するように制約hardppsの変異体（）。"
+    },
+    {
+      "indent": 3,
+      "text": "PPS_KC_HARDPPS_FLL A variant of hardpps() constrained to use a frequency-locked loop.",
+      "ja": "PPS_KC_HARDPPS_FLL周波数ロックループを使用するように制約hardppsの変異体（）。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementation of any or all of these values is OPTIONAL.",
+      "ja": "これらの値のいずれかまたは全ての実装はオプションです。"
+    },
+    {
+      "indent": 3,
+      "text": "The edge parameter indicates which edge of the PPS signal causes a timestamp to be delivered to the kernel consumer. It may have the value PPS_CAPTUREASSERT, PPS_CAPTURECLEAR, or PPS_CAPTUREBOTH, depending on particular characteristics of the PPS source. It may also be zero, which removes any binding between the PPS source and the kernel consumer.",
+      "ja": "エッジパラメータは、PPS信号のエッジがタイムスタンプがカーネルコンシューマに配信させるかを示します。これは、PPS源の特定の特性に応じて、値PPS_CAPTUREASSERT、PPS_CAPTURECLEAR、又はPPS_CAPTUREBOTHを有していてもよいです。また、任意のPPS源とカーネル消費者との間の結合を削除し、ゼロであってもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The tsformat parameter specifies the format for the timestamps delivered to the kernel consumer. If this value is zero, the implementation MAY choose the appropriate format, or return EINVAL. The implementation MAY ignore a non-zero value for this parameter.",
+      "ja": "TSFORMATパラメータは、カーネルコンシューマに配信タイムスタンプのフォーマットを指定します。この値がゼロの場合、実装は、適切な形式を選択するか、EINVALを返してもよいです。実装は、このパラメータのゼロ以外の値を無視してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "The binding created by this call persists until it is changed by a subsequent call specifying the same kernel_consumer. In particular, a subsequent call to time_pps_destroy() for the specified handle does not affect the binding.",
+      "ja": "それは同じkernel_consumerを指定し、後続の呼び出しによって変更されるまで、この結合の呼び出しによって作成された持続します。具体的には、指定されたハンドルのためのtime_pps_destroyへの後続の呼び出しは（）結合に影響しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The binding is independent of any prior or subsequent changes to the PPS_CAPTUREASSERT and PPS_CAPTURECLEAR mode bits for the device. However, if either the edge or the tsformat parameter values are inconsistent with the capabilities of the PPS source, an error is returned. The implementation MAY also return an error if the tsformat value is unsupported for time_pps_kcbind(), even if it is supported for other uses of the API.",
+      "ja": "結合は、デバイスのPPS_CAPTUREASSERTとPPS_CAPTURECLEARモードビットへの前または後の変化とは無関係です。エッジまたはTSFORMATパラメータ値のいずれかがPPSソースの機能と矛盾する場合は、エラーが返されます。 TSFORMAT値がtime_pps_kcbind（のためにサポートされていない場合、実装はまた、APIの他の用途のためにサポートされている場合でも、）エラーが返されることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The operating system may enforce two restrictions on the bindings created by time_pps_kcbind():",
+      "ja": "オペレーティングシステムは、time_pps_kcbind（）によって作成されたバインディング上の2つの制限を実施します。"
+    },
+    {
+      "indent": 6,
+      "text": "1. the kernel MAY return an error if an attempt is made to bind a kernel consumer to more than one PPS source a time.",
+      "ja": "試みが複数のPPSソース時にカーネルコンシューマをバインドするためになされた場合1.カーネルがエラーを返す場合があります。"
+    },
+    {
+      "indent": 6,
+      "text": "2. the kernel MAY restrict the ability to set bindings to processes with sufficient privileges to modify the system's internal timebase. (On UNIX systems, such modification is normally done using settimeofday() and/or adjtime(), and is restricted to users with superuser privilege.)",
+      "ja": "2.カーネルは、システムの内部タイムベースを変更するのに十分な権限を持つプロセスへのバインディングを設定する機能を制限することができます。 （UNIXシステムでは、そのような変更は通常、settimeofday（）および/またはadjtime（）を使用して行われ、スーパーユーザー権限を持つユーザーに制限されています。）"
+    },
+    {
+      "indent": 6,
+      "text": "Warning: If this feature is configured for a PPS source that does not have an accurate 1-pulse-per-second signal, or is otherwise inappropriately configured, use of this feature may result in seriously incorrect timekeeping for the entire system. For best results, the 1-PPS signal should have much better frequency stability than the system's internal clock source (usually a crystal-controlled oscillator), and should have jitter (variation in interarrival time) much less than the system's clock-tick interval.",
+      "ja": "警告：この機能は、正確な1パルス毎秒の信号を持っていないPPS源用に設定され、さもなければ不適切に構成されている場合は、この機能の使用は、システム全体の深刻な誤った計時をもたらすことができます。最良の結果を得るために、1-PPS信号は、システムの内部クロック・ソース（通常は水晶制御発振器）よりもはるかに優れた周波数安定性を有するべきであり、システムのクロック・ティック間隔よりもはるかに少ないジッタ（到着間時間の変動）を有するべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "See RFC 1589 [4] for more information about how the system's timebase may be disciplined using a PPS signal.",
+      "ja": "システムのタイムベースは、PPS信号を使用して訓練することができる方法の詳細については、RFC 1589 [4]を参照。"
+    },
+    {
+      "indent": 3,
+      "text": "RETURN VALUES",
+      "ja": "戻り値"
+    },
+    {
+      "indent": 3,
+      "text": "On successful completion, the time_pps_kcbind() function returns 0. Otherwise, a value of -1 is returned and errno is set to indicate the error.",
+      "ja": "正常終了、time_pps_kcbind（）関数は-1の値が返され、errnoはエラーを示すように設定され、そうでなければ0を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "ERRORS",
+      "ja": "エラー"
+    },
+    {
+      "indent": 3,
+      "text": "If the time_pps_kcbind() function fails, errno may be set to one of the following values:",
+      "ja": "time_pps_kcbind（）関数が失敗した場合、errnoは次のいずれかの値に設定することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[EBADF] The handle parameter is not associated with a valid file descriptor, or the descriptor is not open for writing.",
+      "ja": "[EBADF]ハンドルパラメータが有効なファイルディスクリプタに関連付けられていない、または記述子が書き込み用にオープンではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EFAULT] A parameter points to an invalid address.",
+      "ja": "[EFAULT]パラメータが無効なアドレスを指します。"
+    },
+    {
+      "indent": 3,
+      "text": "[EINVAL] The requested timestamp format is not supported.",
+      "ja": "[EINVAL]要求されたタイムスタンプ形式がサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EOPNOTSUPP] The use of the PPS API is not supported for the associated file descriptor, or this OPTIONAL function is not supported.",
+      "ja": "[EOPNOTSUPP] PPSのAPIを使用すると、関連するファイルディスクリプタのためにサポートされていない、またはこのオプション機能はサポートされていません。"
+    },
+    {
+      "indent": 3,
+      "text": "[EPERM] The process's effective user ID does not have the required privileges to set the binding.",
+      "ja": "[EPERM]プロセスの実効ユーザIDは、バインディングを設定するために必要な権限を持っていません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.5 Compliance rules",
+      "section_title": true,
+      "ja": "3.5コンプライアンスルール"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\",\"SHOULD\", SHOULD NOT\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [1].",
+      "ja": "RFC 2119に記載されているようにキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、 \"SHOULD\"、この文書のMAY「、 \"べきではない\"、および \"\" OPTIONAL [1]に解釈されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Some features of this specification are OPTIONAL, but others are REQUIRED.",
+      "ja": "この仕様の一部の機能はオプションですが、他のものが必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "3.5.1 Functions",
+      "section_title": true,
+      "ja": "3.5.1機能"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MUST provide these functions:",
+      "ja": "実装は、これらの機能を提供する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "- time_pps_create() - time_pps_destroy() - time_pps_setparams() - time_pps_getparams() - time_pps_getcap() - time_pps_fetch()",
+      "ja": " -  time_pps_create（） -  time_pps_destroy（） -  time_pps_setparams（） -  time_pps_getparams（） -  time_pps_getcap（） -  time_pps_fetch（）"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MUST provide this function, but it may be implemented as a function that always return an EOPNOTSUPP error, possibly on a per-source basis:",
+      "ja": "実装は、この機能を提供しなければならないが、それは常に可能性ごとのソースベースで、EOPNOTSUPPエラーを返す関数として実装されてもよいです。"
+    },
+    {
+      "indent": 6,
+      "text": "- time_pps_kcbind()",
+      "ja": " -  time_pps_kcbind（）"
+    },
+    {
+      "indent": 0,
+      "text": "3.5.2 Mode bits",
+      "section_title": true,
+      "ja": "3.5.2モードビット"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MUST support at least one of these mode bits for each PPS source:",
+      "ja": "インプリメンテーションは、各PPS源のためのこれらのモードビットの少なくとも一つをサポートしなければなりません。"
+    },
+    {
+      "indent": 6,
+      "text": "- PPS_CAPTUREASSERT - PPS_CAPTURECLEAR",
+      "ja": " -  PPS_CAPTUREASSERT  -  PPS_CAPTURECLEAR"
+    },
+    {
+      "indent": 3,
+      "text": "and MAY support both of them. If an implementation supports both of these bits for a PPS source, it SHOULD allow them to be set simultaneously.",
+      "ja": "そしてそれらの両方をサポートすることができます。実装がPPSソースのこれらのビットの両方をサポートしている場合、それはそれらを同時に設定することができるはずです。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MUST support this timestamp format:",
+      "ja": "実装は、このタイムスタンプ形式をサポートする必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "- PPS_TSFMT_TSPEC",
+      "ja": " -  PPS_TSFMT_TSPEC"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MAY support these mode bits:",
+      "ja": "実装は、これらのモードビットをサポートすることがあります。"
+    },
+    {
+      "indent": 6,
+      "text": "- PPS_ECHOASSERT - PPS_ECHOCLEAR - PPS_OFFSETASSERT - PPS_OFFSETCLEAR",
+      "ja": " -  PPS_ECHOASSERT  -  PPS_ECHOCLEAR  -  PPS_OFFSETASSERT  -  PPS_OFFSETCLEAR"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MAY support this timestamp format:",
+      "ja": "実装は、このタイムスタンプ形式をサポートする可能性があります。"
+    },
+    {
+      "indent": 6,
+      "text": "- PPS_TSFMT_NTPFP",
+      "ja": " -  PPS_TSFMT_NTPFP"
+    },
+    {
+      "indent": 0,
+      "text": "3.6 Examples",
+      "section_title": true,
+      "ja": "3.6例"
+    },
+    {
+      "indent": 3,
+      "text": "A very simple use of this API might be:",
+      "ja": "このAPIの非常に簡単な使用は次のようになります。"
+    },
+    {
+      "indent": 6,
+      "text": "int fd;\npps_handle_t handle;\npps_params_t params;\npps_info_t infobuf;\nstruct timespec timeout;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* Open a file descriptor and enable PPS on rising edges */\nfd = open(PPSfilename, O_RDWR, 0);\ntime_pps_create(fd, &handle);\ntime_pps_getparams(handle, &params);\nif ((params.mode & PPS_CAPTUREASSERT) == 0) {\n    fprintf(stderr, \"%s cannot currently CAPTUREASSERT\\n\",\n          PPSfilename);\n    exit(1);\n}",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* create a zero-valued timeout */ timeout.tv_sec = 0;\ntimeout.tv_nsec = 0;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* loop, printing the most recent timestamp every second or so */\nwhile (1) {\n    sleep(1);\n    time_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf, &timeout);\n    printf(\"Assert timestamp: %d.%09d, sequence: %ld\\n\",\n                infobuf.assert_timestamp.tv_sec,\n                infobuf.assert_timestamp.tv_nsec,\n                infobuf.assert_sequence);\n}",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that this example omits most of the error-checking that would be expected in a reliable program.",
+      "ja": "この例では、信頼性の高いプログラムで予想されるエラーチェックの大半を省略することに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Also note that, on a system that supports PPS_CANWAIT, the function of these lines:",
+      "ja": "またPPS_CANWAIT、これらの行の機能をサポートしているシステム上で、次の点に注意してください"
+    },
+    {
+      "indent": 9,
+      "text": "sleep(1);\ntime_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf, &timeout);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "might be more reliably accomplished using:",
+      "ja": "より確実に使用して達成されることがあります。"
+    },
+    {
+      "indent": 9,
+      "text": "timeout.tv_sec = 100;\ntimeout.tv_nsec = 0;\ntime_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf, &timeout);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The (arbitrary) timeout value is used to protect against the possibility that another application might disable PPS timestamps, or that the hardware generating the timestamps might fail.",
+      "ja": "（任意）タイムアウト値は、他のアプリケーションがPPSタイムスタンプを無効にする、またはタイムスタンプを生成するハードウェアが失敗するかもしれないかもしれないという可能性から保護するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A slightly more elaborate use of this API might be:",
+      "ja": "このAPIの少しより精巧な使用は次のようになります。"
+    },
+    {
+      "indent": 6,
+      "text": "int fd;\npps_handle_t handle;\npps_params_t params;\npps_info_t infobuf;\nint avail_mode;\nstruct timespec timeout;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* Open a file descriptor */\nfd = open(PPSfilename, O_RDWR, 0);\ntime_pps_create(fd, &handle);",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/*\n * Find out what features are supported\n */",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "time_pps_getcap(handle, &avail_mode);\nif ((avail_mode & PPS_CAPTUREASSERT) == 0) {\n    fprintf(stderr, \"%s cannot CAPTUREASSERT\\n\", PPSfilename);\n    exit(1);\n}\nif ((avail_mode & PPS_OFFSETASSERT) == 0) {\n    fprintf(stderr, \"%s cannot OFFSETASSERT\\n\", PPSfilename);\n    exit(1);\n}",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/*\n * Capture assert timestamps, and\n *   compensate for a 675 nsec propagation delay\n */",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "time_pps_getparams(handle, &params);\nparams.assert_offset.tv_sec = 0;\nparams.assert_offset.tv_nsec = 675;\nparams.mode |= PPS_CAPTUREASSERT | PPS_OFFSETASSERT;\ntime_pps_setparams(handle, &params);",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* create a zero-valued timeout */\ntimeout.tv_sec = 0;\ntimeout.tv_nsec = 0;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* loop, printing the most recent timestamp every second or so */\nwhile (1) {\n    if (avail_mode & PPS_CANWAIT) {\n        time_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf, NULL);\n                        /* waits for the next event */\n    } else {\n        sleep(1);\n        time_pps_fetch(handle, PPS_TSFMT_TSPEC, &infobuf,\n          timeout);",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": " } printf(\"Assert timestamp: %d.%09d, sequence: %ld\\n\", infobuf.assert_timestamp.tv_sec, infobuf.assert_timestamp.tv_nsec, infobuf.assert_sequence); }",
+      "ja": "}のprintf（ \"タイムスタンプをアサートした：％d％09d、配列：％LDを\\ n\"、infobuf.assert_timestamp.tv_sec、infobuf.assert_timestamp.tv_nsec、infobuf.assert_sequence）。 }"
+    },
+    {
+      "indent": 3,
+      "text": "Again, most of the necessary error-checking has been omitted from this example.",
+      "ja": "ここでも、必要なエラーチェックのほとんどは、この例では省略されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4 Security Considerations",
+      "ja": "4つのセキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This API gives applications three capabilities:",
+      "ja": "このAPIは、アプリケーションを3機能を提供します："
+    },
+    {
+      "indent": 6,
+      "text": "- Causing the system to capture timestamps on certain events.",
+      "ja": " - 特定のイベントのタイムスタンプをキャプチャするためにシステムを引き起こします。"
+    },
+    {
+      "indent": 6,
+      "text": "- Obtaining timestamps for certain events.",
+      "ja": " - 特定のイベントのタイムスタンプを取得します。"
+    },
+    {
+      "indent": 6,
+      "text": "- Affecting the system's internal timebase.",
+      "ja": " - システムの内部タイムベースに影響を与えます。"
+    },
+    {
+      "indent": 3,
+      "text": "The first capability should not affect security directly, but might cause a slight increase in interrupt latency and interrupt-handling overhead.",
+      "ja": "最初の機能は、直接セキュリティに影響を与えるべきではありませんが、割り込み遅延のわずかな増加を引き起こし、割り込み処理のオーバーヘッドがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The second capability might be useful in implementing certain kinds of covert communication channels.",
+      "ja": "第二の機能は、隠し通信チャネルの特定の種類を実装するのに有用であるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "In most cases, neither of these first two issues is a significant security threat, because the traditional UNIX file protection facility may be used to to limit access to the relevant special files. Provision of the PPS API adds minimal additional risk.",
+      "ja": "従来のUNIXファイル保護機能は、関連する特殊なファイルへのアクセスを制限するために使用することができるので、ほとんどの場合、これらの最初の二つの問題のどちらも、重大なセキュリティ上の脅威です。 PPSのAPIの提供は、最小限の追加的なリスクを追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "The final capability is reserved to highly privileged users. In UNIX systems, this means those with superuser privilege. Such users can evade protections based on file permissions; however, such users can in general cause unbounded havoc, and can set the internal timebase (and its rate of change), so this API creates no new vulnerabilities.",
+      "ja": "最後の機能は、高度な権限を持つユーザーに予約されています。 UNIXシステムでは、これはスーパーユーザ権限を有するものを意味します。このようなユーザーは、ファイルのアクセス権に基づいて保護を回避することができます。しかし、そのようなユーザーは、一般的な原因無限の大混乱で、内部タイムベース（およびその変化率）を設定することができ、したがってこのAPIには、新たな脆弱性を作成しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5 Acknowledgements",
+      "ja": "5つの謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The API in this document draws some of its inspiration from the LBL \"ppsclock\" distribution [2], originally implemented in 1993 by Steve McCanne, Craig Leres, and Van Jacobson. We also thank Poul-Henning Kamp, Craig Leres, Judah Levine, and Harlan Stenn for helpful comments they contributed during the drafting of this document.",
+      "ja": "この文書に記載されているAPIはもともとスティーブMcCanne、クレイグLeres、ヴァンヤコブソンによって1993年に実施しLBL「ppsclock」分布[2]から、そのインスピレーションの一部を描画します。我々はまた、彼らは、この文書の起草中に貢献して有益なコメントのためにポール・ヘンイング・カンプ、クレイグLeres、ユダレヴァイン、およびハーランStennに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "6 References",
+      "ja": "6つの参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "1. Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "1.ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Steve McCanne, Craig Leres, and Van Jacobson. PPSCLOCK. ftp://ftp.ee.lbl.gov/ppsclock.tar.Z.",
+      "ja": "2.スティーブMcCanne、クレイグLeres、ヴァンヤコブソン。 PPSCLOCK。 ftp://ftp.ee.lbl.gov/ppsclock.tar.Z。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Mills, D., \"Network Time Protocol (Version 3): Specification, Implementation and Analysis\", RFC 1305, March 1992.",
+      "ja": "3.ミルズ、D.、 \"ネットワーク時間プロトコル（バージョン3）：仕様、実装と分析\"、RFC 1305、1992年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "4. Mills, D., \"A Kernel Model for Precision Timekeeping\", RFC 1589, March, 1994.",
+      "ja": "4.ミルズ、D.、 \"精密計時のためのカーネルモデル\"、RFC 1589、1994年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The Open Group. The Single UNIX Specification, Version 2 - 6 Vol Set for UNIX 98. Document number T912, The Open Group, February, 1997.",
+      "ja": "5.オープングループ。シングルUNIX仕様、バージョン2  -  UNIX 98.文書番号T912、Open Groupの2月、1997年6巻セット。"
+    },
+    {
+      "indent": 0,
+      "text": "7 Authors' Addresses",
+      "ja": "7本の著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Jeffrey C. Mogul Western Research Laboratory Compaq Computer Corporation 250 University Avenue Palo Alto, California, 94305, U.S.A.",
+      "ja": "ジェフリーC.モーグル西研究所コンパックコンピュータ株式会社250大学アベニューパロアルト、カリフォルニア、94305、U.S.A."
+    },
+    {
+      "indent": 3,
+      "text": "Phone: 1 650 617 3304 (email preferred) EMail: mogul@wrl.dec.com",
+      "ja": "電話番号：1 650 617 3304（電子メール優先）メール：mogul@wrl.dec.com"
+    },
+    {
+      "indent": 3,
+      "text": "David L. Mills Electrical and Computer Engineering Department University of Delaware Newark, DE 19716",
+      "ja": "デラウェア州ニューアーク、DE 19716のデビッドL.ミルズ電気・コンピューター工学部大学"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: (302) 831-8247 EMail: mills@udel.edu",
+      "ja": "電話：（302）831-8247 Eメール：mills@udel.edu"
+    },
+    {
+      "indent": 3,
+      "text": "Jan Brittenson Sun Microsystems, Inc. 901 San Antonio Rd M/S MPK17-202 Palo Alto, CA 94303 Email: Jan.Brittenson@Eng.Sun.COM",
+      "ja": "ヤンBrittensonサン・マイクロシステムズ株式会社901サンアントニオRdのM / S MPK17-202パロアルト、CA 94303 Eメール：Jan.Brittenson@Eng.Sun.COM"
+    },
+    {
+      "indent": 3,
+      "text": "Jonathan Stone Stanford Distributed Systems Group Stanford, CA 94305",
+      "ja": "ジョナサン・ストーンスタンフォード分散システムグループスタンフォード、CA 94305"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: (650) 723-2513 EMail: jonathan@dsg.stanford.edu",
+      "ja": "電話：（650）723-2513 Eメール：jonathan@dsg.stanford.edu"
+    },
+    {
+      "indent": 3,
+      "text": "Ulrich Windl Universitaet Regensburg, Klinikum",
+      "ja": "レーゲンスブルク、病院のウルリッヒWindl大学"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: ulrich.windl@rz.uni-regensburg.de",
+      "ja": "メールアドレス：ulrich.windl@rz.uni-regensburg.de"
+    },
+    {
+      "indent": 0,
+      "text": "A. Extensions and related APIs",
+      "ja": "A.拡張機能および関連するAPI"
+    },
+    {
+      "indent": 3,
+      "text": "The API specified in the main body of this document could be more useful with the provision of several extensions or companion APIs.",
+      "ja": "このドキュメントの本体に指定されたAPIは、いくつかの拡張やコンパニオンのAPIの規定により有用である可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "At present, the interfaces listed in this appendix are not part of the formal specification in this document.",
+      "ja": "現時点では、この付録に記載されているインタフェースは、この文書の正式な仕様の一部ではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1 Extension: Parameters for the \"echo\" mechanism",
+      "ja": "A.1拡張：「エコー」のメカニズムのためのパラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "The \"echo\" mechanism described in the body of this specification leaves most of the details to the implementor, especially the designation of one or more output pins.",
+      "ja": "本明細書の本文に記載された「エコー」メカニズムが実装、一つ以上の出力ピンの特に指定に詳細の大部分を残します。"
+    },
+    {
+      "indent": 3,
+      "text": "It might be useful to extend this API to provide either or both of these features:",
+      "ja": "これらの機能のいずれかまたは両方を提供するために、このAPIを拡張すると便利かもしれません。"
+    },
+    {
+      "indent": 6,
+      "text": "- A means by which the application can discover which output pin is echoing the input pin.",
+      "ja": " - アプリケーションは、ピンが入力ピンをエコーされた出力を発見することができる手段。"
+    },
+    {
+      "indent": 6,
+      "text": "- A means by which the application can select which output pin is echoing the input pin.",
+      "ja": " - アプリケーションは、ピンが入力ピンをエコーされた出力を選択することができる手段。"
+    },
+    {
+      "indent": 0,
+      "text": "A.2 Extension: Obtaining information about external clocks",
+      "ja": "A.2拡張：外部クロックに関する情報の取得"
+    },
+    {
+      "indent": 3,
+      "text": "The PPS API may be useful with a wide variety of reference clocks, connected via several different interface technologies (including serial lines, parallel interfaces, and bus-level interfaces). These reference clocks can have many features and parameters, some of which might not even have been invented yet.",
+      "ja": "PPS APIは（シリアルライン、パラレルインタフェース、およびバス・レベル・インターフェースを含む）いくつかの異なるインタフェース技術を介して接続された基準クロックの多種多様な、と有用であり得ます。これらの基準クロックでもまだ発明されていない可能性がありますいくつかは、多くの機能とパラメータを持つことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "We believe that it would be useful to have a mechanism by which an application can discover arbitrary features and parameters of a reference clock. These might include:",
+      "ja": "私たちは、アプリケーションが任意の特徴と基準クロックのパラメータを発見することができる機構を有することが有用であろうと信じています。これらは、次のものがあります"
+    },
+    {
+      "indent": 6,
+      "text": "- Clock manufacturer, model number, and revision level - Whether the clock is synchronized to an absolute standard - For synchronized clocks, * The specific standard * The accuracy of the standard * The path used (direct connection, shortwave, longwave, satellite, etc.) * The distance (offset) and variability of this path",
+      "ja": " - 時計メーカー、モデル番号、および改訂レベル - クロックは、絶対標準に同期しているかどうか - 同期クロックの場合、*特定の標準*標準の精度*（直接接続、短波、長波、衛星、等を使用するパスこのパスの）*距離（オフセット）と変動"
+    },
+    {
+      "indent": 6,
+      "text": "- For PPS sources, * The pulse rate * The pulse shape * Which edge of the pulse corresponds to the epoch",
+      "ja": " -  PPSソースの場合、*脈拍*パルスのエッジはエポックに対応するパルス形状*"
+    },
+    {
+      "indent": 6,
+      "text": "- The time representation format",
+      "ja": " - 時間の表現形式"
+    },
+    {
+      "indent": 3,
+      "text": "This information might best be provided by an API analogous to the standard \"curses\" API, with a database analogous to the standard \"terminfo\" database. That is, a \"clockinfo\" database would contain a set of (attribute, value) pairs for each type of clock, and the API would provide a means to query this database.",
+      "ja": "この情報は、最高標準の「terminfoの」データベースに類似したデータベースと、APIを「呪い」の標準に類似したAPIによって提供されているかもしれません。それは時計の種類ごと（属性、値）ペアのセットを含んでいるでしょう、そしてAPIは、このデータベースを照会するための手段を提供する、「clockinfo」データベースです。"
+    },
+    {
+      "indent": 3,
+      "text": "Additional mechanisms would allow an application to discover the clock or clocks connected to the local system, and to discover the clockinfo type of a specific clock device.",
+      "ja": "追加メカニズムは、アプリケーションがローカル・システムに接続されたクロック又はクロックを発見するために、および特定のクロックデバイスのclockinfoタイプを発見することを可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "A.3 Extension: Finding a PPS source",
+      "ja": "A.3拡張：PPSソースを見つけます"
+    },
+    {
+      "indent": 3,
+      "text": "Although the clockinfo database described in section A.2, together with the discover mechanisms described there, would allow an application to discover the PPS source (or sources) connected to a system, it might be more complex than necessary.",
+      "ja": "一緒にそこに記載発見メカニズムとセクションA.2に記載clockinfoデータベースは、システムに接続されたアプリケーションは、PPS源（またはソース）を発見することを可能にするが、それは必要以上に複雑になるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "A simpler approach would be to support a single function that provides the identity of one or more PPS sources.",
+      "ja": "簡単な方法は、一つ以上のPPS源の識別を提供する単一の機能をサポートすることであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the function might be declared as",
+      "ja": "たとえば、関数は次のように宣言される可能性があります"
+    },
+    {
+      "indent": 6,
+      "text": "int time_pps_findsource(int index, char *path, int pathlen, char *idstring, int idlen);",
+      "ja": "int型time_pps_findsource（INTインデックス、CHAR *経路、INT PATHLEN、CHAR * idstring、INT idlen）。"
+    },
+    {
+      "indent": 3,
+      "text": "The index argument implicitly sets up an ordering on the PPS sources attached to the system. An application would use this function to inquire about the Nth source. The function would return -1 if no such source exists; otherwise, it would return 0, and would place the pathname of the associated special file in the path argument. It would also place an identification string in the idstring argument. The identification string could include the clock make, model, version, etc., which could then be used by the application to control its behavior.",
+      "ja": "index引数は、暗黙のうちにシステムに取り付けられたPPSソースの順序を設定します。アプリケーションは、N番目のソースに関するお問い合わせは、この機能を使用します。この関数は返す-1そのようなソースが存在しない場合。それ以外の場合は、0を返します、パス引数に関連した特別なファイルのパス名を置きます。また、idstring引数で識別文字列を置きます。識別文字列は、その動作を制御するためにアプリケーションによって使用することができるクロックのメーカー、モデル、バージョン等を含むことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This function might simply read the Nth line from a simple database, containing lines such as:",
+      "ja": "この関数は、単にのような行を含む、簡単なデータベースからN番目のラインを読むかもしれません："
+    },
+    {
+      "indent": 6,
+      "text": "/dev/tty00 \"TrueTime 468-DC\" /dev/pps1 \"Homebrew rubidium frequency standard\"",
+      "ja": "の/ dev / tty00 \"TrueTime 468-DC\" の/ dev / PPS1 \"自作ルビジウム周波数標準\""
+    },
+    {
+      "indent": 3,
+      "text": "allowing the system administrator to describe the configuration of PPS sources.",
+      "ja": "システム管理者がPPSソースの設定を記述することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "B. Example implementation: PPSDISC Line discipline",
+      "ja": "B.実装例：PPSDISCラインの規律"
+    },
+    {
+      "indent": 3,
+      "text": "One possible implementation of the PPS API might be to define a new \"line discipline\" and then map the API onto a set of ioctl() commands. Here we sketch such an implementation; note that this is not part of the specification of the API, and applications should not expect this low-level interface to be available.",
+      "ja": "PPSのAPIの1つの可能な実装は、新たな「ライン規律」を定義し、その後のioctl（）コマンドのセットにAPIをマッピングするかもしれません。ここでは、このような実装をスケッチ。これはAPIの仕様の一部ではなく、アプリケーションがこの低レベルのインタフェースが利用可能であることを期待すべきではないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "In this approach, the set of line disciplines is augmented with one new line discipline, PPSDISC. This discipline will act exactly the same as the TTYDISC discipline, except for its handling of modem DCD interrupts.",
+      "ja": "このアプローチでは、ライン規律のセットは、1つの改行規律、PPSDISCで強化されています。この規律は、モデムDCD割り込みの取り扱いを除き、TTYDISC規律とまったく同じ動作します。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the TIOCSETD ioctl() has been used to select this line discipline, PPS-related operations on the serial line may be invoked using new ioctl() commands. For example (values used only for illustration):",
+      "ja": "TIOCSETDのIOCTL（）は、このライン規律を選択するために使用された後、シリアルライン上のPPS関連の操作は、新規のioctl（）コマンドを使用して呼び出すことができます。例えば（例示のみのために使用される値）："
+    },
+    {
+      "indent": 3,
+      "text": "#define PPSFETCH _IOR('t', 75, pps_info_t) #define PPSSETPARAM _IOW('t', 76, pps_params_t) #define PPSGETPARAM _IOR('t', 77, pps_params_t) #define PPSGETCAP _IOR('t', 78, int)",
+      "ja": "#define PPSFETCH _IOR（ 'T'、75、pps_info_t）の#define PPSSETPARAM _IOW（ 'T'、76、pps_params_t）の#define PPSGETPARAM _IOR（ 'T'、77、pps_params_t）の#define PPSGETCAP _IOR（ 'T'、78、 int型）"
+    },
+    {
+      "indent": 0,
+      "text": "B.1 Example",
+      "ja": "B.1例"
+    },
+    {
+      "indent": 3,
+      "text": "A typical use might be:",
+      "ja": "典型的な用途は、次のようになります。"
+    },
+    {
+      "indent": 6,
+      "text": "int ldisc = PPSDISC;\npps_params_t params;\npps_info_t infobuf;",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "ioctl(fd, TIOCSETD, &ldisc);    /* set discipline */",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/*\n * Check the capabilities of this PPS source to see\n * if it supports what we need.\n */\nioctl(fd, PPSGETCAP, &params);\nif ((params.mode & PPS_CAPTUREASSERT) == 0) {\n    fprintf(stderr, \"PPS source is not suitable\\n\");\n    exit(1);\n}",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/*\n * Set this line to timestamp on a rising-edge interrupt",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": " */\nioctl(fd, PPSGETPARAMS, &params);\nparams.mode |= PPS_CAPTUREASSERT;\nioctl(fd, PPSSETPARAMS, &params);",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "sleep(2);       /* allow time for the PPS pulse to happen */",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "/* obtain most recent timestamp and sequence # for this line */\nioctl(fd, PPSFETCH, &infobuf);",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Again, this example imprudently omits any error-checking.",
+      "ja": "繰り返しますが、この例では、軽率任意のエラーチェックを省略します。"
+    },
+    {
+      "indent": 0,
+      "text": "C. Available implementations",
+      "ja": "C.利用可能な実装"
+    },
+    {
+      "indent": 3,
+      "text": "Several available implementations of this API are listed at <http://www.ntp.org/ppsapi/PPSImpList.html>. Note that not all of these implementations correspond to the current version of the specification.",
+      "ja": "このAPIのいくつかの利用可能な実装は、<http://www.ntp.org/ppsapi/PPSImpList.html>に記載されています。すべてではないこれらの実装の仕様の現在のバージョンに対応することに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2000). All Rights Reserved.",
+      "ja": "著作権（C）インターネット協会（2000）。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and translations of it may be copied and furnished to others, and derivative works that comment on or otherwise explain it or assist in its implementation may be prepared, copied, published and distributed, in whole or in part, without restriction of any kind, provided that the above copyright notice and this paragraph are included on all such copies and derivative works. However, this document itself may not be modified in any way, such as by removing the copyright notice or references to the Internet Society or other Internet organizations, except as needed for the purpose of developing Internet standards in which case the procedures for copyrights defined in the Internet Standards process must be followed, or as required to translate it into languages other than English.",
+      "ja": "この文書とその翻訳は、コピーして他の人に提供し、それ以外についてはコメントまたは派生物は、いかなる種類の制限もなく、全体的にまたは部分的に、準備コピーし、公表して配布することができることを説明したり、その実装を支援することができます、上記の著作権表示とこの段落は、すべてのそのようなコピーや派生物に含まれていることを条件とします。しかし、この文書自体は著作権のための手順はで定義されている場合には、インターネット標準を開発するために必要なものを除き、インターネットソサエティもしくは他のインターネット関連団体に著作権情報や参照を取り除くなど、どのような方法で変更されないかもしれませんインターネット標準化プロセスが続く、または英語以外の言語に翻訳するために、必要に応じなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The limited permissions granted above are perpetual and will not be revoked by the Internet Society or its successors or assigns.",
+      "ja": "上記の制限は永久で、インターネット学会やその後継者や譲渡者によって取り消されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein is provided on an \"AS IS\" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とインターネットソサエティおよびインターネットエンジニアリングタスクフォースはすべての保証を否認し、明示または黙示、その情報の利用がない任意の保証を含むがこれらに限定されない「として、」上に設けられています特定の目的への権利または商品性または適合性の黙示の保証を侵害します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}

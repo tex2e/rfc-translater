@@ -1,0 +1,813 @@
+{
+  "title": {
+    "text": "RFC 4518 - Lightweight Directory Access Protocol (LDAP): Internationalized String Preparation",
+    "ja": "RFC 4518 - LDAP（Lightweight Directory Access Protocol）：国際化文字列の準備"
+  },
+  "number": 4518,
+  "created_at": "2019-10-22 02:38:57.563982+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                        K. Zeilenga\nRequest for Comments: 4518                           OpenLDAP Foundation\nCategory: Standards Track                                      June 2006",
+      "raw": true
+    },
+    {
+      "indent": 13,
+      "text": "Lightweight Directory Access Protocol (LDAP):\n     Internationalized String Preparation",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet standards track protocol for the Internet community, and requests discussion and suggestions for improvements. Please refer to the current edition of the \"Internet Official Protocol Standards\" (STD 1) for the standardization state and status of this protocol. Distribution of this memo is unlimited.",
+      "ja": "この文書は、インターネットコミュニティのためのインターネット標準トラックプロトコルを指定し、改善のための議論と提案を要求します。このプロトコルの標準化状態と状態への「インターネット公式プロトコル標準」（STD 1）の最新版を参照してください。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "The previous Lightweight Directory Access Protocol (LDAP) technical specifications did not precisely define how character string matching is to be performed. This led to a number of usability and interoperability problems. This document defines string preparation algorithms for character-based matching rules defined for use in LDAP.",
+      "ja": "以前のLDAP（Lightweight Directory Access Protocol）技術仕様は、正確な文字列マッチングが実行される方法を定義しませんでした。これは、使いやすさと相互運用性の問題の数につながりました。このドキュメントでは、LDAPで使用するために定義されている文字ベースのマッチングルールの文字列準備アルゴリズムを定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Background",
+      "section_title": true,
+      "ja": "1.1。バックグラウンド"
+    },
+    {
+      "indent": 3,
+      "text": "A Lightweight Directory Access Protocol (LDAP) [RFC4510] matching rule [RFC4517] defines an algorithm for determining whether a presented value matches an attribute value in accordance with the criteria defined for the rule. The proposition may be evaluated to True, False, or Undefined.",
+      "ja": "ライトウェイトディレクトリアクセスプロトコル（LDAP）[RFC4510]のルールに一致する[RFC4517]は提示された値がルールに定義された基準に応じて属性値と一致するか否かを判定するためのアルゴリズムを定義します。命題は、TRUE、FALSE、または未定義に評価することができます。"
+    },
+    {
+      "indent": 6,
+      "text": "True - the attribute contains a matching value,",
+      "ja": "真 - 属性が一致する値が含まれています、"
+    },
+    {
+      "indent": 6,
+      "text": "False - the attribute contains no matching value,",
+      "ja": "偽 - 属性が一致する値が含まれていません、"
+    },
+    {
+      "indent": 6,
+      "text": "Undefined - it cannot be determined whether the attribute contains a matching value.",
+      "ja": "不定 - 属性が一致する値が含まれているか否かを判断することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "For instance, the caseIgnoreMatch matching rule may be used to compare whether the commonName attribute contains a particular value without regard for case and insignificant spaces.",
+      "ja": "例えば、caseIgnoreMatchマッチングルールは、commonNameの属性は、ケースと取るに足らないスペースに関係なく特定の値を含むかどうかを比較するために使用されてもよいです。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. X.500 String Matching Rules",
+      "section_title": true,
+      "ja": "1.2。 X.500文字列マッチングルール"
+    },
+    {
+      "indent": 3,
+      "text": "\"X.520: Selected attribute types\" [X.520] provides (among other things) value syntaxes and matching rules for comparing values commonly used in the directory [X.500]. These specifications are inadequate for strings composed of Unicode [Unicode] characters.",
+      "ja": "「X.520：選択された属性タイプは、」[X.520]一般に、ディレクトリ[X.500]で使用される値を比較する（とりわけ）値の構文と一致するルールを提供します。これらの仕様は、Unicode [UNICODE]の文字で構成される文字列には不十分です。"
+    },
+    {
+      "indent": 3,
+      "text": "The caseIgnoreMatch matching rule [X.520], for example, is simply defined as being a case-insensitive comparison where insignificant spaces are ignored. For printableString, there is only one space character and case mapping is bijective, hence this definition is sufficient. However, for Unicode string types such as universalString, this is not sufficient. For example, a case-insensitive matching implementation that folded lowercase characters to uppercase would yield different results than an implementation that used uppercase to lowercase folding. Or one implementation may view space as referring to only SPACE (U+0020), a second implementation may view any character with the space separator (Zs) property as a space, and another implementation may view any character with the whitespace (WS) category as a space.",
+      "ja": "caseIgnoreMatchマッチング規則[X.520]は、例えば、単に些細スペースは無視され、大文字と小文字を区別しない比較であると定義されます。 printablestringのために、一つだけのスペース文字とケースマッピングが全単射であり、したがって、この定義は十分です。しかし、このようuniversalStringなどのUnicode文字列型のため、これは十分ではありません。たとえば、大文字と小文字を折り畳まれた大文字と小文字を区別しないマッチングの実装では、折り畳み小文字に大文字を使用するインプリメンテーションとは異なる結果をもたらすであろう。又は一の実装のみSPACE（U + 0020）を参照するように空間を見ることができる、第2の実施の空間としての空間分離器（Zsの）プロパティを持つ任意の文字を見ることができる、別の実装では、空白（WS）カテゴリに任意の文字を見ることができますスペースとして。"
+    },
+    {
+      "indent": 3,
+      "text": "The lack of precise specification for character string matching has led to significant interoperability problems. When used in certificate chain validation, security vulnerabilities can arise. To address these problems, this document defines precise algorithms for preparing character strings for matching.",
+      "ja": "文字列マッチングのための正確な仕様の欠如は重大な相互運用性の問題につながっています。証明書チェーンの検証で使用する場合、セキュリティ上の脆弱性が発生する可能性があります。これらの問題に対処するために、このドキュメントは、マッチングのための文字列を製造するための正確なアルゴリズムを定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Relationship to \"stringprep\"",
+      "section_title": true,
+      "ja": "1.3。 「文字列前」との関係"
+    },
+    {
+      "indent": 3,
+      "text": "The character string preparation algorithms described in this document are based upon the \"stringprep\" approach [RFC3454]. In \"stringprep\", presented and stored values are first prepared for comparison so that a character-by-character comparison yields the \"correct\" result.",
+      "ja": "このドキュメントで説明する文字列準備アルゴリズムは、「文字列前」のアプローチ[RFC3454]に基づいています。 「文字列準備」において、提示及び文字単位で比較が「正しい」結果をもたらすように格納された値は、最初の比較のために用意されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The approach used here is a refinement of the \"stringprep\" [RFC3454] approach. Each algorithm involves two additional preparation steps.",
+      "ja": "ここで使用されるアプローチは、「文字列前」[RFC3454]アプローチの改良したものです。各アルゴリズムは、2つの追加の準備手順が必要。"
+    },
+    {
+      "indent": 3,
+      "text": "a) Prior to applying the Unicode string preparation steps outlined in \"stringprep\", the string is transcoded to Unicode.",
+      "ja": "A）「文字列前」に概説されたUnicode文字列準備の手順を適用する前に、文字列はUnicodeにトランスコードされます。"
+    },
+    {
+      "indent": 3,
+      "text": "b) After applying the Unicode string preparation steps outlined in \"stringprep\", the string is modified to appropriately handle characters insignificant to the matching rule.",
+      "ja": "B）「文字列準備」に概説Unicode文字列の準備手順を適用した後、文字列が適切にマッチングルールに有意でない文字を処理するように修正されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Hence, preparation of character strings for X.500 [X.500] matching [X.501] involves the following steps:",
+      "ja": "したがって、X.500 [X.500]マッチ[X.501]の文字列の調製は、以下の工程を含みます："
+    },
+    {
+      "indent": 6,
+      "text": "1) Transcode 2) Map 3) Normalize 4) Prohibit 5) Check Bidi (Bidirectional) 6) Insignificant Character Handling",
+      "ja": "1））2）地図3をトランスコード4を正規化）5を禁止する）双方向（双方向）6）無意味な文字処理をチェック"
+    },
+    {
+      "indent": 3,
+      "text": "These steps are described in Section 2.",
+      "ja": "これらの手順は、第2節で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "It is noted that while various tables of Unicode characters included or referenced by this specification are derived from Unicode [Unicode] data, these tables are to be considered definitive for the purpose of implementing this specification.",
+      "ja": "Unicode文字含まれるか、または本明細書で参照する各種テーブルがUnicodeに由来している間[ユニコード]データは、これらのテーブルは、この仕様を実装するために決定的と考えられるべきであることに留意されたいです。"
+    },
+    {
+      "indent": 0,
+      "text": "1.4. Relationship to the LDAP Technical Specification",
+      "section_title": true,
+      "ja": "1.4。 LDAP技術仕様書との関係"
+    },
+    {
+      "indent": 3,
+      "text": "This document is an integral part of the LDAP technical specification [RFC4510], which obsoletes the previously defined LDAP technical specification [RFC3377] in its entirety.",
+      "ja": "この文書は、その全体が先に定義されたLDAP技術仕様書[RFC3377]を時代遅れLDAP技術仕様書[RFC4510]の不可欠な部分です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document details new LDAP internationalized character string preparation algorithms used by [RFC4517] and possible other technical specifications defining LDAP syntaxes and/or matching rules.",
+      "ja": "この文書では、[RFC4517]で使用される新しいLDAP国際化文字列準備アルゴリズムとLDAP構文および/または一致ルールを定義することができ、他の技術仕様を詳しく説明しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.5. Relationship to X.500",
+      "section_title": true,
+      "ja": "1.5。 X.500との関係"
+    },
+    {
+      "indent": 3,
+      "text": "LDAP is defined [RFC4510] in X.500 terms as an X.500 access mechanism. As such, there is a strong desire for alignment between LDAP and X.500 syntax and semantics. The character string preparation algorithms described in this document are based upon \"Internationalized String Matching Rules for X.500\" [XMATCH] proposal to ITU/ISO Joint Study Group 2.",
+      "ja": "LDAPは、X.500アクセス機構としてX.500用語で[RFC4510]を定義します。そのため、LDAPとX.500の構文と意味の間に位置合わせのための強い要望があります。このドキュメントで説明する文字列準備アルゴリズムは、「X.500のための国際化文字列一致規則」[XMATCH] ITU / ISO共同研究会2への提案に基づいています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.6. Conventions and Terms",
+      "section_title": true,
+      "ja": "1.6。規則および規約"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますBCP 14 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Character names in this document use the notation for code points and names from the Unicode Standard [Unicode]. For example, the letter \"a\" may be represented as either <U+0061> or <LATIN SMALL LETTER A>. In the lists of mappings and the prohibited characters, the \"U+\" is left off to make the lists easier to read. The comments for character ranges are shown in square brackets (such as \"[CONTROL CHARACTERS]\") and do not come from the standard.",
+      "ja": "この文書における文字の名前は、Unicode標準[UNICODE]のコードポイントと名の表記を使用します。例えば、文字 \"は\" <LATIN SMALL LETTER A> <U + 0061>のいずれかとして表されてもよいです。マッピングと禁止文字のリストでは、「U +」を読みリストを容易にするためにオフに残されています。文字範囲のためのコメントは、（例えば、「[制御文字]」など）角括弧内に示されており、標準から来ていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: a glossary of terms used in Unicode can be found in [Glossary]. Information on the Unicode character encoding model can be found in [CharModel].",
+      "ja": "注：Unicodeで使用される用語の用語集は、[用語]に見出すことができます。 Unicode文字エンコーディングモデルに関する情報は、[CharModel]で見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The term \"combining mark\", as used in this specification, refers to any Unicode [Unicode] code point that has a mark property (Mn, Mc, Me). Appendix A provides a definitive list of combining marks.",
+      "ja": "「マークを組み合わせる」という用語は、本明細書で使用されるように、マーク性（MN、MC、ミー）を有する任意のUnicode [UNICODE]コードポイントを指します。付録Aには、マークを組み合わせるの決定的なリストを提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. String Preparation",
+      "section_title": true,
+      "ja": "2.文字列調製"
+    },
+    {
+      "indent": 3,
+      "text": "The following six-step process SHALL be applied to each presented and attribute value in preparation for character string matching rule evaluation.",
+      "ja": "以下の6つのステップのプロセスは、文字列のマッチングルール評価の準備のためにそれぞれ提示された属性値に適用しなければなりません。"
+    },
+    {
+      "indent": 6,
+      "text": "1) Transcode 2) Map 3) Normalize 4) Prohibit 5) Check bidi 6) Insignificant Character Handling",
+      "ja": "1）トランスコード2）地図3）4を正規化）は5））双方向6をチェック無意味な文字の取り扱いを禁止します"
+    },
+    {
+      "indent": 3,
+      "text": "Failure in any step causes the assertion to evaluate to Undefined.",
+      "ja": "任意のステップでの失敗は未定義に評価するアサーションが発生します。"
+    },
+    {
+      "indent": 3,
+      "text": "The character repertoire of this process is Unicode 3.2 [Unicode].",
+      "ja": "このプロセスの文字レパートリは、Unicode 3.2 [UNICODE]です。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this six-step process specification is intended to describe expected matching behavior. Implementations are free to use alternative processes so long as the matching rule evaluation behavior provided is consistent with the behavior described by this specification.",
+      "ja": "この6段階プロセス仕様が期待マッチング動作を記述することを意図していることに留意されたいです。実装があれば提供マッチングルール評価動作は、本明細書によって記載された動作と一致しているように別のプロセスを使用して自由です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Transcode",
+      "section_title": true,
+      "ja": "2.1。トランスコード"
+    },
+    {
+      "indent": 3,
+      "text": "Each non-Unicode string value is transcoded to Unicode.",
+      "ja": "それぞれの非Unicode文字列値をUnicodeにトランスコードされます。"
+    },
+    {
+      "indent": 3,
+      "text": "PrintableString [X.680] values are transcoded directly to Unicode.",
+      "ja": "printablestring [X.680]の値は、Unicodeに直接トランスコードされています。"
+    },
+    {
+      "indent": 3,
+      "text": "UniversalString, UTF8String, and bmpString [X.680] values need not be transcoded as they are Unicode-based strings (in the case of bmpString, a subset of Unicode).",
+      "ja": "UniversalString、UTF8Stringを、及びbmpString [X.680]の値は、それらが（bmpString、ユニコードのサブセットの場合）Unicodeベースの文字列であるようにトランスコードする必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "TeletexString [X.680] values are transcoded to Unicode. As there is no standard for mapping TeletexString values to Unicode, the mapping is left a local matter.",
+      "ja": "TeletexString [X.680]の値は、Unicodeにトランスコードされます。 UnicodeにマッピングするTeletexString値には標準が存在しないため、マッピングは、ローカルの問題を残しています。"
+    },
+    {
+      "indent": 3,
+      "text": "For these and other reasons, use of TeletexString is NOT RECOMMENDED.",
+      "ja": "これらおよびその他の理由により、TeletexStringの使用が推奨されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The output is the transcoded string.",
+      "ja": "出力はトランスコードの文字列です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Map",
+      "section_title": true,
+      "ja": "2.2。地図"
+    },
+    {
+      "indent": 3,
+      "text": "SOFT HYPHEN (U+00AD) and MONGOLIAN TODO SOFT HYPHEN (U+1806) code points are mapped to nothing. COMBINING GRAPHEME JOINER (U+034F) and VARIATION SELECTORs (U+180B-180D, FF00-FE0F) code points are also mapped to nothing. The OBJECT REPLACEMENT CHARACTER (U+FFFC) is mapped to nothing.",
+      "ja": "SOFT HYPHEN（U + 00AD）モンゴルTODO SOFT HYPHEN（U + 1806）のコードポイントは何にマッピングされます。書記素JOINER（U + 034F）とVARIATIONセレクタを組み合わせ（U + 180B-180D、FF00-FE0F）コードポイントはまた、何にマッピングされます。 OBJECT交換CHARACTER（U + FFFCは）何にもマッピングされています。"
+    },
+    {
+      "indent": 3,
+      "text": "CHARACTER TABULATION (U+0009), LINE FEED (LF) (U+000A), LINE TABULATION (U+000B), FORM FEED (FF) (U+000C), CARRIAGE RETURN (CR) (U+000D), and NEXT LINE (NEL) (U+0085) are mapped to SPACE (U+0020).",
+      "ja": "CHARACTER集計（U + 0009）、ラインフィード（LF）（U + 000A）、LINE集計（U + 000B）、FORMフィード（FF）（U + 000C）、キャリッジリターン（CR）（U + 000D）、及び次の行（NEL）（U + 0085）SPACE（U + 0020）にマッピングされます。"
+    },
+    {
+      "indent": 3,
+      "text": "All other control code (e.g., Cc) points or code points with a control function (e.g., Cf) are mapped to nothing. The following is a complete list of these code points: U+0000-0008, 000E-001F, 007F-0084, 0086-009F, 06DD, 070F, 180E, 200C-200F, 202A-202E, 2060-2063, 206A-206F, FEFF, FFF9-FFFB, 1D173-1D17A, E0001, E0020-E007F.",
+      "ja": "すべての制御機能を有する他の制御コード（たとえば、CC）のポイントまたはコード・ポイント（例えば、CF）は何にマッピングされます。以下では、これらのコードポイントの完全なリストである：U + 0000から0008、000E、001F、007F-0084、0086-009F、06DD、070F、180E、200C、200F、202A-202E、2060年から2063年、206A-206F 、FEFF、FFF9-FFFB、1D173-1D17A、E0001、E0020-E007F。"
+    },
+    {
+      "indent": 3,
+      "text": "ZERO WIDTH SPACE (U+200B) is mapped to nothing. All other code points with Separator (space, line, or paragraph) property (e.g., Zs, Zl, or Zp) are mapped to SPACE (U+0020). The following is a complete list of these code points: U+0020, 00A0, 1680, 2000-200A, 2028-2029, 202F, 205F, 3000.",
+      "ja": "ZERO WIDTH SPACE（U + 200B）は何にもマッピングされています。セパレータ（スペース、ライン、または段落）特性を有する他のすべてのコードポイント（例えば、Zsは、Z1の、またはZpの）は、（U + 0020）空間にマッピングされます。 U + 0020、00A0、1680、2000-200A、2028年から2029年、202F、205F、3000：以下では、これらのコードポイントのリストです。"
+    },
+    {
+      "indent": 3,
+      "text": "For case ignore, numeric, and stored prefix string matching rules, characters are case folded per B.2 of [RFC3454].",
+      "ja": "ケースは、ルールに一致する、数値、及び記憶された接頭文字列を無視するため、文字は[RFC3454]のB.2当たり折り畳まれた場合です。"
+    },
+    {
+      "indent": 3,
+      "text": "The output is the mapped string.",
+      "ja": "出力は、マップされた文字列です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Normalize",
+      "section_title": true,
+      "ja": "2.3。ノーマライズ"
+    },
+    {
+      "indent": 3,
+      "text": "The input string is to be normalized to Unicode Form KC (compatibility composed) as described in [UAX15]. The output is the normalized string.",
+      "ja": "入力文字列は、[UAX15]に記載されているようにユニコードフォームKC（構成互換性）に正規化されます。出力は、正規化された文字列です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Prohibit",
+      "section_title": true,
+      "ja": "2.4。禁止します"
+    },
+    {
+      "indent": 3,
+      "text": "All Unassigned code points are prohibited. Unassigned code points are listed in Table A.1 of [RFC3454].",
+      "ja": "未使用のIPアドレスすべてのコードポイントが禁止されています。割り当てられていないコードポイントは、[RFC3454]の表A.1に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Characters that, per Section 5.8 of [RFC3454], change display properties or are deprecated are prohibited. These characters are listed in Table C.8 of [RFC3454].",
+      "ja": "[RFC3454]のセクション5.8あたり、表示プロパティを変更したり、廃止され、文字が禁止されています。これらの文字は、[RFC3454]の表C.8に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Private Use code points are prohibited. These characters are listed in Table C.3 of [RFC3454].",
+      "ja": "私用のコードポイントが禁止されています。これらの文字は、[RFC3454]の表C.3に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "All non-character code points are prohibited. These code points are listed in Table C.4 of [RFC3454].",
+      "ja": "すべての非文字コードポイントは禁止されています。これらのコードポイントは、[RFC3454]の表C.4に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Surrogate codes are prohibited. These characters are listed in Table C.5 of [RFC3454].",
+      "ja": "サロゲートコードが禁止されています。これらの文字は、[RFC3454]の表C.5にリストされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The REPLACEMENT CHARACTER (U+FFFD) code point is prohibited.",
+      "ja": "REPLACEMENT文字（U + FFFD）コードポイントが禁止されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The step fails if the input string contains any prohibited code point. Otherwise, the output is the input string.",
+      "ja": "入力文字列が任意の禁止コードポイントが含まれている場合、ステップは失敗します。それ以外の場合、出力は入力文字列です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. Check bidi",
+      "section_title": true,
+      "ja": "0.5。 BDをチェック"
+    },
+    {
+      "indent": 3,
+      "text": "Bidirectional characters are ignored.",
+      "ja": "双方向の文字は無視されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. Insignificant Character Handling",
+      "section_title": true,
+      "ja": "2.6。無意味な文字の扱い"
+    },
+    {
+      "indent": 3,
+      "text": "In this step, the string is modified to ensure proper handling of characters insignificant to the matching rule. This modification differs from matching rule to matching rule.",
+      "ja": "このステップでは、文字列が一致したルールに意味のない文字の適切な取扱いを確保するために変更されます。この変更は、ルールに一致するルールに一致するとは異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 2.6.1 applies to case ignore and exact string matching. Section 2.6.2 applies to numericString matching. Section 2.6.3 applies to telephoneNumber matching.",
+      "ja": "2.6.1項は無視して、正確な文字列マッチング場合も同様です。 2.6.2はnumericStringマッチングに適用されます。 2.6.3は、telephoneNumberのマッチングに適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6.1. Insignificant Space Handling",
+      "section_title": true,
+      "ja": "2.6.1。無意味な宇宙取り扱い"
+    },
+    {
+      "indent": 3,
+      "text": "For the purposes of this section, a space is defined to be the SPACE (U+0020) code point followed by no combining marks.",
+      "ja": "このセクションの目的のために、スペースがない組み合わせマーク続いSPACE（U + 0020）のコードポイントであると定義されます。"
+    },
+    {
+      "indent": 7,
+      "text": "NOTE - The previous steps ensure that the string cannot contain\n       any code points in the separator class, other than SPACE\n       (U+0020).",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "For input strings that are attribute values or non-substring assertion values: If the input string contains no non-space character, then the output is exactly two SPACEs. Otherwise (the input string contains at least one non-space character), the string is modified such that the string starts with exactly one space character, ends with exactly one SPACE character, and any inner (non-empty) sequence of space characters is replaced with exactly two SPACE characters. For instance, the input strings \"foo<SPACE>bar<SPACE><SPACE>\", result in the output \"<SPACE>foo<SPACE><SPACE>bar<SPACE>\".",
+      "ja": "属性値または非サブアサーション値であり、入力文字列の場合：入力文字列が何の非空白文字が含まれていない場合、出力は正確に二つのスペースです。そうでない場合（入力文字列が少なくとも1つの非空白文字が含まれている）、文字列は文字列は正確に一つの空白文字で始まるように修飾される、正確に一つのスペース文字、スペース文字のいずれか（空でない）内側のシーケンスで終了されますちょうど二つの空白文字に置き換えます。例えば、入力文字列 \"FOO <SPACE>バー<SPACE> <スペース>\"、 \"<スペース> FOO <SPACE>は<スペース>バー<スペース>\" の出力を生じます。"
+    },
+    {
+      "indent": 3,
+      "text": "For input strings that are substring assertion values: If the string being prepared contains no non-space characters, then the output string is exactly one SPACE. Otherwise, the following steps are taken:",
+      "ja": "アサーション値をサブストリングされた入力文字列について：準備されている文字列は何の非空白文字が含まれていない場合は、出力文字列は正確に一つのスペースです。それ以外の場合は、以下のステップがとられます："
+    },
+    {
+      "indent": 3,
+      "text": "- If the input string is an initial substring, it is modified to start with exactly one SPACE character;",
+      "ja": " - 入力文字列が最初の部分であれば、正確に一つのスペース文字で始まるように変更されます。"
+    },
+    {
+      "indent": 3,
+      "text": "- If the input string is an initial or an any substring that ends in one or more space characters, it is modified to end with exactly one SPACE character;",
+      "ja": " - 入力文字列が最初の1つ以上の空白文字で終わる任意の部分文字列である場合、正確に一つのスペース文字で終了するように変更されます。"
+    },
+    {
+      "indent": 3,
+      "text": "- If the input string is an any or a final substring that starts in one or more space characters, it is modified to start with exactly one SPACE character; and",
+      "ja": " - 入力文字列が任意の1つ以上の空白文字で始まり、最終的なストリングである場合、正確に一つのスペース文字で始まるように変更されます。そして"
+    },
+    {
+      "indent": 3,
+      "text": "- If the input string is a final substring, it is modified to end with exactly one SPACE character.",
+      "ja": " - 入力文字列が最後のサブである場合、正確に一つのスペース文字で終了するように変更されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For instance, for the input string \"foo<SPACE>bar<SPACE><SPACE>\" as an initial substring, the output would be \"<SPACE>foo<SPACE><SPACE>bar<SPACE>\". As an any or final substring, the same input would result in \"foo<SPACE>bar<SPACE>\".",
+      "ja": "例えば、最初のサブストリングとして入力文字列 \"FOO <SPACE>バー<SPACE> <SPACE>\" のため、出力は \"<SPACE> FOO <SPACE> <スペース>バー<スペース>\" であろう。任意または最終サブストリングとして、同じ入力が「FOO <SPACE>バー<SPACE>」をもたらすであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Appendix B discusses the rationale for the behavior.",
+      "ja": "付録Bは、行動のための根拠を説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6.2. numericString Insignificant Character Handling",
+      "section_title": true,
+      "ja": "2.6.2。無意味な文字の処理をnumericString"
+    },
+    {
+      "indent": 3,
+      "text": "For the purposes of this section, a space is defined to be the SPACE (U+0020) code point followed by no combining marks.",
+      "ja": "このセクションの目的のために、スペースがない組み合わせマーク続いSPACE（U + 0020）のコードポイントであると定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "All spaces are regarded as insignificant and are to be removed.",
+      "ja": "すべてのスペースは重要でないとみなされ、削除されているされています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, removal of spaces from the Form KC string: \"<SPACE><SPACE>123<SPACE><SPACE>456<SPACE><SPACE>\" would result in the output string: \"123456\" and the Form KC string: \"<SPACE><SPACE><SPACE>\" would result in the output string: \"\" (an empty string).",
+      "ja": "例えば、フォームKC列からスペースを除去する： \"<SPACE> <SPACE> 123 <SPACE> <SPACE> 456 <SPACE> <SPACE>\" 出力ストリングをもたらすであろう： \"123456\" とフォームKC列： \"\"（空文字列）： \"<SPACE> <スペース> <SPACE>\" は出力文字列をもたらすであろう。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6.3. telephoneNumber Insignificant Character Handling",
+      "section_title": true,
+      "ja": "2.6.3。 telephoneNumberの無意味な文字の扱い"
+    },
+    {
+      "indent": 3,
+      "text": "For the purposes of this section, a hyphen is defined to be a HYPHEN-MINUS (U+002D), ARMENIAN HYPHEN (U+058A), HYPHEN (U+2010), NON-BREAKING HYPHEN (U+2011), MINUS SIGN (U+2212), SMALL HYPHEN-MINUS (U+FE63), or FULLWIDTH HYPHEN-MINUS (U+FF0D) code point followed by no combining marks and a space is defined to be the SPACE (U+0020) code point followed by no combining marks.",
+      "ja": "このセクションの目的のために、ハイフンは、ハイフンマイナス（U + 002D）になるように定義され、ARMENIANハイフン（U + 058A）、ハイフン（U + 2010）、NON-BREAKINGハイフン（U + 2011）、マイナス記号無結合のマーク及びスペース、続いて（U + 2212）、SMALLハイフンマイナス（U + FE63）、または全角ハイフンマイナス（U + FF0D）コードポイントは、SPACE（U + 0020）のコードポイントに続くと定義されますノー組み合わせマークによります。"
+    },
+    {
+      "indent": 3,
+      "text": "All hyphens and spaces are considered insignificant and are to be removed.",
+      "ja": "すべてのハイフンやスペースは重要でないとみなされ、削除されているされています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, removal of hyphens and spaces from the Form KC string: \"<SPACE><HYPHEN>123<SPACE><SPACE>456<SPACE><HYPHEN>\" would result in the output string: \"123456\" and the Form KC string: \"<HYPHEN><HYPHEN><HYPHEN>\" would result in the (empty) output string: \"\".",
+      "ja": "例えば、フォームKC列からハイフンとスペースの除去： \"<SPACE> <ハイフン> 123 <SPACE> <SPACE> 456 <SPACE>は<ハイフン>\" 出力ストリングをもたらすであろう： \"123456\" とフォームKC文字列： \"<HYPHEN> <HYPHEN> <ハイフン>\"（空の）出力文字列になります： \"\"。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Security Considerations",
+      "section_title": true,
+      "ja": "3.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "\"Preparation of Internationalized Strings (\"stringprep\")\" [RFC3454] security considerations generally apply to the algorithms described here.",
+      "ja": "「（文字列準備「）」国際化された文字列の調製」[RFC3454]セキュリティ問題は、一般に、ここで説明したアルゴリズムに適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Acknowledgements",
+      "section_title": true,
+      "ja": "4.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The approach used in this document is based upon design principles and algorithms described in \"Preparation of Internationalized Strings ('stringprep')\" [RFC3454] by Paul Hoffman and Marc Blanchet. Some additional guidance was drawn from Unicode Technical Standards, Technical Reports, and Notes.",
+      "ja": "本書で使用されるアプローチは、「国際化された文字列の調製（ 『文字列準備』）」ポール・ホフマンとマークブランシェによって[RFC3454]に記載の設計原理及びアルゴリズムに基づいています。いくつかの追加のガイダンスは、Unicode技術基準、テクニカルレポート、およびNotesから引き出されました。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the IETF LDAP Revision (LDAPBIS) Working Group.",
+      "ja": "この文書は、IETF LDAP改訂（LDAPBIS）ワーキンググループの製品です。"
+    },
+    {
+      "indent": 0,
+      "text": "5. References",
+      "section_title": true,
+      "ja": "5.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Normative References",
+      "section_title": true,
+      "ja": "5.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3454] Hoffman, P. and M. Blanchet, \"Preparation of Internationalized Strings (\"stringprep\")\", RFC 3454, December 2002.",
+      "ja": "[RFC3454]ホフマン、P.及びM.ブランシェ、 \"国際化された文字列の調製（\" 文字列準備 \"）\"、RFC 3454、2002年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4510] Zeilenga, K., \"Lightweight Directory Access Protocol (LDAP): Technical Specification Road Map\", RFC 4510, June 2006.",
+      "ja": "[RFC4510] Zeilenga、K.、 \"ライトウェイトディレクトリアクセスプロトコル（LDAP）：技術仕様ロードマップ\"、RFC 4510、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4517] Legg, S., Ed., \"Lightweight Directory Access Protocol (LDAP): Syntaxes and Matching Rules\", RFC 4517, June 2006.",
+      "ja": "[RFC4517]レッグ、S.​​、エド、 \"ライトウェイトディレクトリアクセスプロトコル（LDAP）：構文と一致規則\"、RFC 4517、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Unicode] The Unicode Consortium, \"The Unicode Standard, Version 3.2.0\" is defined by \"The Unicode Standard, Version 3.0\" (Reading, MA, Addison-Wesley, 2000. ISBN 0-201- 61633-5), as amended by the \"Unicode Standard Annex #27: Unicode 3.1\" (http://www.unicode.org/reports/tr27/) and by the \"Unicode Standard Annex #28: Unicode 3.2\" (http://www.unicode.org/reports/tr28/).",
+      "ja": "[UNICODE]ユニコードコンソーシアムは、 \"Unicode標準、バージョン3.2.0\" は、 \"Unicode規格、バージョン3.0\"（読書、MA、アディソン・ウェズリー、61633から5 2000. ISBN 0-201-）などによって定義されます改正 \"Unicode標準の附属書＃27：ユニコード3.1\"（http://www.unicode.org/reports/tr27/）とで \"Unicode標準の附属書＃28：Unicodeの3.2\"（のhttp：//www.unicode .ORG /レポート/ TR28 /）。"
+    },
+    {
+      "indent": 3,
+      "text": "[UAX15] Davis, M. and M. Duerst, \"Unicode Standard Annex #15: Unicode Normalization Forms, Version 3.2.0\". <http://www.unicode.org/unicode/reports/tr15/tr15- 22.html>, March 2002.",
+      "ja": "【UAX15]デイビス、M.およびM. Duerst、 \"Unicode規格付属書＃15：Unicode正規化フォーム、バージョン3.2.0\"。 <Http://www.unicode.org/unicode/reports/tr15/tr15- 22.html>、2002年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[X.680] International Telecommunication Union - Telecommunication Standardization Sector, \"Abstract Syntax Notation One (ASN.1) - Specification of Basic Notation\", X.680(2002) (also ISO/IEC 8824-1:2002).",
+      "ja": "[X.680]国際電気通信連合 - 電気通信標準化部門、 \"抽象構文記法1（ASN.1） - 基本的な記法の仕様\"、X.680（2002）（また、ISO / IEC 8824から1：2002）。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Informative References",
+      "section_title": true,
+      "ja": "5.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[X.500] International Telecommunication Union - Telecommunication Standardization Sector, \"The Directory -- Overview of concepts, models and services,\" X.500(1993) (also ISO/IEC 9594-1:1994).",
+      "ja": "[X.500]国際電気通信連合 - 電気通信標準化部門、 \"ディレクトリ - 概念、モデルとサービスの概要、\" X.500（1993）（また、ISO / IEC 9594から1：1994）。"
+    },
+    {
+      "indent": 3,
+      "text": "[X.501] International Telecommunication Union - Telecommunication Standardization Sector, \"The Directory -- Models,\" X.501(1993) (also ISO/IEC 9594- 2:1994).",
+      "ja": "[X.501]国際電気通信連合 - 電気通信標準化部門、 \"ディレクトリ - モデル、\" X.501（1993）（2もISO / IEC 9594-：1994）。"
+    },
+    {
+      "indent": 3,
+      "text": "[X.520] International Telecommunication Union - Telecommunication Standardization Sector, \"The Directory: Selected Attribute Types\", X.520(1993) (also ISO/IEC 9594-6:1994).",
+      "ja": "[X.520]国際電気通信連合 - 電気通信標準化部門、 \"ディレクトリ：選択した属性の種類\"、X.520（1993）（また、ISO / IEC 9594から6：1994）。"
+    },
+    {
+      "indent": 3,
+      "text": "[Glossary] The Unicode Consortium, \"Unicode Glossary\", <http://www.unicode.org/glossary/>.",
+      "ja": "[用語]ユニコードコンソーシアム、 \"ユニコード用語\"、<http://www.unicode.org/glossary/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[CharModel] Whistler, K. and M. Davis, \"Unicode Technical Report #17, Character Encoding Model\", UTR17, <http://www.unicode.org/unicode/reports/tr17/>, August 2000.",
+      "ja": "[CharModel]ウィスラー、K.とM.デイヴィス、 \"Unicodeの技術レポート＃17、文字エンコーディングモデル\"、UTR17、<http://www.unicode.org/unicode/reports/tr17/>、2000年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3377] Hodges, J. and R. Morgan, \"Lightweight Directory Access Protocol (v3): Technical Specification\", RFC 3377, September 2002.",
+      "ja": "[RFC3377]ホッジス、J.とR.モルガン、 \"ライトウェイトディレクトリアクセスプロトコル（v3の）：技術仕様\"、RFC 3377、2002年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4515] Smith, M., Ed. and T. Howes, \"Lightweight Directory Access Protocol (LDAP): String Representation of Search Filters\", RFC 4515, June 2006.",
+      "ja": "[RFC4515]スミス、M.、エド。そして、T.ハウズ、「ライトウェイトディレクトリアクセスプロトコル（LDAP）：検索フィルタの文字列表現」、RFC 4515、2006年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[XMATCH] Zeilenga, K., \"Internationalized String Matching Rules for X.500\", Work in Progress.",
+      "ja": "【XMATCH] Zeilenga、K.、 \"X.500のための国際文字列マッチングルール\"、ProgressのWork。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Combining Marks",
+      "ja": "マークを組み合わせる付録A."
+    },
+    {
+      "indent": 3,
+      "text": "This appendix is normative.",
+      "ja": "この付録は規範的です。"
+    },
+    {
+      "indent": 3,
+      "text": "This table was derived from Unicode [Unicode] data files; it lists all code points with the Mn, Mc, or Me properties. This table is to be considered definitive for the purposes of implementation of this specification.",
+      "ja": "この表は、Unicode [UNICODE]のデータファイルから派生しました。それは、Mn、Mcの、またはMe特性を有するすべてのコード・ポイントを示しています。この表には、この仕様の実装のために決定的な考慮すべきです。"
+    },
+    {
+      "indent": 9,
+      "text": "0300-034F 0360-036F 0483-0486 0488-0489 0591-05A1\n05A3-05B9 05BB-05BC 05BF 05C1-05C2 05C4 064B-0655 0670\n06D6-06DC 06DE-06E4 06E7-06E8 06EA-06ED 0711 0730-074A\n07A6-07B0 0901-0903 093C 093E-094F 0951-0954 0962-0963\n0981-0983 09BC 09BE-09C4 09C7-09C8 09CB-09CD 09D7\n09E2-09E3 0A02 0A3C 0A3E-0A42 0A47-0A48 0A4B-0A4D\n0A70-0A71 0A81-0A83 0ABC 0ABE-0AC5 0AC7-0AC9 0ACB-0ACD\n0B01-0B03 0B3C 0B3E-0B43 0B47-0B48 0B4B-0B4D 0B56-0B57\n0B82 0BBE-0BC2 0BC6-0BC8 0BCA-0BCD 0BD7 0C01-0C03\n0C3E-0C44 0C46-0C48 0C4A-0C4D 0C55-0C56 0C82-0C83\n0CBE-0CC4 0CC6-0CC8 0CCA-0CCD 0CD5-0CD6 0D02-0D03\n0D3E-0D43 0D46-0D48 0D4A-0D4D 0D57 0D82-0D83 0DCA\n0DCF-0DD4 0DD6 0DD8-0DDF 0DF2-0DF3 0E31 0E34-0E3A\n0E47-0E4E 0EB1 0EB4-0EB9 0EBB-0EBC 0EC8-0ECD 0F18-0F19\n0F35 0F37 0F39 0F3E-0F3F 0F71-0F84 0F86-0F87 0F90-0F97\n0F99-0FBC 0FC6 102C-1032 1036-1039 1056-1059 1712-1714\n1732-1734 1752-1753 1772-1773 17B4-17D3 180B-180D 18A9\n20D0-20EA 302A-302F 3099-309A FB1E FE00-FE0F FE20-FE23\n1D165-1D169 1D16D-1D172 1D17B-1D182 1D185-1D18B\n1D1AA-1D1AD",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Substrings Matching",
+      "ja": "付録B.サブストリングマッチング"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix is non-normative.",
+      "ja": "この付録は非規範的です。"
+    },
+    {
+      "indent": 3,
+      "text": "In the absence of substrings matching, the insignificant space handling for case ignore/exact matching could be simplified. Specifically, the handling could be to require that all sequences of one or more spaces be replaced with one space and, if the string contains non-space characters, removal of all leading spaces and trailing spaces.",
+      "ja": "ストリングマッチングの非存在下で、ケースに対して処理僅少スペースは/完全一致を簡略化することができる無視します。具体的には、取り扱いには、文字列は非空白文字が含まれている場合は、1つの以上のスペースのすべてのシーケンスは、1つのスペースに置き換えるとすることを要求するすべての先頭のスペースと末尾のスペースの除去である可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the presence of substrings matching, this simplified space handling would lead to unexpected and undesirable matching behavior. For instance:",
+      "ja": "ストリングマッチングの存在下では、この単純化されたスペースの取り扱いは、予期しない、望ましくないマッチング行動につながります。例えば："
+    },
+    {
+      "indent": 3,
+      "text": "1) (CN=foo\\20*\\20bar) would match the CN value \"foobar\";",
+      "ja": "1）（CNは、20 * \\ 20bar \\ fooは）CN値 \"foobarに\" と一致し=。"
+    },
+    {
+      "indent": 3,
+      "text": "2) (CN=*\\20foobar\\20*) would match \"foobar\", but (CN=*\\20*foobar*\\20*) would not.",
+      "ja": "2）（CN = * \\ 20foobar \\ 20 *） \"foobarに\" と一致するが、あろう（CN = * \\ 20 * foobarに* \\ 20 *）ではないであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "Note to readers not familiar with LDAP substrings matching: the LDAP filter [RFC4515] assertion (CN=A*B*C) says to \"match any value (of the attribute CN) that begins with A, contains B after A, ends with C where C is also after B.\"",
+      "ja": "LDAPサブストリングマッチングに精通していない読者に注意：LDAPフィルタ[RFC4515]アサーションは、（CNは、a * b *表C =）を「Aで始まる（属性CNの）任意の値と一致し、Aの後にBを含んで終わるに言いますCはBの後でもあるC」"
+    },
+    {
+      "indent": 3,
+      "text": "The first case illustrates that this simplified space handling would cause leading and trailing spaces in substrings of the string to be regarded as insignificant. However, only leading and trailing (as well as multiple consecutive spaces) of the string (as a whole) are insignificant.",
+      "ja": "最初のケースでは、この単純化されたスペースの扱いが重要でないと見なされる文字列の部分文字列にスペースを先頭と末尾の原因となることを示しています。しかし、唯一の先頭と末尾（ならびに複数の連続スペース）（全体としての）文字列のは無意味です。"
+    },
+    {
+      "indent": 3,
+      "text": "The second case illustrates that this simplified space handling would cause sub-partitioning failures. That is, if a prepared any substring matches a partition of the attribute value, then an assertion constructed by subdividing that substring into multiple substrings should also match.",
+      "ja": "後者の場合には、この単純化された空間処理は、サブパーティションの障害を引き起こすことを示しています。すなわち、調製される任意のサブストリングは、属性値のパーティションと一致する場合は、複数のサブストリングにそのサブストリングを細分化することによって構築アサーションも一致している必要があり、です。"
+    },
+    {
+      "indent": 3,
+      "text": "In designing an appropriate approach for space handling for substrings matching, one must study key aspects of X.500 case exact/ignore matching. X.520 [X.520] says:",
+      "ja": "部分文字列マッチングに扱うスペースのための適切なアプローチを設計する際に、1は、正確な/マッチングを無視X.500ケースの重要な側面を勉強しなければなりません。 X.520 [X.520]と言います："
+    },
+    {
+      "indent": 6,
+      "text": "The [substrings] rule returns TRUE if there is a partitioning of the attribute value (into portions) such that:",
+      "ja": "[ストリング]（部分への）属性値のパーティションがある場合、ルールがTRUEを返すように。"
+    },
+    {
+      "indent": 9,
+      "text": "- the specified substrings (initial, any, final) match different portions of the value in the order of the strings sequence;",
+      "ja": " - 指定されたサブストリング（最初の、任意の、最終的な）文字列配列の順に値の異なる部分を一致させます。"
+    },
+    {
+      "indent": 9,
+      "text": "- initial, if present, matches the first portion of the value;",
+      "ja": " - 最初は、存在する場合、値の最初の部分に一致します。"
+    },
+    {
+      "indent": 9,
+      "text": "- final, if present, matches the last portion of the value;",
+      "ja": " - 最終的には、存在する場合、値の最後の部分と一致します。"
+    },
+    {
+      "indent": 9,
+      "text": "- any, if present, matches some arbitrary portion of the value.",
+      "ja": " - 任意の、存在する場合、値のいくつかの任意の部分と一致します。"
+    },
+    {
+      "indent": 3,
+      "text": "That is, the substrings assertion (CN=foo\\20*\\20bar) matches the attribute value \"foo<SPACE><SPACE>bar\" as the value can be partitioned into the portions \"foo<SPACE>\" and \"<SPACE>bar\" meeting the above requirements.",
+      "ja": "すなわち、サブストリングのアサーション（CNは、20 * \\ 20bar \\ FOO =）を属性値 \"FOO <SPACE> <スペース>バー\" の値を部分に分割することができるように、 \"FOO <SPACE>\" と「<スペース>一致し、あります上記の要件を満たすバー」。"
+    },
+    {
+      "indent": 3,
+      "text": "X.520 also says:",
+      "ja": "X.520も書かれています："
+    },
+    {
+      "indent": 6,
+      "text": "[T]he following spaces are regarded as not significant:",
+      "ja": "[以下のスペースは重要ではないとみなされています。"
+    },
+    {
+      "indent": 9,
+      "text": "- leading spaces (i.e., those preceding the first character that is not a space);",
+      "ja": " - スペースをリードする（すなわち、空白でない最初の文字に先行するもの）。"
+    },
+    {
+      "indent": 9,
+      "text": "- trailing spaces (i.e., those following the last character that is not a space);",
+      "ja": " - 末尾のスペース（すなわち、スペースではない最後の文字次のもの）。"
+    },
+    {
+      "indent": 9,
+      "text": "- multiple consecutive spaces (these are taken as equivalent to a single space character).",
+      "ja": " - 複数の連続した空間（これらは、単一の空白文字と同等と見なされます）。"
+    },
+    {
+      "indent": 3,
+      "text": "This statement applies to the assertion values and attribute values as whole strings, and not individually to substrings of an assertion value. In particular, the statements should be taken to mean that if an assertion value and attribute value match without any consideration to insignificant characters, then that assertion value should also match any attribute value that differs only by inclusion nor removal of insignificant characters.",
+      "ja": "この文は、全体の文字列としてアサーション値と属性値に適用され、個別にではないアサーション値のストリングに。特に、文は軽微文字への配慮のない主張値と属性値が一致した場合に、その主張の値はまた、唯一の些細な文字を含めることも除去することにより異なり任意の属性値と一致する必要があることを意味すると解釈されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Hence the assertion (CN=foo\\20*\\20bar) matches \"foo<SPACE><SPACE><SPACE>bar\" and \"foo<SPACE>bar\" as these values only differ from \"foo<SPACE><SPACE>bar\" by the inclusion or removal of insignificant spaces.",
+      "ja": "したがってアサーションが \"FOO <SPACE> <スペース> <スペース>バー\" は、これらの値とし、 \"FOO <SPACE>バーは、\" のみFOO」異なる一致（CN 20 * \\ 20bar \\ FOO =）を<SPACE> <スペース>バー「些細な空間の包含または除去による。"
+    },
+    {
+      "indent": 3,
+      "text": "Astute readers of this text will also note that there are special cases where the specified space handling does not ignore spaces that could be considered insignificant. For instance, the assertion (CN=\\20*\\20*\\20) does not match \"<SPACE><SPACE><SPACE>\" (insignificant spaces present in value) or \" \" (insignificant spaces not present in value). However, as these cases have no practical application that cannot be met by simple assertions, e.g., (cn=\\20), and this minor anomaly can only be fully addressed by a preparation algorithm to be used in conjunction with character-by-character partitioning and matching, the anomaly is considered acceptable.",
+      "ja": "このテキストの賢明な読者はまた、指定されたスペースの扱いが重要でないと考えられるスペースは無視されていない特殊なケースがあることに注意します。例えば、アサーション（CN = \\ 20 * \\ 20 * \\ 20）は、 \"<スペース> <スペース> <スペース>\"（値中に存在する有意でないスペース）または \"\"（値に存在しない無意味スペース）と一致しません。しかし、これらの例は、（CN = 20 \\）、簡単なアサーション、例えばによって満たすことができず、このマイナーな異常が唯一の完全文字単位でと組み合わせて使用​​するように準備アルゴリズムによって対処することができる実用的なアプリケーションを持っていないとして、パーティショニングとマッチングが、異常が許容されると考えられます。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Kurt D. Zeilenga OpenLDAP Foundation",
+      "ja": "クルトD. ZeilengaのOpenLDAP財団"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: Kurt@OpenLDAP.org",
+      "ja": "メールアドレス：Kurt@OpenLDAP.org"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}
