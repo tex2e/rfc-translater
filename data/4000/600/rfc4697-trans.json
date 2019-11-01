@@ -1,0 +1,756 @@
+{
+  "title": {
+    "text": "RFC 4697 - Observed DNS Resolution Misbehavior",
+    "ja": "RFC 4697 - 観測されたDNSの解決不正行為"
+  },
+  "number": 4697,
+  "created_at": "2019-10-25 04:33:35.145666+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          M. Larson\nRequest for Comments: 4697                                     P. Barber\nBCP: 123                                                  VeriSign, Inc.\nCategory: Best Current Practice                             October 2006",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Observed DNS Resolution Misbehavior",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an Internet Best Current Practices for the Internet Community, and requests discussion and suggestions for improvements. Distribution of this memo is unlimited.",
+      "ja": "このドキュメントはインターネットコミュニティのためのインターネットBest Current Practicesを指定し、改善のための議論と提案を要求します。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This memo describes DNS iterative resolver behavior that results in a significant query volume sent to the root and top-level domain (TLD) name servers. We offer implementation advice to iterative resolver developers to alleviate these unnecessary queries. The recommendations made in this document are a direct byproduct of observation and analysis of abnormal query traffic patterns seen at two of the thirteen root name servers and all thirteen com/net TLD name servers.",
+      "ja": "このメモは、ルートとトップレベルドメイン（TLD）のネームサーバに送信された重要なクエリのボリュームになりDNSリゾルバ反復動作について説明します。我々は、これらの不要なクエリを軽減するために、反復リゾルバ開発者への実装のアドバイスを提供します。この文書で勧告は、13台のルートネームサーバとすべての13のCOM /ネットTLDネームサーバーの2で見られる異常なクエリトラフィックパターンの観察と分析の直接の副産物です。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n   1.1. A Note about Terminology in this Memo ......................3\n   1.2. Key Words ..................................................3\n2. Observed Iterative Resolver Misbehavior .........................3\n   2.1. Aggressive Requerying for Delegation Information ...........3\n        2.1.1. Recommendation ......................................5\n   2.2. Repeated Queries to Lame Servers ...........................6\n        2.2.1. Recommendation ......................................6\n   2.3. Inability to Follow Multiple Levels of Indirection .........7\n        2.3.1. Recommendation ......................................7\n   2.4. Aggressive Retransmission when Fetching Glue ...............8\n        2.4.1. Recommendation ......................................9\n   2.5. Aggressive Retransmission behind Firewalls .................9\n        2.5.1. Recommendation .....................................10\n   2.6. Misconfigured NS Records ..................................10\n        2.6.1. Recommendation .....................................11",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "   2.7. Name Server Records with Zero TTL .........................11\n        2.7.1. Recommendation .....................................12\n   2.8. Unnecessary Dynamic Update Messages .......................12\n        2.8.1. Recommendation .....................................13\n   2.9. Queries for Domain Names Resembling IPv4 Addresses ........13\n        2.9.1. Recommendation .....................................14\n   2.10. Misdirected Recursive Queries ............................14\n        2.10.1. Recommendation ....................................14\n   2.11. Suboptimal Name Server Selection Algorithm ...............15\n        2.11.1. Recommendation ....................................15\n3. Security Considerations ........................................16\n4. Acknowledgements ...............................................16\n5. Internationalization Considerations ............................16\n6. References .....................................................16\n   6.1. Normative References ......................................16\n   6.2. Informative References ....................................16",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Observation of query traffic received by two root name servers and the thirteen com/net Top-Level Domain (TLD) name servers has revealed that a large proportion of the total traffic often consists of \"requeries\". A requery is the same question (<QNAME, QTYPE, QCLASS>) asked repeatedly at an unexpectedly high rate. We have observed requeries from both a single IP address and multiple IP addresses (i.e., the same query received simultaneously from multiple IP addresses).",
+      "ja": "2台のルートネームサーバと13 COM /ネットトップレベルドメイン（TLD）のネームサーバが受信したクエリトラフィックの観測は、総トラフィックの大部分は、多くの場合、「再クエリ」で構成されていることを明らかにしました。再クエリは、同じ質問（<QNAME、QTYPE、QCLASS>）が予想外に高い割合で繰り返し尋ねています。我々は、単一のIPアドレスと複数のIPアドレス（すなわち、同じクエリが複数のIPアドレスから同時に受信）の両方から再クエリを観察しました。"
+    },
+    {
+      "indent": 3,
+      "text": "By analyzing requery events, we have found that the cause of the duplicate traffic is almost always a deficient iterative resolver, stub resolver, or application implementation combined with an operational anomaly. The implementation deficiencies we have identified to date include well-intentioned recovery attempts gone awry, insufficient caching of failures, early abort when multiple levels of indirection must be followed, and aggressive retry by stub resolvers or applications. Anomalies that we have seen trigger requery events include lame delegations, unusual glue records, and anything that makes all authoritative name servers for a zone unreachable (Denial of Service (DoS) attacks, crashes, maintenance, routing failures, congestion, etc.).",
+      "ja": "再クエリーイベントを分析することにより、我々は、重複したトラフィックの原因は、ほとんど常に欠乏反復リゾルバ、スタブリゾルバ、または運用異常と組み合わせたアプリケーションの実装であることを見出しました。私たちが今日までに同定されている実装の不備がゆがんでしまっ善意回復試行、失敗の不十分なキャッシング、間接の複数のレベルが従わなければならないとき、早期中止、およびスタブリゾルバやアプリケーションによる積極的な再試行が含まれます。私たちは、トリガ再クエリーイベントを見てきた異常はラメ代表団、珍しいグルーレコード、および到達不能ゾーンのすべての権威ネームサーバ（サービス拒否（DoS）攻撃、クラッシュ、メンテナンス、ルーティング障害、渋滞など）を行うものが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the following sections, we provide a detailed explanation of the observed behavior and recommend changes that will reduce the requery rate. None of the changes recommended affects the core DNS protocol specification; instead, this document consists of guidelines to implementors of iterative resolvers.",
+      "ja": "次のセクションでは、観察された行動の詳細な説明を提供し、再クエリの速度が低下します変更をお勧めします。推奨される変更はいずれも、コアDNSプロトコル仕様に影響を与えません。代わりに、この文書は、反復リゾルバの実装者へのガイドラインで構成されています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. A Note about Terminology in This Memo",
+      "section_title": true,
+      "ja": "1.1。このメモで用語についての注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "To recast an old saying about standards, the nice thing about DNS terms is that there are so many of them to choose from. Writing or talking about DNS can be difficult and can cause confusion resulting from a lack of agreed-upon terms for its various components. Further complicating matters are implementations that combine multiple roles into one piece of software, which makes naming the result problematic. An example is the entity that accepts recursive queries, issues iterative queries as necessary to resolve the initial recursive query, caches responses it receives, and which is also able to answer questions about certain zones authoritatively. This entity is an iterative resolver combined with an authoritative name server and is often called a \"recursive name server\" or a \"caching name server\".",
+      "ja": "規格に関する古いことわざを改鋳するには、DNSの用語のいいところは、から選択するので、それらの多くがあるということです。書き方やDNSの話をすることは難しいことができ、そのさまざまなコンポーネントのための合意された用語の欠如から生じた混乱を引き起こす可能性があります。さらに複雑な事項は、問題のある結果を命名するソフトウェアのワンピース、に複数の役割を組み合わせて実装されています。例では、最初の再帰クエリを解決するために再帰クエリ、必要に応じて問題の反復クエリを受け入れ、それが受信した応答をキャッシュし、そしてまた権威ある特定のゾーンについての質問に答えることができるとする実体です。このエンティティは、権威ネームサーバと組み合わせて反復リゾルバであり、しばしば「再帰ネームサーバ」または「キャッシングネームサーバ」と呼ばれています。"
+    },
+    {
+      "indent": 3,
+      "text": "This memo is concerned principally with the behavior of iterative resolvers, which are typically found as part of a recursive name server. This memo uses the more precise term \"iterative resolver\", because the focus is usually on that component. In instances where the name server role of this entity requires mentioning, this memo uses the term \"recursive name server\". As an example of the difference, the name server component of a recursive name server receives DNS queries and the iterative resolver component sends queries.",
+      "ja": "このメモは、通常、再帰ネームサーバの一部として見出される反復リゾルバの行動に主に関係しています。フォーカスは、通常、そのコンポーネントであるため、このメモは、より正確な用語「反復リゾルバ」を使用します。このエンティティのネームサーバの役割は、言及する必要が事例では、このメモは、「再帰ネームサーバー」という用語を使用しています。差の一例として、再帰ネームサーバのネームサーバコンポーネントは、DNSクエリを受信し、反復リゾルバコンポーネントがクエリを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "The advent of IPv6 requires mentioning AAAA records as well as A records when discussing glue. To avoid continuous repetition and qualification, this memo uses the general term \"address record\" to encompass both A and AAAA records when a particular situation is relevant to both types.",
+      "ja": "IPv6のの出現は、接着剤を議論する際にAAAAレコードだけでなく、レコードを言及する必要があり。連続繰り返しと資格を避けるために、このメモは、特定の状況は両方のタイプに関連するとき、一般的な用語である「アドレスレコード」は、両方のAとAAAAレコードを包含するように使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Key Words",
+      "section_title": true,
+      "ja": "1.2。キーワード"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [1].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119に記載されるように解釈される[1]。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Observed Iterative Resolver Misbehavior",
+      "section_title": true,
+      "ja": "2.観測反復リゾルバ不正行為"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Aggressive Requerying for Delegation Information",
+      "section_title": true,
+      "ja": "2.1。委任情報のための積極的な再問合せ"
+    },
+    {
+      "indent": 3,
+      "text": "There can be times when every name server in a zone's NS RRSet is unreachable (e.g., during a network outage), unavailable (e.g., the name server process is not running on the server host), or misconfigured (e.g., the name server is not authoritative for the given zone, also known as \"lame\"). Consider an iterative resolver that attempts to resolve a query for a domain name in such a zone and discovers that none of the zone's name servers can provide an answer. We have observed a recursive name server implementation whose iterative resolver then verifies the zone's NS RRSet in its cache by querying for the zone's delegation information: it sends a query for the zone's NS RRSet to one of the parent zone's name servers. (Note that queries with QTYPE=NS are not required by the standard resolution algorithm described in Section 4.3.2 of RFC 1034 [2]. These NS queries represent this implementation's addition to that algorithm.)",
+      "ja": "ゾーンのNS資源レコード集合内のすべてのネームサーバは、（ネットワーク停止中に、例えば）到達不能利用できない（例えば、ネームサーバプロセスはサーバホスト上で実行されていない）、または誤って設定されたときに（例えば、ネームサーバがある回がある場合もあります特定のゾーンの権威ではない、また）「ラメ」として知られています。そのようなゾーンにドメイン名のクエリを解決しようとすると、ゾーンのネームサーバのどれもが答えを提供できないことを発見し、反復リゾルバを考えてみましょう。私たちは、その反復リゾルバその後、ゾーンの委任情報を照会することによって、そのキャッシュ内にゾーンのNS資源レコード集合を検証再帰ネームサーバの実装を観察している：それは親ゾーンのネームサーバの1つにゾーンのNS資源レコード集合のためのクエリを送信します。 （QTYPE = NSとクエリが[2]。これらのNSクエリは、そのアルゴリズムのこの実施の加算を表すRFC 1034のセクション4.3.2に記載されている標準解像度アルゴリズムによって必要とされないことに注意してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "For example, suppose that \"example.com\" has the following NS RRSet:",
+      "ja": "たとえば、「example.com」以下のNS資源レコード集合を持っているとします。"
+    },
+    {
+      "indent": 5,
+      "text": "example.com. IN NS ns1.example.com. example.com. IN NS ns2.example.com.",
+      "ja": "example.com。 NSのns1.example.com、IN。 example.com。 NSのns2.example.com、IN。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receipt of a query for \"www.example.com\" and assuming that neither \"ns1.example.com\" nor \"ns2.example.com\" can provide an answer, this iterative resolver implementation immediately queries a \"com\" zone name server for the \"example.com\" NS RRSet to verify that it has the proper delegation information. This implementation performs this query to a zone's parent zone for each recursive query it receives that fails because of a completely unresponsive set of name servers for the target zone. Consider the effect when a popular zone experiences a catastrophic failure of all its name servers: now every recursive query for domain names in that zone sent to this recursive name server implementation results in a query to the failed zone's parent name servers. On one occasion when several dozen popular zones became unreachable, the query load on the com/net name servers increased by 50%.",
+      "ja": "「www.example.com」のクエリを受信すると、どちらも「ns1.example.com」と仮定しても、「ns2.example.comは」答えを提供することができ、この反復リゾルバの実装では、すぐに「COM」ゾーンのネームサーバに問い合わせを「example.com」NS資源レコード集合は、それが適切な委任情報を持っていることを確認するため。この実装は、理由は、ターゲットゾーンのネームサーバの完全に応答セットで失敗し、それが受信した各再帰クエリのゾーンの親ゾーンにこのクエリを実行します。失敗したゾーンの親ネームサーバへのクエリで、この再帰ネームサーバの実装の結果に送信され、そのゾーン内のドメイン名になりましたすべての再帰クエリ：人気のゾーンは、そのすべてのネームサーバの致命的な障害が発生した影響を考えてみましょう。数十人気のあるゾーンが到達不能になったある時、COM /ネットネームサーバへのクエリ負荷は50％増加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "We believe this verification query is not reasonable. Consider the circumstances: when an iterative resolver is resolving a query for a domain name in a zone it has not previously searched, it uses the list of name servers in the referral from the target zone's parent. If on its first attempt to search the target zone, none of the name servers in the referral is reachable, a verification query to the parent would be pointless: this query to the parent would come so quickly on the heels of the referral that it would be almost certain to contain the same list of name servers. The chance of discovering any new information is slim.",
+      "ja": "私たちは、この検証クエリが妥当ではないと考えています。状況を考えてみましょう：反復リゾルバは、それが以前に検索されていないゾーンのドメイン名のクエリを解決したとき、それが目標ゾーンの親からの紹介でネームサーバのリストを使用しています。ターゲットゾーンを検索するためのその最初の試みで、紹介でのネームサーバがどれも到達できない場合は、親への検証クエリは無意味のようになります。親にこのクエリは、それがあろうと、紹介のかかとにこんなに早く来ますネームサーバの同じリストが含まれていることはほぼ確実です。新しい情報を発見するチャンスはスリムです。"
+    },
+    {
+      "indent": 3,
+      "text": "The other possibility is that the iterative resolver successfully contacts one of the target zone's name servers and then caches the NS RRSet from the authority section of a response, the proper behavior according to Section 5.4.1 of RFC 2181 [3], because the NS RRSet from the target zone is more trustworthy than delegation information from the parent zone. If, while processing a subsequent recursive query, the iterative resolver discovers that none of the name servers specified in the cached NS RRSet is available or authoritative, querying the parent would be wrong. An NS RRSet from the parent zone would now be less trustworthy than data already in the cache.",
+      "ja": "他の可能性は、[3]、NSので、RFC 2181の5.4.1項に従って、適切な行動の反復リゾルバが正常に連絡することを目標ゾーンのネームサーバの一つであり、その後、応答の権限セクションからNS資源レコード集合をキャッシュターゲットゾーンからの資源レコード集合は親ゾーンから委任情報よりも信頼できます。その後の再帰クエリを処理している間に、反復リゾルバがキャッシュされたNS資源レコード集合に指定されたネームサーバのどれもが利用できるか、権威のないことを発見した場合、親を照会することは間違っているだろう。親ゾーンからのNS資源レコード集合は現在、すでにキャッシュ内のデータよりも少ない信頼できるだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "For this query of the parent zone to be useful, the target zone's entire set of name servers would have to change AND the former set of name servers would have to be deconfigured or decommissioned AND the delegation information in the parent zone would have to be updated with the new set of name servers, all within the Time to Live (TTL) of the target zone's NS RRSet. We believe this scenario is uncommon: administrative best practices dictate that changes to a zone's set of name servers happen gradually when at all possible, with servers removed from the NS RRSet left authoritative for the zone as long as possible. The scenarios that we can envision that would benefit from the parent requery behavior do not outweigh its damaging effects.",
+      "ja": "親ゾーンのこのクエリが有用であるためには、ネームサーバのターゲットゾーンの全体のセットは、変更しなければならないとネームサーバの旧セットは構成解除または廃止しなければならないであろうし、親ゾーンの委任情報を更新する必要がありますターゲットゾーンのNS資源レコード集合のライブするためにすべての時間内でのネームサーバの新しいセット、（TTL）を持ちます。私たちは、このシナリオはまれであると信じて：管理のベストプラクティスは、ときに可能なすべてのNS資源レコード集合から削除サーバはできるだけ長いゾーンに対して権限を左にネームサーバのゾーンのセットへの変更は、徐々に起こることを指示します。我々はそれを想像することができますシナリオはその有害な影響を上回るていない親の再クエリの挙動の恩恵を受けるだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "This section should not be understood to claim that all queries to a zone's parent are bad. In some cases, such queries are not only reasonable but required. Consider the situation when required information, such as the address of a name server (i.e., the address record corresponding to the RDATA of an NS record), has timed out of an iterative resolver's cache before the corresponding NS record. If the name of the name server is below the apex of the zone, then the name server's address record is only available as glue in the parent zone. For example, consider this NS record:",
+      "ja": "このセクションでは、ゾーンの親にすべてのクエリが悪いと主張するものと理解すべきではありません。いくつかのケースでは、このようなクエリだけでなく、合理的であるが、必須。情報を必要なときに、このようなネームサーバ（すなわち、NSレコードのRDATAに対応するアドレスレコード）のアドレスとして、状況を考えると、対応するNSレコードの前に反復リゾルバのキャッシュのタイムアウトしました。ネームサーバーの名前がゾーンの頂点を下回っている場合には、ネームサーバのアドレスレコードは親ゾーンにおける接着剤としてのみ使用可能です。たとえば、このNSレコードを考えてみます。"
+    },
+    {
+      "indent": 5,
+      "text": "example.com. IN NS ns.example.com.",
+      "ja": "example.com。 NSのns.example.com、IN。"
+    },
+    {
+      "indent": 3,
+      "text": "If a cache has this NS record but not the address record for \"ns.example.com\", it is unable to contact the \"example.com\" zone directly and must query the \"com\" zone to obtain the address record. Note, however, that such a query would not have QTYPE=NS according to the standard resolution algorithm.",
+      "ja": "キャッシュはこのNSレコードではなく、「ns.example.com」のアドレスレコードを持っている場合、直接「example.com」ゾーンに連絡することができず、アドレス・レコードを取得するために、「COM」ゾーンを照会しなければなりません。このようなクエリは、標準解像度アルゴリズムに従ってQTYPE = NSを持たないこと、しかし、注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1.1. Recommendation",
+      "section_title": true,
+      "ja": "2.1.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "An iterative resolver MUST NOT send a query for the NS RRSet of a non-responsive zone to any of the name servers for that zone's parent zone. For the purposes of this injunction, a non-responsive zone is defined as a zone for which every name server listed in the zone's NS RRSet:",
+      "ja": "反復リゾルバは、そのゾーンの親ゾーンのネームサーバのいずれかに非応答ゾーンのNS資源レコード集合のためのクエリを送ってはいけません。この差し止め命令の目的のために、非応答ゾーンは、ゾーンのNSの資源レコード集合に記載されているため、すべてのネームサーバゾーンとして定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. is not authoritative for the zone (i.e., lame), or",
+      "section_title": true,
+      "ja": "1.ゾーン（即ち、ラメ）に対する権限はない、または"
+    },
+    {
+      "indent": 3,
+      "text": "2. returns a server failure response (RCODE=2), or",
+      "section_title": true,
+      "ja": "2.サーバー失敗応答を返す（RCODE = 2）、又は"
+    },
+    {
+      "indent": 3,
+      "text": "3. is dead or unreachable according to Section 7.2 of RFC 2308 [4].",
+      "section_title": true,
+      "ja": "3. [4] RFC 2308のセクション7.2に従ってデッドまたは到達不能です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Repeated Queries to Lame Servers",
+      "section_title": true,
+      "ja": "2.2。ラメサーバへのクエリを繰り返します"
+    },
+    {
+      "indent": 3,
+      "text": "Section 2.1 describes a catastrophic failure: when every name server for a zone is unable to provide an answer for one reason or another. A more common occurrence is when a subset of a zone's name servers is unavailable or misconfigured. Different failure modes have different expected durations. Some symptoms indicate problems that are potentially transient, for example, various types of ICMP unreachable messages because a name server process is not running or a host or network is unreachable, or a complete lack of a response to a query. Such responses could be the result of a host rebooting or temporary outages; these events do not necessarily require any human intervention and can be reasonably expected to be temporary.",
+      "ja": "2.1節では致命的な障害について説明します。ゾーンごとにネームサーバが一つの理由または別のための答えを提供することができないとき。ゾーンのネームサーバのサブセットが利用できないか、誤って設定されたときに、より一般的な発生があります。別の故障モードは、異なる予想される持続時間を有します。ネームサーバプロセスが実行されていないか、ホストまたはネットワークに到達できない、またはクエリに対する応答の完全な欠如ので、いくつかの症状は、例えば、ICMP到達不能メッセージの様々なタイプを潜在的に一時的な問題を示しています。このような応答は、ホスト再起動や一時停止の結果である可能性があります。これらのイベントは、必ずしもすべての人間の介入を必要とせず、合理的に一時的であることを期待することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Other symptoms clearly indicate a condition requiring human intervention, such as lame server: if a name server is misconfigured and not authoritative for a zone delegated to it, it is reasonable to assume that this condition has potential to last longer than unreachability or unresponsiveness. Consequently, repeated queries to known lame servers are not useful. In this case of a condition with potential to persist for a long time, a better practice would be to maintain a list of known lame servers and avoid querying them repeatedly in a short interval.",
+      "ja": "他の症状は明らかに、このようなラメサーバーなど人間の介入を必要とする状態を示す：ネームサーバはそれに委任ゾーンに対して権限の設定ミスとされていない場合は、この条件が到達不能または不応答よりも長持ちする可能性を秘めていると仮定することが妥当です。その結果、知らラメサーバへの繰り返しクエリは有用ではありません。長時間持続する可能性のある条件のこの場合は、より良い練習が知られているラメサーバのリストを維持し、短い間隔で繰り返し、それらを照会することを避けることであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "It should also be noted, however, that some authoritative name server implementations appear to be lame only for queries of certain types as described in RFC 4074 [5]. In this case, it makes sense to retry the \"lame\" servers for other types of queries, particularly when all known authoritative name servers appear to be \"lame\".",
+      "ja": "また、いくつかの権威あるネームサーバの実装は、RFC 4074に記載されているようにのみ、特定の種類のクエリに対してラメように見えることが、留意されるべきである[5]。この場合、それはすべての既知の権威ネームサーバは「ラメ」のように見える場合は特に、クエリの他のタイプのための「ラメ」のサーバーを再試行することに意味があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2.1. Recommendation",
+      "section_title": true,
+      "ja": "2.2.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "Iterative resolvers SHOULD cache name servers that they discover are not authoritative for zones delegated to them (i.e., lame servers). If this caching is performed, lame servers MUST be cached against the specific query tuple <zone name, class, server IP address>. Zone name can be derived from the owner name of the NS record that was referenced to query the name server that was discovered to be lame.",
+      "ja": "反復リゾルバは、彼らが彼ら（すなわち、ラメのサーバー）に委任ゾーンに対して権限はありません発見するネームサーバをキャッシュすべきです。このキャッシングが行われた場合は、ラメのサーバーが特定のクエリタプル<ゾーン名、クラス、サーバーのIPアドレス>に対してキャッシュする必要があります。ゾーン名はラメであることが発見されたネームサーバーを照会するために参照されたNSレコードの所有者名から派生することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations that perform lame server caching MUST refrain from sending queries to known lame servers for a configurable time interval after the server is discovered to be lame. A minimum interval of thirty minutes is RECOMMENDED.",
+      "ja": "ラメサーバーのキャッシュを実行する実装は、サーバがラメであることが発見された後、設定時間間隔で知られるラメサーバへのクエリを送信を控える必要があります。 30分の最小間隔を推奨します。"
+    },
+    {
+      "indent": 3,
+      "text": "An exception to this recommendation occurs if all name servers for a zone are marked lame. In that case, the iterative resolver SHOULD temporarily ignore the servers' lameness status and query one or more servers. This behavior is a workaround for the type-specific lameness issue described in the previous section.",
+      "ja": "ゾーンのすべてのネームサーバはラメマークされている場合は、この勧告の例外が発生します。その場合には、反復リゾルバは、一時的にサーバの跛行の状態を無視して、1つ以上のサーバーを照会する必要があります。この動作は、前のセクションで説明した型固有の跛行の問題の回避策です。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementors should take care not to make lame server avoidance logic overly broad: note that a name server could be lame for a parent zone but not a child zone, e.g., lame for \"example.com\" but properly authoritative for \"sub.example.com\". Therefore, a name server should not be automatically considered lame for subzones. In the case above, even if a name server is known to be lame for \"example.com\", it should be queried for QNAMEs at or below \"sub.example.com\" if an NS record indicates that it should be authoritative for that zone.",
+      "ja": "実装者は、ラメサーバー回避ロジックが過度に広範な作るしないように注意する必要があります：ネームサーバがsub.example」の親ゾーンのラメではなく、子ゾーン、例えば、「example.com」のラメが、適切に権限を持つことができることに注意してください。 COM」。そのため、ネームサーバは自動的にサブゾーンのためのラメ考えるべきではありません。 NSレコードは、それがそのための権威であるべきであることを示す場合、ネームサーバが「example.com」のラメであることが知られている場合であっても上記の場合において、それは「sub.example.com」で以下のQNameのために照会されるべきですゾーン。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Inability to Follow Multiple Levels of Indirection",
+      "section_title": true,
+      "ja": "2.3。間接の複数のレベルをフォローすることができません"
+    },
+    {
+      "indent": 3,
+      "text": "Some iterative resolver implementations are unable to follow sufficient levels of indirection. For example, consider the following delegations:",
+      "ja": "いくつかの反復リゾルバの実装は、間接の十分なレベルに従うことができません。たとえば、次の代表団を考慮してください。"
+    },
+    {
+      "indent": 5,
+      "text": "foo.example. IN NS ns1.example.com. foo.example. IN NS ns2.example.com.",
+      "ja": "foo.example。 NSのns1.example.com、IN。 foo.example。 NSのns2.example.com、IN。"
+    },
+    {
+      "indent": 5,
+      "text": "example.com. IN NS ns1.test.example.net. example.com. IN NS ns2.test.example.net.",
+      "ja": "example.com。 NSのns1.test.example.net、IN。 example.com。 NSのns2.test.example.net、IN。"
+    },
+    {
+      "indent": 5,
+      "text": "test.example.net. IN NS ns1.test.example.net. test.example.net. IN NS ns2.test.example.net.",
+      "ja": "test.example.net。 NSのns1.test.example.net、IN。 test.example.net。 NSのns2.test.example.net、IN。"
+    },
+    {
+      "indent": 3,
+      "text": "An iterative resolver resolving the name \"www.foo.example\" must follow two levels of indirection, first obtaining address records for \"ns1.test.example.net\" or \"ns2.test.example.net\" in order to obtain address records for \"ns1.example.com\" or \"ns2.example.com\" in order to query those name servers for the address records of \"www.foo.example\". Although this situation may appear contrived, we have seen multiple similar occurrences and expect more as new generic top-level domains (gTLDs) become active. We anticipate many zones in new gTLDs will use name servers in existing gTLDs, increasing the number of delegations using out-of-zone name servers.",
+      "ja": "名称「www.foo.example」を解決反復リゾルバは、第1のアドレスレコードを得るために「ns1.test.example.net」または「ns2.test.example.net」のアドレスレコードを得る、間接2つのレベルに従わなければなりません「ns1.example.com」または「ns2.example.com」「www.foo.example」のアドレスレコード用のものネームサーバを照会するためにのために。この状況は不自然見えるかもしれないが、我々は、複数の類似の出現を見てきましたし、新しいジェネリックトップレベルドメイン（gTLDの）がアクティブになると、より多くを期待しています。私たちは、外のゾーンのネームサーバを使用した代表団の数を増やし、既存のgTLDにおけるネームサーバを使用する新gTLDの多くのゾーンを期待しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3.1. Recommendation",
+      "section_title": true,
+      "ja": "2.3.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "Clearly constructing a delegation that relies on multiple levels of indirection is not a good administrative practice. However, the practice is widespread enough to require that iterative resolvers be able to cope with it. Iterative resolvers SHOULD be able to handle arbitrary levels of indirection resulting from out-of-zone name servers. Iterative resolvers SHOULD implement a level-of-effort counter to avoid loops or otherwise performing too much work in resolving pathological cases.",
+      "ja": "明らかに間接の複数のレベルに依存している委任を構築することは良い管理プラクティスではありません。しかし、実際には反復リゾルバはそれに対処できるようにすることが必要なほど広まっています。反復リゾルバは、アウトゾーンのネームサーバから生じた間接の任意のレベルを処理できる必要があります。反復リゾルバは、ループを回避するために、レベルのエフォートカウンタを実装するか、そうでない場合は病的な例を解決するにはあまりにも多くの作業を行うべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "A best practice that avoids this entire issue of indirection is to name one or more of a zone's name servers in the zone itself. For example, if the zone is named \"example.com\", consider naming some of the name servers \"ns{1,2,...}.example.com\" (or similar).",
+      "ja": "間接のこの全体の問題を避ける最善の方法は、ゾーン自体にゾーンのネームサーバの一つ以上に名前を付けることです。ゾーンが「example.com」という名前が付けられた場合、ネームサーバ「NS {1,2、...}。example.com」（または類似）のいくつかの名前を付けることを検討してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Aggressive Retransmission when Fetching Glue",
+      "section_title": true,
+      "ja": "2.4。積極的な再送信時にフェッチグルー"
+    },
+    {
+      "indent": 3,
+      "text": "When an authoritative name server responds with a referral, it includes NS records in the authority section of the response. According to the algorithm in Section 4.3.2 of RFC 1034 [2], the name server should also \"put whatever addresses are available into the additional section, using glue RRs if the addresses are not available from authoritative data or the cache.\" Some name server implementations take this address inclusion a step further with a feature called \"glue fetching\". A name server that implements glue fetching attempts to include address records for every NS record in the authority section. If necessary, the name server issues multiple queries of its own to obtain any missing address records.",
+      "ja": "権威ネームサーバは、紹介で応答すると、それが応答の機関セクションでのNSレコードが含まれています。 RFC 1034のセクション4.3.2におけるアルゴリズム[2]によれば、また、「アドレスが正式なデータまたはキャッシュから利用できない場合は、グルーRRを使用して、追加のセクションに用意されていどんなアドレスに置く。」すべきであるネームサーバいくつかのネームサーバの実装は、「グルー・フェッチ」と呼ばれる機能をさらに一歩このアドレスを含めることを取ります。接着剤のフェッチを実装ネームサーバは権限セクション内のすべてのNSレコードのアドレスレコードを含めるしようとします。必要に応じて、ネームサーバは、不足しているアドレスレコードを取得するために、独自の複数のクエリを発行します。"
+    },
+    {
+      "indent": 3,
+      "text": "Problems with glue fetching can arise in the context of \"authoritative-only\" name servers, which only serve authoritative data and ignore requests for recursion. Such an entity will not normally generate any queries of its own. Instead it answers non-recursive queries from iterative resolvers looking for information in zones it serves. With glue fetching enabled, however, an authoritative server invokes an iterative resolver to look up an unknown address record to complete the additional section of a response.",
+      "ja": "接着剤のフェッチに関する問題は、唯一の正式なデータを提供し、再帰のための要求を無視する「権威のみの」ネームサーバのコンテキストで発生する可能性があります。このようなエンティティは、通常、独自のクエリを生成しません。代わりに、それは機能ゾーンで情報を探して反復リゾルバから非再帰的な問い合わせに答えます。接着剤が有効にフェッチすると、しかし、権限のあるサーバーは応答の追加セクションを完了するために、未知のアドレスレコードを検索する反復リゾルバを呼び出します。"
+    },
+    {
+      "indent": 3,
+      "text": "We have observed situations where the iterative resolver of a glue-fetching name server can send queries that reach other name servers, but is apparently prevented from receiving the responses. For example, perhaps the name server is authoritative-only and therefore its administrators expect it to receive only queries and not responses. Perhaps unaware of glue fetching and presuming that the name server's iterative resolver will generate no queries, its administrators place the name server behind a network device that prevents it from receiving responses. If this is the case, all glue-fetching queries will go unanswered.",
+      "ja": "私たちは、糊フェッチネームサーバの反復リゾルバは、他のネームサーバに到達クエリを送信することができます状況を観察しているが、どうやら応答を受信することが防止されます。例えば、恐らくネームサーバは権威のみのため、その管理者は、それがクエリのみではなく応答を受け取ることを期待しています。おそらく、糊のフェッチとネームサーバーの反復リゾルバが何のクエリを生成しないことを前提に気づかず、その管理者が応答を受信するのを防ぎ、ネットワークデバイスの背後にあるネームサーバを配置します。このような場合は、すべてのグルーフェッチクエリが未解決になります。"
+    },
+    {
+      "indent": 3,
+      "text": "We have observed name server implementations whose iterative resolvers retry excessively when glue-fetching queries are unanswered. A single com/net name server has received hundreds of queries per second from a single such source. Judging from the specific queries received and based on additional analysis, we believe these queries result from overly aggressive glue fetching.",
+      "ja": "私たちは、その反復リゾルバのりフェッチクエリに応答がないとき、過度にリトライネームサーバの実装を観察しました。 1つのCOM /ネットネームサーバは、そのような単一のソースから2番目あたりのクエリの数百を受けています。受信した追加の分析に基づいて、特定のクエリから判断すると、私たちは、これらのクエリが過度に攻撃的な接着剤のフェッチに起因すると考えています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4.1. Recommendation",
+      "section_title": true,
+      "ja": "2.4.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers whose name servers support glue fetching SHOULD take care to avoid sending queries at excessive rates. Implementations SHOULD support throttling logic to detect when queries are sent but no responses are received.",
+      "ja": "名前のサーバをサポートグルーフェッチ実装者は、過度のレートでクエリを送信しないように注意する必要があります。実装は、クエリが送信されますが、何の応答が受信されないときを検出するためにスロットリング・ロジックをサポートする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. Aggressive Retransmission behind Firewalls",
+      "section_title": true,
+      "ja": "2.5。ファイアウォールの背後に積極的な再送信"
+    },
+    {
+      "indent": 3,
+      "text": "A common occurrence and one of the largest sources of repeated queries at the com/net and root name servers appears to result from resolvers behind misconfigured firewalls. In this situation, an iterative resolver is apparently allowed to send queries through a firewall to other name servers, but not receive the responses. The result is more queries than necessary because of retransmission, all of which are useless because the responses are never received. Just as with the glue-fetching scenario described in Section 2.4, the queries are sometimes sent at excessive rates. To make matters worse, sometimes the responses, sent in reply to legitimate queries, trigger an alarm on the originator's intrusion detection system. We are frequently contacted by administrators responding to such alarms who believe our name servers are attacking their systems.",
+      "ja": "一般的な発生およびCOM /ネットやルートネームサーバで繰り返しクエリの最大の源の一つは、間違って設定ファイアウォールの背後リゾルバに起因すると思われます。このような状況では、反復リゾルバは、明らかに他のネームサーバにファイアウォールを介してクエリを送信することができますが、応答を受信されません。その結果、応答が受信されることはありませんので、役に立たないすべてがあるため、再送の必要以上のクエリ、です。ただ、2.4節で説明した接着剤・フェッチのシナリオと同様に、クエリは時々過度のレートで送信されます。さらに悪いことに、時には正当なクエリへの応答として送信される応答は、発信者の侵入検知システムのアラームをトリガーします。私たちはしばしば私たちのネームサーバは自分のシステムを攻撃していると信じて、このようなアラームに対応し、管理者から連絡されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Not only do some resolvers in this situation retransmit queries at an excessive rate, but they continue to do so for days or even weeks. This scenario could result from an organization with multiple recursive name servers, only a subset of whose iterative resolvers' traffic is improperly filtered in this manner. Stub resolvers in the organization could be configured to query multiple recursive name servers. Consider the case where a stub resolver queries a filtered recursive name server first. The iterative resolver of this recursive name server sends one or more queries whose replies are filtered, so it cannot respond to the stub resolver, which times out. Then the stub resolver retransmits to a recursive name server that is able to provide an answer. Since resolution ultimately succeeds the underlying problem might not be recognized or corrected. A popular stub resolver implementation has a very aggressive retransmission schedule, including simultaneous queries to multiple recursive name servers, which could explain how such a situation could persist without being detected.",
+      "ja": "だけでなく、過度の割合でこのような状況の再送信クエリ内のいくつかのレゾルバを行うが、彼らは数日あるいは数週間のためにそうし続けます。このシナリオでは、複数の再帰ネームサーバを持つ組織に起因する可能性があり、その反復リゾルバのトラフィックのサブセットのみが不適切、このようにフィルタリングされます。組織内のスタブリゾルバは、複数の再帰ネームサーバを照会するように構成することができます。スタブリゾルバは、第一フィルタ再帰ネームサーバに問い合わせをする場合を考えてみましょう。この再帰的なネームサーバの反復リゾルバは、その回答には、スタブリゾルバにどの回を応答することができないので、フィルタリングされた1つの以上のクエリを送信します。そして、スタブリゾルバは答えを提供することができる再帰ネームサーバに再送信します。解像度が最終的に成功したので、根本的な問題が認識または訂正されない場合があります。人気のスタブリゾルバの実装では、このような状況が検出されることなく持続可能性がどのように説明することができ、複数の再帰ネームサーバへの同時クエリを含む非常に積極的な再送スケジュールを持っています。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5.1. Recommendation",
+      "section_title": true,
+      "ja": "2.5.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "The most obvious recommendation is that administrators SHOULD take care not to place iterative resolvers behind a firewall that allows queries, but not the resulting replies, to pass through.",
+      "ja": "最も明白な勧告は、管理者が通過するために、結果の回答のクエリを許可するファイアウォールの背後に反復リゾルバを配置しないように注意してください、しかしべきではないということです。"
+    },
+    {
+      "indent": 3,
+      "text": "Iterative resolvers SHOULD take care to avoid sending queries at excessive rates. Implementations SHOULD support throttling logic to detect when queries are sent but no responses are received.",
+      "ja": "反復リゾルバは、過度のレートでクエリを送信しないように注意する必要があります。実装は、クエリが送信されますが、何の応答が受信されないときを検出するためにスロットリング・ロジックをサポートする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. Misconfigured NS Records",
+      "section_title": true,
+      "ja": "2.6。不適切に設定されたNSレコード"
+    },
+    {
+      "indent": 3,
+      "text": "Sometimes a zone administrator forgets to add the trailing dot on the domain names in the RDATA of a zone's NS records. Consider this fragment of the zone file for \"example.com\":",
+      "ja": "時々、ゾーン管理者は、ゾーンのNSレコードのRDATAのドメイン名の末尾にドットを追加するのを忘れました。 「example.com」のゾーンファイルのこの断片を考えてみましょう。"
+    },
+    {
+      "indent": 5,
+      "text": "$ORIGIN example.com. example.com. 3600 IN NS ns1.example.com ; Note missing example.com. 3600 IN NS ns2.example.com ; trailing dots",
+      "ja": "$ ORIGIN example.comの。 example.com。 3600 NS ns1.example.com。 example.com行方不明に注意してください。 3600 NS ns2.example.com。末尾のドット"
+    },
+    {
+      "indent": 3,
+      "text": "The zone's authoritative servers will parse the NS RDATA as \"ns1.example.com.example.com\" and \"ns2.example.com.example.com\" and return NS records with this incorrect RDATA in responses, including typically the authority section of every response containing records from the \"example.com\" zone.",
+      "ja": "ゾーンの権威サーバは、「ns1.example.com.example.com」としてNS RDATAを解析し、「ns2.example.com.example.com」との一般的権威セクションを含む応答では、この間違ったRDATA、とNSレコードを返します。 「example.com」ゾーンからレコードを含むすべての応答。"
+    },
+    {
+      "indent": 3,
+      "text": "Now consider a typical sequence of queries. An iterative resolver attempting to resolve address records for \"www.example.com\" with no cached information for this zone will query a \"com\" authoritative server. The \"com\" server responds with a referral to the \"example.com\" zone, consisting of NS records with valid RDATA and associated glue records. (This example assumes that the \"example.com\" zone delegation information is correct in the \"com\" zone.) The iterative resolver caches the NS RRSet from the \"com\" server and follows the referral by querying one of the \"example.com\" authoritative servers. This server responds with the \"www.example.com\" address record in the answer section and, typically, the \"example.com\" NS records in the authority section and, if space in the message remains, glue address records in the additional section. According to Section 5.4.1 of RFC 2181 [3], NS records in the authority section of an authoritative answer are more trustworthy than NS records from the authority section of a non-authoritative answer. Thus, the \"example.com\" NS RRSet just received from the \"example.com\" authoritative server overrides the \"example.com\" NS RRSet received moments ago from the \"com\" authoritative server.",
+      "ja": "今、クエリの典型的なシーケンスを考えます。このゾーンのキャッシュされた情報を「www.example.com」のアドレスレコードを解決しようとする反復リゾルバは、「COM」権限のあるサーバーを照会します。 「COM」サーバーは、有効なRDATAと関連するグルーレコードとNSレコードからなる、「example.com」ゾーンへの紹介で応答します。 （この例では、「example.com」ゾーンの委任情報が「COM」ゾーンに適切であることを前提としています。）反復リゾルバは「COM」サーバからNS資源レコード集合をキャッシュし、「example.comのいずれかを照会することによって、紹介を以下「権威サーバ。このサーバは、権限のセクションで解答セクションで、「www.example.com」アドレスレコードと、一般的に、「example.com」NSレコードで応答し、メッセージ内のスペースは、追加のセクションで、糊のアドレスレコードのままであれば。 RFC 2181のセクション5.4.1 [3]によると、公式の答えの権威セクションのNSレコードは、非公式の答えの権威セクションからNSレコードよりも信頼できます。このように、単に「example.com」権限のあるサーバーから受信した「example.com」NS資源レコード集合は「example.com」NS資源レコード集合は、「COM」権限のあるサーバーからの瞬間前に受けたよりも優先されます。"
+    },
+    {
+      "indent": 3,
+      "text": "But the \"example.com\" zone contains the erroneous NS RRSet as shown in the example above. Subsequent queries for names in \"example.com\" will cause the iterative resolver to attempt to use the incorrect NS records and so it will try to resolve the nonexistent names \"ns1.example.com.example.com\" and \"ns2.example.com.example.com\". In this example, since all of the zone's name servers are named in the zone itself (i.e., \"ns1.example.com.example.com\" and \"ns2.example.com.example.com\" both end in \"example.com\") and all are bogus, the iterative resolver cannot reach any \"example.com\" name servers. Therefore, attempts to resolve these names result in address record queries to the \"com\" authoritative servers. Queries for such obviously bogus glue address records occur frequently at the com/net name servers.",
+      "ja": "上記の例に示すように、しかし、「example.com」ゾーンは、誤ったNS資源レコード集合が含まれています。 「example.com」の名の後続の問合せは、反復リゾルバが正しくないNSレコードを使用しようとするので、それが存在しない名前を解決しようとする「ns1.example.com.example.com」と「ns2.exampleますが発生します。 com.example.com」。この例では、ゾーンのネームサーバのすべてが（ゾーン自体に命名されているので、すなわち、「ns1.example.com.example.com」と「ns2.example.com.example.com」「の両端example.com example.com 『ネームサーバ「）と、すべての反復リゾルバがいずれも到達できない、偽のです』。そのため、「COM」権限サーバにアドレスレコードクエリの結果、これらの名前を解決しようとします。このよう明らかに偽の糊アドレスレコードのクエリは、COM /ネットネームサーバで頻繁に発生します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6.1. Recommendation",
+      "section_title": true,
+      "ja": "2.6.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "An authoritative server can detect this situation. A trailing dot missing from an NS record's RDATA always results by definition in a name server name that exists somewhere under the apex of the zone that the NS record appears in. Note that further levels of delegation are possible, so a missing trailing dot could inadvertently create a name server name that actually exists in a subzone.",
+      "ja": "権威サーバはこの状況を検出することができます。末尾には、NSレコードのRDATAから欠落しているが、常にどこかでNSレコードがに表示されていることを、ゾーンの頂点の下に存在するネームサーバ名で定義して、結果点在しています。とても不足している最後のドットが誤ってできた、代表団のさらなるレベルが可能であることに注意してください実際サブゾーンに存在するネームサーバ名を作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "An authoritative name server SHOULD issue a warning when one of a zone's NS records references a name server below the zone's apex when a corresponding address record does not exist in the zone AND there are no delegated subzones where the address record could exist.",
+      "ja": "対応するアドレスレコードがゾーンに存在しないとアドレスレコードが存在する可能性が全く委任サブゾーンがない場合、ゾーンのNSレコードの一つは、ゾーンの頂点下のネームサーバーを参照する際に権威ネームサーバは警告を発行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.7. Name Server Records with Zero TTL",
+      "section_title": true,
+      "ja": "2.7。ゼロのTTLを持つサーバーレコードの名前"
+    },
+    {
+      "indent": 3,
+      "text": "Sometimes a popular com/net subdomain's zone is configured with a TTL of zero on the zone's NS records, which prohibits these records from being cached and will result in a higher query volume to the zone's authoritative servers. The zone's administrator should understand the consequences of such a configuration and provision resources accordingly. A zero TTL on the zone's NS RRSet, however, carries additional consequences beyond the zone itself: if an iterative resolver cannot cache a zone's NS records because of a zero TTL, it will be forced to query that zone's parent's name servers each time it resolves a name in the zone. The com/net authoritative servers do see an increased query load when a popular com/net subdomain's zone is configured with a TTL of zero on the zone's NS records.",
+      "ja": "時には人気のCOM /ネットサブドメインのゾーンがキャッシュされているから、これらの記録を禁止し、ゾーンの権威サーバーへの高いクエリのボリュームになりますゾーンのNSレコードにゼロのTTL、で構成されています。ゾーンの管理者は、それに応じて、このような構成と提供資源の影響を理解する必要があります。ゾーンのNS資源レコード集合上のゼロTTLは、しかし、ゾーン自体を超えた追加の結果を運ぶ：ゼロTTLの、そのゾーンの親のネームサーバ、それが解決されるたびに照会することを余儀なくされるため、反復リゾルバがゾーンのNSレコードをキャッシュすることができない場合ゾーン内の名前。人気のCOM /ネットサブドメインのゾーンは、ゾーンのNSレコードにゼロのTTLで構成されている場合、COM /ネット権限サーバが増加し、クエリの負荷を見ます。"
+    },
+    {
+      "indent": 3,
+      "text": "A zero TTL on an RRSet expected to change frequently is extreme but permissible. A zone's NS RRSet is a special case, however, because changes to it must be coordinated with the zone's parent. In most zone parent/child relationships that we are aware of, there is typically some delay involved in effecting changes. Furthermore, changes to the set of a zone's authoritative name servers (and therefore to the zone's NS RRSet) are typically relatively rare: providing reliable authoritative service requires a reasonably stable set of servers. Therefore, an extremely low or zero TTL on a zone's NS RRSet rarely makes sense, except in anticipation of an upcoming change. In this case, when the zone's administrator has planned a change and does not want iterative resolvers throughout the Internet to cache the NS RRSet for a long period of time, a low TTL is reasonable.",
+      "ja": "頻繁に変更することが予想資源レコード集合上のゼロTTLは極端ますが許容されます。それへの変更は、ゾーンの親と調整しなければならないため、ゾーンのNS資源レコード集合は、しかし、特殊なケースです。私たちが知っているほとんどのゾーンの親/子関係では、変化をもたらすに関わるいくつかの遅延が一般的にあります。さらに、ゾーンの権威ネームサーバのセット（したがって、ゾーンのNS資源レコード集合に）への変更は、一般的には比較的稀である：信頼できる権威あるサービスを提供するサーバの合理的に安定したセットが必要です。したがって、ゾーンのNS資源レコード集合に極めて低いかゼロTTLはめったに今後の変化を見越しを除き、意味がありません。この場合、ゾーンの管理者が変更を計画しているし、インターネットを通じて反復リゾルバは、長時間のNS資源レコード集合をキャッシュしたくない場合などには、低TTLは合理的です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.7.1. Recommendation",
+      "section_title": true,
+      "ja": "2.7.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "Because of the additional load placed on a zone's parent's authoritative servers resulting from a zero TTL on a zone's NS RRSet, under such circumstances authoritative name servers SHOULD issue a warning when loading a zone.",
+      "ja": "ゾーンをロードするときので、ゾーンのNS資源レコード集合上のゼロTTL起因するゾーンの親の権威のサーバー上に置かれ、追加の負荷が、そのような状況の下で権威ネームサーバは、警告を発行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.8. Unnecessary Dynamic Update Messages",
+      "section_title": true,
+      "ja": "2.8。不要な動的更新メッセージ"
+    },
+    {
+      "indent": 3,
+      "text": "The UPDATE message specified in RFC 2136 [6] allows an authorized agent to update a zone's data on an authoritative name server using a DNS message sent over the network. Consider the case of an agent desiring to add a particular resource record. Because of zone cuts, the agent does not necessarily know the proper zone to which the record should be added. The dynamic update process requires that the agent determine the appropriate zone so the UPDATE message can be sent to one of the zone's authoritative servers (typically the primary master as specified in the zone's Start of Authority (SOA) record's MNAME field).",
+      "ja": "RFC 2136で指定されたUPDATEメッセージは、[6]、許可エージェントがネットワークを介して送信されるDNSメッセージを使用して、権威あるネームサーバ上にゾーンのデータを更新することを可能にします。特定のリソースレコードを追加することを望む剤の場合を考えてみましょう。そのため、ゾーンカットの、エージェントは必ずしもレコードが追加すべき適切なゾーンを知りません。動的更新プロセスは、UPDATEメッセージは、ゾーンの権威サーバー（ゾーンの権限の開始（SOA）レコードのMNAMEフィールドで指定されるように、典型的には一次マスタ）のいずれかに送信することができるように、エージェントは適切なゾーンを決定することを必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "The appropriate zone to update is the closest enclosing zone, which cannot be determined only by inspecting the domain name of the record to be updated, since zone cuts can occur anywhere. One way to determine the closest enclosing zone entails walking up the name space tree by sending repeated UPDATE messages until successful. For example, consider an agent attempting to add an address record with the name \"foo.bar.example.com\". The agent could first attempt to update the \"foo.bar.example.com\" zone. If the attempt failed, the update could be directed to the \"bar.example.com\" zone, then the \"example.com\" zone, then the \"com\" zone, and finally the root zone.",
+      "ja": "更新するための適切なゾーンはゾーンカットはどこにでも発生する可能性があるため、更新するレコードのドメイン名を調べることによってのみ決定することができない最も近い外側のゾーン、です。最も近い外側のゾーンを決定する一つの方法は、成功するまで繰り返さUPDATEメッセージを送信することで、名前空間ツリーを歩くことを伴います。たとえば、名前「foo.bar.example.com」でアドレスレコードを追加しようとするエージェントを考えます。エージェントは、最初に「foo.bar.example.com」ゾーンを更新しようとする可能性があり。試みが失敗した場合、更新は「bar.example.com」ゾーンは、「example.com」ゾーンは、「COM」ゾーン、そして最終的にルートゾーンに向けることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A popular dynamic agent follows this algorithm. The result is many UPDATE messages received by the root name servers, the com/net authoritative servers, and presumably other TLD authoritative servers. A valid question is why the algorithm proceeds to send updates all the way to TLD and root name servers. This behavior is not entirely unreasonable: in enterprise DNS architectures with an",
+      "ja": "人気のあるダイナミックなエージェントは、このアルゴリズムに従っています。結果は、ルートネームサーバ、COM /ネット権限サーバ、およびおそらく他のTLD権威サーバで受信された多くのUPDATEメッセージです。アルゴリズムは、更新にTLDするすべての方法を送信するために進み、ルートネームサーバなぜ有効な質問です。この動作は完全に不合理ではありません。と、企業のDNSアーキテクチャに"
+    },
+    {
+      "indent": 3,
+      "text": "\"internal root\" design, there could conceivably be private, non-public TLD or root zones that would be the appropriate targets for a dynamic update.",
+      "ja": "「内部ルート」のデザイン、考えられる動的更新のための適切な標的となり、民間、非公共TLDまたはルートゾーンがあるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "A significant deficiency with this algorithm is that knowledge of a given UPDATE message's failure is not helpful in directing future UPDATE messages to the appropriate servers. A better algorithm would be to find the closest enclosing zone by walking up the name space with queries for SOA or NS rather than \"probing\" with UPDATE messages. Once the appropriate zone is found, an UPDATE message can be sent. In addition, the results of these queries can be cached to aid in determining the closest enclosing zones for future updates. Once the closest enclosing zone is determined with this method, the update will either succeed or fail and there is no need to send further updates to higher-level zones. The important point is that walking up the tree with queries yields cacheable information, whereas walking up the tree by sending UPDATE messages does not.",
+      "ja": "このアルゴリズムで重要な欠陥は、与えられたUPDATEメッセージの失敗のその知識は、適切なサーバーに将来のUPDATEメッセージを向けるのに役立つではありません。より良いアルゴリズムは、SOAまたはNSを照会して名前空間を歩くのではなくUPDATEメッセージで「探査」によって最も近い外側のゾーンを見つけることであろう。適切なゾーンが見つかると、UPDATEメッセージを送信することができます。また、これらのクエリの結果は、今後の更新のために最も近い囲んゾーンを決定する際に支援するためにキャッシュすることができます。最も近い外側のゾーンはこの方法で決定されると、更新が成功するか失敗すると、より高いレベルのゾーンへのさらなる更新を送信する必要はありませんどちらか。重要な点は、UPDATEメッセージを送信することにより、ツリーを歩くことはないのに対し、クエリでツリーを歩くことは、キャッシュ可能な情報を得られることです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.8.1. Recommendation",
+      "section_title": true,
+      "ja": "2.8.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "Dynamic update agents SHOULD send SOA or NS queries to progressively higher-level names to find the closest enclosing zone for a given name to update. Only after the appropriate zone is found should the client send an UPDATE message to one of the zone's authoritative servers. Update clients SHOULD NOT \"probe\" using UPDATE messages by walking up the tree to progressively higher-level zones.",
+      "ja": "動的更新エージェントは、更新する指定された名前のための最も近い外側のゾーンを見つけるために、次第に、より高いレベルの名にSOAまたはNSクエリーを送信すべきです。適切なゾーンが発見された後にのみ、クライアントは、ゾーンの権威サーバの1つにUPDATEメッセージを送信する必要があります。更新クライアントは、徐々に上位ゾーンにツリーを歩いてUPDATEメッセージを使用して、「プローブ」べきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.9. Queries for Domain Names Resembling IPv4 Addresses",
+      "section_title": true,
+      "ja": "2.9。ドメイン名に似たIPv4アドレスのクエリ"
+    },
+    {
+      "indent": 3,
+      "text": "The root name servers receive a significant number of A record queries where the QNAME looks like an IPv4 address. The source of these queries is unknown. It could be attributed to situations where a user believes that an application will accept either a domain name or an IP address in a given configuration option. The user enters an IP address, but the application assumes that any input is a domain name and attempts to resolve it, resulting in an A record lookup. There could also be applications that produce such queries in a misguided attempt to reverse map IP addresses.",
+      "ja": "ルートネームサーバは、QNAMEは、IPv4アドレスのように見えるのレコードクエリのかなりの数を受け取ります。これらのクエリの源は不明です。これは、ユーザーがアプリケーションをドメイン名または特定の設定オプションでIPアドレスのいずれかを受け入れるだろうと信じている状況に起因する可能性があります。ユーザーは、IPアドレスを入力しますが、アプリケーションは、任意の入力がドメイン名であるとレコード検索で、その結果、それを解決しようとしていることを前提としています。また、マップのIPアドレスを逆に見当違いの試みで、このようなクエリを生成するアプリケーションがあるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "These queries result in Name Error (RCODE=3) responses. An iterative resolver can negatively cache such responses, but each response requires a separate cache entry; i.e., a negative cache entry for the domain name \"192.0.2.1\" does not prevent a subsequent query for the domain name \"192.0.2.2\".",
+      "ja": "これらのクエリは名エラー（RCODE = 3）応答につながります。反復リゾルバは、負にそのような応答をキャッシュすることができるが、各応答は、別々のキャッシュ・エントリを必要としますつまり、ドメイン名「192.0.2.1」のための負のキャッシュエントリは、ドメイン名「192.0.2.2」のために、後続のクエリを防ぐことはできません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.9.1. Recommendation",
+      "section_title": true,
+      "ja": "2.9.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "It would be desirable for the root name servers not to have to answer these queries: they unnecessarily consume CPU resources and network bandwidth. A possible solution is to delegate these numeric TLDs from the root zone to a separate set of servers to absorb the traffic. The \"black hole servers\" used by the AS 112 Project (http://www.as112.net), which are currently delegated the in-addr.arpa zones corresponding to RFC 1918 [7] private use address space, would be a possible choice to receive these delegations. Of course, the proper and usual root zone change procedures would have to be followed to make such a change to the root zone.",
+      "ja": "ルートネームサーバは、これらのクエリに答えるために持っていないことが望ましいだろう。彼らは不必要にCPUリソースとネットワーク帯域幅を消費します。可能な解決策は、トラフィックを吸収するためのサーバーの別のセットにルートゾーンからこれらの数値のTLDを委任することです。現在、RFC 1918 [7]占用アドレス空間に対応するin-addr.arpaゾーンを委任されているAS 112プロジェクト（http://www.as112.net）によって使用される「ブラックホール・サーバ」は、あろうこれらの代表団を受信するための可能な選択肢。もちろん、適切かつ通常のルートゾーンの変更手続きは、ルートゾーンに、このような変更を行うために従うべきだろう。"
+    },
+    {
+      "indent": 0,
+      "text": "2.10. Misdirected Recursive Queries",
+      "section_title": true,
+      "ja": "2.10。見当違いの再帰クエリ"
+    },
+    {
+      "indent": 3,
+      "text": "The root name servers receive a significant number of recursive queries (i.e., queries with the Recursion Desired (RD) bit set in the header). Since none of the root servers offers recursion, the servers' response in such a situation ignores the request for recursion and the response probably does not contain the data the querier anticipated. Some of these queries result from users configuring stub resolvers to query a root server. (This situation is not hypothetical: we have received complaints from users when this configuration does not work as hoped.) Of course, users should not direct stub resolvers to use name servers that do not offer recursion, but we are not aware of any stub resolver implementation that offers any feedback to the user when so configured, aside from simply \"not working\".",
+      "ja": "ルートネームサーバは、再帰クエリ（ヘッダに設定再帰所望の（RD）ビットを有する、すなわち、クエリ）のかなりの数を受け取ります。ルートサーバのいずれも再帰を提供していますので、このような状況では、サーバの応答が再帰の要求を無視し、応答は、おそらくクエリアが予想されるデータが含まれていません。これらのクエリの一部は、ルートサーバーを照会するスタブリゾルバを設定し、ユーザーに起因します。 （この状況は、仮定ではありません：。我々は期待してこの構成が動作しない場合に、ユーザーからの苦情を受けている）もちろん、ユーザーが直接スタブリゾルバは再帰を提供していないネームサーバを使用するべきではありませんが、私たちはどのスタブを認識していません単に「動作しない」とは別に、そのように構成されたユーザへのフィードバックを提供していますリゾルバの実装。"
+    },
+    {
+      "indent": 0,
+      "text": "2.10.1. Recommendation",
+      "section_title": true,
+      "ja": "2.10.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "When the IP address of a name server that supposedly offers recursion is configured in a stub resolver using an interactive user interface, the resolver could send a test query to verify that the server indeed supports recursion (i.e., verify that the response has the RA bit set in the header). The user could be notified immediately if the server is non-recursive.",
+      "ja": "おそらく再帰を提供するネームサーバのIPアドレスは、インタラクティブなユーザインタフェースを使用してスタブリゾルバに設定されている場合、リゾルバはサーバーが実際に再帰をサポートしていることを確認するためのテストクエリを送ることができ（すなわち、応答はRAのビットを持っていることを確認してくださいヘッダに設定）。サーバが非再帰的である場合、ユーザーは即座に通知することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The stub resolver could also report an error, either through a user interface or in a log file, if the queried server does not support recursion. Error reporting SHOULD be throttled to avoid a notification or log message for every response from a non-recursive server.",
+      "ja": "照会サーバーは再帰をサポートしていない場合、スタブリゾルバはまた、ユーザーインターフェースを介して、またはログファイルのいずれかで、エラーを報告することができます。エラー報告は、通知を回避または非再帰的サーバーからのすべての応答のためのメッセージをログに記録する絞るべきである（SHOULD）。"
+    },
+    {
+      "indent": 0,
+      "text": "2.11. Suboptimal Name Server Selection Algorithm",
+      "section_title": true,
+      "ja": "2.11。次善のネームサーバ選択アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "An entire document could be devoted to the topic of problems with different implementations of the recursive resolution algorithm. The entire process of recursion is woefully under-specified, requiring each implementor to design an algorithm. Sometimes implementors make poor design choices that could be avoided if a suggested algorithm and best practices were documented, but that is a topic for another document.",
+      "ja": "文書全体を再帰的な解決アルゴリズムの異なる実装に問題のトピックに専念することができます。再帰の全体のプロセスは、アルゴリズムを設計するために、各実装を必要とする、指定されたアンダーはなはだあります。時々実装者は、提案アルゴリズムとベストプラクティスが記載されていたならば回避できる貧弱な設計上の選択を行うが、それは別の文書のためのトピックです。"
+    },
+    {
+      "indent": 3,
+      "text": "Some deficiencies cause significant operational impact and are therefore worth mentioning here. One of these is name server selection by an iterative resolver. When an iterative resolver wants to contact one of a zone's authoritative name servers, how does it choose from the NS records listed in the zone's NS RRSet? If the selection mechanism is suboptimal, queries are not spread evenly among a zone's authoritative servers. The details of the selection mechanism are up to the implementor, but we offer some suggestions.",
+      "ja": "いくつかの欠陥が重大な運用への影響を引き起こすので、ここで言及する価値があります。これらの一つは、反復リゾルバによってネームサーバの選択です。反復リゾルバがゾーンの権威ネームサーバのいずれかに連絡したい場合は、どのようにそれは、ゾーンのNS資源レコード集合に記載されているNSレコードから選ぶのでしょうか？選択機構が最適ではない場合、クエリは、ゾーンの権威サーバ間で均等に分散されていません。選択機構の詳細は、実装までですが、我々はいくつかの提案を提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.11.1. Recommendation",
+      "section_title": true,
+      "ja": "2.11.1。勧告"
+    },
+    {
+      "indent": 3,
+      "text": "This list is not conclusive, but reflects the changes that would produce the most impact in terms of reducing disproportionate query load among a zone's authoritative servers. That is, these changes would help spread the query load evenly.",
+      "ja": "このリストは決定的ではなく、ゾーンの権威サーバ間で不均衡なクエリの負荷を軽減するという点で最も影響力を生み出す変更が反映されます。つまり、これらの変更は、均等にクエリ負荷を分散役立つだろう。"
+    },
+    {
+      "indent": 3,
+      "text": "o Do not make assumptions based on NS RRSet order: all NS RRs SHOULD be treated equally. (In the case of the \"com\" zone, for example, most of the root servers return the NS record for \"a.gtld-servers.net\" first in the authority section of referrals. Apparently as a result, this server receives disproportionately more traffic than the other twelve authoritative servers for \"com\".)",
+      "ja": "O NS資源レコード集合の順序に基づいて仮定をしないでください。すべてのNSのRRが平等に扱われるべきです。 （「COM」ゾーンの場合、例えば、ルートサーバのほとんどは最初の紹介の権限セクションで、「a.gtld-servers.net」のためにNSレコードを返します。どうやら、結果として、このサーバーは不釣り合い受けます「COM」の他の12台の権限サーバよりも多くのトラフィック。）"
+    },
+    {
+      "indent": 3,
+      "text": "o Use all NS records in an RRSet. (For example, we are aware of implementations that hard-coded information for a subset of the root servers.)",
+      "ja": "O資源レコード集合内のすべてのNSレコードを使用してください。 （例えば、我々は、ルートサーバのサブセットのためのハードコードされた実装情報を認識しています。）"
+    },
+    {
+      "indent": 3,
+      "text": "o Maintain state and favor the best-performing of a zone's authoritative servers. A good definition of performance is response time. Non-responsive servers can be penalized with an extremely high response time.",
+      "ja": "O状態を維持し、ゾーンの権威サーバの最高のパフォーマンスを好みます。パフォーマンスの良い定義は、応答時間です。非応答サーバーは、非常に高い応答時間で罰せられることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Do not lock onto the best-performing of a zone's name servers. An iterative resolver SHOULD periodically check the performance of all of a zone's name servers to adjust its determination of the best-performing one.",
+      "ja": "Oゾーンのネームサーバの最高のパフォーマンスにロックしないでください。反復リゾルバは、定期的に最高の実行1のその決定を調整するために、ゾーンのネームサーバのすべてのパフォーマンスをチェックする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Security Considerations",
+      "section_title": true,
+      "ja": "3.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The iterative resolver misbehavior discussed in this document exposes the root and TLD name servers to increased risk of both intentional and unintentional Denial of Service attacks.",
+      "ja": "このドキュメントで説明反復リゾルバ不正行為は、サービス攻撃の意図的および非意図的な拒否の両方のリスクの増加にルートやTLDのネームサーバを公開しています。"
+    },
+    {
+      "indent": 3,
+      "text": "We believe that implementation of the recommendations offered in this document will reduce the amount of unnecessary traffic seen at root and TLD name servers, thus reducing the opportunity for an attacker to use such queries to his or her advantage.",
+      "ja": "私たちは、この文書で提供勧告の実施は、このように彼または彼女の利点にこのようなクエリを使用するには、攻撃者のための機会を減らし、ルートやTLDのネームサーバで見られる不要なトラフィックの量を減らすことになると信じています。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Acknowledgements",
+      "section_title": true,
+      "ja": "4.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank the following people for their comments that improved this document: Andras Salamon, Dave Meyer, Doug Barton, Jaap Akkerhuis, Jinmei Tatuya, John Brady, Kevin Darcy, Olafur Gudmundsson, Pekka Savola, Peter Koch, and Rob Austein. We apologize if we have omitted anyone; any oversight was unintentional.",
+      "ja": "アンドラス・サラモン、デイブ・マイヤー、ダグ・バートン、ヤープAkkerhuis、神明達也、ジョン・ブレイディ、ケビン・ダーシー、オラフルグドムンソン、ペッカSavola、ピーター・コッホ、とロブAusteinと：作者はこのドキュメントを改善彼らのコメントについて以下の人々に感謝したいと思います。私たちは誰を省略した場合、我々は謝罪します。どの監督が意図しないました。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Internationalization Considerations",
+      "section_title": true,
+      "ja": "5.国際化に関する注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "There are no new internationalization considerations introduced by this memo.",
+      "ja": "このメモによって導入新しい国際化の考慮事項はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6.参照"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[1] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[1]ブラドナーのは、S.は、BCP 14、RFC 2119、1997年3月の \"RFCsにおける使用のためのレベルを示すために\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[2] Mockapetris, P., \"Domain names - concepts and facilities\", STD 13, RFC 1034, November 1987.",
+      "ja": "[2] Mockapetris、P.、 \"ドメイン名 - 概念と設備\"、STD 13、RFC 1034、1987年11月。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[3] Elz, R. and R. Bush, \"Clarifications to the DNS Specification\", RFC 2181, July 1997.",
+      "ja": "[3]エルツ、R.とR.ブッシュ大統領、 \"DNS仕様の明確化\"、RFC 2181、1997年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[4] Andrews, M., \"Negative Caching of DNS Queries (DNS NCACHE)\", RFC 2308, March 1998.",
+      "ja": "[4]アンドリュース、M.、RFC 2308、1998年3月 \"DNSクエリ（DNS NCACHE）のネガティブキャッシュ\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[5] Morishita, Y. and T. Jinmei, \"Common Misbehavior Against DNS Queries for IPv6 Addresses\", RFC 4074, May 2005.",
+      "ja": "[5]森下、Y.とT.神明、 \"IPv6アドレスの一般的な不正行為に対するDNSクエリ\"、RFC 4074、2005年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[6] Vixie, P., Thomson, S., Rekhter, Y., and J. Bound, \"Dynamic Updates in the Domain Name System (DNS UPDATE)\", RFC 2136, April 1997.",
+      "ja": "[6]、RFC 2136 \"ドメインネームシステム（DNS更新）における動的更新\" いるVixie、P.、トムソン、S.、Rekhter、Y.、およびJ.はバウンド、4月1997。"
+    },
+    {
+      "indent": 3,
+      "text": "[7] Rekhter, Y., Moskowitz, B., Karrenberg, D., de Groot, G., and E. Lear, \"Address Allocation for Private Internets\", BCP 5, RFC 1918, February 1996.",
+      "ja": "[7] Rekhter、Y.、モスコウィッツ、B.、Karrenberg、D.、グルート、G.、およびE.リア、BCP 5、RFC 1918、1996年2月、 \"個人的なインターネットのための配分\" デ。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Matt Larson VeriSign, Inc. 21345 Ridgetop Circle Dulles, VA 20166-6503 USA",
+      "ja": "マット・ラーソンベリサイン社21345 Ridgetopサークルダレス、バージニア州20166から6503 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: mlarson@verisign.com",
+      "ja": "メールアドレス：mlarson@verisign.com"
+    },
+    {
+      "indent": 3,
+      "text": "Piet Barber VeriSign, Inc. 21345 Ridgetop Circle Dulles, VA 20166-6503 USA",
+      "ja": "ピエト・バーバーベリサイン社21345 Ridgetopサークルダレス、バージニア州20166から6503 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: pbarber@verisign.com",
+      "ja": "メールアドレス：pbarber@verisign.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The Internet Society (2006).",
+      "ja": "著作権（C）インターネット協会（2006）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットソサエティおよびインターネット・エンジニアリング・タスク・フォース放棄すべての保証、明示または、（もしあれば）後援ISに設けられています。黙示、情報の利用は、特定の目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証含むがこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is provided by the IETF Administrative Support Activity (IASA).",
+      "ja": "RFCエディタ機能のための資金は、IETF管理サポート活動（IASA）によって提供されます。"
+    }
+  ]
+}

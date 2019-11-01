@@ -1,0 +1,451 @@
+{
+  "title": {
+    "text": "RFC 4811 - OSPF Out-of-Band Link State Database (LSDB) Resynchronization",
+    "ja": "RFC 4811 - OSPFアウトオブバンドリンクステートデータベース（LSDB）の再同期"
+  },
+  "number": 4811,
+  "created_at": "2019-10-26 23:05:21.670834+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Network Working Group                                          L. Nguyen\nRequest for Comments: 4811                                        A. Roy\nCategory: Informational                                    Cisco Systems\n                                                                A. Zinin\n                                                          Alcatel-Lucent\n                                                              March 2007",
+      "raw": true
+    },
+    {
+      "indent": 5,
+      "text": "OSPF Out-of-Band Link State Database (LSDB) Resynchronization",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This memo provides information for the Internet community. It does not specify an Internet standard of any kind. Distribution of this memo is unlimited.",
+      "ja": "このメモはインターネットコミュニティのための情報を提供します。それはどんな種類のインターネット標準を指定しません。このメモの配布は無制限です。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "OSPF is a link-state intra-domain routing protocol used in IP networks. Link State Database (LSDB) synchronization in OSPF is achieved via two methods -- initial LSDB synchronization when an OSPF router has just been connected to the network and asynchronous flooding that ensures continuous LSDB synchronization in the presence of topology changes after the initial procedure was completed. It may sometime be necessary for OSPF routers to resynchronize their LSDBs. The OSPF standard, however, does not allow routers to do so without actually changing the topology view of the network.",
+      "ja": "OSPFは、IPネットワークで使用されるリンクステートドメイン内ルーティングプロトコルです。最初の手続きが完了した後の初期LSDB同期OSPFルータは、単にトポロジの変更の存在下での連続LSDB同期を確保し、ネットワークおよび非同期洪水に接続されています -  OSPFでリンクステートデータベース（LSDB）同期は、次の2つの方法を介して達成されます。 OSPFルータがそのLSDBsを再同期することがいつか必要になることがあります。 OSPFの標準は、しかし、ルータは実際にネットワークのトポロジビューを変更することなく、そうすることはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "This memo describes a vendor-specific mechanism to perform such a form of out-of-band LSDB synchronization. The mechanism described in this document was proposed before Graceful OSPF Restart, as described in RFC 3623, came into existence. It is implemented/supported by at least one major vendor and is currently deployed in the field. The purpose of this document is to capture the details of this mechanism for public use. This mechanism is not an IETF standard.",
+      "ja": "このメモは、アウトオブバンドLSDB同期のような形態を実行するためのベンダー固有のメカニズムを説明しています。 RFC 3623で説明したように、この文書で説明するメカニズムは、優雅なOSPFの再起動前に提案された、存在に入って来ました。これは、少なくとも一つの主要なベンダーがサポート/実装されており、現在のフィールドに展開されています。このドキュメントの目的は、公共の使用のために、このメカニズムの詳細をキャプチャすることです。このメカニズムは、IETF標準ではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Proposed Solution ...............................................2\n   2.1. The LR-Bit .................................................3\n   2.2. OSPF Neighbor Data Structure ...............................3\n   2.3. Hello Packets ..............................................4\n   2.4. DBD Packets ................................................4\n   2.5. Neighbor State Treatment ...................................7\n   2.6. Initiating OOB LSDB Resynchronization ......................7\n3. Backward Compatibility ..........................................7\n4. Security Considerations .........................................7\n5. IANA Considerations .............................................7\n6. References ......................................................8\n   6.1. Normative References .......................................8\n   6.2. Informative References .....................................8\nAppendix A.  Acknowledgements ......................................9",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "According to the OSPF standard [RFC2328], after two OSPF routers have established an adjacency (the neighbor Finite State Machines (FSMs) have reached Full state), routers announce the adjacency states in their router-Link State Advertisements (LSAs). Asynchronous flooding algorithm ensures that routers' LSDBs stay in sync in the presence of topology changes. However, if routers need (for some reason) to resynchronize their LSDBs, they cannot do that without actually putting the neighbor FSMs into the ExStart state. This effectively causes the adjacencies to be removed from the router-LSAs, which may not be acceptable if the desire is to prevent routing table flaps during database resynchronization. In this document, we provide the means for so-called out-of-band (OOB) LSDB resynchronization.",
+      "ja": "2つのOSPFルータは（隣人有限状態機械（FSMのは）完全な状態に達している）隣接関係を確立した後でOSPFの標準[RFC2328]によると、ルータは、そのルータのリンクステートアドバタイズメント（LSA）に隣接状態を発表します。非同期フラッディングアルゴリズムは、ルータのLSDBsは、トポロジの変更の存在下で、同期にとどまることを保証します。ルータがLSDBsを再同期するために（何らかの理由で）必要がある場合は、彼らは実際のExStart状態に隣人のFSMをかけることなく、それを行うことはできません。これは、効果的に隣接の欲求は、データベースの再同期化の間にルーティングテーブルフラップを防止するためであれば許容できないかもしれないルータのLSAから除去させます。この文書では、我々は、いわゆるアウトオブバンド（OOB）LSDB再同期するための手段を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "The described mechanism can be used in a number of situations including those where the routers are picking up the adjacencies after a reload. The process of adjacency preemption is outside the scope of this document. Only the details related to LSDB resynchronization are mentioned herein.",
+      "ja": "説明されたメカニズムは、ルータがリロード後に隣接関係をピックアップされるものを含む、多くの状況で使用することができます。隣接プリエンプションのプロセスは、この文書の範囲外です。 LSDB再同期に関連する詳細のみを本明細書に記載されています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Proposed Solution",
+      "section_title": true,
+      "ja": "2.提案されたソリューション"
+    },
+    {
+      "indent": 3,
+      "text": "With this Out-of-Band Resynchronization Solution, the format of the OSPF Database Description (DBD) packet is changed to include a new R-bit indicating OOB LSDB resynchronization. All DBD packets sent during the OOB resynchronization procedure are sent with the R-bit set.",
+      "ja": "このアウトオブバンド再同期ソリューション、OSPFデータベース記述の形式で（DBD）パケットが新たなR-ビット示すOOB LSDB再同期を含むように変更されます。 OOB再同期手順中に送信されるすべてのDBDパケットは、Rビットのセットで送信されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Also, two new fields are added to the neighbor data structure. The first field indicates a neighbor's OOB resynchronization capability. The second indicates that OOB LSDB resynchronization is in process. The latter field allows OSPF implementations to utilize the existing neighbor FSM code.",
+      "ja": "また、2つの新しいフィールドは、隣接データ構造に追加されます。最初のフィールドは、隣人のOOB再同期機能を示します。第二は、OOB LSDB再同期が進行中であることを示しています。後者のフィールドは、OSPFの実装は、既存の隣接FSMコードを利用することを可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "A bit is occupied in the Extended Options (EO) TLV (see [RFC4813]). Routers set this bit to indicate their capability to support the described technique.",
+      "ja": "ビットは、拡張オプション（EO）TLV（[RFC4813]を参照）で占められています。ルータは、記載された技術をサポートするために、彼らの能力を示すために、このビットをセットします。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. The LR-Bit",
+      "section_title": true,
+      "ja": "2.1。 LR-ビット"
+    },
+    {
+      "indent": 3,
+      "text": "A new bit, called LR (LR stands for LSDB Resynchronization), is introduced to the LLS Extended Options TLV (see [RFC4813]). The value of the bit is 0x00000001; see Figure 1. See the \"IANA Considerations\" section of [RFC4813] for more information on the Extended Options bit definitions. Routers set the LR-bit to announce OOB LSDB resynchronization capability.",
+      "ja": "LR（LRがLSDB再同期の略）と呼ばれる新しいビットは、LLS拡張オプションTLV（[RFC4813]を参照）に導入されます。ビットの値が0x00000001のです。図1は、拡張オプションビットの定義の詳細については、[RFC4813]の「IANAの考慮事項」の項を参照してください参照。ルータは、OOB LSDB再同期機能を発表するLRビットをセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "+---+---+---+---+---+---+---+- -+---+---+---+---+---+---+---+---+\n| * | * | * | * | * | * | * |...| * | * | * | * | * | * | * | LR|\n+---+---+---+---+---+---+---+- -+---+---+---+---+---+---+---+---+",
+      "raw": true
+    },
+    {
+      "indent": 23,
+      "text": "Figure 1. The Options Field",
+      "ja": "図1.オプションフィールド"
+    },
+    {
+      "indent": 3,
+      "text": "Routers supporting the OOB LSDB resynchronization technique set the LR-bit in the EO-TLV in the LLS block attached to both Hello and DBD packets. Note that no bit is set in the standard OSPF Options field, neither in OSPF packets nor in LSAs.",
+      "ja": "OOB LSDB再同期技術をサポートするルータは、ハローとDBDパケットの両方に取り付けられたLLSブロックにEO-TLVにおけるLRビットを設定します。何ビットがOSPFパケットでもLSAの中にも、標準のOSPFオプションフィールドに設定されていないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. OSPF Neighbor Data Structure",
+      "section_title": true,
+      "ja": "2.2。 OSPFネイバーデータ構造"
+    },
+    {
+      "indent": 3,
+      "text": "A field is introduced into OSPF neighbor data structure, as described below. The name of the field is OOBResync, and it is a flag indicating that the router is currently performing OOB LSDB resynchronization with the neighbor.",
+      "ja": "以下に説明するように、フィールドは、OSPFネイバーのデータ構造内に導入されます。フィールドの名前はOOBResyncであり、それは、ルータが現在、ネイバーとOOB LSDBの再同期を実行していることを示すフラグです。"
+    },
+    {
+      "indent": 3,
+      "text": "The OOBResync flag is set when the router is initiating OOB LSDB resynchronization (see Section 2.6 for more details).",
+      "ja": "ルータはOOB LSDB再同期を開始しているときOOBResyncフラグが（詳細はセクション2.6を参照）が設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Routers clear the OOBResync flag on the following conditions:",
+      "ja": "ルータは、以下の条件にOOBResyncフラグをクリアします："
+    },
+    {
+      "indent": 4,
+      "text": "o The neighbor data structure is first created.",
+      "ja": "O隣人データ構造が最初に作成されます。"
+    },
+    {
+      "indent": 4,
+      "text": "o The neighbor FSM transitions to any state lower than ExStart.",
+      "ja": "ExStartより低い任意の状態に隣接FSM遷移O。"
+    },
+    {
+      "indent": 4,
+      "text": "o The neighbor FSM transitions to the ExStart state because a DBD packet with the R-bit clear has been received.",
+      "ja": "OクリアRビットを有するDBDパケットのExStart状態に隣接FSM遷移受信されているからです。"
+    },
+    {
+      "indent": 4,
+      "text": "o The neighbor FSM reaches the state Full.",
+      "ja": "OネイバーFSMは、状態が完全に達します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the OOBResync flag may have a TRUE value only if the neighbor FSM is in states ExStart, Exchange, or Loading. As indicated above, if the FSM transitions to any other state, the OOBResync flag should be cleared.",
+      "ja": "OOBResyncフラグがネイバーFSMは状態のExStart、交換、またはロードにある場合にのみTRUE値を有することができることに注意してください。上記に示したように、他の状態に遷移FSM場合、OOBResyncフラグをクリアしなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "It is important to mention that operation of the OSPF neighbor FSM is not changed by this document. However, depending on the state of the OOBResync flag, the router sends either normal DBD packets or DBD packets with the R-bit set.",
+      "ja": "OSPFネイバーFSMの動作は、本文書によって変更されていません言及することが重要です。しかし、OOBResyncフラグの状態に応じて、ルータは、Rビットセットで通常DBDパケットまたはDBDパケットのいずれかを送信します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Hello Packets",
+      "section_title": true,
+      "ja": "2.3。 helloパケット"
+    },
+    {
+      "indent": 3,
+      "text": "Routers capable of performing OOB LSDB resynchronization should always set the LR-bit in their Hello packets.",
+      "ja": "OOB LSDBの再同期を行うことが可能なルータは、常に彼らのHelloパケットにLRビットを設定する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. DBD Packets",
+      "section_title": true,
+      "ja": "2.4。 DBDパケット"
+    },
+    {
+      "indent": 3,
+      "text": "Routers supporting the described technique should always set the LR-bit in the DBD packets. Since the Options field of the initial DBD packet is stored in corresponding neighbor data structure, the LR-bit may be used later to check if a neighbor is capable of performing OOB LSDB resynchronization.",
+      "ja": "記載された技術をサポートするルータは、常に、DBDパケットにLRビットを設定しなければなりません。初期DBDパケットのオプションフィールドは、対応する隣接データ構造に格納されているので、LRビットは、隣人がOOB LSDB再同期を行うことができるかどうかを確認するために後で使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The format of type 2 (DBD) OSPF packets is changed to include a flag indicating the OOB LSDB resynchronization procedure. Figure 2 illustrates the new packet format.",
+      "ja": "タイプ2（DBD）OSPFパケットのフォーマットは、OOB LSDB再同期手順を示すフラグを含むように変更されます。図2は、新たなパケットフォーマットを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Version #   |       2       |         Packet length         |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                          Router ID                            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                           Area ID                             |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|           Checksum            |             AuType            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                       Authentication                          |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                       Authentication                          |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|         Interface MTU         |    Options    |0|0|0|0|R|I|M|MS\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                     DD sequence number                        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-                                                             -+\n|                                                               |\n+-                      An LSA Header                          -+\n|                                                               |\n+-                                                             -+\n|                                                               |\n+-                                                             -+\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                              ...                              |",
+      "raw": true
+    },
+    {
+      "indent": 22,
+      "text": "Figure 2. Modified DBD Packet",
+      "ja": "図2.改変DBDパケット"
+    },
+    {
+      "indent": 3,
+      "text": "The R-bit in OSPF type 2 packets is set when the OOBResync flag for the specific neighbor is set to TRUE. If a DBD packets with the R-bit clear is received for a neighbor with active OOBResync flag, the OOB LSDB resynchronization process is canceled and normal LSDB synchronization procedure is initiated.",
+      "ja": "特定の隣人のためOOBResyncフラグがTRUEに設定されている場合、OSPFタイプ2パケットにおけるRビットがセットされます。 RビットのクリアとDBDパケットがアクティブOOBResyncフラグと隣人のために受信された場合、OOB LSDB再同期処理がキャンセルされ、通常のLSDB同期化手順が開始されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a DBD packet is received with the R-bit set and the sender is known to be OOB-incapable, the packet should be dropped and a SeqNumber-Mismatch event should be generated for the neighbor.",
+      "ja": "DBDパケットがセットRビットで受信され、送信者がOOB-不可能であることが知られている場合、パケットは廃棄されるべきであるとSeqNumber不一致イベントが隣人のために生成されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Processing of DBD packets is modified as follows:",
+      "ja": "次のようにDBDパケットの処理が変更されます。"
+    },
+    {
+      "indent": 4,
+      "text": "1. If the OOBResync flag for the neighbor is set (the LSDB resynchronization process has been started) and the received DBD packet does not have the R-bit set, ignore the packet and generate a SeqNumberMismatch event for the neighbor FSM.",
+      "ja": "隣人のためOOBResyncフラグが設定されている場合1.（LSDB再同期処理が開始されている）、受信したDBDパケットは、Rビットセットを有するパケットを無視し、隣接FSM用SeqNumberMismatchイベントを生成しません。"
+    },
+    {
+      "indent": 4,
+      "text": "2. Otherwise, if the OOBResync flag for the neighbor is clear and the received DBD packet has the R-bit set, perform the following steps:",
+      "ja": "隣人のためOOBResyncフラグがクリアされ、受信したDBDパケットは、Rビットがセットされている場合2.そうでない場合、次の手順を実行します。"
+    },
+    {
+      "indent": 8,
+      "text": "*  If the neighbor FSM is in state Full and bits I, M, and MS\n   are set in the DBD packet, set the OOBResync flag for the\n   neighbor, put the FSM in ExStart state, and continue\n   processing the DBD packet as described in [RFC2328].",
+      "raw": true
+    },
+    {
+      "indent": 8,
+      "text": "* Otherwise, ignore received DBD packet (no OOB DBD packets are allowed with OOBResync flag clear and FSM in state other than Full). Also, if the state of the FSM is Exchange or higher, generate a SeqNumberMismatch event for the neighbor FSM.",
+      "ja": "*そうでない場合は、受信したDBDパケットを無視する（何OOB DBDパケットがフル以外の状態で明らかとFSM OOBResyncフラグが許可されていません）。 FSMの状態は、Exchange以上である場合にも、隣人FSMのためのSeqNumberMismatchイベントを発生させます。"
+    },
+    {
+      "indent": 4,
+      "text": "3. Otherwise, process the DBD packet as described in [RFC2328].",
+      "section_title": true,
+      "ja": "3.そうでない場合、プロセス[RFC2328]に記載されているようにDBDパケット。"
+    },
+    {
+      "indent": 3,
+      "text": "During normal processing of the initial OOB DBD packet (with bits R, I, M, and MS set), if the receiving router is selected to be the Master, it may speed up the resynchronization process by immediately replying to the received packet.",
+      "ja": "受信ルータがマスターであるように選択された場合（ビットR、I、M、及びMSが設定された）初期のOOB DBDパケットの通常の処理の間に、それはすぐに受信したパケットに応答することによって、再同期プロセスをスピードアップすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is also necessary to limit the time an adjacency can spend in ExStart, Exchange, and Loading states with OOBResync flag set to a finite period of time (e.g., by limiting the number of times DBD and link state request packets can be retransmitted). If the adjacency does not proceed to Full state before the timeout, it is indicative that the neighboring router cannot resynchronize its LSDB with the local router. The requesting router may decide to stop trying to resynchronize the LSDB over this adjacency (if, for example, it can be resynchronized via another neighbor on the same segment) or to resynchronize using the legacy method by clearing the OOBResync flag and leaving the FSM in ExStart state. The neighboring router may decide to cancel the OOB procedure for the neighbor.",
+      "ja": "隣接（例えば、DBDおよびリンク状態要求パケットを再送することができる回数を制限することにより）時間の有限の時間に設定OOBResyncフラグとのExStart、Exchange、およびローディング状態に費やすことができる時間を制限することも必要です。隣接関係がタイムアウトする前に完全な状態に進まない場合は、隣接ルータがローカルルータとのLSDBを再同期することができないことを示しています。要求ルータは、（例えば、それは同じセグメント上の他のネイバーを介して再同期することができ、場合）この隣接上LSDBを再同期化するか、FSMでのOOBResyncフラグをクリアして残すことにより、従来の方法を使用して再同期しようと停止することを決定することができますExStart状態。隣接ルータは、隣人のためにOOB手続きを中止することがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. Neighbor State Treatment",
+      "section_title": true,
+      "ja": "2.5。ネイバーの状態の治療"
+    },
+    {
+      "indent": 3,
+      "text": "An OSPF implementation supporting the described technique should modify the logic consulting the state of a neighbor FSM as described below.",
+      "ja": "後述のように記載された技術をサポートするOSPFの実装では、ネイバーFSMの状態をコンサルティングロジックを変更する必要があります。"
+    },
+    {
+      "indent": 4,
+      "text": "o FSM state transitioning from and to the Full state with the OOBResync flag set should not cause origination of a new version of router-LSA or network-LSA.",
+      "ja": "oからとOOBResyncフラグがセットされた完全な状態に遷移FSMの状態は、ルータLSAやネットワークLSAの新しいバージョンのオリジネーションが発生することはありません。"
+    },
+    {
+      "indent": 4,
+      "text": "o Any explicit checks for the Full state of a neighbor FSM for the purposes other than LSDB synchronization and flooding should treat states ExStart, Exchange, and Loading as state Full, provided that OOBResync flag is set for the neighbor. (Flooding and MaxAge-LSA-specific procedures should not check the state of the OOBResync flag, but should continue consulting only the FSM state.)",
+      "ja": "Oの状態を扱うべきLSDB同期と氾濫以外の目的のために隣人FSMの完全な状態のための明示的なチェックのExStart、Exchange、およびロードのフル状態、OOBResyncフラグが隣人のために設定されていることを提供するように。 （フラッディングとMaxAgeの-LSA-特定手順はOOBResyncフラグの状態をチェックするべきではないが、唯一のFSMの状態を調べる継続すべきです。）"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. Initiating OOB LSDB Resynchronization",
+      "section_title": true,
+      "ja": "2.6。 OOB LSDB再同期を開始"
+    },
+    {
+      "indent": 3,
+      "text": "To initiate out-of-band LSDB resynchronization, the router must first make sure that the corresponding neighbor supports this technology (by checking the LR-bit in the Options field of the neighbor data structure). If the neighboring router is capable, the OOBResync flag for the neighbor should be set to TRUE and the FSM state should be forced to ExStart.",
+      "ja": "アウトオブバンドLSDBの再同期を開始するには、ルータは、最初に対応するネイバーが（隣人データ構造の[オプション]フィールドにLRビットをチェックすることによって）このテクノロジをサポートしていることを確認する必要があります。隣接ルータが対応している場合、隣人のためOOBResyncフラグをTRUEに設定する必要がありますし、FSMの状態はのExStartに強制されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Backward Compatibility",
+      "section_title": true,
+      "ja": "3.下位互換性"
+    },
+    {
+      "indent": 3,
+      "text": "Because OOB-capable routers explicitly indicate their capability by setting the corresponding bit in the Options field, no DBD packets with the R-bit set are sent to OOB-incapable routers.",
+      "ja": "OOB対応ルータが明示的にオプションフィールドに対応するビットを設定することによって、彼らの能力を示すため、RビットがセットされないDBDパケットはOOB非対応ルータに送信されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The LR-bit itself is transparent for OSPF implementations and does not affect communication between routers.",
+      "ja": "LR-ビット自体は、OSPFの実装のための透明であり、ルータ間の通信に影響を与えません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The described technique does not introduce any new security issues into the OSPF protocol.",
+      "ja": "記載された技術では、OSPFプロトコルに新たなセキュリティ問題を紹介しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Please refer to the \"IANA Considerations\" section of [RFC4813] for more information on the Extended Options bit definitions.",
+      "ja": "拡張オプションビットの定義の詳細については、[RFC4813]の「IANAの考慮事項」を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6.参照"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2328] Moy, J., \"OSPF Version 2\", STD 54, RFC 2328, April 1998.",
+      "ja": "[RFC2328]モイ、J.、 \"OSPFバージョン2\"、STD 54、RFC 2328、1998年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3623] Moy, J., Pillay-Esnault, P., and A. Lindem, \"Graceful OSPF Restart\", RFC 3623, November 2003.",
+      "ja": "[RFC3623]モイ、J.、Pillay-Esnault、P.、およびA. Lindem、 \"優雅なOSPF再起動\"、RFC 3623、2003年11月。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4813] Friedman, B., Nguyen, L., Roy, A., Yeung, D., and A. Zinin, \"OSPF Link-Local Signaling\", RFC 4813, March 2007.",
+      "ja": "[RFC4813]フリードマン、B.、グエン、L.、ロイ、A.、ヨン、D.、およびA.ジニン、 \"OSPFリンクローカルシグナリング\"、RFC 4813、2007年3月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Acknowledgments",
+      "ja": "付録A.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Acee Lindem, Russ White, Don Slice, and Alvaro Retana for their valuable comments.",
+      "ja": "作者は彼らの貴重なコメントをACEE Lindem、ラスホワイト、ドン・スライス、およびアルバロRetanaに感謝したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Liem Nguyen Cisco Systems 225 West Tasman Drive San Jose, CA 95134 USA EMail: lhnguyen@cisco.com",
+      "ja": "Liem Nguyenのシスコシステムズ225西タスマン・ドライブサンノゼ、CA 95134 USA電子メール：lhnguyen@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Abhay Roy Cisco Systems 225 West Tasman Drive San Jose, CA 95134 USA EMail: akr@cisco.com",
+      "ja": "アブヘイロイシスコシステムズ225西タスマン・ドライブサンノゼ、CA 95134 USA電子メール：akr@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Alex Zinin Alcatel-Lucent Mountain View, CA USA EMail: alex.zinin@alcatel-lucent.com",
+      "ja": "アレックスジニンアルカテル・ルーセントマウンテンビュー、CA USA Eメール：alex.zinin@alcatel-lucent.com"
+    },
+    {
+      "indent": 0,
+      "text": "Full Copyright Statement",
+      "ja": "完全な著作権声明"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (C) The IETF Trust (2007).",
+      "ja": "著作権（C）IETFトラスト（2007）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to the rights, licenses and restrictions contained in BCP 78, and except as set forth therein, the authors retain all their rights.",
+      "ja": "この文書では、BCP 78に含まれる権利と許可と制限の適用を受けており、その中の記載を除いて、作者は彼らのすべての権利を保有します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document and the information contained herein are provided on an \"AS IS\" basis and THE CONTRIBUTOR, THE ORGANIZATION HE/SHE REPRESENTS OR IS SPONSORED BY (IF ANY), THE INTERNET SOCIETY, THE IETF TRUST AND THE INTERNET ENGINEERING TASK FORCE DISCLAIM ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.",
+      "ja": "この文書とここに含まれている情報は、基礎とCONTRIBUTOR「そのまま」、ORGANIZATION HE / SHEが表すまたはインターネットSOCIETY、（もしあれば）を後援し、IETF TRUST ANDインターネットエンジニアリングタスクフォース放棄ALLに設けられています。保証は、明示または黙示、この情報の利用および特定目的に対する権利または商品性または適合性の黙示の保証を侵害しない任意の保証がこれらに限定されません。"
+    },
+    {
+      "indent": 0,
+      "text": "Intellectual Property",
+      "ja": "知的財産"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF takes no position regarding the validity or scope of any Intellectual Property Rights or other rights that might be claimed to pertain to the implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; nor does it represent that it has made any independent effort to identify any such rights. Information on the procedures with respect to rights in RFC documents can be found in BCP 78 and BCP 79.",
+      "ja": "IETFは、本書またはそのような権限下で、ライセンスがたりないかもしれない程度に記載された技術の実装や使用に関係すると主張される可能性があります任意の知的財産権やその他の権利の有効性または範囲に関していかなる位置を取りません利用可能です。またそれは、それがどのような権利を確認する独自の取り組みを行ったことを示すものでもありません。 RFC文書の権利に関する手続きの情報は、BCP 78およびBCP 79に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Copies of IPR disclosures made to the IETF Secretariat and any assurances of licenses to be made available, or the result of an attempt made to obtain a general license or permission for the use of such proprietary rights by implementers or users of this specification can be obtained from the IETF on-line IPR repository at http://www.ietf.org/ipr.",
+      "ja": "IPRの開示のコピーが利用できるようにIETF事務局とライセンスの保証に行われた、または本仕様の実装者または利用者がそのような所有権の使用のための一般的なライセンスまたは許可を取得するために作られた試みの結果を得ることができますhttp://www.ietf.org/iprのIETFのオンラインIPRリポジトリから。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF invites any interested party to bring to its attention any copyrights, patents or patent applications, or other proprietary rights that may cover technology that may be required to implement this standard. Please address the information to the IETF at ietf-ipr@ietf.org.",
+      "ja": "IETFは、その注意にこの標準を実装するために必要とされる技術をカバーすることができる任意の著作権、特許または特許出願、またはその他の所有権を持ってすべての利害関係者を招待します。 ietf-ipr@ietf.orgのIETFに情報を記述してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgement",
+      "ja": "了承"
+    },
+    {
+      "indent": 3,
+      "text": "Funding for the RFC Editor function is currently provided by the Internet Society.",
+      "ja": "RFC Editor機能のための基金は現在、インターネット協会によって提供されます。"
+    }
+  ]
+}
