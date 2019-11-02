@@ -1,0 +1,754 @@
+{
+  "title": {
+    "text": "RFC 8405 - Shortest Path First (SPF) Back-Off Delay Algorithm for Link-State IGPs",
+    "ja": "RFC 8405 - 最短パス優先（SPF）リンクステートのIGPのためのバックオフディレイアルゴリズム"
+  },
+  "number": 8405,
+  "created_at": "2019-11-01 18:18:41.699474+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       B. Decraene\nRequest for Comments: 8405                                        Orange\nCategory: Standards Track                                   S. Litkowski\nISSN: 2070-1721                                  Orange Business Service\n                                                              H. Gredler\n                                                            RtBrick Inc.\n                                                               A. Lindem\n                                                           Cisco Systems\n                                                             P. Francois",
+      "raw": true
+    },
+    {
+      "indent": 50,
+      "text": "             C. Bowers\nJuniper Networks, Inc.\n             June 2018",
+      "raw": true
+    },
+    {
+      "indent": 1,
+      "text": "Shortest Path First (SPF) Back-Off Delay Algorithm for Link-State IGPs",
+      "ja": "最短パス優先（SPF）リンクステートのIGPのためのバックオフディレイアルゴリズム"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a standard algorithm to temporarily postpone or \"back off\" link-state IGP Shortest Path First (SPF) computations. This reduces the computational load and churn on IGP nodes when multiple temporally close network events trigger multiple SPF computations.",
+      "ja": "この文書では、一時的にリンクステートIGP最短パス優先（SPF）計算の「バックオフ」延期またはするための標準的なアルゴリズムを定義します。これは、複数の時間的に近いネットワークイベントは、複数のSPF計算をトリガーIGPノード上の計算負荷や解約を低減します。"
+    },
+    {
+      "indent": 3,
+      "text": "Having one standard algorithm improves interoperability by reducing the probability and/or duration of transient forwarding loops during the IGP convergence when the IGP reacts to multiple temporally close IGP events.",
+      "ja": "一つの標準アルゴリズムを有するIGPは、複数の時間的に近いIGPイベントに反応するときにIGP収束時確率及び/又は過渡転送ループの持続時間を減少させることによって、相互運用性を向上させることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8405.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttps://www.rfc-editor.org/info/rfc8405で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2018 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2018 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（https://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2\n  1.1.  Requirements Language . . . . . . . . . . . . . . . . . .   3\n2.  High-Level Goals  . . . . . . . . . . . . . . . . . . . . . .   3\n3.  Definitions and Parameters  . . . . . . . . . . . . . . . . .   4\n4.  Principles of the SPF Delay Algorithm . . . . . . . . . . . .   5\n5.  Specification of the SPF Delay State Machine  . . . . . . . .   6\n  5.1.  State Machine . . . . . . . . . . . . . . . . . . . . . .   6\n  5.2.  States  . . . . . . . . . . . . . . . . . . . . . . . . .   7\n  5.3.  Timers  . . . . . . . . . . . . . . . . . . . . . . . . .   7\n  5.4.  FSM Events  . . . . . . . . . . . . . . . . . . . . . . .   7\n6.  Parameters  . . . . . . . . . . . . . . . . . . . . . . . . .   9\n7.  Partial Deployment  . . . . . . . . . . . . . . . . . . . . .  10\n8.  Impact on Micro-loops . . . . . . . . . . . . . . . . . . . .  11\n9.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  11\n10. Security Considerations . . . . . . . . . . . . . . . . . . .  11\n11. References  . . . . . . . . . . . . . . . . . . . . . . . . .  11\n  11.1.  Normative References . . . . . . . . . . . . . . . . . .  11\n  11.2.  Informative References . . . . . . . . . . . . . . . . .  11\nAcknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .  13\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  13",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Link-state IGPs, such as IS-IS [ISO10589], OSPF [RFC2328], and OSPFv3 [RFC5340], perform distributed route computation on all routers in the area/level. In order to have consistent routing tables across the network, such distributed computation requires that all routers have the same version of the network topology (Link-State Database (LSDB)) and perform their computation essentially at the same time.",
+      "ja": "リンク状態のIGPは、例えば、OSPF [RFC2328]、およびOSPFv3の[RFC5340]、面積/レベル内のすべてのルータに分散経路計算を行う[ISO10589] IS-IS。ネットワーク全体で一貫性のあるルーティングテーブルを有するために、そのような分散計算は、すべてのルータがネットワークトポロジ（リンク状態データベース（LSDB））の同じバージョンを持っている必要があり、同時に、本質的に、それらの計算を行います。"
+    },
+    {
+      "indent": 3,
+      "text": "In general, when the network is stable, there is a desire to trigger a new Shortest Path First (SPF) computation as soon as a failure is detected in order to quickly route around the failure. However, when the network is experiencing multiple failures over a short period of time, there is a conflicting desire to limit the frequency of SPF computations, which would allow a reduction in control plane resources used by IGPs and all protocols/subsystems reacting to the attendant route change, such as LDP [RFC5036], RSVP-TE [RFC3209], BGP [RFC4271], Fast Reroute computations (e.g., Loop-Free Alternates (LFAs) [RFC5286]), FIB updates, etc. This also reduces network churn and, in particular, reduces side effects (such as micro-loops [RFC5715]) that ensue during IGP convergence.",
+      "ja": "ネットワークが安定している場合、一般的には、故障が故障の周りに迅速ルーティングするために検出されるとすぐに新しい最短パス優先（SPF）計算をトリガーすることが望まれています。しかし、ネットワークは、時間の短い期間にわたって複数の障害が発生している場合、SPF計算の頻度を制限するために競合する要望がある、のIGPによって使用される制御プレーン資源の減少および付随する反応するすべてのプロトコル/サブシステムを可能にするであろう等（例えば、ループフリーのAlternates（LFAs）[RFC5286]）LDP [RFC5036]、RSVP-TE [RFC3209]、BGP [RFC4271]、高速リルート演算、FIBの更新、などの経路の変化は、これもネットワークチャーンを低減しますそして、特に、IGP収束時続いて起こる（例えば、マイクロループ[RFC5715]など）の副作用を減少させます。"
+    },
+    {
+      "indent": 3,
+      "text": "To allow for this, IGPs usually implement an SPF Back-Off Delay algorithm that postpones or backs off the SPF computation. However, different implementations chose different algorithms. Hence, in a multi-vendor network, it's not possible to ensure that all routers trigger their SPF computation after the same delay. This situation increases the average and maximum differential delay between routers completing their SPF computation. It also increases the probability that different routers compute their FIBs based on different LSDB versions. Both factors increase the probability and/or duration of micro-loops as discussed in Section 8.",
+      "ja": "これを可能にするため、のIGPは、通常、SPF計算を延期またはオフにバックアップSPFバックオフ遅延アルゴリズムを実装します。しかし、異なる実装は異なるアルゴリズムを選択しました。したがって、マルチベンダーネットワークでは、すべてのルータが同じ遅延後にSPF計算をトリガーすることを保証することはできません。この状況は、彼らのSPF計算を完了し、ルータ間の平均と最大遅延差を増加します。それはまた別のルータが異なるLSDBのバージョンに基づいて自分のFIBを計算する確率を高めます。セクション8で説明したように、両方の要因は、マイクロループの確率及び/又は持続時間を増大させます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies a standard algorithm to allow multi-vendor networks to have all routers delay their SPF computations for the same duration.",
+      "ja": "この文書では、マルチベンダーネットワークは、すべてのルータが同じ期間のために彼らのSPF計算を遅らせる持つことができるようにするための標準的なアルゴリズムを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Requirements Language",
+      "section_title": true,
+      "ja": "1.1。要件言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、 \"SHALL\"、 \"SHOULD\"、 \"ないもの\"、 \"推奨\" \"ない（SHOULD NOT）\"、 \"MAY\"、 \"推奨NOT\"、および「OPTIONAL BCP 14に記載されているように「この文書に解釈されるべきである[RFC2119]、[RFC8174]と、ここで示されるように、それらは、すべて大文字で表示された場合にのみ。"
+    },
+    {
+      "indent": 0,
+      "text": "2. High-Level Goals",
+      "section_title": true,
+      "ja": "2.高レベルの目標"
+    },
+    {
+      "indent": 3,
+      "text": "The high-level goals of this algorithm are the following:",
+      "ja": "このアルゴリズムの高レベルの目標は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o very fast convergence for a single event (e.g., link failure),",
+      "ja": "Oつのイベント（例えば、リンク障害）のための非常に高速なコンバージェンス、"
+    },
+    {
+      "indent": 3,
+      "text": "o paced fast convergence for multiple temporally close IGP events while IGP stability is considered acceptable,",
+      "ja": "IGP安定性が許容できると考えている間にO、複数の時間的に近いIGPイベントの速い収束をペース"
+    },
+    {
+      "indent": 3,
+      "text": "o delayed convergence when IGP stability is problematic (this will allow the IGP and related processes to conserve resources during the period of instability), and",
+      "ja": "O IGP安定性が問題である場合（これはIGPと関連プロセスが不安定期間中にリソースを節約することを可能にする）収束を遅延させ、そして"
+    },
+    {
+      "indent": 3,
+      "text": "o avoidance of having different SPF_DELAY timer values (Section 3) across different routers in the area/level. This requires specific consideration as different routers may receive IGP messages at different intervals, or even in different orders, due to differences both in the distance from the originator of the IGP event and in flooding implementations.",
+      "ja": "エリア/レベルで異なるルータ間で異なるSPF_DELAYタイマー値（セクション3）を有するのO回避。異なるルータが原因IGPイベントの発信元からの距離や洪水の実装の両方の違いにより、異なる間隔で、あるいは異なる順序でIGPメッセージを受信することができるので、これは、特定の考慮を必要とします。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Definitions and Parameters",
+      "section_title": true,
+      "ja": "3.定義とパラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "IGP event: The reception or origination of an IGP LSDB change requiring a new routing table computation. Some examples are a topology change, a prefix change, and a metric change on a link or prefix. Note that locally triggering a routing table computation is not considered an IGP event since other IGP routers are unaware of this occurrence.",
+      "ja": "IGPイベント：新しいルーティングテーブルの計算を必要とIGP LSDB変更の受信または発信。いくつかの例には、トポロジー変更、プレフィックス変更、およびリンクまたはプレフィックスのメトリック変更されています。他のIGPルータは、この発生を知らないので、ローカルルーティングテーブルの計算をトリガするIGPイベントとは見なされないことに留意されたいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Routing table computation, in this document, is scoped to the IGP; so, this is the computation of the IGP RIB, performed by the IGP, using the IGP LSDB. No distinction is made between the type of computation performed, e.g., full SPF, incremental SPF, or Partial Route Computation (PRC); the type of computation is a local consideration. This document may interchangeably use the terms \"routing table computation\" and \"SPF computation\".",
+      "ja": "ルーティングテーブルの計算は、この文書では、IGPにスコープされます。したがって、これは、IGP LSDBを使用して、IGPによって実行される、IGP RIBの計算です。区別は、例えば、フルSPF、インクリメンタルSPF、または部分的なルート計算（PRC）、実行される計算の種類との間で行われていません。計算の種類は、ローカルな考慮事項です。この文書は、互換的用語「ルーティングテーブルの計算」と「SPF計算」を使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "SPF_DELAY: The delay between the first IGP event triggering a new routing table computation and the start of that routing table computation. It can take the following values:",
+      "ja": "SPF_DELAY：新しいルーティングテーブルの計算およびそのルーティングテーブルの計算の開始をトリガする最初のIGPイベント間の遅延。それは次の値をとることができます。"
+    },
+    {
+      "indent": 4,
+      "text": "INITIAL_SPF_DELAY: A very small delay to quickly handle a single isolated link failure, e.g., 0 milliseconds.",
+      "ja": "INITIAL_SPF_DELAYは：非常に小さな遅延が迅速単一孤立リンクの障害、例えば、0ミリ秒を処理します。"
+    },
+    {
+      "indent": 4,
+      "text": "SHORT_SPF_DELAY: A small delay to provide fast convergence in the case of a single component failure (such as a node failure or Shared Risk Link Group (SRLG) failure) that leads to multiple IGP events, e.g., 50-100 milliseconds.",
+      "ja": "SHORT_SPF_DELAY：小さな遅延が（例えば、ノード障害又は共有リスクリンクグループ（SRLG）障害のような）単一のコンポーネントに障害が発生した場合に高速収束を提供するために、複数のIGPイベントをもたらす、例えば、50〜100ミリ秒。"
+    },
+    {
+      "indent": 4,
+      "text": "LONG_SPF_DELAY: A long delay when the IGP is unstable, e.g., 2 seconds. Note that this allows the IGP network to stabilize.",
+      "ja": "LONG_SPF_DELAY：IGPが不安定で、長時間の遅延、例えば、2秒。これはIGPネットワークが安定することを可能にすることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "TIME_TO_LEARN_INTERVAL: This is the maximum duration typically needed to learn all the IGP events related to a single component failure (such as router failure or SRLG failure), e.g., 1 second. It's mostly dependent on failure detection time variation between all routers that are adjacent to the failure. Additionally, it may depend on the different IGP implementations/parameters across the network and their relation to the origination and flooding of link state advertisements.",
+      "ja": "TIME_TO_LEARN_INTERVAL：これは典型的には、例えば、1秒（例えばルータ障害またはSRLG障害など）は、単一コンポーネントの障害に関連するすべてのIGPイベントを学習するために必要な最大時間です。それは失敗に隣接するすべてのルータ間の障害検出時間の変化にほとんど依存しています。さらに、それは別のIGPの実装/ネットワーク全体のパラメータとリンクステートアドバタイズメントの発信と洪水との関係に依存してもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "HOLDDOWN_INTERVAL: The time required with no received IGP event before considering the IGP to be stable again and allowing the SPF_DELAY to be restored to INITIAL_SPF_DELAY, e.g., a HOLDDOWN_INTERVAL of 3 seconds. The HOLDDOWN_INTERVAL MUST be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.",
+      "ja": "HOLDDOWN_INTERVAL：SPF_DELAYを再びIGP安定であることを考慮し、許可する前にない受信IGPイベントに必要な時間は、例えばINITIAL_SPF_DELAY、3秒のHOLDDOWN_INTERVALに復元します。 HOLDDOWN_INTERVALは、債務不履行またはTIME_TO_LEARN_INTERVALよりも長くなるように設定されなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Principles of the SPF Delay Algorithm",
+      "section_title": true,
+      "ja": "SPF遅延アルゴリズムの4原則"
+    },
+    {
+      "indent": 3,
+      "text": "For the first IGP event, we assume that there has been a single simple change in the network, which can be taken into account using a single routing computation (e.g., link failure, prefix (metric) change), and we optimize for very fast convergence by delaying the initial routing computation for a small interval, INITIAL_SPF_DELAY. Under this assumption, there is no benefit in delaying the routing computation. In a typical network, this is the most common type of IGP event. Hence, it makes sense to optimize this case.",
+      "ja": "最初のIGPのイベントのために、我々は単一のルーティング計算（例えば、リンク障害、接頭辞（メトリック）の変化）を使用して、考慮に入れることができる、ネットワーク内の単一簡単な変更、があったと仮定し、我々は非常に高速のために最適化小さな間隔、INITIAL_SPF_DELAYの初期ルーティング計算を遅らせることによって収束。この仮定の下で、ルーティング計算を遅らせる利点はありません。典型的なネットワークでは、これは、IGPイベントの最も一般的なタイプです。したがって、このケースを最適化するために理にかなっています。"
+    },
+    {
+      "indent": 3,
+      "text": "If subsequent IGP events are received in a short period of time (TIME_TO_LEARN_INTERVAL), we then assume that a single component failed, but that this failure requires the knowledge of multiple IGP events in order for IGP routing to converge. Under this assumption, we want fast convergence since this is a normal network situation. However, there is a benefit in waiting for all IGP events related to this single component failure: the IGP can then compute the post-failure routing table in a single additional route computation. In this situation, we delay the routing computation by SHORT_SPF_DELAY.",
+      "ja": "後続のIGPイベントは短時間（TIME_TO_LEARN_INTERVAL）で受信された場合、我々は、単一のコンポーネントが失敗したと仮定したが、この障害は、IGPルーティングが収束するためには、複数のIGPイベントの知識を必要とすること。これは、通常のネットワーク状況であるので、この仮定の下で、我々は高速コンバージェンスをしたいです。しかし、この単一コンポーネントの障害に関連するすべてのIGPイベントを待っているに利点がある：IGPは、単一の追加のルート計算に後故障ルーティングテーブルを計算することができます。このような状況で、我々はSHORT_SPF_DELAYにより、ルーティング計算を遅らせます。"
+    },
+    {
+      "indent": 3,
+      "text": "If IGP events are still received after TIME_TO_LEARN_INTERVAL from the initial IGP event received in QUIET state (see Section 5.1), then the network is presumably experiencing multiple independent failures. In this case, while waiting for network stability, the computations are delayed for a longer time, which is represented by LONG_SPF_DELAY. This SPF delay is used until no IGP events are received for HOLDDOWN_INTERVAL.",
+      "ja": "IGPのイベントはまだQUIET状態で受信した初期IGPイベントからTIME_TO_LEARN_INTERVAL後に受信されている場合、ネットワークは、おそらく複数の独立した障害が発生している、（セクション5.1を参照してください）。ネットワークの安定を待っている間に、この場合、計算はLONG​​_SPF_DELAYで表される長い時間のために遅延されます。何IGPイベントがHOLDDOWN_INTERVALのために受信されなくなるまで、このSPF遅延が使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that in order to increase the consistency network wide, the algorithm uses a delay (TIME_TO_LEARN_INTERVAL) from the initial IGP event rather than the number of SPF computations performed. Indeed, as all routers may receive the IGP events at different times, we cannot assume that all routers will perform the same number of SPF computations. For example, assuming that the SPF delay is 50 milliseconds, router R1 may receive three IGP events (E1, E2, E3) in those 50 milliseconds and hence will perform a single routing computation, while another router R2 may only receive two events (E1, E2) in those 50 milliseconds and hence will schedule another routing computation when receiving E3.",
+      "ja": "ワイド整合ネットワークを高めるために、アルゴリズムが初期IGPイベントなく行わSPF計算の数から遅延（TIME_TO_LEARN_INTERVAL）を使用することに留意されたいです。すべてのルータが異なる時間にIGPイベントを受け取ることができるよう確かに、私たちは、すべてのルータがSPF計算の同じ数を実行すると仮定することはできません。例えば、SPF遅延が50ミリ秒であると仮定すると、ルータR1は、これらの50ミリ秒三のIGPイベント（E1、E2、E3）を受信することができ、したがって、別のルータR2は、2つだけのイベント（E1を受信することができるが、単一のルーティング計算を実行しますE3を受信した場合、それらの50ミリ秒E2）、したがって、他の経路計算をスケジュールします。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Specification of the SPF Delay State Machine",
+      "section_title": true,
+      "ja": "SPF遅延ステートマシンの5の仕様"
+    },
+    {
+      "indent": 3,
+      "text": "This section specifies the Finite State Machine (FSM) intended to control the timing of the execution of SPF calculations in response to IGP events.",
+      "ja": "このセクションでは、IGPイベントに応答してSPF計算の実行のタイミングを制御することを目的と有限状態機械（FSM）を指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. State Machine",
+      "section_title": true,
+      "ja": "5.1。ステートマシン"
+    },
+    {
+      "indent": 3,
+      "text": "The FSM is initialized to the QUIET state with all three timers (SPF_TIMER, HOLDDOWN_TIMER, and LEARN_TIMER) deactivated.",
+      "ja": "FSMが無効にすべての3つのタイマー（SPF_TIMER、HOLDDOWN_TIMER、およびLEARN_TIMER）でQUIET状態に初期化されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The events that may change the FSM states are an IGP event or the expiration of one timer (SPF_TIMER, HOLDDOWN_TIMER, or LEARN_TIMER).",
+      "ja": "FSMの状態を変更する可能性のあるイベントは、IGPイベントまたは1つのタイマー（SPF_TIMER、HOLDDOWN_TIMER、またはLEARN_TIMER）の有効期限です。"
+    },
+    {
+      "indent": 3,
+      "text": "The following diagram briefly describes the state transitions.",
+      "ja": "次の図は、簡単に状態遷移を説明します。"
+    },
+    {
+      "indent": 11,
+      "text": "          +-------------------+\n    +---->|                   |<-------------------+\n    |     |      QUIET        |                    |\n    +-----|                   |<---------+         |\n7:        +-------------------+          |         |\nSPF_TIMER           |                    |         |\nexpiration          |                    |         |\n                    | 1: IGP event       |         |\n                    |                    |         |\n                    v                    |         |\n          +-------------------+          |         |\n    +---->|                   |          |         |\n    |     |    SHORT_WAIT     |----->----+         |\n    +-----|                   |                    |\n2:        +-------------------+  6: HOLDDOWN_TIMER |\nIGP event           |               expiration     |\n8: SPF_TIMER        |                              |\n   expiration       |                              |\n                    | 3: LEARN_TIMER               |\n                    |    expiration                |\n                    |                              |\n                    v                              |\n          +-------------------+                    |\n    +---->|                   |                    |\n    |     |     LONG_WAIT     |------------>-------+\n    +-----|                   |\n4:        +-------------------+  5: HOLDDOWN_TIMER\nIGP event                           expiration\n9: SPF_TIMER expiration",
+      "raw": true
+    },
+    {
+      "indent": 26,
+      "text": "Figure 1: State Machine",
+      "ja": "図1：ステートマシン"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. States",
+      "section_title": true,
+      "ja": "5.2。アメリカ"
+    },
+    {
+      "indent": 3,
+      "text": "The naming and semantics of each state corresponds directly to the SPF delay used for IGP events received in that state. Three states are defined:",
+      "ja": "各状態の命名およびセマンティクスはその状態で受信されたIGPイベントに使用されるSPF遅延に直接対応します。三つの状態が定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIET: This is the initial state, when no IGP events have occurred for at least HOLDDOWN_INTERVAL since the last routing table computation. The state is meant to handle link failures very quickly.",
+      "ja": "QUIET：これは何のIGPのイベントが最後のルーティングテーブル計算するので、少なくともHOLDDOWN_INTERVALのために発生していない初期状態、です。状態は非常に迅速にリンク障害を処理するためのものです。"
+    },
+    {
+      "indent": 3,
+      "text": "SHORT_WAIT: This is the state entered when an IGP event has been received in QUIET state. This state is meant to handle a single component failure requiring multiple IGP events (e.g., node, SRLG).",
+      "ja": "SHORT_WAIT：これは、IGPイベントがQUIET状態で受信されたときの状態に入っています。この状態は、複数のIGPイベント（例えば、ノード、SRLG）を必要とする単一コンポーネントの障害を処理することを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "LONG_WAIT: This is the state reached after TIME_TO_LEARN_INTERVAL in state SHORT_WAIT. This state is meant to handle multiple independent component failures during periods of IGP instability.",
+      "ja": "LONG_WAIT：これは、状態SHORT_WAITでTIME_TO_LEARN_INTERVAL後に到達状態です。この状態は、IGP不安定の期間中に複数の独立したコンポーネントの障害に対処するためのものです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Timers",
+      "section_title": true,
+      "ja": "5.3。タイマー"
+    },
+    {
+      "indent": 3,
+      "text": "SPF_TIMER: This is the FSM timer that uses the computed SPF delay. Upon expiration, the routing table computation (as defined in Section 3) is performed.",
+      "ja": "SPF_TIMER：これは、計算されたSPFの遅延を使用してFSMタイマーです。満了すると、ルーティングテーブルの計算は、（セクション3で定義されるように）行われます。"
+    },
+    {
+      "indent": 3,
+      "text": "HOLDDOWN_TIMER: This is the FSM timer that is (re)started when an IGP event is received and set to HOLDDOWN_INTERVAL. Upon expiration, the FSM is moved to the QUIET state.",
+      "ja": "HOLDDOWN_TIMER：これは、IGPイベントを受信し、HOLDDOWN_INTERVALに設定されている場合（再）であるFSMタイマーが開始されます。期限が切れると、FSMは、QUIET状態に移行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "LEARN_TIMER: This is the FSM timer that is started when an IGP event is received while the FSM is in the QUIET state. Upon expiration, the FSM is moved to the LONG_WAIT state.",
+      "ja": "LEARN_TIMER：これは、FSMは、QUIET状態にある間IGPイベントを受信したときに開始されたFSMタイマーです。期限が切れると、FSMはLONG​​_WAIT状態に移動されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. FSM Events",
+      "section_title": true,
+      "ja": "5.4。 FSMイベント"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes the events and the actions performed in response.",
+      "ja": "このセクションでは、イベントと反応して実行されたアクションを説明しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 1: IGP event while in QUIET state",
+      "ja": "トランジション1：QUIET状態の間にIGPイベント"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 1:",
+      "ja": "イベント1のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o If SPF_TIMER is not already running, start it with value INITIAL_SPF_DELAY.",
+      "ja": "SPF_TIMERがまだ実行されていない場合は、O、値INITIAL_SPF_DELAYでそれを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Start LEARN_TIMER with TIME_TO_LEARN_INTERVAL.",
+      "ja": "O TIME_TO_LEARN_INTERVALでLEARN_TIMERを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Start HOLDDOWN_TIMER with HOLDDOWN_INTERVAL.",
+      "ja": "HOLDDOWN_INTERVALでスタートHOLDDOWN_TIMER O。"
+    },
+    {
+      "indent": 3,
+      "text": "o Transition to SHORT_WAIT state.",
+      "ja": "O遷移状態をSHORT_WAITします。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 2: IGP event while in SHORT_WAIT",
+      "ja": "移行2：SHORT_WAITにいる間IGPイベント"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 2:",
+      "ja": "イベント2のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Reset HOLDDOWN_TIMER to HOLDDOWN_INTERVAL.",
+      "ja": "O HOLDDOWN_INTERVALにHOLDDOWN_TIMERをリセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "o If SPF_TIMER is not already running, start it with value SHORT_SPF_DELAY.",
+      "ja": "SPF_TIMERがまだ実行されていない場合は、O、値SHORT_SPF_DELAYでそれを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Remain in current state.",
+      "ja": "O現在の状態のまま。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 3: LEARN_TIMER expiration",
+      "ja": "トランジション3：LEARN_TIMER期限"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 3:",
+      "ja": "イベント3のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Transition to LONG_WAIT state.",
+      "ja": "O遷移状態をLONG_WAITします。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 4: IGP event while in LONG_WAIT",
+      "ja": "トランジション4：IGPイベントLONG_WAITにいる間"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 4:",
+      "ja": "イベント4上のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Reset HOLDDOWN_TIMER to HOLDDOWN_INTERVAL.",
+      "ja": "O HOLDDOWN_INTERVALにHOLDDOWN_TIMERをリセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "o If SPF_TIMER is not already running, start it with value LONG_SPF_DELAY.",
+      "ja": "SPF_TIMERがまだ実行されていない場合は、O、値LONG_SPF_DELAYでそれを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Remain in current state.",
+      "ja": "O現在の状態のまま。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 5: HOLDDOWN_TIMER expiration while in LONG_WAIT",
+      "ja": "トランジション5：LONG_WAITにいる間HOLDDOWN_TIMER満了"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 5:",
+      "ja": "イベント5での操作："
+    },
+    {
+      "indent": 3,
+      "text": "o Transition to QUIET state.",
+      "ja": "QUIET状態にO遷移。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 6: HOLDDOWN_TIMER expiration while in SHORT_WAIT",
+      "ja": "トランジション6：SHORT_WAITにいる間HOLDDOWN_TIMER満了"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 6:",
+      "ja": "イベント6での操作："
+    },
+    {
+      "indent": 3,
+      "text": "o Deactivate LEARN_TIMER.",
+      "ja": "O LEARN_TIMERを無効にします。"
+    },
+    {
+      "indent": 3,
+      "text": "o Transition to QUIET state.",
+      "ja": "QUIET状態にO遷移。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 7: SPF_TIMER expiration while in QUIET",
+      "ja": "トランジション7：SPF_TIMER満了QUIETにいる間"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 7:",
+      "ja": "イベント7上のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Compute SPF.",
+      "ja": "SPFを計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Remain in current state.",
+      "ja": "O現在の状態のまま。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 8: SPF_TIMER expiration while in SHORT_WAIT",
+      "ja": "トランジション8：SPF_TIMER満了しばらくSHORT_WAITで"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 8:",
+      "ja": "イベント8上のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Compute SPF.",
+      "ja": "SPFを計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Remain in current state.",
+      "ja": "O現在の状態のまま。"
+    },
+    {
+      "indent": 3,
+      "text": "Transition 9: SPF_TIMER expiration while in LONG_WAIT",
+      "ja": "トランジション9：SPF_TIMER満了しばらくLONG_WAITで"
+    },
+    {
+      "indent": 3,
+      "text": "Actions on event 9:",
+      "ja": "イベント9のアクション："
+    },
+    {
+      "indent": 3,
+      "text": "o Compute SPF.",
+      "ja": "SPFを計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Remain in current state.",
+      "ja": "O現在の状態のまま。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Parameters",
+      "section_title": true,
+      "ja": "6.パラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "All the parameters MUST be configurable at the protocol instance level. They MAY be configurable on a per IGP LSDB basis (e.g., IS-IS level, OSPF area, or IS-IS Level 1 area). All the delays (INITIAL_SPF_DELAY, SHORT_SPF_DELAY, LONG_SPF_DELAY, TIME_TO_LEARN_INTERVAL, and HOLDDOWN_INTERVAL) SHOULD be configurable with a granularity of a millisecond. They MUST be configurable with a granularity of at least a tenth of a second. The configurable range for all the parameters SHOULD be from 0 milliseconds to at least 6000 milliseconds. The HOLDDOWN_INTERVAL MUST be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.",
+      "ja": "すべてのパラメータは、プロトコル・インスタンス・レベルで構成可能でなければなりません。彼らは、（例えば、レベル、OSPFエリア、またはレベル1領域-ISは、IS-IS）IGP LSDBごとに設定可能です。すべての遅延（INITIAL_SPF_DELAY、SHORT_SPF_DELAY、LONG_SPF_DELAY、TIME_TO_LEARN_INTERVAL、およびHOLDDOWN_INTERVAL）は、ミリ秒の精度で設定すべきである（SHOULD）。彼らは、第二の少なくとも第十の粒度で構成可能でなければなりません。すべてのパラメータの設定範囲は、0ミリ秒から少なくとも6000ミリ秒であるべきです。 HOLDDOWN_INTERVALは、債務不履行またはTIME_TO_LEARN_INTERVALよりも長くなるように設定されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "If this SPF Back-Off algorithm is enabled by default, then in order to have consistent SPF delays between implementations with default configuration, the following default values SHOULD be implemented:",
+      "ja": "このSPFバックオフアルゴリズムは、デフォルトで有効になっている場合、デフォルトの設定と実装の間で一貫性のSPF遅延を持つために、次のデフォルト値を実装する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "INITIAL_SPF_DELAY 50 ms SHORT_SPF_DELAY 200 ms LONG_SPF_DELAY 5000 ms TIME_TO_LEARN_INTERVAL 500 ms HOLDDOWN_INTERVAL 10000 ms",
+      "ja": "INITIAL_SPF_DELAY 50ミリSHORT_SPF_DELAY 200ミリ秒のLONG_SPF_DELAY 5000ミリTIME_TO_LEARN_INTERVAL 500ミリHOLDDOWN_INTERVAL 10000ミリ秒"
+    },
+    {
+      "indent": 3,
+      "text": "In order to satisfy the goals stated in Section 2, operators are RECOMMENDED to configure delay intervals such that INITIAL_SPF_DELAY <= SHORT_SPF_DELAY and SHORT_SPF_DELAY <= LONG_SPF_DELAY.",
+      "ja": "第2節で述べた目標を満たすために、オペレータは、INITIAL_SPF_DELAY <= SHORT_SPF_DELAYとSHORT_SPF_DELAY <= LONG_SPF_DELAYその遅延間隔を設定することを推奨しています。"
+    },
+    {
+      "indent": 3,
+      "text": "When setting (default) values, one should consider the customers and their application requirements, the computational power of the routers, the size of the network as determined primarily by the number of IP prefixes advertised in the IGP, the frequency and number of IGP events, and the number of protocol reactions/computations triggered by IGP SPF computation (e.g., BGP, Path Computation Element Communication Protocol (PCEP), Traffic Engineering Constrained SPF (CSPF), and Fast Reroute computations). Note that some or all of these factors may change over the life of the network. In case of doubt, it's RECOMMENDED that timer intervals should be chosen conservatively (i.e., longer timer values).",
+      "ja": "（デフォルト）の値を設定する場合、主にIGPでアドバタイズIPプレフィックスの数、周波数およびIGPイベントの数によって決定されるように、1は、顧客とそのアプリケーション要件、ルータの計算能力、ネットワークの大きさを考慮しなければなりません、およびIGP SPF計算によってトリガプロトコル反応/計算の数（例えば、BGP、経路計算要素通信プロトコル（PCEP）、トラフィックエンジニアリング制約SPF（CSPF）、および高速リルート計算）。これらの要因の一部またはすべてがネットワークの生活とともに変化する可能性があることに注意してください。疑わしい場合には、タイマー間隔は控えめに（すなわち、より長いタイマー値）を選択すべきであることをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "For the standard algorithm to be effective in mitigating micro-loops, it is RECOMMENDED that all routers in the IGP domain, or at least all the routers in the same area/level, have exactly the same configured values.",
+      "ja": "標準アルゴリズムは、マイクロループを軽減するのに有効であるためには、IGPドメイン内のすべてのルータが、あるいは少なくとも同じ領域/レベル内のすべてのルータ、全く同じ構成値を有することが推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Partial Deployment",
+      "section_title": true,
+      "ja": "7.部分的な展開"
+    },
+    {
+      "indent": 3,
+      "text": "In general, the SPF Back-Off Delay algorithm is only effective in mitigating micro-loops if it is deployed with the same parameters on all routers in the IGP domain or, at least, all routers in an IGP area/level. The impact of partial deployment is dependent on the particular event, the topology, and the algorithm(s) used on other routers in the IGP area/level. In cases where the previous SPF Back-Off Delay algorithm was implemented uniformly, partial deployment will increase the frequency and duration of micro-loops. Hence, it is RECOMMENDED that all routers in the IGP domain, or at least within the same area/level, be migrated to the SPF algorithm described herein at roughly the same time.",
+      "ja": "それはIGPドメイン内のすべてのルータで同じパラメータまたは、IGP領域/レベルにおいて少なくとも、すべてのルータを用いて展開されている場合、一般的に、SPFバックオフ遅延アルゴリズムは、マイクロループを緩和でのみ有効です。部分的な展開の影響は、特定のイベント、トポロジー、およびIGPエリア/レベルに他のルータで使用されるアルゴリズム（複数可）に依存しています。前SPFバックオフ遅延アルゴリズムが均一に実施された場合には、部分的な配備は、マイクロループの周波数及び持続時間を増加させるであろう。したがって、IGPドメイン内のすべてのルータが、あるいは少なくとも同じ面積/レベル内で、本明細書においてほぼ同じ時間記載SPFアルゴリズムに移行することが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this is not a new consideration; over time, network operators have changed SPF delay parameters in order to accommodate new customer requirements for fast convergence, as permitted by new software and hardware. They may also have progressively replaced an implementation using a given SPF Back-Off Delay algorithm with another implementation using a different one.",
+      "ja": "これは、新たな考慮事項ではないことに注意してください。時間の経過とともに、ネットワークオペレータは、新しいソフトウェアとハ​​ードウェアによって認められているように、高速コンバージェンスのための新たな顧客の要件に対応するために、SPF遅延パラメータを変更しました。彼らはまた、徐々に別のものを使用して別の実装を与えられたSPFバックオフ遅延アルゴリズムを使用して実装を置き換えている場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Impact on Micro-loops",
+      "section_title": true,
+      "ja": "マイクロループ8.インパクト"
+    },
+    {
+      "indent": 3,
+      "text": "Micro-loops during IGP convergence are due to a non-synchronized or non-ordered update of FIBs [RFC5715] [RFC6976] [SPF-MICRO]. FIBs are installed after multiple steps, such as flooding of the IGP event across the network, SPF wait time, SPF computation, FIB distribution across line cards, and FIB update. This document only addresses the contribution from the SPF wait time. This standardized procedure reduces the probability and/or duration of micro-loops when IGPs experience multiple temporally close events. It does not prevent all micro-loops; however, it is beneficial and is less complex and costly to implement when compared to full solutions such as Distributed Tunnels [RFC5715], Synchronized FIB Update [RFC5715], or the ordered FIB approach [RFC6976].",
+      "ja": "IGPの収束時のマイクロループはのFIBの非同期または非命じ更新によるものである[RFC5715] [RFC6976] [SPF-MICRO]。 FIBは、ネットワーク、SPF待ち時間、SPF計算、全ラインカードでのFIB分布、およびFIBのアップデート間でIGPイベントの洪水など、複数のステップ、後にインストールされています。この文書では、唯一のSPF待ち時間からの寄与に対応しています。この標準化手順は、マイクロループのIGPの経験複数の時間的に近いイベントの確率及び/又は持続時間を減少させます。これは、すべてのマイクロループを防ぐことはできません。しかし、それは有益であり、そのような分散トンネル[RFC5715]として完全なソリューションと比較した場合、実装がより複雑かつ高価であり、同期FIBアップデート[RFC5715]、または順序付けられたFIBアプローチ[RFC6976]。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "このドキュメントには、IANAのアクションを持っていません。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Security Considerations",
+      "section_title": true,
+      "ja": "10.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm presented in this document does not compromise IGP security. An attacker having the ability to generate IGP events would be able to delay the IGP convergence time. The LONG_SPF_DELAY state may help mitigate the effects of Denial-of-Service (DoS) attacks generating many IGP events.",
+      "ja": "この文書で提示したアルゴリズムは、IGPのセキュリティを侵害しません。 IGPのイベントを生成する能力を有する攻撃者は、IGP収束時間を遅らせることができるであろう。 LONG_SPF_DELAY状態は、多くのIGPのイベントを生成するサービス拒否（DoS）攻撃の影響を軽減するのに役立つことがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B.、 \"RFC 2119個のキーワードに小文字VS大文字の曖昧さ\"、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ISO10589] International Organization for Standardization, \"Information technology -- Telecommunications and information exchange between systems -- Intermediate System to Intermediate System intra-domain routeing information exchange protocol for use in conjunction with the protocol for providing the connectionless-mode network service (ISO 8473)\", ISO/IEC 10589:2002, Second Edition, November 2002.",
+      "ja": "[ISO10589]国際標準化機構、「情報技術 - システム間のテレコミュニケーションと情報交換 - 接続モード・ネットワーク・サービスを提供するためのプロトコルと組み合わせて使用​​するための情報交換プロトコルをrouteingする中間システムイントラドメインへの中間システム（ISO 8473）」、ISO / IEC 10589：2002、第2版、2002年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2328] Moy, J., \"OSPF Version 2\", STD 54, RFC 2328, DOI 10.17487/RFC2328, April 1998, <https://www.rfc-editor.org/info/rfc2328>.",
+      "ja": "[RFC2328]モイ、J.、 \"OSPFバージョン2\"、STD 54、RFC 2328、DOI 10.17487 / RFC2328、1998年4月、<https://www.rfc-editor.org/info/rfc2328>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3209] Awduche, D., Berger, L., Gan, D., Li, T., Srinivasan, V., and G. Swallow, \"RSVP-TE: Extensions to RSVP for LSP Tunnels\", RFC 3209, DOI 10.17487/RFC3209, December 2001, <https://www.rfc-editor.org/info/rfc3209>.",
+      "ja": "[RFC3209] Awduche、D.、バーガー、L.、ガン、D.、李、T.、スリニヴァサン、V.、およびG.ツバメ、 \"RSVP-TE：ExtensionsがLSPトンネルのためのRSVPする\"、RFC 3209、DOI 10.17487 / RFC3209、2001年12月、<https://www.rfc-editor.org/info/rfc3209>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4271] Rekhter, Y., Ed., Li, T., Ed., and S. Hares, Ed., \"A Border Gateway Protocol 4 (BGP-4)\", RFC 4271, DOI 10.17487/RFC4271, January 2006, <https://www.rfc-editor.org/info/rfc4271>.",
+      "ja": "[RFC4271] Rekhter、Y.、エド。、李、T.、エド。、およびS.野兎、編、 \"ボーダーゲートウェイプロトコル4（BGP-4）\"、RFC 4271、DOI 10.17487 / RFC4271、2006年1月、<https://www.rfc-editor.org/info/rfc4271>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5036] Andersson, L., Ed., Minei, I., Ed., and B. Thomas, Ed., \"LDP Specification\", RFC 5036, DOI 10.17487/RFC5036, October 2007, <https://www.rfc-editor.org/info/rfc5036>.",
+      "ja": "[RFC5036]アンデション、L.、エド、Minei、I.、エド、およびB.トーマス、エド、 \"LDP仕様\"、RFC 5036、DOI 10.17487 / RFC5036、2007年10月、<HTTPS：。。。// WWW。 rfc-editor.org/info/rfc5036>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5286] Atlas, A., Ed. and A. Zinin, Ed., \"Basic Specification for IP Fast Reroute: Loop-Free Alternates\", RFC 5286, DOI 10.17487/RFC5286, September 2008, <https://www.rfc-editor.org/info/rfc5286>.",
+      "ja": "[RFC5286]アトラス、A.編。 。そしてA.ジニン、エド、 \"IP高速リルートのための基本仕様：ループフリーのAlternates\"、RFC 5286、DOI 10.17487 / RFC5286、2008年9月、<https://www.rfc-editor.org/info/rfc5286> 。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5340] Coltun, R., Ferguson, D., Moy, J., and A. Lindem, \"OSPF for IPv6\", RFC 5340, DOI 10.17487/RFC5340, July 2008, <https://www.rfc-editor.org/info/rfc5340>.",
+      "ja": "[RFC5340] Coltun、R.、ファーガソン、D.、モイ、J.、およびA. Lindem、 \"IPv6のためのOSPF\"、RFC 5340、DOI 10.17487 / RFC5340、2008年7月、<HTTPS：//www.rfc-editor .ORG /情報/ rfc5340>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5715] Shand, M. and S. Bryant, \"A Framework for Loop-Free Convergence\", RFC 5715, DOI 10.17487/RFC5715, January 2010, <https://www.rfc-editor.org/info/rfc5715>.",
+      "ja": "[RFC5715]シャンド、M.およびS.ブライアント、 \"ループフリーコンバージェンスのためのフレームワーク\"、RFC 5715、DOI 10.17487 / RFC5715、2010年1月、<https://www.rfc-editor.org/info/rfc5715> 。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6976] Shand, M., Bryant, S., Previdi, S., Filsfils, C., Francois, P., and O. Bonaventure, \"Framework for Loop-Free Convergence Using the Ordered Forwarding Information Base (oFIB) Approach\", RFC 6976, DOI 10.17487/RFC6976, July 2013, <https://www.rfc-editor.org/info/rfc6976>.",
+      "ja": "[RFC6976]シャンド、M.、ブライアント、S.、Previdi、S.、Filsfils、C.、フランソワ、P.、およびO.ボナヴェントゥラ、「順序付き転送情報ベースを使用してループフリーコンバージェンスのためのフレームワーク（oFIB）アプローチ」、RFC 6976、DOI 10.17487 / RFC6976、2013年7月、<https://www.rfc-editor.org/info/rfc6976>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SPF-MICRO] Litkowski, S., Decraene, B., and M. Horneffer, \"Link State protocols SPF trigger and delay algorithm impact on IGP micro-loops\", Work in Progress, draft-ietf-rtgwg-spf-uloop-pb-statement-07, May 2018.",
+      "ja": "[SPF-MICRO] Litkowski、S.、Decraene、B.、およびM. Horneffer、 \"リンク状態プロトコルSPFトリガとIGPマイクロループに遅延アルゴリズムの影響\"、進行中で働いて、ドラフトIETF-rtgwg-SPF-uloop -pb文-07、2018年5月。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "We would like to acknowledge Les Ginsberg, Uma Chunduri, Mike Shand, and Alexander Vainshtein for the discussions and comments related to this document.",
+      "ja": "私たちは、このドキュメントに関連する議論やコメントにレスギンズバーグ、ユマChunduri、マイク・シャンド、アレクサンドルVainshteinを確認したいと思います。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Bruno Decraene Orange",
+      "ja": "ブルーノDecraeneオレンジ"
+    },
+    {
+      "indent": 3,
+      "text": "Email: bruno.decraene@orange.com",
+      "ja": "メール：bruno.decraene@orange.com"
+    },
+    {
+      "indent": 3,
+      "text": "Stephane Litkowski Orange Business Service",
+      "ja": "ステファンLitkowskiオレンジビジネスサービス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: stephane.litkowski@orange.com",
+      "ja": "メール：stephane.litkowski@orange.com"
+    },
+    {
+      "indent": 3,
+      "text": "Hannes Gredler RtBrick Inc.",
+      "ja": "ハンネスGredler RtBrick株式会社"
+    },
+    {
+      "indent": 3,
+      "text": "Email: hannes@rtbrick.com",
+      "ja": "メール：hannes@rtbrick.com"
+    },
+    {
+      "indent": 3,
+      "text": "Acee Lindem Cisco Systems 301 Midenhall Way Cary, NC 27513 United States of America",
+      "ja": "ACEE Lindemシスコシステムズ301 Midenhallウェイカリー、NCアメリカの27513米国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: acee@cisco.com",
+      "ja": "メール：acee@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Pierre Francois",
+      "ja": "ピエール・フランソワ"
+    },
+    {
+      "indent": 3,
+      "text": "Email: pfrpfr@gmail.com",
+      "ja": "メール：pfrpfr@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Chris Bowers Juniper Networks, Inc. 1194 N. Mathilda Ave. Sunnyvale, CA 94089 United States of America",
+      "ja": "クリス・バワーズジュニパーネットワークス株式会社1194 N.マチルダアベニュー。アメリカのカリフォルニア州サニーベール94089米国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: cbowers@juniper.net",
+      "ja": "メール：cbowers@juniper.net"
+    }
+  ]
+}

@@ -60,6 +60,11 @@ if __name__ == '__main__':
         from src.trans_rfc import trans_test
         trans_test()
 
+    elif args.fetch and args.begin and args.end:
+        numbers = list(diff_remote_and_local_index())
+        numbers = [x for x in numbers if args.begin <= x <= args.end]
+        for rfc_number in numbers:
+            fetch_rfc(rfc_number)
     elif args.fetch and args.rfc:
         fetch_rfc(args.rfc)
     elif args.trans and args.rfc:
