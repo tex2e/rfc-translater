@@ -1,0 +1,557 @@
+{
+  "title": {
+    "text": "RFC 6298 - Computing TCP's Retransmission Timer",
+    "ja": "RFC 6298 - コンピューティングTCPの再送信タイマー"
+  },
+  "number": 6298,
+  "created_at": "2019-11-02 00:33:08.540240+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                         V. Paxson\nRequest for Comments: 6298                              ICSI/UC Berkeley\nObsoletes: 2988                                                M. Allman\nUpdates: 1122                                                       ICSI\nCategory: Standards Track                                         J. Chu\nISSN: 2070-1721                                                   Google\n                                                              M. Sargent\n                                                                    CWRU\n                                                               June 2011",
+      "raw": true
+    },
+    {
+      "indent": 18,
+      "text": "Computing TCP's Retransmission Timer",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines the standard algorithm that Transmission Control Protocol (TCP) senders are required to use to compute and manage their retransmission timer. It expands on the discussion in Section 4.2.3.1 of RFC 1122 and upgrades the requirement of supporting the algorithm from a SHOULD to a MUST. This document obsoletes RFC 2988.",
+      "ja": "この文書では、伝送制御プロトコル（TCP）送信者は、その再送タイマを計算し、管理するのに使用するために必要な標準アルゴリズムを定義します。これは、RFC 1122のセクション4.2.3.1で議論を展開するとMUSTにSHOULDからアルゴリズムをサポートする要件をアップグレードします。この文書はRFC 2988を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 5741.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 5741のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc6298.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc6298で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2011 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2011 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The Transmission Control Protocol (TCP) [Pos81] uses a retransmission timer to ensure data delivery in the absence of any feedback from the remote data receiver. The duration of this timer is referred to as RTO (retransmission timeout). RFC 1122 [Bra89] specifies that the RTO should be calculated as outlined in [Jac88].",
+      "ja": "伝送制御プロトコル（TCP）[Pos81]は、リモート・データ受信機からのフィードバックの非存在下でのデータ配信を保証するために、再送タイマーを使用します。このタイマーの持続時間は、RTO（再送タイムアウト）と呼ばれます。 RFC 1122 [Bra89] [Jac88]に概説されるようにRTOを算出するように指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document codifies the algorithm for setting the RTO. In addition, this document expands on the discussion in Section 4.2.3.1 of RFC 1122 and upgrades the requirement of supporting the algorithm from a SHOULD to a MUST. RFC 5681 [APB09] outlines the algorithm TCP uses to begin sending after the RTO expires and a retransmission is sent. This document does not alter the behavior outlined in RFC 5681 [APB09].",
+      "ja": "この文書では、RTOを設定するためのアルゴリズムを成文化。また、この文書はRFC 1122のセクション4.2.3.1での議論を拡張し、MUSTにSHOULDからアルゴリズムをサポートする要件をアップグレードします。 RFC 5681 [APB09]は、アルゴリズムのTCPがRTOの有効期限が切れると再送信が送られた後に送信を開始するために使用しています概説します。この文書は、RFC 5681 [APB09]で概説した動作を変更しません。"
+    },
+    {
+      "indent": 3,
+      "text": "In some situations, it may be beneficial for a TCP sender to be more conservative than the algorithms detailed in this document allow. However, a TCP MUST NOT be more aggressive than the following algorithms allow. This document obsoletes RFC 2988 [PA00].",
+      "ja": "TCPの送信者は、この文書に詳述されたアルゴリズムが許すよりも、より保守的であるためにはいくつかの状況では、それは有益であろう。しかし、TCPは、以下のアルゴリズムが許すよりも、より積極的にすることはできません。この文書は、RFC 2988 [PA00]を廃止します。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in [Bra97].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はあります【Bra97]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. The Basic Algorithm",
+      "section_title": true,
+      "ja": "2.基本的なアルゴリズムに"
+    },
+    {
+      "indent": 3,
+      "text": "To compute the current RTO, a TCP sender maintains two state variables, SRTT (smoothed round-trip time) and RTTVAR (round-trip time variation). In addition, we assume a clock granularity of G seconds.",
+      "ja": "現在のRTOを計算するには、TCPの送信者は、2つの状態変数、SRTT（平滑化往復時間）とRTTVAR（往復の時間変化）を維持します。また、当社は、G秒のクロック精度を前提としています。"
+    },
+    {
+      "indent": 3,
+      "text": "The rules governing the computation of SRTT, RTTVAR, and RTO are as follows:",
+      "ja": "次のようにSRTT、RTTVAR、およびRTOの計算を管理する規則は、以下のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "(2.1) Until a round-trip time (RTT) measurement has been made for a segment sent between the sender and receiver, the sender SHOULD set RTO <- 1 second, though the \"backing off\" on repeated retransmission discussed in (5.5) still applies.",
+      "ja": "（2.1）ラウンドトリップ時間（RTT）測定は、送信者が<RTOを設定すべきである、送信者と受信者の間で送信されるセグメントのためになされたものまで、 - （5.5）で説明した繰り返し再送の「バックオフ」が、1秒まだ適用されます。"
+    },
+    {
+      "indent": 9,
+      "text": "Note that the previous version of this document used an initial\nRTO of 3 seconds [PA00].  A TCP implementation MAY still use\nthis value (or any other value > 1 second).  This change in the\nlower bound on the initial RTO is discussed in further detail\nin Appendix A.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "(2.2) When the first RTT measurement R is made, the host MUST set",
+      "ja": "（2.2）最初のRTT計測Rが行われると、ホストが設定しなければなりません"
+    },
+    {
+      "indent": 12,
+      "text": "SRTT <- R\nRTTVAR <- R/2\nRTO <- SRTT + max (G, K*RTTVAR)",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "where K = 4.",
+      "ja": "ここで、K = 4。"
+    },
+    {
+      "indent": 3,
+      "text": "(2.3) When a subsequent RTT measurement R' is made, a host MUST set",
+      "ja": "（2.3）、その後のRTT計測R」が行われると、ホストが設定しなければなりません"
+    },
+    {
+      "indent": 12,
+      "text": "RTTVAR <- (1 - beta) * RTTVAR + beta * |SRTT - R'|\nSRTT <- (1 - alpha) * SRTT + alpha * R'",
+      "raw": true
+    },
+    {
+      "indent": 9,
+      "text": "The value of SRTT used in the update to RTTVAR is its value before updating SRTT itself using the second assignment. That is, updating RTTVAR and SRTT MUST be computed in the above order.",
+      "ja": "RTTVARの更新に使用されるSRTTの値は、第二の割り当てを使用してSRTT自身を更新する前にその値です。すなわち、上記の順序で計算されなければならないRTTVARとSRTTを更新する、です。"
+    },
+    {
+      "indent": 9,
+      "text": "The above SHOULD be computed using alpha=1/8 and beta=1/4 (as suggested in [JK88]).",
+      "ja": "上記アルファ= 1/8、ベータ= 1/4（[JK88]で提案されているような）を使用して計算されるべきです。"
+    },
+    {
+      "indent": 9,
+      "text": "After the computation, a host MUST update RTO <- SRTT + max (G, K*RTTVAR)",
+      "ja": "計算後、ホストは更新しなければならないRTO < -  SRTT + MAX（G、K * RTTVAR）"
+    },
+    {
+      "indent": 3,
+      "text": "(2.4) Whenever RTO is computed, if it is less than 1 second, then the RTO SHOULD be rounded up to 1 second.",
+      "ja": "RTOが計算されるたびに、それが1秒未満である場合（2.4）、次いで、RTOは1秒に切り上げされるべきです。"
+    },
+    {
+      "indent": 9,
+      "text": "Traditionally, TCP implementations use coarse grain clocks to\nmeasure the RTT and trigger the RTO, which imposes a large\nminimum value on the RTO.  Research suggests that a large\nminimum RTO is needed to keep TCP conservative and avoid\nspurious retransmissions [AP99].  Therefore, this specification\nrequires a large minimum RTO as a conservative approach, while at the same time acknowledging that at some future point,\nresearch may show that a smaller minimum RTO is acceptable or\nsuperior.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "(2.5) A maximum value MAY be placed on RTO provided it is at least 60 seconds.",
+      "ja": "（2.5）の最大値は、RTO上に配置することができるが、それは、少なくとも60秒が提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Taking RTT Samples",
+      "section_title": true,
+      "ja": "3.撮影RTTサンプル"
+    },
+    {
+      "indent": 3,
+      "text": "TCP MUST use Karn's algorithm [KP87] for taking RTT samples. That is, RTT samples MUST NOT be made using segments that were retransmitted (and thus for which it is ambiguous whether the reply was for the first instance of the packet or a later instance). The only case when TCP can safely take RTT samples from retransmitted segments is when the TCP timestamp option [JBB92] is employed, since the timestamp option removes the ambiguity regarding which instance of the data segment triggered the acknowledgment.",
+      "ja": "TCPは、RTTのサンプルを採取するために[KP87]カーンのアルゴリズムを使用しなければなりません。すなわち、RTTサンプルが再送されたセグメントを使用して作製されてはいけません（したがって、そのため、応答パケット以降のインスタンスの最初のインスタンスのためだったかどうか曖昧である）、です。 TCPタイムスタンプオプションが[JBB92]使用されたときにタイムスタンプオプションは、データセグメントのインスタンスは、肯定応答をトリガかに関する曖昧さを除去するので、TCPが安全に再送セグメントからRTTサンプルを取ることができる場合のみです。"
+    },
+    {
+      "indent": 3,
+      "text": "Traditionally, TCP implementations have taken one RTT measurement at a time (typically, once per RTT). However, when using the timestamp option, each ACK can be used as an RTT sample. RFC 1323 [JBB92] suggests that TCP connections utilizing large congestion windows should take many RTT samples per window of data to avoid aliasing effects in the estimated RTT. A TCP implementation MUST take at least one RTT measurement per RTT (unless that is not possible per Karn's algorithm).",
+      "ja": "伝統的に、TCPの実装は（典型的には、一度RTTごとに）一度に一つのRTT測定値をとっています。タイムスタンプオプションを使用する場合しかし、各ACKは、RTTサンプルとして使用することができます。 RFC 1323 [JBB92]大混雑の窓を利用したTCP接続が推定RTTにおけるエイリアシング効果を回避するために、データの窓あたりの多くのRTTサンプルを取るべきであることを示唆しています。 （それはカーンのアルゴリズムあたりのことができない場合を除く）TCPの実装では、RTTごとに少なくとも1回のRTT測定を取る必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For fairly modest congestion window sizes, research suggests that timing each segment does not lead to a better RTT estimator [AP99]. Additionally, when multiple samples are taken per RTT, the alpha and beta defined in Section 2 may keep an inadequate RTT history. A method for changing these constants is currently an open research question.",
+      "ja": "かなり控えめな輻輳ウィンドウサイズの場合、研究は、各セグメントのタイミングが良くRTT推定[AP99]にはつながらないことを示唆しています。複数のサンプルがRTTごとに取得された場合に加えて、セクション2で定義されたαおよびβは、不十分なRTTの履歴を保持することができます。これらの定数を変更するための方法は、現在開いている研究課題です。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Clock Granularity",
+      "section_title": true,
+      "ja": "4.時計粒度"
+    },
+    {
+      "indent": 3,
+      "text": "There is no requirement for the clock granularity G used for computing RTT measurements and the different state variables. However, if the K*RTTVAR term in the RTO calculation equals zero, the variance term MUST be rounded to G seconds (i.e., use the equation given in step 2.3).",
+      "ja": "Gは、RTT測定値と異なる状態変数を計算するために使用されるクロックの粒度のための必要はありません。 RTO算出におけるK * RTTVAR項がゼロに等しい場合は、分散という用語は、G秒（すなわち、ステップ2.3で与えられた式を使用）に丸めなければなりません。"
+    },
+    {
+      "indent": 7,
+      "text": "RTO <- SRTT + max (G, K*RTTVAR)",
+      "ja": "RTO < -  SRTT + MAX（G、K * RTTVAR）"
+    },
+    {
+      "indent": 3,
+      "text": "Experience has shown that finer clock granularities (<= 100 msec) perform somewhat better than coarser granularities.",
+      "ja": "経験は、より細かいクロック粒度（<= 100ミリ秒）が粗い粒度よりも幾分良好に機能することが示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that [Jac88] outlines several clever tricks that can be used to obtain better precision from coarse granularity timers. These changes are widely implemented in current TCP implementations.",
+      "ja": "【Jac88】粗い粒度のタイマーより良い精度を得るために使用することができるいくつかの巧妙なトリックを概説することに留意されたいです。これらの変更は、現在広く普及しているTCP実装で実装されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Managing the RTO Timer",
+      "section_title": true,
+      "ja": "5. RTOタイマーを管理します"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MUST manage the retransmission timer(s) in such a way that a segment is never retransmitted too early, i.e., less than one RTO after the previous transmission of that segment.",
+      "ja": "実装は、セグメントは、そのセグメントの前の送信後1 RTOよりも、すなわち、小さい、早期あまりにも再送されることはありませんように再送タイマ（複数可）を管理しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following is the RECOMMENDED algorithm for managing the retransmission timer:",
+      "ja": "以下は、再送タイマーを管理するための推奨アルゴリズムです。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.1) Every time a packet containing data is sent (including a retransmission), if the timer is not running, start it running so that it will expire after RTO seconds (for the current value of RTO).",
+      "ja": "タイマーが実行されていない場合（5.1）（再送信を含む）データを含むパケットが送信されるたびに、それは（RTOの現在値のため）RTO秒後に期限切れになるように、それが実行を開始。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.2) When all outstanding data has been acknowledged, turn off the retransmission timer.",
+      "ja": "（5.2）は、すべての未処理のデータが認識されている場合には、再送タイマーをオフにしてください。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.3) When an ACK is received that acknowledges new data, restart the retransmission timer so that it will expire after RTO seconds (for the current value of RTO).",
+      "ja": "ACKが新しいデータを認識し、その受信した場合、それは（RTOの現在値のため）RTO秒後に期限切れになるように、（5.3）は、再送タイマを再起動します。"
+    },
+    {
+      "indent": 3,
+      "text": "When the retransmission timer expires, do the following:",
+      "ja": "再送タイマが満了したときは、次の手順を実行します。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.4) Retransmit the earliest segment that has not been acknowledged by the TCP receiver.",
+      "ja": "（5.4）TCP受信機によって肯定応答されていない最も早いセグメントを再送します。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.5) The host MUST set RTO <- RTO * 2 (\"back off the timer\"). The maximum value discussed in (2.5) above may be used to provide an upper bound to this doubling operation.",
+      "ja": "（5.5）ホストは<RTOを設定しなければなりません -  RTO * 2（ \"バックオフタイマー\"）。上記（2.5）で説明した最大値は、この倍増操作に上限を提供するために使用され得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.6) Start the retransmission timer, such that it expires after RTO seconds (for the value of RTO after the doubling operation outlined in 5.5).",
+      "ja": "（5.6）は（5.5で概説さ倍増操作後のRTOの値のための）RTO秒後に期限切れになるように、再送タイマーを起動します。"
+    },
+    {
+      "indent": 3,
+      "text": "(5.7) If the timer expires awaiting the ACK of a SYN segment and the TCP implementation is using an RTO less than 3 seconds, the RTO MUST be re-initialized to 3 seconds when data transmission begins (i.e., after the three-way handshake completes).",
+      "ja": "（5.7）タイマRTO 3秒未満を使用してSYNセグメントとTCP実装のACKを待つ満了した場合、データ送信が始まるとき、RTO（3秒に再初期化されなければならない、すなわち、スリーウェイハンドシェイクの後）完了します。"
+    },
+    {
+      "indent": 9,
+      "text": "This represents a change from the previous version of this\ndocument [PA00] and is discussed in Appendix A.",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that after retransmitting, once a new RTT measurement is obtained (which can only happen when new data has been sent and acknowledged), the computations outlined in Section 2 are performed, including the computation of RTO, which may result in \"collapsing\" RTO back down after it has been subject to exponential back off (rule 5.5).",
+      "ja": "再送信後、一旦新しいRTT測定がRTOを「崩壊」をもたらす可能性がRTOの計算を含む、第2節で概説した計算が行われ、（新たなデータが送信され、承認された場合にのみ発生する可能性がある）が得られることに注意してくださいバックダウン、（規則5.5）をバックオフ指数関数を受けた後。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that a TCP implementation MAY clear SRTT and RTTVAR after backing off the timer multiple times as it is likely that the current SRTT and RTTVAR are bogus in this situation. Once SRTT and RTTVAR are cleared, they should be initialized with the next RTT sample taken per (2.2) rather than using (2.3).",
+      "ja": "現在のSRTTとRTTVARは、このような状況では偽であると思われるようTCP実装は、タイマーをオフにバックアップした後、複数回SRTTとRTTVARをクリアすることがあります。 SRTTとRTTVARがクリアされると、それらは次のRTT（2.2）ごとに採取したサンプルではなく、使用して（2.3）で初期化する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document requires a TCP to wait for a given interval before retransmitting an unacknowledged segment. An attacker could cause a TCP sender to compute a large value of RTO by adding delay to a timed packet's latency, or that of its acknowledgment. However, the ability to add delay to a packet's latency often coincides with the ability to cause the packet to be lost, so it is difficult to see what an attacker might gain from such an attack that could cause more damage than simply discarding some of the TCP connection's packets.",
+      "ja": "この文書では、未確認のセグメントを再送信する前に、一定間隔を待つためにTCPが必要です。攻撃者は、TCPの送信者が、時限パケットの遅延、またはその承認のものに遅延を追加することにより、RTOの大きな値を計算する可能性があります。しかし、パケットのレイテンシーに遅延を追加する機能は、多くの場合、パケットが失われ能力と一致しているので、攻撃者は、単にの一部を捨てるよりも多くの損傷を引き起こす可能性があり、そのような攻撃から得る可能性があるかを確認することは困難ですTCPコネクションのパケット。"
+    },
+    {
+      "indent": 3,
+      "text": "The Internet, to a considerable degree, relies on the correct implementation of the RTO algorithm (as well as those described in RFC 5681) in order to preserve network stability and avoid congestion collapse. An attacker could cause TCP endpoints to respond more aggressively in the face of congestion by forging acknowledgments for segments before the receiver has actually received the data, thus lowering RTO to an unsafe value. But to do so requires spoofing the acknowledgments correctly, which is difficult unless the attacker can monitor traffic along the path between the sender and the receiver. In addition, even if the attacker can cause the sender's RTO to reach too small a value, it appears the attacker cannot leverage this into much of an attack (compared to the other damage they can do if they can spoof packets belonging to the connection), since the sending TCP will still back off its timer in the face of an incorrectly transmitted packet's loss due to actual congestion.",
+      "ja": "インターネットは、かなりの程度まで、正しいRTOアルゴリズムの実装（およびRFC 5681に記載されているものなど）、ネットワークの安定性を維持し、輻輳崩壊を回避するために、に依存しています。攻撃者は、TCPエンドポイントは、受信機は、実際にこのように危険な値にRTOを下げ、データを受信した前のセグメントの確認応答を鍛造することで輻輳の顔に、より積極的に対応する可能性があります。しかし、そうすることは、攻撃者が送信者と受信者との間の経路に沿ってトラフィックを監視することができない限り困難である、正しく確認応答をスプーフィングが必要です。また、攻撃者は送信者のRTOが小さすぎる値に到達させることができたとしても、攻撃者が（彼らは、接続に属するパケットを偽装できるかどうか、彼らが行うことができ、他の損傷と比較して）攻撃の多くにこれを活用することはできません表示されます、送信TCP以来まだによる実際の混雑に間違って送信したパケットの損失に直面して、そのタイマーをオフにバックアップします。"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations in RFC 5681 [APB09] are also applicable to this document.",
+      "ja": "RFC 5681 [APB09]におけるセキュリティの考慮事項も、この文書に適用されます。"
+    },
+    {
+      "indent": 1,
+      "text": "7. Changes from",
+      "section_title": true,
+      "ja": "7.変更から"
+    },
+    {
+      "indent": 3,
+      "text": "This document reduces the initial RTO from the previous 3 seconds [PA00] to 1 second, unless the SYN or the ACK of the SYN is lost, in which case the default RTO is reverted to 3 seconds before data transmission begins.",
+      "ja": "この文書では、SYNまたはSYNのACKが失われない限り、1秒前の3秒〔PA00〕から初期RTOを低減する、データ送信が開始される前にデフォルトのRTOを3秒に戻されている場合には。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Acknowledgments",
+      "section_title": true,
+      "ja": "8.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The RTO algorithm described in this memo was originated by Van Jacobson in [Jac88].",
+      "ja": "このメモに記載RTOアルゴリズムは[Jac88]にバン・ジェイコブソンによって発信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Much of the data that motivated changing the initial RTO from 3 seconds to 1 second came from Robert Love, Andre Broido, and Mike Belshe.",
+      "ja": "1秒に3秒から初期RTOを変える動機データの多くは、ロバート・ラブ、アンドレBroido、およびマイクBelsheから来ました。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[APB09] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, September 2009.",
+      "ja": "[APB09]オールマン、M.、パクソン、V.、およびE.ブラントン、 \"TCP輻輳制御\"、RFC 5681、2009年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Bra89] Braden, R., Ed., \"Requirements for Internet Hosts - Communication Layers\", STD 3, RFC 1122, October 1989.",
+      "ja": "[Bra89]ブレーデン、R.、エド、 \"インターネットホストのための要件 - 通信層\"。、STD 3、RFC 1122、1989年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Bra97] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[Bra97]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[JBB92] Jacobson, V., Braden, R., and D. Borman, \"TCP Extensions for High Performance\", RFC 1323, May 1992.",
+      "ja": "[JBB92]ジェーコブソン、V.、ブレーデン、R.、およびD.ボーマン、 \"ハイパフォーマンスのためのTCP拡張\"、RFC 1323、1992年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Pos81] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "【Pos81]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[AP99] Allman, M. and V. Paxson, \"On Estimating End-to-End Network Path Properties\", SIGCOMM 99.",
+      "ja": "「エンドツーエンドのネットワークパスのプロパティの推定について」[AP99]オールマン、M.およびV.パクソン、SIGCOMM 99。"
+    },
+    {
+      "indent": 3,
+      "text": "[Chu09] Chu, J., \"Tuning TCP Parameters for the 21st Century\", http://www.ietf.org/proceedings/75/slides/tcpm-1.pdf, July 2009.",
+      "ja": "[Chu09]チュー、J.、 \"21世紀のためのチューニングTCPパラメータ\"、http://www.ietf.org/proceedings/75/slides/tcpm-1.pdf、2009年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[SLS09] Schulman, A., Levin, D., and Spring, N., \"CRAWDAD data set umd/sigcomm2008 (v. 2009-03-02)\", http://crawdad.cs.dartmouth.edu/umd/sigcomm2008, March, 2009.",
+      "ja": "【SLS09]シュルマン、A.、レビン、D.、および、http://crawdad.cs.dartmouth.edu/umd春、N.、 \"/ sigcomm2008を（V。2009-03-02）UMD CRAWDADデータセット\" / sigcomm2008、2009年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[HKA04] Henderson, T., Kotz, D., and Abyzov, I., \"CRAWDAD trace dartmouth/campus/tcpdump/fall03 (v. 2004-11-09)\", http://crawdad.cs.dartmouth.edu/dartmouth/campus/ tcpdump/fall03, November 2004.",
+      "ja": "【HKA04]ヘンダーソン、T.、Kotz、D.、およびAbyzov、I.、 \"CRAWDADトレースダートマス/キャンパス/ tcpdumpの/ fall03（V 2004-11-09。）\" は、http：//crawdad.cs.dartmouth。 EDU /ダートマス/キャンパス/ tcpdumpを/ fall03、2004年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Jac88] Jacobson, V., \"Congestion Avoidance and Control\", Computer Communication Review, vol. 18, no. 4, pp. 314-329, Aug. 1988.",
+      "ja": "[Jac88]ジェーコブソン、V.、「輻輳回避とコントロール」、コンピュータコミュニケーションレビュー、巻。 18、ありません。 4、頁314から329まで、1988年8月。"
+    },
+    {
+      "indent": 3,
+      "text": "[JK88] Jacobson, V. and M. Karels, \"Congestion Avoidance and Control\", ftp://ftp.ee.lbl.gov/papers/congavoid.ps.Z.",
+      "ja": "[JK88]ジェーコブソン、V.とM. Karels、 \"輻輳回避と制御\"、ftp://ftp.ee.lbl.gov/papers/congavoid.ps.Z。"
+    },
+    {
+      "indent": 3,
+      "text": "[KP87] Karn, P. and C. Partridge, \"Improving Round-Trip Time Estimates in Reliable Transport Protocols\", SIGCOMM 87.",
+      "ja": "[KP87]カーン、P.とC.ヤマウズラ、「信頼性の高いトランスポートプロトコルにおける改善のラウンドトリップ時間の見積り」、SIGCOMM 87。"
+    },
+    {
+      "indent": 3,
+      "text": "[PA00] Paxson, V. and M. Allman, \"Computing TCP's Retransmission Timer\", RFC 2988, November 2000.",
+      "ja": "[PA00]パクソン、V.とM.オールマン、 \"コンピューティングTCPの再送信タイマー\"、RFC 2988、2000年11月。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Rationale for Lowering the Initial RTO",
+      "ja": "初期RTOを下げるための付録A.根拠"
+    },
+    {
+      "indent": 3,
+      "text": "Choosing a reasonable initial RTO requires balancing two competing considerations:",
+      "ja": "合理的な初期RTOを選択すると、2つの競合する考慮事項のバランスをとる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The initial RTO should be sufficiently large to cover most of the end-to-end paths to avoid spurious retransmissions and their associated negative performance impact.",
+      "ja": "1.初期RTOは、スプリアス再送とそれに関連する負のパフォーマンスへの影響を回避するために、エンドツーエンドのパスの大部分をカバーするのに十分に大きくなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The initial RTO should be small enough to ensure a timely recovery from packet loss occurring before an RTT sample is taken.",
+      "ja": "2.初期RTOはRTTのサンプルが取られる前に発生したパケット損失からのタイムリーな回復を確保するために十分に小さくなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Traditionally, TCP has used 3 seconds as the initial RTO [Bra89] [PA00]. This document calls for lowering this value to 1 second using the following rationale:",
+      "ja": "伝統的に、TCPは初期RTO [Bra89] [PA00]として3秒を使用しています。このドキュメントでは、次の根拠を使用して1秒にこの値を低下させるための呼び出します。"
+    },
+    {
+      "indent": 3,
+      "text": "- Modern networks are simply faster than the state-of-the-art was at the time the initial RTO of 3 seconds was defined.",
+      "ja": " - 現代のネットワークは速く、最先端のは、3秒の初期RTOが定義された時にあったより単純です。"
+    },
+    {
+      "indent": 3,
+      "text": "- Studies have found that the round-trip times of more than 97.5% of the connections observed in a large scale analysis were less than 1 second [Chu09], suggesting that 1 second meets criterion 1 above.",
+      "ja": " - 研究は、大規模な分析で観察された接続を超える97.5％のラウンドトリップ時間が1秒以上の基準1を満たしていることを示唆し、1秒未満【Chu09]であったことを見出しました。"
+    },
+    {
+      "indent": 3,
+      "text": "- In addition, the studies observed retransmission rates within the three-way handshake of roughly 2%. This shows that reducing the initial RTO has benefit to a non-negligible set of connections.",
+      "ja": " - 加えて、研究は、おおよそ2％のスリーウェイハンドシェイク内再送率を観察しました。これは、初期RTOを低減する接続の無視できないセットに利益があることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "- However, roughly 2.5% of the connections studied in [Chu09] have an RTT longer than 1 second. For those connections, a 1 second initial RTO guarantees a retransmission during connection establishment (needed or not).",
+      "ja": " - しかし、[Chu09]で研究接続の約2.5％はRTTより長く1秒を持っています。これらの接続のために、1秒の初期RTOは、接続確立（必要に応じて、またはしない）中に再送信を保証します。"
+    },
+    {
+      "indent": 5,
+      "text": "When this happens, this document calls for reverting to an initial RTO of 3 seconds for the data transmission phase. Therefore, the implications of the spurious retransmission are modest: (1) an extra SYN is transmitted into the network, and (2) according to RFC 5681 [APB09] the initial congestion window will be limited to 1 segment. While (2) clearly puts such connections at a disadvantage, this document at least resets the RTO such that the connection will not continually run into problems with a short timeout. (Of course, if the RTT is more than 3 seconds, the connection will still encounter difficulties. But that is not a new issue for TCP.)",
+      "ja": "これが発生すると、この文書は、データ伝送フェーズのために3秒の初期RTOに戻すために呼び出します。したがって、スプリアス再送の影響が適度である：（1）余分SYNは、ネットワークに送信され、（2）RFC 5681によれば、[APB09初期輻輳ウィンドウは1つのセグメントに限定されるであろう。 （2）明らかに不利で、このような接続を置く一方で、この文書は、少なくとも、接続が継続的に短いタイムアウトの問題に実行されないことをRTOは、リセットされます。 （もちろん、RTTが3秒以上であれば、接続はまだ困難が発生します。しかし、それはTCPのための新しい問題ではありません。）"
+    },
+    {
+      "indent": 5,
+      "text": "In addition, we note that when using timestamps, TCP will be able to take an RTT sample even in the presence of a spurious retransmission, facilitating convergence to a correct RTT estimate when the RTT exceeds 1 second.",
+      "ja": "加えて、我々は、タイムスタンプを使用する場合、TCPは、RTTが1秒を超えたときに正しいRTT推定値に収束しやすく、さらにスプリアス再送の存在下で、RTTのサンプルを取ることができることに注意します。"
+    },
+    {
+      "indent": 3,
+      "text": "As an additional check on the results presented in [Chu09], we analyzed packet traces of client behavior collected at four different vantage points at different times, as follows:",
+      "ja": "次のように[Chu09]に示す結果に追加のチェックとして、我々は、異なる時間に四つの異なる見晴らしの良いポイントで収集クライアントの動作のパケットトレースを分析しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Name       Dates            Pkts.   Cnns.  Clnts. Servs.\n--------------------------------------------------------\nLBL-1      Oct/05--Mar/06   292M    242K   228    74K\nLBL-2      Nov/09--Feb/10   1.1B    1.2M   1047   38K\nICSI-1     Sep/11--18/07    137M    2.1M   193    486K\nICSI-2     Sep/11--18/08    163M    1.9M   177    277K\nICSI-3     Sep/14--21/09    334M    3.1M   170    253K\nICSI-4     Sep/11--18/10    298M    5M     183    189K\nDartmouth  Jan/4--21/04     1B      4M     3782   132K\nSIGCOMM    Aug/17--21/08    11.6M   133K   152    29K",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The \"LBL\" data was taken at the Lawrence Berkeley National Laboratory, the \"ICSI\" data from the International Computer Science Institute, the \"SIGCOMM\" data from the wireless network that served the attendees of SIGCOMM 2008, and the \"Dartmouth\" data was collected from Dartmouth College's wireless network. The latter two datasets are available from the CRAWDAD data repository [HKA04] [SLS09]. The table lists the dates of the data collections, the number of packets collected, the number of TCP connections observed, the number of local clients monitored, and the number of remote servers contacted. We consider only connections initiated near the tracing vantage point.",
+      "ja": "「LBL」データはローレンス・バークレー国立研究所で撮影された、国際コンピュータサイエンス研究所、SIGCOMM 2008の参加者を務め、ワイヤレスネットワークから「SIGCOMM」データ、および「ダートマス」データから「ICSI」のデータがしましたダートマス大学のワイヤレスネットワークから収集しました。後者の2つのデータセットは、CRAWDADデータリポジトリ[HKA04] [SLS09]から入手可能です。テーブルには、データ収集の日付をリストし、収集したパケットの数は、観測されたTCP接続の数は、ローカルクライアントの数は、監視、およびリモートサーバーの数が接触しました。私たちは、トレース視点の近くに開始した接続のみを考えます。"
+    },
+    {
+      "indent": 3,
+      "text": "Analysis of these datasets finds the prevalence of retransmitted SYNs to be between 0.03% (ICSI-4) to roughly 2% (LBL-1 and Dartmouth).",
+      "ja": "これらのデータセットの分析は、再送SYNの有病率は約2％（LBL-1およびダートマス）に0.03％（ICSI-4）との間であることを認めます。"
+    },
+    {
+      "indent": 3,
+      "text": "We then analyzed the data to determine the number of additional and spurious retransmissions that would have been incurred if the initial RTO was assumed to be 1 second. In most of the datasets, the proportion of connections with spurious retransmits was less than 0.1%. However, in the Dartmouth dataset, approximately 1.1% of the connections would have sent a spurious retransmit with a lower initial RTO. We attribute this to the fact that the monitored network is wireless and therefore susceptible to additional delays from RF effects.",
+      "ja": "私たちは、初期RTOは1秒であると仮定した場合には発生したであろう追加とスプリアス再送回数を決定するためにデータを分析しました。データセットのほとんどにおいて、スプリアス再送との接続の割合が0.1％未満でした。しかし、ダートマスデータセットでは、接続の約1.1％は低い初期RTOとスプリアス再送を送っているだろう。私たちは、監視対象のネットワークは、ワイヤレスおよびRFの影響から、追加の遅延に影響を受けやすいという事実にこれを属性。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, there are obviously performance benefits from retransmitting lost SYNs with a reduced initial RTO. Across our datasets, the percentage of connections that retransmitted a SYN and would realize at least a 10% performance improvement by using the smaller initial RTO specified in this document ranges from 43% (LBL-1) to 87% (ICSI-4). The percentage of connections that would realize at least a 50% performance improvement ranges from 17% (ICSI-1 and SIGCOMM) to 73% (ICSI-4).",
+      "ja": "最後に、減少初期RTOを失ったのSYNを再送からのパフォーマンス上のメリットは明らかにあります。我々のデータセットを横切って、SYNを再送し、この文書で指定されたより小さな初期RTO 87％（ICSI-4）〜43％（LBL-1）の範囲を使用して、少なくとも10％の性能向上を実現することになる接続のパーセンテージ。少なくとも50％の性能向上を実現することになる接続の割合は17％（ICSI-1及びSIGCOMM）から73％（ICSI-4）の範囲です。"
+    },
+    {
+      "indent": 3,
+      "text": "From the data to which we have access, we conclude that the lower initial RTO is likely to be beneficial to many connections, and harmful to relatively few.",
+      "ja": "我々がアクセス権を持っているとのデータから、我々はより低い初期RTOは、多くの接続に有益である可能性が高い、と比較的少数に有害であると結論付けています。"
+    },
+    {
+      "indent": 3,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Vern Paxson ICSI/UC Berkeley 1947 Center Street Suite 600 Berkeley, CA 94704-1198",
+      "ja": "バーン・パクソンICSI / UCバークレー1947センターストリートスイート600バークレー、CA 94704から1198"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: 510-666-2882 EMail: vern@icir.org http://www.icir.org/vern/",
+      "ja": "電話：510-666-2882 Eメール：vern@icir.org http://www.icir.org/vern/"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Allman ICSI 1947 Center Street Suite 600 Berkeley, CA 94704-1198",
+      "ja": "マーク・オールマンICSI 1947センターストリートスイート600バークレー、CA 94704から1198"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: 440-235-1792 EMail: mallman@icir.org http://www.icir.org/mallman/",
+      "ja": "電話：440-235-1792 Eメール：mallman@icir.org http://www.icir.org/mallman/"
+    },
+    {
+      "indent": 3,
+      "text": "H.K. Jerry Chu Google, Inc. 1600 Amphitheatre Parkway Mountain View, CA 94043",
+      "ja": "H.K.ジェリー・チューグーグル株式会社1600アンフィシアターパークウェイマウンテンビュー、CA 94043"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: 650-253-3010 EMail: hkchu@google.com",
+      "ja": "電話：650-253-3010 Eメール：hkchu@google.com"
+    },
+    {
+      "indent": 3,
+      "text": "Matt Sargent Case Western Reserve University Olin Building 10900 Euclid Avenue Room 505 Cleveland, OH 44106",
+      "ja": "マット・サージェントケース・ウェスタン・リザーブ大学オーリンビル10900ユークリッドアベニュールーム505クリーブランド、オハイオ州44106"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: 440-223-5932 EMail: mts71@case.edu",
+      "ja": "電話：440-223-5932 Eメール：mts71@case.edu"
+    }
+  ]
+}
