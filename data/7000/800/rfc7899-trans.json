@@ -1,0 +1,897 @@
+{
+  "title": {
+    "text": "RFC 7899 - Multicast VPN State Damping",
+    "ja": "RFC 7899 - マルチキャストVPN州ダンピング"
+  },
+  "number": 7899,
+  "created_at": "2019-11-03 07:53:12.774919+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     T. Morin, Ed.\nRequest for Comments: 7899                                  S. Litkowski\nUpdates: 6514                                                     Orange\nCategory: Standards Track                                       K. Patel\nISSN: 2070-1721                                            Cisco Systems\n                                                                Z. Zhang\n                                                               R. Kebler\n                                                                 J. Haas\n                                                        Juniper Networks\n                                                               June 2016",
+      "raw": true
+    },
+    {
+      "indent": 22,
+      "text": "Multicast VPN State Damping",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes procedures to damp Multicast VPN (MVPN) routing state changes and control the effect of the churn due to the multicast dynamicity in customer sites. The procedures described in this document are applicable to BGP-based multicast VPN and help avoid uncontrolled control-plane load increase in the core routing infrastructure. The new procedures proposed were inspired by BGP unicast route damping principles that have been adapted to multicast.",
+      "ja": "この文書では、状態の変更をルーティングするマルチキャストVPN（MVPN）を減衰し、顧客サイトにおけるマルチキャスト動的性によるチャーンの効果を制御するための手順を記載しています。この文書に記載された手順は、BGPベースのマルチキャストVPNに適用可能であり、コアルーティングインフラストラクチャに制御されていないコントロールプレーンの負荷の増加を回避するのに役立ちます。提案された新しい手順は、マルチキャストに適応されている原理を減衰BGPユニキャスト経路に触発されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc7899.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc7899で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2016 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2016 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3\n2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4\n3.  Overview  . . . . . . . . . . . . . . . . . . . . . . . . . .   4\n4.  Existing Mechanisms . . . . . . . . . . . . . . . . . . . . .   5\n  4.1.  Rate-Limiting Multicast Control Traffic . . . . . . . . .   5\n  4.2.  Existing PIM, IGMP, and MLD Timers  . . . . . . . . . . .   6\n  4.3.  BGP Route Damping . . . . . . . . . . . . . . . . . . . .   6\n5.  Procedures for Multicast State Damping  . . . . . . . . . . .   7\n  5.1.  PIM Procedures  . . . . . . . . . . . . . . . . . . . . .   7\n  5.2.  Procedures for Multicast VPN State Damping  . . . . . . .  10\n6.  Procedures for P-Tunnel State Damping . . . . . . . . . . . .  12\n  6.1.  Damping MVPN P-Tunnel Change Events . . . . . . . . . . .  12\n  6.2.  Procedures for Ethernet VPNs  . . . . . . . . . . . . . .  13\n7.  Operational Considerations  . . . . . . . . . . . . . . . . .  13\n  7.1.  Enabling Multicast Damping  . . . . . . . . . . . . . . .  13\n  7.2.  Troubleshooting and Monitoring  . . . . . . . . . . . . .  13\n  7.3.  Default and Maximum Values  . . . . . . . . . . . . . . .  13\n8.  Security Considerations . . . . . . . . . . . . . . . . . . .  15\n9.  References  . . . . . . . . . . . . . . . . . . . . . . . . .  16\n  9.1.  Normative References  . . . . . . . . . . . . . . . . . .  16\n  9.2.  Informative References  . . . . . . . . . . . . . . . . .  17\nAcknowledgements  . . . . . . . . . . . . . . . . . . . . . . . .  17\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  18",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "In a multicast VPN [RFC6513] deployed with BGP-based procedures [RFC6514], when receivers in VPN sites join and leave a given multicast group or channel through multicast membership control protocols (Internet Group Management Protocol (IGMP) [RFC3376] and Multicast Listener Discovery (MLD) [RFC3810]), multicast routing protocols accordingly adjust multicast routing states and P-multicast tree states to forward or prune multicast traffic to these receivers. Similar challenges arise in the context of the multicast specification for Virtual Private LAN Service (VPLS) [RFC7117].",
+      "ja": "マルチキャストVPNで[RFC6513]はVPNサイト内の受信機が参加し、（インターネットグループ管理プロトコル（IGMP）[RFC3376]とマルチキャストリスナマルチキャストメンバーシップの制御プロトコルを通じて所定のマルチキャストグループまたはチャネルを離れるときに、BGPベースの手順[RFC6514]で展開しますディスカバリー（MLD）[RFC3810]）、マルチキャストルーティングプロトコルは、それに応じて、これらの受信機にマルチキャストトラフィックを転送またはプルーニングするマルチキャストルーティング状態及びP-マルチキャストツリーの状態を調整します。同様の課題は、仮想プライベートLANサービス（VPLS）[RFC7117]のためのマルチキャスト明細書の文脈で発生します。"
+    },
+    {
+      "indent": 3,
+      "text": "In VPN contexts, providing isolation between customers of a shared infrastructure is a core requirement resulting in stringent expectations with regard to risks of denial-of-service attacks.",
+      "ja": "VPNコンテキストでは、共有インフラストラクチャの顧客との間のアイソレーションを提供するサービス拒否攻撃のリスクに関して厳しい期待をもたらすコア要件です。"
+    },
+    {
+      "indent": 3,
+      "text": "By nature, multicast memberships change based on the behavior of multicast applications running on end hosts. Hence, the frequency of membership changes can legitimately be much higher than the typical churn of unicast routing states.",
+      "ja": "性質上、マルチキャストメンバーシップは、エンドホスト上で実行されているマルチキャストアプリケーションの動作に基づいて変化します。したがって、メンバーシップの変更の頻度は、合法的に、ユニキャストルーティング状態の典型的な解約よりもはるかに高いことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, mechanisms need to be put in place to ensure that the load put on the BGP control plane, and on the P-tunnel setup control plane, remains under control regardless of the frequency at which multicast membership changes are made by end hosts.",
+      "ja": "したがって、機構は、負荷がBGP制御プレーン上に置くことを確実にするために適所に置かれる必要があり、そしてP-トンネル設定制御プレーンにかかわらず、マルチキャストメンバシップの変更がエンドホストによって作製される周波数の制御下に残ります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes procedures inspired by existing BGP route damping [RFC2439] that are aimed at offering means to set an upper bound to the amount of processing for the MVPN control-plane protocols: more precisely, the BGP control plane in [RFC6514], the P-tunnel control-plane protocol in the contexts of [RFC6514], and the multicast specification for VPLS [RFC7117]. The goal of setting this upper bound is pursued simultaneous with the goal of preserving the service provided (delivering the multicast stream as requested by Customer Edge devices), although at the expense of a minimal increase of average bandwidth use in the provider network). The upper bound to the control-plane load due to the processing of a given multicast state is controlled indirectly via configurable parameters.",
+      "ja": "より正確には、BGP制御プレーンを[RFC6514]で：この文書は、MVPNコントロールプレーンプロトコルの処理量に上限を設定するための手段を提供することを目的としている既存のBGPルートダンピング[RFC2439]に触発された手順を説明しますP-トンネル制御プレーン[RFC6514]の文脈でプロトコル、およびVPLSのマルチキャスト仕様[RFC7117]。この上限を設定する目標は、提供されるサービス（カスタマーエッジデバイスによって要求されたマルチキャストストリームを提供する）を維持することを目的と同時に追求される）プロバイダーネットワークの平均使用帯域幅の最小限の増加を犠牲にしているが。所定のマルチキャスト状態の処理制御プレーン負荷に上限が設定可能なパラメータを介して間接的に制御されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 16 of [RFC6514] specifically spells out the need for damping the activity of C-multicast and Leaf Auto-discovery routes and outlines how to do it by \"delaying the advertisement of withdrawals of C-multicast routes\". This specification provides appropriate detail on how to implement this approach and how to provide control to the operator; for this reason, it is an update to [RFC6514].",
+      "ja": "[RFC6514]のセクション16は、具体的にはC-マルチキャストおよび葉の自動検出ルートの活性を減衰させるための必要性を呪文や「C-マルチキャストルートの引き出しの広告を遅らせる」ことでそれを行う方法を概説します。この仕様は、このアプローチを実装し、オペレータに制御を提供する方法をどのように適切な詳細を提供します。このような理由のために、それは[RFC6514]のアップデートです。"
+    },
+    {
+      "indent": 3,
+      "text": "The base principle of this specification is described in Section 3. Existing mechanisms that could be relied upon are discussed in Section 4. Section 5 details the procedures introduced by this specification.",
+      "ja": "本明細書の塩基原理に依拠することができる3.既存のメカニズムは、セクション5は、本明細書によって導入手順の詳細をセクション4に記載されているセクションに記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 6 provides specific details related to the damping of multicast VPNs P-tunnel state.",
+      "ja": "セクション6は、マルチキャストVPNのP-トンネル状態の減衰に関連する特定の詳細を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, Section 7 discusses operational considerations related to the proposed mechanism.",
+      "ja": "最後に、7節では提案されたメカニズムに関連する運用考慮事項について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2.用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document reuses terminology from [RFC7761] and [RFC6514].",
+      "ja": "この文書では、[RFC7761]と[RFC6514]から用語を再利用します。"
+    },
+    {
+      "indent": 3,
+      "text": "In this specification, damping of a multicast state will be said to be \"active\" or \"inactive\". Note that in [RFC2439], the term used for a unicast route that is dampened is \"suppressed\", but we will avoid this term in this specification given that the proposed solution consists in holding active a damped multicast state.",
+      "ja": "本明細書では、マルチキャスト状態の減衰は、「アクティブ」または「非アクティブ」であると言われます。 [RFC2439]に、減衰されるユニキャストルートに使用される用語「抑制」されることに注意してください、我々は、提案された解決策は、アクティブ減衰マルチキャスト保持状態にあることを考えれば、本明細書でこの用語を避けることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Overview",
+      "section_title": true,
+      "ja": "3.概要"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures described in this document allow the network operator to configure multicast VPN PEs (Provider Edge routers) so that they can delay the propagation of multicast state prune messages between PEs when faced with a rate of multicast state dynamicity exceeding a certain configurable threshold. Assuming that the number of multicast states that can be created by a receiver is bounded, delaying the propagation of multicast state pruning results in setting up an upper bound to the average frequency at which the router will send state updates to an upstream router.",
+      "ja": "この文書に記載された手順は、特定の設定可能な閾値を超えるマルチキャスト状態の動的性の速度に直面したとき、彼らは、PE間のマルチキャスト状態プルーンメッセージの伝播を遅らせることができるように、ネットワークオペレータは、マルチキャストVPN用のPE（プロバイダーエッジルータ）を設定することを可能にします。ルータはアップストリームルータに状態更新を送信するときの平均頻度に上限を設定する際にマルチキャスト状態プルーニング結果の伝播を遅延させる、受信機によって作成することができるマルチキャスト状態の数が制限されると仮定すると。"
+    },
+    {
+      "indent": 3,
+      "text": "From the point of view of a downstream router, such as a CE (Customer Edge router), this approach has no impact: the multicast routing state changes that it solicits to its PE will be honored without any additional delay. Indeed, the propagation of Joins is not impacted by the procedures specified here, and having the upstream router delay state prune propagation to its own upstream router does not affect what traffic is sent to the downstream router. In particular, the amount of bandwidth used on the PE-CE link downstream to a PE applying this damping technique is not increased.",
+      "ja": "そのようなCE（カスタマエッジルータ）のような下流のルータの観点から、このアプローチは影響を与えない：マルチキャストルーティング状態は、任意の追加の遅延なしで表彰され、そのPEに要請することを変更します。確かに、参加の伝播は、ここで指定された手順によって影響を受けず、独自の上流のルータにアップストリームルータの遅延状態のプルーンの伝播を有する下流のルータに送信されたものを、トラフィックには影響しません。具体的には、この減衰技法を適用PE下流PE-CEリンク上で使用される帯域幅の量が増加しません。"
+    },
+    {
+      "indent": 3,
+      "text": "This approach increases the average bandwidth utilization on a link upstream to a PE applying this technique, such as a PE-PE link: indeed, a given multicast flow will be forwarded for a longer time than if no damping was applied. That said, it is expected that this technique will meet the goals of protecting the multicast routing infrastructure control plane without a significant average increase of bandwidth; for instance, damping events happening at a frequency higher than one event per X seconds can be done without increasing by more than X seconds the time during which a multicast flow is present on a link.",
+      "ja": "実際、所与のマルチキャストフローが全く減衰が適用されなかった場合よりも長い時間のために転送されます。このアプローチは、PE-PEリンクとしてこの技術を適用するPEへアップストリームリンク上の平均帯域幅使用率を増加させます。それによると、この技術は、帯域幅の有意な平均増加させることなく、マルチキャストルーティングインフラストラクチャの制御プレーンを保護する目標を達成することが期待されます。例えば、X秒ごとに1つのイベントがX秒以上によりマルチキャストフローがリンク上に存在している時間を増加させることなく行うことができるよりも高い頻度で起こったイベントを減衰。"
+    },
+    {
+      "indent": 3,
+      "text": "That said, simulation of the exponential decay algorithm shows that the multicast state churn can be drastically reduced without significantly increasing the duration for which multicast traffic is forwarded. Hence, using this technique will efficiently protect the multicast routing infrastructure control plane against the issues described here without a significant average increase of bandwidth. The exception will be a scenario with strict constraints on multicast bandwidth, where extending the time a multicast flow is forwarded would result in congestion.",
+      "ja": "指数関数的減衰アルゴリズムの前記シミュレーションは、マルチキャスト状態チャーンが急激に大きくマルチキャストトラフィックが転送される時間を増加させることなく減少させることができることを示しています。したがって、この技術を使用して効率的に帯域幅の有意な平均増加させることなく、ここで説明している問題に対するマルチキャストルーティングインフラストラクチャのコントロールプレーンを保護します。例外は、マルチキャストフローが転送される時間を延長することは、輻輳を生じるマルチキャスト帯域幅に厳しい制約のあるシナリオであろう。"
+    },
+    {
+      "indent": 3,
+      "text": "To be practical, such a mechanism requires configurability. In particular, means are required to control when damping is triggered and to allow delaying the pruning of a multicast state for a time increasing with the churn of this multicast state. This will let the operator control the trade-off made between minimizing the dynamicity and reducing bandwidth consumption.",
+      "ja": "実用的であるために、このようなメカニズムは、構成可能性を必要とします。具体的には、手段は、減衰がトリガされたときに制御し、このマルチキャスト状態のチャーンと増加時間のマルチキャスト状態の剪定を遅らせる可能にするために必要とされます。これは、オペレータが動的性を最小限に抑え、帯域幅の消費を削減するとの間で行わトレードオフを制御できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Existing Mechanisms",
+      "section_title": true,
+      "ja": "4.既存のメカニズム"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes mechanisms that could be considered to address the issue but that end up appearing as not suitable or not efficient enough.",
+      "ja": "このセクションでは、この問題に対処するために考えられたが、その終わりまでには十分に効率的で、適切なされていないかのように見えることができメカニズムについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Rate-Limiting Multicast Control Traffic",
+      "section_title": true,
+      "ja": "4.1。レート制限マルチキャスト制御トラフィック"
+    },
+    {
+      "indent": 3,
+      "text": "The Protocol Independent Multicast - Sparse Mode (PIM-SM) specification [RFC7761] examines multicast security threats and, among other things, the risk of denial-of-service attacks described in Section 1. A mechanism relying on rate-limiting PIM messages is proposed in Section 5.3.3 of [RFC4609] but has the identified drawbacks of impacting the service delivered and having side-effects on legitimate users.",
+      "ja": "プロトコル独立マルチキャスト - スパースモード（PIM-SM）仕様[RFC7761]は、マルチキャストセキュリティの脅威を調べて、他のものの間で、速度制限PIMメッセージに依存する第1節でのメカニズムを説明したサービス拒否攻撃の危険性があります[RFC4609]のセクション5.3.3で提案されているが、提供されるサービスに影響を与えるし、正当なユーザーへの副作用を持つの識別された欠点を有しています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Existing PIM, IGMP, and MLD Timers",
+      "section_title": true,
+      "ja": "4.2。既存のPIM、IGMP、およびMLDタイマー"
+    },
+    {
+      "indent": 3,
+      "text": "In the context of PIM multicast routing protocols [RFC7761], a mechanism exists that may offer a form of de facto damping of multicast states, under some conditions. Indeed, when active, the prune override mechanism consists in having a PIM upstream router introduce a delay (\"prune override interval\") before taking into account a PIM Prune message sent by a downstream neighbor.",
+      "ja": "PIMマルチキャストルーティングプロトコル[RFC7761]の文脈では、機構は、いくつかの条件の下で、マルチキャスト状態の減衰事実上の形態を提供することができる存在します。実際、アクティブのとき、プルーンオーバーライド機構が考慮下流隣人によって送信されたPIMプルーンメッセージを取る前に、上流ルータが遅延を導入PIM（「プルーンオーバーライド間隔」）を有することにあります。"
+    },
+    {
+      "indent": 3,
+      "text": "This mechanism has not been designed specifically for the purpose of damping multicast state, but as a means to allow PIM to operate on multi-access networks. See Section 4.3.3 of [RFC7761]. However, when active, this mechanism will prevent a downstream router from producing multicast routing protocol messages that would cause, for a given multicast state, the upstream router to send to its own upstream router multicast routing protocol messages at a rate higher than 1/[JP_Override_Interval]. This provides a form of de facto damping.",
+      "ja": "このメカニズムは、マルチキャスト状態を減衰させる目的のために特別に設計されていないが、手段としてPIMは、マルチアクセスネットワーク上で動作できるようにします。 [RFC7761]のセクション4.3.3を参照してください。しかし、アクティブ、このメカニズムは、[所与のマルチキャスト状態のために、原因となるマルチキャスト・ルーティング・プロトコル・メッセージ、1 /より高いレートで、自身の上流のルータのマルチキャスト・ルーティング・プロトコル・メッセージを送信するアップストリームルータの製造の下流ルータを防止しますJP_Override_Interval]。これは事実上減衰の形態を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, the IGMP and MLD multicast membership control protocols can provide a similar behavior under the right conditions.",
+      "ja": "同様に、IGMPやMLDマルチキャストメンバシップ制御プロトコルは、適切な条件の下で同様の動作を提供することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "These mechanisms are not considered suitable to meet the goals spelled out in Section 1, the main reasons being that:",
+      "ja": "これらのメカニズムは、主な理由は、ということで第1節で綴ら目標を達成するために適切であると考えられていません。"
+    },
+    {
+      "indent": 3,
+      "text": "o when enabled, these mechanisms require additional bandwidth on the local link on which the effect of a prune is delayed (in our case, the PE-CE link);",
+      "ja": "有効な場合、O、これらのメカニズムは、プルーンの効果は、（我々の場合、PE-CEリンクに）遅延されたローカルリンク上の追加の帯域幅を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "o when enabled, these mechanisms require disabling explicit tracking (see Section 4.3.3 of [RFC7761]), even though enabling this feature may otherwise be desired;",
+      "ja": "有効な場合、O、これらのメカニズムは、この機能を有効にそうでなければ所望されていても、（[RFC7761]のセクション4.3.3を参照）、明示的なトラッキングを無効にする必要。"
+    },
+    {
+      "indent": 3,
+      "text": "o on certain implementations, these mechanisms are incompatible with behaviors that cannot be turned off (e.g., implementation applying a fast-leave behavior on interfaces with only two neighbors);",
+      "ja": "O特定の実装では、これらのメカニズムはオフにすることができない振る舞いと互換性がありません（例えば、実装の2つだけの隣人とのインタフェース上の高速脱退動作を適用します）。"
+    },
+    {
+      "indent": 3,
+      "text": "o they do not provide a suitable level of configurability; and",
+      "ja": "O彼らは、コンフィギュラの適切なレベルを提供していません。そして"
+    },
+    {
+      "indent": 3,
+      "text": "o they do not provide a way to discriminate between multicast flows based on estimation of their dynamicity.",
+      "ja": "O彼らは動的性の推定に基づくマルチキャストフローを区別するための方法を提供していません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. BGP Route Damping",
+      "section_title": true,
+      "ja": "4.3。 BGPルートダンピング"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures defined in [RFC2439] and [RFC7196] for BGP route flap damping are useful for operators who want to control the impact of unicast route churn on the routing infrastructure and offer a standardized set of parameters to control damping.",
+      "ja": "[RFC2439]とBGPルートフラップダンピングのために[RFC7196]で定義された手順は、ダンピング制御するパラメータの標準セットをルーティングインフラストラクチャ上のユニキャスト経路チャーンの影響を制御し、提供する事業者のために有用です。"
+    },
+    {
+      "indent": 3,
+      "text": "These procedures are not directly relevant in a multicast context for the following reasons:",
+      "ja": "これらの手順は、以下の理由により、マルチキャスト文脈では直接関係ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o they are not specified for multicast routing protocol in general, and",
+      "ja": "Oそれらは一般にマルチキャストルーティングプロトコルのために指定されていない、及び"
+    },
+    {
+      "indent": 3,
+      "text": "o even in contexts where BGP routes are used to carry multicast routing states (e.g., [RFC6514]), these procedures do not allow the implementation of the principle described in this document; the main reason being that a damped route becomes suppressed while the target behavior would be to keep advertising when damping is triggered on a multicast route.",
+      "ja": "OもBGPルートがマルチキャストルーティング状態（例えば、[RFC6514]）を搬送するために使用されている状況で、これらの手順は、本書で説明した原理の実施を許可しません。主な理由は、減衰ルートがターゲットの行動は、減衰がマルチキャストルート上にトリガーされたときに広告を維持するだろうしながら、抑えになるというもの。"
+    },
+    {
+      "indent": 3,
+      "text": "However, the set of parameters standardized to control the thresholds of the exponential decay mechanism can be relevantly reused. This is the approach proposed for the procedures described in this document (Section 5). Motivations for doing so are to help the network operator deploy this feature based on consistent configuration parameters and to obtain predictable results without the drawbacks of relying on rate-limiting multicast control protocol exchanges (as is exposed in Section 4.1) or on the use of existing PIM/IGMP timers (as is exposed in Section 4.2).",
+      "ja": "しかし、指数関数的減衰機構のしきい値を制御するために標準化パラメータのセットは、意義が再利用することができます。これは、このドキュメント（セクション5）に記載の手順のために提案されたアプローチです。そうするための動機は、ネットワークオペレータが一貫した構成パラメータに基づいて、この機能を展開するために役立つと律速マルチキャスト制御プロトコル交換に頼るの欠点なしで予測可能な結果を​​得るために（セクション4.1に露出されるように）、または既存の使用にありますPIM / IGMPタイマー（4.2節に露出されるように）。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Procedures for Multicast State Damping",
+      "section_title": true,
+      "ja": "マルチキャストステートダンピング5.手順"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. PIM Procedures",
+      "section_title": true,
+      "ja": "5.1。 PIM手順"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes procedures for multicast state damping satisfying the goals spelled out in Section 1. This section describes procedures for (S,G) states in the PIM-SM protocol [RFC7761]; they apply unchanged for such states created based on multicast group management protocols (IGMP [RFC3376], MLD [RFC3810]) on downstream interfaces. The same procedures are applied to (*,G) states in the context of PIM-SM Any-Source Multicast (ASM) groups (damping is not applied to (S,G,Rpt) Prune state).",
+      "ja": "このセクションでは、マルチキャスト状態は、このセクションでは、（S、G）のための手順を説明し、セクション1に綴ら目標を満たす減衰させる手順を説明PIM-SMプロトコル[RFC7761]に述べて。ダウンストリームインターフェイス上でマルチキャストグループ管理プロトコル（IGMP [RFC3376]、MLD [RFC3810]）に基づいて作成された彼らは、そのような状態に対して不変当てはまります。同じ手順は、PIM-SMの文脈で（*、G）ステートに適用される任意-ソースマルチキャスト（ASM）基（（S、G、RPT）プルーン状態に適用されていないダンピング）。"
+    },
+    {
+      "indent": 3,
+      "text": "The following notions of [RFC2439] are reused in these procedures:",
+      "ja": "[RFC2439]の以下の概念は、これらの手順で再利用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "figure-of-merit: A number reflecting the current estimation of recent past activity of an (S,G) multicast routing state, which increases based on routing events related to this state and decreases between these events following an exponential decay function (see below); the activation or inactivation of damping on the state is based on this number. This number is associated with the upstream state machine for (S,G) and is initialized to a value of zero on state creation.",
+      "ja": "性能指数：この状態に関連したルーティングイベントに基づいて、指数減衰関数以下、これらのイベントの間に減少増加する（S、G）マルチキャストルーティング状態、最近の過去の活動の現在の推定値を反映する数値（下記参照）;オン状態の減衰の活性化または不活性化は、この数に基づいています。この数は（S、G）のためのアップストリームステートマシンに関連付けられている状態の作成時にゼロの値に初期化されます。"
+    },
+    {
+      "indent": 3,
+      "text": "exponential decay function: A mathematical function as defined in Section 2.3 of [RFC2439] (ignoring the first paragraph of the section, as it does not apply here).",
+      "ja": "指数関数的減衰関数：数学関数[RFC2439]（それはここでは適用されないように、セクションの最初の段落を無視する）の2.3節で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "decay-half-life: The duration used to control how fast the exponential decay of the *figure-of-merit* is; this parameter of the exponential decay function is the time duration during which the *figure-of-merit* will be reduced by half when in the absence of a routing event (configurable parameter).",
+      "ja": "崩壊半減期：*の性能指数の指数関数的減衰*がどのように速く制御するために使用期間;指数関数的減衰関数のこのパラメータは、*性能指数*ルーティングイベント（設定可能なパラメータ）の非存在下で半分に減少される時間期間です。"
+    },
+    {
+      "indent": 3,
+      "text": "cutoff-threshold: The value of the *figure-of-merit* over which damping is applied (configurable parameter).",
+      "ja": "カットオフ閾値：減衰が適用される上*の性能指数の値*（設定可能なパラメータ）。"
+    },
+    {
+      "indent": 3,
+      "text": "reuse-threshold: The value of the *figure-of-merit* under which damping stops being applied (configurable parameter).",
+      "ja": "再利用閾値を：ダンピング停止が適用されてその下*性能指数の値*（設定可能なパラメータ）。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to these values, a configurable *increment-factor* parameter is introduced that controls by how much the *figure-of-merit* is incremented on multicast state update events.",
+      "ja": "これらの値に加えて、構成可能*増加ファクタは、*パラメータによって制御することが導入されるどのくらい*フィギュア・オブ・メリット*マルチキャスト状態更新イベントにインクリメントされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 7.3 proposes default and maximum values for the configurable parameters.",
+      "ja": "7.3節では、設定可能なパラメータのデフォルト値と最大値を提案しています。"
+    },
+    {
+      "indent": 3,
+      "text": "On reception of updated multicast membership or routing information on a downstream interface I for a given (S,G) state, which results in a change of the state of the PIM downstream state machine (see Section 4.5.3 of [RFC7761]), a router implementing these procedures MUST:",
+      "ja": "PIM下流のステートマシンの状態の変化をもたらす所定の（S、G）ステートのダウンストリームインタフェースI、更新されたマルチキャストメンバーシップの受信やルーティング情報（[RFC7761]のセクション4.5.3を参照）、これらの手順を実行するルータが必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o apply procedures of [RFC7761] unchanged, for everything relating to what multicast traffic ends up being sent on downstream interfaces, including interface I",
+      "ja": "O Iはインターフェースを含む、マルチキャストトラフィックはダウンストリームインターフェイス上で送信されてしまうものに関連するすべてのために、[RFC7761]不変の手順を適用します"
+    },
+    {
+      "indent": 3,
+      "text": "o update the *figure-of-merit* following the exponential decay algorithm",
+      "ja": "O *性能指数*以下の指数関数的減衰アルゴリズムを更新"
+    },
+    {
+      "indent": 3,
+      "text": "o increase the *figure-of-merit* for the (S,G) by the *increment-factor*",
+      "ja": "O *インクリメントファクタによって（S、G）のため*フィギュア・オブ・メリットを増大させます"
+    },
+    {
+      "indent": 3,
+      "text": "o update the damping state for the (S,G) state: damping becomes active on the state if the recomputed *figure-of-merit* is strictly above the configured *cutoff-threshold*:",
+      "ja": "O（S、G）状態に対する減衰状態を更新：ダンピング状態にアクティブになった場合に再計算*フィギュア・オブ・メリット*厳密に構成された*カットオフ閾値以上であります*。"
+    },
+    {
+      "indent": 6,
+      "text": "* if damping remains inactive on (S,G) state, update the upstream state machine as usual (as per Section 4.5.7 of [RFC7761]).",
+      "ja": "*減衰状態（S、G）に不活性なままであれば、通常のように（[RFC7761]のセクション4.5.7に従って）上流の状態機械を更新します。"
+    },
+    {
+      "indent": 6,
+      "text": "* if damping becomes active for the (S,G) state:",
+      "ja": "*減衰が（S、G）ステートのためのアクティブになった場合："
+    },
+    {
+      "indent": 9,
+      "text": "+ if the received message has caused the upstream state machine to transition to Joined state, update the upstream state machine for (S,G) applying usual PIM procedures in Section 4.5.7 of [RFC7761] and including sending a PIM Join to the upstream neighbor",
+      "ja": "+受信したメッセージが上流の状態マシンは、接合状態に遷移する[RFC7761]のセクション4.5.7に通常PIM手順を適用し、PIM上流に参加送信を含む（S、G）のための上流の状態機械を更新させた場合隣人"
+    },
+    {
+      "indent": 9,
+      "text": "+ if the received message has caused the upstream state machine to transition to NotJoined state, do not update the upstream state machine for (S,G)",
+      "ja": "+受信したメッセージが上流の状態マシンがアップストリームステートマシンを更新しない、NotJoined状態に遷移させた場合には（S、G）"
+    },
+    {
+      "indent": 9,
+      "text": "+ hold the upstream state machine in Joined state until the reuse threshold is reached: for the purpose of updating this state machine, events that may result in updating the state based on [RFC7761] SHOULD be ignored until the *reuse-threshold* is reached. The effect is that in the meantime, while PIM Join messages may be sent as refreshes to the upstream neighbor, no PIM Prune message will be sent.",
+      "ja": "*再利用閾値*に達するまで、この状態機械を更新するために、[RFC7761]に基づいて状態を更新することをもたらすことができるイベントは無視されるべきである：再利用閾値に達するまで+接合状態で上流状態機械を保持します。効果は、PIMは、上流の隣人へのリフレッシュとして送信されるメッセージに参加しながら、その間に、何のPIMプルーンメッセージは送信されませんということです。"
+    },
+    {
+      "indent": 6,
+      "text": "* if damping was already active, do not update the upstream state machine for (S,G); the upstream state machine was frozen after processing the previous message.",
+      "ja": "*減衰がすでにアクティブであった場合、（S、G）のための上流の状態機械を更新しません。上流のステートマシンは、前のメッセージを処理した後に凍結しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the *figure-of-merit* for (S,G) damping state decays to a value strictly below the configured *reuse-threshold*, the upstream state machine for (S,G) is recomputed based on states of downstream state machines, eventually leading to a PIM Join or Prune message to be sent to the upstream neighbor.",
+      "ja": "*性能指数*のための（S、G）の減衰状態は*厳密構成*再利用閾値を下回る値まで減衰すると、（S、G）のためのアップストリームステートマシンは、下流のステートマシンの状態に基づいて再計算されます、結局上流隣接に送信されるPIM Joinまたはプルーニングメッセージにつながります。"
+    },
+    {
+      "indent": 3,
+      "text": "Given the specificity of multicast applications, it is REQUIRED for the implementation to let the operator configure the *decay-half-life* in seconds, rather than in minutes.",
+      "ja": "マルチキャストアプリケーションの特異性を考えると、オペレータが秒単位ではなく、数分で* *崩壊半減期を設定できるように実装するために必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification does not impose the use of a particular technique to update the *figure-of-merit* following the exponential decay controlled by the configured *decay-half-life*. For instance, the same techniques as the ones described in [RFC2439] can be applied. The only requirement is that the *figure-of-merit* has to be updated prior to increasing it and that its decay below the *reuse-threshold* has to be reacted upon in a timely manner: in particular, if the recomputation is done with a fixed time granularity, this granularity should be low enough to not significantly delay the inactivation of damping on a multicast state beyond what the operator wanted to configure (e.g., for a *decay-half-life* of 10s, recomputing the *figure-of-merit* each minute would result in a multicast state remaining damped for a much longer time than specified).",
+      "ja": "この仕様は、*構成された*崩壊半減期によって制御指数関数的減衰以下*の性能指数を更新するために特定の技術の使用を課しません。例えば、[RFC2439]に記載のものと同様の手法を適用することができます。具体的には、再計算が行われた場合：唯一の要件は、*性能指数*は前にそれを増加すると*の再利用しきい値以下その崩壊*をタイムリーにすると反応しなければならないことに更新しなければならないことです一定の時間粒度で、この粒度は*フィギュアを再計算、大幅10Sの*崩壊半減期*のために、例えば（オペレータが設定したいものを超えてマルチキャスト状態にダンピングの不活性化を遅らせないために十分に低くなければなりません-of-メリット*毎分）指定されたよりもはるかに長い時間のためにマルチキャスト状態残りの減衰をもたらします。"
+    },
+    {
+      "indent": 3,
+      "text": "PIM implementations typically follow the suggestion from Section 4.1 of [RFC7761] that:",
+      "ja": "PIM実装は、典型的には、[RFC7761]のセクション4.1からの提案に従ってください。"
+    },
+    {
+      "indent": 6,
+      "text": "implementations will only maintain state when it is relevant to forwarding operations - for example, the 'NoInfo' state might be assumed from the lack of other state information, rather than being held explicitly.",
+      "ja": "それは、転送操作に関連する場合の実装は、状態を維持する - 例えば、「NoInfo」状態ではなく、明示的に保持されるよりも、他の状態情報の欠如から推定されるかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "To properly implement damping procedures, an implementation MUST keep an explicit (S,G) state as long as damping is active on an (S,G). Once an (S,G) state expires, and damping becomes inactive on this state, its associated *figure-of-merit* and damping state are removed as well.",
+      "ja": "適切な手順を減衰実装するために、実装が減衰する（S、G）上でアクティブである限り、明示的に（S、G）状態を維持しなければなりません。 （S、G）状態の有効期限が切れ、かつ減衰すると、この状態に非アクティブになると、それに関連する*フィギュア・オブ・メリット*及びダンピング状態は同様に除去されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that these procedures:",
+      "ja": "これらの手順があります："
+    },
+    {
+      "indent": 3,
+      "text": "o do not impact PIM procedures related to refreshes or expiration of multicast routing states: PIM Prune messages triggered by the expiration of the (S,G) keep-alive timer are not suppressed or delayed, and the reception of Join messages not causing transition of state on the downstream interface does not lead to incrementing the *figure-of-merit*;",
+      "ja": "Oリフレッシュまたはマルチキャストルーティング状態の有効期限に関連するPIM手順に影響を与えない：（S、G）キープアライブタイマーの満了によってトリガPIMプルーンメッセージを抑制または遅延、および参加メッセージの受信の遷移が発生しないれていませんダウンストリームインターフェイスの状態は、* *の性能指数をインクリメントにつながりません。"
+    },
+    {
+      "indent": 3,
+      "text": "o do not impact the PIM Assert mechanism: in particular, PIM Prune messages triggered by a change of the PIM Assert winner on the upstream interface are not suppressed or delayed;",
+      "ja": "O PIMアサートメカニズムに影響を与えない：特に、上流インターフェース上のPIMアサート勝者の変化によってトリガPIMプルーンメッセージを抑制または遅延されません。"
+    },
+    {
+      "indent": 3,
+      "text": "o do not impact PIM Prune messages that are sent when the RPF neighbor is updated for a given multicast flow; and",
+      "ja": "O RPF隣人が与えられたマルチキャストフローのために更新されたときに送信されたPIMプルーンメッセージには影響しません。そして"
+    },
+    {
+      "indent": 3,
+      "text": "o do not impact PIM Prune messages that are sent in the context of switching between a Rendezvous Point Tree and a Shortest Path Tree.",
+      "ja": "Oランデブーポイントツリーと最短パスツリーの切り替えのコンテキストで送信されたPIMプルーンメッセージには影響しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note also that no action is triggered based on the reception of PIM Prune messages (or corresponding IGMP/MLD messages) that relate to non-existing (S,G) state: in particular, no *figure-of-merit* or damping state is created in this case.",
+      "ja": "注また、何のアクションが存在しない（S、G）状態に関連するPIMプルーンメッセージ（または対応するIGMP / MLDメッセージ）の受信に基づいてトリガされていないこと：特に、何*フィギュア・オブ・メリット*または状態ダンピングこの場合に作成されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Procedures for Multicast VPN State Damping",
+      "section_title": true,
+      "ja": "5.2。マルチキャストVPN国家ダンピングのための手順"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures described in Section 5.1 can be applied in the Virtual Routing and Forwarding (VRF) PIM-SM implementation (in the \"C-PIM instance\"), with the corresponding action to suppressing the emission of a Prune(S,G) message being to not withdraw the C-multicast Source Tree Join (C-S,C-G) BGP route. An implementation of [RFC6513] relying on the use of PIM to carry C-multicast routing information MUST support this technique to be compliant with this specification.",
+      "ja": "セクション5.1に記載された手順は、プルーン（S、G）メッセージの排出を抑制することに対応するアクションと、仮想ルーティングおよび転送（「C-PIMインスタンス」で）（VRF）PIM-SMの実装にも適用することができますC-マルチキャストソースツリーを撤回しないようにということは（CS、CG）BGPルートに参加します。 PIMの使用に依存する[RFC6513]の実装は、この仕様に準拠するために、この技術をサポートしなければならないC-マルチキャストルーティング情報を運ぶために。"
+    },
+    {
+      "indent": 3,
+      "text": "In the context of [RFC6514], where BGP is used to distribute C-multicast routing information, the following procedure is proposed as an alternative to the procedures in Section 5.1 and consists in applying damping in the BGP implementation based on existing BGP damping mechanisms applied to C-multicast Source Tree Join routes and Shared Tree Join routes (and as well to Leaf A-D routes - see Section 6) and modified to implement the behavior described in Section 3 along the following guidelines:",
+      "ja": "[RFC6514]、BGPは、C-マルチキャストルーティング情報を配布するために使用される場合、以下の手順は、セクション5.1の手順に代わるものとして提案され、適用既存のBGPダンピングメカニズムに基づいて、BGP実装で減衰適用に構成されているの文脈でC-マルチキャストソースツリーへのルートに参加し、共有ツリーはルート参加（と同様に葉ADルートを - セクション6を参照）、次のガイドラインに沿って第3節に記載された動作を実現するように修正："
+    },
+    {
+      "indent": 3,
+      "text": "o not withdrawing (instead of not advertising) damped routes;",
+      "ja": "O（代わりにアドバタイズしない）吸引しない経路を減衰。"
+    },
+    {
+      "indent": 3,
+      "text": "o providing means to configure the *decay-half-life* in seconds if that option is not already available; and",
+      "ja": "そのオプションはまだ利用できない場合は数秒で*崩壊半減期*を設定するための手段を提供するO;そして"
+    },
+    {
+      "indent": 3,
+      "text": "o using parameters for the exponential decay that are specific to multicast based on default values and multicast-specific configuration.",
+      "ja": "デフォルト値とマルチキャスト固有の設定に基づいて、マルチキャストに固有の指数関数的減衰のためのパラメータを使用して、O。"
+    },
+    {
+      "indent": 3,
+      "text": "While these procedures would typically be implemented on PE routers, in a context where BGP Route Reflectors (RRs) [RFC4456] are used it can be considered useful to also be able to apply damping on RRs as well to provide additional protection against activity created behind multiple PEs. Additionally, for MVPN Inter-AS deployments, it can be needed to protect one Autonomous System (AS) from the dynamicity of multicast VPN routing events from other ASes.",
+      "ja": "これらの手順は、典型的には、[RFC4456] BGPルートリフレクタ（RRS）のコンテキストでは、PEルータ上に実装される際に使用されることも後ろ作成活性に対する追加の保護を提供するだけでなく資源レコードに減衰適用することができるように有用と考えることができます複数のPE。また、MVPNのInter-ASの展開のために、他のASからのマルチキャストVPNルーティングイベントのダイナミシティから1自律システム（AS）を保護するために必要なことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The choice to implement damping based on BGP routes or the procedures described in Section 5.1 is up to the implementor, but at least one of the two MUST be implemented. In the perspective of allowing damping to be done on RRs and Autonomous System Border Routers (ASBRs), implementing the BGP approach is recommended.",
+      "ja": "BGPルートまたはセクション5.1に記載された手順に基づいて減衰実装する選択は実装次第であるが、両者の少なくとも一方が実施されなければなりません。 RRおよび自律システム境界ルータ（のASBR）上で行われる減衰せる観点では、BGP手法を実装することが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When not all routers in a deployment have the capability to drop traffic coming from the wrong PE (as spelled out in Section 9.1.1 of [RFC6513]), then the withdrawal of a C-multicast route resulting from a change in the Upstream Multicast Hop or Upstream Multicast PE SHOULD NOT be damped. An implementation of this specification MUST do at least one of the two following things:",
+      "ja": "配備における全てのルータが間違ったPEからのトラフィック（[RFC6513]のセクション9.1.1に綴られる）、上流マルチキャストの変化に起因するC-マルチキャスト経路のその後撤退をドロップする能力を有する場合ホップや上流マルチキャストPEは、減衰されるべきではありません。この仕様の実装は、次の二つの事柄のうち少なくともいずれかを行う必要があります"
+    },
+    {
+      "indent": 3,
+      "text": "o not damp these withdrawals by default, and/or",
+      "ja": "Oデフォルトでは、これらの引き出しを減衰させる、および/またはありません"
+    },
+    {
+      "indent": 3,
+      "text": "o provide a tuning knob to disable the damping of these withdrawals.",
+      "ja": "Oこれらの引き出しの減衰を無効にするチューニングつまみを提供しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, in such a deployment context, it is RECOMMENDED not to enable any multicast VPN route damping on RRs and ASBRs since these types of equipment cannot distinguish the event having caused a C-multicast to be withdrawn.",
+      "ja": "また、このような展開に関連して、装置のこれらのタイプはC-マルチキャストが取り下げさせたイベントを区別することができないためのRRとのASBR上制振任意マルチキャストVPN経路を有効にしないことをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "Note well that it is out of scope of this section to consider the application of these damping techniques on MVPN BGP routes other than C-multicast routes.",
+      "ja": "それはC-マルチキャストルート以外MVPN BGPルート上のこれら制振技術の適用を検討するために、このセクションの範囲外であることを十分に注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Procedures for P-Tunnel State Damping",
+      "section_title": true,
+      "ja": "P-トンネル国家ダンピング6.手順"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Damping MVPN P-Tunnel Change Events",
+      "section_title": true,
+      "ja": "6.1。 MVPN P-トンネルの変更イベントをダンピング"
+    },
+    {
+      "indent": 3,
+      "text": "When selective P-tunnels are used (see Section 7 of [RFC6513]), the effect of updating the upstream state machine for a given (C-S,C-G) state on a PE connected to multicast receivers is not only to generate activity to propagate C-multicast routing information to the source connected PE, but also to possibly trigger changes related to the P-tunnels carrying (C-S,C-G) traffic. Protecting the provider network from an excessive amount of change in the state of P-tunnels is required, and this section details how this can be done.",
+      "ja": "選択的なP-トンネルは（[RFC6513]のセクション7を参照）が使用される場合、所与の（CS、CG）のためのアップストリームステートマシンを更新する効果がマルチキャスト受信機に接続されたPEに状態Cを伝播する活動を生成するだけでなくPE接続されたソースへのルーティング情報を-multicastだけでなく、おそらく（CS、CG）トラフィックを伝送するP-トンネルに関連する変更をトリガします。 P-トンネルの状態の変化の過剰量からプロバイダネットワークの保護が必要とされ、この部分の詳細はこれをどのように行うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A PE implementing these procedures for MVPN MUST damp Leaf A-D routes in the same manner as it would for C-multicast routes (see Section 5.2).",
+      "ja": "それはC-マルチキャストルート（セクション5.2を参照）と同じようにMVPNのためにこれらの手順を実装するPEは、同じ方法で葉A-Dの経路を減衰しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A PE implementing these procedures for MVPN MUST damp the activity related to removing itself from a P-tunnel. Possible ways to do so depend on the type of P-tunnel, and local implementation details are left up to the implementor.",
+      "ja": "MVPNのためにこれらの手順を実装するPEはP-トンネルからそれ自体を除去することに関連する活性を減衰しなければなりません。そうする可能性のある方法は、P-トンネルの種類に依存し、地元の実装の詳細は、実装者に任されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The following is proposed as an example of how the above can be achieved:",
+      "ja": "以下は、上記を達成することができる方法の一例として提案されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o For P-tunnels implemented with the PIM protocol, this consists in applying multicast state damping techniques described in Section 5.1 to the P-PIM instance, at least for (S,G) states corresponding to P-tunnels.",
+      "ja": "PIMプロトコルで実現P-トンネルのO、これはP-PIMインスタンスへのセクション5.1に記載された技術を減衰マルチキャストステートを適用することからなる、少なくとも（S、G）のためのP-トンネルに対応する状態。"
+    },
+    {
+      "indent": 3,
+      "text": "o For P-tunnels implemented with multipoint LDP (mLDP), this consists in applying damping techniques completely similar to the one described in Section 5 but generalized to apply to mLDP states.",
+      "ja": "OマルチLDP（MLDP）で実現P-トンネルの場合、これは、セクション5で説明が、MLDP状態に適用する一般ものと完全に類似した減衰技法を適用することからなります。"
+    },
+    {
+      "indent": 3,
+      "text": "o For root-initiated P-tunnels (P-tunnels implemented with the Point-to-Multipoint (P2MP) RSVP-TE, or relying on ingress replication), no particular action needs to be implemented to damp P-tunnels membership, if the activity of Leaf A-D route themselves is damped.",
+      "ja": "Oルート-開始P-トンネルについて（P-トンネルはポイントツーマルチポイント（P2MP）RSVP-TEを用いて実装、または入力複製に依存する）、特にアクションがあれば、P-トンネルのメンバーシップを減衰するために実装する必要はありません葉ADルートそのものの活性が減衰されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Another possibility is to base the decision to join or not join the P-tunnel to which a given (C-S,C-G) is bound and to advertise or not advertise a Leaf A-D route related to (C-S,C-G) based on whether or not a C-multicast Source Tree Join route is being advertised for (C-S,C-G) rather than by relying on the state of the C-PIM Upstream state machine for (C-S,C-G).",
+      "ja": "O別の可能性は、所与の（CS、CG）が結合しているか否かに基づいて（CS、CG）に関連するリーフADルートをアドバタイズアドバタイズするかどうかをれるP-トンネルに参加する参加するかどうかの決定の基礎とすることですC-マルチキャストソースツリーはルートに参加（CS、CG）のためではなく（CS、CG）用のC-PIMアップストリームステートマシンの状態に依存することによってアドバタイズされています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Procedures for Ethernet VPNs",
+      "section_title": true,
+      "ja": "6.2。イーサネットVPNの手順"
+    },
+    {
+      "indent": 3,
+      "text": "Specifications exist to support or optimize multicast and broadcast in the context of Ethernet VPNs [RFC7117] relying on the use of Selective P-Multicast Service Interface (S-PMSI) and P-tunnels. For the same reasons as for IP multicast VPNs, an implementation of [RFC7117] MUST follow the procedures described in Section 6.1 to be compliant with this specification.",
+      "ja": "仕様は、選択的P-マルチキャストサービスインタフェース（S-PMSI）及びP-トンネルの使用に依存する[RFC7117]イーサネットVPNのコンテキストでマルチキャストおよびブロードキャストをサポートまたは最適化するために存在します。 IPマルチキャストVPNのと同じ理由のために、[RFC7117]の実装は、この仕様に準拠する第6.1節に記載された手順に従わなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Operational Considerations",
+      "section_title": true,
+      "ja": "7.運用に関する注意事項"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Enabling Multicast Damping",
+      "section_title": true,
+      "ja": "7.1。マルチキャストダンピングを有効にします"
+    },
+    {
+      "indent": 3,
+      "text": "In the context of multicast VPNs, these procedures would be enabled on PE routers. Additionally, in the case of C-multicast routing based on BGP extensions ([RFC6514]), these procedures can be enabled on ASBRs and RRs.",
+      "ja": "マルチキャストVPNの文脈では、これらの手順は、PEルータ上で有効であろう。また、BGP拡張（[RFC6514]）に基づいて、C-マルチキャストルーティングの場合、これらの手順は、のASBRとのRR上で有効にすることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Troubleshooting and Monitoring",
+      "section_title": true,
+      "ja": "7.2。トラブルシューティングおよび監視"
+    },
+    {
+      "indent": 3,
+      "text": "Implementing the damping mechanisms described in this document should be complemented by appropriate tools to observe and troubleshoot damping activity.",
+      "ja": "この文書に記載された減衰メカニズムを実装することは観察及び活性を減衰トラブルシューティングするために適切なツールによって補完されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Complementing the existing interface providing information on multicast states with information on eventual damping of corresponding states (e.g., Multicast Routing Information Base (MRIB) states) is RECOMMENDED for C-multicast routing states and P-tunnel states.",
+      "ja": "対応する状態（例えば、マルチキャストルーティング情報ベース（MRIB）の状態）の最終的な減衰に関する情報をマルチキャスト状態に関する情報を提供する既存のインタフェースを補完するC-マルチキャストルーティング状態及びP-トンネル状態に推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3. Default and Maximum Values",
+      "section_title": true,
+      "ja": "7.3。デフォルト値と最大値"
+    },
+    {
+      "indent": 3,
+      "text": "Considering that, by design, multicast streams will be delivered unchanged to the end user independent of the value chosen for the configurable parameters, and that the only trade-off being made is an increase of bandwidth use, the default and maximum values do not have to be perfectly tuned.",
+      "ja": "設計により、マルチキャストストリームは、設定可能なパラメータのために選択した値に依存しないエンドユーザにそのまま配信されます、ということ、そして作られている唯一のトレードオフは、帯域幅の使用の増加であることを考慮すると、デフォルト値と最大値はありません完璧に調整することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This section proposes default and maximum values that are conservative, so as to not significantly impact network dimensioning but still prevent multicast state churn going beyond what can be considered a reasonably low churn for a multicast state (see below for illustrations in order of magnitude of the effect of these values).",
+      "ja": "ない大幅にネットワークの寸法に影響を与えるが、それでもマルチキャスト状態のための合理的に低解約考えることができるものを越えたマルチキャストステート・解約を防ぐためにこのセクションでは、保守的であり、デフォルト値と最大値を提案している（の大きさの順にイラストについては、以下をご覧くださいこれらの値の影響）。"
+    },
+    {
+      "indent": 3,
+      "text": "The following values are RECOMMENDED to be adopted as default values:",
+      "ja": "次の値がデフォルト値として採用することが推奨されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o *increment-factor*: 1000",
+      "ja": "O *増分ファクタ*：1000"
+    },
+    {
+      "indent": 3,
+      "text": "o *cutoff-threshold*: 3000",
+      "ja": "O *カットオフしきい値*：3000"
+    },
+    {
+      "indent": 3,
+      "text": "o *decay-half-life*: 10s",
+      "ja": "O *崩壊半減期*：10秒"
+    },
+    {
+      "indent": 3,
+      "text": "o *reuse-threshold*: 1500",
+      "ja": "O *再利用しきい値*：1500"
+    },
+    {
+      "indent": 3,
+      "text": "For unicast damping, it is common to set an upper bound to the time during which a route is suppressed. In the case of multicast state damping, which relies on not withdrawing a damped route, it may be desirable to avoid a situation where a multicast flow would keep flowing in a portion of the network for a very long time in the absence of receivers.",
+      "ja": "ユニキャスト減衰させるためには、経路が抑制されている時間に上限を設定することが一般的です。減衰経路を吸引しないに依存して減衰マルチキャスト状態の場合には、マルチキャストフローは、受信機の非存在下で非常に長い時間のためのネットワークの一部に流れ続けることになる事態を回避することが望ましい場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The proposed default maximum value for the *figure-of-merit* is 20x*increment-factor*, i.e., 20000 with the proposed default *increment-factor* of 1000.",
+      "ja": "即ち*フィギュア・オブ・メリット* 20X *増分因子であるために提案されたデフォルトの最大値は、20000 1000の提案されたデフォルト*インクリメント因子*を有します。"
+    },
+    {
+      "indent": 3,
+      "text": "As illustrations, with these values:",
+      "ja": "これらの値を持つイラスト、同様に："
+    },
+    {
+      "indent": 3,
+      "text": "o a multicast state updated less frequently than once every 6 s will not be damped at all;",
+      "ja": "oを一度6秒よりも少ない頻度で更新されたマルチキャスト状態は全く減衰されることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "o a multicast state changing once per second for 3 s, and then not changing, will not be damped;",
+      "ja": "Oマルチキャスト状態は3秒間1秒に1回変更し、その後に減衰されず、変化しません。"
+    },
+    {
+      "indent": 3,
+      "text": "o a multicast state changing once per second for 4 s, and then not changing, will be damped after the fourth change for approximately 13 s;",
+      "ja": "マルチキャスト状態は4秒間1秒に1回変更し、その後変化しないO、約13秒間第変更後に減衰されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o a multicast state changing twice per second for 15 s, and then not changing, will be damped after the fourth change for approximately 50 s; and",
+      "ja": "マルチキャスト状態が15秒間毎秒回変更し、その後変化しないO、約50秒間第変更後に減衰されます。そして"
+    },
+    {
+      "indent": 3,
+      "text": "o a multicast state changing at a fast pace for a long time will reach the maximum of *figure-of-merit*; once the activity on this state stops, corresponding traffic may still flow in the network for approximately 37 s before dampening stops being active.",
+      "ja": "O長時間速いペースで変化するマルチキャスト状態は*の性能指数の最大値に到達します*。この状態で活動が停止すると、トラフィックを対応する静止湿停止がアクティブになる前に約37秒間ネットワークに流れることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The following values are proposed as maximums:",
+      "ja": "次の値が最大値として提案されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o *decay-half-life*: 60 s",
+      "ja": "O *崩壊半減期*：60秒"
+    },
+    {
+      "indent": 3,
+      "text": "o *cutoff-threshold*: 50000",
+      "ja": "O *カットオフしきい値*：50000"
+    },
+    {
+      "indent": 3,
+      "text": "More aggressive protection against the risk of denial of service can be achieved by increasing the *increment-factor* or the *decay-half-life*, or by reducing the *cutoff-threshold* and/or *reuse-threshold*.",
+      "ja": "サービス拒否のリスクに対してより積極的な保護は、* *インクリメントファクタ*または*崩壊半減期を増加させることにより、または* *カットオフしきい値*および/または*再利用しきい値を低減することによって達成することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures defined in this document do not introduce additional security issues not already present in the contexts addressed and actually aim at addressing some of the identified risks without introducing as much denial-of-service risk as some of the mechanisms already defined.",
+      "ja": "この文書で定義された手順は、アドレス指定されたコンテキスト内に既に存在していない追加のセキュリティ問題を紹介し、実際には、すでに定義されたメカニズムの一部として、できるだけ多くのサービス拒否リスクを導入することなく、特定されたリスクの一部に対処することを目指していません。"
+    },
+    {
+      "indent": 3,
+      "text": "The protection provided relates to the control plane of the multicast routing protocols, including the components implementing the routing protocols and the components responsible for updating the multicast forwarding plane.",
+      "ja": "提供される保護は、ルーティングプロトコルとマルチキャスト転送プレーンを更新する責任を負うコンポーネントを実装するコンポーネントを含むマルチキャストルーティングプロトコルの制御プレーンに関する。"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures described are meant to provide some level of protection for the router on which they are enabled by reducing the amount of routing state updates that it needs to send to its upstream neighbor or peers but do not provide any reduction of the control-plane load related to processing routing information from downstream neighbors. Protecting routers from an increase in control-plane load due to activity on downstream interfaces toward core routers (or in the context of BGP-based MVPN C-multicast routing, BGP peers) relies on the activation of damping on corresponding downstream neighbors (or BGP peers) and/or at the edge of the network. Protecting routers from an increase in control-plane load due to activity on customer-facing downstream interfaces or downstream interfaces to routers in another administrative domain is out of the scope of this document and should use already defined mechanisms (see [RFC4609]).",
+      "ja": "説明する手順は、彼らはそれがその上流の隣人やピアに送信する必要がある状態のルーティングアップデートの量を減らすことで有効になっていますが、コントロールプレーンの負荷の低減を提供しないでルータのあるレベルの保護を提供することを意図しています下流ネイバーからルーティング情報を処理することに関連します。コアルータ（またはBGPベースMVPN C-マルチキャストルーティングの文脈において、BGPピア）に向かってダウンストリームインターフェイス上によるアクティビティにコントロールプレーンの負荷の増大からルータを保護することは、対応する下流の隣人（またはBGPに減衰の活性化に依存していますピア）および/またはネットワークのエッジにあります。別の管理ドメイン内のルータに顧客向け下流インターフェイスまたは下流インターフェイスに起因する活性の制御プレーン負荷の増大からルータを保護することは、この文書の範囲外であり、既に定義されたメカニズム（[RFC4609]を参照）を使用しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "To be effective, the procedures described here must be complemented by configuration limiting the number of multicast states that can be created on a multicast router through protocol interactions with multicast receivers, neighbor routers in adjacent ASes, or in multicast VPN contexts with multicast CEs. Note well that the two mechanisms may interact: the state for which Prune has been requested may still remain taken into account for some time if damping has been triggered and hence result in an otherwise acceptable new state from being successfully created.",
+      "ja": "有効であるために、ここで説明する手順は、隣接のASに、またはマルチキャストのCEとマルチキャストVPNコンテキストにおけるマルチキャスト受信機、隣接ルータとのプロトコル相互作用を介してマルチキャストルータ上に作成することができるマルチキャスト状態の数を制限する構成によって補完されなければなりません。二つのメカニズムが相互作用することができることにも注意してください：プルーンはまだ正常に作成されてから、それ以外の場合は許容できる新しい状態になるので、減衰がトリガされた場合には、いくつかの時間のために考慮されたままになることがあり、要求された状態を。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, it is worth noting that these procedures are not meant to protect against peaks of control-plane load but only address averaged load. For instance, assuming a set of multicast states are submitted to the same Join/Prune events, damping can prevent more than a certain number of Join/Prune messages to be sent upstream in the period of time that elapses between the reception of Join/Prune messages triggering the activation of damping on these states and when damping becomes inactive after decay.",
+      "ja": "さらに、それは、これらの手順は、コントロールプレーンの負荷のピークから保護するためのものだけアドレスが負荷を平均化されていないことは注目に値します。例えば、マルチキャスト状態のセットを減衰、同一の参加/プルーンイベントに提出されると仮定すると、参加/プルーンの受信との間に経過する時間の期間の上流送信する参加/プルーンメッセージの特定の数を超えることを防止することができますこれらの状態に減衰し、減衰する際の活性化をトリガするメッセージが崩壊した後に非アクティブになります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <http://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<http://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2439] Villamizar, C., Chandra, R., and R. Govindan, \"BGP Route Flap Damping\", RFC 2439, DOI 10.17487/RFC2439, November 1998, <http://www.rfc-editor.org/info/rfc2439>.",
+      "ja": "[RFC2439] Villamizar、C.、チャンドラ、R.、およびR.ゴヴィンダン、 \"BGPルートフラップダンピング\"、RFC 2439、DOI 10.17487 / RFC2439、1998年11月、<http://www.rfc-editor.org/info / rfc2439>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3376] Cain, B., Deering, S., Kouvelas, I., Fenner, B., and A. Thyagarajan, \"Internet Group Management Protocol, Version 3\", RFC 3376, DOI 10.17487/RFC3376, October 2002, <http://www.rfc-editor.org/info/rfc3376>.",
+      "ja": "[RFC3376]カイン、B.、デアリング、S.、Kouvelas、I.、フェナー、B.、およびA. Thyagarajan、 \"インターネットグループ管理プロトコル、バージョン3\"、RFC 3376、DOI 10.17487 / RFC3376、2002年10月、< http://www.rfc-editor.org/info/rfc3376>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3810] Vida, R., Ed. and L. Costa, Ed., \"Multicast Listener Discovery Version 2 (MLDv2) for IPv6\", RFC 3810, DOI 10.17487/RFC3810, June 2004, <http://www.rfc-editor.org/info/rfc3810>.",
+      "ja": "[RFC3810]ビダ、R.、エド。そして、L.コスタ、エド。、 \"IPv6のマルチキャストリスナ発見バージョン2（MLDv2の）\"、RFC 3810、DOI 10.17487 / RFC3810、2004年6月、<http://www.rfc-editor.org/info/rfc3810>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6513] Rosen, E., Ed. and R. Aggarwal, Ed., \"Multicast in MPLS/ BGP IP VPNs\", RFC 6513, DOI 10.17487/RFC6513, February 2012, <http://www.rfc-editor.org/info/rfc6513>.",
+      "ja": "[RFC6513]ローゼン、E.、エド。そして、R.アガルワル、エド。、 \"マルチキャストMPLS / BGP VPNのIPで\"、RFC 6513、DOI 10.17487 / RFC6513、2012年2月、<http://www.rfc-editor.org/info/rfc6513>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6514] Aggarwal, R., Rosen, E., Morin, T., and Y. Rekhter, \"BGP Encodings and Procedures for Multicast in MPLS/BGP IP VPNs\", RFC 6514, DOI 10.17487/RFC6514, February 2012, <http://www.rfc-editor.org/info/rfc6514>.",
+      "ja": "[RFC6514]アガルワル、R.、ローゼン、E.、モリン、T.、およびY. Rekhter、 \"BGPエンコーディング及び/ BGP IP VPNのMPLSにおけるマルチキャストのための手順\"、RFC 6514、DOI 10.17487 / RFC6514、2012年2月、< http://www.rfc-editor.org/info/rfc6514>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7117] Aggarwal, R., Ed., Kamite, Y., Fang, L., Rekhter, Y., and C. Kodeboniya, \"Multicast in Virtual Private LAN Service (VPLS)\", RFC 7117, DOI 10.17487/RFC7117, February 2014, <http://www.rfc-editor.org/info/rfc7117>.",
+      "ja": "[RFC7117]アガルワル、R.、エド。、Kamite、Y.、牙、L.、Rekhter、Y.、およびC. Kodeboniya、 \"仮想プライベートLANサービス（VPLS）でマルチキャスト\"、RFC 7117、DOI 10.17487 / RFC7117 、2014年2月、<http://www.rfc-editor.org/info/rfc7117>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7196] Pelsser, C., Bush, R., Patel, K., Mohapatra, P., and O. Maennel, \"Making Route Flap Damping Usable\", RFC 7196, DOI 10.17487/RFC7196, May 2014, <http://www.rfc-editor.org/info/rfc7196>.",
+      "ja": "[RFC7196] Pelsser、C.、ブッシュ、R.、パテル、K.、Mohapatra、P.、およびO. Maennel、 \"ルートフラップダンピング使用可能にする\"、RFC 7196、DOI 10.17487 / RFC7196、2014年5月、<のhttp： //www.rfc-editor.org/info/rfc7196>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7761] Fenner, B., Handley, M., Holbrook, H., Kouvelas, I., Parekh, R., Zhang, Z., and L. Zheng, \"Protocol Independent Multicast - Sparse Mode (PIM-SM): Protocol Specification (Revised)\", STD 83, RFC 7761, DOI 10.17487/RFC7761, March 2016, <http://www.rfc-editor.org/info/rfc7761>.",
+      "ja": "[RFC7761]フェナー、B.、ハンドレー、M.、ホルブルック、H.、Kouvelas、I.、Parekhの、R.、張、Z.、およびL.鄭、「プロトコル独立マルチキャスト - スパースモード（PIM-SM） ：プロトコル仕様（改訂）」、STD 83、RFC 7761、DOI 10.17487 / RFC7761、2016年3月、<http://www.rfc-editor.org/info/rfc7761>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4456] Bates, T., Chen, E., and R. Chandra, \"BGP Route Reflection: An Alternative to Full Mesh Internal BGP (IBGP)\", RFC 4456, DOI 10.17487/RFC4456, April 2006, <http://www.rfc-editor.org/info/rfc4456>.",
+      "ja": "[RFC4456]ベイツ、T.、チェン、E.、およびR.チャンドラ、 \"BGPルートリフレクション：フルメッシュ内部BGP（IBGP）への代替\"、RFC 4456、DOI 10.17487 / RFC4456、2006年4月、<のhttp：/ /www.rfc-editor.org/info/rfc4456>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4609] Savola, P., Lehtonen, R., and D. Meyer, \"Protocol Independent Multicast - Sparse Mode (PIM-SM) Multicast Routing Security Issues and Enhancements\", RFC 4609, DOI 10.17487/RFC4609, October 2006, <http://www.rfc-editor.org/info/rfc4609>.",
+      "ja": "[RFC4609] Savola、P.、Lehtonenの、R.、およびD.マイヤー、 \"プロトコル独立マルチキャスト - スパースモード（PIM-SM）マルチキャストルーティングセキュリティの問題と機能拡張\"、RFC 4609、DOI 10.17487 / RFC4609、2006年10月、< http://www.rfc-editor.org/info/rfc4609>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "We would like to thank Bruno Decraene and Lenny Giuliano for discussions that helped shape this proposal. We would also like to thank Yakov Rekhter and Eric Rosen for their reviews and helpful comments. Thanks to Wim Henderickx for his comments and support of this proposal. Additionally, Martin Vigoureux, Gunter Van De Velde, and Alvaro Retana provided useful comments to finalize the document.",
+      "ja": "私たちは、この提案を形作る助けた議論のためにブルーノDecraeneとレニージュリアーノに感謝したいと思います。我々はまた、彼らのレビューと有益なコメントのためのヤコフ・レックターとエリック・ローゼンに感謝したいと思います。彼のコメントとこの提案をサポートするためのヴィム・ヘンデリックに感謝します。また、マーティンVigoureux、ギュンター・ヴァン・デ・ヴェルデ、そしてアルバロRetanaは、文書を完成させるために有益なコメントを提供しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Thomas Morin (editor) Orange 2, avenue Pierre Marzin Lannion 22307 France",
+      "ja": "トーマス・モリン（エディタ）オレンジ2、大通りピエールMarzin 22307ラニオンフランス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: thomas.morin@orange.com",
+      "ja": "メール：thomas.morin@orange.com"
+    },
+    {
+      "indent": 3,
+      "text": "Stephane Litkowski Orange France",
+      "ja": "ステファンLitkowskiオレンジフランス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: stephane.litkowski@orange.com",
+      "ja": "メール：stephane.litkowski@orange.com"
+    },
+    {
+      "indent": 3,
+      "text": "Keyur Patel Cisco Systems 170 W. Tasman Drive San Jose, CA 95134 United States of America",
+      "ja": "Keyurパテルシスコシステムズ170 W.タスマン・ドライブサンノゼ、CAアメリカの95134米国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: keyupate@cisco.com",
+      "ja": "メール：keyupate@cisco.com"
+    },
+    {
+      "indent": 3,
+      "text": "Zhaohui Zhang Juniper Networks Inc. 10 Technology Park Drive Westford, MA 01886 United States of America",
+      "ja": "Zhaohuiチャンジュニパーネットワークス株式会社10・テクノロジー・パークドライブウェストフォード、MAアメリカの01886米国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: zzhang@juniper.net",
+      "ja": "メール：zzhang@juniper.net"
+    },
+    {
+      "indent": 3,
+      "text": "Robert Kebler Juniper Networks Inc. 10 Technology Park Drive Westford, MA 01886 United States of America",
+      "ja": "ロバートKeblerジュニパーネットワークス株式会社10・テクノロジー・パークドライブウェストフォード、MAアメリカの01886米国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: rkebler@juniper.net",
+      "ja": "メール：rkebler@juniper.net"
+    },
+    {
+      "indent": 3,
+      "text": "Jeffrey Haas Juniper Networks",
+      "ja": "ジェフリー・ハースジュニパーネットワークス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: jhaas@juniper.net",
+      "ja": "メール：jhaas@juniper.net"
+    }
+  ]
+}
