@@ -1,0 +1,741 @@
+{
+  "title": {
+    "text": "RFC 7342 - Practices for Scaling ARP and Neighbor Discovery (ND) in Large Data Centers",
+    "ja": "RFC 7342 - 大規模データセンターにおけるスケーリングARPおよび近隣探索（ND）のベストプラクティス"
+  },
+  "number": 7342,
+  "created_at": "2019-10-31 23:35:34.026034+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Independent Submission                                         L. Dunbar\nRequest for Comments: 7342                                        Huawei\nCategory: Informational                                        W. Kumari\nISSN: 2070-1721                                                   Google\n                                                            I. Gashinsky\n                                                                   Yahoo\n                                                             August 2014",
+      "raw": true
+    },
+    {
+      "indent": 11,
+      "text": "Practices for Scaling ARP and Neighbor Discovery (ND)\n                in Large Data Centers",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This memo documents some operational practices that allow ARP and Neighbor Discovery (ND) to scale in data center environments.",
+      "ja": "このメモは、ARPおよび近隣探索（ND）は、データセンター環境の中に拡張することができ、いくつかの業務慣行を説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for informational purposes.",
+      "ja": "このドキュメントはインターネット標準化過程仕様ではありません。それは、情報提供の目的のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This is a contribution to the RFC Series, independently of any other RFC stream. The RFC Editor has chosen to publish this document at its discretion and makes no statement about its value for implementation or deployment. Documents approved for publication by the RFC Editor are not a candidate for any level of Internet Standard; see Section 2 of RFC 5741.",
+      "ja": "これは、独立して、他のRFCストリームの、RFCシリーズへの貢献です。 RFC Editorはその裁量でこの文書を公開することを選択し、実装や展開のためにその値についての声明を出すていません。 RFC編集者によって公表のために承認されたドキュメントは、インターネット標準の任意のレベルの候補ではありません。 RFC 5741のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc7342.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc7342で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2014 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2014 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................2\n2. Terminology .....................................................4\n3. Common DC Network Designs .......................................4\n4. Layer 3 to Access Switches ......................................5\n5. Layer 2 Practices to Scale ARP/ND ...............................5\n   5.1. Practices to Alleviate APR/ND Burden on L2/L3\n        Boundary Routers ...........................................5\n        5.1.1. Communicating with a Peer in a Different Subnet .....6\n        5.1.2. L2/L3 Boundary Router Processing of Inbound\n               Traffic .............................................7\n        5.1.3. Inter-Subnet Communications .........................8\n   5.2. Static ARP/ND Entries on Switches ..........................8\n   5.3. ARP/ND Proxy Approaches ....................................9\n   5.4. Multicast Scaling Issues ...................................9\n6. Practices to Scale ARP/ND in Overlay Models ....................10\n7. Summary and Recommendations ....................................10\n8. Security Considerations ........................................11\n9. Acknowledgements ...............................................11\n10. References ....................................................12\n   10.1. Normative References .....................................12\n   10.2. Informative References ...................................13",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This memo documents some operational practices that allow ARP/ND to scale in data center environments.",
+      "ja": "このメモは、ARP / NDは、データセンター環境の中に拡張することができ、いくつかの業務慣行を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "As described in [RFC6820], the increasing trend of rapid workload shifting and server virtualization in modern data centers requires servers to be loaded (or reloaded) with different Virtual Machines (VMs) or applications at different times. Different VMs residing on one physical server may have different IP addresses or may even be in different IP subnets.",
+      "ja": "[RFC6820]で説明したように、近代的なデータセンターの急速なシフトワークロードとサーバー仮想化の増加傾向は、異なる時間に異なる仮想マシン（VM）またはアプリケーションで（または再ロード）ロードするサーバーが必要です。一つの物理サーバー上に存在する別のVMは異なるIPアドレスを持っていること、あるいは異なるIPサブネットにあってもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to allow a physical server to be loaded with VMs in different subnets or allow VMs to be moved to different server racks without IP address reconfiguration, the networks need to enable multiple broadcast domains (many VLANs) on the interfaces of L2/L3 boundary routers and Top-of-Rack (ToR) switches and allow some subnets to span multiple router ports.",
+      "ja": "物理サーバが、異なるサブネット内のVMをロードすることを可能にするか、VMはIPアドレス再設定することなく、異なるサーバラックに移動することを可能にするために、ネットワークは、L2 / L3境界のインターフェイスで複数のブロードキャストドメイン（多くのVLAN）を有効にする必要がありますルーターやトップオブラック（ToR）スイッチと、いくつかのサブネットに複数のルータポートにまたがることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: L2/L3 boundary routers as discussed in this document are capable of forwarding IEEE 802.1 Ethernet frames (Layer 2) without a Media Access Control (MAC) header change. When subnets span multiple ports of those routers, they still fall under the category of \"single-link\" subnets, specifically the multi-access link model recommended by [RFC4903]. They are different from the \"multi-link\" subnets described in [Multi-Link] and RFC 4903, which refer to different physical media with the same prefix connected to one router. Within the \"multi-link\" subnet described in RFC 4903, Layer 2 frames from one port cannot be natively forwarded to another port without a header change.",
+      "ja": "注：L2 / L3境界ルータこの文書で説明したように、メディアアクセス制御（MAC）ヘッダを変更することなく、IEEE 802.1イーサネットフレーム（レイヤ2）を転送することが可能です。サブネットがこれらのルータの複数のポートにまたがる場合は、彼らはまだ、「シングルリンク」のサブネット、[RFC4903]によって推奨特にマルチアクセスリンクモデルに該当します。彼らは、一つのルータに接続された同じプレフィックスを有する異なる物理メディアを参照して、「マルチリンク」[マルチリンク]に記載のサブネットとRFC 4903、異なっています。 RFC 4903に記載された「マルチリンク」サブネット内、一方のポートからレイヤ2つのフレームは、ネイティブヘッダを変更せず、他のポートに転送することができません。"
+    },
+    {
+      "indent": 3,
+      "text": "Unfortunately, when the combined number of VMs (or hosts) in all those subnets is large, this can lead to address resolution (i.e., IPv4 ARP and IPv6 ND) scaling issues. There are three major issues associated with ARP/ND address resolution protocols when subnets span multiple L2/L3 boundary router ports:",
+      "ja": "これらすべてのサブネット内のVM（またはホスト）の合計数が多い場合残念ながら、これは、アドレス解決（すなわち、IPv4のARPおよびIPv6 ND）スケーリングの問題につながる可能性があります。サブネットは複数のL2 / L3境界ルータポートにまたがるときARP / NDアドレス解決プロトコルに関連する3つの主要な問題があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1) The ARP/ND messages being flooded to many physical link segments, which can reduce bandwidth utilization for user traffic.",
+      "ja": "1）ARP / NDメッセージは、ユーザトラフィックの帯域幅使用率を低減することができる、多くの物理リンクセグメントにフラッディングされています。"
+    },
+    {
+      "indent": 3,
+      "text": "2) The ARP/ND processing load impact on the L2/L3 boundary routers.",
+      "ja": "2）L2 / L3境界ルータ上のARP / ND処理負荷の影響。"
+    },
+    {
+      "indent": 3,
+      "text": "3) In IPv4, every end station in a subnet receiving ARP broadcast messages from all other end stations in the subnet. IPv6 ND has eliminated this issue by using multicast.",
+      "ja": "3）IPv4では、ARP受信サブネット内のすべてのエンドステーションは、サブネット内の他のすべてのエンドステーションからメッセージをブロードキャストします。 IPv6のNDは、マルチキャストを使用してこの問題を排除しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the majority of data center servers are moving towards 1G or 10G ports, the bandwidth taken by ARP/ND messages, even when flooded to all physical links, becomes negligible compared to the link bandwidth. In addition, IGMP/MLD (Internet Group Management Protocol and Multicast Listener Discovery) snooping [RFC4541] can further reduce the ND multicast traffic to some physical link segments.",
+      "ja": "データセンターのサーバーの大部分が、1Gまたは10Gポートに向かって移動しているので、全ての物理リンクにフラッディングもARP / NDメッセージによって撮影された帯域幅は、リンクの帯域幅に比べて無視できるようになります。また、IGMP / MLD（インターネットグループ管理プロトコルおよびマルチキャストリスナ発見）[RFC4541]をスヌーピング、さらにいくつかの物理リンクセグメントにNDマルチキャストトラフィックを削減することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "As modern servers' computing power increases, the processing taken by a large amount of ARP broadcast messages becomes less significant to servers. For example, lab testing shows that 2000 ARP requests per second only takes 2% of a single-core CPU server. Therefore, the impact of ARP broadcasts to end stations is not significant on today's servers.",
+      "ja": "近代的なサーバのコンピューティングパワーが増加すると、ARPブロードキャストメッセージが大量で撮影した処理は、サーバにはあまり顕著になります。例えば、実験室試験は、毎秒2000 ARPリクエストのみシングルコアCPUサーバの2％をとることを示しています。そのため、エンドステーションにARPブロードキャストの影響は、今日のサーバ上で重要ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Statistics provided by Merit Network [ARMD-Statistics] have shown that the major impact of a large number of mobile VMs in a data center is on the L2/L3 boundary routers, i.e., issue 2 above.",
+      "ja": "メリットネットワーク[ARMD-統計]によって提供される統計は、データセンター内の移動VMの多数の主要な影響、すなわち、問題2は、上記L2 / L3境界ルータであることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This memo documents some simple practices that can scale ARP/ND in a data center environment, especially in reducing processing loads to L2/L3 boundary routers.",
+      "ja": "このメモは、特にL2 / L3境界ルータへの処理負荷を減らすことで、データセンター環境でARP / NDを拡張することができますいくつかの簡単なプラクティスを説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2.用語"
+    },
+    {
+      "indent": 3,
+      "text": "This document reuses much of the terminology from [RFC6820]. Many of the definitions are presented here to aid the reader.",
+      "ja": "この文書では、[RFC6820]から用語の多くを再利用します。定義の多くは、読者を助けるためにここに提示されています。"
+    },
+    {
+      "indent": 3,
+      "text": "ARP: IPv4 Address Resolution Protocol [RFC826]",
+      "ja": "ARP：IPv4アドレス解決プロトコル[RFC826]"
+    },
+    {
+      "indent": 3,
+      "text": "Aggregation Switch: A Layer 2 switch interconnecting ToR switches",
+      "ja": "アグリゲーションスイッチ：のToRスイッチを相互接続するレイヤ2スイッチ"
+    },
+    {
+      "indent": 3,
+      "text": "Bridge: IEEE802.1Q-compliant device. In this document, the term \"Bridge\" is used interchangeably with \"Layer 2 switch\"",
+      "ja": "ブリッジ：IEEE802.1Q準拠のデバイス。この文書では、用語「橋」「レイヤ2スイッチ」と交換可能に使用されます"
+    },
+    {
+      "indent": 3,
+      "text": "DC: Data Center",
+      "ja": "DC：データセンター"
+    },
+    {
+      "indent": 3,
+      "text": "DA: Destination Address",
+      "ja": "DA：宛先アドレス"
+    },
+    {
+      "indent": 3,
+      "text": "End Station: VM or physical server, whose address is either the destination or the source of a data frame",
+      "ja": "エンドステーション：そのアドレスが宛先またはデータフレームのソースのいずれかであるVMまたは物理サーバ、"
+    },
+    {
+      "indent": 3,
+      "text": "EoR: End-of-Row switches in a data center",
+      "ja": "EOR：データセンターにおけるエンド・オブ・ロウのスイッチ"
+    },
+    {
+      "indent": 3,
+      "text": "NA: IPv6 Neighbor Advertisement",
+      "ja": "NA：IPv6近隣広告"
+    },
+    {
+      "indent": 3,
+      "text": "ND: IPv6 Neighbor Discovery [RFC4861]",
+      "ja": "ND：IPv6の近隣探索[RFC4861]"
+    },
+    {
+      "indent": 3,
+      "text": "NS: IPv6 Neighbor Solicitation",
+      "ja": "NS：IPv6のネイバー送信要求"
+    },
+    {
+      "indent": 3,
+      "text": "SA: Source Address",
+      "ja": "SA：送信元アドレス"
+    },
+    {
+      "indent": 3,
+      "text": "ToR: Top-of-Rack Switch (also known as access switch)",
+      "ja": "ToR：トップ・オブ・ラックスイッチ（アクセススイッチとして知られています）"
+    },
+    {
+      "indent": 3,
+      "text": "UNA: IPv6 Unsolicited Neighbor Advertisement",
+      "ja": "UNA：IPv6の迷惑近隣広告"
+    },
+    {
+      "indent": 3,
+      "text": "VM: Virtual Machine",
+      "ja": "VM：仮想マシン"
+    },
+    {
+      "indent": 3,
+      "text": "Subnet: Refers to the multi-access link subnet referenced by RFC 4903",
+      "ja": "サブネット：RFC 4903で参照されるマルチアクセスリンクサブネットを参照"
+    },
+    {
+      "indent": 0,
+      "text": "3. Common DC Network Designs",
+      "section_title": true,
+      "ja": "3.一般的なDCネットワーク設計"
+    },
+    {
+      "indent": 3,
+      "text": "Some common network designs for a data center include:",
+      "ja": "データセンターのためのいくつかの一般的なネットワーク設計が含まれます："
+    },
+    {
+      "indent": 3,
+      "text": "1) Layer 3 connectivity to the access switch,",
+      "ja": "1）アクセススイッチに3接続レイヤ、"
+    },
+    {
+      "indent": 3,
+      "text": "2) Large Layer 2, and",
+      "ja": "2）大規模なレイヤ2、および"
+    },
+    {
+      "indent": 3,
+      "text": "3) Overlay models.",
+      "ja": "3）オーバーレイモデル。"
+    },
+    {
+      "indent": 3,
+      "text": "There is no single network design that fits all cases. The following sections document some of the common practices to scale address resolution under each network design.",
+      "ja": "すべてのケースに合った単一のネットワーク設計はありません。次のセクションでは、各ネットワーク設計の下のアドレス解決をスケーリングするのが一般的慣行の一部を文書化。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Layer 3 to Access Switches",
+      "section_title": true,
+      "ja": "アクセススイッチに4レイヤ3"
+    },
+    {
+      "indent": 3,
+      "text": "This network design configures Layer 3 to the access switches, effectively making the access switches the L2/L3 boundary routers for the attached VMs.",
+      "ja": "このネットワーク設計を効果的にアクセスが結合VMのL2 / L3境界ルータを切り替えながら、アクセススイッチにレイヤ3を構成します。"
+    },
+    {
+      "indent": 3,
+      "text": "As described in [RFC6820], many data centers are architected so that ARP/ND broadcast/multicast messages are confined to a few ports (interfaces) of the access switches (i.e., ToR switches).",
+      "ja": "[RFC6820]に記載されているようにARP / NDブロードキャスト/マルチキャストメッセージがアクセススイッチ（すなわち、Torはスイッチ）のいくつかのポート（インターフェース）に制限されるように、多くのデータセンターは、設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Another variant of the Layer 3 solution is a Layer 3 infrastructure configured all the way to servers (or even to the VMs), which confines the ARP/ND broadcast/multicast messages to the small number of VMs within the server.",
+      "ja": "レイヤ3ソリューションの他の変形は、サーバーへのすべての方法を設定されたレイヤ3のインフラストラクチャである（あるいは仮想マシンへの）サーバ内のVMの数が少ないにARP / NDブロードキャスト/マルチキャストメッセージを閉じ込めます。"
+    },
+    {
+      "indent": 3,
+      "text": "Advantage: Both ARP and ND scale well. There is no address resolution issue in this design.",
+      "ja": "利点：ARPおよびND規模の両方も。この設計にはアドレス解決の問題がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Disadvantage: The main disadvantage of this network design occurs during VM movement. During VM movement, either VMs need an address change or switches/routers need a configuration change when the VMs are moved to different locations.",
+      "ja": "デメリット：このネットワーク設計の主な欠点は、VMの移動時に発生します。 VMの移動中に、仮想マシンのいずれかがアドレスの変更を必要とするか、または仮想マシンを別の場所に移動されたときに、スイッチ/ルータは、構成の変更を必要とします。"
+    },
+    {
+      "indent": 3,
+      "text": "Summary: This solution is more suitable to data centers that have a static workload and/or network operators who can reconfigure IP addresses/subnets on switches before any workload change. No protocol changes are suggested.",
+      "ja": "概要：このソリューションは、あらゆるワークロードの変更前のスイッチ上のIPアドレス/サブネットを再構成することができ、静的なワークロードおよび/またはネットワークオペレータを持つデータセンターに適しています。いいえ、プロトコルの変更が提案されていません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Layer 2 Practices to Scale ARP/ND",
+      "section_title": true,
+      "ja": "ARP / NDをスケールに5.レイヤ2つのプラクティス"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Practices to Alleviate APR/ND Burden on L2/L3 Boundary Routers",
+      "section_title": true,
+      "ja": "5.1。 L2 / L3境界ルータ上の4月/ NDの負担を軽減するための実践"
+    },
+    {
+      "indent": 3,
+      "text": "The ARP/ND broadcast/multicast messages in a Layer 2 domain can negatively affect the L2/L3 boundary routers, especially with a large number of VMs and subnets. This section describes some commonly used practices for reducing the ARP/ND processing required on L2/L3 boundary routers.",
+      "ja": "レイヤ2ドメインのARP / NDブロードキャスト/マルチキャストメッセージはマイナス特にVMおよびサブネットの数が多いと、L2 / L3境界ルータに影響を与えることができます。このセクションでは、L2 / L3境界ルータに必要なARP / ND処理を低減するためのいくつかの一般的に使用されるプラクティスを記載しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.1. Communicating with a Peer in a Different Subnet",
+      "section_title": true,
+      "ja": "5.1.1。異なるサブネットにピアとの通信"
+    },
+    {
+      "indent": 3,
+      "text": "Scenario: When the originating end station doesn't have its default gateway MAC address in its ARP/ND cache and needs to communicate with a peer in a different subnet, it needs to send ARP/ND requests to its default gateway router to resolve the router's MAC address. If there are many subnets on the gateway router and a large number of end stations in those subnets that don't have the gateway MAC address in their ARP/ND caches, the gateway router has to process a very large number of ARP/ND requests. This is often CPU intensive, as ARP/ND messages are usually processed by the CPU (and not in hardware).",
+      "ja": "シナリオ：発信側ステーションは、そのARP / NDキャッシュにそのデフォルトゲートウェイのMACアドレスを持っているし、別のサブネットにピアと通信する必要がないときは、それが解決するために、そのデフォルトゲートウェイルータにARP / ND要求を送信する必要がありますルータのMACアドレス。ゲートウェイルータとそのARP / NDキャッシュにゲートウェイのMACアドレスを持っていないこれらのサブネット内のエンドステーションの数が多い上に多数のサブネットがある場合は、ゲートウェイルータはARP / ND要求の非常に大きな数を処理しなければなりません。 ARP / NDメッセージは、通常は（およびないハードウェアで）CPUによって処理されているように、これは、多くの場合、CPU集約的です。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: Any centralized configuration that preloads the default MAC addresses is not included in this scenario.",
+      "ja": "注意：デフォルトのMACアドレスをプリロード任意の集中型の構成は、このシナリオには含まれていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Solution: For IPv4 networks, a practice to alleviate this problem is to have the L2/L3 boundary router send periodic gratuitous ARP [GratuitousARP] messages, so that all the connected end stations can refresh their ARP caches. As a result, most (if not all) end stations will not need to send ARP requests for the gateway routers when they need to communicate with external peers.",
+      "ja": "解決策：IPv4ネットワークでは、この問題を軽減するための実践は、接続されたすべてのエンドステーションが自分のARPキャッシュを更新することができるように、定期的に無償ARP [GratuitousARP]メッセージを送信するL2 / L3境界ルータを持つことです。その結果、ほとんどの（すべてではない）エンドステーションは、彼らが外部ピアと通信する必要がある場合、ゲートウェイルータのARP要求を送信する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "For the above scenario, IPv6 end stations are still required to send unicast ND messages to their default gateway router (even with those routers periodically sending Unsolicited Neighbor Advertisements) because IPv6 requires bidirectional path validation.",
+      "ja": "IPv6は、双方向パス検証が必要であるため、上記のシナリオでは、IPv6のエンドステーションはまだ（さえ定期的に迷惑近隣広告を送るそれらのルータで）自分のデフォルトゲートウェイルータにユニキャストNDメッセージを送信するために必要とされています。"
+    },
+    {
+      "indent": 3,
+      "text": "Advantage: This practice results in a reduction of ARP requests to be processed by the L2/L3 boundary router for IPv4.",
+      "ja": "利点：ARP要求の削減でこのような行為の結果は、IPv4のL2 / L3境界ルータによって処理されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Disadvantage: This practice doesn't reduce ND processing on the L2/L3 boundary router for IPv6 traffic.",
+      "ja": "短所：この練習では、IPv6トラフィックのL2 / L3境界ルータ上のND処理を減らすことはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Recommendation: If the network is an IPv4-only network, then this approach can be used. For an IPv6 network, one needs to consider the work described in [RFC7048]. Note: ND and Secure Neighbor Discovery (SEND) [RFC3971] use the bidirectional nature of queries to detect and prevent security attacks.",
+      "ja": "推奨：ネットワークがIPv4のみのネットワークである場合、このアプローチを使用することができます。 IPv6ネットワークの場合、1は[RFC7048]で説明した作業を検討する必要があります。注意：NDおよびセキュア近隣探索（SEND）[RFC3971]のセキュリティ攻撃を検出し、防止するために、クエリの双方向的な性質を使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.2. L2/L3 Boundary Router Processing of Inbound Traffic",
+      "section_title": true,
+      "ja": "5.1.2。インバウンドトラフィックのL2 / L3境界ルータの処理"
+    },
+    {
+      "indent": 3,
+      "text": "Scenario: When an L2/L3 boundary router receives a data frame destined for a local subnet and the destination is not in the router's ARP/ND cache, some routers hold the packet and trigger an ARP/ND request to resolve the L2 address. The router may need to send multiple ARP/ND requests until either a timeout is reached or an ARP/ND reply is received before forwarding the data packets towards the target's MAC address. This process is not only CPU intensive but also buffer intensive.",
+      "ja": "シナリオ：L2 / L3境界ルータはローカルサブネット宛てのデータフレームを受信し、宛先がルータのARP / NDキャッシュにない場合は、一部のルータがパケットを保持し、L2アドレスを解決するためのARP / ND要求をトリガします。ルータは、タイムアウトのいずれかに到達するか、ARP / ND応答がターゲットのMACアドレスに向けてデータパケットを転送する前に受信されるまで、複数のARP / ND要求を送信する必要があるかもしれません。このプロセスは、CPUに負荷をかけないだけでなく、集中的なバッファ。"
+    },
+    {
+      "indent": 3,
+      "text": "Solution: To protect a router from being overburdened by resolving target MAC addresses, one solution is for the router to limit the rate of resolving target MAC addresses for inbound traffic whose target is not in the router's ARP/ND cache. When the rate is exceeded, the incoming traffic whose target is not in the ARP/ND cache is dropped.",
+      "ja": "解決策：ルータがそのターゲットルータのARP / NDキャッシュにないインバウンドトラフィックのためのターゲットMACアドレスを解決する速度を制限するためのターゲットMACアドレスを解決することにより、過負荷されることからルータを保護するためには、一つの解決策です。レートを超過した場合は、そのターゲットARP / NDキャッシュにない着信トラフィックがドロップされます。"
+    },
+    {
+      "indent": 3,
+      "text": "For an IPv4 network, another common practice to alleviate pain caused by this problem is for the router to snoop ARP messages between other hosts, so that its ARP cache can be refreshed with active addresses in the L2 domain. As a result, there is an increased likelihood of the router's ARP cache having the IP-MAC entry when it receives data frames from external peers. [RFC6820] Section 7.1 provides a full description of this problem.",
+      "ja": "IPv4ネットワークでは、この問題によって引き起こされる痛みを軽減するための別の一般的な方法は、そのARPキャッシュはL2ドメインでアクティブなアドレスでリフレッシュすることができるように、ルータは、他のホスト間のARPメッセージをスヌープするためのものです。その結果、それが外部ピアからのデータフレームを受信したIP-MACエントリを持つルータのARPキャッシュの増加可能性があります。 [RFC6820]セクション7.1は、この問題の完全な説明を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "For IPv6 end stations, routers are supposed to send Router Advertisements (RAs) unicast even if they have snooped UNAs/NSs/NAs from those stations. Therefore, this practice allows an L2/L3 boundary to send unicast RAs to the target instead of multicasts. [RFC6820] Section 7.2 has a full description of this problem.",
+      "ja": "IPv6のエンドステーションの場合、ルータは、それらが、それらの局からUNAs /のNS / NASに詮索している場合でも、ルータ広告（RAS）ユニキャストを送ることになっています。したがって、この方法は、L2 / L3境界がマルチキャストするのではなく、ターゲットにユニキャストのRAを送信することを可能にします。 [RFC6820]セクション7.2は、この問題の詳細な説明を持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Advantage: This practice results in a reduction of the number of ARP requests that routers have to send upon receiving IPv4 packets and the number of IPv4 data frames from external peers that routers have to hold due to targets not being in the ARP cache.",
+      "ja": "利点：ルータは、ルータが原因ARPキャッシュにないターゲットに保持するために持っていることをIPv4パケットと外部ピアからのIPv4データフレームの数を受信したときに送信する必要がARP要求の数の削減でこの練習の結果。"
+    },
+    {
+      "indent": 3,
+      "text": "Disadvantage: The amount of ND processing on routers for IPv6 traffic is not reduced. IPv4 routers still need to hold data packets from external peers and trigger ARP requests if the targets of the data packets either don't exist or are not very active. In this case, IPv4 processing or IPv4 buffers are not reduced.",
+      "ja": "短所：IPv6トラフィックのためのルータのND処理の量が低減されません。 IPv4ルーターは、まだ外部ピアからデータパケットを保持し、データパケットのターゲットが存在しないか、非常にアクティブではないかのどちらかあればARP要求をトリガする必要があります。この場合、IPv4の処理またはIPv4バッファが低減されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Recommendation: If there is a higher chance of routers receiving data packets that are destined for nonexistent or inactive targets, alternative approaches should be considered.",
+      "ja": "推奨事項：存在しないか、非アクティブなターゲット宛てのデータパケットを受信するルータの高い可能性がある場合は、代替アプローチが考慮されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.3. Inter-Subnet Communications",
+      "section_title": true,
+      "ja": "5.1.3。サブネット間の通信"
+    },
+    {
+      "indent": 3,
+      "text": "The router could be hit with ARP/ND requests twice when the originating and destination stations are in different subnets attached to the same router and those hosts don't communicate with external peers often enough. The first hit is when the originating station in subnet-A initiates an ARP/ND request to the L2/L3 boundary router if the router's MAC is not in the host's cache (Section 5.1.1 above), and the second hit is when the L2/L3 boundary router initiates ARP/ND requests to the target in subnet-B if the target is not in the router's ARP/ND cache (Section 5.1.2 above).",
+      "ja": "発信元と宛先のステーションが同じルータに接続されている異なるサブネットにある場合、ルータが二回ARP / ND要求でヒットすることができ、これらのホストは、多くの場合、十分な外部ピアと通信しません。ルータのMACホストのキャッシュ（上記セクション5.1.1）にない場合、サブネット-Aにおける発信局は、L2 / L3境界ルータにARP / ND要求を開始したときに最初のヒットであり、第二のヒットは場合でありますターゲットは、ルーターのARP / NDキャッシュ（上記セクション5.1.2）でない場合はL2 / L3境界ルータは、サブネット-BにおけるターゲットへのARP / ND要求を開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "Again, practices described in Sections 5.1.1 and 5.1.2 can alleviate some problems in some IPv4 networks.",
+      "ja": "ここでも、セクション5.1.1および5.1.2で説明したプラクティスは、いくつかのIPv4ネットワークにおけるいくつかの問題を軽減することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "For IPv6 traffic, the practices described above don't reduce the ND processing on L2/L3 boundary routers.",
+      "ja": "IPv6トラフィックのために、上述の慣行は、L2 / L3境界ルータ上のND処理を低下させません。"
+    },
+    {
+      "indent": 3,
+      "text": "Recommendation: Consider the recommended approaches described in Sections 5.1.1 and 5.1.2. However, any solutions that relax the bidirectional requirement of IPv6 ND disable the security that the two-way ND communication exchange provides.",
+      "ja": "推奨事項：セクション5.1.1と5.1.2で説明した推奨アプローチを考えてみましょう。ただし、IPv6の双方向の要件を緩和ND双方向ND通信交換が提供するセキュリティを無効に任意のソリューションを提供しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Static ARP/ND Entries on Switches",
+      "section_title": true,
+      "ja": "5.2。スイッチ上のスタティックARP / NDエントリ"
+    },
+    {
+      "indent": 3,
+      "text": "In a data center environment, the placement of L2 and L3 addressing may be orchestrated by Server (or VM) Management System(s). Therefore, it may be possible for static ARP/ND entries to be configured on routers and/or servers.",
+      "ja": "データセンター環境では、アドレス指定L2及びL3の配置は、サーバ（またはVM）によって調整することができる管理システム（S）。静的ARP / NDエントリは、ルータおよび/またはサーバー上で設定するためにしたがって、それは可能かもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "Advantage: This methodology has been used to reduce ARP/ND fluctuations in large-scale data center networks.",
+      "ja": "利点：この方法は、大規模データセンターネットワークにおけるARP / NDの変動を軽減するために使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Disadvantage: When some VMs are added, deleted, or moved, many switches' static entries need to be updated. In a data center with virtualized servers, those events can happen frequently. For example, for an event of one VM being added to one server, if the subnet of this VM spans 15 access switches, all of them need to be updated. Network management mechanisms (SNMP, the Network Configuration Protocol (NETCONF), or proprietary mechanisms) are available to provide updates or incremental updates. However, there is no well-defined approach for switches to synchronize their content with the management system for efficient incremental updates.",
+      "ja": "短所：一部のVMは、追加、削除、または移動された場合、多くのスイッチスタティックエントリを更新する必要があります。仮想サーバとデータセンターでは、これらのイベントが頻繁に発生することができます。たとえば、このVMのサブネットが15台のアクセススイッチにまたがる場合は、一つのサーバに追加された1 VMのイベントのために、それらのすべてを更新する必要があります。ネットワーク管理メカニズム（SNMP、ネットワーク構成プロトコル（NETCONF）、または独自のメカニズム）は、更新または増分更新を提供するために利用可能です。しかし、効率的な増分更新のための管理システムとその内容を同期させるスイッチのない明確に定義されたアプローチがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Recommendation: Additional work may be needed within IETF working groups (e.g., NETCONF, NVO3, I2RS, etc.) to get prompt incremental updates of static ARP/ND entries when changes occur.",
+      "ja": "推奨：変更が発生した場合は、追加の作業がIETFワーキンググループ内で必要になる場合があり（例えば、NETCONFは、NVO3、I2RSなど）は、静的なARP / NDエントリのプロンプト増分更新を取得します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. ARP/ND Proxy Approaches",
+      "section_title": true,
+      "ja": "5.3。 ARP / NDプロキシアプローチ"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 1027 [RFC1027] specifies one ARP Proxy approach referred to as \"Proxy ARP\". However, RFC 1027 does not discuss a scaling mechanism. Since the publication of RFC 1027 in 1987, many variants of Proxy ARP have been deployed. RFC 1027's Proxy ARP technique allows a gateway to return its own MAC address on behalf of the target station.",
+      "ja": "RFC 1027 [RFC1027]一のARPプロキシアプローチは、「プロキシARP」という指定します。ただし、RFC 1027には、スケーリングメカニズムについては説明しません。 1987年にRFC 1027の出版以来、プロキシARPの多くの変異体が展開されています。 RFC 1027のプロキシARP技術は、ゲートウェイがターゲットステーションに代わって、自身のMACアドレスを返すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[ARP_Reduction] describes a type of \"ARP Proxy\" that allows a ToR switch to snoop ARP requests and return the target station's MAC if the ToR has the information in its cache. However, [RFC4903] doesn't recommend the caching approach described in [ARP_Reduction] because such a cache prevents any type of fast mobility between Layer 2 ports and breaks Secure Neighbor Discovery [RFC3971].",
+      "ja": "[ARP_Reduction]のToRスイッチはARP要求をスヌープし、Torはそのキャッシュ内の情報を持っている場合は、ターゲットステーションのMACを返すことができます「ARPプロキシ」のタイプを記述する。こうしたキャッシュはレイヤ2つのポートおよび休憩セキュア近隣探索[RFC3971]の間での高速移動性のいずれかのタイプを防ぐためただし、[RFC4903]は[ARP_Reduction]で説明キャッシングアプローチを推奨していません。"
+    },
+    {
+      "indent": 3,
+      "text": "IPv6 ND Proxy [RFC4389] specifies a proxy used between an Ethernet segment and other segments, such as wireless or PPP segments. ND Proxy [RFC4389] doesn't allow a proxy to send NA messages on behalf of the target to ensure that the proxy does not interfere with hosts moving from one segment to another. Therefore, the ND Proxy [RFC4389] doesn't reduce the number of ND messages to an L2/L3 boundary router.",
+      "ja": "IPv6のNDプロキシ[RFC4389]はイーサネットセグメントと、無線またはPPPセグメントと他のセグメントとの間で使用するプロキシを指定します。 NDプロキシ[RFC4389]は、プロキシは、プロキシは、ホストが別のセグメントからの移動を妨害しないことを保証するために、ターゲットの代わりにNAメッセージを送信することはできません。したがって、NDプロキシ[RFC4389]はL2 / L3境界ルータにNDメッセージの数を減少させません。"
+    },
+    {
+      "indent": 3,
+      "text": "Bottom line, the term \"ARP/ND Proxy\" has different interpretations, depending on vendors and/or environments.",
+      "ja": "ボトムラインは、用語「ARP / NDプロキシは、」ベンダーおよび/または環境に応じて、異なる解釈を持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Recommendation: For IPv4, even though those Proxy ARP variants (not RFC 1076) have been used to reduce ARP traffic in various environments, there are many issues with caching.",
+      "ja": "勧告：IPv4の場合、それらのプロキシARPは（ないRFC 1076）の変種にもかかわらず、さまざまな環境でのARPトラフィックを削減するために使用されている、キャッシュを持つ多くの問題があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF should consider making proxy recommendations for data center environments as a transition issue to help DC operators transitioning to IPv6. Section 7 of [RFC4389] (\"Guidelines to Proxy Developers\") should be considered when developing any new proxy protocols to scale ARP.",
+      "ja": "IETFは、IPv6への移行DC事業者を支援するための移行の問題として、データセンター環境のプロキシ提言を行うことを検討すべきです。 [RFC4389]（「プロキシ開発者へのガイドライン」）の第7項は、任意の新しいプロキシプロトコルを開発する際にはARPをスケールするために考慮されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Multicast Scaling Issues",
+      "section_title": true,
+      "ja": "5.4。マルチキャストスケーリングの問題"
+    },
+    {
+      "indent": 3,
+      "text": "Multicast snooping (IGMP/MLD) has different implementations and scaling issues. [RFC4541] notes that multicast IGMPv2/v3 snooping has trouble with subnets that include IGMPv2 and IGMPv3. [RFC4541] also notes that MLDv2 snooping requires the use of either destination MAC (DMAC) address filtering or deeper inspection of frames/packets to allow for scaling.",
+      "ja": "（IGMP / MLD）をスヌーピングマルチキャストは異なる実装とスケーリングの問題があります。 [RFC4541]は、マルチキャストはIGMPv2 / v3のスヌーピングはIGMPv2のおよびIGMPv3が含まれるサブネットに問題があることを指摘しています。 [RFC4541]ものMLDv2スヌーピングはスケーリングを可能にするために、宛先MAC（DMAC）アドレスフィルタリングまたはフレーム/パケットのより深い検査のいずれかの使用を必要とすることを指摘しています。"
+    },
+    {
+      "indent": 3,
+      "text": "MLDv2 snooping needs to be re-examined for scaling within the DC. Efforts such as IGMP/MLD explicit tracking [IGMP-MLD-Tracking] for downstream hosts need to provide better scaling than IGMP/MLDv2 snooping.",
+      "ja": "MLDv2スヌーピングは、DC内のスケーリングのために再検討する必要があります。そのような下流のホストのためのIGMP / MLD明示的なトラッキング[IGMP-MLD-トラッキング]のような努力はIGMP /のMLDv2スヌーピングよりも良好なスケーリングを提供する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Practices to Scale ARP/ND in Overlay Models",
+      "section_title": true,
+      "ja": "オーバーレイモデルでARP / NDをスケールに6.プラクティス"
+    },
+    {
+      "indent": 3,
+      "text": "There are several documents on using overlay networks to scale large Layer 2 networks (or avoid the need for large L2 networks) and enable mobility (e.g., [L3-VM-Mobility], [VXLAN]). Transparent Interconnection of Lots of Links (TRILL) and IEEE 802.1ah (Mac-in-Mac) are other types of overlay networks that can scale Layer 2.",
+      "ja": "大レイヤ2つのネットワークをスケーリング（または大規模L2ネットワークの必要性を回避するため）および移動可能にするためにオーバーレイネットワークを使用して、上のいくつかのドキュメント（例えば、[L3-VM-モビリティ] [VXLAN]）があります。透明なリンクの多くの相互接続（TRILL）およびIEEE 802.1ahの（マック・イン・マック）は、レイヤ2を拡張することができ、オーバーレイ・ネットワークの他のタイプです。"
+    },
+    {
+      "indent": 3,
+      "text": "Overlay networks hide the VMs' addresses from the interior switches and routers, thereby greatly reducing the number of addresses exposed to the interior switches and router. The overlay edge nodes that perform the network address encapsulation/decapsulation still handle all remote stations' addresses that communicate with the locally attached end stations.",
+      "ja": "オーバーレイネットワークが大幅内部スイッチおよびルータにさらされるアドレスの数を減らす、内部スイッチやルータからのVM​​のアドレスを隠します。ネットワークアドレスのカプセル化/デカプセル化を行うオーバーレイエッジノードは、依然としてローカル接続エンドステーションと通信するすべての遠隔局のアドレスを扱います。"
+    },
+    {
+      "indent": 3,
+      "text": "For a large data center with many applications, these applications' IP addresses need to be reachable by external peers. Therefore, the overlay network may have a bottleneck at the gateway node(s) in processing resolving target stations' physical addresses (MAC or IP) and the overlay edge address within the data center.",
+      "ja": "多くのアプリケーションで大規模なデータセンターでは、これらのアプリケーションのIPアドレスが外部ピアで到達可能である必要があります。したがって、オーバーレイ・ネットワークは、データセンター内で解決するターゲット局の物理アドレス（MACまたはIP）及びオーバーレイエッジアドレスを処理する際に、ゲートウェイノード（単数または複数）でボトルネックを有していてもよいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Here are two approaches that can be used to minimize this problem:",
+      "ja": "ここでは、この問題を最小限に抑えるために使用できる2つのアプローチがあります："
+    },
+    {
+      "indent": 3,
+      "text": "1. Use static mapping as described in Section 5.2.",
+      "section_title": true,
+      "ja": "1. 5.2節で説明したように静的マッピング。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Have multiple L2/L3 boundary nodes (i.e., routers), with each handling a subset of stations' addresses that are visible to external peers (e.g., Gateway #1 handles a set of prefixes, Gateway #2 handles another subset of prefixes, etc.).",
+      "ja": "プレフィックスの別のサブセットを処理する各外部ピア（例えば、ゲートウェイ＃1は、プレフィックスの集合、ゲートウェイ＃2ハンドルに表示されている局のアドレスの部分集合を処理して2は、複数のL2 / L3境界ノード（すなわち、ルータ）を有します、など）。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Summary and Recommendations",
+      "section_title": true,
+      "ja": "7.まとめと提言"
+    },
+    {
+      "indent": 3,
+      "text": "This memo describes some common practices that can alleviate the impact of address resolution on L2/L3 gateway routers.",
+      "ja": "このメモは、L2 / L3ゲートウェイルータのアドレス解決の影響を緩和することができるいくつかの一般的なプラクティスを記載しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In data centers, no single solution fits all deployments. This memo has summarized some practices in various scenarios and the advantages and disadvantages of all of these practices.",
+      "ja": "データセンターでは、単一のソリューションは、すべての配置に適合していません。このメモは、さまざまなシナリオで、いくつかのプラクティスとこれらのプラクティスのすべての長所と短所をまとめました。"
+    },
+    {
+      "indent": 3,
+      "text": "In some of these scenarios, the common practices could be improved by creating and/or extending existing IETF protocols. These protocol change recommendations are:",
+      "ja": "これらのシナリオのいくつかでは、一般的な慣行が作成及び/又は既存のIETFプロトコルを拡張することによって改善することができます。これらのプロトコルの変更の推奨事項は、次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o Relax the bidirectional requirement of IPv6 ND in some environments. However, other issues will be introduced when the bidirectional requirement of ND is relaxed. Therefore, it is necessary to have performed a comprehensive study of possible issues prior to making those changes.",
+      "ja": "O一部の環境でのIPv6 NDの双方向の要件をリラックス。しかし、他の問題は、NDの双方向の要件が緩和されたときに導入されます。したがって、これらの変更を行う前に潜在的な問題の包括的な研究を行っていることが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "o Create an incremental \"update\" scheme for efficient static ARP/ND entries.",
+      "ja": "O効率的な静的ARP / NDエントリの増分「更新」スキームを作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Develop IPv4 ARP/IPv6 ND Proxy standards for use in the data center. Section 7 of [RFC4389] (\"Guidelines to Proxy Developers\") should be considered when developing any new proxy protocols to scale ARP/ND.",
+      "ja": "Oデータセンターで使用するためのIPv4 ARP / IPv6のNDプロキシ基準を策定。 [RFC4389]（「プロキシ開発者へのガイドライン」）の第7項は、任意の新しいプロキシプロトコルを開発する際にはARP / NDを拡張するために考慮されるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "o Consider scaling issues with IGMP/MLD snooping to determine whether or not new alternatives can provide better scaling.",
+      "ja": "O新しい選択肢がより良いスケーリングを提供できるかどうかを判断するために、IGMPスヌーピング/ MLDの問題をスケーリング考えてみましょう。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This memo documents existing solutions and proposes additional work that could be initiated to extend various IETF protocols to better scale ARP/ND for the data center environment.",
+      "ja": "これはメモのソリューションを既存の文書やデータセンター環境のためのよりよい規模ARP / NDに様々なIETFプロトコルを拡張するために開始することができ、追加の作業を提案しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Security is a major issue for data center environments. Therefore, security should be seriously considered when developing any future protocol extensions.",
+      "ja": "セキュリティは、データセンター環境のための主要な問題です。将来のプロトコル拡張を開発する際にそのため、セキュリティは真剣に考えるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Acknowledgements",
+      "section_title": true,
+      "ja": "9.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "We want to acknowledge the ARMD WG and the following people for their valuable inputs to this document: Joel Jaeggli, Dave Thaler, Susan Hares, Benson Schliesser, T. Sridhar, Ron Bonica, Kireeti Kompella, and K.K. Ramakrishnan.",
+      "ja": "ジョエルJaeggli、デーブターラー、スーザンノウサギ、ベンソンSchliesser、T.シュリダール、ロンBonica、Kireeti Kompella、およびK.K.：私たちは、この文書に貴重な入力のためのARMD WGと、次の人を認めることをしたいですラマクリシュナン。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[GratuitousARP] Cheshire, S., \"IPv4 Address Conflict Detection\", RFC 5227, July 2008.",
+      "ja": "[GratuitousARP]チェシャー、S.、 \"IPv4アドレス競合検出\"、RFC 5227、2008年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC826] Plummer, D., \"Ethernet Address Resolution Protocol: Or Converting Network Protocol Addresses to 48.bit Ethernet Address for Transmission on Ethernet Hardware\", STD 37, RFC 826, November 1982.",
+      "ja": "[RFC826]プラマー、D.、：、STD 37、RFC 826、1982年11月「イーサネットアドレス解決プロトコルやネットワーク・プロトコルを変換するには、イーサネットハードウェア上での伝送のためのイーサネットアドレスを48ビットにIPアドレス」。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1027] Carl-Mitchell, S. and J. Quarterman, \"Using ARP to implement transparent subnet gateways\", RFC 1027, October 1987.",
+      "ja": "[RFC1027]カール・ミッチェル、S.およびJ. Quarterman、 \"透明サブネットゲートウェイを実装するためにARPを使用する\"、RFC 1027、1987年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3971] Arkko, J., Ed., Kempf, J., Zill, B., and P. Nikander, \"SEcure Neighbor Discovery (SEND)\", RFC 3971, March 2005.",
+      "ja": "[RFC3971] Arkko、J.、編、ケンプ、J.、Zill、B.、およびP. Nikander、 \"セキュア近隣探索（SEND）\"、RFC 3971、2005年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4389] Thaler, D., Talwar, M., and C. Patel, \"Neighbor Discovery Proxies (ND Proxy)\", RFC 4389, April 2006.",
+      "ja": "[RFC4389]ターラー、D.、Talwar、M.、およびC.パテル、 \"近隣探索プロキシ（NDプロキシ）\"、RFC 4389、2006年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4541] Christensen, M., Kimball, K., and F. Solensky, \"Considerations for Internet Group Management Protocol (IGMP) and Multicast Listener Discovery (MLD) Snooping Switches\", RFC 4541, May 2006.",
+      "ja": "[RFC4541]クリステンセン、M.、キンボール、K.、およびF. Solensky、RFC 4541、2006年5月、 \"インターネットグループ管理プロトコル（IGMP）とMulticast Listener Discovery（MLD）スヌーピングスイッチの考慮事項\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4861] Narten, T., Nordmark, E., Simpson, W., and H. Soliman, \"Neighbor Discovery for IP version 6 (IPv6)\", RFC 4861, September 2007.",
+      "ja": "[RFC4861] Narten氏、T.、Nordmarkと、E.、シンプソン、W.、およびH.ソリマン、 \"IPバージョン6（IPv6）のための近隣探索\"、RFC 4861、2007年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4903] Thaler, D., \"Multi-Link Subnet Issues\", RFC 4903, June 2007.",
+      "ja": "[RFC4903]ターラー、D.、 \"マルチリンクサブネットの問題\"、RFC 4903、2007年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6820] Narten, T., Karir, M., and I. Foo, \"Address Resolution Problems in Large Data Center Networks\", RFC 6820, January 2013.",
+      "ja": "[RFC6820] Narten氏、T.、Karir、M.、およびI. Fooの、 \"大規模データセンターネットワークにおけるアドレス解決の問題\"、RFC 6820、2013年1月。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ARMD-Statistics] Karir, M. and J. Rees, \"Address Resolution Statistics\", Work in Progress, July 2011.",
+      "ja": "[ARMD-統計] Karir、M.とJ.リースは、進捗状況、2011年7月に、仕事を \"解像度統計アドレス\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[ARP_Reduction] Shah, H., Ghanwani, A., and N. Bitar, \"ARP Broadcast Reduction for Large Data Centers\", Work in Progress, October 2011.",
+      "ja": "[ARP_Reduction]シャー、H.、Ghanwani、A.、およびN.ビタール、 \"大規模データセンターのためのARPブロードキャスト削減\"、進歩、2011年10月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[IGMP-MLD-Tracking] Asaeda, H., \"IGMP/MLD-Based Explicit Membership Tracking Function for Multicast Routers\", Work in Progress, December 2013.",
+      "ja": "[IGMP-MLD-トラッキング] Asaeda、H.、 \"マルチキャストルータのIGMP / MLDベースの明示的なメンバーシップトラッキング機能\"、進歩、2013年12月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[L3-VM-Mobility] Kumari, W. and J. Halpern, \"Virtual Machine mobility in L3 Networks\", Work in Progress, August 2011.",
+      "ja": "[L3-VM-モビリティ]クマリ、W.およびJ.ハルパーン、 \"L3ネットワークにおける仮想マシンのモビリティ\"、進歩、2011年8月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[Multi-Link] Thaler, D. and C. Huitema, \"Multi-link Subnet Support in IPv6\", Work in Progress, June 2002.",
+      "ja": "[マルチリンク]ターラー、D.およびC.のHuitema、「IPv6でのマルチリンクサブネットのサポート」、進歩、2002年6月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1076] Trewitt, G. and C. Partridge, \"HEMS Monitoring and Control Language\", RFC 1076, November 1988.",
+      "ja": "[RFC1076] Trewitt、G.とC.ヤマウズラ、 \"HEMSの監視と制御言語\"、RFC 1076、1988年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7048] Nordmark, E. and I. Gashinsky, \"Neighbor Unreachability Detection Is Too Impatient\", RFC 7048, January 2014.",
+      "ja": "[RFC7048] Nordmarkと、E.およびI. Gashinskyは、RFC 7048、2014年1月、 \"近隣到達不能検出は、あまりにもせっかちです\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[VXLAN] Mahalingam, M., Dutt, D., Duda, K., Agarwal, P., Kreeger, L., Sridhar, T., Bursell, M., and C. Wright, \"VXLAN: A Framework for Overlaying Virtualized Layer 2 Networks over Layer 3 Networks\", Work in Progress, April 2014.",
+      "ja": "[VXLAN] Mahalingam、M.、ダット、D.、Dudaの文献、K.、Agarwalさん、P.、Kreeger、L.、シュリダール、T.、Bursell、M.、およびC.ライト、「VXLAN：オーバーレイのためのフレームワーク層の上に仮想化されたレイヤ2つのネットワーク3つのネットワーク」、進歩、2014年4月での作業。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Linda Dunbar Huawei Technologies 5340 Legacy Drive, Suite 175 Plano, TX 75024 USA",
+      "ja": "リンダ・ダンバー華為技術5340レガシードライブ、スイート175プラノ、TX 75024 USA"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: (469) 277 5840 EMail: ldunbar@huawei.com",
+      "ja": "電話：（469）277 5840 Eメール：ldunbar@huawei.com"
+    },
+    {
+      "indent": 3,
+      "text": "Warren Kumari Google 1600 Amphitheatre Parkway Mountain View, CA 94043 USA",
+      "ja": "ウォーレン・クマリGoogleの1600アンフィシアターパークウェイマウンテンビュー、CA 94043 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: warren@kumari.net",
+      "ja": "メールアドレス：warren@kumari.net"
+    },
+    {
+      "indent": 3,
+      "text": "Igor Gashinsky Yahoo 45 West 18th Street 6th floor New York, NY 10011 USA",
+      "ja": "イゴールGashinskyヤフー45西18番街6階ニューヨーク、NY 10011 USA"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: igor@yahoo-inc.com",
+      "ja": "メールアドレス：igor@yahoo-inc.com"
+    }
+  ]
+}
