@@ -1,0 +1,553 @@
+{
+  "title": {
+    "text": "RFC 6356 - Coupled Congestion Control for Multipath Transport Protocols",
+    "ja": "RFC 6356 - マルチパストランスポートプロトコルのための結合された輻輳制御"
+  },
+  "number": 6356,
+  "created_at": "2019-10-31 12:15:21.160934+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                         C. Raiciu\nRequest for Comments: 6356                Univ. Politehnica of Bucharest\nCategory: Experimental                                         M. Handly\nISSN: 2070-1721                                             D. Wischik\n                                                    Univ. College London\n                                                            October 2011",
+      "raw": true
+    },
+    {
+      "indent": 6,
+      "text": "Coupled Congestion Control for Multipath Transport Protocols",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "Often endpoints are connected by multiple paths, but communications are usually restricted to a single path per connection. Resource usage within the network would be more efficient were it possible for these multiple paths to be used concurrently. Multipath TCP is a proposal to achieve multipath transport in TCP.",
+      "ja": "多くの場合、エンドポイントは複数のパスで接続されているが、通信は通常、接続ごとに単一経路に制限されます。これらの複数の経路を同時に使用することは可能であったネットワーク内のリソースの使用は、より効率的であろう。マルチパスTCPはTCPでのマルチパスの輸送を達成するための提案です。"
+    },
+    {
+      "indent": 3,
+      "text": "New congestion control algorithms are needed for multipath transport protocols such as Multipath TCP, as single path algorithms have a series of issues in the multipath context. One of the prominent problems is that running existing algorithms such as standard TCP independently on each path would give the multipath flow more than its fair share at a bottleneck link traversed by more than one of its subflows. Further, it is desirable that a source with multiple paths available will transfer more traffic using the least congested of the paths, achieving a property called \"resource pooling\" where a bundle of links effectively behaves like one shared link with bigger capacity. This would increase the overall efficiency of the network and also its robustness to failure.",
+      "ja": "単一パスアルゴリズムは、マルチコンテキストで一連の問題を持っているとして、新たな輻輳制御アルゴリズムは、そのようなマルチパスTCPなどのマルチパストランスポートプロトコルのために必要とされます。著名な問題の一つは、各パスに独立な標準TCPなどの既存のアルゴリズムを実行すると、マルチパスは、そのサブフローのつ以上が通過するボトルネックリンクで公正なシェアよりも多く流れ与えるだろうということです。さらに、可能な複数のパスを持つソースがリンクのバンドルが効果的に大きな容量を持つ1つの共有リンクのように振る舞う「リソースプーリング」と呼ばれる性質を達成、パスの最も混雑を使用して、より多くのトラフィックを転送することが望ましいです。これは、障害へのネットワーク全体の効率性ともその堅牢性を高めるでしょう。"
+    },
+    {
+      "indent": 3,
+      "text": "This document presents a congestion control algorithm that couples the congestion control algorithms running on different subflows by linking their increase functions, and dynamically controls the overall aggressiveness of the multipath flow. The result is a practical algorithm that is fair to TCP at bottlenecks while moving traffic away from congested links.",
+      "ja": "この文書では、輻輳制御アルゴリズムは、その増加の機能を連携することにより、異なるサブフロー上で実行されているカップルの輻輳制御アルゴリズムを提示し、動的マルチパスの流れの全体的な攻撃性を制御します。結果は、離れて混雑したリンクからのトラフィックを移動させながら、ボトルネックでTCPに公平である実用的なアルゴリズムです。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for examination, experimental implementation, and evaluation.",
+      "ja": "このドキュメントはインターネット標準化過程仕様ではありません。それは、検査、実験的な実装、および評価のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an Experimental Protocol for the Internet community. This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are a candidate for any level of Internet Standard; see Section 2 of RFC 5741.",
+      "ja": "この文書は、インターネットコミュニティのためにExperimentalプロトコルを定義します。このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。 IESGによって承認されていないすべての文書がインターネットStandardのどんなレベルの候補です。 RFC 5741のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc6356.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc6356で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2011 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2011 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1. Introduction ....................................................3\n2. Requirements Language ...........................................5\n3. Coupled Congestion Control Algorithm ............................5\n4. Implementation Considerations ...................................7\n   4.1. Computing \"alpha\" in Practice ..............................7\n   4.2. Implementation Considerations when CWND is\n        Expressed in Packets .......................................8\n5. Discussion ......................................................9\n6. Security Considerations ........................................10\n7. Acknowledgements ...............................................11\n8. References .....................................................11\n   8.1. Normative References ......................................11\n   8.2. Informative References ....................................11",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Multipath TCP (MPTCP, [MPTCP-MULTIADDRESSED]) is a set of extensions to regular TCP [RFC0793] that allows one TCP connection to be spread across multiple paths. MPTCP distributes load through the creation of separate \"subflows\" across potentially disjoint paths.",
+      "ja": "マルチTCP（MPTCP、[MPTCP-同報]）が1つのTCP接続が複数のパスに分散されることを可能にする定期的なTCP [RFC0793]の拡張セットです。 MPTCPは、潜在的にばらばらパス間で別の「サブフロー」の作成を介して負荷を分配します。"
+    },
+    {
+      "indent": 3,
+      "text": "How should congestion control be performed for multipath TCP? First, each subflow must have its own congestion control state (i.e., cwnd) so that capacity on that path is matched by offered load. The simplest way to achieve this goal is to simply run standard TCP congestion control on each subflow. However, this solution is unsatisfactory as it gives the multipath flow an unfair share when the paths taken by its different subflows share a common bottleneck.",
+      "ja": "どのように輻輳制御は、マルチパスTCPのために実行すべきですか？その経路上の容量が提供された負荷にマッチするように、まず、各サブフローは、それ自身の輻輳制御状態（すなわち、CWND）を有していなければなりません。この目標を達成するための最も簡単な方法は、単純に各サブフローに標準TCPの輻輳制御を実行することです。それは、その異なるサブフローで撮影されたパスは、共通のボトルネックを共有する場合、マルチパスが不当共有フロー与えるしかし、この解決策は不十分です。"
+    },
+    {
+      "indent": 3,
+      "text": "Bottleneck fairness is just one requirement multipath congestion control should meet. The following three goals capture the desirable properties of a practical multipath congestion control algorithm:",
+      "ja": "ボトルネックの公平性は、輻輳制御を満たさなければならないただ一つの要件マルチパスです。以下の三つの目標は、実用的なマルチパスの輻輳制御アルゴリズムの望ましい特性をキャプチャ："
+    },
+    {
+      "indent": 3,
+      "text": "o Goal 1 (Improve Throughput) A multipath flow should perform at least as well as a single path flow would on the best of the paths available to it.",
+      "ja": "O目標1（スループットの向上）マルチフローは、少なくともならびに単一パスフローを実行する必要があり、それが利用可能なパスの最良の上だろう。"
+    },
+    {
+      "indent": 3,
+      "text": "o Goal 2 (Do no harm) A multipath flow should not take up more capacity from any of the resources shared by its different paths than if it were a single flow using only one of these paths. This guarantees it will not unduly harm other flows.",
+      "ja": "それが唯一のこれらのパスのを使用して、単一の流れだった場合よりもO目標2（害を行いません）マルチパスの流れは、その異なるパスによって共有リソースのいずれかからより多くの容量を取るべきではありません。これは、不当に他のフローに害を与えないであろう保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Goal 3 (Balance congestion) A multipath flow should move as much traffic as possible off its most congested paths, subject to meeting the first two goals.",
+      "ja": "O目標3（バランス混雑）マルチフローは、最初の2つの目標を達成する被験者、最も混雑パスオフできるだけ多くのトラフィックを移動しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Goals 1 and 2 together ensure fairness at the bottleneck. Goal 3 captures the concept of resource pooling [WISCHIK]: if each multipath flow sends more data through its least congested path, the traffic in the network will move away from congested areas. This improves robustness and overall throughput, among other things. The way to achieve resource pooling is to effectively \"couple\" the congestion control loops for the different subflows.",
+      "ja": "目標1と2は、一緒にボトルネックで公平性を確保します。目標3は、リソースの概念プーリングをキャプチャ[WISCHIK]：各マルチパスの流れが最も輻輳経路を通って、より多くのデータを送信する場合、ネットワーク上のトラフィックが離れて混雑地域から移動します。これはとりわけ、堅牢性と全体のスループットを向上させます。リソースプールを達成するための方法が効果的に「夫婦」は、異なるサブフローのための輻輳制御ループです。"
+    },
+    {
+      "indent": 3,
+      "text": "We propose an algorithm that couples the additive increase function of the subflows, and uses unmodified TCP behavior in case of a drop. The algorithm relies on the traditional TCP mechanisms to detect drops, to retransmit data, etc.",
+      "ja": "私たちは、そのカップルサブフローの添加剤の増加関数をアルゴリズムを提案し、ドロップした場合に変更されていないTCPの動作を使用しています。このアルゴリズムは、など、データを再送信するために、滴を検出するために、従来のTCPメカニズムに依存しています"
+    },
+    {
+      "indent": 3,
+      "text": "Detecting shared bottlenecks reliably is quite difficult, but is just one part of a bigger question. This bigger question is how much bandwidth a multipath user should use in total, even if there is no shared bottleneck.",
+      "ja": "確実に共有ボトルネックを検出することは極めて困難であるが、より大きな問題のほんの一部です。これより大きな問題は、マルチパス、ユーザが何も共有し、ボトルネックが存在しない場合でも、合計で使用する必要がありますどのくらいの帯域幅です。"
+    },
+    {
+      "indent": 3,
+      "text": "The congestion controller aims to set the multipath flow's aggregate bandwidth to be the same as that of a regular TCP flow would get on the best path available to the multipath flow. To estimate the bandwidth of a regular TCP flow, the multipath flow estimates loss rates and round-trip times (RTTs) and computes the target rate. Then, it adjusts the overall aggressiveness (parameter alpha) to achieve the desired rate.",
+      "ja": "輻輳制御装置は、通常のTCPフローのそれは、マルチパスの流れに利用できる最善の道になるだろうと同じように、マルチパスの流れの総帯域幅を設定することを目指しています。通常のTCPフローの帯域幅を推定するために、マルチパスの流れは、損失率とのラウンドトリップ時間（RTTの）を推定し、目標レートを計算します。次いで、所望の速度を達成するために、全体的な攻撃（パラメータアルファ）を​​調整します。"
+    },
+    {
+      "indent": 3,
+      "text": "While the mechanism above applies always, its effect depends on whether the multipath TCP flow influences or does not influence the link loss rates (low versus high statistical multiplexing). If MPTCP does not influence link loss rates, MPTCP will get the same throughput as TCP on the best path. In cases with low statistical multiplexing, where the multipath flow influences the loss rates on the path, the multipath throughput will be strictly higher than that a single TCP would get on any of the paths. In particular, if using two idle paths, multipath throughput will be sum of the two paths' throughput.",
+      "ja": "メカニズムは、上記常に適用されるが、その効果は、マルチパスTCPフローに影響を与えるかどうかに依存しますか（高統計多重対低）リンク損失率に影響を与えません。 MPTCPはリンク損失率に影響を与えない場合は、MPTCPは最適なパス上のTCPと同じスループットを取得します。マルチパスの流れはパス上の損失率に影響を与える低統計多重、との例では、マルチパススループットは、単一のTCPは、パスのいずれかになるだろうことをより厳密に高くなります。具体的には、2つのアイドルパスを使用している場合、マルチパススループットは、二つのパススループットの合計になります。"
+    },
+    {
+      "indent": 3,
+      "text": "This algorithm ensures bottleneck fairness and fairness in the broader, network sense. We acknowledge that current TCP fairness criteria are far from ideal, but a multipath TCP needs to be deployable in the current Internet. If needed, new fairness criteria can be implemented by the same algorithm we propose by appropriately scaling the overall aggressiveness.",
+      "ja": "このアルゴリズムは、より広い、ネットワーク意味でのボトルネックの公正性・公平性を確保します。私たちは、現在のTCPの公平性基準は理想からかけ離れていることを認めるが、マルチパスTCPは、現在のインターネットで展開可能にする必要があります。必要に応じて、新たな公正基準は、我々は適切に全体的な攻撃性をスケーリングすることにより、提案する同じアルゴリズムで実現することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is intended that the algorithm presented here can be applied to other multipath transport protocols, such as alternative multipath extensions to TCP, or indeed any other congestion-aware transport protocols. However, for the purposes of example, this document will, where appropriate, refer to the MPTCP.",
+      "ja": "ここに示されたアルゴリズムは、TCPの代わりに、マルチパスの拡張、あるいは実際には任意の他の混雑対応のトランスポートプロトコルなどの他のマルチパストランスポートプロトコルに適用することができることを意図しています。しかしながら、例示の目的のために、このドキュメントは、適切な場合、MPTCPを参照します。"
+    },
+    {
+      "indent": 3,
+      "text": "The design decisions and evaluation of the congestion control algorithm are published in [NSDI].",
+      "ja": "輻輳制御アルゴリズムの設計上の決定および評価は、[NSDI]で公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm presented here only extends standard TCP congestion control for multipath operation. It is foreseeable that other congestion controllers will be implemented for multipath transport to achieve the bandwidth-scaling properties of the newer congestion control algorithms for regular TCP (such as Compound TCP and Cubic).",
+      "ja": "ここで紹介するアルゴリズムは、マルチパス操作用の標準TCPの輻輳制御を拡張します。他の輻輳制御器は、（このような化合物のTCPやキュービックなど）、通常のTCPの新しい輻輳制御アルゴリズムの帯域幅スケーリング特性を達成するために、マルチパスの輸送のために実装されることが予想されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Requirements Language",
+      "section_title": true,
+      "ja": "2.必要な言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119] .",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Coupled Congestion Control Algorithm",
+      "section_title": true,
+      "ja": "3.結合輻輳制御アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm we present only applies to the increase phase of the congestion avoidance state specifying how the window inflates upon receiving an ACK. The slow start, fast retransmit, and fast recovery algorithms, as well as the multiplicative decrease of the congestion avoidance state are the same as in standard TCP [RFC5681].",
+      "ja": "我々は本アルゴリズムは、唯一のウィンドウがACKを受信したときに膨張させる方法を指定する輻輳回避状態の増加フェーズに適用されます。スロースタート、高速再送、および高速回復アルゴリズムと同様に、輻輳回避状態の乗算減少は、標準のTCP [RFC5681]と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "Let cwnd_i be the congestion window on the subflow i. Let cwnd_total be the sum of the congestion windows of all subflows in the connection. Let p_i, rtt_i, and MSS_i be the loss rate, round-trip time (i.e., smoothed round-trip time estimate used by TCP), and maximum segment size on subflow i.",
+      "ja": "cwnd_iがサブフロー私の輻輳ウィンドウとします。 cwnd_totalは、接続中のすべてのサブフローの輻輳ウィンドウの合計とします。 P_I、rtt_i、及びMSS_iは、Iサブフロー損失率、ラウンドトリップ時間（TCPによって使用される、すなわち、平滑化往復時間推定値）、及び最大セグメントサイズであるとします。"
+    },
+    {
+      "indent": 3,
+      "text": "We assume throughout this document that the congestion window is maintained in bytes, unless otherwise specified. We briefly describe the algorithm for packet-based implementations of cwnd in section Section 4.2.",
+      "ja": "私たちは、特に指定がない限り、輻輳ウィンドウは、バイト単位で維持され、この文書全体を前提としています。私たちは、簡単にセクションセクション4.2でのcwndのパケットベースの実装のためのアルゴリズムを説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Our proposed \"Linked Increases\" algorithm MUST:",
+      "ja": "私たちの提案する「リンクされた増加」アルゴリズムをする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "o For each ACK received on subflow i, increase cwnd_i by",
+      "ja": "O各ACKがサブフローで受信したiについては、によってcwnd_iを増やします"
+    },
+    {
+      "indent": 10,
+      "text": "      alpha * bytes_acked * MSS_i   bytes_acked * MSS_i\nmin ( --------------------------- , ------------------- )  (1)\n               cwnd_total                   cwnd_i",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The increase formula (1) takes the minimum between the computed increase for the multipath subflow (first argument to min), and the increase TCP would get in the same scenario (the second argument). In this way, we ensure that any multipath subflow cannot be more aggressive than a TCP flow in the same circumstances, hence achieving Goal 2 (do no harm).",
+      "ja": "増加式（1）は、マルチパスサブフロー（MINの最初の引数）のために計算された増加、及びTCPは、同じシナリオ（第2引数）になるだろう増加との間の最小値をとります。このように、我々はそれゆえ（危害を与えない）目標2を達成し、任意のマルチパスサブフローが同じ状況でTCPフローよりもより積極的なことができないことを確認してください。"
+    },
+    {
+      "indent": 3,
+      "text": "\"alpha\" is a parameter of the algorithm that describes the aggressiveness of the multipath flow. To meet Goal 1 (improve throughput), the value of alpha is chosen such that the aggregate throughput of the multipath flow is equal to the throughput a TCP flow would get if it ran on the best path.",
+      "ja": "「アルファ」は、マルチパスフローの攻撃性を説明したアルゴリズムのパラメータです。目標1（スループットを向上させる）を満たすために、アルファの値は、マルチパス・フローの総スループットは、それが最良のパスで実行された場合、TCPフローが得るであろうスループットと等しくなるように選択されます。"
+    },
+    {
+      "indent": 3,
+      "text": "To get an idea of what the algorithm is trying to do, let's take the case where all the subflows have the same round-trip time and Maximum Segment Size (MSS). In this case, the algorithm will grow the total window by approximately alpha*MSS per RTT. This increase is distributed to the individual flows according to their instantaneous window size. Subflow i will increase by alpha*cwnd_i/cwnd_total segments per RTT.",
+      "ja": "アルゴリズムがやろうとしているかのアイデアを取得するには、のすべてのサブフローが同じラウンドトリップ時間と最大セグメントサイズ（MSS）を持っている場合を見てみましょう。この場合、アルゴリズムは、RTTあたり約アルファ*のMSSによって総ウィンドウを成長します。この増加は、その瞬間のウィンドウサイズに応じて個々のフローに配分されます。サブフローは、私はRTTごとにアルファ* cwnd_i / cwnd_totalセグメントによって増加します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that, as in standard TCP, when cwnd_total is large the increase may be 0. In this case, the increase MUST be set to 1. We discuss how to implement this formula in practice in the next section.",
+      "ja": "標準TCPのように、cwnd_totalが大きい場合増加がこの場合は0であってもよい、ということに注意してください、増加は、我々は次のセクションでは、実際にこの数式を実装する方法について説明を1に設定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "We assume implementations use an approach similar to appropriate byte counting (ABC, [RFC3465]), where the bytes_acked variable records the number of bytes newly acknowledged. If this is not the case, bytes_acked SHOULD be set to MSS_i.",
+      "ja": "我々は、実装がbytes_acked変数が新たに受け付けたバイト数を記録し、適切なバイト・カウント（ABC、[RFC3465]）と類似の方法を使用仮定する。そうでない場合は、bytes_ackedはMSS_iに設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To compute cwnd_total, it is an easy mistake to sum up cwnd_i across all subflows: when a flow is in fast retransmit, its cwnd is typically inflated and no longer represents the real congestion window. The correct behavior is to use the ssthresh (slow start threshold) value for flows in fast retransmit when computing cwnd_total. To cater to connections that are app limited, the computation should consider the minimum between flight_size_i and cwnd_i, and flight_size_i and ssthresh_i, where appropriate.",
+      "ja": "流れが速い再送信しているとき、そのCWNDは、一般的に膨張し、もはや実際の輻輳ウィンドウを表している：cwnd_totalを計算するために、それはすべてのサブフローを越えcwnd_iを総括する簡単な間違いがあります。正しい動作はcwnd_totalを計算するときに高速再送に流れるためSSTHRESH（スロースタート閾値）値を使用することです。適切な場合に限られているアプリの接続に応えるために、計算は、flight_size_iとcwnd_i、およびflight_size_iとssthresh_i間の最小を検討すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "The total throughput of a multipath flow depends on the value of alpha and the loss rates, maximum segment sizes, and round-trip times of its paths. Since we require that the total throughput is no worse than the throughput a single TCP would get on the best path, it is impossible to choose, a priori, a single value of alpha that achieves the desired throughput in every occasion. Hence, alpha must be computed based on the observed properties of the paths.",
+      "ja": "マルチパスフローの合計スループットは、αの値及び損失率、最大セグメントサイズ、およびそのパスの往復時間に依存します。私たちは、総スループットは、単一のTCPが最適なパスになるだろうスループットよりも悪化していないことを必要とするので、先験的に、あらゆる機会に所望のスループットを実現アルファの単一の値を選択することは不可能です。したがって、アルファは、パスの観察された特性に基づいて計算されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The formula to compute alpha is:",
+      "ja": "アルファを計算する式は："
+    },
+    {
+      "indent": 3,
+      "text": "                     MAX (cwnd_i/rtt_i^2)\nalpha = cwnd_total * -------------------------           (2)\n                     (SUM (cwnd_i/rtt_i))^2",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note:",
+      "ja": "注意："
+    },
+    {
+      "indent": 3,
+      "text": "MAX (x_i) means the maximum value for any possible value of i.",
+      "ja": "MAX（X_Iは、i）のすべての可能な値の最大値を意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "SUM (x_i) means the summation for all possible values of i.",
+      "ja": "SUM（X_Iは、i）のすべての可能な値のための和を意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "The formula (2) is derived by equalizing the rate of the multipath flow with the rate of a TCP running on the best path, and solving for alpha.",
+      "ja": "式（2）は、最良のパス上で実行されているTCPの速度を有するマルチパスの流量を均一化し、アルファについて解くことによって導出されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Implementation Considerations",
+      "section_title": true,
+      "ja": "4.実装に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Equation (2) implies that alpha is a floating point value. This would require performing costly floating point operations whenever an ACK is received. Further, in many kernels, floating point operations are disabled. There is an easy way to approximate the above calculations using integer arithmetic.",
+      "ja": "式（2）アルファが浮動小数点値であることを意味します。 ACKが受信されるたびに、これはコストのかかる浮動小数点演算を実行する必要があろう。さらに、多くのカーネルでは、浮動小数点演算が無効になっています。整数演算を使用して上記の計算を近似する簡単な方法があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Computing \"alpha\" in Practice",
+      "section_title": true,
+      "ja": "4.1。実際には「アルファ」を計算"
+    },
+    {
+      "indent": 3,
+      "text": "Let alpha_scale be an integer. When computing alpha, use alpha_scale * cwnd_total instead of cwnd_total and do all the operations in integer arithmetic.",
+      "ja": "alpha_scale整数とします。アルファを計算するとき、代わりcwnd_totalのalpha_scale * cwnd_totalを使用して、整数演算ですべての操作を行います。"
+    },
+    {
+      "indent": 3,
+      "text": "Then, scale down the increase per ACK by alpha_scale. The resulting algorithm is a simple change from Equation (1):",
+      "ja": "その後、alpha_scaleによってACKあたりの増加を縮小。得られたアルゴリズムは、式（1）からの単純な変更です。"
+    },
+    {
+      "indent": 3,
+      "text": "o For each ACK received on subflow i, increase cwnd_i by:",
+      "ja": "各ACK iは、によってcwnd_iを高めるサブフローで受信したため、O："
+    },
+    {
+      "indent": 10,
+      "text": "      alpha * bytes_acked * MSS_i   bytes_acked * MSS_i\nmin ( --------------------------- , ------------------- )  (3)\n       alpha_scale * cwnd_total              cwnd_i",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The alpha_scale parameter denotes the precision we want for computing alpha. Observe that the errors in computing the numerator or the denominator in the formula for alpha are quite small, as the cwnd in bytes is typically much larger than the RTT (measured in ms).",
+      "ja": "alpha_scaleパラメータは、アルファを計算するための私たちが望むの精度を表します。バイト単位のCWNDは、典型的には、RTT（ミリ秒で測定される）よりもはるかに大きいようにアルファのための式の分子または分母の計算における誤差は、非常に小さいことを観察します。"
+    },
+    {
+      "indent": 3,
+      "text": "With these changes, all the operations can be done using integer arithmetic. We propose alpha_scale be a small power of two, to allow using faster shift operations instead of multiplication and division. Our experiments show that using alpha_scale=512 works well in a wide range of scenarios. Increasing alpha_scale increases precision, but also increases the risk of overflow when computing alpha. Using 64- bit operations would solve this issue. Another option is to dynamically adjust alpha_scale when computing alpha; in this way, we avoid overflow and obtain maximum precision.",
+      "ja": "これらの変更により、すべての操作は、整数演算を使用して行うことができます。私たちは、alpha_scale代わりに、乗算や除算の高速化シフト演算を使用可能にするために、2の小電力も提案しています。我々の実験はalpha_scale = 512を使用すると、シナリオの広い範囲でうまく機能することを示しています。増加alpha_scaleは、精度を増加させるだけでなく、アルファを計算するときにオーバーフローのリスクを増大させます。 64ビット演算を使用することで、この問題を解決するだろう。別のオプションは、アルファを計算するときに動的にalpha_scaleを調整することです。このように、我々はオーバーフローを避け、最大の精度を得ます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to implement the algorithm by calculating cwnd_total on each ack; however, this would be costly especially when the number of subflows is large. To avoid this overhead, the implementation MAY choose to maintain a new per-connection state variable called \"cwnd_total\". If it does so, the implementation will update the cwnd_total value whenever the individual subflow's windows are updated. Updating only requires one more addition or subtraction operation compared to the regular, per-subflow congestion control code, so its performance impact should be minimal.",
+      "ja": "各ACKにcwnd_totalを計算することにより、アルゴリズムを実装することが可能です。しかし、これは、サブフローの数が多い場合は特にコストがかかります。このオーバーヘッドを回避するために、実装は、「cwnd_total」と呼ばれる新しい接続ごとの状態変数を維持するために選ぶかもしれません。それがそうするならば、実装は、個々のサブフローのウィンドウが更新されるたびcwnd_total値を更新します。更新は、定期的に、毎サブフロー輻輳制御コードと比較して、1つの以上の加算または減算演算を必要とするので、その性能への影響は最小限であるべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "Computing alpha per ACK is also costly. We propose alpha be a per-connection variable, computed whenever there is a drop and once per RTT otherwise. More specifically, let cwnd_new be the new value of the congestion window after it is inflated or after a drop. Update alpha only if the quotient of cwnd_i/MSS_i differs from the quotient of cwnd_new_i/MSS_i.",
+      "ja": "ACKあたりのアルファを計算することもコストがかかります。我々は、ドロップがあるたびに計算され、そうでない場合はRTTごとに一度、アルファは、接続ごとの変数で提案します。具体的には、それが膨張したり、ドロップした後にされた後cwnd_new輻輳ウィンドウの新しい値とします。 cwnd_i / MSS_iの商はcwnd_new_i / MSS_iの商と異なる場合にのみ、更新アルファ。"
+    },
+    {
+      "indent": 3,
+      "text": "In certain cases with small RTTs, computing alpha can still be expensive. We observe that if RTTs were constant, it is sufficient to compute alpha once per drop, as alpha does not change between drops (the insight here is that cwnd_i/cwnd_j = constant as long as both windows increase). Experimental results show that even if round-trip times are not constant, using average round-trip time per sawtooth instead of instantaneous round-trip time (i.e., TCP's smoothed RTT estimator) gives good precision for computing alpha. Hence, it is possible to compute alpha only once per drop using a modified version of equation (2) where rtt_i is replaced with rtt_avg_i.",
+      "ja": "小さいのRTTとの特定の場合では、コンピューティング・アルファは依然として高価であることができます。私たちは、のRTTが一定であれば、アルファ（ここでは洞察力はそのcwnd_i / cwnd_j =定数限り、両方のウィンドウの増加などである）を滴間で変化しないように、ドロップごとに一度アルファを計算するために十分であることを確認します。実験結果は、ラウンドトリップ時間が鋸歯代わりの瞬間往復時間当たりの平均往復時間を使用して、一定でなくても（すなわち、TCPの平滑RTT推定器）がアルファを計算するための良好な精度を与えることを示しています。したがって、rtt_iがrtt_avg_iで置換され、式（2）の修正バージョンを使用して一度だけ降下当たりのアルファを計算することが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "If using average round-trip time, rtt_avg_i will be computed by sampling the rtt_i whenever the window can accommodate one more packet, i.e., when cwnd / MSS < (cwnd+increase)/MSS. The samples are averaged once per sawtooth into rtt_avg_i. This sampling ensures that there is no sampling bias for larger windows.",
+      "ja": "平均往復時間を使用している場合、ウィンドウ、すなわち、CWND / MSS <（CWND +の増加）/ MSS、もう一つのパケットを収容することができるたびに、rtt_avg_iはrtt_iをサンプリングすることによって計算されます。サンプルはrtt_avg_iに一度ノコギリあたり平均化されています。このサンプリングは、大きな窓のためのサンプリングの偏りがないことを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "Given cwnd_total and alpha, the congestion control algorithm is run for each subflow independently, with similar complexity to the standard TCP increase code [RFC5681].",
+      "ja": "所与cwnd_totalとアルファは、輻輳制御アルゴリズムは、標準的なTCP増加コード[RFC5681]と同様複雑で、それぞれ独立して、サブフローのために実行されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Implementation Considerations when CWND is Expressed in Packets",
+      "section_title": true,
+      "ja": "4.2。 CWNDがパケットで表現され実装に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "When the congestion control algorithm maintains cwnd in packets rather than bytes, the algorithms above must change to take into account path MSS.",
+      "ja": "輻輳制御アルゴリズムは、パケットではなく、バイト単位でcwndを維持した場合、アルゴリズムは、上記のアカウントパスMSSに取るように変更する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To compute the increase when an ACK is received, the implementation for multipath congestion control is a simple extension of the standard TCP code. In standard, TCP cwnd_cnt is an additional state variable that tracks the number of segments acked since the last cwnd increment; cwnd is incremented only when cwnd_cnt > cwnd; then, cwnd_cnt is set to 0.",
+      "ja": "ACKが受信されるの増加を計算するには、マルチパス輻輳制御のための実装は、標準のTCPコードの単純な拡張です。標準では、TCPのcwnd_cntは、最後のCWND増分のでACKさセグメントの数を追跡する追加の状態変数です。 cwndは、ときにのみcwnd_cnt> cwndを増加されます。その後、cwnd_cntは0に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the multipath case, cwnd_cnt_i is maintained for each subflow as above, and cwnd_i is increased by 1 when cwnd_cnt_i > max(alpha_scale * cwnd_total / alpha, cwnd_i).",
+      "ja": "マルチパスの場合、cwnd_cnt_iは、上記のように、各サブフローのために維持され、そしてcwnd_i 1 cwnd_cnt_i> MAX（alpha_scale * cwnd_total /アルファ、cwnd_i）だけ増加させます。"
+    },
+    {
+      "indent": 3,
+      "text": "When computing alpha for packet-based stacks, the errors in computing the terms in the denominator are larger (this is because cwnd is much smaller and rtt may be comparatively large). Let max be the index of the subflow used in the numerator. To reduce errors, it is easiest to move rtt_max (once calculated) from the numerator to the denominator, changing equation (2) to obtain the equivalent formula below.",
+      "ja": "パケットベースのスタックのためのアルファを計算するとき（CWNDがはるかに小さく、RTTが比較的大きくてもよいためである）、分母の項を計算する際に誤差が大きくなっています。最大の分子で使用されるサブフローの指標とします。エラーを低減するためには、以下の等価式を得るために、式（2）を変化させる、分母と分子からrtt_max（一度計算）を移動するのが最も簡単です。"
+    },
+    {
+      "indent": 66,
+      "text": "(4)",
+      "ja": "（４）"
+    },
+    {
+      "indent": 1,
+      "text": "                                              cwnd_max\nalpha = alpha_scale * cwnd_total * ------------------------------------\n                                   (SUM ((rtt_max * cwnd_i) / rtt_i))^2",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Note that the calculation of alpha does not take into account path MSS and is the same for stacks that keep cwnd in bytes or packets. With this formula, the algorithm for computing alpha will match the rate of TCP on the best path in B/s for byte-oriented stacks, and in packets/s in packet-based stacks. In practice, MSS rarely changes between paths so this shouldn't be a problem.",
+      "ja": "アルファの計算は、アカウントのパスMSSに取り、バイトまたはパケットでのcwndを保つスタックでも同じですしないことに注意してください。この式で、アルファを計算するためのアルゴリズムは、バイト指向のスタックのためのB / Sで最良経路上、パケットベースのスタック内のパケット/秒でTCPの速度と一致します。これが問題になることはありませんので、実際には、MSSはめったにパスの間で変化しません。"
+    },
+    {
+      "indent": 3,
+      "text": "However, it is simple to derive formulae allowing packet-based stacks to achieve byte rate fairness (and vice versa) if needed. In particular, for packet-based stacks wanting byte-rate fairness, equation (4) above changes as follows: cwnd_max is replaced by cwnd_max * MSS_max * MSS_max, while cwnd_i is replaced with cwnd_i * MSS_i.",
+      "ja": "しかし、必要に応じてパケットベースのスタックはバイトレート公平性（およびその逆）を達成できるように数式を導出することは簡単です。具体的には、次のように変化する上記バイトレート公平、式（4）希望パケットベースのスタックのための：cwnd_iがcwnd_i * MSS_iで置換されている間cwnd_maxは、* MSS_max * MSS_max cwnd_maxによって置き換えられます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Discussion",
+      "section_title": true,
+      "ja": "5.ディスカッション"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm we've presented fully achieves Goals 1 and 2, but does not achieve full resource pooling (Goal 3). Resource pooling requires that no traffic should be transferred on links with higher loss rates. To achieve perfect resource pooling, one must couple both increase and decrease of congestion windows across subflows, as in [KELLY].",
+      "ja": "我々が提示してきたアルゴリズムは完全に目標1と2を達成したが、完全なリソースプーリング（目標3）を達成しません。リソースプーリングは、トラフィックが高い損失率を持つリンク上で転送されるべきでないことが必要です。 [KELLY]のように、完璧なリソースプーリング、1つの必須のカップルの増加とサブフロー間で輻輳ウィンドウの減少の両方を達成するために。"
+    },
+    {
+      "indent": 3,
+      "text": "There are a few problems with such a fully coupled controller. First, it will insufficiently probe paths with high loss rates and will fail to detect free capacity when it becomes available. Second, such controllers tend to exhibit \"flappiness\": when the paths have similar levels of congestion, the congestion controller will tend to allocate all the window to one random subflow and allocate zero window to the other subflows. The controller will perform random flips between these stable points. This doesn't seem desirable in general, and is particularly bad when the achieved rates depend on the RTT (as in the current Internet): in such a case, the resulting rate with fluctuate unpredictably depending on which state the controller is in, hence violating Goal 1.",
+      "ja": "このように完全に接続されたコントローラを持ついくつかの問題があります。まず、それは十分に高い損失率でパスをプローブし、それが利用可能になったときに空き容量を検出するために失敗します。パスが輻輳の同様のレベルを有する場合、輻輳制御装置一のランダムサブフローにすべてのウィンドウを割り当て、他のサブフローにゼロウィンドウを割り当てる傾向がある。第二に、そのようなコントローラは、「flappiness」を示す傾向があります。コントローラは、これらの安定した点の間のランダムなフリップを実行します。これは、一般的に望ましいように見える、と達成率が（現在のインターネットのように）RTTに依存する場合に特に悪いない。このような場合に、どのに応じ予測不可能に変動すると、得られた速度は、コントローラは、従って、でいる状態目標1に違反。"
+    },
+    {
+      "indent": 3,
+      "text": "By only coupling increases our proposal probes high loss paths, detecting free capacity quicker. Our proposal does not suffer from flappiness but also achieves less resource pooling. The algorithm will allocate window to the subflows such that p_i * cwnd_i = constant, for all i. Thus, when the loss rates of the subflows are equal, each subflow will get an equal window, removing flappiness. When the loss rates differ, progressively more windows will be allocated to the flow with the lower loss rate. In contrast, perfect resource pooling requires that all the window should be allocated on the path with the lowest loss rate. Further details can be found in [NSDI].",
+      "ja": "のみ結合することにより迅速に空き容量を検出し、私たちの提案プローブ高損失のパスを増します。私たちの提案はflappinessに苦しむだけでなく、より少ないリソースプールを実現していません。このアルゴリズムは、私はすべてのために、このようP_I * cwnd_i =定数そのサブフローにウィンドウが割り当てられます。このように、サブフローの損失率が等しいとき、各サブフローはflappinessを削除、同じウィンドウを取得します。損失率が異なる場合、次第に窓は、低損失率とフローに割り当てられます。これとは対照的に、完璧なリソースプーリングは、すべてのウィンドウが最小の​​損失率とパスに割り当てられるべきであることが必要です。さらなる詳細は[NSDI]に見出すことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6.セキュリティの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "One security concern relates to what we call the traffic-shifting attack: on-path attackers can drop packets belonging to a multipath subflow, which, in turn, makes the path seem congested and will force the sender's congestion controller to avoid that path and push more data over alternate subflows.",
+      "ja": "一つのセキュリティ上の問題は、我々は、トラフィック・シフト攻撃呼んでいるものに関する：上のパス攻撃者が順番に、混雑しているように見えるのパスを行い、マルチパスサブフローに属するパケットをドロップすることができ、そのパスとプッシュを避けるために、送信側の輻輳制御装置を強制します別のサブフローを超える多くのデータ。"
+    },
+    {
+      "indent": 3,
+      "text": "The attacker's goal is to create congestion on the corresponding alternative paths. This behavior is entirely feasible but will only have minor effects: by design, the coupled congestion controller is less (or similarly) aggressive on any of its paths than a single TCP flow. Thus, the biggest effect this attack can have is to make a multipath subflow be as aggressive as a single TCP flow.",
+      "ja": "攻撃者の目標は、対応する代替経路上の混雑を作成することです。この動作は完全に実現可能であるが、わずかな効果を持っています：設計により、結合された輻輳制御装置は、単一のTCPフローよりもそのパスのいずれかに積極的に少ない（または同様に）です。したがって、この攻撃を持つことができる最大の効果は、マルチパスサブフローは、単一のTCPフローのように積極的にすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "Another effect of the traffic-shifting attack is that the new path can monitor all the traffic, whereas before it could only see a subset of traffic. We believe that if privacy is needed, splitting traffic across multiple paths with MPTCP is not the right solution in the first place; end-to-end encryption should be used instead.",
+      "ja": "トラフィック・シフト攻撃のもう一つの効果は、それが唯一のトラフィックのサブセットを見ることができました前のに対し、新しいパスは、すべてのトラフィックを監視することができるということです。私たちは、プライバシーが必要な場合、MPTCPで複数のパス間で分割トラフィックは最初の場所で適切なソリューションではないと信じています。エンドツーエンドの暗号化を代わりに使用してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Besides the traffic-shifting attack mentioned above, the coupled congestion control algorithm defined in this document adds no other security considerations to those found in [MPTCP-MULTIADDRESSED] and [RFC6181]. Detailed security analysis for the Multipath TCP protocol itself is included in [MPTCP-MULTIADDRESSED] and [RFC6181].",
+      "ja": "上記トラフィック・シフト攻撃に加えて、本文書で定義された結合された輻輳制御アルゴリズムは、[MPTCP-同報]と[RFC6181]に見られるものと他のセキュリティ問題を追加していません。マルチパスTCPプロトコル自体の詳細なセキュリティ分析は、[MPTCP-同報]と[RFC6181]に含まれています。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Acknowledgements",
+      "section_title": true,
+      "ja": "7.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "We thank Christoph Paasch for his suggestions for computing alpha in packet-based stacks. The authors are supported by Trilogy (http://www.trilogy-project.org), a research project (ICT-216372) partially funded by the European Community under its Seventh Framework Program. The views expressed here are those of the author(s) only. The European Commission is not liable for any use that may be made of the information in this document.",
+      "ja": "私たちは、パケットベースのスタックでアルファを計算するための彼の提案のためのクリストフPaaschに感謝します。著者は、トリロジー（http://www.trilogy-project.org）、部分的にその第七次フレームワーク・プログラムの下で欧州共同体資金による研究プロジェクト（ICT-216372）によってサポートされています。ここで示された見解は、著者（複数可）のみのものです。欧州委員会は、この文書に記載されている情報を用いることができる任意の使用のための責任を負いません。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8.参照文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0793] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "[RFC0793]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5681] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, September 2009.",
+      "ja": "[RFC5681]オールマン、M.、パクソン、V.、およびE.ブラントン、 \"TCP輻輳制御\"、RFC 5681、2009年9月。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[KELLY] Kelly, F. and T. Voice, \"Stability of end-to-end algorithms for joint routing and rate control\", ACM SIGCOMM CCR vol. 35 num. 2, pp. 5-12, 2005, <http://portal.acm.org/citation.cfm?id=1064415>.",
+      "ja": "【KELLY】ケリー、F.とT.ボイス、「ジョイントルーティング及びレート制御のためのエンドツーエンドのアルゴリズムの安定性」、ACM SIGCOMM CCR体積。 35 NUM。 2、頁5-12、2005、<http://portal.acm.org/citation.cfm?id=1064415>。"
+    },
+    {
+      "indent": 3,
+      "text": "[MPTCP-MULTIADDRESSED] Ford, A., Raiciu, C., Handley, M., and O. Bonaventure, \"TCP Extensions for Multipath Operation with Multiple Addresses\", Work in Progress, July 2011.",
+      "ja": "[MPTCP-同報]フォード、A.、Raiciu、C.、ハンドリー、M.、およびO.ボナベンチャー、 \"複数のアドレスを持つマルチパス操作のためのTCP拡張機能\"、進歩、2011年7月での作業。"
+    },
+    {
+      "indent": 3,
+      "text": "[NSDI] Wischik, D., Raiciu, C., Greenhalgh, A., and M. Handley, \"Design, Implementation and Evaluation of Congestion Control for Multipath TCP\", Usenix NSDI , March 2011, <htt p://www.cs.ucl.ac.uk/staff/c.raiciu/files/mptcp-nsdi.pdf>.",
+      "ja": "[NSDI] Wischik、D.、Raiciu、C.、グリーンハル、A.、およびM.ハンドリー、 \"マルチパスTCP輻輳制御の設計、実装と評価\"、のUsenix NSDI、2011年3月、<HTT P：// WWW .cs.ucl.ac.uk /スタッフ/ c.raiciu /ファイル/ MPTCP-nsdi.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3465] Allman, M., \"TCP Congestion Control with Appropriate Byte Counting (ABC)\", RFC 3465, February 2003.",
+      "ja": "[RFC3465]オールマン、M.、RFC 3465、2003年2月 \"適切なバイトカウント（ABC）とTCP輻輳制御\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6181] Bagnulo, M., \"Threat Analysis for TCP Extensions for Multipath Operation with Multiple Addresses\", RFC 6181, March 2011.",
+      "ja": "[RFC6181] Bagnulo、M.、RFC 6181 \"複数アドレスを持つマルチパス操作のためのTCP拡張のための脅威分析\"、2011年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[WISCHIK] Wischik, D., Handley, M., and M. Bagnulo Braun, \"The Resource Pooling Principle\", ACM SIGCOMM CCR vol. 38 num. 5, pp. 47-52, October 2008, <http://ccr.sigcomm.org/online/files/p47-handleyA4.pdf>.",
+      "ja": "【WISCHIK] Wischik、D.、ハンドレー、M.、およびM. Bagnuloブラウン、 \"リソースプーリング原理\"、ACM SIGCOMM CCR体積。 38 NUM。 5、頁47-52、2008年10月、<http://ccr.sigcomm.org/online/files/p47-handleyA4.pdf>。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Costin Raiciu University Politehnica of Bucharest Splaiul Independentei 313 Bucharest Romania",
+      "ja": "ブカレストSplaiul Independentei 313ブカレストルーマニアのコスティンRaiciu工科大学"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: costin.raiciu@cs.pub.ro",
+      "ja": "メールアドレス：costin.raiciu@cs.pub.ro"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Handley University College London Gower Street London WC1E 6BT UK",
+      "ja": "マーク・ハンドリーロンドン大学ガウアーストリートロンドンWC1E 6BT英国"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: m.handley@cs.ucl.ac.uk",
+      "ja": "メールアドレス：m.handley@cs.ucl.ac.uk"
+    },
+    {
+      "indent": 3,
+      "text": "Damon Wischik University College London Gower Street London WC1E 6BT UK",
+      "ja": "デイモンWischikロンドン大学ガウアーストリートロンドンWC1E 6BT英国"
+    },
+    {
+      "indent": 3,
+      "text": "EMail: d.wischik@cs.ucl.ac.uk",
+      "ja": "メールアドレス：d.wischik@cs.ucl.ac.uk"
+    }
+  ]
+}

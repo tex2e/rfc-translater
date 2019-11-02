@@ -1,0 +1,565 @@
+{
+  "title": {
+    "text": "RFC 8336 - The ORIGIN HTTP/2 Frame",
+    "ja": "RFC 8336 - ORIGIN HTTP / 2フレーム"
+  },
+  "number": 8336,
+  "created_at": "2019-10-30 09:41:29.134976+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     M. Nottingham\nRequest for Comments: 8336\nCategory: Standards Track                                      E. Nygren\nISSN: 2070-1721                                      Akamai Technologies\n                                                              March 2018",
+      "raw": true
+    },
+    {
+      "indent": 24,
+      "text": "The ORIGIN HTTP/2 Frame",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies the ORIGIN frame for HTTP/2, to indicate what origins are available on a given connection.",
+      "ja": "この文書では、起源が特定の接続に利用可能であるかを示すため、HTTP / 2用ORIGINフレームを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 7841のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8336.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttps://www.rfc-editor.org/info/rfc8336で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2018 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2018 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（https://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2\n  1.1.  Notational Conventions  . . . . . . . . . . . . . . . . .   2\n2.  The ORIGIN HTTP/2 Frame . . . . . . . . . . . . . . . . . . .   3\n  2.1.  Syntax  . . . . . . . . . . . . . . . . . . . . . . . . .   3\n  2.2.  Processing ORIGIN Frames  . . . . . . . . . . . . . . . .   3\n  2.3.  The Origin Set  . . . . . . . . . . . . . . . . . . . . .   4\n  2.4.  Authority, Push, and Coalescing with ORIGIN . . . . . . .   6\n3.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .   7\n4.  Security Considerations . . . . . . . . . . . . . . . . . . .   7\n5.  References  . . . . . . . . . . . . . . . . . . . . . . . . .   8\n  5.1.  Normative References  . . . . . . . . . . . . . . . . . .   8\n  5.2.  Informative References  . . . . . . . . . . . . . . . . .   8\nAppendix A.  Non-Normative Processing Algorithm . . . . . . . . .  10\nAppendix B.  Operational Considerations for Servers . . . . . . .  10\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  11",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/2 [RFC7540] allows clients to coalesce different origins [RFC6454] onto the same connection when certain conditions are met. However, in some cases, a connection is not usable for a coalesced origin, so the 421 (Misdirected Request) status code ([RFC7540], Section 9.1.2) was defined.",
+      "ja": "HTTP / 2 [RFC7540]は、クライアントが特定の条件が満たされた同じ接続に異なる起源[RFC6454]を合体することを可能にします。しかし、いくつかのケースでは、接続は合体起源のために使用できないので、421（間違った方向への要求）ステータスコード（[RFC7540]、セクション9.1.2）を定義しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Using a status code in this manner allows clients to recover from misdirected requests, but at the penalty of adding latency. To address that, this specification defines a new HTTP/2 frame type, \"ORIGIN\", to allow servers to indicate for which origins a connection is usable.",
+      "ja": "このようにステータスコードを使用すると、クライアントは見当違いの要求から回復することができますが、遅延を加えるのペナルティで。それに対処するために、この仕様は、サーバがその起源のために接続が使用可能であることを示すことを可能にする新しいHTTP / 2フレームタイプ、「ORIGIN」を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, experience has shown that HTTP/2's requirement to establish server authority using both DNS and the server's certificate is onerous. This specification relaxes the requirement to check DNS when the ORIGIN frame is in use. Doing so has additional benefits, such as removing the latency associated with some DNS lookups.",
+      "ja": "また、経験はDNSやサーバーの証明書の両方を使用して、サーバーの権限を確立するために、HTTP / 2の要件が不利であることが示されています。この仕様は、ORIGINフレームが使用されているときにDNSをチェックするための要件を緩和します。そうすることで、このようないくつかのDNSルックアップに関連する待ち時間を削除するなどの追加の利点を持っています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Notational Conventions",
+      "section_title": true,
+      "ja": "1.1。表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "キーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、 \"SHALL\"、 \"SHOULD\"、 \"ないもの\"、 \"推奨\" \"ない（SHOULD NOT）\"、 \"MAY\"、 \"推奨NOT\"、および「OPTIONAL BCP 14に記載されているように「この文書に解釈されるべきである[RFC2119]、[RFC8174]と、ここで示されるように、それらは、すべて大文字で表示された場合にのみ。"
+    },
+    {
+      "indent": 0,
+      "text": "2. The ORIGIN HTTP/2 Frame",
+      "section_title": true,
+      "ja": "2. ORIGINのHTTP / 2フレーム"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a new HTTP/2 frame type ([RFC7540], Section 4) called ORIGIN, that allows a server to indicate what origin(s) [RFC6454] the server would like the client to consider as members of the Origin Set (Section 2.3) for the connection within which it occurs.",
+      "ja": "この文書では、ORIGINと呼ばれる新しいHTTP / 2フレームタイプ（[RFC7540]、セクション4）を定義し、それは（サーバは、サーバは、クライアントが起源セットのメンバーとして検討したいと思うだろうか、原点（S）[RFC6454]示すことができますそれが発生し、その中の接続については、セクション2.3）。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Syntax",
+      "section_title": true,
+      "ja": "2.1。構文"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame type is 0xc (decimal 12) and contains zero or more instances of the Origin-Entry field.",
+      "ja": "ORIGINフレームタイプは、（小数12）から0xCであり、原点入力フィールドのゼロ以上のインスタンスを含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "+-------------------------------+-------------------------------+\n|         Origin-Entry (*)                                    ...\n+-------------------------------+-------------------------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "An Origin-Entry is a length-delimited string:",
+      "ja": "原点エントリは長さで区切られた文字列です。"
+    },
+    {
+      "indent": 3,
+      "text": "+-------------------------------+-------------------------------+\n|         Origin-Len (16)       | ASCII-Origin?               ...\n+-------------------------------+-------------------------------+",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Specifically:",
+      "ja": "具体的に："
+    },
+    {
+      "indent": 3,
+      "text": "Origin-Len: An unsigned, 16-bit integer indicating the length, in octets, of the ASCII-Origin field.",
+      "ja": "原点レン：オクテットで、ASCII-ORIGINフィールドの長さを示す符号なし16ビット整数。"
+    },
+    {
+      "indent": 3,
+      "text": "Origin: An OPTIONAL sequence of characters containing the ASCII serialization of an origin ([RFC6454], Section 6.2) that the sender asserts this connection is or could be authoritative for.",
+      "ja": "起源：送信者はこの接続であるかの権威であり得るアサートすることを原点（[RFC6454]、セクション6.2）のASCIIシリアライゼーションを含む文字の任意の配列。"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame does not define any flags. However, future updates to this specification MAY define flags. See Section 2.2.",
+      "ja": "ORIGINフレームは、任意のフラグを定義していません。しかし、この仕様の将来のアップデートでは、フラグを定義することもできます。 2.2節を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Processing ORIGIN Frames",
+      "section_title": true,
+      "ja": "2.2。 ORIGINフレームを処理"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame is a non-critical extension to HTTP/2. Endpoints that do not support this frame can safely ignore it upon receipt.",
+      "ja": "ORIGINフレームは、HTTP / 2への非クリティカル拡張です。このフレームをサポートしていないエンドポイントは安全に受信したときにそれを無視することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "When received by an implementing client, it is used to initialize and manipulate the Origin Set (see Section 2.3), thereby changing how the client establishes authority for origin servers (see Section 2.4).",
+      "ja": "実装するクライアントが受信した場合、それにより、クライアントはオリジンサーバ（2.4節を参照）の権限を確立する方法変更、（2.3節を参照）を初期化し、原点の設定を操作するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame MUST be sent on stream 0; an ORIGIN frame on any other stream is invalid and MUST be ignored.",
+      "ja": "ORIGINフレームは、ストリーム0上で送信されなければなりません。他のストリーム上ORIGINフレームは無効であり、無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Likewise, the ORIGIN frame is only valid on connections with the \"h2\" protocol identifier or when specifically nominated by the protocol's definition; it MUST be ignored when received on a connection with the \"h2c\" protocol identifier.",
+      "ja": "同様に、ORIGINフレームは、プロトコルの定義によって指名さ「H2」プロトコル識別子場合や、具体的との接続でのみ有効です。 「H2C」プロトコル識別子との接続上で受信された場合、それを無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification does not define any flags for the ORIGIN frame, but future updates to this specification (through IETF consensus) might use them to change its semantics. The first four flags (0x1, 0x2, 0x4, and 0x8) are reserved for backwards-incompatible changes; therefore, when any of them are set, the ORIGIN frame containing them MUST be ignored by clients conforming to this specification, unless the flag's semantics are understood. The remaining flags are reserved for backwards-compatible changes and do not affect processing by clients conformant to this specification.",
+      "ja": "この仕様は、ORIGINのフレームのための任意のフラグを定義していませんが、（IETFコンセンサスを介して）この仕様書の将来のアップデートは、その意味を変更するためにそれらを使用する場合があります。最初の4つのフラグ（0x1の、0x2の、0x4の、及び0x8という）は、互換性のない変更のために予約されています。それらのいずれかが設定されている場合ので、それらを含むORIGINフレームは、フラグの意味は理解されない限り、この仕様に準拠したクライアントで無視しなければなりません。残りのフラグは、後方互換性の変更のために予約されており、この仕様に準拠したクライアントによって処理には影響を与えません。"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame describes a property of the connection and therefore is processed hop by hop. An intermediary MUST NOT forward ORIGIN frames. Clients configured to use a proxy MUST ignore any ORIGIN frames received from it.",
+      "ja": "ORIGINフレームは、接続のプロパティを記述し、従って、ホップによってホップ処理されます。仲介者はORIGINフレームを転送してはなりません。クライアントはそれから受信したすべてのORIGINフレームを無視しなければならないプロキシを使用するように設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Each ASCII-Origin field in the frame's payload MUST be parsed as an ASCII serialization of an origin ([RFC6454], Section 6.2). If parsing fails, the field MUST be ignored.",
+      "ja": "フレームのペイロード内の各ASCII由来のフィールドは、原点（[RFC6454]、セクション6.2）のASCIIシリアライゼーションとして解析されなければなりません。構文解析が失敗した場合、フィールドは無視しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the ORIGIN frame does not support wildcard names (e.g., \"*.example.com\") in Origin-Entry. As a result, sending ORIGIN when a wildcard certificate is in use effectively disables any origins that are not explicitly listed in the ORIGIN frame(s) (when the client understands ORIGIN).",
+      "ja": "ORIGINフレームが原点エントリに（例えば、「* .example.comの」）のワイルドカード名をサポートしていないことに留意されたいです。結果として、ワイルドカード証明書が使用されているORIGINを送信することを効果的に明示的ORIGINフレーム（複数可）（クライアント原点を理解する際）に記載されていない任意の起源を無効にします。"
+    },
+    {
+      "indent": 3,
+      "text": "See Appendix A for an illustrative algorithm for processing ORIGIN frames.",
+      "ja": "ORIGINフレームを処理するための例示的なアルゴリズムについては、付録Aを参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. The Origin Set",
+      "section_title": true,
+      "ja": "2.3。起源を設定"
+    },
+    {
+      "indent": 3,
+      "text": "The set of origins (as per [RFC6454]) that a given connection might be used for is known in this specification as the Origin Set.",
+      "ja": "所与の接続をするために使用されるかもしれないこと（[RFC6454]の通り）起源のセットを原点セットとして本明細書で知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "By default, the Origin Set for a connection is uninitialized. An uninitialized Origin Set means that clients apply the coalescing rules from Section 9.1.1 of [RFC7540].",
+      "ja": "デフォルトでは、接続のための起源セットが初期化されていません。初期化されていない原点設定は、クライアントが[RFC7540]のセクション9.1.1からの合体ルールを適用することを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "When an ORIGIN frame is first received and successfully processed by a client, the connection's Origin Set is defined to contain an initial origin. The initial origin is composed from:",
+      "ja": "ORIGINフレームは、クライアントによって最初に受信し、正常に処理されている場合、接続の原点設定は初期起点を含むように定義されています。最初の起源は、から構成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "o Scheme: \"https\"",
+      "ja": "Oスキーム： \"https\" の"
+    },
+    {
+      "indent": 3,
+      "text": "o Host: the value sent in Server Name Indication (SNI) ([RFC6066], Section 3) converted to lower case; if SNI is not present, the remote address of the connection (i.e., the server's IP address)",
+      "ja": "Oホスト：サーバ名表示（SNI）（[RFC6066]、セクション3）で送信された値は、小文字に変換しました。 SNIが存在しない場合、接続のリモートアドレス（すなわち、サーバのIPアドレス）"
+    },
+    {
+      "indent": 3,
+      "text": "o Port: the remote port of the connection (i.e., the server's port)",
+      "ja": "Oポート：接続のリモートポート（つまり、サーバーのポート）"
+    },
+    {
+      "indent": 3,
+      "text": "The contents of that ORIGIN frame (and subsequent ones) allow the server to incrementally add new origins to the Origin Set, as described in Section 2.2.",
+      "ja": "そのORIGINフレーム（およびそれ以降のもの）の内容は、2.2節で説明したように、サーバーの増分、原点セットに新しい起源を追加することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The Origin Set is also affected by the 421 (Misdirected Request) response status code, as defined in [RFC7540], Section 9.1.2. Upon receipt of a response with this status code, implementing clients MUST create the ASCII serialization of the corresponding request's origin (as per [RFC6454], Section 6.2) and remove it from the connection's Origin Set, if present.",
+      "ja": "[RFC7540]、セクション9.1.2で定義されるように原点セットは、421（間違った方向への要求）レスポンスステータスコードによって影響されます。このステータスコードで応答を受信すると、実装のクライアントは（[RFC6454]、セクション6.2による）、対応するリクエストの起源のASCIIシリアライゼーションを作成しなければならなくて、存在する場合、接続の原点セットから削除します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: When sending an ORIGIN frame to a connection that is initialized as an alternative service [RFC7838], the initial Origin Set (Section 2.3) will contain an origin with the appropriate scheme and hostname (since RFC 7838 specifies that the origin's hostname be sent in SNI). However, it is possible that the port will be different than that of the intended origin, since the initial Origin Set is calculated using the actual port in use, which can be different for the alternative service. In this case, the intended origin needs to be sent in the ORIGIN frame explicitly.",
+      "ja": "注意：代替サービスとして初期化されている接続に[RFC7838]をORIGINフレームを送信する場合はRFC 7838には、原点のホスト名を送信するように指定しているので、初期の起源セット（2.3節）は、適切なスキームとホスト名（と起源が含まれていますSNIで）。しかし、最初の原点セットは、代替サービスのために異なることができ、使用中の実際のポートを、使用して計算されるため、ポートが、意図起源のものとは異なることになる可能性があります。この場合、意図した原点は、明示的ORIGINフレームで送信される必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "For example, a client making requests for \"https://example.com\" is directed to an alternative service at (\"h2\", \"x.example.net\", \"8443\"). If this alternative service sends an ORIGIN frame, the initial origin will be \"https://example.com:8443\". The client will not be able to use the alternative service to make requests for \"https://example.com\" unless that origin is explicitly included in the ORIGIN frame.",
+      "ja": "例えば、クライアントが「https://example.com」の要求を行う（「H2」、「x.example.net」、「8443」）で代替サービスに向けられています。この代替サービスはORIGINフレームを送信する場合、最初の原点は「https://example.com:8443」になります。その原点は、明示的にORIGINフレームに含まれていない限り、クライアントは「https://example.com」の要求を行うために、代替サービスを使用することはできません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Authority, Push, and Coalescing with ORIGIN",
+      "section_title": true,
+      "ja": "2.4。当局は、押して、ORIGINで合体します"
+    },
+    {
+      "indent": 3,
+      "text": "Section 10.1 of [RFC7540] uses both DNS and the presented Transport Layer Security (TLS) certificate to establish the origin server(s) that a connection is authoritative for, just as HTTP/1.1 does in [RFC7230].",
+      "ja": "[RFC7540]のセクション10.1は、接続がHTTP / 1.1 [RFC7230]で同じよう、に対して権限を持っていることをオリジンサーバ（複数可）を確立するために、DNSおよび提示トランスポート層セキュリティ（TLS）証明書の両方を使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, Section 9.1.1 of [RFC7540] explicitly allows a connection to be used for more than one origin server, if it is authoritative. This affects what responses can be considered authoritative, both for direct responses to requests and for server push (see [RFC7540], Section 8.2.2). Indirectly, it also affects what requests will be sent on a connection, since clients will generally only send requests on connections that they believe to be authoritative for the origin in question.",
+      "ja": "それは権限のある場合また、[RFC7540]のセクション9.1.1は、明示的に、接続は、複数のオリジンサーバに使用されることを可能にします。これは、応答は（[RFC7540]、セクション8.2.2を参照）の要求に直接応答のために、サーバープッシュの両方、権威と考えることができるものに影響します。間接的に、それはまた、クライアントは一般的にのみ、彼らは問題の起源のための信頼できると信じている接続でリクエストを送信しますので、リクエストは、接続上で送信されますどのような影響を与えます。"
+    },
+    {
+      "indent": 3,
+      "text": "Once an Origin Set has been initialized for a connection, clients that implement this specification use it to help determine what the connection is authoritative for. Specifically, such clients MUST NOT consider a connection to be authoritative for an origin not present in the Origin Set, and they SHOULD use the connection for all requests to origins in the Origin Set for which the connection is authoritative, unless there are operational reasons for opening a new connection.",
+      "ja": "原点の設定は、接続用に初期化された後、この仕様を実装するクライアントは、接続がために権威のあるものを判断するためにそれを使用します。具体的には、このようなクライアントは、Originの設定に存在していない起源のための信頼できるとの接続を考慮してはならない、とのための運用上の理由がない限り、彼らは、接続が権限を起源セット内の起源へのすべての要求のための接続を使用する必要があります新しい接続を開きます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that for a connection to be considered authoritative for a given origin, the server is still required to authenticate with a certificate that passes suitable checks; see Section 9.1.1 of [RFC7540] for more information. This includes verifying that the host matches a \"dNSName\" value from the certificate \"subjectAltName\" field (using the rules defined in [RFC2818]; see also [RFC5280], Section 4.2.1.6).",
+      "ja": "所定の原点に対して権限考慮すべき接続のために、サーバがまだ適切なチェックに合格証明書で認証するために必要であることに注意してください。詳細については、[RFC7540]のセクション9.1.1を参照してください。これは、ホスト証明書「のsubjectAltName」フィールドから「のdNSName」値に一致することを検証することは、（[RFC2818]で定義されたルールを使用して、また、[RFC5280]、セクション4.2.1.6を参照します）。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, clients MAY avoid consulting DNS to establish the connection's authority for new requests to origins in the Origin Set; however, those that do so face new risks, as explained in Section 4.",
+      "ja": "さらに、クライアントは、Originの設定で起源への新しい要求のための接続の権威を確立するためのコンサルティングDNSを回避することができます。しかし、第4節で説明したように、新たなリスクに直面しないもの。"
+    },
+    {
+      "indent": 3,
+      "text": "Because ORIGIN can change the set of origins a connection is used for over time, it is possible that a client might have more than one viable connection to an origin open at any time. When this occurs, clients SHOULD NOT emit new requests on any connection whose Origin Set is a proper subset of another connection's Origin Set, and they SHOULD close it once all outstanding requests are satisfied.",
+      "ja": "ORIGINは、接続が時間をかけてのために使用されているの起源のセットを変更することができますので、クライアントはいつでも開いて原点に複数の実行可能な接続を持っているかもしれないという可能性です。これが発生すると、クライアントは、Originの設定は、別の接続の原点セットの適切なサブセットである、と彼らはすべての未処理の要求が満たされている一度それを閉じる必要があります任意の接続で新しい要求を発するべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The Origin Set is unaffected by any alternative services [RFC7838] advertisements made by the server. Advertising an alternative service does not affect whether a server is authoritative.",
+      "ja": "オリジンの設定は、サーバによって行われた任意の代替サービス[RFC7838]広告による影響を受けません。代替サービスを宣伝することは、サーバが権威であるかどうかには影響しません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. IANA Considerations",
+      "section_title": true,
+      "ja": "3. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This specification adds an entry to the \"HTTP/2 Frame Type\" registry.",
+      "ja": "この仕様は「HTTP / 2フレームタイプ」レジストリにエントリを追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Frame Type: ORIGIN",
+      "ja": "Oフレームタイプ：ORIGIN"
+    },
+    {
+      "indent": 3,
+      "text": "o Code: 0xc",
+      "ja": "お こで： ０ｘｃ"
+    },
+    {
+      "indent": 3,
+      "text": "o Specification: RFC 8336",
+      "ja": "O仕様：RFC 8336"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Clients that blindly trust the ORIGIN frame's contents will be vulnerable to a large number of attacks. See Section 2.4 for mitigations.",
+      "ja": "盲目的ORIGINフレームの内容を信頼するクライアントは攻撃の大多数に対して脆弱になります。緩和策については、セクション2.4を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Relaxing the requirement to consult DNS when determining authority for an origin means that an attacker who possesses a valid certificate no longer needs to be on path to redirect traffic to them; instead of modifying DNS, they need only convince the user to visit another website in order to coalesce connections to the target onto their existing connection.",
+      "ja": "起源のための権限を決定する際にDNSを相談するための要件を緩和する有効な証明書を持っている攻撃者は、もはや彼らにトラフィックをリダイレクトするためにパス上にあることが必要であることを意味しません。代わりにDNSを変更するのではなく、彼らは既存の接続にターゲットへの接続を合体するために、別のウェブサイトを訪問するユーザーを納得させるだけです。"
+    },
+    {
+      "indent": 3,
+      "text": "As a result, clients opting not to consult DNS ought to employ some alternative means to establish a high degree of confidence that the certificate is legitimate. For example, clients might skip consulting DNS only if they receive proof of inclusion in a Certificate Transparency log [RFC6962] or if they have a recent Online Certificate Status Protocol (OCSP) response [RFC6960] (possibly using the \"status_request\" TLS extension [RFC6066]) showing that the certificate was not revoked.",
+      "ja": "その結果、DNSに相談しないで選ぶのクライアントは、証明書が正当なものであることを高い信頼度を確立するために、いくつかの代替手段を採用するべきです。例えば、クライアントは、証明書の透明性ログに[RFC6962]を含めることの証明を受けるか、彼らは（OCSP）応答[RFC6960]最近のオンライン証明書状態プロトコルを使用している場合（おそらく「status_request」TLS拡張[を使用している場合にのみコンサルティングDNSをスキップするかもしれませんRFC6066]）証明書が失効していなかったことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "The Origin Set's size is unbounded by this specification and thus could be used by attackers to exhaust client resources. To mitigate this risk, clients can monitor their state commitment and close the connection if it is too high.",
+      "ja": "原点セットのサイズは、この仕様で無制限れるため、クライアントのリソースを使い果たすために攻撃者によって使用することができます。このリスクを軽減するために、クライアントはそれらの状態のコミットメントを監視し、それが高すぎる場合、接続を閉じることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. References",
+      "section_title": true,
+      "ja": "5.参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Normative References",
+      "section_title": true,
+      "ja": "5.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2818] Rescorla, E., \"HTTP Over TLS\", RFC 2818, DOI 10.17487/RFC2818, May 2000, <https://www.rfc-editor.org/info/rfc2818>.",
+      "ja": "[RFC2818]レスコラ、E.、 \"TLSオーバーHTTP\"、RFC 2818、DOI 10.17487 / RFC2818、2000年5月、<https://www.rfc-editor.org/info/rfc2818>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5280] Cooper, D., Santesson, S., Farrell, S., Boeyen, S., Housley, R., and W. Polk, \"Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List (CRL) Profile\", RFC 5280, DOI 10.17487/RFC5280, May 2008, <https://www.rfc-editor.org/info/rfc5280>.",
+      "ja": "[RFC5280]クーパー、D.、Santesson、S.、ファレル、S.、Boeyen、S.、Housley氏、R.、およびW.ポーク、「インターネットX.509公開鍵暗号基盤証明書と証明書失効リスト（CRL）のプロフィール」、RFC 5280、DOI 10.17487 / RFC5280、2008年5月、<https://www.rfc-editor.org/info/rfc5280>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6066] Eastlake 3rd, D., \"Transport Layer Security (TLS) Extensions: Extension Definitions\", RFC 6066, DOI 10.17487/RFC6066, January 2011, <https://www.rfc-editor.org/info/rfc6066>.",
+      "ja": "[RFC6066]イーストレイク3日、D.、 \"トランスポート層セキュリティ（TLS）拡張機能：拡張定義\"、RFC 6066、DOI 10.17487 / RFC6066、2011年1月、<https://www.rfc-editor.org/info/rfc6066> 。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6454] Barth, A., \"The Web Origin Concept\", RFC 6454, DOI 10.17487/RFC6454, December 2011, <https://www.rfc-editor.org/info/rfc6454>.",
+      "ja": "[RFC6454]バース、A.、 \"ウェブ起源コンセプト\"、RFC 6454、DOI 10.17487 / RFC6454、2011年12月、<https://www.rfc-editor.org/info/rfc6454>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7540] Belshe, M., Peon, R., and M. Thomson, Ed., \"Hypertext Transfer Protocol Version 2 (HTTP/2)\", RFC 7540, DOI 10.17487/RFC7540, May 2015, <https://www.rfc-editor.org/info/rfc7540>.",
+      "ja": "[RFC7540] Belshe、M.、ペオン、R.、およびM.トムソン、エド、 \"ハイパーテキスト転送プロトコルバージョン2（HTTP / 2）\"、RFC 7540、DOI 10.17487 / RFC7540、2015年5月、<HTTPS：// www.rfc-editor.org/info/rfc7540>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B.、 \"RFC 2119個のキーワードに小文字VS大文字の曖昧さ\"、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Informative References",
+      "section_title": true,
+      "ja": "5.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6960] Santesson, S., Myers, M., Ankney, R., Malpani, A., Galperin, S., and C. Adams, \"X.509 Internet Public Key Infrastructure Online Certificate Status Protocol - OCSP\", RFC 6960, DOI 10.17487/RFC6960, June 2013, <https://www.rfc-editor.org/info/rfc6960>.",
+      "ja": "[RFC6960] Santesson、S.、マイヤーズ、M.、Ankney、R.、Malpani、A.、Galperin、S.、およびC.アダムス、 \"X.509のインターネット公開鍵暗号基盤のオンライン証明書状態プロトコル -  OCSP\"、RFC 6960、DOI 10.17487 / RFC6960、2013年6月、<https://www.rfc-editor.org/info/rfc6960>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6962] Laurie, B., Langley, A., and E. Kasper, \"Certificate Transparency\", RFC 6962, DOI 10.17487/RFC6962, June 2013, <https://www.rfc-editor.org/info/rfc6962>.",
+      "ja": "[RFC6962]ローリー、B.、ラングレー、A.、およびE.カスパー、 \"証明書の透明性\"、RFC 6962、DOI 10.17487 / RFC6962、2013年6月、<https://www.rfc-editor.org/info/rfc6962 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7230] Fielding, R., Ed. and J. Reschke, Ed., \"Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing\", RFC 7230, DOI 10.17487/RFC7230, June 2014, <https://www.rfc-editor.org/info/rfc7230>.",
+      "ja": "[RFC7230]フィールディング、R.、エド。及びJ. Reschke、編、 \"ハイパーテキスト転送プロトコル（HTTP / 1.1）：メッセージの構文およびルーティング\"、RFC 7230、DOI 10.17487 / RFC7230、2014年6月、<https://www.rfc-editor.org/info/ rfc7230>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7838] Nottingham, M., McManus, P., and J. Reschke, \"HTTP Alternative Services\", RFC 7838, DOI 10.17487/RFC7838, April 2016, <https://www.rfc-editor.org/info/rfc7838>.",
+      "ja": "[RFC7838]ノッティンガム、M.、マクマナス、P.、およびJ. Reschke、 \"HTTP代替サービス\"、RFC 7838、DOI 10.17487 / RFC7838、2016年4月、<https://www.rfc-editor.org/info/ rfc7838>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8288] Nottingham, M., \"Web Linking\", RFC 8288, DOI 10.17487/RFC8288, October 2017, <https://www.rfc-editor.org/info/rfc8288>.",
+      "ja": "[RFC8288]ノッティンガム、M.、 \"ウェブリンク\"、RFC 8288、DOI 10.17487 / RFC8288、2017年10月、<https://www.rfc-editor.org/info/rfc8288>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Non-Normative Processing Algorithm",
+      "ja": "付録A.非規範的処理アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "The following algorithm illustrates how a client could handle received ORIGIN frames:",
+      "ja": "次のアルゴリズムは、クライアントが受信ORIGINフレームを扱うことができる方法を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. If the client is configured to use a proxy for the connection, ignore the frame and stop processing.",
+      "ja": "1.クライアントは、接続のためのプロキシを使用してフレームを無視して処理を停止するように構成されている場合。"
+    },
+    {
+      "indent": 3,
+      "text": "2. If the connection is not identified with the \"h2\" protocol identifier or another protocol that has explicitly opted into this specification, ignore the frame and stop processing.",
+      "ja": "2.接続は、「H2」プロトコル識別子又は明示本明細書にオプトインした他のプロトコル、フレームを無視して処理を停止すると識別されない場合。"
+    },
+    {
+      "indent": 3,
+      "text": "3. If the frame occurs upon any stream except stream 0, ignore the frame and stop processing.",
+      "ja": "前記フレームは、ストリーム0以外の任意のストリームの際発生した場合は、フレームを無視して処理を停止します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. If any of the flags 0x1, 0x2, 0x4, or 0x8 are set, ignore the frame and stop processing.",
+      "ja": "フラグは0x1、0x2の、0x4の、または0x8というのいずれかが設定されている場合4.は、フレームを無視して処理を停止します。"
+    },
+    {
+      "indent": 3,
+      "text": "5. If no previous ORIGIN frame on the connection has reached this step, initialize the Origin Set as per Section 2.3.",
+      "ja": "5.接続には、前ORIGINフレームは、セクション2.3に従って原産地設定を初期化し、この段階に達していない場合。"
+    },
+    {
+      "indent": 3,
+      "text": "6. For each \"Origin-Entry\" in the frame payload:",
+      "section_title": true,
+      "ja": "フレームペイロード内の各「原点入力」6.。"
+    },
+    {
+      "indent": 7,
+      "text": "1.  Parse \"ASCII-Origin\" as an ASCII serialization of an origin\n    ([RFC6454], Section 6.2), and let the result be\n    \"parsed_origin\".  If parsing fails, skip to the next\n    \"Origin-Entry\".",
+      "raw": true
+    },
+    {
+      "indent": 7,
+      "text": "2. Add \"parsed_origin\" to the Origin Set.",
+      "section_title": true,
+      "ja": "2.原点セットに「parsed_origin」を追加します。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Operational Considerations for Servers",
+      "ja": "サーバーの付録B.運用に関する注意事項"
+    },
+    {
+      "indent": 3,
+      "text": "The ORIGIN frame allows a server to indicate for which origins a given connection ought be used. The set of origins advertised using this mechanism is under control of the server; servers are not obligated to use it or to advertise all origins that they might be able to answer a request for.",
+      "ja": "ORIGINフレームは、サーバが特定の接続が使用されるはずの起源のために示すことを可能にします。このメカニズムを使用してアドバタイズ起源のセットは、サーバの制御下にあります。サーバは、それを使用するか、彼らは要求に答えることができるかもしれない、すべての起源を宣伝する義務はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, it can be used to inform the client that the connection is to only be used for the SNI-based origin, by sending an empty ORIGIN frame. Or, a larger number of origins can be indicated by including a payload.",
+      "ja": "例えば、接続のみ空ORIGINフレームを送信することにより、SNI系起源のために使用されることをクライアントに通知するために使用することができます。あるいは、起源より多くのペイロードを含むことによって示すことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Generally, this information is most useful to send before sending any part of a response that might initiate a new connection; for example, \"Link\" response header fields [RFC8288], or links in the response body.",
+      "ja": "一般的に、この情報は、新しい接続を開始する可能性がある応答の一部を送信する前に送信するために最も有用です。例えば、「リンク」レスポンスヘッダーフィールド[RFC8288]、または応答ボディのリンク。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, the ORIGIN frame ought be sent as soon as possible on a connection, ideally before any HEADERS or PUSH_PROMISE frames.",
+      "ja": "したがって、ORIGINフレームは、理想的には任意のヘッダやPUSH_PROMISEフレームの前に、接続にできるだけ早く送信されべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "However, if it's desirable to associate a large number of origins with a connection, doing so might introduce end-user-perceived latency, due to their size. As a result, it might be necessary to select a \"core\" set of origins to send initially, and expand the set of origins the connection is used for with subsequent ORIGIN frames later (e.g., when the connection is idle).",
+      "ja": "それは接続に起源を大量に関連付けることが望ましいですしかし、もし、そうすることは、そのサイズのため、エンドユーザ知覚遅延を導入することがあります。結果として、それは最初に送信するために起源の「コア」セットを選択し、接続して後で後続ORIGINフレームとのために使用される起源のセットを展開する必要があるかもしれない（例えば、接続がアイドル状態のとき）。"
+    },
+    {
+      "indent": 3,
+      "text": "That said, senders are encouraged to include as many origins as practical within a single ORIGIN frame; clients need to make decisions about creating connections on the fly, and if the Origin Set is split across many frames, their behavior might be suboptimal.",
+      "ja": "それによると、送信者は、単一ORIGINフレーム内でできるだけ多くの起源を含むことが奨励されます。クライアントは、その場での接続の作成についての決定を行う必要があり、かつ原点セットは、多くのフレームに分割された場合、その挙動は次善のかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "Senders take note that, as per Section 4, Step 5, of [RFC6454], the values in an ORIGIN header need to be case-normalized before serialization.",
+      "ja": "送信者は[RFC6454]と、第4のとおりなお、ステップ5をとり、ORIGINヘッダの値はシリアライゼーション前場合、正規化する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, servers that host alternative services [RFC7838] will need to explicitly advertise their origins when sending ORIGIN, because the default contents of the Origin Set (as per Section 2.3) do not contain any alternative services' origins, even if they have been used previously on the connection.",
+      "ja": "（2.3節ごとなど）起源セットのデフォルトの内容は、彼らが使用されている場合でも、任意の代替サービスの起源を含んでいないので、最後に、代替サービス[RFC7838]をホストするサーバーは、ORIGINを送信するときに、明示的にその起源を宣伝する必要があります。以前の接続に。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Nottingham",
+      "ja": "マーク・ノッティンガム"
+    },
+    {
+      "indent": 3,
+      "text": "Email: mnot@mnot.net URI: https://www.mnot.net/",
+      "ja": "メール：mnot@mnot.net URI：https://www.mnot.net/"
+    },
+    {
+      "indent": 3,
+      "text": "Erik Nygren Akamai Technologies",
+      "ja": "エリックNygrenアカマイ・テクノロジーズ"
+    },
+    {
+      "indent": 3,
+      "text": "Email: erik+ietf@nygren.org",
+      "ja": "メール：erik+ietf@nygren.org"
+    }
+  ]
+}
