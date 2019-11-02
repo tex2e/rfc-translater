@@ -1,0 +1,604 @@
+{
+  "title": {
+    "text": "RFC 6528 - Defending against Sequence Number Attacks",
+    "ja": "RFC 6528 - シーケンス番号攻撃からの保護"
+  },
+  "number": 6528,
+  "created_at": "2019-10-27 07:55:29.712944+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                           F. Gont\nRequest for Comments: 6528                        SI6 Networks / UTN-FRH\nObsoletes: 1948                                              S. Bellovin\nUpdates: 793                                         Columbia University\nCategory: Standards Track                                  February 2012\nISSN: 2070-1721",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Defending against Sequence Number Attacks",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "抽象"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies an algorithm for the generation of TCP Initial Sequence Numbers (ISNs), such that the chances of an off-path attacker guessing the sequence numbers in use by a target connection are reduced. This document revises (and formally obsoletes) RFC 1948, and takes the ISN generation algorithm originally proposed in that document to Standards Track, formally updating RFC 793.",
+      "ja": "この文書では、ターゲット接続によって使用中のシーケンス番号を推測オフパス攻撃の可能性が低減されるように、TCP初期シーケンス番号（ISNの）を生成するためのアルゴリズムを指定します。この文書は改訂（と正式に廃止）RFC 1948、および正式にRFC 793を更新し、標準化過程に元々その文書で提案されているISN生成アルゴリズムを取ります。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準化過程文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 5741.",
+      "ja": "このドキュメントはインターネットエンジニアリングタスクフォース（IETF）の製品です。これは、IETFコミュニティの総意を表しています。これは、公開レビューを受けており、インターネットエンジニアリング運営グループ（IESG）によって公表のために承認されています。インターネット標準の詳細については、RFC 5741のセクション2で利用可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at http://www.rfc-editor.org/info/rfc6528.",
+      "ja": "このドキュメントの現在の状態、任意の正誤表、そしてどのようにフィードバックを提供するための情報がhttp://www.rfc-editor.org/info/rfc6528で取得することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2012 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2012 IETF信託とドキュメントの作成者として特定の人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (http://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書では、BCP 78と、この文書の発行日に有効なIETFドキュメント（http://trustee.ietf.org/license-info）に関連IETFトラストの法律の規定に従うものとします。彼らは、この文書に関してあなたの権利と制限を説明するように、慎重にこれらの文書を確認してください。コードコンポーネントは、トラスト法規定のセクションで説明4.eおよび簡体BSDライセンスで説明したように、保証なしで提供されているよう簡体BSDライセンスのテキストを含める必要があり、この文書から抽出されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction . . . . . . . . . . . . . . . . . . . . . . . . .  2\n2.  Generation of Initial Sequence Numbers . . . . . . . . . . . .  3\n3.  Proposed Initial Sequence Number Generation Algorithm  . . . .  4\n4.  Security Considerations  . . . . . . . . . . . . . . . . . . .  5\n5.  Acknowledgements . . . . . . . . . . . . . . . . . . . . . . .  6\n6.  References . . . . . . . . . . . . . . . . . . . . . . . . . .  6\n  6.1.  Normative References . . . . . . . . . . . . . . . . . . .  6\n  6.2.  Informative References . . . . . . . . . . . . . . . . . .  7\nAppendix A.  Address-Based Trust-Relationship Exploitation\n             Attacks . . . . . . . . . . . . . . . . . . . . . . . 10\n  A.1.  Blind TCP Connection-Spoofing  . . . . . . . . . . . . . . 10\nAppendix B.  Changes from RFC 1948 . . . . . . . . . . . . . . . . 12",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1.はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "For a long time, the Internet has experienced a number of off-path attacks against TCP connections. These attacks have ranged from trust-relationship exploitation to denial-of-service attacks [CPNI-TCP]. Discussion of some of these attacks dates back to at least 1985, when Morris [Morris1985] described a form of attack based on guessing what sequence numbers TCP [RFC0793] will use for new connections between two known end-points.",
+      "ja": "長い間、インターネットはTCP接続に対してオフパス攻撃の数を経験しています。これらの攻撃は、信頼関係の搾取からのサービス拒否攻撃[CPNI-TCP]の範囲であったしています。これらの攻撃のいくつかの議論は、バックモリス[Morris1985]は数字のTCP [RFC0793]は二つの既知のエンドポイント間の新しい接続に使用するどのような順序を推測に基づいて攻撃の形を説明し、少なくとも1985年にさかのぼります。"
+    },
+    {
+      "indent": 3,
+      "text": "In 1996, RFC 1948 [RFC1948] proposed an algorithm for the selection of TCP Initial Sequence Numbers (ISNs), such that the chances of an off-path attacker guessing valid sequence numbers are reduced. With the aforementioned algorithm, such attacks would remain possible if and only if the attacker already has the ability to perform \"man-in-the-middle\" attacks.",
+      "ja": "1996年には、RFC 1948 [RFC1948]は、有効なシーケンス番号を推測オフパス攻撃の可能性が低減されるようにTCP初期シーケンス番号（ISNの）を選択するためのアルゴリズムを提案しました。上記のアルゴリズムでは、このような攻撃は、攻撃者は、すでに「のman-in-the-middle」攻撃を実行する能力を持っている場合にのみ可能残ります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document revises (and formally obsoletes) RFC 1948, and takes the ISN generation algorithm originally proposed in that document to Standards Track.",
+      "ja": "この文書は改訂（と正式に廃止）RFC 1948を、もともと標準化過程への文書で提案されているISN生成アルゴリズムを取ります。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 2 provides a brief discussion of the requirements for a good ISN generation algorithm. Section 3 specifies a good ISN selection algorithm. Appendix A provides a discussion of the trust-relationship exploitation attacks that originally motivated the publication of RFC 1948 [RFC1948]. Finally, Appendix B lists the differences from RFC 1948 to this document.",
+      "ja": "第2節では、良いISN生成アルゴリズムのための要件の簡単な説明を提供します。第3節では良いISN選択アルゴリズムを指定します。付録Aは元々RFC 1948 [RFC1948]の発行を動機付け信頼関係搾取攻撃の議論を提供します。最後に、付録Bは、本文書にRFC 1948との違いを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119].",
+      "ja": "この文書のキーワード \"MUST\"、 \"MUST NOT\"、 \"REQUIRED\"、、、、 \"べきではない\" \"べきである\" \"ないもの\" \"ものとし\"、 \"推奨\"、 \"MAY\"、および \"OPTIONAL\" はありますRFC 2119 [RFC2119]に記載されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Generation of Initial Sequence Numbers",
+      "section_title": true,
+      "ja": "初期シーケンス番号の2世代"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 793 [RFC0793] suggests that the choice of the ISN of a connection is not arbitrary, but aims to reduce the chances of a stale segment from being accepted by a new incarnation of a previous connection. RFC 793 [RFC0793] suggests the use of a global 32-bit ISN generator that is incremented by 1 roughly every 4 microseconds.",
+      "ja": "RFC 793 [RFC0793]は、接続のISNの選択は任意ではなく、以前の接続の新しい化身によって受け入れられるから古くなったセグメントの可能性を低減することを目的とすることを示唆しています。 RFC 793 [RFC0793]は1おおよそ毎に4マイクロ秒だけインクリメントされるグローバル32ビットISN発生器の使用を示唆しています。"
+    },
+    {
+      "indent": 3,
+      "text": "It is interesting to note that, as a matter of fact, protection against stale segments from a previous incarnation of the connection is enforced by preventing the creation of a new incarnation of a previous connection before 2*MSL have passed since a segment corresponding to the old incarnation was last seen (where \"MSL\" is the \"Maximum Segment Lifetime\" [RFC0793]). This is accomplished by the TIME-WAIT state and TCP's \"quiet time\" concept (see Appendix B of [RFC1323]).",
+      "ja": "実際の問題として、コネクションの前の化身から古いセグメントに対する保護は、セグメントがに対応する経過した2 * MSLの前に、前の接続の新しい化身の作成を防止することによって強制され、それを注意することは興味深いことです古い化身は（「MSL」は「最大セグメント寿命」[RFC0793]である。）最後に見られました。これは、TIME-WAIT状態とTCPの「静かな時間」の概念（[RFC1323]の付録Bを参照）することによって達成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Based on the assumption that ISNs are monotonically increasing across connections, many stacks (e.g., 4.2BSD-derived) use the ISN of an incoming SYN segment to perform \"heuristics\" that enable the creation of a new incarnation of a connection while the previous incarnation is still in the TIME-WAIT state (see p. 945 of [Wright1994]). This avoids an interoperability problem that may arise when a node establishes connections to a specific TCP end-point at a high rate [Silbersack2005].",
+      "ja": "仮定に基づいて、ISNは単調に接続にわたって増加していることは、多くの積層体（例えば、4.2BSD由来）前化身ながら接続の新しい化身を作成できる「ヒューリスティックス」を実行する着信SYNセグメントのISNを使用（[Wright1994]におけるp。945を参照）TIME-WAIT状態のままです。これは、ノードが高レート[Silbersack2005]で特定のTCPエンドポイントへの接続を確立するときに発生する可能性がある相互運用性の問題を回避します。"
+    },
+    {
+      "indent": 3,
+      "text": "Unfortunately, the ISN generator described in [RFC0793] makes it trivial for an off-path attacker to predict the ISN that a TCP will use for new connections, thus allowing a variety of attacks against TCP connections [CPNI-TCP]. One of the possible attacks that takes advantage of weak sequence numbers was first described in [Morris1985], and its exploitation was widely publicized about 10 years later [Shimomura1995]. [CERT2001] and [USCERT2001] are advisories about the security implications of weak ISN generators. [Zalewski2001] and [Zalewski2002] contain a detailed analysis of ISN generators, and a survey of the algorithms in use by popular TCP implementations.",
+      "ja": "残念ながら、[RFC0793]で説明ISNジェネレータは、TCPは、このようにTCPコネクション[CPNI-TCP]に対するさまざまな攻撃を許す、新しい接続のために使用することISNを予測するために、オフパス攻撃者にとっては些細なことができます。弱いシーケンス番号を利用して攻撃の可能性の一つは、最初の[Morris1985]で説明し、その利用が広く[Shimomura1995]約10年後に公表されました。 【CERT2001]および[USCERT2001】弱いISNジェネレータのセキュリティへの影響についての勧告です。 [Zalewski2001]と[Zalewski2002] ISN発電機の詳細な分析、そして人気のTCP実装によって使用されているアルゴリズムの調査を含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "Simple random selection of the TCP ISNs would mitigate those attacks that require an attacker to guess valid sequence numbers. However, it would also break the 4.4BSD \"heuristics\" to accept a new incoming connection when there is a previous incarnation of that connection in the TIME-WAIT state [Silbersack2005].",
+      "ja": "TCP ISNの単純なランダムな選択は、有効なシーケンス番号を推測する攻撃者を必要とする攻撃を軽減します。 TIME-WAIT状態[Silbersack2005]でその接続の前の化身があった場合しかし、それはまた、新しい着信接続を受け入れるように4.4BSD「ヒューリスティック」を破ります。"
+    },
+    {
+      "indent": 3,
+      "text": "We can prevent sequence number guessing attacks by giving each connection -- that is, each four-tuple of (localip, localport, remoteip, remoteport) -- a separate sequence number space. Within each space, the ISN is incremented according to [RFC0793]; however, there is no obvious relationship between the numbering in different spaces.",
+      "ja": "我々は、各接続を与えることによって、攻撃を推測シーケンス番号を防止することができる - すなわち、（localip、次に、localport、remoteip、次に、remoteport）の各4タプル - 別個のシーケンス番号空間を。各空間内に、ISNは、[RFC0793]に従ってインクリメントされます。しかし、異なる空間の番号の間には明確な関係はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "An obvious way to prevent sequence number guessing attacks while not breaking the 4.4BSD heuristics would be to perform a simple random selection of TCP ISNs while maintaining state for dead connections (e.g. changing the TCP state transition diagram so that both end-points of all connections go to TIME-WAIT state). That would work but would consume system memory to store the additional state. Instead, we propose an improvement to the TCP ISN generation algorithm that does not require TCP to keep state for all recently terminated connections.",
+      "ja": "すべての接続の両方のエンドポイントになるようにTCPの状態遷移図を変更死ん接続（例えばの状態を維持しながら、4.4BSDのヒューリスティックを壊していないながら攻撃を推測するシーケンス番号を防止するための明白な方法は、TCP ISNの簡単なランダムな選択を行うことであろう）TIME-WAIT状態になります。それは動作しますが、追加の状態を保存するために、システムメモリを消費することになります。代わりに、我々はすべて、最近終了した接続の状態を維持するためにTCPを必要としないTCPのISN生成アルゴリズムの改良を提案します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Proposed Initial Sequence Number Generation Algorithm",
+      "section_title": true,
+      "ja": "3.提案初期シーケンス番号生成アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "TCP SHOULD generate its Initial Sequence Numbers with the expression:",
+      "ja": "TCPは、表現とその初期シーケンス番号を生成する必要があります："
+    },
+    {
+      "indent": 6,
+      "text": "ISN = M + F(localip, localport, remoteip, remoteport, secretkey)",
+      "ja": "ISN = M + F（localip、次に、localport、remoteip、次に、remoteport、秘密鍵）"
+    },
+    {
+      "indent": 3,
+      "text": "where M is the 4 microsecond timer, and F() is a pseudorandom function (PRF) of the connection-id. F() MUST NOT be computable from the outside, or an attacker could still guess at sequence numbers from the ISN used for some other connection. The PRF could be implemented as a cryptographic hash of the concatenation of the connection-id and some secret data; MD5 [RFC1321] would be a good choice for the hash function.",
+      "ja": "ここで、Mは4マイクロ秒のタイマーであり、F（）は接続IDの擬似ランダム関数（PRF）です。 F（）は、外部から計算しているはずがありません、または攻撃者は、まだいくつかの他の接続に使用するISNからシーケンス番号を推測できました。 PRFは、接続IDと、いくつかの秘密データの連結の暗号ハッシュとして実現することができます。 MD5 [RFC1321]はハッシュ関数のために良い選択となります。"
+    },
+    {
+      "indent": 3,
+      "text": "The result of F() is no more secure than the secret key. If an attacker is aware of which cryptographic hash function is being used by the victim (which we should expect), and the attacker can obtain enough material (i.e., ISNs selected by the victim), the attacker may simply search the entire secret-key space to find matches. To protect against this, the secret key should be of a reasonable length. Key lengths of 128 bits should be adequate. The secret key can either be a true random number [RFC4086] or some per-host secret. A possible mechanism for protecting the secret key would be to change it on occasion. For example, the secret key could be changed whenever one of the following events occur:",
+      "ja": "F（）の結果は、秘密鍵よりもより安全ではありません。攻撃者は（私たちが期待するべき）被害者によって使用されている、および攻撃者が十分な材料を得ることができ、暗号化されたハッシュ関数を認識している場合（つまり、被害者が選択したISNが）、攻撃者は、単に全体の秘密鍵を検索することができマッチを見つけるためのスペース。これを防ぐために、秘密鍵は、合理的な長さであるべきです。 128ビットの鍵長さは適切でなければなりません。秘密鍵は、真の乱数[RFC4086]または一部のホストごと秘密のいずれかとすることができます。秘密鍵を保護するための可能なメカニズムは、機会にそれを変更することです。次のいずれかのイベントが発生するたび例えば、秘密鍵を変更することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "o The system is being bootstrapped (e.g., the secret key could be a combination of some secret and the boot time of the machine).",
+      "ja": "Oシステムは、（例えば、秘密鍵は、いくつかの秘密の組み合わせと機械の起動時間とすることができる）ブートストラップされています。"
+    },
+    {
+      "indent": 3,
+      "text": "o Some predefined/random time has expired.",
+      "ja": "Oいくつかの定義済み/ランダムな時間が経過しました。"
+    },
+    {
+      "indent": 3,
+      "text": "o The secret key has been used sufficiently often that it should be regarded as insecure at that point.",
+      "ja": "O秘密鍵は、それがその時点で安全でないと見なされるべきであることを十分に頻繁に使用されてきました。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that changing the secret would change the ISN space used for reincarnated connections, and thus could cause the 4.4BSD heuristics to fail; to maintain safety, either dead connection state could be kept or a quiet time observed for two maximum segment lifetimes before such a change.",
+      "ja": "秘密を変更すると生まれ変わり接続に使用されるISNスペースを変更することに注意してくださいので、4.4BSDの経験則が失敗する可能性があります。安全性、どちらか死んで接続状態を維持するために保管または静かな時間は、変更前の2つの最大セグメント寿命のために観察することができました。"
+    },
+    {
+      "indent": 3,
+      "text": "It should be noted that while there have been concerns about the security properties of MD5 [RFC6151], the algorithm specified in this document simply aims at reducing the chances of an off-path attacker guessing the ISN of a new connection, and thus in our threat model it is not worth the effort for an attacker to try to learn the secret key. Since MD5 is faster than other \"stronger\" alternatives, and is used in virtually all existing implementations of this algorithm, we consider that use of MD5 in the specified algorithm is acceptable. However, implementations should consider the trade-offs involved in using functions with stronger security properties, and employ them if it is deemed appropriate.",
+      "ja": "MD5のセキュリティ特性についての懸念[RFC6151]、この文書で指定されたアルゴリズムは、単に新しい接続のISNを推測オフパス攻撃の可能性を低減することを目的とし、したがって、私たちの中に存在してきたがことに留意すべきです脅威モデルは、それが秘密鍵を学ぼうとする攻撃者のために努力する価値はありません。 MD5は他の「強い」の選択肢よりも高速で、このアルゴリズムのほぼすべての既存の実装で使用されているので、私たちは、指定されたアルゴリズムでMD5の使用が許容可能であることを考えます。しかし、実装はより強力なセキュリティプロパティを持つ関数の使用に関連するトレードオフを考慮し、それが適切であるとみなされた場合、それらを採用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4.セキュリティについての考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Good sequence numbers are not a replacement for cryptographic authentication, such as that provided by IPsec [RFC4301] or the TCP Authentication Option (TCP-AO) [RFC5925]. At best, they are a palliative measure.",
+      "ja": "良好なシーケンス番号は、IPsecの[RFC4301]またはTCP認証オプション（TCP-AO）[RFC5925]で提供されるように、暗号化認証に代わるものではありません。せいぜい、彼らは緩和的尺度です。"
+    },
+    {
+      "indent": 3,
+      "text": "If random numbers are used as the sole source of the secret, they MUST be chosen in accordance with the recommendations given in [RFC4086].",
+      "ja": "乱数が秘密の唯一の供給源として使用されている場合、それらは[RFC4086]で与えられた勧告に従って選ばなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A security consideration that should be made about the algorithm proposed in this document is that it might allow an attacker to count the number of systems behind a Network Address Translator (NAT) [RFC3022]. Depending on the ISN generators implemented by each of the systems behind the NAT, an attacker might be able to count the number of systems behind a NAT by establishing a number of TCP connections (using the public address of the NAT) and identifying the number of different sequence number \"spaces\". [Gont2009] discusses how this and other information leakages at NATs could be mitigated.",
+      "ja": "この文書で提案されたアルゴリズムについて行われるべきセキュリティ上の考慮事項は、攻撃者がネットワークアドレス変換（NAT）[RFC3022]の背後にあるシステムの数をカウントすることを可能にするかもしれないということです。 NATの背後にあるシステムのそれぞれによって実装ISNジェネレータによっては、攻撃者が（NATのパブリックアドレスを使用して）TCP接続の数を確立し、数を識別することにより、NATの背後にあるシステムの数をカウントすることができるかもしれません異なるシーケンス番号「スペース」。 [Gont2009]は、NATので、このおよびその他の情報の漏洩を軽減することができる方法について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "An eavesdropper who can observe the initial messages for a connection can determine its sequence number state, and may still be able to launch sequence number guessing attacks by impersonating that connection. However, such an eavesdropper can also hijack existing connections [Joncheray1995], so the incremental threat is not that high. Still, since the offset between a fake connection and a given real connection will be more or less constant for the lifetime of the secret, it is important to ensure that attackers can never capture such packets. Typical attacks that could disclose them include both eavesdropping and the variety of routing attacks discussed in [Bellovin1989].",
+      "ja": "接続のための最初のメッセージを確認することができ、盗聴者は、そのシーケンス番号の状態を決定することができ、そしてまだその接続を偽装することにより、シーケンス番号推測攻撃を開始することができるかもしれません。しかしながら、そのような盗聴者はまた、[Joncheray1995]既存の接続をハイジャックすることができるので、増分脅威は、高くありません。偽の接続部との間のオフセットと与えられた実際の接続は、秘密の寿命のために多かれ少なかれ一定であるので、それでも、攻撃者がこのようなパケットをキャプチャすることはできないことを確認することが重要です。それらは、盗聴や[Bellovin1989]で説明したルーティング攻撃の種々の両方を含む可能性が開示されている典型的な攻撃。"
+    },
+    {
+      "indent": 3,
+      "text": "Off-path attacks against TCP connections require the attacker to guess or know the four-tuple (localip, localport, remoteip, remoteport) that identifies the target connection. TCP port number randomization [RFC6056] reduces the chances of an attacker of guessing such a four-tuple by obfuscating the selection of TCP ephemeral ports, therefore contributing to the mitigation of such attacks. [RFC6056] provides advice on the selection of TCP ephemeral ports, such that the overall protection of TCP connections against off-path attacks is improved.",
+      "ja": "TCP接続に対してオフパス攻撃は、ターゲット接続を識別する4タプル（localip、次に、localport、remoteip、次に、remoteport）を推測するかを知っている攻撃者を必要としています。 TCPポート番号のランダム化[RFC6056]はそのような攻撃の緩和に貢献するため、TCPエフェメラルポートの選択を難読化することにより、このような四組を推測の攻撃の可能性を減少させます。 [RFC6056]はオフ・パス攻撃に対するTCP接続の全体的な保護が改善されるように、TCPエフェメラルポートの選択にアドバイスを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "[CPNI-TCP] contains a discussion of all the currently known attacks that require an attacker to know or be able to guess the TCP sequence numbers in use by the target connection.",
+      "ja": "[CPNI-TCP]知っているか、ターゲット接続で使用中のTCPシーケンス番号を推測することができるように、攻撃者が必要とするすべての現在知られている攻撃の議論が含まれています。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Acknowledgements",
+      "section_title": true,
+      "ja": "5.謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Matt Blaze and Jim Ellis contributed some crucial ideas to RFC 1948, on which this document is based. Frank Kastenholz contributed constructive comments to that memo.",
+      "ja": "マット・ブレイズとジム・エリスは、このドキュメントの基になっているRFC 1948にいくつかの重要なアイデアを貢献しました。フランクKastenholzとは、そのメモに建設的なコメントを貢献しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors of this document would like to thank (in chronological order) Alfred Hoenes, Lloyd Wood, Lars Eggert, Joe Touch, William Allen Simpson, Tim Shepard, Wesley Eddy, Anantha Ramaiah, and Ben Campbell for providing valuable comments on draft versions of this document.",
+      "ja": "本書の著者はドラフトバージョンの貴重なコメントを提供するために（年代順に）アルフレッドHoenes、ロイド・ウッド、ラースEggertの、ジョー・タッチ、ウィリアムアレンシンプソン、ティム・シェパード、ウェズリーエディ、Anantha Ramaiah、ベン・キャンベルに感謝したいと思いますこのドキュメント。"
+    },
+    {
+      "indent": 3,
+      "text": "Fernando Gont wishes to thank Jorge Oscar Gont, Nelida Garcia, and Guillermo Gont for their love and support, and Daniel Bellomo and Christian O'Flaherty for their support in his Internet engineering activities.",
+      "ja": "フェルナンドGontは彼のインターネットエンジニアリング活動における彼らのサポートのためにホルヘオスカーGont、Nelidaガルシア、そして彼らの愛とサポートのためギジェルモGont、そしてダニエルBellomoとキリスト教O'Flahertyに感謝したいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Fernando Gont's attendance to IETF meetings was supported by ISOC's \"Fellowship to the IETF\" program.",
+      "ja": "IETFミーティングにフェルナンドGontの出席は、ISOCのプログラム「フェローシップIETFへ」によってサポートされていました。"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6.参照"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1。引用規格"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0793] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, September 1981.",
+      "ja": "[RFC0793]ポステル、J.、 \"伝送制御プロトコル\"、STD 7、RFC 793、1981年9月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1321] Rivest, R., \"The MD5 Message-Digest Algorithm\", RFC 1321, April 1992.",
+      "ja": "[RFC1321]のRivest、R.、 \"MD5メッセージダイジェストアルゴリズム\"、RFC 1321、1992年4月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1323] Jacobson, V., Braden, B., and D. Borman, \"TCP Extensions for High Performance\", RFC 1323, May 1992.",
+      "ja": "[RFC1323]ジェーコブソン、V.、ブレーデン、B.、およびD.ボーマン、 \"ハイパフォーマンスのためのTCP拡張\"、RFC 1323、1992年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, March 1997.",
+      "ja": "[RFC2119]ブラドナーの、S.、 \"要件レベルを示すためにRFCsにおける使用のためのキーワード\"、BCP 14、RFC 2119、1997年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, June 2005.",
+      "ja": "[RFC4086]イーストレーク、D.、シラー、J.、およびS.クロッカー、 \"セキュリティのためのランダム要件\"、BCP 106、RFC 4086、2005年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6056] Larsen, M. and F. Gont, \"Recommendations for Transport-Protocol Port Randomization\", BCP 156, RFC 6056, January 2011.",
+      "ja": "[RFC6056]ラーセン、M.とF. Gont、BCP 156、RFC 6056、2011年1月 \"トランスポート・プロトコルポートランダム化のための提言\"。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2。参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[Bellovin1989] Morris, R., \"Security Problems in the TCP/IP Protocol Suite\", Computer Communications Review, vol. 19, no. 2, pp. 32-48, 1989.",
+      "ja": "[Bellovin1989]モリス、R.、 \"TCP / IPプロトコルスイートのセキュリティ問題\"、コンピュータコミュニケーションレビュー、巻。 19、ありません。 2、PP。32-48、1989。"
+    },
+    {
+      "indent": 3,
+      "text": "[CERT2001] CERT, \"CERT Advisory CA-2001-09: Statistical Weaknesses in TCP/IP Initial Sequence Numbers\", http://www.cert.org/advisories/CA-2001-09.html, 2001.",
+      "ja": "[CERT2001] CERT、 \"CERT勧告CA-2001-09：TCP / IP初期シーケンス番号で統計的弱点\"、http://www.cert.org/advisories/CA-2001-09.html、2001。"
+    },
+    {
+      "indent": 3,
+      "text": "[CPNI-TCP] CPNI, \"Security Assessment of the Transmission Control Protocol (TCP)\", http://www.gont.com.ar/ papers/tn-03-09-security-assessment-TCP.pdf, 2009.",
+      "ja": "[CPNI-TCP] CPNI、 \"伝送制御プロトコル（TCP）のセキュリティ評価\"、http://www.gont.com.ar/論文/ TN-03-09-セキュリティ・アセスメント・TCP.pdf、2009。"
+    },
+    {
+      "indent": 3,
+      "text": "[Gont2009] Gont, F. and P. Srisuresh, \"Security implications of Network Address Translators (NATs)\", Work in Progress, October 2009.",
+      "ja": "[Gont2009] Gont、F.とP. Srisureshは、進歩、2009年10月に作品 \"ネットワークのセキュリティへの影響は、翻訳者（NATのを）アドレス\"。"
+    },
+    {
+      "indent": 3,
+      "text": "[Joncheray1995] Joncheray, L., \"A Simple Active Attack Against TCP\", Proc. Fifth Usenix UNIX Security Symposium, 1995.",
+      "ja": "[Joncheray1995] Joncheray、L.、 \"TCPに対する単純なアクティブな攻撃\"、PROC。第五のUsenix UNIXセキュリティシンポジウム、1995。"
+    },
+    {
+      "indent": 3,
+      "text": "[Morris1985] Morris, R., \"A Weakness in the 4.2BSD UNIX TCP/IP Software\", CSTR 117, AT&T Bell Laboratories, Murray Hill, NJ, 1985.",
+      "ja": "[Morris1985]モリス、R.、 \"4.2BSD UNIX TCP / IPソフトウェアで弱さ\"、CSTR 117、AT＆Tベル研究所、マリーヒル、NJ、1985。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0854] Postel, J. and J. Reynolds, \"Telnet Protocol Specification\", STD 8, RFC 854, May 1983.",
+      "ja": "[RFC0854]ポステル、J.、およびJ.レイノルズ、 \"テルネットプロトコル仕様\"、STD 8、RFC 854、1983年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034] Mockapetris, P., \"Domain names - concepts and facilities\", STD 13, RFC 1034, November 1987.",
+      "ja": "[RFC1034] Mockapetris、P.、 \"ドメイン名 - 概念と設備\"、STD 13、RFC 1034、1987年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1948] Bellovin, S., \"Defending Against Sequence Number Attacks\", RFC 1948, May 1996.",
+      "ja": "[RFC1948] Bellovin氏、S.、 \"シーケンス番号攻撃からの保護\"、RFC 1948、1996年5月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3022] Srisuresh, P. and K. Egevang, \"Traditional IP Network Address Translator (Traditional NAT)\", RFC 3022, January 2001.",
+      "ja": "[RFC3022] Srisuresh、P.とK. Egevang、 \"伝統的なIPネットワークアドレス変換（NAT繁体字）\"、RFC 3022、2001年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4120] Neuman, C., Yu, T., Hartman, S., and K. Raeburn, \"The Kerberos Network Authentication Service (V5)\", RFC 4120, July 2005.",
+      "ja": "[RFC4120]ノイマン、C.、ゆう、T.、ハルトマン、S.、およびK.レイバーン、 \"ケルベロスネットワーク認証サービス（V5）\"、RFC 4120、2005年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4251] Ylonen, T. and C. Lonvick, \"The Secure Shell (SSH) Protocol Architecture\", RFC 4251, January 2006.",
+      "ja": "[RFC4251] Ylonenと、T.とC. Lonvick、 \"セキュアシェル（SSH）プロトコルアーキテクチャ\"、RFC 4251、2006年1月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4301] Kent, S. and K. Seo, \"Security Architecture for the Internet Protocol\", RFC 4301, December 2005.",
+      "ja": "[RFC4301]ケント、S.とK. Seo、 \"インターネットプロトコルのためのセキュリティアーキテクチャ\"、RFC 4301、2005年12月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4954] Siemborski, R. and A. Melnikov, \"SMTP Service Extension for Authentication\", RFC 4954, July 2007.",
+      "ja": "[RFC4954] Siemborski、R.とA.メルニコフ、 \"認証のためのSMTPサービス拡張子\"、RFC 4954、2007年7月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5321] Klensin, J., \"Simple Mail Transfer Protocol\", RFC 5321, October 2008.",
+      "ja": "[RFC5321] Klensin、J.、 \"簡易メール転送プロトコル\"、RFC 5321、2008年10月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5925] Touch, J., Mankin, A., and R. Bonica, \"The TCP Authentication Option\", RFC 5925, June 2010.",
+      "ja": "[RFC5925]をタッチし、J.、マンキン、A.、およびR. Bonica、 \"TCP認証オプション\"、RFC 5925、2010年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5936] Lewis, E. and A. Hoenes, \"DNS Zone Transfer Protocol (AXFR)\", RFC 5936, June 2010.",
+      "ja": "[RFC5936]ルイス、E.およびA. Hoenes、 \"DNSゾーン転送プロトコル（AXFR）\"、RFC 5936、2010年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6151] Turner, S. and L. Chen, \"Updated Security Considerations for the MD5 Message-Digest and the HMAC-MD5 Algorithms\", RFC 6151, March 2011.",
+      "ja": "[RFC6151]ターナー、S.とL.チェン、 \"MD5メッセージダイジェストとHMAC-MD5アルゴリズムのための更新されたセキュリティ上の考慮事項\"、RFC 6151、2011年3月。"
+    },
+    {
+      "indent": 3,
+      "text": "[Shimomura1995] Shimomura, T., \"Technical details of the attack described by Markoff in NYT\", http://www.gont.com.ar/docs/post-shimomura-usenet.txt, Message posted in USENET's comp.security.misc newsgroup, Message-ID: <3g5gkl$5j1@ariel.sdsc.edu>, 1995.",
+      "ja": "[Shimomura1995]下村、T.、「NYTにマルコフによって記述攻撃の技術的詳細」、http://www.gont.com.ar/docs/post-shimomura-usenet.txt、メッセージはUSENETのcomp.securityに投稿します.miscニュースグループ、メッセージ-ID：<3g5gkl$5j1@ariel.sdsc.edu>、1995年。"
+    },
+    {
+      "indent": 3,
+      "text": "[Silbersack2005] Silbersack, M., \"Improving TCP/IP security through randomization without sacrificing interoperability\", EuroBSDCon 2005 Conference.",
+      "ja": "[Silbersack2005] Silbersack、M.、 \"相互運用性を犠牲にすることなく、ランダム化を通じてTCP / IPセキュリティの改善\"、EuroBSDCon 2005会議。"
+    },
+    {
+      "indent": 3,
+      "text": "[USCERT2001] US-CERT, \"US-CERT Vulnerability Note VU#498440: Multiple TCP/IP implementations may use statistically predictable initial sequence numbers\", http://www.kb.cert.org/vuls/id/498440, 2001.",
+      "ja": "[USCERT2001】米国-CERT、 \"US-CERT脆弱性ノートVU＃498440：複数のTCP / IPの実装は、統計的に予測可能な初期シーケンス番号を使用することができます\"、http://www.kb.cert.org/vuls/id/498440、2001 。"
+    },
+    {
+      "indent": 3,
+      "text": "[Wright1994] Wright, G. and W. Stevens, \"TCP/IP Illustrated, Volume 2: The Implementation\", Addison-Wesley, 1994.",
+      "ja": "[Wright1994]ライト、G.とW.スティーブンス、 \"TCP / IPイラスト、2巻：インプリメンテーション\"、アディソン・ウェズリー、1994。"
+    },
+    {
+      "indent": 3,
+      "text": "[Zalewski2001] Zalewski, M., \"Strange Attractors and TCP/IP Sequence Number Analysis\", http://lcamtuf.coredump.cx/oldtcp/tcpseq.html, 2001.",
+      "ja": "[Zalewski2001] Zalewski氏、M.、 \"ストレンジアトラクターとTCP / IPシーケンス番号分析\"、http://lcamt​​uf.coredump.cx/oldtcp/tcpseq.html、2001。"
+    },
+    {
+      "indent": 3,
+      "text": "[Zalewski2002] Zalewski, M., \"Strange Attractors and TCP/IP Sequence Number Analysis - One Year Later\", http://lcamtuf.coredump.cx/newtcp/, 2002.",
+      "ja": "[Zalewski2002] Zalewski氏、M.、 \"ストレンジアトラクターとTCP / IPシーケンス番号分析 - 一年後\"、http://lcamt​​uf.coredump.cx/newtcp/、2002。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Address-Based Trust-Relationship Exploitation Attacks",
+      "ja": "付録A.アドレスベースの信頼関係を悪用する攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "This section discusses the trust-relationship exploitation attack that originally motivated the publication of RFC 1948 [RFC1948]. It should be noted that while RFC 1948 focused its discussion of address-based trust-relationship exploitation attacks on Telnet [RFC0854] and the various UNIX \"r\" commands, both Telnet and the various \"r\" commands have since been largely replaced by secure counterparts (such as SSH [RFC4251]) for the purpose of remote login and remote command execution. Nevertheless, address-based trust relationships are still employed nowadays in some scenarios. For example, some SMTP [RFC5321] deployments still authenticate their users by means of their IP addresses, even when more appropriate authentication mechanisms are available [RFC4954]. Another example is the authentication of DNS secondary servers [RFC1034] by means of their IP addresses for allowing DNS zone transfers [RFC5936], or any other access control mechanism based on IP addresses.",
+      "ja": "このセクションでは、元々RFC 1948 [RFC1948]の発行を動機付け信頼関係搾取攻撃を論じています。 RFC 1948がTelnet [RFC0854]や様々なUNIXの「r」コマンド、両方のTelnetおよび様々な「R」のコマンドにアドレスベースの信頼関係の搾取攻撃のその議論に焦点を当てながら、以来、主に、セキュアに置き換えられていることに留意すべきですリモートログインおよびリモートコマンドの実行のために（例えばSSH [RFC4251]のような）対応。それにも関わらず、アドレスベースの信頼関係は、まだいくつかのシナリオでは、今日使用されています。例えば、いくつかのSMTP [RFC5321]の展開が一層適切な認証メカニズムが使用可能に[RFC4954]であっても、そのIPアドレスを用いて、そのユーザを認証します。別の例では、DNSゾーン転送[RFC5936]、またはIPアドレスに基づいて、他のアクセス制御機構を可能にするため、それらのIPアドレスによって、DNSセカンダリサーバ[RFC1034]の認証です。"
+    },
+    {
+      "indent": 3,
+      "text": "In 1985, Morris [Morris1985] described a form of attack based on guessing what sequence numbers TCP [RFC0793] will use for new connections. Briefly, the attacker gags a host trusted by the target, impersonates the IP address of the trusted host when talking to the target, and completes the three-way handshake based on its guess at the next ISN to be used. An ordinary connection to the target is used to gather sequence number state information. This entire sequence, coupled with address-based authentication, allows the attacker to execute commands on the target host.",
+      "ja": "1985年には、モリス[Morris1985]は、シーケンス番号のTCP [RFC0793]は、新しい接続に使用するかを推測に基づいて攻撃の形を説明しました。簡単に言えば、攻撃者は、ターゲットによって信頼されたホストのGAGを対象に話を信頼されたホストのIPアドレスを偽装して、次のISNでその推測に基づいてスリーウェイハンドシェイクを使用することが完了します。ターゲットへの通常の接続は、シーケンス番号状態情報を収集するために使用されます。アドレスベースの認証と相まって、このシーケンス全体では、攻撃者がターゲットホスト上でコマンドを実行することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Clearly, the proper solution for these attacks is cryptographic authentication [RFC4301] [RFC4120] [RFC4251].",
+      "ja": "明らかに、これらの攻撃のための適切な解決策は、暗号認証[RFC4301] [RFC4120] [RFC4251]です。"
+    },
+    {
+      "indent": 3,
+      "text": "The following subsection provides technical details for the trust-relationship exploitation attack described by Morris [Morris1985].",
+      "ja": "以下のサブセクションでは、モリス[Morris1985]で記述信頼関係の搾取攻撃のための技術的な詳細を提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1. Blind TCP Connection-Spoofing",
+      "ja": "A.1。ブラインドTCPコネクション・スプーフィング"
+    },
+    {
+      "indent": 3,
+      "text": "In order to understand the particular case of sequence number guessing, one must look at the three-way handshake used in the TCP open sequence [RFC0793]. Suppose client machine A wants to talk to rsh server B. It sends the following message:",
+      "ja": "推測シーケンス番号の特定の場合を理解するためには、TCPのオープンシーケンス[RFC0793]で使用する3ウェイハンドシェイクを見なければなりません。仮定クライアントマシンAには、それは次のようなメッセージを送るのrshサーバーBに話をしたいです："
+    },
+    {
+      "indent": 30,
+      "text": "A->B: SYN, ISNa",
+      "ja": "A-> B：SYN、ISNA"
+    },
+    {
+      "indent": 3,
+      "text": "That is, it sends a packet with the SYN (\"synchronize sequence number\") bit set and an initial sequence number ISNa.",
+      "ja": "すなわち、ビットセットと初期シーケンス番号ISNA（「シーケンス番号を同期させる」）SYNでパケットを送信する、です。"
+    },
+    {
+      "indent": 3,
+      "text": "B replies with",
+      "ja": "Bはで応答します"
+    },
+    {
+      "indent": 25,
+      "text": "B->A: SYN, ISNb, ACK(ISNa)",
+      "ja": "B-> A：SYN、ISNb、ACK（ISNA）"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to sending its own ISN, it acknowledges A's. Note that the actual numeric value ISNa must appear in the message.",
+      "ja": "独自のISNを送ることに加えて、それはAさんを認めています。実際の数値ISNAがメッセージに表示されなければならないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A concludes the handshake by sending",
+      "ja": "Aは、送信することにより、ハンドシェイクを終了します"
+    },
+    {
+      "indent": 30,
+      "text": "A->B: ACK(ISNb)",
+      "ja": "A-> BLACK（ISBN）"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 793 [RFC0793] specifies that the 32-bit counter be incremented by 1 in the low-order position about every 4 microseconds. Instead, Berkeley-derived kernels traditionally incremented it by a constant every second, and by another constant for each new connection. Thus, if you opened a connection to a machine, you knew to a very high degree of confidence what sequence number it would use for its next connection. And therein lied the vulnerability.",
+      "ja": "RFC 793 [RFC0793]は、32ビットカウンタはすべての4マイクロ秒程度下位位置に1ずつインクリメントされることを指定します。その代わり、バークレー由来のカーネルは、伝統的に定数で毎秒それをインクリメントし、それぞれの新しい接続のための別の定数によります。あなたがマシンへの接続を開いた場合はこのように、あなたはそれがその次の接続のために使用するものをシーケンス番号自信の非常に高い程度に知っていました。そして、その中に脆弱性が嘘をつきました。"
+    },
+    {
+      "indent": 3,
+      "text": "The attacker X first opens a real connection to its target B -- say, to the mail port or the TCP echo port. This gives ISNb. It then impersonates A and sends",
+      "ja": "メールポートに、言うか、TCPポートをエコー - 攻撃者Xは、最初にターゲットBへの実際の接続を開きます。これはISNbを与えます。その後、Aを偽装して送信します"
+    },
+    {
+      "indent": 30,
+      "text": "Ax->B: SYN, ISNx",
+      "ja": "AX-> B：SYN、ISNx"
+    },
+    {
+      "indent": 3,
+      "text": "where \"Ax\" denotes a packet sent by X pretending to be A.",
+      "ja": "「アックス」A.のふりXによって送信されたパケットを表します"
+    },
+    {
+      "indent": 3,
+      "text": "B's response to X's original SYN (so to speak)",
+      "ja": "Xの元のSYNにBの応答（いわば）"
+    },
+    {
+      "indent": 24,
+      "text": "B->A: SYN, ISNb', ACK(ISNx)",
+      "ja": "B-> A：SYN、ISNb」、ACK（ISNx）"
+    },
+    {
+      "indent": 3,
+      "text": "goes to the legitimate A, about which more anon. X never sees that message but can still send",
+      "ja": "正当A、詳細アノンに行きます。 Xは、そのメッセージを見ないが、それでも送信できません"
+    },
+    {
+      "indent": 29,
+      "text": "Ax->B: ACK(ISNb')",
+      "ja": "AX-> BLACK（ISBN '）"
+    },
+    {
+      "indent": 3,
+      "text": "using the predicted value for ISNb'. If the guess is right -- and usually it will be, if the sequence numbers are weak -- B's rsh server thinks it has a legitimate connection with A, when in fact X is sending the packets. X can't see the output from this session, but it can execute commands as more or less any user -- and in that case, the game is over and X has won.",
+      "ja": "ISNbの予測値を使用して」。推測が正しければ - と、シーケンス番号が弱い場合には、通常、それはなります、 - 実際にはXがパケットを送信しているとき、Bさんのrshサーバは、それがAと正当な接続を持っていると考えています。 Xは、このセッションからの出力を見ることはできませんが、それは、多かれ少なかれ、任意のユーザとしてコマンドを実行することができます - その場合には、ゲームオーバーですとXが勝ちました。"
+    },
+    {
+      "indent": 3,
+      "text": "There is a minor difficulty here. If A sees B's message, it will realize that B is acknowledging something it never sent, and will send a RST packet in response to tear down the connection. However, an attacker could send the TCP segments containing the commands to be executed back-to-back with the segments required to establish the TCP connection, and thus by the time the connection is reset, the attacker has already won.",
+      "ja": "ここではマイナーな困難があります。 AはBのメッセージを見た場合、それはBは、それが送信されることはありません何かを認めていることを理解するであろう、との接続を切断するには対応してRSTパケットを送信します。しかし、攻撃者がTCP接続を確立するために必要なセグメントと背中合わせに実行するコマンドを含むTCPセグメントを送信することができ、したがって、時間によって接続がリセットされ、攻撃者は、すでに獲得しています。"
+    },
+    {
+      "indent": 6,
+      "text": "In the past, attackers exploited a common TCP implementation bug to prevent the connection from being reset (see subsection \"A Common TCP Bug\" in [RFC1948]). However, all TCP implementations that used to implement this bug have been fixed for a long time.",
+      "ja": "過去には、攻撃者は、（[RFC1948]で「共通TCPのバグを」のサブセクションを参照してください）がリセットされてからの接続を防ぐために、一般的なTCPの実装のバグを悪用しました。しかし、このバグを実装するために使用されるすべてのTCP実装は、長い時間のために固定されています。"
+    },
+    {
+      "indent": 1,
+      "text": "Appendix B. Changes from",
+      "ja": "付録B.変更から"
+    },
+    {
+      "indent": 3,
+      "text": "o This document is Standards Track (rather than Informational).",
+      "ja": "Oこの文書は（というよりも情報）標準化過程です。"
+    },
+    {
+      "indent": 3,
+      "text": "o Formal requirements [RFC2119] are specified.",
+      "ja": "Oフォーマル要件[RFC2119]は指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "o The discussion of address-based trust-relationship attacks has been updated and moved to an appendix.",
+      "ja": "Oアドレスベースの信頼関係攻撃の議論が更新され、付録に移動されました。"
+    },
+    {
+      "indent": 3,
+      "text": "o The subsection entitled \"A Common TCP Bug\" (describing a common bug in the BSD TCP implementation) has been removed.",
+      "ja": "O（BSD TCPの実装に共通のバグを記述する）「共通TCPのバグ」と題するサブセクションが削除されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Fernando Gont SI6 Networks / UTN-FRH Evaristo Carriego 2644 Haedo, Provincia de Buenos Aires 1706 Argentina",
+      "ja": "フェルナンドGont SI6ネットワーク/ UTN-FRHエバリスト・キャリエゴ2644 Haedo、1706ブエノスアイレス州アルゼンチン"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +54 11 4650 8472 EMail: fgont@si6networks.com URI: http://www.si6networks.com",
+      "ja": "電話：+54 11 4650 8472 Eメール：fgont@si6networks.com URI：http://www.si6networks.com"
+    },
+    {
+      "indent": 3,
+      "text": "Steven M. Bellovin Columbia University 1214 Amsterdam Avenue MC 0401 New York, NY 10027 US",
+      "ja": "スティーブンM. Bellovin氏コロンビア大学1214アムステルダムアベニューMC 0401ニューヨーク、NY 10027米国"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +1 212 939 7149 EMail: bellovin@acm.org",
+      "ja": "電話：+1 212 939 7149 Eメール：bellovin@acm.org"
+    }
+  ]
+}
