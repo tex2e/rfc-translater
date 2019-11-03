@@ -22,6 +22,8 @@ def make_index():
         m = re.match(r'rfc(\d+).html', rfcfile)
         if m:
             filenum = int(m[1])
+            if filenum < 2220: # RFC 2220 以降を対象とする
+                return
             files.append((filenum, rfcfile, title))
 
     files.sort()
