@@ -35,6 +35,7 @@ class Paragraph:
                 or text.find('+++') >= 0 # figure
                 or text.find('***') >= 0 # figure
                 or text.find('+-+-+-+') >= 0 # figure
+                or text.find('/|') >= 0 # figure
                 or text.find('.........') >= 0 # TOC
                 or text.find('. . . . . . . ') >= 0 # TOC
                 or text.find('=========') >= 0 # table

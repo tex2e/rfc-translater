@@ -68,7 +68,7 @@ if __name__ == '__main__':
     elif args.fetch and args.rfc:
         fetch_rfc(args.rfc)
     elif args.trans and args.rfc:
-        trans_rfc(args.rfc, mode=trans_mode)
+        trans_rfc(args.rfc, mode=args.trans_mode)
     elif args.make and args.begin and args.end:
         for rfc_number in range(args.begin, args.end):
             make_html(rfc_number)
