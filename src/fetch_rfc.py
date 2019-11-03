@@ -30,12 +30,11 @@ class Paragraph:
         # "........" が現れたときは目次
         # ソースコードなども図に分類する
         return (text.find('---') >= 0 # figure and table
-                or text.find('___') >= 0 # figure
+                or text.find('__') >= 0 # figure
                 or text.find('~~~') >= 0 # figure
                 or text.find('+++') >= 0 # figure
                 or text.find('***') >= 0 # figure
                 or text.find('+-+-+-+') >= 0 # figure
-                or text.find('/|') >= 0 # figure
                 or text.find('.........') >= 0 # TOC
                 or text.find('. . . . . . . ') >= 0 # TOC
                 or text.find('=========') >= 0 # table
@@ -51,6 +50,7 @@ class Paragraph:
                 or text.find('": true,') >= 0 # json
                 or text.find('": false,') >= 0 # json
                 or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
+                or re.search(r'[/|\\] +[/|\\]', text) # figure
                 )
 
     def _find_section_title_pattern(self, text):
