@@ -37,11 +37,80 @@
   </div>
 
   <script>
+    function dedent(strings) {
+      // $FlowFixMe: Flow doesn't undestand .raw
+      var raw = (typeof strings === "string" ? [strings] : strings.raw);
+
+      // first, perform interpolation
+      var result = "";
+      for (var i = 0; i < raw.length; i++) {
+        result += raw[i].
+        // join lines when there is a suppressed newline
+        replace(/\\\n[ \t]*/g, "").
+
+        // handle escaped backticks
+        replace(/\\`/g, "`");
+
+        if (i < (arguments.length <= 1 ? 0 : arguments.length - 1)) {
+          result += arguments.length <= i + 1 ? undefined : arguments[i + 1];
+        }
+      }
+
+      // now strip indentation
+      var lines = result.split("\n");
+      var mindent = null;
+      lines.forEach(function (l) {
+        var m = l.match(/^(\s+)\S+/);
+        if (m) {
+          var indent = m[1].length;
+          if (!mindent) {
+            // this is the first indented line
+            mindent = indent;
+          } else {
+            mindent = Math.min(mindent, indent);
+          }
+        }
+      });
+
+      if (mindent !== null) {
+        (function () {
+          var m = mindent; // appease Flow
+          result = lines.map(function (l) {
+            return l[0] === " " ? l.slice(m) : l;
+          }).join("\n");
+        })();
+      }
+
+      return (result
+        // dedent eats leading and trailing whitespace too
+        .trim().
+        // handle escaped newlines at the end to ensure they don't get stripped too
+        .replace(/\\n/g, "\n"));
+    }
+  </script>
+  <script>
     var url = new URL(window.location.href);
     var rfc_number = parseInt(url.searchParams.get("rfc"));
 
     var d4 = Math.floor(rfc_number/1000)%10;
     var filepath = "../data/" + d4 + "000/rfc" + rfc_number + "-trans.json";
+
+    function genParagraphInfoDOM(indent, is_section_title, is_raw) {
+      var indent_text = $('<span class="indent mr-1">').text(indent);
+      var checkbox_section =
+        $('<input type="checkbox" class="section mr-1">')
+        .attr('checked', is_section_title);
+      var checkbox_raw =
+        $('<input type="checkbox" class="raw mr-1">')
+        .attr('checked', is_raw);
+      return (
+        $('<div class="col-sm-12 small">')
+        .append(indent_text)
+        .append(checkbox_section)
+        .append(checkbox_raw)
+      )
+    }
+
     $.getJSON(filepath, function (data) {
       console.log(data);
       $('#title_text').text(data.title.text);
@@ -56,9 +125,7 @@
         if (ctx.raw === true) {
           $('#content').append(
             $('<div class="row mode_raw">')
-            .append(
-              $('<div class="col-sm-12 indent small">').text(ctx.indent)
-            )
+            .append(genParagraphInfoDOM(ctx.indent, false, true))
             .append(
               $('<div class="col-sm-12 col-md-12">').append(
                 $('<pre class="text text-monospace">').text(ctx.text)
@@ -68,9 +135,7 @@
         } else if (ctx.section_title === true) {
           $('#content').append(
             $('<div class="row mode_section">')
-            .append(
-              $('<div class="col-sm-12 indent small">').text(ctx.indent)
-            )
+            .append(genParagraphInfoDOM(ctx.indent, true, false))
             .append(
               $('<div class="col-sm-12 col-md-6">').append(
                 $('<h5 class="text mt-2">').text(ctx.text)
@@ -85,9 +150,7 @@
         } else {
           $('#content').append(
             $('<div class="row mode_text">')
-            .append(
-              $('<div class="col-sm-12 indent small">').text(ctx.indent)
-            )
+            .append(genParagraphInfoDOM(ctx.indent, false, false))
             .append(
               $('<div class="col-sm-12 col-md-6">').append(
                 $('<p class="text">').text(ctx.text)
@@ -115,34 +178,40 @@
       data.contents = [];
 
       contents = $('#content .row');
-      console.log(contents);
+      // console.log(contents);
       for (var i = 0; i < contents.length; i++) {
         var $ctx = $(contents[i]);
-        console.log($ctx);
+        // console.log($ctx);
 
+        var content;
+        var indent = parseInt($($ctx.find('.indent')[0]).text());
+        var text, ja;
         if ($ctx.hasClass('mode_raw')) {
-          var indent = parseInt($($ctx.find('.indent')[0]).text());
-          var text = $($ctx.find('pre.text')[0]).text();
-          data.contents.push({
-            indent: indent, text: text, raw: true
-          });
+          text = $($ctx.find('pre.text')[0]).text();
+          content = { indent: indent, text: text };
         }
         else if ($ctx.hasClass('mode_section')) {
-          var indent = parseInt($($ctx.find('.indent')[0]).text());
-          var text = $($ctx.find('h5.text')[0]).text();
-          var ja   = $($ctx.find('h5.text')[1]).text();
-          data.contents.push({
-            indent: indent, text: text, section_title: true, ja: ja
-          });
+          text = $($ctx.find('h5.text')[0]).text();
+          ja   = $($ctx.find('h5.text')[1]).text();
+          content = { indent: indent, text: text };
         }
         else if ($ctx.hasClass('mode_text')) {
-          var indent = parseInt($($ctx.find('.indent')[0]).text());
-          var text = $($ctx.find('p.text')[0]).text();
-          var ja   = $($ctx.find('p.text')[1]).text();
-          data.contents.push({
-            indent: indent, text: text, ja: ja
-          });
+          text = $($ctx.find('p.text')[0]).text();
+          ja   = $($ctx.find('p.text')[1]).text();
+          content = { indent: indent, text: text };
         }
+
+        if ($ctx.find('input.section').first().is(':checked')) {
+          content.section_title = true;
+        }
+        if ($ctx.find('input.raw').first().is(':checked')) {
+          content.raw = true;
+          ja = null;
+        }
+        if (ja) {
+          content.ja = ja;
+        }
+        data.contents.push(content);
       }
 
       console.log(data);

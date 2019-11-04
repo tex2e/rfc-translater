@@ -58,7 +58,7 @@ class Paragraph:
         # "N." が現れたときはセクションのタイトルとする
         if len(text.split('\n')) >= 2:
             return False
-        return re.match(r'^\d+\.', text)
+        return re.match(r'^\d{1,2}\.', text)
 
 
 class Paragraphs:
