@@ -50,6 +50,7 @@ class Paragraph:
                 or text.find('": true,') >= 0 # json
                 or text.find('": false,') >= 0 # json
                 or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
+                or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
                 or re.search(r'[/|\\] +[/|\\]', text) # figure
                 )
 
@@ -105,7 +106,7 @@ class RFCNotFound(Exception):
 def fetch_rfc(number):
 
     url = 'https://tools.ietf.org/html/rfc%d' % number
-    output_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
+    output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
     if os.path.isfile(output_file):

@@ -4,7 +4,7 @@ import json
 import textwrap
 
 def collect_figures(rfc_number):
-    input_dir = 'data/%04d/%03d' % (rfc_number//1000%10*1000, rfc_number//100%10*100)
+    input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
     input_file = '%s/rfc%d-trans.json' % (input_dir, rfc_number)
     if not os.path.isfile(input_file):
         input_file = '%s/rfc%d.json' % (input_dir, rfc_number)

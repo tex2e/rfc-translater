@@ -72,7 +72,7 @@ class Translator2: # googletrans
 
 def trans_rfc(number, mode='selenium'):
 
-    input_dir = 'data/%04d/%03d' % (number//1000%10*1000, number//100%10*100)
+    input_dir = 'data/%04d' % (number//1000%10*1000)
     input_file = '%s/rfc%d.json' % (input_dir, number)
     output_file = '%s/rfc%d-trans.json' % (input_dir, number)
     midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
