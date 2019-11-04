@@ -3,6 +3,10 @@ console.log('hello!');
 
 document.addEventListener('DOMContentLoaded', function () {
 
+  // ---------------------------------------------------------------------------
+  // index.html
+  // ---------------------------------------------------------------------------
+
   var searchText = document.getElementById('searchText');
 
   if (searchText) {
@@ -38,6 +42,24 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
+  }
+
+  // ---------------------------------------------------------------------------
+  // rfcXXXX.html
+  // ---------------------------------------------------------------------------
+
+  var footer = document.getElementById('rfc_footer');
+
+  if (footer) {
+    var rfc_number = parseInt(document.getElementById('rfc_number').innerText);
+    window.addEventListener('click', function (evt) {
+      if (evt.detail === 4) {
+        var result = window.confirm("編集ページに移動します");
+        if (result) {
+          window.location.href = 'edit.html?rfc=' + rfc_number;
+        }
+      }
+    });
   }
 
 });
