@@ -25,9 +25,9 @@ def trans_replace():
                     paragraph['ja'] = text_ja
 
             # セクション番号が「1.1。」となっている部分の修正
-            m = re.match(r'^(\d{1,2}.\d{1,2}(?:.\d{1,2})?)。(.*)$', paragraph['text'])
+            m = re.match(r'^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)。(.*)$', paragraph['ja'])
             if m:
-                paragraph['text'] = m[1] + '. ' + m[2]
+                paragraph['ja'] = m[1] + '. ' + m[2]
 
         with open(filename, 'w') as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
