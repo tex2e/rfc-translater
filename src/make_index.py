@@ -23,7 +23,7 @@ def make_index():
         if m:
             filenum = int(m[1])
             if filenum < 2220: # RFC 2220 以降を対象とする
-                return
+                continue
             files.append((filenum, rfcfile, title))
 
     files.sort()
