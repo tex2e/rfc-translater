@@ -29,10 +29,12 @@ def trans_replace():
                     is_changed = True
 
             # セクション番号が「1.1。」となっている部分の修正
-            m = re.match(r'^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)。(.*)$', paragraph['ja'])
-            if m:
-                paragraph['ja'] = m[1] + '. ' + m[2]
-                is_changed = True
+            if paragraph.get('ja'):
+                m = re.match(r'^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)。(.*)$',
+                             paragraph['ja'])
+                if m:
+                    paragraph['ja'] = m[1] + '. ' + m[2]
+                    is_changed = True
 
         if is_changed:
             with open(filename, 'w') as f:
