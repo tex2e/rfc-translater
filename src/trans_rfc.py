@@ -112,7 +112,13 @@ def trans_rfc(number, mode='selenium'):
             text = paragraph['text']
 
             translator.count = i + 1
-            ja = translator.translate(text)
+            # 文が「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる場合は、
+            # その文字を含めないで翻訳する。
+            m = re.match(r'^(- |\* |o |(?:\d{1,2}.)+ )(.*)$', text)
+            if m:
+                ja = m[1] + translator.translate(m[2])
+            else:
+                ja = translator.translate(text)
             obj['contents'][i]['ja'] = ja
 
     except json.decoder.JSONDecodeError as e:
