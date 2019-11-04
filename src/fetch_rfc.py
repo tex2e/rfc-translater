@@ -16,6 +16,9 @@ class Paragraph:
         self.is_code = is_code if is_code else self._find_code_pattern(self.text)
         self.is_section_title = self._find_section_title_pattern(self.text)
 
+        if self.is_code and self.is_section_title:
+            self.is_code = False
+
         if not self.is_code:
             self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
             self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
@@ -29,34 +32,51 @@ class Paragraph:
         # "---" や "___" が現れたときは図・表
         # "........" が現れたときは目次
         # ソースコードなども図に分類する
-        return (text.find('---') >= 0 # figure and table
-                or text.find('__') >= 0 # figure
-                or text.find('~~~') >= 0 # figure
-                or text.find('+++') >= 0 # figure
-                or text.find('***') >= 0 # figure
-                or text.find('+-+-+-+') >= 0 # figure
-                or text.find('.........') >= 0 # TOC
-                or text.find('. . . . . . . ') >= 0 # TOC
-                or text.find('=========') >= 0 # table
-                or text.find('+--') >= 0 # directory tree
-                or text.find('/*') >= 0 # src
-                or text.find('enum {') >= 0 # tls
-                or text.find('struct {') >= 0 # tls
-                or text.find('::=') >= 0 # syntax
-                or text.find('": [') >= 0 # json
-                or text.find('": {') >= 0 # json
-                or text.find('": "') >= 0 # json
-                or text.find('": \'') >= 0 # json
-                or text.find('": true,') >= 0 # json
-                or text.find('": false,') >= 0 # json
-                or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
-                or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
-                or re.search(r'[/|\\] +[/|\\]', text) # figure
-                )
+        if (text.find('---') >= 0 # figure and table
+            or text.find('__') >= 0 # figure
+            or text.find('~~~') >= 0 # figure
+            or text.find('+++') >= 0 # figure
+            or text.find('***') >= 0 # figure
+            or text.find('+-+-+-+') >= 0 # figure
+            or text.find('.........') >= 0 # TOC
+            or text.find('. . . . . . . ') >= 0 # TOC
+            or text.find('=========') >= 0 # table
+            or text.find('+--') >= 0 # directory tree
+            or text.find('/*') >= 0 # src
+            or text.find('enum {') >= 0 # tls
+            or text.find('struct {') >= 0 # tls
+            or text.find('::=') >= 0 # syntax
+            or text.find('": [') >= 0 # json
+            or text.find('": {') >= 0 # json
+            or text.find('": "') >= 0 # json
+            or text.find('": \'') >= 0 # json
+            or text.find('": true,') >= 0 # json
+            or text.find('": false,') >= 0 # json
+            or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
+            or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
+            or re.search(r'[/|\\] +[/|\\]', text) # figure
+            ):
+            return True
+
+        # 数式やプログラムを検出する
+        # print("---")
+        # print(text)
+        # print(len(re.findall(r'[-+*/=!<>{})^@:;]|[^ ]\(', text)) >= 3)
+        # print(not re.search(r'[.,:]$', text))
+        # 記号が3文字以上 (ただし、丸括弧は直前には空白がないことが条件)
+        if (len(re.findall(r'[-+*/=!<>{})^@:;]|[^ ]\(', text)) >= 3 #
+            and (not re.search(r'[.,:]$', text)) # 文末が「.,:」ではない
+            ):
+            return True
+
+        return False
+
 
     def _find_section_title_pattern(self, text):
         # "N." が現れたときはセクションのタイトルとする
         if len(text.split('\n')) >= 2:
+            return False
+        if text.endswith('.'):
             return False
         return re.match(r'^\d{1,2}\.', text)
 
