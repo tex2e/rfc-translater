@@ -7,6 +7,21 @@ import time
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
+trans_rules = {
+    'Abstract': '概要',
+    'Introduction': 'はじめに',
+    'Acknowledgement': '謝辞',
+    'Acknowledgements': '謝辞',
+    'Status of This Memo': 'このメモのステータス',
+    'Copyright Notice': '著作権表示',
+    'Table of Contents': '目次',
+    'Terminology': '用語',
+    'References': '参考文献',
+    'Normative References': '引用文献',
+    'Informative References': '参考引用',
+    'Contributors': '貢献者',
+    'The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.': 'この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。',
+}
 
 class Translator: # selenium
 
@@ -25,6 +40,10 @@ class Translator: # selenium
     def translate(self, text, dest='ja'):
         from bs4 import BeautifulSoup
         import urllib.parse
+
+        ja = trans_rules.get(text)
+        if ja:
+            return ja
 
         # Start translation
         text_for_url = urllib.parse.quote_plus(text, safe='')
@@ -56,6 +75,10 @@ class Translator2: # googletrans
         self.total = 0
 
     def translate(self, text, dest='ja'):
+        ja = trans_rules.get(text)
+        if ja:
+            return ja
+
         text = re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text)
         ja = self.translator.translate(text, dest='ja')
         # take interval
@@ -114,7 +137,7 @@ def trans_rfc(number, mode='selenium'):
             translator.count = i + 1
             # 文が「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる場合は、
             # その文字を含めないで翻訳する。
-            m = re.match(r'^(- |\* |o |(?:\d{1,2}.)+ )(.*)$', text)
+            m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +)(.*)$', text)
             if m:
                 ja = m[1] + translator.translate(m[2])
             else:

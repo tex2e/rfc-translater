@@ -51,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--make-index', dest='make_index',
         action='store_true', help='make index.html')
     parser.add_argument('--transtest', action='store_true')
+    parser.add_argument('--force', '-f', action='store_true')
     args = parser.parse_args()
 
     if args.make_index:
@@ -66,7 +67,7 @@ if __name__ == '__main__':
         for rfc_number in numbers:
             fetch_rfc(rfc_number)
     elif args.fetch and args.rfc:
-        fetch_rfc(args.rfc)
+        fetch_rfc(args.rfc, args.force)
     elif args.trans and args.rfc:
         trans_rfc(args.rfc, mode=args.trans_mode)
     elif args.make and args.begin and args.end:

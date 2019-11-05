@@ -10,13 +10,24 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
 class Paragraph:
-    def __init__(self, text, is_code=False):
+    def __init__(self, text, is_code=None):
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         self.indent = get_line_len_diff(text, self.text)
-        self.is_code = is_code if is_code else self._find_code_pattern(self.text)
-        self.is_section_title = self._find_section_title_pattern(self.text)
+        self.is_code = is_code
+        if not self.is_code:
+            self.is_code = (
+                not self._find_list_pattern(self.text)
+                and self._find_code_pattern(self.text) )
+        self.is_section_title = (
+            self.indent <= 2 and
+            self._find_section_title_pattern(self.text) )
+        self.is_toc = self._find_toc_pattern(self.text)
 
-        if self.is_code and self.is_section_title:
+        # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
+        if self.is_toc:
+            self.is_code = True
+            self.is_section_title = False
+        elif self.is_code and self.is_section_title:
             self.is_code = False
 
         if not self.is_code:
@@ -28,80 +39,65 @@ class Paragraph:
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
             (self.indent, self.is_code, self.text)
 
+    def _find_toc_pattern(self, text):
+        return re.search(r'\.{6}|(?:\. ){6}', text)
+
+    def _find_list_pattern(self, text):
+        return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
+
     def _find_code_pattern(self, text):
-        # "---" や "___" が現れたときは図・表
-        # "........" が現れたときは目次
-        # ソースコードなども図に分類する
-        if (text.find('---') >= 0 # figure and table
-            or text.find('__') >= 0 # figure
-            or text.find('~~~') >= 0 # figure
-            or text.find('+++') >= 0 # figure
-            or text.find('***') >= 0 # figure
-            or text.find('+-+-+-+') >= 0 # figure
-            or text.find('.........') >= 0 # TOC
-            or text.find('. . . . . . . ') >= 0 # TOC
-            or text.find('=========') >= 0 # table
+        # "---" や "___" などの特定の文字列が現れたときは図・表・ソースコードとして検出する
+        if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text) # fig
+            or re.search(r'\.{4}|(?:\. ){4}', text) # TOC
             or text.find('+--') >= 0 # directory tree
             or text.find('/*') >= 0 # src
-            or text.find('enum {') >= 0 # tls
-            or text.find('struct {') >= 0 # tls
+            or re.search(r'(?:enum|struct) \{', text) # tls
             or text.find('::=') >= 0 # syntax
-            or text.find('": [') >= 0 # json
-            or text.find('": {') >= 0 # json
-            or text.find('": "') >= 0 # json
-            or text.find('": \'') >= 0 # json
-            or text.find('": true,') >= 0 # json
-            or text.find('": false,') >= 0 # json
+            or re.search(r'": (?:[\[\{\"\']|true,|false,)', text) # json
+            or re.search(r'= [\[\(\{*%#&]', text) # src
             or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
             or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
             or re.search(r'[/|\\] +[/|\\]', text) # figure
+            or re.match(r'^Email: ', text) # Authors' Addresses
+            or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text) # hexdump
+            or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text) # hexdump
+            or re.search(r'[0-9a-zA-Z]{32,}$', text) # hex
             ):
             return True
 
         # 数式やプログラムを検出する
-        # print("---")
-        # print(text)
-        # print(len(re.findall(r'[-+*/=!<>{})^@:;]|[^ ]\(', text)) >= 3)
-        # print(not re.search(r'[.,:]$', text))
-        # 記号が3文字以上 (ただし、丸括弧は直前には空白がないことが条件)
-        if (len(re.findall(r'[-+*/=!<>{})^@:;]|[^ ]\(', text)) >= 3 #
-            and (not re.search(r'[.,:]$', text)) # 文末が「.,:」ではない
+        # 記号が(3 + 行数-1)文字以上のとき
+        # (ただし、丸括弧は直前には空白がないことが条件)
+        # (ただし、マイナスは直前に空白があることが条件)
+        lines_num = len(text.split("\n"))
+        threshold = 3 + (lines_num - 1) * 1
+        if (len(re.findall(r'[~+*/=!#<>{})^@:;]|[^ ]\(| -', text)) >= threshold
+            and (not re.search(r'[.,:]\)?$', text)) # 文末が「.,:」ではない
             ):
             return True
 
         return False
 
-
     def _find_section_title_pattern(self, text):
-        # "N." が現れたときはセクションのタイトルとする
+        # "N." が現れたときはセクションのタイトルとして検出する
         if len(text.split('\n')) >= 2:
             return False
-        if text.endswith('.'):
-            return False
-        return re.match(r'^\d{1,2}\.', text)
+        if text.endswith('.'): return False
+        if text.endswith(':'): return False
+        if text.endswith(','): return False
+        if re.match(r'^Appendix [A-F]. ', text):
+            return True
+        return re.match(r'^(?:\d{1,2}\.)+ |^[A-Z]\.(?:\d{1,2}\.)+ ', text)
 
 
 class Paragraphs:
     def __init__(self, text, has_header=True):
         is_header = has_header
-        prev_indent = 0
         chunks = re.compile(r'\n\n+').split(text)
         self.paragraphs = []
         for i, chunk in enumerate(chunks):
-            # indent = get_indent(chunk)
-            indent = get_line_len_diff(chunk, textwrap.dedent(chunk))
-            if i >= 1 and indent <= 3:
-                is_header = False
-            is_large_indent = (indent - prev_indent > 3)
-
-            is_oneline = (len(chunk.split('\n')) == 1)
-
-            if (is_header or (not is_oneline and is_large_indent)):
-                flag = True
-            else:
-                flag = None
-            self.paragraphs.append(Paragraph(chunk, is_code=flag))
-            prev_indent = indent
+            is_header = (i == 0 and has_header)
+            self.paragraphs.append(Paragraph(chunk, is_code=is_header))
 
     def __getitem__(self, key):
         return self.paragraphs[key]
@@ -123,13 +119,13 @@ class RFCNotFound(Exception):
     pass
 
 
-def fetch_rfc(number):
+def fetch_rfc(number, force=False):
 
     url = 'https://tools.ietf.org/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
-    if os.path.isfile(output_file):
+    if not force and os.path.isfile(output_file):
         return 0
 
     os.makedirs(output_dir, exist_ok=True)
@@ -184,7 +180,8 @@ def fetch_rfc(number):
             # print('  ', indent2, next_first_line)
             if (not prev_last_line.endswith('.') and
                 not prev_last_line.endswith(';') and
-                    re.match(r'^ *[a-z(]', next_first_line) and indent1 == indent2):
+                    re.match(r'^ *[a-zA-Z0-9(]', next_first_line) and
+                    indent1 == indent2):
                 # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる
                 contents[i+3] = ' ' + contents[i+3].lstrip()
             else:
