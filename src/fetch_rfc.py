@@ -50,12 +50,12 @@ class Paragraph:
         if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text) # fig
             or re.search(r'\.{4}|(?:\. ){4}', text) # TOC
             or text.find('+--') >= 0 # directory tree
-            or text.find('/*') >= 0 # src
+            or re.search(r'^\/\*|\/\* | \*\/$', text) # src
             or re.search(r'(?:enum|struct) \{', text) # tls
             or text.find('::=') >= 0 # syntax
             or re.search(r'": (?:[\[\{\"\']|true,|false,)', text) # json
             or re.search(r'= [\[\(\{*%#&]', text) # src
-            or len(re.compile(r';$', re.MULTILINE).findall(text)) >= 2 # src
+            or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2 # src
             or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
             or re.search(r'[/|\\] +[/|\\]', text) # figure
             or re.match(r'^Email: ', text) # Authors' Addresses
@@ -148,7 +148,7 @@ def fetch_rfc(number, force=False):
         '//pre/a/text() | ' # 本文中のリンク
         # セクションのタイトル
         '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
-                   '@class="h4" or @class="h5" or @class="h6"]/text() |'
+                   '@class="h4" or @class="h5" or @class="h6"]//text() |'
         '//pre/span/a[@class="selflink"]/text() |' # セクションの番号
         '//a[@class="invisible"]' # ページの区切り
     )
