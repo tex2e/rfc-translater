@@ -1,0 +1,870 @@
+{
+  "title": {
+    "text": "RFC 8635 - Router Keying for BGPsec",
+    "ja": "RFC 8635 - BGPsecのルーターキーイング"
+  },
+  "number": 8635,
+  "created_at": "2019-11-06 13:33:30.785195+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                           R. Bush\nRequest for Comments: 8635                              IIJ Lab & Arrcus\nCategory: Standards Track                                      S. Turner\nISSN: 2070-1721                                                    sn3rd\n                                                                K. Patel\n                                                            Arrcus, Inc.\n                                                             August 2019",
+      "raw": true
+    },
+    {
+      "indent": 24,
+      "text": "Router Keying for BGPsec",
+      "ja": "BGPsecのルーターキーイング"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "BGPsec-speaking routers are provisioned with private keys in order to sign BGPsec announcements. The corresponding public keys are published in the Global Resource Public Key Infrastructure (RPKI), enabling verification of BGPsec messages. This document describes two methods of generating the public-private key pairs: router-driven and operator-driven.",
+      "ja": "BGPsecアナウンスに署名するために、BGPsecを話すルーターは秘密鍵でプロビジョニングされます。 対応する公開鍵は、グローバルリソース公開鍵インフラストラクチャ（RPKI）で公開され、BGPsecメッセージの検証を可能にします。 このドキュメントでは、公開キーと秘密キーのペアを生成する2つの方法、ルーター駆動型とオペレーター駆動型について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "このメモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット標準化過程の文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、Internet Engineering Task Force（IETF）の製品です。 IETFコミュニティのコンセンサスを表しています。 これは公開レビューを受けており、Internet Engineering Steering Group（IESG）による公開が承認されています。 インターネット標準の詳細については、RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8635.",
+      "ja": "このドキュメントの現在のステータス、エラータ、およびフィードバックに関する情報は、https：//www.rfc-editor.org/info/rfc8635で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2019 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（c）2019 IETF Trustおよび文書の著者として特定された人物。 全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書は、BCP 78と、この文書の公開日に有効なIETF文書に関するIETFトラストの法的条項（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するあなたの権利と制限を説明しているので、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust Legal Provisionsのセクション4.eに記載されているSimplified BSD Licenseテキストを含める必要があり、Simplified BSD Licenseに記載されている保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   2\n2.  Requirements Language . . . . . . . . . . . . . . . . . . . .   3\n3.  Management/Router Communication . . . . . . . . . . . . . . .   3\n4.  Exchange Certificates . . . . . . . . . . . . . . . . . . . .   4\n5.  Setup . . . . . . . . . . . . . . . . . . . . . . . . . . . .   5\n6.  Generate PKCS#10  . . . . . . . . . . . . . . . . . . . . . .   5\n  6.1.  Router-Driven Keys  . . . . . . . . . . . . . . . . . . .   5\n  6.2.  Operator-Driven Keys  . . . . . . . . . . . . . . . . . .   6\n    6.2.1.  Using PKCS#8 to Transfer Private Keys . . . . . . . .   6\n7.  Send PKCS#10 and Receive PKCS#7 . . . . . . . . . . . . . . .   7\n8.  Install Certificate . . . . . . . . . . . . . . . . . . . . .   7\n9.  Advanced Deployment Scenarios . . . . . . . . . . . . . . . .   8\n10. Key Management  . . . . . . . . . . . . . . . . . . . . . . .   9\n  10.1.  Key Validity . . . . . . . . . . . . . . . . . . . . . .  10\n  10.2.  Key Rollover . . . . . . . . . . . . . . . . . . . . . .  10\n  10.3.  Key Revocation . . . . . . . . . . . . . . . . . . . . .  11\n  10.4.  Router Replacement . . . . . . . . . . . . . . . . . . .  11\n11. Security Considerations . . . . . . . . . . . . . . . . . . .  12\n12. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  13\n13. References  . . . . . . . . . . . . . . . . . . . . . . . . .  13\n  13.1.  Normative References . . . . . . . . . . . . . . . . . .  13\n  13.2.  Informative References . . . . . . . . . . . . . . . . .  14\nAppendix A.  Management/Router Channel Security . . . . . . . . .  17\nAppendix B.  An Introduction to BGPsec Key Management . . . . . .  18\nAuthors' Addresses  . . . . . . . . . . . . . . . . . . . . . . .  21",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "BGPsec-speaking routers are provisioned with private keys, which allow them to digitally sign BGPsec announcements. To verify the signature, the public key, in the form of a certificate [RFC8209], is published in the Resource Public Key Infrastructure (RPKI). This document describes provisioning of BGPsec-speaking routers with the appropriate public-private key pairs. There are two methods: router-driven and operator-driven.",
+      "ja": "BGPsecを話すルーターには秘密鍵がプロビジョニングされており、BGPsecアナウンスメントにデジタル署名することができます。 署名を検証するために、証明書[RFC8209]の形式の公開鍵がResource Public Key Infrastructure（RPKI）で公開されます。 このドキュメントでは、適切な公開鍵と秘密鍵のペアを使用したBGPsec対応ルーターのプロビジョニングについて説明します。 ルーター駆動型とオペレーター駆動型の2つの方法があります。"
+    },
+    {
+      "indent": 3,
+      "text": "These two methods differ in where the keys are generated: on the router in the router-driven method, and elsewhere in the operator-driven method.",
+      "ja": "これら2つの方法は、キーが生成される場所が異なります。ルーター駆動型の方法ではルーター上で、オペレーター駆動型の方法では他の場所です。"
+    },
+    {
+      "indent": 3,
+      "text": "The two methods also differ in who generates the private/public key pair: the operator generates the pair and sends it to the router in the operator-driven method, and the router generates its own pair in the router-driven method.",
+      "ja": "2つの方法は、秘密/公開キーペアの生成者も異なります。オペレーターがペアを生成し、それをオペレーター駆動方式でルーターに送信し、ルーターがルーター駆動方式で独自のペアを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "The router-driven method mirrors the model used by traditional PKI subscribers; the private key never leaves trusted storage (e.g., Hardware Security Module (HSM)). This is by design and supports classic PKI Certification Policies for (often human) subscribers that require the private key only ever be controlled by the subscriber to ensure that no one can impersonate the subscriber. For non-humans, this method does not always work. The operator-driven method is motivated by the extreme importance placed on ensuring the continued operation of the network. In some deployments, the same private key needs to be installed in the soon-to-be online router that was used by the soon-to-be offline router, since this \"hot-swapping\" behavior can result in minimal downtime, especially compared with the normal RPKI procedures to propagate a new key, which can take a day or longer to converge.",
+      "ja": "ルーター駆動方式は、従来のPKIサブスクライバーが使用するモデルを反映しています。 秘密鍵が信頼できるストレージ（ハードウェアセキュリティモジュール（HSM）など）から離れることはありません。 これは設計によるものであり、（多くの場合人間の）サブスクライバーの秘密キーをサブスクライバーのみが制御して、誰もサブスクライバーになりすますことができないようにする必要がある従来のPKI認証ポリシーをサポートします。 人間以外の場合、この方法は常に機能するとは限りません。 オペレーター主導の方法は、ネットワークの継続的な運用を確保することに非常に重きが置かれていることに動機付けられています。 一部の展開では、この「ホットスワップ」動作によりダウンタイムが最小限に抑えられるため、特に近いうちに、オフラインルーターで使用されるオンラインルーターに同じ秘密キーをインストールする必要があります。 通常のRPKI手順を使用して新しいキーを伝達します。これには、収束するまでに1日以上かかる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, when an operator wants to support hot-swappable routers, the same private key needs to be installed in the soon-to-be online router that was used by the soon-to-be offline router. This motivated the operator-driven method.",
+      "ja": "たとえば、オペレータがホットスワップ可能なルーターをサポートする場合、すぐにオフラインになるルーターで使用されていたすぐに使用するオンラインルーターに同じ秘密キーをインストールする必要があります。 これは、オペレーター主導の方法を動機付けました。"
+    },
+    {
+      "indent": 3,
+      "text": "Sections 3 through 8 describe the various steps involved for an operator to use the two methods to provision new and existing routers. The methods described involve the operator configuring the two endpoints (i.e., the management station and the router) and acting as the intermediary. Section 9 describes another method that requires more-capable routers.",
+      "ja": "セクション3〜8では、オペレータが2つの方法を使用して新規および既存のルータをプロビジョニングするためのさまざまな手順について説明します。 説明されている方法には、2つのエンドポイント（管理ステーションとルーター）を構成し、仲介者として機能するオペレーターが含まれます。 セクション9では、より能力の高いルーターを必要とする別の方法について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Useful References: [RFC8205] describes the details of BGPsec, [RFC8209] specifies the format for the PKCS#10 certification request, and [RFC8608] specifies the algorithms used to generate the PKCS#10 signature.",
+      "ja": "有用な参照：[RFC8205]はBGPsecの詳細を説明し、[RFC8209]はPKCS＃10証明要求の形式を指定し、[RFC8608]はPKCS＃10署名の生成に使用されるアルゴリズムを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Requirements Language",
+      "section_title": true,
+      "ja": "2. 要件言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Management/Router Communication",
+      "section_title": true,
+      "ja": "3. 管理/ルーター通信"
+    },
+    {
+      "indent": 3,
+      "text": "Operators are free to use either the router-driven or the operator-driven method as supported by the platform. Prudent security practice recommends router-generated keying, if the delay in replacing a router (or router engine) is acceptable to the operator. Regardless of the method chosen, operators first establish a protected channel between the management system and the router; this protected channel prevents eavesdropping, tampering, and message forgery. It also provides mutual authentication. How this protected channel is established is router-specific and is beyond scope of this document. Though other configuration mechanisms might be used, e.g., the Network Configuration Protocol (NETCONF) (see [RFC6470]), the protected channel used between the management platform and the router is assumed to be an SSH-protected CLI. See Appendix A for security considerations for this protected channel.",
+      "ja": "オペレーターは、プラットフォームでサポートされているルーター駆動方式またはオペレーター駆動方式を自由に使用できます。 慎重なセキュリティ対策では、ルーター（またはルーターエンジン）の交換の遅延がオペレーターに受け入れられる場合、ルーター生成のキーイングを推奨しています。 選択した方法に関係なく、オペレーターはまず管理システムとルーター間に保護されたチャネルを確立します。 この保護されたチャネルは、盗聴、改ざん、メッセージの偽造を防ぎます。 また、相互認証も提供します。 この保護されたチャネルの確立方法はルーター固有であり、このドキュメントの範囲を超えています。 ネットワーク構成プロトコル（NETCONF）（[RFC6470]を参照）などの他の構成メカニズムを使用することもできますが、管理プラットフォームとルーターの間で使用される保護されたチャネルはSSHで保護されたCLIであると想定されます。 この保護されたチャネルのセキュリティに関する考慮事項については、付録Aを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The previous paragraph assumes the management-system-to-router communications are over a network. When the management system has a direct physical connection to the router, e.g., via the craft port, there is no assumption that there is a protected channel between the two.",
+      "ja": "前の段落では、管理システムからルーターへの通信がネットワーク経由であることを前提としています。 管理システムが、たとえばクラフトポートを介して、ルーターに直接物理的に接続している場合、2つの間に保護されたチャネルがあるという仮定はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "To be clear, for both of these methods, an initial leap of faith is required because the router has no keying material that it can use to protect communications with anyone or anything. Because of this initial leap of faith, a direct physical connection is safer than a network connection because there is less chance of a monkey in the middle. Once keying material is established on the router, the communications channel must prevent eavesdropping, tampering, and message forgery. This initial leap of faith will no longer be required once routers are delivered to operators with operator-trusted keying material.",
+      "ja": "明確にするために、これらの方法の両方について、ルータには誰とでも何かとの通信を保護するために使用できるキー情報がないため、最初の信頼の飛躍が必要です。 この最初の信仰の飛躍のために、直接の物理的な接続は、ネットワーク接続よりも安全です。なぜなら、真ん中に猿がいる可能性が少ないからです。 ルーター上でキー情報が確立されると、通信チャネルは盗聴、改ざん、メッセージの偽造を防止する必要があります。 この信頼性の最初の飛躍は、ルーターがオペレーターに信頼されたキー情報を使用してオペレーターに配信されると、もはや必要なくなります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Exchange Certificates",
+      "section_title": true,
+      "ja": "4. 交換証明書"
+    },
+    {
+      "indent": 3,
+      "text": "A number of options exist for the operator's management station to exchange PKI-related information with routers and with the RPKI including:",
+      "ja": "オペレーターの管理ステーションには、ルーターやRPKIとPKI関連の情報を交換するための多くのオプションがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "o Using application/pkcs10 media type [RFC5967] to extract certificate requests and application/pkcs7-mime [RFC8551] to return the issued certificate,",
+      "ja": "o application / pkcs10メディアタイプ[RFC5967]を使用して証明書リクエストを抽出し、application / pkcs7-mime [RFC8551]を使用して発行された証明書を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Using FTP or HTTP per [RFC2585], and",
+      "ja": "o [RFC2585]ごとにFTPまたはHTTPを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "o Using the Enrollment over Secure Transport (EST) protocol per [RFC7030].",
+      "ja": "o [RFC7030]に準拠したEnrollment over Secure Transport（EST）プロトコルの使用。"
+    },
+    {
+      "indent": 3,
+      "text": "Despite the fact that certificates are integrity-protected and do not necessarily need additional protection, transports that also provide integrity protection are RECOMMENDED.",
+      "ja": "証明書は整合性が保護されており、必ずしも追加の保護を必要としないという事実にもかかわらず、整合性保護も提供するトランスポートが推奨されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Setup",
+      "section_title": true,
+      "ja": "5. セットアップ"
+    },
+    {
+      "indent": 3,
+      "text": "To start, the operator uses the protected channel to install the appropriate RPKI Trust Anchor's Certificate (TA Certificate) in the router. This will later enable the router to validate the router certificate returned in the PKCS#7 certs-only message [RFC8551].",
+      "ja": "開始するには、オペレータは保護されたチャネルを使用して、適切なRPKIトラストアンカー証明書（TA証明書）をルーターにインストールします。 これにより、後でルーターはPKCS＃7証明書のみのメッセージ[RFC8551]で返されたルーター証明書を検証できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator configures the Autonomous System (AS) number to be used in the generated router certificate. This may be the sole AS configured on the router or an operator choice if the router is configured with multiple ASes. A router with multiple ASes can generate multiple router certificates by following the process described in this document for each desired certificate. This configured AS number is also used during verification of keys, if generated by the operator (see Section 6.2), as well as during certificate verification steps (see Sections 7, 8, and 9).",
+      "ja": "オペレーターは、生成されたルーター証明書で使用される自律システム（AS）番号を構成します。 これは、ルーターで構成されている唯一のASである場合も、ルーターが複数のASで構成されている場合はオペレーターの選択である場合もあります。 複数のASを備えたルーターは、必要な証明書ごとにこのドキュメントで説明されているプロセスに従うことにより、複数のルーター証明書を生成できます。 この構成されたAS番号は、キーの検証中（オペレーターによって生成された場合）（セクション6.2を参照）、および証明書検証ステップ（セクション7、8、9を参照）でも使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator configures or extracts from the router the BGP Identifier [RFC6286] to be used in the generated router certificate. In the case where the operator has chosen not to use unique per-router certificates, a BGP Identifier of 0 MAY be used.",
+      "ja": "オペレーターは、生成されたルーター証明書で使用されるBGP識別子[RFC6286]をルーターから構成または抽出します。 オペレーターが一意のルーターごとの証明書を使用しないことを選択した場合、0のBGP識別子が使用される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator configures the router's access control mechanism to ensure that only authorized users are able to later access the router's configuration.",
+      "ja": "オペレーターはルーターのアクセス制御メカニズムを構成して、許可されたユーザーのみが後でルーターの構成にアクセスできるようにします。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Generate PKCS#10",
+      "section_title": true,
+      "ja": "6. PKCS＃10を生成"
+    },
+    {
+      "indent": 3,
+      "text": "The private key, and hence the PKCS#10 certification request, which is sometimes referred to as a Certificate Signing Request (CSR), may be generated by the router or by the operator.",
+      "ja": "秘密鍵、したがってPKCS＃10証明書要求（証明書署名要求（CSR）と呼ばれることもあります）は、ルーターまたはオペレーターによって生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Retaining the CSR allows for verifying that the returned public key in the certificate corresponds to the private key used to generate the signature on the CSR.",
+      "ja": "CSRを保持することにより、証明書で返された公開キーがCSRの署名の生成に使用された秘密キーに対応することを確認できます。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: The PKCS#10 certification request does not include the AS number or the BGP Identifier for the router certificate. Therefore, the operator transmits the AS it has chosen on the router as well as the BGP Identifier when it sends the CSR to the CA.",
+      "ja": "注：PKCS＃10認証要求には、ルーター証明書のAS番号またはBGP識別子は含まれません。 したがって、オペレータは、CSRをCAに送信するときに、ルータで選択したASとBGP識別子を送信します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Router-Driven Keys",
+      "section_title": true,
+      "ja": "6.1. ルーター駆動型キー"
+    },
+    {
+      "indent": 3,
+      "text": "In the router-driven method, once the protected channel is established and the initial setup (Section 5) performed, the operator issues a command or commands for the router to generate the public-private key pair, to generate the PKCS#10 certification request, and to sign the PKCS#10 certification request with the private key. Once the router has generated the PKCS#10 certification request, it returns it to the operator over the protected channel.",
+      "ja": "ルーター駆動型の方法では、保護されたチャネルが確立され、初期セットアップ（セクション5）が実行されると、オペレーターは1つまたは複数のルーターにコマンドを発行して公開鍵と秘密鍵のペアを生成し、PKCS＃10認証要求を生成します 、および秘密鍵でPKCS＃10証明書要求に署名します。 ルーターがPKCS＃10認証要求を生成すると、保護されたチャネルを介してオペレーターにそれを返します。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator includes the chosen AS number and the BGP Identifier when it sends the CSR to the CA.",
+      "ja": "オペレータは、CSRをCAに送信するときに、選択したAS番号とBGP識別子を含めます。"
+    },
+    {
+      "indent": 3,
+      "text": "Even if the operator cannot extract the private key from the router, this signature still provides a link between a private key and a router. That is, the operator can verify the proof of possession (POP), as required by [RFC6484].",
+      "ja": "オペレーターがルーターから秘密鍵を抽出できない場合でも、この署名は依然として秘密鍵とルーター間のリンクを提供します。 つまり、オペレータは[RFC6484]で要求されているように、所有証明（POP）を検証できます。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: The CA needs to know that the router-driven CSR is authorized. The easiest way to accomplish this is for the operator to mediate the communication with the CA. Other workflows are possible, e.g., where the router sends the CSR to the CA but the operator logs in to the CA independently and is presented with a list of pending requests to approve. See Section 9 for an additional workflow.",
+      "ja": "注：CAは、ルーター駆動型CSRが承認されていることを知る必要があります。 これを達成する最も簡単な方法は、オペレーターがCAとの通信を仲介することです。 他のワークフローも可能です。たとえば、ルーターはCSRをCAに送信しますが、オペレーターはCAに個別にログインし、承認する保留中の要求のリストが提示されます。 追加のワークフローについては、セクション9を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If a router was to communicate directly with a CA to have the CA certify the PKCS#10 certification request, there would be no way for the CA to authenticate the router. As the operator knows the authenticity of the router, the operator mediates the communication with the CA.",
+      "ja": "ルータがCAと直接通信してCAにPKCS＃10認証要求を認証させる場合、CAがルータを認証する方法はありません。 オペレーターはルーターの信頼性を知っているため、CAとの通信を仲介します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Operator-Driven Keys",
+      "section_title": true,
+      "ja": "6.2. オペレーター駆動キー"
+    },
+    {
+      "indent": 3,
+      "text": "In the operator-driven method, the operator generates the public-private key pair on a management station and installs the private key into the router over the protected channel. Beware that experience has shown that copy-and-paste from a management station to a router can be unreliable for long texts.",
+      "ja": "オペレーター主導の方法では、オペレーターは管理ステーションで公開鍵と秘密鍵のペアを生成し、保護されたチャネルを介してルーターに秘密鍵をインストールします。 経験から、管理ステーションからルーターへのコピーアンドペーストは長いテキストでは信頼できないことがわかっていることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator then creates and signs the PKCS#10 certification request with the private key; the operator includes the chosen AS number and the BGP Identifier when it sends the CSR to the CA.",
+      "ja": "次に、オペレーターは秘密鍵を使用してPKCS＃10証明書要求を作成して署名します。 オペレータは、CSRをCAに送信するときに、選択したAS番号とBGP識別子を含めます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.1. Using PKCS#8 to Transfer Private Keys",
+      "section_title": true,
+      "ja": "6.2.1. PKCS＃8を使用して秘密鍵を転送する"
+    },
+    {
+      "indent": 3,
+      "text": "A private key can be encapsulated in a PKCS#8 Asymmetric Key Package [RFC5958] and SHOULD be further encapsulated in Cryptographic Message Syntax (CMS) SignedData [RFC5652] and signed with the operator's End Entity (EE) private key.",
+      "ja": "秘密鍵はPKCS＃8非対称鍵パッケージ[RFC5958]にカプセル化でき、暗号化メッセージ構文（CMS）SignedData [RFC5652]にさらにカプセル化して、オペレーターのエンドエンティティ（EE）秘密鍵で署名する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The router SHOULD verify the signature of the encapsulated PKCS#8 to ensure the returned private key did in fact come from the operator, but this requires that the operator also provision via the CLI or include in the SignedData the RPKI CA certificate and relevant operators' EE certificate(s). The router SHOULD inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.",
+      "ja": "ルーターは、カプセル化されたPKCS＃8の署名を検証して、返された秘密キーが実際にオペレーターからのものであることを確認する必要がありますが、これにはオペレーターもCLIを介してプロビジョニングするか、SignedDataにRPKI CA証明書と関連するオペレーターを含める必要があります EE証明書。 ルーターは、署名がトラストアンカーを検証するかどうかをオペレーターに通知する必要があります。 この通知メカニズムは範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Send PKCS#10 and Receive PKCS#7",
+      "section_title": true,
+      "ja": "7. PKCS＃10を送信し、PKCS＃7を受信します"
+    },
+    {
+      "indent": 3,
+      "text": "The operator uses RPKI management tools to communicate with the Global RPKI system to have the appropriate CA validate the PKCS#10 certification request, sign the key in the PKCS#10 (i.e., certify it), generate a PKCS#7 certs-only message, and publish the certificate in the Global RPKI. External network connectivity may be needed if the certificate is to be published in the Global RPKI.",
+      "ja": "オペレーターは、RPKI管理ツールを使用してグローバルRPKIシステムと通信し、適切なCAがPKCS＃10証明書要求を検証し、PKCS＃10のキーに署名（つまり、証明書）し、PKCS＃7証明書のみのメッセージを生成します。 、および証明書をグローバルRPKIで公開します。 証明書をグローバルRPKIで公開する場合は、外部ネットワーク接続が必要になる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "After the CA certifies the key, it does two things:",
+      "ja": "CAはキーを認証した後、次の2つのことを行います。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Publishes the certificate in the Global RPKI. The CA must have connectivity to the relevant publication point, which, in turn, must have external network connectivity as it is part of the Global RPKI.",
+      "ja": "1. グローバルRPKIで証明書を公開します。 CAは、関連する公開ポイントへの接続が必要であり、その公開ポイントは、グローバルRPKIの一部であるため、外部ネットワーク接続が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Returns the certificate to the operator's management station, packaged in a PKCS#7 certs-only message, using the corresponding method by which it received the certificate request. It SHOULD include the certificate chain below the TA Certificate so that the router can validate the router certificate.",
+      "ja": "2. 証明書要求を受信した対応する方法を使用して、PKCS＃7証明書のみのメッセージにパッケージ化された証明書をオペレーターの管理ステーションに返します。 ルータがルータ証明書を検証できるように、TA証明書の下に証明書チェーンを含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the operator-driven method, the operator SHOULD extract the certificate from the PKCS#7 certs-only message and verify that the public key the operator holds corresponds to the returned public key in the PKCS#7 certs-only message. If the operator saved the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the operator has not saved the PKCS#10, it can check this correspondence by regenerating the public key from the private key and then verifying that the regenerated public key matches the public key returned in the certificate.",
+      "ja": "オペレーター駆動方式では、オペレーターはPKCS＃7証明書のみのメッセージから証明書を抽出する必要があり（SHOULD）、オペレーターが保持する公開鍵がPKCS＃7証明書のみのメッセージで返された公開鍵に対応することを確認します。 オペレーターがPKCS＃10を保存した場合、CSRの公開キーを返された証明書の公開キーと比較することにより、この対応を確認できます。 オペレーターがPKCS＃10を保存していない場合、秘密キーから公開キーを再生成し、再生成された公開キーが証明書で返された公開キーと一致することを確認することで、この対応を確認できます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the operator-driven method, the operator has already installed the private key in the router (see Section 6.2).",
+      "ja": "オペレーター主導の方法では、オペレーターはすでにルーターに秘密鍵をインストールしています（セクション6.2を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Install Certificate",
+      "section_title": true,
+      "ja": "8. 証明書をインストールする"
+    },
+    {
+      "indent": 3,
+      "text": "The operator provisions the PKCS#7 certs-only message into the router over the protected channel.",
+      "ja": "オペレーターは、保護されたチャネルを介してルーターにPKCS＃7証明書のみのメッセージをプロビジョニングします。"
+    },
+    {
+      "indent": 3,
+      "text": "The router SHOULD extract the certificate from the PKCS#7 certs-only message and verify that the public key corresponds to the stored private key. If the router stored the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the router did not store the PKCS#10, it can check this correspondence by generating a signature on any data and then verifying the signature using the returned certificate. The router SHOULD inform the operator whether it successfully received the certificate and whether or not the keys correspond; the mechanism is out of scope.",
+      "ja": "ルーターは、PKCS＃7証明書のみのメッセージから証明書を抽出する必要があり（SHOULD）、公開キーが保存されている秘密キーに対応していることを確認します。 ルータがPKCS＃10を保存している場合、CSRの公開キーを返された証明書の公開キーと比較することにより、この対応を確認できます。 ルータがPKCS＃10を保存しなかった場合、任意のデータに署名を生成し、返された証明書を使用して署名を検証することにより、この対応を確認できます。 ルータは、証明書を正常に受信したかどうか、およびキーが一致するかどうかをオペレータに通知する必要があります。 メカニズムは範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "The router SHOULD also verify that the returned certificate validates back to the installed TA Certificate, i.e., the entire chain from the installed TA Certificate through subordinate CAs to the BGPsec certificate validate. To perform this verification, the CA certificate chain needs to be returned along with the router's certificate in the PKCS#7 certs-only message. The router SHOULD inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.",
+      "ja": "また、ルーターは、返された証明書がインストール済みTA証明書、つまり、インストール済みTA証明書から下位CAを経由してBGPsec証明書までのチェーン全体を検証することを検証する必要があります。 この検証を実行するには、PKCS＃7証明書のみのメッセージでルーターの証明書とともにCA証明書チェーンを返す必要があります。 ルーターは、署名がトラストアンカーを検証するかどうかをオペレーターに通知する必要があります。 この通知メカニズムは範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: The signature on the PKCS#8 and Certificate need not be made by the same entity. Signing the PKCS#8 permits more-advanced configurations where the entity that generates the keys is not the direct CA.",
+      "ja": "注：PKCS＃8の署名と証明書は、同じエンティティによって作成される必要はありません。 PKCS＃8に署名すると、キーを生成するエンティティが直接CAではない、より高度な構成が可能になります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Advanced Deployment Scenarios",
+      "section_title": true,
+      "ja": "9. 高度な展開シナリオ"
+    },
+    {
+      "indent": 3,
+      "text": "More PKI-capable routers can take advantage of increased functionality and lighten the operator's burden. Typically, these routers include either preinstalled manufacturer-driven certificates (e.g., IEEE 802.1 AR [IEEE802-1AR]) or preinstalled manufacturer-driven Pre-Shared Keys (PSKs) as well as PKI-enrollment functionality and transport protocol, e.g., CMC's \"Secure Transport\" [RFC7030] or the original CMC transport protocols [RFC5273]. When the operator first establishes a protected channel between the management system and the router, this preinstalled key material is used to authenticate the router.",
+      "ja": "より多くのPKI対応ルーターは、機能の向上を活用して、オペレーターの負担を軽減できます。 通常、これらのルーターには、プレインストールされたメーカー主導の証明書（IEEE 802.1 AR [IEEE802-1AR]など）またはプレインストールされたメーカー主導の事前共有キー（PSK）、PKI登録機能およびトランスポートプロトコル（CMCなど）が含まれます。 セキュアトランスポート」[RFC7030]または元のCMCトランスポートプロトコル[RFC5273]。 オペレーターが管理システムとルーターの間に保護されたチャネルを最初に確立するとき、このプリインストールされた鍵素材はルーターの認証に使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The operator's burden shifts here to include:",
+      "ja": "オペレーターの負担はここにシフトし、次のものが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Securely communicating the router's authentication material to the CA prior to the operator initiating the router's CSR. CAs use authentication material to determine whether the router is eligible to receive a certificate. At a minimum, authentication material includes the router's AS number and BGP Identifier as well as the router's key material, but it can also include additional information. Authentication material can be communicated to the CA (i.e., CSRs signed by this key material are issued certificates with this AS and BGP Identifier) or to the router (i.e., the operator uses the vendor-supplied management interface to include the AS number and BGP Identifier in the router-driven CSR). The CA stores this authentication material in an account entry for the router so that it can later be compared against the CSR prior to the CA issuing a certificate to the router.",
+      "ja": "1. オペレーターがルーターのCSRを開始する前に、ルーターの認証資料をCAに安全に通信します。 CAは認証素材を使用して、ルーターが証明書を受信する資格があるかどうかを判断します。 少なくとも、認証資料にはルーターのAS番号とBGP識別子、およびルーターのキー資料が含まれますが、追加情報を含めることもできます。 認証資料は、CA（つまり、この鍵資料によって署名されたCSRは、このASおよびBGP識別子を使用して証明書を発行されます）またはルーター（つまり、オペレーターがベンダー提供の管理インターフェイスを使用してAS番号とBGPを含めることができます） ルーター駆動型CSRの識別子）。 CAは、この認証情報をルーターのアカウントエントリに保存し、後でCAがルーターに証明書を発行する前にCSRと比較できるようにします。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Enabling the router to communicate with the CA. While the router-to-CA communications are operator-initiated, the operator's management interface need not be involved in the communications path. Enabling the router-to-CA connectivity may require connections to external networks (i.e., through firewalls, NATs, etc.).",
+      "ja": "2. ルーターがCAと通信できるようにします。 ルーターとCA間の通信はオペレーターが開始しますが、オペレーターの管理インターフェースは通信パスに関与する必要はありません。 ルーターとCAの接続を有効にするには、外部ネットワークへの接続（つまり、ファイアウォール、NATなど）が必要になる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Ensuring the cryptographic chain of custody from the manufacturer. For the preinstalled key material, the operator needs guarantees that either no one has accessed the private key or an authenticated log of those who have accessed it MUST be provided to the operator.",
+      "ja": "3. 製造業者からの暗号化された保管の連鎖を保証します。 事前にインストールされたキーマテリアルの場合、オペレーターは、秘密キーに誰もアクセスしていないこと、またはアクセスしたユーザーの認証済みログをオペレーターに提供する必要があることを保証する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Once configured, the operator can begin the process of enrolling the router. Because the router is communicating directly with the CA, there is no need for the operator to retrieve the PKCS#10 certification request from the router as in Section 6 or return the PKCS#7 certs-only message to the router as in Section 7. Note that the checks performed by the router in Section 8 (namely, extracting the certificate from the PKCS#7 certs-only message, verifying that the public key corresponds to the private key, and verifying that the returned certificate validated back to an installed trust anchor) SHOULD be performed. Likewise, the router SHOULD notify the operator if any of these fail, but this notification mechanism is out of scope.",
+      "ja": "構成が完了すると、オペレーターはルーターの登録プロセスを開始できます。 ルーターはCAと直接通信しているため、オペレーターがセクション6のようにルーターからPKCS＃10証明書要求を取得したり、セクション7のようにルーターにPKCS＃7証明書のみのメッセージを返す必要はありません。 セクション8でルーターによって実行されるチェック（つまり、PKCS＃7証明書のみのメッセージから証明書を抽出し、公開キーが秘密キーに対応することを確認し、返された証明書がインストール済みの信頼に戻ったことを確認することに注意してください） アンカー）を実行する必要があります。 同様に、これらのいずれかが失敗した場合、ルーターはオペレーターに通知する必要がありますが、この通知メカニズムは範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "When a router is so configured, the communication with the CA SHOULD be automatically re-established by the router at future times to renew the certificate automatically when necessary (see Section 10). This further reduces the tasks required of the operator.",
+      "ja": "ルーターがそのように構成されている場合、CAとの通信は、必要に応じて証明書を自動的に更新するために、将来的にルーターによって自動的に再確立される必要があります（セクション10を参照）。 これにより、オペレーターに必要なタスクがさらに削減されます。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Key Management",
+      "section_title": true,
+      "ja": "10. キー管理"
+    },
+    {
+      "indent": 3,
+      "text": "Key management not only includes key generation, key provisioning, certificate issuance, and certificate distribution, it also includes assurance of key validity, key rollover, and key preservation during router replacement. All of these responsibilities persist for as long as the operator wishes to operate the BGPsec-speaking router.",
+      "ja": "キー管理には、キーの生成、キーのプロビジョニング、証明書の発行、および証明書の配布だけでなく、ルーターの交換中のキーの有効性、キーのロールオーバー、およびキーの保存も含まれます。 これらの責任はすべて、オペレータがBGPsecを話すルーターを操作したい限り持続します。"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Key Validity",
+      "section_title": true,
+      "ja": "10.1. キーの有効性"
+    },
+    {
+      "indent": 3,
+      "text": "It is critical that a BGPsec-speaking router is signing with a valid private key at all times. To this end, the operator needs to ensure the router always has an unexpired certificate. That is, the key used to sign BGPsec announcements always has an associated certificate whose expiry time is after the current time.",
+      "ja": "BGPsecを話すルーターが常に有効な秘密鍵で署名していることが重要です。 このために、オペレーターはルーターに有効期限が切れていない証明書があることを確認する必要があります。 つまり、BGPsecアナウンスに署名するために使用されるキーには、有効期限が現在の時刻より後の証明書が常に関連付けられています。"
+    },
+    {
+      "indent": 3,
+      "text": "Ensuring this is not terribly difficult but requires that either:",
+      "ja": "これを確実にすることはそれほど難しくありませんが、次のいずれかが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The router has a mechanism to notify the operator that the certificate has an impending expiration, and/or",
+      "ja": "1. ルータには、証明書の有効期限が迫っていることをオペレータに通知するメカニズムがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The operator notes the expiry time of the certificate and uses a calendaring program to remind them of the expiry time, and/or",
+      "ja": "2. オペレーターは、証明書の有効期限を記録し、カレンダープログラムを使用して有効期限を思い出させます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The RPKI CA warns the operator of pending expiration, and/or",
+      "ja": "3. RPKI CAは、有効期限が切れていることをオペレーターに警告します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. The operator uses some other kind of automated process to search for and track the expiry times of router certificates.",
+      "ja": "4. オペレータは、他の種類の自動化プロセスを使用して、ルーター証明書の有効期限を検索および追跡します。"
+    },
+    {
+      "indent": 3,
+      "text": "It is advisable that expiration warnings happen well in advance of the actual expiry time.",
+      "ja": "有効期限の警告は、実際の有効期限のかなり前に発生することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "Regardless of the technique used to track router certificate expiry times, additional operators in the same organization should be notified as the expiry time approaches, thereby ensuring that the forgetfulness of one operator does not affect the entire organization.",
+      "ja": "ルーター証明書の有効期限を追跡するために使用される手法に関係なく、有効期限が近づくと、同じ組織内の追加のオペレーターに通知する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Depending on inter-operator relationships, it may be helpful to notify a peer operator that one or more of their certificates are about to expire.",
+      "ja": "オペレーター間の関係によっては、1つ以上の証明書が期限切れになることをピアオペレーターに通知すると役立つ場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Key Rollover",
+      "section_title": true,
+      "ja": "10.2. キーロールオーバー"
+    },
+    {
+      "indent": 3,
+      "text": "Routers that support multiple private keys also greatly increase the chance that routers can continuously speak BGPsec because the new private key and certificate can be obtained and distributed prior to expiration of the operational key. Obviously, the router needs to know when to start using the new key. Once the new key is being used, having the already-distributed certificate ensures continuous operation.",
+      "ja": "また、複数の秘密キーをサポートするルーターは、新しい秘密キーと証明書を取得して運用キーの有効期限が切れる前に配布できるため、ルーターがBGPsecを継続的に話す機会を大幅に増やします。 明らかに、ルータは新しいキーの使用を開始するタイミングを知る必要があります。 新しいキーが使用されると、既に配布された証明書を持つことで継続的な運用が保証されます。"
+    },
+    {
+      "indent": 3,
+      "text": "More information on how to proceed with a key rollover is described in [RFC8634].",
+      "ja": "キーのロールオーバーを進める方法の詳細については、[RFC8634]で説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "10.3. Key Revocation",
+      "section_title": true,
+      "ja": "10.3. キー失効"
+    },
+    {
+      "indent": 3,
+      "text": "In certain circumstances, a router's BGPsec certificate may need to be revoked. When this occurs, the operator needs to use the RPKI CA system to revoke the certificate by placing the router's BGPsec certificate on the Certificate Revocation List (CRL) as well as re-keying the router's certificate.",
+      "ja": "特定の状況では、ルーターのBGPsec証明書を失効させる必要がある場合があります。 これが発生した場合、オペレーターはRPKI CAシステムを使用して、ルーターのBGPsec証明書を証明書失効リスト（CRL）に配置し、ルーターの証明書を再入力することにより、証明書を失効させる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The process of revoking an active router key consists of requesting the revocation from the CA, the CA actually revoking the router's certificate, the re-keying/renewing of the router's certificate (possibly) distributing a new key and certificate to the router, and distributing the status. During the time this process takes, the operator must decide how they wish to maintain continuity of operation (with or without the compromised private key) or whether they wish to bring the router offline to address the compromise.",
+      "ja": "アクティブなルーターキーを失効させるプロセスは、CAに失効をリクエストし、CAが実際にルーターの証明書を失効させ、ルーターの証明書を再キー/更新し（場合によっては）新しいキーと証明書をルーターに配布し、 ステータス。 このプロセスが実行される間、オペレータは、運用の継続性を維持する方法（侵害された秘密キーの有無にかかわらず）、または侵害に対処するためにルーターをオフラインにするかどうかを決定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Keeping the router operational and BGPsec-speaking is the ideal goal; but, if operational practices do not allow this, then reconfiguring the router to disable BGPsec is likely preferred to bringing the router offline.",
+      "ja": "ルーターを動作可能な状態に保ち、BGPsecスピーキングを維持することが理想的な目標です。 ただし、運用上の慣行でこれが許可されない場合は、ルーターをオフラインにするよりも、BGPsecを無効にするようにルーターを再構成することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "Routers that support more than one private key, where one is operational and other(s) are soon-to-be-operational, facilitate revocation events because the operator can configure the router to make a soon-to-be-operational key operational, request revocation of the compromised key, and then make a next generation soon-to-be-operational key. Hopefully, all this can be done without needing to take the router offline or reboot it. For routers that support only one operational key, the operators should create or install the new private key and then request revocation of the certificate corresponding to the compromised private key.",
+      "ja": "1つが操作可能で、もう1つがすぐに操作可能な複数の秘密キーをサポートするルーターは、操作者がすぐに操作可能なキーを操作するようにルーターを構成できるため、失効イベントを促進します。 侵害されたキーの失効を要求してから、次世代のすぐに操作可能なキーを作成します。 うまくいけば、ルーターをオフラインにしたり、再起動したりすることなく、これらすべてを行うことができます。 1つの操作キーのみをサポートするルーターの場合、オペレーターは新しい秘密キーを作成またはインストールし、侵害された秘密キーに対応する証明書の失効を要求する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10.4. Router Replacement",
+      "section_title": true,
+      "ja": "10.4. ルーターの交換"
+    },
+    {
+      "indent": 3,
+      "text": "At the time of writing, routers often generate private keys for uses such as Secure Shell (SSH), and the private keys may not be seen or exported from the router. While this is good security, it creates difficulties when a routing engine or whole router must be replaced in the field and all software that accesses the router must be updated with the new keys. Also, any network-based initial contact with a new routing engine requires trust in the public key presented on first contact.",
+      "ja": "執筆時点では、ルーターはSecure Shell（SSH）などの使用のために秘密鍵を生成することが多く、ルーターから秘密鍵が表示されたりエクスポートされたりすることはありません。 これは優れたセキュリティですが、ルーティングエンジンまたはルーター全体を現場で交換する必要があり、ルーターにアクセスするすべてのソフトウェアを新しいキーで更新する必要がある場合、問題が生じます。 また、ネットワークベースの新しいルーティングエンジンとの最初の連絡には、最初の連絡時に提示された公開キーに対する信頼が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "To allow operators to quickly replace routers without requiring update and distribution of the corresponding public keys in the RPKI, routers SHOULD allow the private BGPsec key to be inserted via a protected channel, e.g., SSH, NETCONF (see [RFC6470]), and SNMP.",
+      "ja": "RPKI内の対応する公開キーの更新と配布を必要とせずにオペレーターがルーターをすばやく交換できるように、ルーターは、SSH、NETCONF（[RFC6470]を参照）、SNMPなどの保護されたチャネルを介してプライベートBGPsecキーを挿入できるようにする必要があります 。"
+    },
+    {
+      "indent": 3,
+      "text": "This lets the operator escrow the old private key via the mechanism used for operator-driven keys (see Section 6.2), such that it can be reinserted into a replacement router. The router MAY allow the private key to be exported via the protected channel after key generation, but this SHOULD be paired with functionality that sets the newly generated key into a permanent non-exportable state to ensure that it is not exported at a future time by unauthorized operations.",
+      "ja": "これにより、オペレータは、交換用ルータに再挿入できるように、オペレータ駆動キーに使用されるメカニズム（セクション6.2を参照）を介して古い秘密キーをエスクローできます。 ルーターは、キー生成後に秘密キーを保護されたチャネル経由でエクスポートすることを許可する場合がありますが、これは、新しく生成されたキーを永続的な非エクスポート可能な状態に設定して将来的にエクスポートされないようにする機能とペアにする必要があります 不正な操作。"
+    },
+    {
+      "indent": 0,
+      "text": "11. Security Considerations",
+      "section_title": true,
+      "ja": "11. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The router's manual will describe which of the key-generation options discussed in the earlier sections of this document a router supports or if it supports both of them. The manual will also describe other important security-related information (e.g., how to SSH to the router). After becoming familiar with the capabilities of the router, an operator is encouraged to ensure that the router is patched with the latest software updates available from the manufacturer.",
+      "ja": "ルーターのマニュアルでは、このドキュメントの前のセクションで説明したキー生成オプションのどちらがルーターでサポートされるか、または両方をサポートするかについて説明します。 また、このマニュアルでは、その他の重要なセキュリティ関連の情報（ルーターへのSSH方法など）についても説明します。 ルーターの機能に精通した後、オペレーターは、ルーターがメーカーから入手可能な最新のソフトウェア更新プログラムでパッチを適用することを確認することが推奨されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines no protocols. So, in some sense, it introduces no new security considerations. However, it relies on many other protocols, and the security considerations in the referenced documents should be consulted; notably, the documents listed in Section 1 should be consulted first. PKI-relying protocols, of which BGPsec is one, have many issues to consider -- so many, in fact, entire books have been written to address them -- so listing all PKI-related security considerations is neither useful nor helpful. Regardless, some bootstrapping-related issues that are worth repeating are listed here:",
+      "ja": "このドキュメントはプロトコルを定義しません。 したがって、ある意味では、新しいセキュリティの考慮事項は導入されません。 ただし、他の多くのプロトコルに依存しているため、参照文書のセキュリティに関する考慮事項を参照する必要があります。 特に、最初にセクション1にリストされているドキュメントを参照する必要があります。 BGPsecがその1つであるPKI依存プロトコルには、考慮すべき多くの問題があります-実際、非常に多くの書籍がそれらに対処するために書かれているため、PKI関連のセキュリティに関するすべての考慮事項をリストすることは有用でも有用でもありません。 とにかく、繰り返しの価値があるいくつかのブートストラップ関連の問題を以下にリストします。"
+    },
+    {
+      "indent": 3,
+      "text": "o Public-private key pair generation: Mistakes here are, for all practical purposes, catastrophic because PKIs rely on the pairing of a difficult-to-generate public-private key pair with a signer; all key pairs MUST be generated from a good source of non-deterministic random input [RFC4086].",
+      "ja": "o パブリックキーとプライベートキーのペアの生成：PKIは生成が困難なパブリックキーとプライベートキーのペアと署名者とのペアリングに依存しているため、ここでの間違いはすべての実用的な目的で壊滅的です。 すべてのキーペアは、非決定的ランダム入力の適切なソースから生成する必要があります[RFC4086]。"
+    },
+    {
+      "indent": 3,
+      "text": "o Private key protection at rest: Mistakes here are, for all, practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; all private keys MUST be protected when at rest in a secure fashion. Obviously, how each router protects private keys is implementation specific. Likewise, the local storage format for the private key is just that: a local matter.",
+      "ja": "o 秘密鍵の保護：秘密鍵の開示により、別のエンティティが署名者になりすます（つまり、偽装する）ことができるため、ここでの間違いは、すべての実用的な目的で壊滅的です。 安静時に安全な方法ですべての秘密鍵を保護する必要があります。 明らかに、各ルーターが秘密鍵を保護する方法は実装固有です。 同様に、秘密鍵のローカルストレージ形式は、ローカルの問題です。"
+    },
+    {
+      "indent": 3,
+      "text": "o Private key protection in transit: Mistakes here are, for all practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; therefore, transport security is strongly RECOMMENDED. The level of security provided by the transport layer's security mechanism SHOULD be at least as good as the strength of the BGPsec key; there's no point in spending time and energy to generate an excellent public-private key pair and then transmit the private key in the clear or with a known-to-be-broken algorithm, as it just undermines trust that the private key has been kept private. Additionally, operators SHOULD ensure the transport security mechanism is up to date, in order to address all known implementation bugs.",
+      "ja": "o 転送中の秘密キーの保護：秘密キーの開示により、別のエンティティが署名者になりすます（つまり、偽装する）ことができるため、ここでの間違いは、すべての実際的な目的で壊滅的です。 したがって、トランスポートセキュリティを強くお勧めします。 トランスポート層のセキュリティメカニズムによって提供されるセキュリティのレベルは、BGPsecキーの強度と少なくとも同等である必要があります。 秘密鍵が保持されているという信頼を損なうだけであるため、優れた公開鍵と秘密鍵のペアを生成し、平文で、または既知の壊れやすいアルゴリズムを使用して秘密鍵を送信するために時間とエネルギーを費やす意味はありません 民間。 さらに、オペレータは、既知のすべての実装バグに対処するために、トランスポートセキュリティメカニズムが最新であることを確認する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Though the CA's certificate is installed on the router and used to verify that the returned certificate is in fact signed by the CA, the revocation status of the CA's certificate is rarely checked as the router may not have global connectivity or CRL-aware software. The operator MUST ensure that the installed CA certificate is valid.",
+      "ja": "CAの証明書はルーターにインストールされ、返された証明書が実際にCAによって署名されていることを確認するために使用されますが、ルーターにはグローバル接続またはCRL対応ソフトウェアがない可能性があるため、CAの証明書の失効ステータスはほとんど確認されません。 オペレーターは、インストールされたCA証明書が有効であることを確認する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "12. IANA Considerations",
+      "section_title": true,
+      "ja": "12. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "このドキュメントにはIANAアクションがありません。"
+    },
+    {
+      "indent": 0,
+      "text": "13. References",
+      "section_title": true,
+      "ja": "13. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "13.1. Normative References",
+      "section_title": true,
+      "ja": "13.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[IEEE802-1AR] IEEE, \"IEEE Standard for Local and Metropolitan Area Networks - Secure Device Identity\", IEEE Std 802.1AR, <https://standards.ieee.org/standard/802_1AR-2018.html>.",
+      "ja": "[IEEE802-1AR] IEEE、「ローカルおよびメトロポリタンエリアネットワークのIEEE標準-セキュアデバイスアイデンティティ」、IEEE Std 802.1AR、<https://standards.ieee.org/standard/802_1AR-2018.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S.、「要件レベルを示すためにRFCで使用するキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ rfc2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake 3rd, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, DOI 10.17487/RFC4086, June 2005, <https://www.rfc-editor.org/info/rfc4086>.",
+      "ja": "[RFC4086] Eastlake 3rd、D.、Schiller、J。、およびS. Crocker、「Randomness Requirements for Security」、BCP 106、RFC 4086、DOI 10.17487 / RFC4086、2005年6月、<https：//www.rfc-editor .org / info / rfc4086>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4253] Ylonen, T. and C. Lonvick, Ed., \"The Secure Shell (SSH) Transport Layer Protocol\", RFC 4253, DOI 10.17487/RFC4253, January 2006, <https://www.rfc-editor.org/info/rfc4253>.",
+      "ja": "[RFC4253] Ylonen、T.およびC. Lonvick、Ed。、「セキュアシェル（SSH）トランスポート層プロトコル」、RFC 4253、DOI 10.17487 / RFC4253、2006年1月、<https://www.rfc-editor.org / info / rfc4253>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5652] Housley, R., \"Cryptographic Message Syntax (CMS)\", STD 70, RFC 5652, DOI 10.17487/RFC5652, September 2009, <https://www.rfc-editor.org/info/rfc5652>.",
+      "ja": "[RFC5652] Housley、R。、「Cryptographic Message Syntax（CMS）」、STD 70、RFC 5652、DOI 10.17487 / RFC5652、2009年9月、<https://www.rfc-editor.org/info/rfc5652>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5958] Turner, S., \"Asymmetric Key Packages\", RFC 5958, DOI 10.17487/RFC5958, August 2010, <https://www.rfc-editor.org/info/rfc5958>.",
+      "ja": "[RFC5958]ターナー、S。、「非対称キーパッケージ」、RFC 5958、DOI 10.17487 / RFC5958、2010年8月、<https://www.rfc-editor.org/info/rfc5958>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6286] Chen, E. and J. Yuan, \"Autonomous-System-Wide Unique BGP Identifier for BGP-4\", RFC 6286, DOI 10.17487/RFC6286, June 2011, <https://www.rfc-editor.org/info/rfc6286>.",
+      "ja": "[RFC6286] Chen、E。、およびJ. Yuan、「BGP-4の自律システム全体で一意のBGP識別子」、RFC 6286、DOI 10.17487 / RFC6286、2011年6月、<https://www.rfc-editor.org / info / rfc6286>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8608] Turner, S. and O. Borchert, \"BGPsec Algorithms, Key Formats, and Signature Formats\", RFC 8608, DOI 10.17487/RFC8608, June 2019, <https://www.rfc-editor.org/info/rfc8608>.",
+      "ja": "[RFC8608] Turner、S。およびO. Borchert、「BGPsecアルゴリズム、キー形式、および署名形式」、RFC 8608、DOI 10.17487 / RFC8608、2019年6月、<https://www.rfc-editor.org/info/ rfc8608>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8209] Reynolds, M., Turner, S., and S. Kent, \"A Profile for BGPsec Router Certificates, Certificate Revocation Lists, and Certification Requests\", RFC 8209, DOI 10.17487/RFC8209, September 2017, <https://www.rfc-editor.org/info/rfc8209>.",
+      "ja": "[RFC8209]レイノルズ、M。、ターナー、S。、およびS.ケント、「BGPsecルーター証明書、証明書失効リスト、および証明書要求のプロファイル」、RFC 8209、DOI 10.17487 / RFC8209、2017年9月、<https：/ /www.rfc-editor.org/info/rfc8209>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8551] Schaad, J., Ramsdell, B., and S. Turner, \"Secure/ Multipurpose Internet Mail Extensions (S/MIME) Version 4.0 Message Specification\", RFC 8551, DOI 10.17487/RFC8551, April 2019, <https://www.rfc-editor.org/info/rfc8551>.",
+      "ja": "[RFC8551] Schaad、J.、Ramsdell、B。、およびS. Turner、「Secure / Multipurpose Internet Mail Extensions（S / MIME）Version 4.0 Message Specification」、RFC 8551、DOI 10.17487 / RFC8551、2019年4月、<https： //www.rfc-editor.org/info/rfc8551>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8634] Weis, B., Gagliano, R., and K. Patel, \"BGPsec Router Certificate Rollover\", BCP 224, RFC 8634, DOI 10.17487/RFC8634, August 2019, <https://www.rfc-editor.org/info/rfc8634>.",
+      "ja": "[RFC8634] Weis、B.、Gagliano、R。、およびK. Patel、「BGPsec Router Certificate Rollover」、BCP 224、RFC 8634、DOI 10.17487 / RFC8634、2019年8月、<https：//www.rfc-editor。 org / info / rfc8634>。"
+    },
+    {
+      "indent": 0,
+      "text": "13.2. Informative References",
+      "section_title": true,
+      "ja": "13.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2585] Housley, R. and P. Hoffman, \"Internet X.509 Public Key Infrastructure Operational Protocols: FTP and HTTP\", RFC 2585, DOI 10.17487/RFC2585, May 1999, <https://www.rfc-editor.org/info/rfc2585>.",
+      "ja": "[RFC2585] Housley、R。、およびP. Hoffman、「インターネットX.509公開鍵インフラストラクチャ操作プロトコル：FTPおよびHTTP」、RFC 2585、DOI 10.17487 / RFC2585、1999年5月、<https：//www.rfc-editor。 org / info / rfc2585>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3766] Orman, H. and P. Hoffman, \"Determining Strengths For Public Keys Used For Exchanging Symmetric Keys\", BCP 86, RFC 3766, DOI 10.17487/RFC3766, April 2004, <https://www.rfc-editor.org/info/rfc3766>.",
+      "ja": "[RFC3766] Orman、H。、およびP. Hoffman、「対称鍵の交換に使用される公開鍵の強度の決定」、BCP 86、RFC 3766、DOI 10.17487 / RFC3766、2004年4月、<https：//www.rfc-editor。 org / info / rfc3766>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5273] Schaad, J. and M. Myers, \"Certificate Management over CMS (CMC): Transport Protocols\", RFC 5273, DOI 10.17487/RFC5273, June 2008, <https://www.rfc-editor.org/info/rfc5273>.",
+      "ja": "[RFC5273] Schaad、J。、およびM. Myers、「CMS（CMC）上の証明書管理：トランスポートプロトコル」、RFC 5273、DOI 10.17487 / RFC5273、2008年6月、<https://www.rfc-editor.org/info / rfc5273>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5480] Turner, S., Brown, D., Yiu, K., Housley, R., and T. Polk, \"Elliptic Curve Cryptography Subject Public Key Information\", RFC 5480, DOI 10.17487/RFC5480, March 2009, <https://www.rfc-editor.org/info/rfc5480>.",
+      "ja": "[RFC5480] Turner、S.、Brown、D.、Yiu、K.、Housley、R。、およびT. Polk、「Elliptic Curve Cryptography Subject Public Key Information」、RFC 5480、DOI 10.17487 / RFC5480、2009年3月、< https://www.rfc-editor.org/info/rfc5480>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5647] Igoe, K. and J. Solinas, \"AES Galois Counter Mode for the Secure Shell Transport Layer Protocol\", RFC 5647, DOI 10.17487/RFC5647, August 2009, <https://www.rfc-editor.org/info/rfc5647>.",
+      "ja": "[RFC5647] Igoe、K。、およびJ. Solinas、「Secure Shell Transport Layer ProtocolのAESガロアカウンターモード」、RFC 5647、DOI 10.17487 / RFC5647、2009年8月、<https://www.rfc-editor.org/ info / rfc5647>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5656] Stebila, D. and J. Green, \"Elliptic Curve Algorithm Integration in the Secure Shell Transport Layer\", RFC 5656, DOI 10.17487/RFC5656, December 2009, <https://www.rfc-editor.org/info/rfc5656>.",
+      "ja": "[RFC5656] Stebila、D。、およびJ. Green、「Secure Shell Transport Layerでの楕円曲線アルゴリズムの統合」、RFC 5656、DOI 10.17487 / RFC5656、2009年12月、<https://www.rfc-editor.org/info / rfc5656>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5967] Turner, S., \"The application/pkcs10 Media Type\", RFC 5967, DOI 10.17487/RFC5967, August 2010, <https://www.rfc-editor.org/info/rfc5967>.",
+      "ja": "[RFC5967] Turner、S。、「application / pkcs10 Media Type」、RFC 5967、DOI 10.17487 / RFC5967、2010年8月、<https://www.rfc-editor.org/info/rfc5967>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6187] Igoe, K. and D. Stebila, \"X.509v3 Certificates for Secure Shell Authentication\", RFC 6187, DOI 10.17487/RFC6187, March 2011, <https://www.rfc-editor.org/info/rfc6187>.",
+      "ja": "[RFC6187] Igoe、K.、D。Stebila、「セキュアシェル認証用のX.509v3証明書」、RFC 6187、DOI 10.17487 / RFC6187、2011年3月、<https://www.rfc-editor.org/info/rfc6187 >。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6470] Bierman, A., \"Network Configuration Protocol (NETCONF) Base Notifications\", RFC 6470, DOI 10.17487/RFC6470, February 2012, <https://www.rfc-editor.org/info/rfc6470>.",
+      "ja": "[RFC6470] Bierman、A。、「ネットワーク構成プロトコル（NETCONF）ベース通知」、RFC 6470、DOI 10.17487 / RFC6470、2012年2月、<https://www.rfc-editor.org/info/rfc6470>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6484] Kent, S., Kong, D., Seo, K., and R. Watro, \"Certificate Policy (CP) for the Resource Public Key Infrastructure (RPKI)\", BCP 173, RFC 6484, DOI 10.17487/RFC6484, February 2012, <https://www.rfc-editor.org/info/rfc6484>.",
+      "ja": "[RFC6484] Kent、S.、Kong、D.、Seo、K。、およびR. Watro、「リソース公開鍵インフラストラクチャ（RPKI）の証明書ポリシー（CP）」、BCP 173、RFC 6484、DOI 10.17487 / RFC6484 、2012年2月、<https://www.rfc-editor.org/info/rfc6484>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6668] Bider, D. and M. Baushke, \"SHA-2 Data Integrity Verification for the Secure Shell (SSH) Transport Layer Protocol\", RFC 6668, DOI 10.17487/RFC6668, July 2012, <https://www.rfc-editor.org/info/rfc6668>.",
+      "ja": "[RFC6668] Bider、D。、およびM. Baushke、「Secure Shell（SSH）トランスポート層プロトコルのSHA-2データ整合性検証」、RFC 6668、DOI 10.17487 / RFC6668、2012年7月、<https：//www.rfc -editor.org/info/rfc6668>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7030] Pritikin, M., Ed., Yee, P., Ed., and D. Harkins, Ed., \"Enrollment over Secure Transport\", RFC 7030, DOI 10.17487/RFC7030, October 2013, <https://www.rfc-editor.org/info/rfc7030>.",
+      "ja": "[RFC7030] Pritikin、M.、Ed。、Yee、P.、Ed。、and D. Harkins、Ed。、 \"Enrollment over Secure Transport\"、RFC 7030、DOI 10.17487 / RFC7030、October 2013、<https：// www.rfc-editor.org/info/rfc7030>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8205] Lepinski, M., Ed. and K. Sriram, Ed., \"BGPsec Protocol Specification\", RFC 8205, DOI 10.17487/RFC8205, September 2017, <https://www.rfc-editor.org/info/rfc8205>.",
+      "ja": "[RFC8205] Lepinski、M.、Ed。 およびK. Sriram、編、「BGPsecプロトコル仕様」、RFC 8205、DOI 10.17487 / RFC8205、2017年9月、<https://www.rfc-editor.org/info/rfc8205>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SP800-57] National Institute of Standards and Technology (NIST), \"Recommendation for Key Management - Part 1: General\", NIST Special Publication 800-57 Revision 4, DOI 10.6028/NIST.SP.800-57pt1r4, January 2016, <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/ NIST.SP.800-57pt1r4.pdf>.",
+      "ja": "[SP800-57]国立標準技術研究所（NIST）、「鍵管理に関する推奨事項-パート1：全般」、NIST Special Publication 800-57 Revision 4、DOI 10.6028 / NIST.SP.800-57pt1r4、2016年1月、 <https://nvlpubs.nist.gov/nistpubs/SpecialPublications/ NIST.SP.800-57pt1r4.pdf>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Management/Router Channel Security",
+      "section_title": true,
+      "ja": "付録A.管理/ルーターチャネルセキュリティ"
+    },
+    {
+      "indent": 3,
+      "text": "Encryption, integrity, authentication, and key-exchange algorithms used by the protected channel should be of equal or greater strength than the BGPsec keys they protect, which for the algorithm specified in [RFC8608] is 128 bits; see [RFC5480] and [SP800-57] for information about this strength claim as well as [RFC3766] for \"how to determine the length of an asymmetric key as a function of a symmetric key strength requirement\". In other words, for the encryption algorithm, do not use export grade crypto (40-56 bits of security), and do not use Triple-DES (112 bits of security). Suggested minimum algorithms would be AES-128, specifically the following:",
+      "ja": "保護されたチャネルで使用される暗号化、整合性、認証、およびキー交換アルゴリズムは、保護するBGPsecキーと同等またはそれ以上の強度である必要があります。[RFC8608]で指定されるアルゴリズムの128ビットです。 この強度の主張に関する情報については[RFC5480]および[SP800-57]を、「対称キーの強度要件の関数として非対称キーの長さを決定する方法」については[RFC3766]を参照してください。 つまり、暗号化アルゴリズムには、輸出グレードの暗号（40〜56ビットのセキュリティ）を使用せず、Triple-DES（112ビットのセキュリティ）を使用しないでください。 推奨される最小アルゴリズムは、AES-128、具体的には次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "o aes128-cbc [RFC4253] and AEAD_AES_128_GCM [RFC5647] for encryption,",
+      "ja": "o 暗号化用のaes128-cbc [RFC4253]およびAEAD_AES_128_GCM [RFC5647]"
+    },
+    {
+      "indent": 3,
+      "text": "o hmac-sha2-256 [RFC6668] or AESAD_AES_128_GCM [RFC5647] for integrity,",
+      "ja": "o 整合性のためにhmac-sha2-256 [RFC6668]またはAESAD_AES_128_GCM [RFC5647]"
+    },
+    {
+      "indent": 3,
+      "text": "o ecdsa-sha2-nistp256 [RFC5656] for authentication, and",
+      "ja": "o 認証のためのecdsa-sha2-nistp256 [RFC5656]"
+    },
+    {
+      "indent": 3,
+      "text": "o ecdh-sha2-nistp256 [RFC5656] for key exchange.",
+      "ja": "o 鍵交換のためのecdh-sha2-nistp256 [RFC5656]。"
+    },
+    {
+      "indent": 3,
+      "text": "Some routers support the use of public key certificates and SSH. The certificates used for the SSH session are different than the certificates used for BGPsec. The certificates used with SSH should also enable a level of security at least as good as the security offered by the BGPsec keys; x509v3-ecdsa-sha2-nistp256 [RFC6187] could be used for authentication.",
+      "ja": "一部のルーターは、公開鍵証明書とSSHの使用をサポートしています。 SSHセッションに使用される証明書は、BGPsecに使用される証明書とは異なります。 SSHで使用される証明書は、少なくともBGPsecキーによって提供されるセキュリティと同等のセキュリティレベルを有効にする必要があります。 x509v3-ecdsa-sha2-nistp256 [RFC6187]は認証に使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The protected channel must provide confidentiality, authentication, and integrity and replay protection.",
+      "ja": "保護されたチャネルは、機密性、認証、および整合性と再生保護を提供する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. An Introduction to BGPsec Key Management",
+      "section_title": true,
+      "ja": "付録B. BGPsecキー管理の概要"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix is informative. It attempts to explain some of the PKI jargon.",
+      "ja": "この付録は参考情報です。 PKIの専門用語の一部を説明しようとします。"
+    },
+    {
+      "indent": 3,
+      "text": "BGPsec speakers send signed BGPsec updates that are verified by other BGPsec speakers. In PKI parlance, the senders are referred to as \"signers\", and the receivers are referred to as \"relying parties\". The signers with which we are concerned here are routers signing BGPsec updates. Signers use private keys to sign, and relying parties use the corresponding public keys, in the form of X.509 public key certificates, to verify signatures. The third party involved is the entity that issues the X.509 public key certificate, the Certification Authority (CA). Key management is all about making these key pairs and the certificates, as well as ensuring that the relying parties trust that the certified public keys in fact correspond to the signers' private keys.",
+      "ja": "BGPsecスピーカーは、他のBGPsecスピーカーによって検証された署名付きBGPsecアップデートを送信します。 PKIの用語では、送信者は「署名者」と呼ばれ、受信者は「依存者」と呼ばれます。 ここで関係する署名者は、BGPsec更新に署名するルーターです。 署名者は秘密鍵を使用して署名し、証明書利用者はX.509公開鍵証明書の形式で対応する公開鍵を使用して署名を検証します。 関係するサードパーティは、X.509公開キー証明書を発行するエンティティである認証局（CA）です。 キー管理とは、これらのキーペアと証明書を作成することと、認証された公開キーが実際に署名者の秘密キーに対応することを信頼者が信頼することを保証することです。"
+    },
+    {
+      "indent": 3,
+      "text": "The specifics of key management greatly depend on the routers as well as management interfaces provided by the routers' vendor. Because of these differences, it is hard to write a definitive \"how to\", but this guide is intended to arm operators with enough information to ask the right questions. The other aspect that makes this guide informative is that the steps for the do-it-yourself (DIY) approach involve arcane commands while the GUI-based vendor-assisted management console approach will likely hide all of those commands behind some button clicks. Regardless, the operator will end up with a BGPsec-enabled router. Initially, we focus on the DIY approach and then follow up with some information about the GUI-based approach.",
+      "ja": "キー管理の詳細は、ルーターとルーターのベンダーが提供する管理インターフェイスに大きく依存します。 これらの違いのために、決定的な「方法」を書くことは困難ですが、このガイドは、適切な質問をするのに十分な情報をオペレーターに提供することを目的としています。 このガイドを有益なものにするもう1つの側面は、日曜大工（DIY）アプローチの手順に不可解なコマンドが含まれる一方で、GUIベースのベンダー支援管理コンソールアプローチでは、これらのコマンドがすべてボタンクリックの背後に隠れている可能性が高いことです。 とにかく、オペレーターはBGPsec対応ルーターになります。 最初に、DIYアプローチに焦点を当ててから、GUIベースのアプローチに関する情報をフォローアップします。"
+    },
+    {
+      "indent": 3,
+      "text": "The first step in the DIY approach is to generate a private key. However, in fact, what you do is create a key pair: one part (the private key) is kept very private, and the other part (the public key) is given out to verify whatever is signed. The two methods for how to create the key pair are the subject of this document, but it boils down to either doing it on-router (router-driven) or off-router (operator-driven).",
+      "ja": "DIYアプローチの最初のステップは、秘密キーを生成することです。 ただし、実際には、鍵ペアを作成します。1つの部分（秘密鍵）は非常に秘密にされ、他の部分（公開鍵）は署名されたものを検証するために提供されます。 キーペアの作成方法の2つの方法はこのドキュメントの主題ですが、それを要約すると、オンルーター（ルーター駆動）またはオフルーター（オペレーター駆動）のいずれかになります。"
+    },
+    {
+      "indent": 3,
+      "text": "If you are generating keys on the router (router-driven), then you will need to access the router. Again, how you access the router is router-specific, but generally the DIY approach involves using the CLI and accessing the router either directly via the router's craft port or over the network on an administrative interface. If accessing the router over the network, be sure to do it securely (i.e., use SSHv2). Once logged into the router, issue a command or a series of commands that will generate the key pair for the algorithms referenced in the main body of this document; consult your router's documentation for the specific commands. The key-generation process will yield one or more files containing the private key and the public key; the file format varies depending on, among other things, the arcane command the operator issued; however, the files are generally DER- or PEM-encoded.",
+      "ja": "ルーターでキーを生成する場合（ルーター駆動型）、ルーターにアクセスする必要があります。 繰り返しますが、ルーターへのアクセス方法はルーター固有ですが、一般的にDIYのアプローチでは、CLIを使用し、ルーターのクラフトポート経由で、または管理インターフェイスのネットワーク経由でルーターにアクセスします。 ネットワーク経由でルーターにアクセスする場合は、必ず安全にアクセスしてください（つまり、SSHv2を使用してください）。 ルータにログインしたら、このドキュメントの本文で参照されているアルゴリズムのキーペアを生成するコマンドまたは一連のコマンドを発行します。 特定のコマンドについては、ルーターのマニュアルを参照してください。 鍵生成プロセスは、秘密鍵と公開鍵を含む1つ以上のファイルを生成します。 ファイル形式は、とりわけ、オペレーターが発行した不可解なコマンドによって異なります。 ただし、ファイルは通常、DERまたはPEMでエンコードされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The second step is to generate the certification request, which is often referred to as a Certificate Signing Request (CSR) or PKCS#10 certification request, and to send it to the CA to be signed. To generate the CSR, the operator issues some more arcane commands while logged into the router; using the private key just generated to sign the certification request with the algorithms referenced in the main body of this document; the CSR is signed to prove to the CA that the router has possession of the private key (i.e., the signature is the proof-of-possession). The output of the command is the CSR file; the file format varies depending on the arcane command you issued, but generally the files are DER- or PEM-encoded.",
+      "ja": "2番目の手順は、証明書署名要求（CSR）またはPKCS＃10認証要求と呼ばれることが多い認証要求を生成し、CAに送信して署名させることです。 CSRを生成するために、オペレーターはルーターにログインしている間に、さらに不可解なコマンドを発行します。 生成されたばかりの秘密鍵を使用して、このドキュメントの本文で参照されているアルゴリズムを使用して認証要求に署名します。 CSRが署名されて、ルーターが秘密鍵を所有していることをCAに証明します（つまり、署名は所有の証明です）。 コマンドの出力はCSRファイルです。 ファイル形式は発行した難解なコマンドによって異なりますが、通常、ファイルはDERまたはPEMでエンコードされています。"
+    },
+    {
+      "indent": 3,
+      "text": "The third step is to retrieve the signed CSR from the router and send it to the CA. But before sending it, you need to also send the CA the subject name (i.e., \"ROUTER-\" followed by the AS number) and serial number (i.e., the 32-bit BGP Identifier) for the router. The CA needs this information to issue the certificate. How you get the CSR to the CA is beyond the scope of this document. While you are still connected to the router, install the trust anchor for the root of the PKI. At this point, you no longer need access to the router for BGPsec-related initiation purposes.",
+      "ja": "3番目の手順は、署名されたCSRをルーターから取得し、CAに送信することです。 ただし、送信する前に、CAにルーターのサブジェクト名（つまり、「ROUTER-」の後にAS番号が続く）とシリアル番号（つまり、32ビットBGP識別子）も送信する必要があります。 CAは、証明書を発行するためにこの情報を必要とします。 CSRをCAに取得する方法は、このドキュメントの範囲外です。 まだルーターに接続している間に、PKIのルートにトラストアンカーをインストールします。 この時点で、BGPsec関連の開始目的でルーターにアクセスする必要はなくなりました。"
+    },
+    {
+      "indent": 3,
+      "text": "The fourth step is for the CA to issue the certificate based on the CSR you sent. The certificate will include the subject name, serial number, public key, and other fields; it will also be signed by the CA. After the CA issues the certificate, the CA returns the certificate and posts the certificate to the RPKI repository. Check that the certificate corresponds to the public key contained in the certificate by verifying the signature on the CSR sent to the CA; this is just a check to make sure that the CA issued a certificate that includes a public key that is the pair of the private key (i.e., the math will work when verifying a signature generated by the private key with the returned certificate).",
+      "ja": "4番目のステップは、CAが送信したCSRに基づいて証明書を発行することです。 証明書には、サブジェクト名、シリアル番号、公開キー、およびその他のフィールドが含まれます。 また、CAによって署名されます。 CAが証明書を発行した後、CAは証明書を返し、証明書をRPKIリポジトリにポストします。 CAに送信されたCSRの署名を確認することにより、証明書に含まれる公開鍵に証明書が対応していることを確認します。 これは、CAが秘密鍵のペアである公開鍵を含む証明書を発行したことを確認するためのチェックです（つまり、返された証明書を使用して秘密鍵によって生成された署名を検証するときに計算が機能します）。"
+    },
+    {
+      "indent": 3,
+      "text": "If generating the keys off-router (operator-driven), then the same steps are used as with on-router key generation (possibly with the same arcane commands as those used in the on-router approach). However, no access to the router is needed, and the first three steps are done on an administrative workstation:",
+      "ja": "キーをルーター外で生成する場合（オペレーター駆動）、オンルーターキー生成と同じ手順が使用されます（オンルーターアプローチで使用されるものと同じ難解なコマンドを使用する場合があります）。 ただし、ルーターにアクセスする必要はなく、最初の3つの手順は管理ワークステーションで実行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Step 1: Generate key pair. Step 2: Create CSR and sign CSR with private key. Step 3: Send CSR file with the subject name and serial number to CA.",
+      "ja": "ステップ1：キーペアを生成します。 ステップ2：CSRを作成し、秘密鍵でCSRに署名します。 手順3：件名とシリアル番号を含むCSRファイルをCAに送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "After the CA has returned the certificate and you have checked the certificate, you need to put the private key and trust anchor in the router. Assuming the DIY approach, you will be using the CLI and accessing the router either directly via the router's craft port or over the network on an admin interface; if accessing the router over the network, make doubly sure it is done securely (i.e., use SSHv2) because the private key is being moved over the network. At this point, access to the router is no longer needed for BGPsec-related initiation purposes.",
+      "ja": "CAが証明書を返し、証明書を確認したら、プライベートキーとトラストアンカーをルーターに配置する必要があります。 DIYのアプローチを想定すると、CLIを使用して、ルーターのクラフトポート経由で直接、または管理インターフェイスのネットワーク経由でルーターにアクセスします。 ネットワーク経由でルーターにアクセスする場合は、秘密鍵がネットワーク上で移動されるため、安全に行われることを二重に確認してください（つまり、SSHv2を使用してください）。 この時点で、ルータへのアクセスは、BGPsec関連の開始目的には必要なくなりました。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: Regardless of the approach taken, the first three steps could trivially be collapsed by a vendor-provided script to yield the private key and the signed CSR.",
+      "ja": "注：採用されたアプローチに関係なく、最初の3つの手順は、ベンダー提供のスクリプトによって簡単に折りたたまれて、秘密キーと署名済みCSRを生成できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Given a GUI-based vendor-assisted management console, all of these steps will likely be hidden behind pointing and clicking the way through BGPsec-enabling the router.",
+      "ja": "GUIベースのベンダー支援管理コンソールを考えると、これらの手順はすべて、BGPsec対応ルーターをポイントしてクリックする方法の背後に隠れている可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The scenarios described above require the operator to access each router, which does not scale well to large networks. An alternative would be to create an image, perform the necessary steps to get the private key and trust anchor on the image, and then install the image via a management protocol.",
+      "ja": "上記のシナリオでは、オペレーターが各ルーターにアクセスする必要がありますが、これは大規模なネットワークにうまく対応できません。 別の方法としては、イメージを作成し、必要な手順を実行してプライベートキーとトラストアンカーを取得してから、管理プロトコルを介してインストールします。"
+    },
+    {
+      "indent": 3,
+      "text": "One final word of advice: certificates include a notAfter field that unsurprisingly indicates when relying parties should no longer trust the certificate. To avoid having routers with expired certificates, follow the recommendations in the Certification Policy (CP) [RFC6484] and make sure to renew the certificate at least one week prior to the notAfter date. Set a calendar reminder in order not to forget!",
+      "ja": "最後のアドバイスとして、証明書には、証明書利用者が証明書を信頼する必要がなくなったことを驚くほど示さないnotAfterフィールドが含まれています。 有効期限が切れた証明書を持つルーターを使用しないようにするには、認証ポリシー（CP）[RFC6484]の推奨事項に従い、notAfterの日付の少なくとも1週間前に証明書を更新してください。 忘れないようにカレンダーのリマインダーを設定してください！"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Randy Bush IIJ & Arrcus 5147 Crystal Springs Bainbridge Island, Washington 98110 United States of America",
+      "ja": "ランディブッシュIIJ＆Arrcus 5147 Crystal Springsベインブリッジ島、ワシントン98110アメリカ合衆国"
+    },
+    {
+      "indent": 3,
+      "text": "Email: randy@psg.com",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Sean Turner sn3rd",
+      "ja": "ショーン・ターナーsn3rd"
+    },
+    {
+      "indent": 3,
+      "text": "Email: sean@sn3rd.com",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Keyur Patel Arrcus, Inc.",
+      "ja": "Keyur Patel Arrcus、Inc."
+    },
+    {
+      "indent": 3,
+      "text": "Email: keyur@arrcus.com",
+      "raw": true
+    }
+  ]
+}
