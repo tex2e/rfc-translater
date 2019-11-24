@@ -11,12 +11,15 @@ def make_index():
 
     ary = []
     for filepath in sorted(glob.glob('figs/html/*000.html')):
-        m = re.match(r'html/((\d+)\.html)', filepath)
+        m = re.match(r'figs/html/((\d+)\.html)', filepath)
         if m:
             filename  = m[1]
             rfc_begin = int(m[2])
             rfc_end   = rfc_begin + 999
             ary.append((filename, rfc_begin, rfc_end))
+
+    if len(ary) == 0:
+        print('make_index: Not found html files')
 
     mylookup = TemplateLookup(
         directories=["./"],
@@ -29,9 +32,4 @@ def make_index():
 
 
 if __name__ == '__main__':
-    # import argparse
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('rfc_number', type=int)
-    # args = parser.parse_args()
-
     make_index()
