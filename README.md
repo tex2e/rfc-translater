@@ -65,10 +65,10 @@ python3 figs/collect_figures.py --begin 0000 --end 0999 -w figs/data/0000.json
 python3 figs/collect_figures.py --begin 7000 --end 7999 -w figs/data/7000.json
 
 # JSONをHTMLに変換する
-python3 make_html.py 0000
+python3 figs/make_html.py 0000
 ...
-python3 make_html.py 7000
+python3 figs/make_html.py 7000
 
 # インデックスページの作成
-python3 make_index.py
+python3 figs/make_index.py
 ```

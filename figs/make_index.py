@@ -7,10 +7,10 @@ import glob
 import re
 
 def make_index():
-    output_file = 'html/index.html'
+    output_file = 'figs/html/index.html'
 
     ary = []
-    for filepath in sorted(glob.glob('html/*000.html')):
+    for filepath in sorted(glob.glob('figs/html/*000.html')):
         m = re.match(r'html/((\d+)\.html)', filepath)
         if m:
             filename  = m[1]
@@ -21,7 +21,7 @@ def make_index():
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
-    mytemplate = mylookup.get_template('templates/index.html')
+    mytemplate = mylookup.get_template('figs/templates/index.html')
     output = mytemplate.render_unicode(ctx=ary)
 
     with open(output_file, 'w') as f:
