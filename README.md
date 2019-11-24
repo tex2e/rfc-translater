@@ -49,3 +49,26 @@ python3 main.py --trans-mode googletrans # 翻訳にgoogletransを使用する
 - fetch_rfc ... data/A000/B00/rfcABCD.json (段落区切りで取り出した文章)
 - trans_rfc ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
 - make_html ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
+
+```bash
+python3 src/make_index.py # インデックスページの作成
+```
+
+#### Figs
+
+RFC Figs のページについて
+
+```bash
+# 1000個のRFC毎に図を集め、JSONファイルで保存する
+python3 figs/collect_figures.py --begin 0000 --end 0999 -w figs/data/0000.json
+...
+python3 figs/collect_figures.py --begin 7000 --end 7999 -w figs/data/7000.json
+
+# JSONをHTMLに変換する
+python3 make_html.py 0000
+...
+python3 make_html.py 7000
+
+# インデックスページの作成
+python3 make_index.py
+```
