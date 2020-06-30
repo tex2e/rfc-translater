@@ -100,7 +100,7 @@ def trans_rfc(number, mode='selenium'):
     output_file = '%s/rfc%d-trans.json' % (input_dir, number)
     midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
 
-    if os.path.isfile(midway_file): # 途中まで翻訳済みのファイルがあれば復元する
+    if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
         with open(midway_file, 'r') as f:
             obj = json.load(f)
     else:
@@ -119,17 +119,17 @@ def trans_rfc(number, mode='selenium'):
 
     try:
         # タイトルの翻訳
-        if not obj['title'].get('ja'): # 既に翻訳済みの段落はスキップする
-            text = obj['title']['text'].split(' - ', 1)[1] # "RFC XXXX - Title"
+        if not obj['title'].get('ja'):  # 既に翻訳済みの段落はスキップする
+            text = obj['title']['text'].split(' - ', 1)[1]  # "RFC XXXX - Title"
             ja = translator.translate(text)
             obj['title']['ja'] = "RFC %d - %s" % (number, ja)
 
         # 段落の翻訳
         for i, paragraph in enumerate(obj['contents']):
 
-            if paragraph.get('ja'): # 既に翻訳済みの段落はスキップする
+            if paragraph.get('ja'):  # 既に翻訳済みの段落はスキップする
                 continue
-            if paragraph.get('raw') == True: # 図や表は翻訳しない
+            if paragraph.get('raw') == True:  # 図や表は翻訳しない
                 continue
 
             text = paragraph['text']

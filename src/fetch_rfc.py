@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
+
 class Paragraph:
     def __init__(self, text, is_code=None):
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
@@ -17,10 +18,10 @@ class Paragraph:
         if not self.is_code:
             self.is_code = (
                 not self._find_list_pattern(self.text)
-                and self._find_code_pattern(self.text) )
+                and self._find_code_pattern(self.text))
         self.is_section_title = (
             self.indent <= 2 and
-            self._find_section_title_pattern(self.text) )
+            self._find_section_title_pattern(self.text))
         self.is_toc = self._find_toc_pattern(self.text)
 
         # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
@@ -31,9 +32,9 @@ class Paragraph:
             self.is_code = False
 
         if not self.is_code:
-            self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text) # ハイフンを繋げる
-            self.text = re.sub(r'\n *', ' ', self.text) # 複数行を1行にまとめる
-            self.text = re.sub(r' +', ' ', self.text) # 連続した空白を1つにまとめる
+            self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text)  # ハイフンを繋げる
+            self.text = re.sub(r'\n *', ' ', self.text)  # 複数行を1行にまとめる
+            self.text = re.sub(r' +', ' ', self.text)  # 連続した空白を1つにまとめる
 
     def __str__(self):
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
@@ -47,22 +48,22 @@ class Paragraph:
 
     def _find_code_pattern(self, text):
         # "---" や "___" などの特定の文字列が現れたときは図・表・ソースコードとして検出する
-        if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text) # fig
-            or re.search(r'\.{4}|(?:\. ){4}', text) # TOC
-            or text.find('+--') >= 0 # directory tree
-            or re.search(r'^\/\*|\/\* | \*\/$', text) # src
-            or re.search(r'(?:enum|struct) \{', text) # tls
-            or text.find('::=') >= 0 # syntax
-            or re.search(r'": (?:[\[\{\"\']|true,|false,)', text) # json
-            or re.search(r'= [\[\(\{*%#&]', text) # src
-            or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2 # src
-            or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2 # xml
-            or re.search(r'[/|\\] +[/|\\]', text) # figure
-            or re.match(r'^Email: ', text) # Authors' Addresses
-            or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text) # hexdump
-            or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text) # hexdump
-            or re.search(r'[0-9a-zA-Z]{32,}$', text) # hex
-            ):
+        if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
+                or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
+                or text.find('+--') >= 0  # directory tree
+                or re.search(r'^\/\*|\/\* | \*\/$', text)  # src
+                or re.search(r'(?:enum|struct) \{', text)  # tls
+                or text.find('::=') >= 0  # syntax
+                or re.search(r'": (?:[\[\{\"\']|true,|false,)', text)  # json
+                or re.search(r'= [\[\(\{*%#&]', text) # src
+                or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
+                or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
+                or re.search(r'[/|\\] +[/|\\]', text)  # figure
+                or re.match(r'^Email: ', text)  # Authors' Addresses
+                or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
+                or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
+                or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
+                ):
             return True
 
         # 数式やプログラムを検出する
@@ -72,8 +73,8 @@ class Paragraph:
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
         if (len(re.findall(r'[~+*/=!#<>{})^@:;]|[^ ]\(| -', text)) >= threshold
-            and (not re.search(r'[.,:]\)?$', text)) # 文末が「.,:」ではない
-            ):
+                and (not re.search(r'[.,:]\)?$', text)) # 文末が「.,:」ではない
+                ):
             return True
 
         return False
@@ -82,9 +83,12 @@ class Paragraph:
         # "N." が現れたときはセクションのタイトルとして検出する
         if len(text.split('\n')) >= 2:
             return False
-        if text.endswith('.'): return False
-        if text.endswith(':'): return False
-        if text.endswith(','): return False
+        if text.endswith('.'): 
+            return False
+        if text.endswith(':'): 
+            return False
+        if text.endswith(','): 
+            return False
         if re.match(r'^Appendix [A-F]. ', text):
             return True
         return re.match(r'^(?:\d{1,2}\.)+ |^[A-Z]\.(?:\d{1,2}\.)+ ', text)
@@ -130,7 +134,7 @@ def fetch_rfc(number, force=False):
 
     os.makedirs(output_dir, exist_ok=True)
 
-    headers = { 'User-agent': '', 'referer': url }
+    headers = {'User-agent': '', 'referer': url}
     page = requests.get(url, headers)
     tree = html.fromstring(page.content)
 
@@ -144,13 +148,13 @@ def fetch_rfc(number, force=False):
         raise RFCNotFound
 
     contents = tree.xpath(
-        '//pre/text() | ' # 本文
-        '//pre/a/text() | ' # 本文中のリンク
+        '//pre/text() | '  # 本文
+        '//pre/a/text() | '  # 本文中のリンク
         # セクションのタイトル
         '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
                    '@class="h4" or @class="h5" or @class="h6"]//text() |'
-        '//pre/span/a[@class="selflink"]/text() |' # セクションの番号
-        '//a[@class="invisible"]' # ページの区切り
+        '//pre/span/a[@class="selflink"]/text() |'  # セクションの番号
+        '//a[@class="invisible"]'  # ページの区切り
     )
 
     contents_len = len(contents)
@@ -161,18 +165,22 @@ def fetch_rfc(number, force=False):
 
             contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
             contents[i+0] = '' # ページ区切りの除去
-            if i + 1 >= contents_len: continue
+            if i + 1 >= contents_len: 
+                continue
             contents[i+1] = '' # 余分な改行の除去
-            if i + 2 >= contents_len: continue
+            if i + 2 >= contents_len: 
+                continue
             contents[i+2] = '' # 余分な空白の除去
-            if i + 3 >= contents_len: continue
-            if not isinstance(contents[i+3], str): continue
+            if i + 3 >= contents_len: 
+                continue
+            if not isinstance(contents[i+3], str): 
+                continue
             contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
 
             # ページをまたぐ文章に対応する処理
             first, last = 0, -1
-            prev_last_line = contents[i-1].split('\n')[last]   # 前ページの最後の行
-            next_first_line = contents[i+3].split('\n')[first] # 次ページの最初の行
+            prev_last_line = contents[i-1].split('\n')[last]    # 前ページの最後の行
+            next_first_line = contents[i+3].split('\n')[first]  # 次ページの最初の行
             indent1 = get_indent(prev_last_line)
             indent2 = get_indent(next_first_line)
             # print('newpage:', i)
@@ -194,7 +202,7 @@ def fetch_rfc(number, force=False):
     paragraphs = Paragraphs(text)
 
     obj = {
-        'title': { 'text': title },
+        'title': {'text': title},
         'number': number,
         'created_at': str(datetime.now(JST)),
         'updated_by': '',
