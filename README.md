@@ -42,6 +42,7 @@ python3 main.py # 順番に翻訳する
 python3 main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
 python3 main.py --trans-mode selenium # 翻訳にseleniumを使用する
 python3 main.py --trans-mode googletrans # 翻訳にgoogletransを使用する
+python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
 ```
 
 生成物
@@ -51,7 +52,7 @@ python3 main.py --trans-mode googletrans # 翻訳にgoogletransを使用する
 - make_html ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
 
 ```bash
-python3 src/make_index.py # インデックスページの作成
+python3 main.py --make-index # インデックスページの作成
 ```
 
 #### Figs
