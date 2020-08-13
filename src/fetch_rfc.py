@@ -41,7 +41,9 @@ class Paragraph:
             (self.indent, self.is_code, self.text)
 
     def _find_toc_pattern(self, text):
-        return re.search(r'\.{6}|(?:\. ){6}', text)
+        return (re.search(r'\.{6}|(?:\. ){6}', text) or 
+               (re.search(r'\A\s*1.  Introduction\n', text, re.MULTILINE) and 
+                re.search(r'Authors\' Addresses\s*\Z', text, re.MULTILINE)))
 
     def _find_list_pattern(self, text):
         return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
@@ -217,6 +219,8 @@ def fetch_rfc(number, force=False):
             obj['contents'][-1]['section_title'] = True
         if paragraph.is_code:
             obj['contents'][-1]['raw'] = True
+        if paragraph.is_toc:
+            obj['contents'][-1]['toc'] = True
 
     json_file = open(output_file, 'w')
     json.dump(obj, json_file, indent=2, ensure_ascii=False)

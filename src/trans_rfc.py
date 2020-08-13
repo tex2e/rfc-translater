@@ -12,7 +12,7 @@ trans_rules = {
     'Introduction': 'はじめに',
     'Acknowledgement': '謝辞',
     'Acknowledgements': '謝辞',
-    'Status of This Memo': 'このメモのステータス',
+    'Status of This Memo': '本文書の状態',
     'Copyright Notice': '著作権表示',
     'Table of Contents': '目次',
     'Terminology': '用語',
