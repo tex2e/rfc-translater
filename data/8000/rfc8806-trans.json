@@ -1,0 +1,656 @@
+{
+  "title": {
+    "text": "RFC 8806 - Running a Root Server Local to a Resolver",
+    "ja": "RFC 8806 - ルートサーバーをリゾルバーに対してローカルで実行する"
+  },
+  "number": 8806,
+  "created_at": "2020-08-13 18:37:20.809219+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                         W. Kumari\nRequest for Comments: 8806                                        Google\nObsoletes: 7706                                               P. Hoffman\nCategory: Informational                                            ICANN\nISSN: 2070-1721                                                June 2020",
+      "raw": true
+    },
+    {
+      "indent": 15,
+      "text": "Running a Root Server Local to a Resolver",
+      "ja": "ルートサーバーをリゾルバーに対してローカルで実行する"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "Some DNS recursive resolvers have longer-than-desired round-trip times to the closest DNS root server; those resolvers may have difficulty getting responses from the root servers, such as during a network attack. Some DNS recursive resolver operators want to prevent snooping by third parties of requests sent to DNS root servers. In both cases, resolvers can greatly decrease the round-trip time and prevent observation of requests by serving a copy of the full root zone on the same server, such as on a loopback address or in the resolver software. This document shows how to start and maintain such a copy of the root zone that does not cause problems for other users of the DNS, at the cost of adding some operational fragility for the operator.",
+      "ja": "一部のDNS再帰リゾルバーは、最も近いDNSルートサーバーへのラウンドトリップ時間が望ましい値を超えています。これらのリゾルバーは、ネットワーク攻撃時などに、ルートサーバーからの応答を取得することが困難な場合があります。一部のDNS再帰リゾルバーオペレーターは、DNSルートサーバーに送信された要求の第三者によるスヌーピングを防ぎたいと考えています。どちらの場合も、リゾルバーは、ループバックアドレスやリゾルバーソフトウェアなどの同じサーバー上のフルルートゾーンのコピーを提供することで、ラウンドトリップ時間を大幅に短縮し、要求の監視を防ぐことができます。このドキュメントでは、DNSの他のユーザーに問題を引き起こさないルートゾーンのコピーを開始および維持する方法を示しますが、オペレーターの運用上の脆弱性を追加します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes RFC 7706.",
+      "ja": "このドキュメントはRFC 7706を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の状態"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for informational purposes.",
+      "ja": "このドキュメントはInternet Standards Trackの仕様ではありません。情報提供を目的として公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、IETF（Internet Engineering Task Force）の製品です。これは、IETFコミュニティのコンセンサスを表しています。これは公開レビューを受けており、Internet Engineering Steering Group（IESG）による公開が承認されています。 IESGによって承認されたすべてのドキュメントが、あらゆるレベルのインターネット標準の候補であるとは限りません。 RFC 7841のセクション2をご覧ください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8806.",
+      "ja": "このドキュメントの現在のステータス、正誤表、およびフィードバックの提供方法に関する情報は、https：//www.rfc-editor.org/info/rfc8806で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2020 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2020 IETFトラストおよび文書の作成者として識別された人物。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書は、BCP 78およびIETF文書に関するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象であり、この文書の発行日に有効です。これらのドキュメントは、このドキュメントに関するあなたの権利と制限を説明しているため、注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、Trust Legal Provisionsのセクション4.eに記載されているSimplified BSD Licenseのテキストが含まれている必要があり、Simplified BSD Licenseに記載されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Changes from RFC 7706\n  1.2.  Requirements Notation\n2.  Requirements\n3.  Operation of the Root Zone on the Local Server\n4.  Security Considerations\n5.  IANA Considerations\n6.  References\n  6.1.  Normative References\n  6.2.  Informative References\nAppendix A.  Current Sources of the Root Zone\n  A.1.  Root Zone Services\nAppendix B.  Example Configurations of Common Implementations\n  B.1.  Example Configuration: BIND 9.12\n  B.2.  Example Configuration: Unbound 1.8\n  B.3.  Example Configuration: BIND 9.14\n  B.4.  Example Configuration: Unbound 1.9\n  B.5.  Example Configuration: Knot Resolver\n  B.6.  Example Configuration: Microsoft Windows Server 2012\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "DNS recursive resolvers have to provide answers to all queries from their clients, even those for domain names that do not exist. For each queried name that is within a top-level domain (TLD) that is not in the recursive resolver's cache, the resolver must send a query to a root server to get the information for that TLD or to find out that the TLD does not exist. Research shows that the vast majority of queries going to the root are for names that do not exist in the root zone.",
+      "ja": "DNS再帰リゾルバは、存在しないドメイン名のクエリも含め、クライアントからのすべてのクエリに回答を提供する必要があります。再帰リゾルバーのキャッシュにないトップレベルドメイン（TLD）内にあるクエリ名ごとに、リゾルバーはルートサーバーにクエリを送信して、そのTLDの情報を取得するか、TLDがそうでないことを確認する必要があります存在します。調査によると、ルートに送信されるクエリの大部分は、ルートゾーンに存在しない名前に対するものです。"
+    },
+    {
+      "indent": 3,
+      "text": "Many of the queries from recursive resolvers to root servers get answers that are referrals to other servers. Malicious third parties might be able to observe that traffic on the network between the recursive resolver and root servers.",
+      "ja": "再帰リゾルバからルートサーバーへのクエリの多くは、他のサーバーへの参照である回答を受け取ります。悪意のある第三者が、再帰リゾルバとルートサーバー間のネットワーク上のトラフィックを監視できる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The primary goals of this design are to provide more reliable answers for queries to the root zone during network attacks that affect the root servers and to prevent queries and responses from being visible on the network. This design will probably have little effect on getting faster responses to the stub resolver for good queries on TLDs, because the TTL for most TLDs is usually long-lived (on the order of a day or two) and is thus usually already in the cache of the recursive resolver; the same is true for the TTL for negative answers from the root servers. (Although the primary goal of the design is for serving the root zone, the method can be used for any zone.)",
+      "ja": "この設計の主な目的は、ルートサーバーに影響を与えるネットワーク攻撃中にルートゾーンへのクエリに対してより信頼できる回答を提供し、クエリと応答がネットワーク上に表示されないようにすることです。ほとんどのTLDのTTLは通常長期間（1日か2日程度）であり、通常はすでにキャッシュにあるため、この設計は、TLDでの適切なクエリに対してスタブリゾルバーへの応答を高速化することにほとんど影響しません。再帰リゾルバの;ルートサーバーからの否定応答のTTLについても同様です。 （設計の主な目的はルートゾーンを提供することですが、この方法はどのゾーンにも使用できます。）"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a method for the operator of a recursive resolver to have a complete root zone locally and to hide queries for the root zone from outsiders. The basic idea is to create an up-to-date root zone service on the same host as the recursive server and use that service when the recursive resolver looks up root information. The recursive resolver validates all responses from the root service on the same host, just as it would validate all responses from a remote root server.",
+      "ja": "このドキュメントでは、再帰リゾルバーのオペレーターがローカルで完全なルートゾーンを持ち、ルートゾーンのクエリを外部から隠す方法について説明します。基本的な考え方は、再帰サーバーと同じホスト上に最新のルートゾーンサービスを作成し、再帰リゾルバーがルート情報を検索するときにそのサービスを使用することです。再帰リゾルバは、リモートルートサーバーからのすべての応答を検証するのと同じように、同じホスト上のルートサービスからのすべての応答を検証します。"
+    },
+    {
+      "indent": 3,
+      "text": "This design explicitly only allows the new root zone service to be run on the same server as the recursive resolver in order to prevent the server from serving authoritative answers to any other system. Specifically, the root service on the local system MUST be configured to only answer queries from resolvers on the same host and MUST NOT answer queries from any other resolver.",
+      "ja": "この設計では、サーバーが他のシステムへの信頼できる応答を提供できないようにするために、新しいルートゾーンサービスを再帰リゾルバーと同じサーバーで実行することのみを明示的に許可しています。具体的には、ローカルシステムのルートサービスは、同じホスト上のリゾルバーからのクエリにのみ応答するように構成する必要があり、他のリゾルバーからのクエリに応答してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "At the time that RFC 7706 [RFC7706] was published, it was considered controversial, because there was not consensus on whether this was a \"best practice\". In fact, many people felt that it is an excessively risky practice, because it introduced a new operational piece to local DNS operations where there was not one before. Since then, the DNS operational community has largely shifted to believing that local serving of the root zone for an individual resolver is a reasonable practice. The advantages listed above do not come free: if this new system does not work correctly, users can get bad data, or the entire recursive resolution system might fail in ways that are hard to diagnose.",
+      "ja": "RFC 7706 [RFC7706]が公開された時点では、これが「ベストプラクティス」であるかどうかについてコンセンサスが得られなかったため、物議を醸すと見なされていました。実際、多くの人々は、これが非常にリスクの高い慣行であると感じていました。これは、これまでなかった新しいDNS運用をローカルDNS運用に導入したためです。それ以来、DNS運用コミュニティは、個々のリゾルバのルートゾーンのローカルサービスが合理的な慣行であると信じるように大きくシフトしました。上記の利点は無料ではありません。この新しいシステムが正しく機能しない場合、ユーザーは不正なデータを取得したり、再帰解決システム全体が診断が困難な方法で失敗したりする可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This design uses an authoritative service running on the same machine as the recursive resolver. Common open source recursive resolver software does not need to add new functionality to act as an authoritative server for some zones, but other recursive resolver software might need to be able to talk to an authoritative server running on the same host. Some resolver software supports being both an authoritative server and a resolver but separated by logical \"views\", allowing a local root to be implemented within a single process; examples of this can be seen in Appendix B.",
+      "ja": "この設計では、再帰リゾルバーと同じマシンで実行される信頼できるサービスを使用しています。一般的なオープンソースの再帰リゾルバーソフトウェアは、一部のゾーンの権限のあるサーバーとして機能するために新しい機能を追加する必要はありませんが、他の再帰リゾルバーソフトウェアは、同じホストで実行されている権限のあるサーバーと通信できる必要がある場合があります。一部のリゾルバーソフトウェアは、信頼できるサーバーとリゾルバーの両方をサポートしますが、論理的な「ビュー」によって分離されているため、ローカルルートを単一のプロセス内に実装できます。この例は、付録Bにあります。"
+    },
+    {
+      "indent": 3,
+      "text": "A different approach to solving some of the problems discussed in this document is described in [RFC8198].",
+      "ja": "このドキュメントで説明されている問題のいくつかを解決する別のアプローチは、[RFC8198]で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Readers are expected to be familiar with [RFC8499].",
+      "ja": "読者は[RFC8499]に精通している必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Changes from RFC 7706",
+      "section_title": true,
+      "ja": "1.1. RFC 7706からの変更点"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 7706 explicitly required that a root server instance be run on the loopback interface of the host running the validating resolver. However, RFC 7706 also had examples of how to set up common software that did not use the loopback interface. This document loosens the restriction on using the loopback interface and in fact allows the use of a local service, not necessarily an authoritative server. However, the document keeps the requirement that only systems running on that single host be able to query that authoritative root server or service.",
+      "ja": "RFC 7706では、検証リゾルバを実行しているホストのループバックインターフェイスでルートサーバーインスタンスを実行することを明示的に要求していました。ただし、RFC 7706には、ループバックインターフェイスを使用しない一般的なソフトウェアの設定方法の例も含まれていました。このドキュメントでは、ループバックインターフェイスの使用に関する制限を緩和し、実際には、権限のあるサーバーではなく、ローカルサービスの使用を許可しています。ただし、このドキュメントでは、その単一のホストで実行されているシステムのみがその信頼できるルートサーバーまたはサービスにクエリを実行できるという要件を守っています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document changes the use cases for running a local root service to be more consistent with the reasons operators said they had for using RFC 7706:",
+      "ja": "このドキュメントは、ローカルルートサービスを実行するためのユースケースを、オペレーターがRFC 7706を使用するために持っていた理由とより一致するように変更します。"
+    },
+    {
+      "indent": 3,
+      "text": "* Removed the prohibition on distribution of recursive DNS servers, including configurations for this design because some already do and others have expressed an interest in doing so.",
+      "ja": "* この設計の構成を含む、再帰DNSサーバーの配布の禁止を削除しました。既に実行しているものもあれば、そうすることに関心を示しているものもあります。"
+    },
+    {
+      "indent": 3,
+      "text": "* Added the idea that a recursive resolver using this design might switch to using the normal (remote) root servers if the local root server fails.",
+      "ja": "* この設計を使用する再帰リゾルバーが、ローカルルートサーバーに障害が発生した場合に通常の（リモート）ルートサーバーの使用に切り替わる可能性があるという考えを追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Refreshed the list of where one can get copies of the root zone.",
+      "ja": "* ルートゾーンのコピーを取得できる場所のリストを更新しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Added examples of other resolvers and updated the existing examples.",
+      "ja": "* 他のリゾルバーの例を追加し、既存の例を更新しました。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Requirements Notation",
+      "section_title": true,
+      "ja": "1.2. 要件表記"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Requirements",
+      "section_title": true,
+      "ja": "2. 必要条件"
+    },
+    {
+      "indent": 3,
+      "text": "In order to implement the mechanism described in this document:",
+      "ja": "このドキュメントで説明されているメカニズムを実装するには、次のようにします。"
+    },
+    {
+      "indent": 3,
+      "text": "* The system MUST be able to validate every signed record in a zone with DNSSEC [RFC4033].",
+      "ja": "* システムは、DNSSEC [RFC4033]を使用して、ゾーン内のすべての署名済みレコードを検証できる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The system MUST have an up-to-date copy of the public part of the Key Signing Key (KSK) [RFC4033] used to sign the DNS root.",
+      "ja": "* システムは、DNSルートに署名するために使用されるキー署名キー（KSK）[RFC4033]の公開部分の最新のコピーを持っている必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The system MUST be able to retrieve a copy of the entire root zone (including all DNSSEC-related records).",
+      "ja": "* システムは、ルートゾーン全体（すべてのDNSSEC関連レコードを含む）のコピーを取得できなければなりません（MUST）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The system MUST be able to run an authoritative service for the root zone on the same host. The authoritative root service MUST only respond to queries from the same host. One way to ensure that the authoritative root service does not respond to queries from other hosts is to run an authoritative server for the root that responds only on one of the loopback addresses (that is, an address in the range 127/8 for IPv4 or ::1 in IPv6). Another method is to have the resolver software also act as an authoritative server for the root zone, but only for answering queries from itself.",
+      "ja": "* システムは、同じホスト上のルートゾーンに対して権限のあるサービスを実行できる必要があります。信頼できるルートサービスは、同じホストからのクエリにのみ応答する必要があります。信頼できるルートサービスが他のホストからのクエリに応答しないようにする1つの方法は、ループバックアドレスの1つ（IPv4の場合は127/8の範囲のアドレス）でのみ応答するルートに対して信頼できるサーバーを実行することです。 IPv6では:: 1）。別の方法は、リゾルバーソフトウェアがルートゾーンの権限のあるサーバーとしても機能するようにすることですが、それ自体からのクエリにのみ応答します。"
+    },
+    {
+      "indent": 3,
+      "text": "A corollary of the above list is that authoritative data in the root zone used on the local authoritative server MUST be identical to the same data in the root zone for the DNS. It is possible to change the unsigned data (the glue records) in the copy of the root zone, but such changes could cause problems for the recursive server that accesses the local root zone, and therefore any changes to the glue records SHOULD NOT be made.",
+      "ja": "上記のリストの帰結として、ローカルの権威サーバーで使用されるルートゾーンの権威データは、DNSのルートゾーンの同じデータと同一でなければなりません。ルートゾーンのコピーで署名されていないデータ（グルーレコード）を変更することは可能ですが、そのような変更はローカルルートゾーンにアクセスする再帰サーバーに問題を引き起こす可能性があるため、グルーレコードへの変更は行わないでください。 。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Operation of the Root Zone on the Local Server",
+      "section_title": true,
+      "ja": "3. ローカルサーバー上のルートゾーンの操作"
+    },
+    {
+      "indent": 3,
+      "text": "The operation of an authoritative server for the root in the system described here can be done separately from the operation of the recursive resolver, or it might be part of the configuration of the recursive resolver system.",
+      "ja": "ここで説明するシステムのルートに対する権限のあるサーバーの操作は、再帰リゾルバーの操作とは別に実行できます。または、再帰リゾルバーシステムの構成の一部である場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The steps to set up the root zone are:",
+      "ja": "ルートゾーンを設定する手順は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Retrieve a copy of the root zone. (See Appendix A for some current locations of sources.)",
+      "ja": "1. ルートゾーンのコピーを取得します。 （現在の出典の場所については、付録Aを参照してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "2. Start the authoritative service for the root zone in a manner that prevents any system other than a recursive resolver on the same host from accessing it.",
+      "ja": "2. 同じホスト上の再帰リゾルバ以外のシステムがアクセスできないように、ルートゾーンの権限のあるサービスを開始します。"
+    },
+    {
+      "indent": 3,
+      "text": "The contents of the root zone MUST be refreshed using the timers from the SOA record in the root zone, as described in [RFC1035]. This inherently means that the contents of the local root zone will likely be a little behind those of the global root servers, because those servers are updated when triggered by NOTIFY messages.",
+      "ja": "[RFC1035]で説明されているように、ルートゾーンの内容は、ルートゾーンのSOAレコードのタイマーを使用して更新する必要があります。これは本質的に、ローカルルートゾーンのコンテンツがグローバルルートサーバーのコンテンツよりも少し遅れる可能性があることを意味します。これらのサーバーはNOTIFYメッセージによってトリガーされたときに更新されるためです。"
+    },
+    {
+      "indent": 3,
+      "text": "There is a risk that a system using a local authoritative server for the root zone cannot refresh the contents of the root zone before the expire time in the SOA. A system using a local authoritative server for the root zone MUST NOT serve stale data for the root zone. To mitigate the risk that stale data is served, the local root server MUST immediately switch to using non-local root servers when it detects that it would be serving state data.",
+      "ja": "ルートゾーンにローカルの権限のあるサーバーを使用しているシステムでは、SOAの有効期限が切れる前にルートゾーンの内容を更新できないというリスクがあります。ルートゾーンにローカルの権威サーバーを使用するシステムは、ルートゾーンの古いデータを提供してはなりません。古いデータが提供されるリスクを軽減するために、ローカルルートサーバーは、状態データを提供することを検出すると、すぐに非ローカルルートサーバーの使用に切り替える必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In a resolver that is using an internal service for the root zone, if the contents of the root zone cannot be refreshed before the expire time in the SOA, the resolver MUST immediately switch to using non-local root servers.",
+      "ja": "ルートゾーンの内部サービスを使用しているリゾルバーでは、SOAで有効期限が切れる前にルートゾーンのコンテンツを更新できない場合、リゾルバーはすぐに非ローカルルートサーバーの使用に切り替える必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the event that refreshing the contents of the root zone fails, the results can be disastrous. For example, sometimes all the NS records for a TLD are changed in a short period of time (such as 2 days); if the refreshing of the local root zone is broken during that time, the recursive resolver will have bad data for the entire TLD zone.",
+      "ja": "ルートゾーンのコンテンツの更新に失敗した場合、結果は悲惨なものになる可能性があります。たとえば、TLDのすべてのNSレコードが短期間に（2日など）変更される場合があります。その間にローカルルートゾーンの更新が中断された場合、再帰リゾルバにはTLDゾーン全体の不良データが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "An administrator using the procedure in this document SHOULD have an automated method to check that the contents of the local root zone are being refreshed; this might be part of the resolver software. One way to do this is to have a separate process that periodically checks the SOA of the local root zone and makes sure that it is changing. At the time that this document is published, the SOA for the root zone is the digital representation of the current date with a two-digit counter appended, and the SOA is changed every day even if the contents of the root zone are unchanged. For example, the SOA of the root zone on January 2, 2019 was 2019010201. A process can use this fact to create a check for the contents of the local root zone (using a program not specified in this document).",
+      "ja": "このドキュメントの手順を使用する管理者は、ローカルルートゾーンの内容が更新されていることを確認する自動化された方法を使用する必要があります（SHOULD）。これはリゾルバソフトウェアの一部である可能性があります。これを行う1つの方法は、ローカルルートゾーンのSOAを定期的にチェックし、それが変更されていることを確認する別のプロセスを用意することです。このドキュメントが公開された時点では、ルートゾーンのSOAは2桁のカウンターが追加された現在の日付のデジタル表現であり、ルートゾーンの内容が変更されていなくても、SOAは毎日変更されます。たとえば、2019年1月2日のルートゾーンのSOAは2019010201でした。プロセスはこのファクトを使用して、ローカルルートゾーンの内容のチェックを作成できます（このドキュメントで指定されていないプログラムを使用）。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "A system that does not follow the DNSSEC-related requirements given in Section 2 can be fooled into giving bad responses in the same way as any recursive resolver that does not do DNSSEC validation on responses from a remote root server. Anyone deploying the method described in this document should be familiar with the operational benefits and costs of deploying DNSSEC [RFC4033].",
+      "ja": "セクション2に記載されているDNSSEC関連の要件に準拠していないシステムは、リモートルートサーバーからの応答に対してDNSSEC検証を行わない再帰リゾルバと同じ方法で、不正な応答をする可能性があります。このドキュメントで説明されている方法を展開する人は、DNSSEC [RFC4033]を展開することの運用上の利点とコストに精通している必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "As stated in Section 1, this design explicitly requires the local copy of the root zone information to be available only from resolvers on that host. This has the security property of limiting damage to clients of any local resolver that might try to rely on an altered copy of the root.",
+      "ja": "セクション1で述べたように、この設計では、ルートゾーン情報のローカルコピーがそのホストのリゾルバーからのみ利用可能であることが明示的に必要です。これには、変更されたルートのコピーに依存しようとする可能性があるローカルリゾルバのクライアントへの損傷を制限するというセキュリティプロパティがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "このドキュメントにはIANAアクションはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, DOI 10.17487/RFC1035, November 1987, <https://www.rfc-editor.org/info/rfc1035>.",
+      "ja": "[RFC1035] Mockapetris、P。、「ドメイン名-実装および仕様」、STD 13、RFC 1035、DOI 10.17487 / RFC1035、1987年11月、<https://www.rfc-editor.org/info/rfc1035>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https://www.rfc-editor.org/info/ rfc2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4033] Arends, R., Austein, R., Larson, M., Massey, D., and S. Rose, \"DNS Security Introduction and Requirements\", RFC 4033, DOI 10.17487/RFC4033, March 2005, <https://www.rfc-editor.org/info/rfc4033>.",
+      "ja": "[RFC4033] Arends、R.、Austein、R.、Larson、M.、Massey、D。、およびS. Rose、「DNSセキュリティの概要と要件」、RFC 4033、DOI 10.17487 / RFC4033、2005年3月、<https： //www.rfc-editor.org/info/rfc4033>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7706] Kumari, W. and P. Hoffman, \"Decreasing Access Time to Root Servers by Running One on Loopback\", RFC 7706, DOI 10.17487/RFC7706, November 2015, <https://www.rfc-editor.org/info/rfc7706>.",
+      "ja": "[RFC7706]クマリ、W、およびP.ホフマン、「ループバックで1つを実行してルートサーバーへのアクセス時間を短縮する」、RFC 7706、DOI 10.17487 / RFC7706、2015年11月、<https://www.rfc-editor.org/ info / rfc7706>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https://www.rfc-editor.org/info/ rfc8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8499] Hoffman, P., Sullivan, A., and K. Fujiwara, \"DNS Terminology\", BCP 219, RFC 8499, DOI 10.17487/RFC8499, January 2019, <https://www.rfc-editor.org/info/rfc8499>.",
+      "ja": "[RFC8499]ホフマン、P。、サリバン、A。、およびK.藤原、「DNS用語」、BCP 219、RFC 8499、DOI 10.17487 / RFC8499、2019年1月、<https://www.rfc-editor.org/ info / rfc8499>。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[Manning2013] Manning, W., \"Client Based Naming\", May 2013, <http://www.sfc.wide.ad.jp/dissertation/bill_e.html>.",
+      "ja": "[Manning2013] Manning、W。、「Client Based Naming」、2013年5月、<http://www.sfc.wide.ad.jp/dissertation/bill_e.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5936] Lewis, E. and A. Hoenes, Ed., \"DNS Zone Transfer Protocol (AXFR)\", RFC 5936, DOI 10.17487/RFC5936, June 2010, <https://www.rfc-editor.org/info/rfc5936>.",
+      "ja": "[RFC5936] Lewis、E。およびA. Hoenes、編、「DNSゾーン転送プロトコル（AXFR）」、RFC 5936、DOI 10.17487 / RFC5936、2010年6月、<https://www.rfc-editor.org/info / rfc5936>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8198] Fujiwara, K., Kato, A., and W. Kumari, \"Aggressive Use of DNSSEC-Validated Cache\", RFC 8198, DOI 10.17487/RFC8198, July 2017, <https://www.rfc-editor.org/info/rfc8198>.",
+      "ja": "[RFC8198] Fujiwara、K.、Kato、A。、およびW. Kumari、「DNSSEC-Validated Cacheの積極的な使用」、RFC 8198、DOI 10.17487 / RFC8198、2017年7月、<https：//www.rfc-editor。 org / info / rfc8198>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Current Sources of the Root Zone",
+      "section_title": true,
+      "ja": "付録A.ルートゾーンの現在のソース"
+    },
+    {
+      "indent": 3,
+      "text": "The root zone can be retrieved from anywhere as long as it comes with all the DNSSEC records needed for validation. Currently, one can get the root zone from ICANN by zone transfer AXFR [RFC5936] over TCP from DNS servers at xfr.lax.dns.icann.org and xfr.cjr.dns.icann.org. The root zone file can be obtained using methods described at <https://www.iana.org/domains/root/files>.",
+      "ja": "ルートゾーンは、検証に必要なすべてのDNSSECレコードが付属している限り、どこからでも取得できます。現在、xfr.lax.dns.icann.orgとxfr.cjr.dns.icann.orgにあるDNSサーバーからTCP経由のゾーン転送AXFR [RFC5936]によってICANNからルートゾーンを取得できます。ルートゾーンファイルは、<https://www.iana.org/domains/root/files>で説明されている方法を使用して取得できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Currently, the root can also be retrieved by AXFR over TCP from the following root server operators:",
+      "ja": "現在、ルートは、次のルートサーバーオペレーターからAXFR over TCPによって取得することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "* b.root-servers.net",
+      "ja": "* ｂ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "* c.root-servers.net",
+      "ja": "* ｃ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "* d.root-servers.net",
+      "ja": "* ｄ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "* f.root-servers.net",
+      "ja": "* ｆ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "* g.root-servers.net",
+      "ja": "* ｇ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "* k.root-servers.net",
+      "ja": "* ｋ。ろおｔーせｒゔぇｒｓ。ねｔ"
+    },
+    {
+      "indent": 3,
+      "text": "It is crucial to note that none of the above services are guaranteed to be available. It is possible that ICANN or some of the root server operators will turn off the AXFR capability on the servers listed above. Using AXFR over TCP to addresses that are likely to be anycast (as the ones above are) may conceivably have transfer problems due to anycast, but current practice shows that to be unlikely.",
+      "ja": "上記のサービスのいずれも利用可能であることが保証されていないことに注意することが重要です。 ICANNまたは一部のルートサーバーオペレーターが、上記のサーバーでAXFR機能をオフにする可能性があります。 （上記のように）エニーキャストである可能性が高いアドレスにAXFR over TCPを使用すると、エニーキャストが原因で転送の問題が発生する可能性がありますが、現在の慣例では、その可能性は低いと示されています。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1. Root Zone Services",
+      "section_title": true,
+      "ja": "A.1. ルートゾーンサービス"
+    },
+    {
+      "indent": 3,
+      "text": "At the time that this document is published, there is one root zone service that is active and one that has been announced as in the planning stages. This section describes all known active services.",
+      "ja": "このドキュメントが公開された時点で、アクティブなルートゾーンサービスが1つと、計画段階で発表されたものがあります。このセクションでは、すべての既知のアクティブなサービスについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "LocalRoot (<https://localroot.isi.edu/>) is an experimental service that embodies many of the ideas in this document. It distributes the root zone by AXFR and also offers DNS NOTIFY messages when the LocalRoot system sees that the root zone has changed.",
+      "ja": "LocalRoot（<https://localroot.isi.edu/>）は、このドキュメントのアイデアの多くを具現化する実験的なサービスです。これは、AXFRによってルートゾーンを配布し、ルートゾーンが変更されたことをLocalRootシステムが検出したときにDNS NOTIFYメッセージも提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Example Configurations of Common Implementations",
+      "section_title": true,
+      "ja": "付録B.一般的な実装の構成例"
+    },
+    {
+      "indent": 3,
+      "text": "This section shows fragments of configurations for some popular recursive server software that is believed to correctly implement the requirements given in this document. The examples have been updated since the publication of [RFC7706].",
+      "ja": "このセクションでは、このドキュメントに記載されている要件を正しく実装していると考えられている一般的な再帰サーバーソフトウェアの構成の一部を示します。 [RFC7706]の公開以降、例は更新されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The IPv4 and IPv6 addresses in this section were checked in March 2020 by testing for AXFR over TCP from each address for the known single-letter names in the root-servers.net zone.",
+      "ja": "このセクションのIPv4アドレスとIPv6アドレスは、2020年3月に、root-servers.netゾーン内の既知の1文字の名前の各アドレスからAXFR over TCPをテストすることによって確認されました。"
+    },
+    {
+      "indent": 0,
+      "text": "B.1. Example Configuration: BIND 9.12",
+      "section_title": true,
+      "ja": "B.1. 構成例：BIND 9.12"
+    },
+    {
+      "indent": 3,
+      "text": "BIND 9.12 acts both as a recursive resolver and an authoritative server. Because of this, there is \"fate-sharing\" between the two servers in the following configuration. That is, if the root server dies, it is likely that all of BIND is dead.",
+      "ja": "BIND 9.12は、再帰リゾルバーと権威サーバーの両方として機能します。このため、次の構成では、2つのサーバー間で「運命共有」が行われます。つまり、ルートサーバーが停止した場合、すべてのBINDが停止している可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that a future version of BIND will support a much more robust method for creating a local mirror of the root or other zones; see Appendix B.3.",
+      "ja": "BINDの将来のバージョンでは、ルートまたは他のゾーンのローカルミラーを作成するためのより堅牢な方法をサポートすることに注意してください。付録B.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Using this configuration, queries for information in the root zone are returned with the Authoritative Answer (AA) bit not set.",
+      "ja": "この構成を使用すると、ルートゾーンの情報に対するクエリは、Authoritative Answer（AA）ビットが設定されていない状態で返されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When slaving a zone, BIND 9.12 will treat zone data differently if the zone is slaved into a separate view (or a separate instance of the software) versus slaved into the same view or instance that is also performing the recursion.",
+      "ja": "ゾーンをスレーブ化するとき、ゾーンが別のビュー（またはソフトウェアの別のインスタンス）にスレーブ化されている場合と、再帰を実行している同じビューまたはインスタンスにスレーブ化されている場合、BIND 9.12はゾーンデータを異なる方法で扱います。"
+    },
+    {
+      "indent": 3,
+      "text": "Validation: When using separate views or separate instances, the DS records in the slaved zone will be validated as the zone data is accessed by the recursive server. When using the same view, this validation does not occur for the slaved zone.",
+      "ja": "検証：別のビューまたは別のインスタンスを使用する場合、再帰サーバーがゾーンデータにアクセスすると、スレーブゾーンのDSレコードが検証されます。同じビューを使用する場合、この検証はスレーブゾーンでは発生しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Caching: When using separate views or instances, the recursive server will cache all of the queries for the slaved zone, just as it would using the traditional \"root hints\" method. Thus, as the zone in the other view or instance is refreshed or updated, changed information will not appear in the recursive server until the TTL of the old record times out. Currently, the TTL for DS and delegation NS records is two days. When using the same view, all zone data in the recursive server will be updated as soon as it receives its copy of the zone.",
+      "ja": "キャッシュ：個別のビューまたはインスタンスを使用する場合、再帰サーバーは、従来の「ルートヒント」メソッドを使用する場合と同様に、スレーブゾーンのすべてのクエリをキャッシュします。したがって、他のビューまたはインスタンスのゾーンが更新または更新されると、古いレコードのTTLがタイムアウトするまで、変更された情報は再帰サーバーに表示されません。現在、DSおよび委任NSレコードのTTLは2日です。同じビューを使用する場合、再帰サーバーがゾーンのコピーを受信するとすぐに、再帰サーバーのすべてのゾーンデータが更新されます。"
+    },
+    {
+      "indent": 3,
+      "text": "view root {\n    match-destinations { 127.12.12.12; };\n    zone \".\" {\n        type slave;\n        file \"rootzone.db\";\n        notify no;\n        masters {\n            199.9.14.201;         # b.root-servers.net\n            192.33.4.12;          # c.root-servers.net\n            199.7.91.13;          # d.root-servers.net\n            192.5.5.241;          # f.root-servers.net\n            192.112.36.4;         # g.root-servers.net\n            193.0.14.129;         # k.root-servers.net\n            192.0.47.132;         # xfr.cjr.dns.icann.org\n            192.0.32.132;         # xfr.lax.dns.icann.org\n            2001:500:200::b;      # b.root-servers.net\n            2001:500:2::c;        # c.root-servers.net\n            2001:500:2d::d;       # d.root-servers.net\n            2001:500:2f::f;       # f.root-servers.net\n            2001:500:12::d0d;     # g.root-servers.net\n            2001:7fd::1;          # k.root-servers.net\n            2620:0:2830:202::132; # xfr.cjr.dns.icann.org\n            2620:0:2d0:202::132;  # xfr.lax.dns.icann.org\n        };\n    };\n};",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "view recursive {\n    dnssec-validation auto;\n    allow-recursion { any; };\n    recursion yes;\n    zone \".\" {\n        type static-stub;\n        server-addresses { 127.12.12.12; };\n    };\n};",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "B.2. Example Configuration: Unbound 1.8",
+      "section_title": true,
+      "ja": "B.2. 構成例：バインドされていない1.8"
+    },
+    {
+      "indent": 3,
+      "text": "Similar to BIND, Unbound, starting with version 1.8, can act both as a recursive resolver and an authoritative server.",
+      "ja": "BINDと同様に、バージョン1.8以降のUnboundは、再帰リゾルバーと権威サーバーの両方として機能できます。"
+    },
+    {
+      "indent": 3,
+      "text": "auth-zone:\n    name: \".\"\n    master: 199.9.14.201         # b.root-servers.net\n    master: 192.33.4.12          # c.root-servers.net\n    master: 199.7.91.13          # d.root-servers.net\n    master: 192.5.5.241          # f.root-servers.net\n    master: 192.112.36.4         # g.root-servers.net\n    master: 193.0.14.129         # k.root-servers.net\n    master: 192.0.47.132         # xfr.cjr.dns.icann.org\n    master: 192.0.32.132         # xfr.lax.dns.icann.org\n    master: 2001:500:200::b      # b.root-servers.net\n    master: 2001:500:2::c        # c.root-servers.net\n    master: 2001:500:2d::d       # d.root-servers.net\n    master: 2001:500:2f::f       # f.root-servers.net\n    master: 2001:500:12::d0d     # g.root-servers.net\n    master: 2001:7fd::1          # k.root-servers.net\n    master: 2620:0:2830:202::132 # xfr.cjr.dns.icann.org\n    master: 2620:0:2d0:202::132  # xfr.lax.dns.icann.org\n    fallback-enabled: yes\n    for-downstream: no\n    for-upstream: yes",
+      "raw": true
+    },
+    {
+      "indent": 0,
+      "text": "B.3. Example Configuration: BIND 9.14",
+      "section_title": true,
+      "ja": "B.3. 構成例：BIND 9.14"
+    },
+    {
+      "indent": 3,
+      "text": "BIND 9.14 can set up a local mirror of the root zone with a small configuration option:",
+      "ja": "BIND 9.14は、小さな構成オプションでルートゾーンのローカルミラーをセットアップできます。"
+    },
+    {
+      "indent": 3,
+      "text": "zone \".\" {\n    type mirror;\n};",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "The simple \"type mirror\" configuration for the root zone works for the root zone because a default list of primary servers for the IANA root zone is built into BIND 9.14. In order to set up mirroring of any other zone, an explicit list of primary servers needs to be provided.",
+      "ja": "IANAルートゾーンのプライマリサーバーのデフォルトリストがBIND 9.14に組み込まれているため、ルートゾーンの単純な「タイプミラー」構成はルートゾーンで機能します。他のゾーンのミラーリングを設定するには、プライマリサーバーの明示的なリストを提供する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "See the documentation for BIND 9.14 for more detail about how to use this simplified configuration.",
+      "ja": "この簡略化された構成の使用方法の詳細については、BIND 9.14のドキュメントを参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "B.4. Example Configuration: Unbound 1.9",
+      "section_title": true,
+      "ja": "B.4. 構成例：アンバインド1.9"
+    },
+    {
+      "indent": 3,
+      "text": "Recent versions of Unbound have an \"auth-zone\" feature that allows local mirroring of the root zone. Configuration looks as follows:",
+      "ja": "Unboundの最近のバージョンには、ルートゾーンのローカルミラーリングを可能にする「auth-zone」機能があります。構成は次のようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "auth-zone: name: \".\" master: \"b.root-servers.net\" master: \"c.root-servers.net\" master: \"d.root-servers.net\" master: \"f.root-servers.net\" master: \"g.root-servers.net\" master: \"k.root-servers.net\" fallback-enabled: yes for-downstream: no for-upstream: yes zonefile: \"root.zone\"",
+      "ja": "auth-zone：名前： \"。\"マスター： \"b.root-servers.net\"マスター： \"c.root-servers.net\"マスター： \"d.root-servers.net\"マスター： \"f.root-servers.net\"マスター： \"g.root -servers.net \"master：\" k.root-servers.net \"fallback-enabled：yes for-downstream：no for-upstream：yes zonefile：\" root.zone \""
+    },
+    {
+      "indent": 0,
+      "text": "B.5. Example Configuration: Knot Resolver",
+      "section_title": true,
+      "ja": "B.5. 構成例：ノットリゾルバー"
+    },
+    {
+      "indent": 3,
+      "text": "Knot Resolver uses its \"prefill\" module to load the root zone information. This is described at <https://knot-resolver.readthedocs.io/en/v5.0.1/modules-rfc7706.html>.",
+      "ja": "Knot Resolverは「prefill」モジュールを使用してルートゾーン情報をロードします。これについては、<https://knot-resolver.readthedocs.io/en/v5.0.1/modules-rfc7706.html>で説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "B.6. Example Configuration: Microsoft Windows Server 2012",
+      "section_title": true,
+      "ja": "B.6. 構成例：Microsoft Windows Server 2012"
+    },
+    {
+      "indent": 3,
+      "text": "Windows Server 2012 contains a DNS server in the \"DNS Manager\" component. When activated, that component acts as a recursive server. The DNS Manager can also act as an authoritative server.",
+      "ja": "Windows Server 2012では、「DNSマネージャー」コンポーネントにDNSサーバーが含まれています。アクティブにすると、そのコンポーネントは再帰サーバーとして機能します。 DNSマネージャーは、権限のあるサーバーとしても機能します。"
+    },
+    {
+      "indent": 3,
+      "text": "Using this configuration, queries for information in the root zone are returned with the AA bit set.",
+      "ja": "この構成を使用すると、ルートゾーン内の情報に対するクエリは、AAビットセットで返されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The steps to configure the DNS Manager to implement the requirements in this document are:",
+      "ja": "このドキュメントの要件を実装するようにDNSマネージャーを構成する手順は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Launch the DNS Manager GUI. This can be done from the command line (\"dnsmgmt.msc\") or from the Service Manager (the \"DNS\" command in the \"Tools\" menu).",
+      "ja": "1. DNSマネージャGUIを起動します。これは、コマンドライン（ \"dnsmgmt.msc\"）またはサービスマネージャ（[ツール]メニューの[DNS]コマンド）から実行できます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. In the hierarchy under the server on which the service is running, right-click on the \"Forward Lookup Zones\", and select \"New Zone\". This brings up a succession of dialog boxes.",
+      "ja": "2. サービスが実行されているサーバーの下の階層で、[前方参照ゾーン]を右クリックし、[新しいゾーン]を選択します。これにより、一連のダイアログボックスが表示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. In the \"Zone Type\" dialog box, select \"Secondary zone\".",
+      "ja": "3. [ゾーンの種類]ダイアログボックスで、[セカンダリゾーン]を選択します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. In the \"Zone Name\" dialog box, enter \".\".",
+      "ja": "4. 「ゾーン名」ダイアログに「。」を入力します。"
+    },
+    {
+      "indent": 3,
+      "text": "5. In the \"Master DNS Servers\" dialog box, enter \"b.root-servers.net\". The system validates that it can do a zone transfer from that server. (After this configuration is completed, the DNS Manager will attempt to transfer from all of the root zone servers.)",
+      "ja": "5. [マスターDNSサーバー]ダイアログボックスで、「b.root-servers.net」と入力します。システムは、そのサーバーからゾーン転送を実行できることを検証します。 （この構成が完了すると、DNSマネージャーはすべてのルートゾーンサーバーからの転送を試みます。）"
+    },
+    {
+      "indent": 3,
+      "text": "6. In the \"Completing the New Zone Wizard\" dialog box, click \"Finish\".",
+      "ja": "6. [新しいゾーンウィザードの完了]ダイアログボックスで、[完了]をクリックします。"
+    },
+    {
+      "indent": 3,
+      "text": "7. Verify that the DNS Manager is acting as a recursive resolver. Right-click on the server name in the hierarchy, choosing the \"Advanced\" tab in the dialog box. See that \"Disable recursion (also disables forwarders)\" is not selected and that \"Enable DNSSEC validation for remote responses\" is selected.",
+      "ja": "7. DNSマネージャーが再帰リゾルバーとして機能していることを確認します。階層内のサーバー名を右クリックし、ダイアログボックスの[詳細]タブを選択します。 「再帰を無効にする（フォワーダーも無効にする）」が選択されておらず、「リモート応答のDNSSEC検証を有効にする」が選択されていることを確認します。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors fully acknowledge that running a copy of the root zone on the loopback address is not a new concept and that we have chatted with many people about that idea over time. For example, Bill Manning described a similar solution to the problems in his doctoral dissertation in 2013 [Manning2013].",
+      "ja": "著者は、ループバックアドレスでルートゾーンのコピーを実行することは新しい概念ではなく、そのアイデアについて多くの人と時間をかけて話し合ったことを完全に認めます。たとえば、Bill Manningは、2013年の博士論文の問題に対する同様の解決策について説明しました[Manning2013]。"
+    },
+    {
+      "indent": 3,
+      "text": "Evan Hunt contributed greatly to the logic in the requirements. Other significant contributors include Wouter Wijngaards, Tony Hain, Doug Barton, Greg Lindsay, and Akira Kato. The authors also received many offline comments about making the document clear that this is just a description of a way to operate a root zone on the same host and not a recommendation to do so.",
+      "ja": "Evan Huntは、要件のロジックに大きく貢献しました。他の重要な貢献者には、Wouter Wijngaards、Tony Hain、Doug Barton、Greg Lindsay、およびAkira Katoが含まれます。著者はまた、これが同じホスト上でルートゾーンを操作する方法の単なる説明であり、推奨するものではないことをドキュメントに明確にすることについての多くのオフラインコメントを受け取りました。"
+    },
+    {
+      "indent": 3,
+      "text": "People who contributed to this update to [RFC7706] include Florian Obser, nusenu, Wouter Wijngaards, Mukund Sivaraman, Bob Harold, and Leo Vegoda.",
+      "ja": "[RFC7706]のこの更新に貢献した人々には、Florian Obser、nusenu、Wouter Wijngaards、Mukund Sivaraman、Bob Harold、およびLeo Vegodaが含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Warren Kumari Google",
+      "ja": "ウォーレンクマリグーグル"
+    },
+    {
+      "indent": 3,
+      "text": "Email: Warren@kumari.net",
+      "raw": true
+    },
+    {
+      "indent": 3,
+      "text": "Paul Hoffman ICANN",
+      "ja": "ポール・ホフマンICANN"
+    },
+    {
+      "indent": 3,
+      "text": "Email: paul.hoffman@icann.org",
+      "raw": true
+    }
+  ]
+}
