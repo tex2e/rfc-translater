@@ -23,10 +23,6 @@
 ### 開発者向け
 
 ```
-pip3 install selenium
-```
-
-```
 pip3 install requests lxml
 pip3 install beautifulsoup4
 pip3 install Mako
@@ -40,8 +36,6 @@ python3 main.py --rfc 123 --trans # RFCの翻訳だけ
 python3 main.py --rfc 123 --make # HTMLの生成だけ
 python3 main.py # 順番に翻訳する
 python3 main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
-python3 main.py --trans-mode selenium # 翻訳にseleniumを使用する
-python3 main.py --trans-mode googletrans # 翻訳にgoogletransを使用する
 python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
 ```
 
@@ -55,6 +49,7 @@ python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成す
 python3 main.py --make-index # インデックスページの作成
 ```
 
+<br>
 #### Figs
 
 RFC Figs のページについて

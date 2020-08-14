@@ -3,7 +3,7 @@ import os
 import re
 import json
 import time
-
+from googletrans import Translator as GoogleTranslater # pip install googletrans
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -13,6 +13,7 @@ trans_rules = {
     'Acknowledgement': '謝辞',
     'Acknowledgements': '謝辞',
     'Status of This Memo': '本文書の状態',
+    'Status of this Memo': '本文書の状態',
     'Copyright Notice': '著作権表示',
     'Table of Contents': '目次',
     'Terminology': '用語',
@@ -23,75 +24,55 @@ trans_rules = {
     'The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.': 'この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。',
 }
 
-class Translator: # selenium
+
+class TranslatorGoogletrans: # googletrans
 
     def __init__(self):
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options
-
-        self.options = Options()
-        self.options.add_argument('--headless')
-        self.browser = webdriver.Chrome(options=self.options)
-        self.browser.implicitly_wait(3)
-
-        self.count = 0
-        self.total = 0
-
-    def translate(self, text, dest='ja'):
-        from bs4 import BeautifulSoup
-        import urllib.parse
-
-        ja = trans_rules.get(text)
-        if ja:
-            return ja
-
-        # Start translation
-        text_for_url = urllib.parse.quote_plus(text, safe='')
-        url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
-        self.browser.get(url)
-
-        # take interval
-        wait_time = 2 + len(text) / 100 # IMPORTANT!!!
-        if self.total > 0:
-            print('%3d/%d: ' % (self.count, self.total), end='')
-        print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
-        time.sleep(wait_time)
-
-        # Get translation result
-        ja = BeautifulSoup(self.browser.page_source, "html.parser").find(class_="tlid-translation translation")
-        return ja.text
-
-    def quit(self):
-        self.browser.quit()
-
-
-class Translator2: # googletrans
-
-    def __init__(self):
-        from googletrans import Translator as GoogleTranslater
-
         self.translator = GoogleTranslater()
         self.count = 0
         self.total = 0
 
     def translate(self, text, dest='ja'):
+        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
         ja = trans_rules.get(text)
         if ja:
             return ja
-
+        # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
         text = re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text)
+        # 翻訳処理
         ja = self.translator.translate(text, dest='ja')
-        # take interval
-        wait_time = 1 + len(text) / 40 # IMPORTANT!!!
+        # 翻訳の間隔を開ける
+        wait_time = 1 + len(text) / 80 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
         time.sleep(wait_time)
         return ja.text
 
-    def quit(self):
-        return
+    def translate_texts(self, texts, dest='ja'):
+        # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
+        texts = list(map(lambda text: re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text), texts))
+        # 翻訳処理
+        texts_ja = self.translator.translate(texts, dest='ja')
+        res = [text_ja.text for text_ja in texts_ja]
+        total_len = sum([len(t) for t in texts])
+        # 翻訳の間隔を開ける
+        wait_time = len([True for t in texts if len(t) > 0]) / 2 # IMPORTANT!!!
+        if self.total > 0:
+            print('%3d/%d: ' % (self.count, self.total), end='')
+        print('len(text)=%d, sleep=%.1f' % (total_len, wait_time))
+        time.sleep(wait_time)
+        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
+        for i, text in enumerate(texts):
+            ja = trans_rules.get(text)
+            if ja:
+                res[i] = ja
+        return res
 
+
+def chunks(l, n):
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 def trans_rfc(number, mode='selenium'):
 
@@ -107,12 +88,7 @@ def trans_rfc(number, mode='selenium'):
         with open(input_file, 'r') as f:
             obj = json.load(f)
 
-    translator = None
-    if mode == 'selenium':
-        translator = Translator()
-    elif mode == 'googletrans':
-        translator = Translator2()
-
+    translator = TranslatorGoogletrans()
     translator.count = 0
     translator.total = len(obj['contents'])
     is_canceled = False
@@ -125,24 +101,40 @@ def trans_rfc(number, mode='selenium'):
             obj['title']['ja'] = "RFC %d - %s" % (number, ja)
 
         # 段落の翻訳
-        for i, paragraph in enumerate(obj['contents']):
+        #   複数の段落をまとめて翻訳する
+        CHUNK_NUM = 10
+        for obj_contents in chunks(list(enumerate(obj['contents'])), CHUNK_NUM):
 
-            if paragraph.get('ja'):  # 既に翻訳済みの段落はスキップする
-                continue
-            if paragraph.get('raw') == True:  # 図や表は翻訳しない
-                continue
+            texts = []     # 原文
+            pre_texts = [] # 原文の前文字 (箇条書きの記号など)
 
-            text = paragraph['text']
+            for i, obj_contents_i in obj_contents:
 
-            translator.count = i + 1
-            # 文が「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる場合は、
-            # その文字を含めないで翻訳する。
-            m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +)(.*)$', text)
-            if m:
-                ja = m[1] + translator.translate(m[2])
-            else:
-                ja = translator.translate(text)
-            obj['contents'][i]['ja'] = ja
+                translator.count += 1
+
+                # 既に翻訳済みの段落 や 図表 は翻訳しないでスキップする
+                if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') == True)):
+                    texts.append('')
+                    pre_texts.append('')
+                    continue
+
+                text = obj_contents_i['text']
+
+                # 「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳
+                m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +)(.*)$', text)
+                if m:
+                    pre_texts.append(m[1])
+                    texts.append(m[2])
+                else:
+                    pre_texts.append('')
+                    texts.append(text)
+
+            texts_ja = translator.translate_texts(texts)
+
+            # 翻訳結果を格納
+            for (i, obj_contents_i), pre_text, text_ja in \
+                    zip(obj_contents, pre_texts, texts_ja):
+                obj['contents'][i]['ja'] = pre_text + text_ja
 
     except json.decoder.JSONDecodeError as e:
         print('[-] googletrans is blocked by Google :(')
@@ -151,8 +143,6 @@ def trans_rfc(number, mode='selenium'):
     except KeyboardInterrupt as e:
         print('Interrupted!')
         is_canceled = True
-    finally:
-        translator.quit()
 
     if not is_canceled:
         with open(output_file, 'w') as f:
@@ -166,6 +156,22 @@ def trans_rfc(number, mode='selenium'):
         with open(midway_file, 'w') as f: # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
         return False
+
+
+def trans_test():
+    translator = Translator2()
+    ja = translator.translate('test', dest='ja')
+    return ja == 'テスト'
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('text', help='english text')
+    args = parser.parse_args()
+
+    translator = Translator2()
+    ja = translator.translate(args.text, dest='ja')
+    print(ja)
 
 
 # googletrans:
@@ -192,18 +198,3 @@ def trans_rfc(number, mode='selenium'):
 #   URL: https://translate.google.com/translate_a/single?...
 #
 #
-
-def trans_test():
-    translator = Translator2()
-    ja = translator.translate('test', dest='ja')
-    return ja == 'テスト'
-
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('text', help='english text')
-    args = parser.parse_args()
-
-    translator = Translator2()
-    ja = translator.translate(args.text, dest='ja')
-    print(ja)
