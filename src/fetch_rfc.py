@@ -61,6 +61,7 @@ class Paragraph:
                 or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
                 or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
                 or re.search(r'[/|\\] +[/|\\]', text)  # figure
+                or len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3  # table
                 or re.match(r'^Email: ', text)  # Authors' Addresses
                 or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
                 or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
