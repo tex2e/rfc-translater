@@ -65,6 +65,8 @@ class Paragraph:
                 or len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3  # table
                 or len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3  # syntax
                 or len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3  # syntax
+                or len(re.compile(r'^\s*\[', re.MULTILINE).findall(text)) >= 3  # syntax
+                or len(re.compile(r'\]\s*$', re.MULTILINE).findall(text)) >= 3  # syntax
                 or len(re.compile(r'^\s*:', re.MULTILINE).findall(text)) >= 3  # src
                 or len(re.compile(r'^\s*o ', re.MULTILINE).findall(text)) >= 4  # list
                 or re.match(r'^E[Mm]ail: ', text)  # Authors' Addresses
