@@ -62,7 +62,12 @@ class Paragraph:
                 or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
                 or re.search(r'[/|\\] +[/|\\]', text)  # figure
                 or len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3  # table
-                or re.match(r'^Email: ', text)  # Authors' Addresses
+                or len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3  # table
+                or len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3  # syntax
+                or len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3  # syntax
+                or len(re.compile(r'^\s*:', re.MULTILINE).findall(text)) >= 3  # src
+                or len(re.compile(r'^\s*o ', re.MULTILINE).findall(text)) >= 4  # list
+                or re.match(r'^E[Mm]ail: ', text)  # Authors' Addresses
                 or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
                 or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
                 or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
@@ -75,7 +80,7 @@ class Paragraph:
         # (ただし、マイナスは直前に空白があることが条件)
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
-        if (len(re.findall(r'[~+*/=!#<>{})^@:;]|[^ ]\(| -', text)) >= threshold
+        if (len(re.findall(r'[~+*/=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold
                 and (not re.search(r'[.,:]\)?$', text)) # 文末が「.,:」ではない
                 ):
             return True

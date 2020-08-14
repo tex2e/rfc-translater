@@ -22,6 +22,7 @@ trans_rules = {
     'Informative References': '参考引用',
     'Contributors': '貢献者',
     'The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.': 'この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。',
+    'where:': 'ただし：',
 }
 
 
@@ -67,6 +68,8 @@ class TranslatorGoogletrans: # googletrans
             ja = trans_rules.get(text)
             if ja:
                 res[i] = ja
+        # 関数の括弧（）は半角に変換する
+        res = [re.sub(r'（）', '()', text_ja) for text_ja in res]
         return res
 
 
@@ -121,7 +124,7 @@ def trans_rfc(number, mode='selenium'):
                 text = obj_contents_i['text']
 
                 # 「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳
-                m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +)(.*)$', text)
+                m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +|[a-z]\) |\[[0-9a-z]{1,2}\] )(.*)$', text)
                 if m:
                     pre_texts.append(m[1])
                     texts.append(m[2])
