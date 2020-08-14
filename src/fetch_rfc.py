@@ -99,7 +99,7 @@ class Paragraph:
             return False
         if re.match(r'^Appendix [A-F]. ', text):
             return True
-        return re.match(r'^(?:\d{1,2}\.)+ |^[A-Z]\.(?:\d{1,2}\.)+ ', text)
+        return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+ ', text)
 
 
 class Paragraphs:
