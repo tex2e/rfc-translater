@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--begin', type=int, help='begin rfc number')
     parser.add_argument('--end', type=int, help='end rfc number')
     parser.add_argument('--trans-mode', dest='trans_mode',
-                        choices=['selenium', 'googletrans'], default='selenium')
+                        choices=['selenium', 'googletrans'], default='googletrans')
     parser.add_argument('--make-index', dest='make_index',
                         action='store_true', help='make index.html')
     parser.add_argument('--transtest', action='store_true')
