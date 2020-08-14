@@ -49,7 +49,8 @@ python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成す
 python3 main.py --make-index # インデックスページの作成
 ```
 
-<br>
+---
+
 #### Figs
 
 RFC Figs のページについて
