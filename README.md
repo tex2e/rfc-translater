@@ -27,6 +27,7 @@ pip3 install requests lxml
 pip3 install beautifulsoup4
 pip3 install Mako
 pip3 install googletrans
+pip3 install tqdm
 ```
 
 ```bash
