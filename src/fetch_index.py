@@ -36,7 +36,7 @@ def fetch_remote_index():
     return rfc_numbers
 
 def fetch_local_index():
-    # 作成したRFCに対応するHTMLの番号の一覧をローカルディスクから取得する
+    # 作成したRFCに対応するHTMLの番号の一覧をローカルディスクから取得する。
 
     pathname = 'html/rfc*.html'
     rfc_numbers = []
@@ -48,6 +48,8 @@ def fetch_local_index():
     return rfc_numbers
 
 def diff_remote_and_local_index():
+    # RFC Indexとローカルのhtml/のRFCの差分を作成する。
+    # 返り値は、RFC番号の一覧
     remote_index = fetch_remote_index()
     local_index  = fetch_local_index()
     diff_index = set(remote_index) - set(local_index)

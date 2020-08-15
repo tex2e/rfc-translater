@@ -14,17 +14,21 @@ def make_html(rfc_number):
         print("make_html: Not found:", input_file)
         return
 
+    # 翻訳したRFC (json) の読み込み
     with open(input_file, 'r') as f:
         obj = json.load(f)
 
+    # テンプレートエンジン「Mako」を使って、値をバインドする
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template('templates/rfc.html')
     output = mytemplate.render_unicode(ctx=obj)
 
+    # 出力ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)
 
+    # 翻訳したRFC (html) の作成
     with open(output_file, 'w') as f:
         f.write(output)
 
