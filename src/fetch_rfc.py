@@ -35,12 +35,13 @@ class Paragraph:
         elif self.is_code and self.is_section_title:
             self.is_code = False
 
-        # BREAKの置き換え
-        #   文章のときは空白に置き換えて、コードのときは改行の置き換える。
+        # BREAKの置き換え (段落がページをまたいだときの処理)
         if self.is_code:
+            # 図表・コードのときは、改行に置き換える
             self.text = self.text.replace(BREAK, '\n')
         else:
-            self.text = self.text.replace(BREAK, ' ')
+            # 文章のときは、空白1つに置き換える (ページ間の余分な空白も取り除く)
+            self.text = re.sub(BREAK + r'\s+', ' ', self.text)
 
         # 文章のときの処理
         if not self.is_code:
@@ -113,11 +114,11 @@ class Paragraph:
         # "N." が現れたときはセクションのタイトルとして検出する
         if len(text.split('\n')) >= 2:
             return False
-        if text.endswith('.'): 
+        if text.endswith('.'):
             return False
-        if text.endswith(':'): 
+        if text.endswith(':'):
             return False
-        if text.endswith(','): 
+        if text.endswith(','):
             return False
         if re.match(r'^Appendix [A-F](?:\. [-a-zA-Z0-9\'\. ]+)?$', text):
             return True
@@ -239,9 +240,9 @@ def fetch_rfc(number, force=False):
                 not prev_last_line.endswith(';') and
                     re.match(r'^ *[a-zA-Z0-9(]', next_first_line) and
                     indent1 == indent2):
-                # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる。
+                # 内容がページをまたぐ場合、BREAKを挿入する
                 # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
-                contents[i+3] = BREAK + contents[i+3].lstrip()
+                contents[i+3] = BREAK + contents[i+3]
             else:
                 # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
                 contents[i+0] = '\n\n'

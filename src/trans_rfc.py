@@ -4,6 +4,7 @@ import re
 import json
 import time
 from googletrans import Translator as GoogleTranslater # pip install googletrans
+from tqdm import tqdm # pip install tqdm
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -26,10 +27,18 @@ trans_rules = {
 
 class TranslatorGoogletrans: # googletrans
 
-    def __init__(self):
+    def __init__(self, total, desc=''):
         self.translator = GoogleTranslater()
         self.count = 0
-        self.total = 0
+        self.total = total
+        # プログレスバー
+        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
+
+    def increment_count(self, incr=1):
+        # プログレスバー用の出力
+        self.count += incr
+        self.bar.update(incr)
 
     def translate(self, text, dest='ja'):
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
@@ -42,9 +51,8 @@ class TranslatorGoogletrans: # googletrans
         ja = self.translator.translate(text, dest='ja')
         # 翻訳の間隔を開ける
         wait_time = 1 + len(text) / 100 # IMPORTANT!!!
-        if self.total > 0:
-            print('%3d/%d: ' % (self.count, self.total), end='')
-        print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
+        # プログレスバーに詳細情報を追加
+        self.bar.set_postfix(len=len(text), sleep=('%.1f' % wait_time))
         time.sleep(wait_time)
         return ja.text
 
@@ -57,9 +65,8 @@ class TranslatorGoogletrans: # googletrans
         total_len = sum([len(t) for t in texts])
         # 翻訳の間隔を開ける
         wait_time = 1 + total_len / 1000 # IMPORTANT!!!
-        if self.total > 0:
-            print('%3d/%d: ' % (self.count, self.total), end='')
-        print('len(text)=%d, sleep=%.1f' % (total_len, wait_time))
+        # プログレスバーに詳細情報を追加
+        self.bar.set_postfix(len=total_len, sleep=('%.1f' % wait_time))
         time.sleep(wait_time)
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
         for i, text in enumerate(texts):
@@ -75,7 +82,7 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number, mode='selenium'):
+def trans_rfc(number):
 
     input_dir = 'data/%04d' % (number//1000%10*1000)
     input_file = '%s/rfc%d.json' % (input_dir, number)
@@ -89,9 +96,8 @@ def trans_rfc(number, mode='selenium'):
         with open(input_file, 'r') as f:
             obj = json.load(f)
 
-    translator = TranslatorGoogletrans()
-    translator.count = 0
-    translator.total = len(obj['contents'])
+    desc = 'RFC %d' % number
+    translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
     is_canceled = False
 
     try:
@@ -111,7 +117,7 @@ def trans_rfc(number, mode='selenium'):
 
             for i, obj_contents_i in obj_contents:
 
-                translator.count += 1
+                translator.increment_count()
 
                 # 既に翻訳済みの段落 や 図表 は翻訳しないでスキップする
                 if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') == True)):
@@ -161,7 +167,7 @@ def trans_rfc(number, mode='selenium'):
 
 
 def trans_test():
-    translator = Translator2()
+    translator = TranslatorGoogletrans()
     ja = translator.translate('test', dest='ja')
     return ja == 'テスト'
 
@@ -171,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('text', help='english text')
     args = parser.parse_args()
 
-    translator = Translator2()
+    translator = TranslatorGoogletrans()
     ja = translator.translate(args.text, dest='ja')
     print(ja)
 
