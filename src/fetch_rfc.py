@@ -73,6 +73,7 @@ class Paragraph:
                 or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
                 or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
                 or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
+                or re.search(r'" \| "', text)  # BNF syntax
                 ):
             return True
 
@@ -99,9 +100,9 @@ class Paragraph:
             return False
         if text.endswith(','): 
             return False
-        if re.match(r'^Appendix [A-F]. ', text):
+        if re.match(r'^Appendix [A-F](?:\. [-a-zA-Z0-9\'\. ]+)?$', text):
             return True
-        return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+ ', text)
+        return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.\d{1,2} ', text)
 
 
 class Paragraphs:

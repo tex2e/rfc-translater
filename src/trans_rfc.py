@@ -8,20 +8,18 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
 trans_rules = {
-    'Abstract': '概要',
-    'Introduction': 'はじめに',
-    'Acknowledgement': '謝辞',
-    'Acknowledgements': '謝辞',
-    'Status of This Memo': '本文書の状態',
-    'Status of this Memo': '本文書の状態',
-    'Copyright Notice': '著作権表示',
-    'Table of Contents': '目次',
-    'Terminology': '用語',
-    'References': '参考文献',
-    'Normative References': '引用文献',
-    'Informative References': '参考引用',
-    'Contributors': '貢献者',
-    'The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.': 'この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。',
+    'abstract': '概要',
+    'introduction': 'はじめに',
+    'acknowledgement': '謝辞',
+    'acknowledgements': '謝辞',
+    'status of this memo': '本文書の状態',
+    'copyright notice': '著作権表示',
+    'table of contents': '目次',
+    'terminology': '用語',
+    'references': '参考文献',
+    'normative references': '引用文献',
+    'informative references': '参考引用',
+    'contributors': '貢献者',
     'where:': 'ただし：',
 }
 
@@ -35,7 +33,7 @@ class TranslatorGoogletrans: # googletrans
 
     def translate(self, text, dest='ja'):
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
-        ja = trans_rules.get(text)
+        ja = trans_rules.get(text.lower())
         if ja:
             return ja
         # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
@@ -43,7 +41,7 @@ class TranslatorGoogletrans: # googletrans
         # 翻訳処理
         ja = self.translator.translate(text, dest='ja')
         # 翻訳の間隔を開ける
-        wait_time = 1 + len(text) / 80 # IMPORTANT!!!
+        wait_time = 1 + len(text) / 100 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (len(text), wait_time))
@@ -58,14 +56,14 @@ class TranslatorGoogletrans: # googletrans
         res = [text_ja.text for text_ja in texts_ja]
         total_len = sum([len(t) for t in texts])
         # 翻訳の間隔を開ける
-        wait_time = len([True for t in texts if len(t) > 0]) / 2 # IMPORTANT!!!
+        wait_time = 1 + total_len / 1000 # IMPORTANT!!!
         if self.total > 0:
             print('%3d/%d: ' % (self.count, self.total), end='')
         print('len(text)=%d, sleep=%.1f' % (total_len, wait_time))
         time.sleep(wait_time)
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
         for i, text in enumerate(texts):
-            ja = trans_rules.get(text)
+            ja = trans_rules.get(text.lower())
             if ja:
                 res[i] = ja
         # 関数の括弧（）は半角に変換する
@@ -105,7 +103,7 @@ def trans_rfc(number, mode='selenium'):
 
         # 段落の翻訳
         #   複数の段落をまとめて翻訳する
-        CHUNK_NUM = 10
+        CHUNK_NUM = 15
         for obj_contents in chunks(list(enumerate(obj['contents'])), CHUNK_NUM):
 
             texts = []     # 原文
@@ -124,7 +122,8 @@ def trans_rfc(number, mode='selenium'):
                 text = obj_contents_i['text']
 
                 # 「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳
-                m = re.match(r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+ +|[a-z]\) |\[[0-9a-z]{1,2}\] )(.*)$', text)
+                pattern = r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |[a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
+                m = re.match(pattern, text)
                 if m:
                     pre_texts.append(m[1])
                     texts.append(m[2])
