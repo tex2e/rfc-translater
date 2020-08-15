@@ -56,8 +56,8 @@ class Paragraph:
     def _find_toc_pattern(self, text):
         # 目次の判定
         return (re.search(r'\.{6}|(?:\. ){6}', text) or 
-               (re.search(r'\A\s*1.  Introduction\n', text, re.MULTILINE) and 
-                re.search(r'Authors\' Addresses\s*\Z', text, re.MULTILINE)))
+               (re.search(r'\A\s*1\. +Introduction\n', text, re.MULTILINE) and
+                re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
 
     def _find_list_pattern(self, text):
         # 箇条書きなどの判定
