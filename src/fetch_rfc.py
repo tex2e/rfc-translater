@@ -9,8 +9,12 @@ import os
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
+# 段落がページをまたぐことを表す文字
+BREAK = '\n\x07\n'
 
 class Paragraph:
+    # 段落情報を持つクラス
+
     def __init__(self, text, is_code=None):
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         self.indent = get_line_len_diff(text, self.text)
@@ -31,6 +35,14 @@ class Paragraph:
         elif self.is_code and self.is_section_title:
             self.is_code = False
 
+        # BREAKの置き換え
+        #   文章のときは空白に置き換えて、コードのときは改行の置き換える。
+        if self.is_code:
+            self.text = self.text.replace(BREAK, '\n')
+        else:
+            self.text = self.text.replace(BREAK, ' ')
+
+        # 文章のときの処理
         if not self.is_code:
             self.text = re.sub(r'([a-zA-Z])-\n *', r'\1-', self.text)  # ハイフンを繋げる
             self.text = re.sub(r'\n *', ' ', self.text)  # 複数行を1行にまとめる
@@ -41,15 +53,17 @@ class Paragraph:
             (self.indent, self.is_code, self.text)
 
     def _find_toc_pattern(self, text):
+        # 目次の判定
         return (re.search(r'\.{6}|(?:\. ){6}', text) or 
                (re.search(r'\A\s*1.  Introduction\n', text, re.MULTILINE) and 
                 re.search(r'Authors\' Addresses\s*\Z', text, re.MULTILINE)))
 
     def _find_list_pattern(self, text):
+        # 箇条書きなどの判定
         return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
 
     def _find_code_pattern(self, text):
-        # "---" や "___" などの特定の文字列が現れたときは図・表・ソースコードとして検出する
+        # 図表・ソースコード・数式の判定
         if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
                 or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
                 or text.find('+--') >= 0  # directory tree
@@ -57,7 +71,7 @@ class Paragraph:
                 or re.search(r'(?:enum|struct) \{', text)  # tls
                 or text.find('::=') >= 0  # syntax
                 or re.search(r'": (?:[\[\{\"\']|true,|false,)', text)  # json
-                or re.search(r'= [\[\(\{*%#&]', text) # src
+                or re.search(r'= +[\[\(\{*%#&]', text) # src, syntax
                 or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
                 or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
                 or re.search(r'[/|\\] +[/|\\]', text)  # figure
@@ -74,6 +88,10 @@ class Paragraph:
                 or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
                 or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
                 or re.search(r'" \| "', text)  # BNF syntax
+                or re.match(r'^\s*[-\w\d]+\s+=\s+[-\w\d /]{1,40}$', text) # syntax
+                or re.match(r'^\s*[-\w\d]+\s+=\s+"[-\w\d ]{1,20}"$', text) # syntax
+                or re.search(r'^\s*[-\w\d]+\s+=\s+1\*.', text) # syntax
+                or len(re.compile(r'^\s*Content-Type:\s+[a-z]+/[a-z]+\s*$', re.MULTILINE).findall(text)) >= 1 # HTML
                 ):
             return True
 
@@ -91,6 +109,7 @@ class Paragraph:
         return False
 
     def _find_section_title_pattern(self, text):
+        # セクションのタイトルの判定
         # "N." が現れたときはセクションのタイトルとして検出する
         if len(text.split('\n')) >= 2:
             return False
@@ -106,9 +125,11 @@ class Paragraph:
 
 
 class Paragraphs:
+    # 段落(Paragraph)の集合
+
     def __init__(self, text, has_header=True):
         is_header = has_header
-        chunks = re.compile(r'\n\n+').split(text)
+        chunks = re.compile(r'\n\n+').split(text) # 2つ以上改行が連続する部分が段落区切り
         self.paragraphs = []
         for i, chunk in enumerate(chunks):
             is_header = (i == 0 and has_header)
@@ -134,30 +155,42 @@ class RFCNotFound(Exception):
     pass
 
 
+def cleanhtml(raw_html):
+    # 本文中にあるRFCへのリンクを削除する
+    cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
+    cleantext = re.sub(cleaner, b'', raw_html)
+    return cleantext
+
 def fetch_rfc(number, force=False):
 
     url = 'https://tools.ietf.org/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
+    # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not force and os.path.isfile(output_file):
         return 0
 
+    # 出力先ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)
 
+    # RFCページのDOMツリーの取得
     headers = {'User-agent': '', 'referer': url}
     page = requests.get(url, headers)
-    tree = html.fromstring(page.content)
+    tree = html.fromstring(cleanhtml(page.content))
 
+    # タイトルの取得
     title = tree.xpath('//title/text()')
     if len(title) == 0:
         raise RFCNotFound
     title = title[0]
 
+    # ページが存在するか確認
     content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
     if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
         raise RFCNotFound
 
+    # DOMツリーから文章を取得
     contents = tree.xpath(
         '//pre/text() | '  # 本文
         '//pre/a/text() | '  # 本文中のリンク
@@ -168,6 +201,7 @@ def fetch_rfc(number, force=False):
         '//a[@class="invisible"]'  # ページの区切り
     )
 
+    # ページ区切りで段落がページをまたぐ場合の処理
     contents_len = len(contents)
     for i, content in enumerate(contents):
         # ページ区切りのとき
@@ -197,21 +231,29 @@ def fetch_rfc(number, force=False):
             # print('newpage:', i)
             # print('  ', indent1, prev_last_line)
             # print('  ', indent2, next_first_line)
+
+            # 以下の条件のとき、段落がページをまたいでいると判断する
+            #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
+            #   2) 前ページの最後の段落が、文終端の「.」や「;」ではないとき
             if (not prev_last_line.endswith('.') and
                 not prev_last_line.endswith(';') and
                     re.match(r'^ *[a-zA-Z0-9(]', next_first_line) and
                     indent1 == indent2):
-                # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる
-                contents[i+3] = ' ' + contents[i+3].lstrip()
+                # 内容がページをまたぐ場合、次ページの先頭の空白を1つにまとめる。
+                # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
+                contents[i+3] = BREAK + contents[i+3].lstrip()
             else:
-                # 内容がページをまたがない場合、ページの境界を明確にするために改行を挿入する
+                # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
                 contents[i+0] = '\n\n'
 
+    # ページ番号を非表示にする
     contents[-1] = re.sub(r'.*\[Page \d+\]$', '', contents[-1].rstrip()).rstrip()
+    # 全ての段落を結合する（段落の区切りは\n\n）
     text = ''.join(contents).strip()
 
     paragraphs = Paragraphs(text)
 
+    # 段落情報をJSONに変換する
     obj = {
         'title': {'text': title},
         'number': number,
