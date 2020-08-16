@@ -105,9 +105,13 @@ def trans_rfc(number):
     try:
         # タイトルの翻訳
         if not obj['title'].get('ja'):  # 既に翻訳済みの段落はスキップする
-            text = obj['title']['text'].split(' - ', 1)[1]  # "RFC XXXX - Title"
-            ja = translator.translate(text)
-            obj['title']['ja'] = "RFC %d - %s" % (number, ja)
+            titles = obj['title']['text'].split(' - ', 1)  # "RFC XXXX - Title"
+            if len(titles) <= 1:
+                obj['title']['ja'] = "RFC %d" % number
+            else:
+                text = titles[1]
+                ja = translator.translate(text)
+                obj['title']['ja'] = "RFC %d - %s" % (number, ja)
 
         # 段落の翻訳
         #   複数の段落をまとめて翻訳する
