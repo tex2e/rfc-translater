@@ -72,7 +72,7 @@ class Paragraph:
                 or re.search(r'(?:enum|struct) \{', text)  # tls
                 or text.find('::=') >= 0  # syntax
                 or re.search(r'": (?:[\[\{\"\']|true,|false,)', text)  # json
-                or re.search(r'= +[\[\(\{*%#&]', text) # src, syntax
+                or re.search(r'= +[\[\(\{<*%#&]', text) # src, syntax
                 or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
                 or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
                 or re.search(r'[/|\\] +[/|\\]', text)  # figure
@@ -88,11 +88,15 @@ class Paragraph:
                 or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
                 or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
                 or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
-                or re.search(r'" \| "', text)  # BNF syntax
+                or re.search(r'" [\|/] "', text)  # BNF syntax
                 or re.match(r'^\s*[-\w\d]+\s+=\s+[-\w\d /]{1,40}$', text) # syntax
                 or re.match(r'^\s*[-\w\d]+\s+=\s+"[-\w\d ]{1,20}"$', text) # syntax
                 or re.search(r'^\s*[-\w\d]+\s+=\s+1\*.', text) # syntax
                 or len(re.compile(r'^\s*Content-Type:\s+[a-z]+/[a-z]+\s*$', re.MULTILINE).findall(text)) >= 1 # HTML
+                or len(re.compile(r'^\s*[SC]: ', re.MULTILINE).findall(text)) >= 2 # server-client
+                or len(re.compile(r'^\s*-- ', re.MULTILINE).findall(text)) >= 2 # syntax
+                or len(re.compile(r'^\s*[0-9a-f]0: ', re.MULTILINE).findall(text)) >= 3 # hexdump
+                or len(re.compile(r'^\s*(?:IN   |OUT  ).', re.MULTILINE).findall(text)) >= 2 # SNMP Dispatcher
                 ):
             return True
 

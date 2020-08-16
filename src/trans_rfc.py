@@ -21,7 +21,9 @@ trans_rules = {
     'normative references': '引用文献',
     'informative references': '参考引用',
     'contributors': '貢献者',
+    'where': 'ただし',
     'where:': 'ただし：',
+    'assume:': '前提：',
 }
 
 
