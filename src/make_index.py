@@ -12,7 +12,7 @@ def make_index():
     files = []
     for filename in glob.glob('html/rfc*.html'):
         rfcfile = re.sub(r'^html/', '', filename)
-        with open(filename) as f:
+        with open(filename, 'r', encoding="utf-8") as f:
             html = f.read()
         m = re.search(r'<title>([^<]*)</title>', html)
         if not m:
@@ -34,7 +34,7 @@ def make_index():
     mytemplate = mylookup.get_template('templates/index.html')
     output = mytemplate.render_unicode(ctx={ 'files': files })
 
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding="utf-8") as f:
         f.write(output)
 
 

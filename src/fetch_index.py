@@ -1,5 +1,5 @@
 
-from lxml import html
+from lxml import html  # pip install lxml
 import requests
 
 import re

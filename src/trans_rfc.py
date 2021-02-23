@@ -7,6 +7,10 @@ from googletrans import Translator as GoogleTranslater # pip install googletrans
 from tqdm import tqdm # pip install tqdm
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
+import urllib.parse
+from selenium import webdriver  # pip install selenium
+from selenium.webdriver.firefox.options import Options
+from selenium.common.exceptions import NoSuchElementException
 
 trans_rules = {
     'abstract': '概要',
@@ -26,10 +30,15 @@ trans_rules = {
     'assume:': '前提：',
 }
 
+class TransMode:
+    GOOGLETRANS = 1
+    SELENIUM_GOOGLETRANS = 2
+
 
 class TranslatorGoogletrans: # googletrans
 
     def __init__(self, total, desc=''):
+        
         self.translator = GoogleTranslater()
         self.count = 0
         self.total = total
@@ -80,11 +89,66 @@ class TranslatorGoogletrans: # googletrans
         return res
 
 
+class TranslatorSeleniumGoogletrans:
+
+    def __init__(self, total, desc=''):
+        WEBDRIVER_EXE_PATH = 'C:\Apps\webdriver\geckodriver.exe'
+        options = Options()
+        options.add_argument('--headless')
+        browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
+        browser.implicitly_wait(3)
+        self._browser = browser
+
+        self.count = 0
+        self.total = total
+        # プログレスバー
+        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
+
+    def increment_count(self, incr=1):
+        # プログレスバー用の出力
+        self.count += incr
+        self.bar.update(incr)
+
+    def translate(self, text, dest='ja'):
+        if len(text) == 0:
+            return ""
+        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
+        ja = trans_rules.get(text.lower())
+        if ja:
+            return ja
+        # 「/」をURLエンコードする
+        text = text.replace('/', '%2F')
+
+        browser = self._browser
+        # 翻訳したい文をURLに埋め込んでからアクセスする
+        text_for_url = urllib.parse.quote_plus(text, safe='')
+        url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
+        browser.get(url)
+        # 数秒待機する
+        wait_time = 2 + len(text) / 1000
+        time.sleep(wait_time)
+        # 翻訳結果を抽出する
+        elems = browser.find_elements_by_css_selector("span[jsname='W297wb']")
+        ja = "".join(elem.text for elem in elems)
+        # プログレスバーに詳細情報を追加
+        self.bar.set_postfix(len=len(text), sleep=('%.1f' % wait_time))
+        return ja
+
+    def translate_texts(self, texts, dest='ja'):
+        res = []
+        for text in texts:
+            ja = self.translate(text)
+            res.append(ja)
+            self.increment_count()
+        return res
+
+
 def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number):
+def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
 
     input_dir = 'data/%04d' % (number//1000%10*1000)
     input_file = '%s/rfc%d.json' % (input_dir, number)
@@ -92,14 +156,17 @@ def trans_rfc(number):
     midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
 
     if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
-        with open(midway_file, 'r') as f:
+        with open(midway_file, 'r', encoding="utf-8") as f:
             obj = json.load(f)
     else:
-        with open(input_file, 'r') as f:
+        with open(input_file, 'r', encoding="utf-8") as f:
             obj = json.load(f)
 
     desc = 'RFC %d' % number
-    translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
+    if mode == TransMode.GOOGLETRANS:
+        translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
+    else:
+        translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
     is_canceled = False
 
     try:
@@ -123,8 +190,6 @@ def trans_rfc(number):
 
             for i, obj_contents_i in obj_contents:
 
-                translator.increment_count()
-
                 # 既に翻訳済みの段落 や 図表 は翻訳しないでスキップする
                 if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') == True)):
                     texts.append('')
@@ -143,6 +208,9 @@ def trans_rfc(number):
                     pre_texts.append('')
                     texts.append(text)
 
+            if mode == TransMode.GOOGLETRANS:
+                translator.increment_count(len(texts))
+
             texts_ja = translator.translate_texts(texts)
 
             # 翻訳結果を格納
@@ -154,12 +222,16 @@ def trans_rfc(number):
         print('[-] googletrans is blocked by Google :(')
         print('[-]', datetime.now(JST))
         is_canceled = True
+    except NoSuchElementException as e:
+        print('[-] Google Translate is blocked by Google :(')
+        print('[-]', datetime.now(JST))
+        is_canceled = True
     except KeyboardInterrupt as e:
         print('Interrupted!')
         is_canceled = True
 
     if not is_canceled:
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding="utf-8") as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
         # 不要になったファイルの削除
         os.remove(input_file)
@@ -167,23 +239,26 @@ def trans_rfc(number):
             os.remove(midway_file)
         return True
     else:
-        with open(midway_file, 'w') as f: # 途中まで翻訳済みのファイルを生成する
+        with open(midway_file, 'w', encoding="utf-8") as f: # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
         return False
 
 
-def trans_test():
-    translator = TranslatorGoogletrans()
+def trans_test(mode=TransMode.SELENIUM_GOOGLETRANS):
+    if mode == TransMode.GOOGLETRANS:
+        translator = TranslatorGoogletrans()
+    else:
+        translator = TranslatorSeleniumGoogletrans()
     ja = translator.translate('test', dest='ja')
     return ja == 'テスト'
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(total=1)
     parser.add_argument('text', help='english text')
     args = parser.parse_args()
 
-    translator = TranslatorGoogletrans()
+    translator = TranslatorGoogletrans(total=1)
     ja = translator.translate(args.text, dest='ja')
     print(ja)
 

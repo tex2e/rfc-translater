@@ -15,7 +15,7 @@ def make_html(rfc_number):
         return
 
     # 翻訳したRFC (json) の読み込み
-    with open(input_file, 'r') as f:
+    with open(input_file, 'r', encoding="utf-8") as f:
         obj = json.load(f)
 
     # テンプレートエンジン「Mako」を使って、値をバインドする
@@ -29,7 +29,7 @@ def make_html(rfc_number):
     os.makedirs(output_dir, exist_ok=True)
 
     # 翻訳したRFC (html) の作成
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding="utf-8") as f:
         f.write(output)
 
 

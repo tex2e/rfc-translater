@@ -278,7 +278,7 @@ def fetch_rfc(number, force=False):
         if paragraph.is_toc:
             obj['contents'][-1]['toc'] = True
 
-    json_file = open(output_file, 'w')
+    json_file = open(output_file, 'w', encoding="utf-8")
     json.dump(obj, json_file, indent=2, ensure_ascii=False)
 
 

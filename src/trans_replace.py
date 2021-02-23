@@ -16,7 +16,7 @@ def trans_replace():
     for filename in glob.glob('data/*/rfc*-trans.json'):
         # print(filename)
 
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding="utf-8") as f:
             obj = json.load(f)
 
         is_changed = False
@@ -37,7 +37,7 @@ def trans_replace():
                     is_changed = True
 
         if is_changed:
-            with open(filename, 'w') as f:
+            with open(filename, 'w', encoding="utf-8") as f:
                 json.dump(obj, f, indent=2, ensure_ascii=False)
 
 
