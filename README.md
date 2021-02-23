@@ -28,7 +28,12 @@ pip3 install beautifulsoup4
 pip3 install Mako
 pip3 install googletrans
 pip3 install tqdm
+pip3 install selenium
 ```
+
+2021/02/23追記：googletransライブラリが不調＆修正されるまで時間がかかりそうなため、seleniumによるGoogle翻訳をデフォルトにしました。
+seleniumではFirefoxを使用するため、geckodriverをダウンロードしておいてください。
+geckodriverの配置場所は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照すること。
 
 ```bash
 python3 main.py --rfc 123 # RFC 123の翻訳作業を開始してHTMLまで生成する
@@ -49,6 +54,14 @@ python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成す
 ```bash
 python3 main.py --make-index # インデックスページの作成
 ```
+
+確認
+
+```bash
+python3 -m http.server
+```
+
+<br>
 
 ---
 
