@@ -128,7 +128,7 @@ class TranslatorSeleniumGoogletrans:
         url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
         browser.get(url)
         # 数秒待機する
-        wait_time = 2 + len(text) / 1000
+        wait_time = 3 + len(text) / 1000
         time.sleep(wait_time)
         # 翻訳結果を抽出する
         elems = browser.find_elements_by_css_selector("span[jsname='W297wb']")

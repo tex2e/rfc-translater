@@ -7,7 +7,7 @@ from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
 
 
-def main(rfc_number):
+def main(rfc_number, transmode):
     print('RFC %d:' % rfc_number)
 
     try:
@@ -25,17 +25,17 @@ def main(rfc_number):
             f.write('')
         return
 
-    res = trans_rfc(rfc_number)
+    res = trans_rfc(rfc_number, transmode)
     if res is False: return False
     make_html(rfc_number)
 
-def continuous_main(begin=None, end=None):
+def continuous_main(transmode, begin=None, end=None):
     numbers = list(diff_remote_and_local_index())
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
 
     for rfc_number in numbers:
-        res = main(rfc_number)
+        res = main(rfc_number, transmode)
         if res is False:
             break
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     elif args.trans and RFCs:
         # RFCの翻訳
         for rfc in RFCs:
-            trans_rfc(rfc)
+            trans_rfc(rfc, transmode)
     elif args.make and args.begin and args.end:
         # 範囲指定でrfcXXXX.htmlの作成
         for rfc_number in range(args.begin, args.end):
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     elif RFCs:
         # 未処理のRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
-            main(rfc)
+            main(rfc, transmode)
     else:
         # 範囲指定でRFCを順番に取得・翻訳・作成
-        continuous_main(begin=args.begin, end=args.end)
+        continuous_main(transmode, begin=args.begin, end=args.end)
