@@ -31,11 +31,12 @@ trans_rules = {
 }
 
 class TransMode:
-    GOOGLETRANS = 1
-    SELENIUM_GOOGLETRANS = 2
+    PY_GOOGLETRANS  = 1
+    SELENIUM_GOOGLE = 2
 
 
-class TranslatorGoogletrans: # googletrans
+class TranslatorGoogletrans:
+    # py-googletrans
 
     def __init__(self, total, desc=''):
         
@@ -44,7 +45,7 @@ class TranslatorGoogletrans: # googletrans
         self.total = total
         # プログレスバー
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
-        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format, ascii=True)
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
 
     def increment_count(self, incr=1):
         # プログレスバー用の出力
@@ -90,6 +91,7 @@ class TranslatorGoogletrans: # googletrans
 
 
 class TranslatorSeleniumGoogletrans:
+    # Selenium + Google
 
     def __init__(self, total, desc=''):
         WEBDRIVER_EXE_PATH = 'C:\Apps\webdriver\geckodriver.exe'
@@ -103,7 +105,7 @@ class TranslatorSeleniumGoogletrans:
         self.total = total
         # プログレスバー
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
-        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format, ascii=True)
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
 
     def increment_count(self, incr=1):
         # プログレスバー用の出力
@@ -148,7 +150,7 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
+def trans_rfc(number, mode):
 
     input_dir = 'data/%04d' % (number//1000%10*1000)
     input_file = '%s/rfc%d.json' % (input_dir, number)
@@ -163,7 +165,7 @@ def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
             obj = json.load(f)
 
     desc = 'RFC %d' % number
-    if mode == TransMode.GOOGLETRANS:
+    if mode == TransMode.PY_GOOGLETRANS:
         translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
     else:
         translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
@@ -208,7 +210,7 @@ def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
                     pre_texts.append('')
                     texts.append(text)
 
-            if mode == TransMode.GOOGLETRANS:
+            if mode == TransMode.PY_GOOGLETRANS:
                 translator.increment_count(len(texts))
 
             texts_ja = translator.translate_texts(texts)
@@ -246,13 +248,16 @@ def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
         return False
 
 
-def trans_test(mode=TransMode.SELENIUM_GOOGLETRANS):
-    if mode == TransMode.GOOGLETRANS:
-        translator = TranslatorGoogletrans()
+def trans_test(mode=TransMode.SELENIUM_GOOGLE):
+    if mode == TransMode.PY_GOOGLETRANS:
+        translator = TranslatorGoogletrans(total=1)
+        ja = translator.translate('test', dest='ja')
+        return ja == 'テスト'
     else:
-        translator = TranslatorSeleniumGoogletrans()
-    ja = translator.translate('test', dest='ja')
-    return ja == 'テスト'
+        translator = TranslatorSeleniumGoogletrans(total=1)
+        ja = translator.translate('test', dest='ja')
+        print('result:', ja)
+        return ja in ('テスト', 'しけん')
 
 if __name__ == '__main__':
     import argparse

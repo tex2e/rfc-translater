@@ -1,7 +1,7 @@
 
 import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
-from src.trans_rfc import trans_rfc
+from src.trans_rfc import trans_rfc, TransMode
 from src.make_html import make_html
 from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
@@ -52,37 +52,54 @@ if __name__ == '__main__':
                         action='store_true', help='make index.html')
     parser.add_argument('--transtest', action='store_true')
     parser.add_argument('--force', '-f', action='store_true')
+    parser.add_argument('--transmode', type=str)
     args = parser.parse_args()
 
+    # RFCの指定（複数の場合はカンマ区切り）
     RFCs = None
     if args.rfc:
         RFCs = [int(rfc_number) for rfc_number in args.rfc.split(",")]
 
+    # 翻訳ツールの選択
+    transmode = TransMode.SELENIUM_GOOGLE
+    if args.transmode == 'py-googletrans':
+        transmode = TransMode.PY_GOOGLETRANS
+
     if args.make_index:
+        # index.htmlの作成
         make_index()
     elif args.transtest:
+        # 翻訳のテスト
         from src.trans_rfc import trans_test
-        trans_test()
+        res = trans_test(transmode)
+        print('Translate test result:', res)
     elif args.fetch and args.begin and args.end:
+        # 範囲指定でRFCの取得
         numbers = list(diff_remote_and_local_index())
         numbers = [x for x in numbers if args.begin <= x <= args.end]
         for rfc_number in numbers:
             fetch_rfc(rfc_number)
     elif args.fetch and RFCs:
+        # 指定したRFCの取得
         for rfc in RFCs:
             fetch_rfc(rfc, args.force)
     elif args.trans and RFCs:
+        # RFCの翻訳
         for rfc in RFCs:
             trans_rfc(rfc)
     elif args.make and args.begin and args.end:
+        # 範囲指定でrfcXXXX.htmlの作成
         for rfc_number in range(args.begin, args.end):
             make_html(rfc_number)
     elif args.make and RFCs:
+        # 指定したrfcXXXX.htmlの作成
         for rfc in RFCs:
             make_html(rfc)
 
     elif RFCs:
+        # 未処理のRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
             main(rfc)
     else:
+        # 範囲指定でRFCを順番に取得・翻訳・作成
         continuous_main(begin=args.begin, end=args.end)
