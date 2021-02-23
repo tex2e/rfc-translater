@@ -44,7 +44,7 @@ class TranslatorGoogletrans: # googletrans
         self.total = total
         # プログレスバー
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
-        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format, ascii=True)
 
     def increment_count(self, incr=1):
         # プログレスバー用の出力
@@ -103,7 +103,7 @@ class TranslatorSeleniumGoogletrans:
         self.total = total
         # プログレスバー
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
-        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
+        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format, ascii=True)
 
     def increment_count(self, incr=1):
         # プログレスバー用の出力
@@ -217,6 +217,8 @@ def trans_rfc(number, mode=TransMode.SELENIUM_GOOGLETRANS):
             for (i, obj_contents_i), pre_text, text_ja in \
                     zip(obj_contents, pre_texts, texts_ja):
                 obj['contents'][i]['ja'] = pre_text + text_ja
+
+        print("", flush=True)
 
     except json.decoder.JSONDecodeError as e:
         print('[-] googletrans is blocked by Google :(')
