@@ -41,7 +41,7 @@ def fetch_local_index():
     pathname = 'html/rfc*.html'
     rfc_numbers = []
     for filename in glob.glob(pathname):
-        m = re.match(r'^html/rfc(\d+)', filename)
+        m = re.match(r'^html[/\\]rfc(\d+)', filename)
         if m:
             rfc_numbers.append(int(m[1]))
 
