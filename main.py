@@ -29,10 +29,15 @@ def main(rfc_number, transmode):
     if res is False: return False
     make_html(rfc_number)
 
-def continuous_main(transmode, begin=None, end=None):
+def continuous_main(transmode, begin=None, end=None, only_first=False):
     numbers = list(diff_remote_and_local_index())
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
+    elif begin:  # 開始のみ設定
+        numbers = [x for x in numbers if begin <= x]
+
+    if only_first:  # 最初の1つのRFCのみ選択
+        numbers = numbers[0:1]
 
     for rfc_number in numbers:
         res = main(rfc_number, transmode)
@@ -53,6 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--transtest', action='store_true')
     parser.add_argument('--force', '-f', action='store_true')
     parser.add_argument('--transmode', type=str)
+    parser.add_argument('--only-first', action='store_true')
     args = parser.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）
@@ -97,9 +103,10 @@ if __name__ == '__main__':
             make_html(rfc)
 
     elif RFCs:
-        # 未処理のRFCを順番に取得・翻訳・作成
+        # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
             main(rfc, transmode)
     else:
-        # 範囲指定でRFCを順番に取得・翻訳・作成
-        continuous_main(transmode, begin=args.begin, end=args.end)
+        # 未処理のRFCを順番に取得・翻訳・作成
+        continuous_main(transmode, begin=args.begin, end=args.end, 
+                        only_first=args.only_first)
