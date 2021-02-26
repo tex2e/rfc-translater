@@ -22,13 +22,15 @@
 
 ### 開発者向け
 
+動作環境：Python3, MacOS or Windows
+
 ```
-pip3 install requests lxml
-pip3 install beautifulsoup4
-pip3 install Mako
-pip3 install googletrans
-pip3 install tqdm
-pip3 install selenium
+pip install requests lxml
+pip install beautifulsoup4
+pip install Mako
+pip install googletrans
+pip install tqdm
+pip install selenium
 ```
 
 2021/02/23追記：googletransライブラリが不調＆修正されるまで時間がかかりそうなため、seleniumによるGoogle翻訳をデフォルトにしました。
@@ -36,13 +38,13 @@ seleniumではFirefoxを使用するため、geckodriverをダウンロードし
 geckodriverの配置場所は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照すること。
 
 ```bash
-python3 main.py --rfc 123 # RFC 123の翻訳作業を開始してHTMLまで生成する
-python3 main.py --rfc 123 --fetch # RFCの取得だけ
-python3 main.py --rfc 123 --trans # RFCの翻訳だけ
-python3 main.py --rfc 123 --make # HTMLの生成だけ
-python3 main.py # 順番に翻訳する
-python3 main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
-python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
+python main.py --rfc 123 # RFC 123の翻訳作業を開始してHTMLまで生成する
+python main.py --rfc 123 --fetch # RFCの取得だけ
+python main.py --rfc 123 --trans # RFCの翻訳だけ
+python main.py --rfc 123 --make # HTMLの生成だけ
+python main.py # 順番に翻訳する
+python main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
+python main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
 ```
 
 生成物
@@ -52,13 +54,19 @@ python3 main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成す
 - make_html ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
 
 ```bash
-python3 main.py --make-index # インデックスページの作成
+python main.py --make-index # インデックスページの作成
 ```
 
-確認
+ローカルで成果物の確認
 
 ```bash
-python3 -m http.server
+python -m http.server
+```
+
+タスクスケジューラ用
+
+```bash
+py .\main.py --begin 8000 --only-first
 ```
 
 <br>
