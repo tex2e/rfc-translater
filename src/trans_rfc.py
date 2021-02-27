@@ -43,12 +43,10 @@ class TransMode:
     SELENIUM_GOOGLE = 2
 
 
-class TranslatorGoogletrans:
-    # py-googletrans
+# 翻訳抽象クラス
+class Translator:
 
     def __init__(self, total, desc=''):
-        
-        self.translator = GoogleTranslater()
         self.count = 0
         self.total = total
         # プログレスバー
@@ -59,6 +57,19 @@ class TranslatorGoogletrans:
         # プログレスバー用の出力
         self.count += incr
         self.bar.update(incr)
+
+    def output_progress(self, len, wait_time):
+        # プログレスバーに詳細情報を追加
+        self.bar.set_postfix(len=len, sleep=('%.1f' % wait_time))
+
+
+class TranslatorGoogletrans(Translator):
+    # py-googletrans
+
+    def __init__(self, total, desc=''):
+        super(TranslatorGoogletrans, self).__init__(total, desc)
+
+        self.translator = GoogleTranslater()
 
     def translate(self, text, dest='ja'):
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
@@ -70,9 +81,9 @@ class TranslatorGoogletrans:
         # 翻訳処理
         ja = self.translator.translate(text, dest='ja')
         # 翻訳の間隔を開ける
-        wait_time = 1 + len(text) / 100 # IMPORTANT!!!
+        wait_time = 3 + len(text) / 100 # IMPORTANT!!!
         # プログレスバーに詳細情報を追加
-        self.bar.set_postfix(len=len(text), sleep=('%.1f' % wait_time))
+        self.output_progress(len=len(text), wait_time=wait_time)
         time.sleep(wait_time)
         return ja.text
 
@@ -84,9 +95,9 @@ class TranslatorGoogletrans:
         res = [text_ja.text for text_ja in texts_ja]
         total_len = sum([len(t) for t in texts])
         # 翻訳の間隔を開ける
-        wait_time = 1 + total_len / 1000 # IMPORTANT!!!
+        wait_time = 5 + total_len / 1000 # IMPORTANT!!!
         # プログレスバーに詳細情報を追加
-        self.bar.set_postfix(len=total_len, sleep=('%.1f' % wait_time))
+        self.output_progress(len=total_len, wait_time=wait_time)
         time.sleep(wait_time)
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
         for i, text in enumerate(texts):
@@ -98,27 +109,18 @@ class TranslatorGoogletrans:
         return res
 
 
-class TranslatorSeleniumGoogletrans:
+class TranslatorSeleniumGoogletrans(Translator):
     # Selenium + Google
 
     def __init__(self, total, desc=''):
+        super(TranslatorSeleniumGoogletrans, self).__init__(total, desc)
+
         WEBDRIVER_EXE_PATH = 'C:\Apps\webdriver\geckodriver.exe'
         options = Options()
         options.add_argument('--headless')
         browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
         browser.implicitly_wait(3)
         self._browser = browser
-
-        self.count = 0
-        self.total = total
-        # プログレスバー
-        bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
-        self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
-
-    def increment_count(self, incr=1):
-        # プログレスバー用の出力
-        self.count += incr
-        self.bar.update(incr)
 
     def translate(self, text, dest='ja'):
         if len(text) == 0:
@@ -142,7 +144,7 @@ class TranslatorSeleniumGoogletrans:
         elems = browser.find_elements_by_css_selector("span[jsname='W297wb']")
         ja = "".join(elem.text for elem in elems)
         # プログレスバーに詳細情報を追加
-        self.bar.set_postfix(len=len(text), sleep=('%.1f' % wait_time))
+        self.output_progress(len=len(text), wait_time=wait_time)
         return ja
 
     def translate_texts(self, texts, dest='ja'):
