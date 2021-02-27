@@ -235,7 +235,7 @@ def trans_rfc(number, mode):
         is_canceled = True
 
     if not is_canceled:
-        with open(output_file, 'w', encoding="utf-8") as f:
+        with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
         # 不要になったファイルの削除
         os.remove(input_file)
@@ -243,7 +243,8 @@ def trans_rfc(number, mode):
             os.remove(midway_file)
         return True
     else:
-        with open(midway_file, 'w', encoding="utf-8") as f: # 途中まで翻訳済みのファイルを生成する
+        with open(midway_file, 'w', encoding="utf-8", newline="\n") as f:
+            # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
         return False
 
