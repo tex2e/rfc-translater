@@ -10,6 +10,9 @@ def make_html(rfc_number):
     output_dir = 'html'
     output_file = '%s/rfc%d.html' % (output_dir, rfc_number)
 
+    input_file = os.path.normpath(input_file)
+    output_file = os.path.normpath(output_file)
+
     if not os.path.isfile(input_file):
         print("make_html: Not found:", input_file)
         return
@@ -29,7 +32,7 @@ def make_html(rfc_number):
     os.makedirs(output_dir, exist_ok=True)
 
     # 翻訳したRFC (html) の作成
-    with open(output_file, 'w', encoding="utf-8") as f:
+    with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
         f.write(output)
 
 
