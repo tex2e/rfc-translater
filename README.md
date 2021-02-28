@@ -37,7 +37,8 @@ pip install selenium
 従来の方法を使いたい場合は `--transmode py-googletrans` を指定してください。
 
 現状では、seleniumではFirefoxを使用するため、geckodriverをダウンロードしておいてください。
-geckodriverの配置場所は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照ください。
+geckodriverの配置場所を環境変数 WEBDRIVER_EXE_PATH に指定してから実行してください。
+詳細は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照ください。
 
 ```bash
 python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
