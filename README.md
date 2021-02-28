@@ -26,32 +26,38 @@
 
 ```
 pip install requests lxml
-pip install beautifulsoup4
 pip install Mako
-pip install googletrans
 pip install tqdm
+pip install googletrans==4.0.0-rc1
 pip install selenium
 ```
 
-2021/02/23追記：googletransライブラリが不調＆修正されるまで時間がかかりそうなため、seleniumによるGoogle翻訳をデフォルトにしました。
-seleniumではFirefoxを使用するため、geckodriverをダウンロードしておいてください。
-geckodriverの配置場所は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照すること。
+2021/02/27追記：googletransは安定版の3.0.0だと翻訳できません。
+別の翻訳手段として、seleniumによるGoogle翻訳も追加し、デフォルトの翻訳方法とします。
+従来の方法を使いたい場合は `--transmode py-googletrans` を指定してください。
+
+現状では、seleniumではFirefoxを使用するため、geckodriverをダウンロードしておいてください。
+geckodriverの配置場所は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照ください。
 
 ```bash
-python main.py --rfc 123 # RFC 123の翻訳作業を開始してHTMLまで生成する
+python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
 python main.py --rfc 123 --fetch # RFCの取得だけ
 python main.py --rfc 123 --trans # RFCの翻訳だけ
 python main.py --rfc 123 --make # HTMLの生成だけ
-python main.py # 順番に翻訳する
 python main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
 python main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
+python main.py # 未翻訳RFCを順番に翻訳する
+python main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
+
+python main.py --rfc 123 --transmode selenium       # Seleniumを使用してGoogle翻訳(デフォルト)
+python main.py --rfc 123 --transmode py-googletrans # googletransを使用してGoogle翻訳
 ```
 
 生成物
 
-- fetch_rfc ... data/A000/B00/rfcABCD.json (段落区切りで取り出した文章)
-- trans_rfc ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
-- make_html ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
+1. fetch_rfc（取得） ... data/A000/B00/rfcABCD.json (段落区切りで取り出した文章)
+2. trans_rfc（翻訳） ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
+3. make_html（生成） ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
 
 ```bash
 python main.py --make-index # インデックスページの作成
@@ -61,12 +67,7 @@ python main.py --make-index # インデックスページの作成
 
 ```bash
 python -m http.server
-```
-
-タスクスケジューラ用
-
-```bash
-py .\main.py --begin 8000 --only-first
+# localhost:8000/htmlにアクセス
 ```
 
 <br>
@@ -75,7 +76,7 @@ py .\main.py --begin 8000 --only-first
 
 #### Figs
 
-RFC Figs のページについて
+各RFCから図のみを集めて公開するサイト「RFC Figs」について
 
 ```bash
 # 1000個のRFC毎に図を集め、JSONファイルで保存する
