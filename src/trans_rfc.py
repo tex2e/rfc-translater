@@ -115,7 +115,8 @@ class TranslatorSeleniumGoogletrans(Translator):
     def __init__(self, total, desc=''):
         super(TranslatorSeleniumGoogletrans, self).__init__(total, desc)
 
-        WEBDRIVER_EXE_PATH = 'C:\Apps\webdriver\geckodriver.exe'
+        WEBDRIVER_EXE_PATH = os.getenv('WEBDRIVER_EXE_PATH',
+            default='C:\Apps\webdriver\geckodriver.exe')
         options = Options()
         options.add_argument('--headless')
         browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
