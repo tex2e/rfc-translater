@@ -62,6 +62,9 @@ class Translator:
         # プログレスバーに詳細情報を追加
         self.bar.set_postfix(len=len, sleep=('%.1f' % wait_time))
 
+    def close(self):
+        return True
+
 
 class TranslatorGoogletrans(Translator):
     # py-googletrans
@@ -156,6 +159,11 @@ class TranslatorSeleniumGoogletrans(Translator):
             self.increment_count()
         return res
 
+    def close(self):
+        if self._browser is None:
+            return True
+        return self._browser.quit()
+
 
 def chunks(l, n):
     for i in range(0, len(l), n):
@@ -244,6 +252,8 @@ def trans_rfc(number, mode):
     except KeyboardInterrupt as e:
         print('Interrupted!')
         is_canceled = True
+    finally:
+        translator.close()
 
     if not is_canceled:
         with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
