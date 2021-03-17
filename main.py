@@ -6,7 +6,6 @@ from src.make_html import make_html
 from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
 
-
 def main(rfc_number, transmode):
     print('RFC %d:' % rfc_number)
 
@@ -73,6 +72,7 @@ if __name__ == '__main__':
 
     if args.make_index:
         # index.htmlの作成
+        print("[+] index.htmlの作成")
         make_index()
     elif args.transtest:
         # 翻訳のテスト
@@ -81,20 +81,24 @@ if __name__ == '__main__':
         print('Translate test result:', res)
     elif args.fetch and args.begin and args.end:
         # 範囲指定でRFCの取得
+        print("[+] RFC %d - %d のRFCを取得" % (args.begin, args.end))
         numbers = list(diff_remote_and_local_index())
         numbers = [x for x in numbers if args.begin <= x <= args.end]
         for rfc_number in numbers:
             fetch_rfc(rfc_number)
     elif args.fetch and RFCs:
         # 指定したRFCの取得
+        print("[+] RFC %d を取得")
         for rfc in RFCs:
             fetch_rfc(rfc, args.force)
     elif args.trans and RFCs:
         # RFCの翻訳
+        print("[+] RFC %d を翻訳")
         for rfc in RFCs:
             trans_rfc(rfc, transmode)
     elif args.make and args.begin and args.end:
         # 範囲指定でrfcXXXX.htmlの作成
+        print("[+] RFC %d - %d のHTMLを生成" % (args.begin, args.end))
         for rfc_number in range(args.begin, args.end):
             make_html(rfc_number)
     elif args.make and RFCs:
