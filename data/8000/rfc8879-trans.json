@@ -1,0 +1,438 @@
+{
+  "title": {
+    "text": "RFC 8879 - TLS Certificate Compression",
+    "ja": "RFC 8879 - TLS証明書圧縮"
+  },
+  "number": 8879,
+  "created_at": "2021-03-23 06:59:05.366710+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        A. Ghedini\nRequest for Comments: 8879                              Cloudflare, Inc.\nCategory: Standards Track                                    V. Vasiliev\nISSN: 2070-1721                                                   Google\n                                                           December 2020",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 22,
+      "text": "TLS Certificate Compression",
+      "ja": "TLS証明書圧縮"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "In TLS handshakes, certificate chains often take up the majority of the bytes transmitted.",
+      "ja": "TLSハンドシェイクでは、証明書チェーンはしばしば送信されたバイトの大部分を占めます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how certificate chains can be compressed to reduce the amount of data transmitted and avoid some round trips.",
+      "ja": "この文書では、データの量を軽減し、いくつかの往復を回避するために証明書チェーンを圧縮する方法について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の状態"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それは公開レビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8879.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法は、https://www.rfc-editor.org/info/rfc8879で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2020 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（C）2020 IETFの信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "この文書は、この文書の公開日に有効なIETF文書（https://truste.ietf.org/License-info）に関するBCP 78とIETF信頼の法的規定を受けています。この文書に関してあなたの権利と制限を説明するので、これらの文書を慎重に見直してください。この文書から抽出されたコードコンポーネントには、信頼法の法的規定のセクション4。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Notational Conventions\n3.  Negotiating Certificate Compression\n4.  Compressed Certificate Message\n5.  Security Considerations\n6.  Middlebox Compatibility\n7.  IANA Considerations\n  7.1.  TLS ExtensionType Values\n  7.2.  TLS HandshakeType\n  7.3.  Compression Algorithms\n8.  References\n  8.1.  Normative References\n  8.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "In order to reduce latency and improve performance, it can be useful to reduce the amount of data exchanged during a TLS handshake.",
+      "ja": "待ち時間を短縮し、パフォーマンスを向上させるためには、TLSハンドシェイク中に交換されるデータ量を減らすことが有用であり得る。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7924] describes a mechanism that allows a client and a server to avoid transmitting certificates already shared in an earlier handshake, but it doesn't help when the client connects to a server for the first time and doesn't already have knowledge of the server's certificate chain.",
+      "ja": "[RFC7924]クライアントとサーバーが以前のハンドシェイクですでに共有されている証明書を送信しないようにするメカニズムを説明しますが、クライアントが最初にサーバーに接続しているときには役立ちません。サーバーの証明書チェーン。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a mechanism that would allow certificates to be compressed during all handshakes.",
+      "ja": "このドキュメントでは、すべてのハンドシェイク中に証明書を圧縮できるようにするメカニズムについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Notational Conventions",
+      "section_title": true,
+      "ja": "2. 表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "「必須」、「必須」、「必須」、「SHALL」、「必ず」、「推奨する」、「推奨する」、「推奨する」、「推奨する」、「推奨する」、「5月」「この文書では、BCP 14 [RFC2119] [RFC8174]に記載されている場合に解釈されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Negotiating Certificate Compression",
+      "section_title": true,
+      "ja": "3. 証明書圧縮の交渉"
+    },
+    {
+      "indent": 3,
+      "text": "This extension is only supported with TLS 1.3 [RFC8446] and newer; if TLS 1.2 [RFC5246] or earlier is negotiated, the peers MUST ignore this extension.",
+      "ja": "この拡張機能はTLS 1.3 [RFC 8446]と新しいものでのみサポートされています。TLS 1.2 [RFC 5246]以前のネゴシエートが交渉されている場合、ピアはこの拡張機能を無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a new extension type (compress_certificate(27)), which can be used to signal the supported compression formats for the Certificate message to the peer. Whenever it is sent by the client as a ClientHello message extension ([RFC8446], Section 4.1.2), it indicates support for compressed server certificates. Whenever it is sent by the server as a CertificateRequest extension ([RFC8446], Section 4.3.2), it indicates support for compressed client certificates.",
+      "ja": "このドキュメントは新しい拡張タイプ（compress_certificate（27））を定義します。これは、Certificateメッセージのサポートされている圧縮フォーマットをピアにシグナリングするために使用できます。クライアントからClientHelloメッセージ拡張として送信されるたびに（[RFC8446]、セクション4.1.2）、圧縮サーバー証明書のサポートを示します。サーバーによってCertificateRequest拡張機能として送信されるたびに（[RFC8446]、セクション4.3.2）、圧縮クライアント証明書のサポートを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "By sending a compress_certificate extension, the sender indicates to the peer the certificate-compression algorithms it is willing to use for decompression. The \"extension_data\" field of this extension SHALL contain a CertificateCompressionAlgorithms value:",
+      "ja": "compress_certificate拡張機能を送信することによって、送信者は解凍に使用しても構わないと思われる証明書 - 圧縮アルゴリズムをピアに示します。この拡張子の \"extension_data\"フィールドには、CertificateCompressionalGorithms値が含まれています。"
+    },
+    {
+      "indent": 7,
+      "text": "enum {\n    zlib(1),\n    brotli(2),\n    zstd(3),\n    (65535)\n} CertificateCompressionAlgorithm;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "struct {\n    CertificateCompressionAlgorithm algorithms<2..2^8-2>;\n} CertificateCompressionAlgorithms;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The compress_certificate extension is a unidirectional indication; no corresponding response extension is needed.",
+      "ja": "compress_certificate拡張機能は単方向指示です。対応する応答拡張は必要ありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Compressed Certificate Message",
+      "section_title": true,
+      "ja": "4. 圧縮証明書メッセージ"
+    },
+    {
+      "indent": 3,
+      "text": "If the peer has indicated that it supports compression, server and client MAY compress their corresponding Certificate messages (Section 4.4.2 of [RFC8446]) and send them in the form of the CompressedCertificate message (replacing the Certificate message).",
+      "ja": "ピアが圧縮をサポートしている場合は、サーバーとクライアントは対応する証明書メッセージを圧縮し（[RFC8446]のセクション4.4.2）、それらをCompressedCertificateメッセージの形式で送信します（証明書メッセージを置き換える）。"
+    },
+    {
+      "indent": 3,
+      "text": "The CompressedCertificate message is formed as follows:",
+      "ja": "CompressedCertificateメッセージは次のようになります。"
+    },
+    {
+      "indent": 7,
+      "text": "struct {\n     CertificateCompressionAlgorithm algorithm;\n     uint24 uncompressed_length;\n     opaque compressed_certificate_message<1..2^24-1>;\n} CompressedCertificate;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "algorithm: The algorithm used to compress the certificate. The algorithm MUST be one of the algorithms listed in the peer's compress_certificate extension.",
+      "ja": "アルゴリズム：証明書を圧縮するために使用されるアルゴリズム。アルゴリズムは、ピアのcompress_certificate拡張機能にリストされているアルゴリズムの1つでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "uncompressed_length: The length of the Certificate message once it is uncompressed. If, after decompression, the specified length does not match the actual length, the party receiving the invalid message MUST abort the connection with the \"bad_certificate\" alert. The presence of this field allows the receiver to preallocate the buffer for the uncompressed Certificate message and enforce limits on the message size before performing decompression.",
+      "ja": "uncompressed_length：それが圧縮された後に証明書メッセージの長さ。解凍後、指定された長さが実際の長さと一致しない場合、無効なメッセージを受信したパーティは「BAD_Certificate」アラートとの接続を中止する必要があります。このフィールドの存在により、受信側は非圧縮証明書メッセージのためにバッファを事前に配置し、解凍を実行する前にメッセージサイズの制限を強制することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "compressed_certificate_message: The result of applying the indicated compression algorithm to the encoded Certificate message that would have been sent if certificate compression was not in use. The compression algorithm defines how the bytes in the compressed_certificate_message field are converted into the Certificate message.",
+      "ja": "compressed_certificate_message：証明書圧縮が使用されていない場合に送信されたであろうエンコードされた証明書メッセージに示された圧縮アルゴリズムを適用した結果。圧縮アルゴリズムは、compressed_certificate_messageフィールドのバイト数を証明書メッセージに変換する方法を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "If the specified compression algorithm is zlib, then the Certificate message MUST be compressed with the ZLIB compression algorithm, as defined in [RFC1950]. If the specified compression algorithm is brotli, the Certificate message MUST be compressed with the Brotli compression algorithm, as defined in [RFC7932]. If the specified compression algorithm is zstd, the Certificate message MUST be compressed with the Zstandard compression algorithm, as defined in [RFC8478].",
+      "ja": "指定された圧縮アルゴリズムがZLIBの場合、[RFC1950]で定義されているように、証明書メッセージをZLIB圧縮アルゴリズムで圧縮する必要があります。指定された圧縮アルゴリズムがBrotliの場合、[RFC7932]で定義されているように、証明書メッセージをBrotli圧縮アルゴリズムで圧縮する必要があります。指定された圧縮アルゴリズムがzstdの場合、[RFC8478]で定義されているように、証明書メッセージをzStandard圧縮アルゴリズムで圧縮する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible to define a certificate compression algorithm that uses a preshared dictionary to achieve a higher compression ratio. This document does not define any such algorithms, but additional codepoints may be allocated for such use per the policy in Section 7.3.",
+      "ja": "より高い圧縮率を達成するために事前共有辞書を使用する証明書圧縮アルゴリズムを定義することが可能である。この文書はそのようなアルゴリズムを定義していませんが、セクション7.3のポリシーごとにそのような使用に対して追加のコードポイントが割り当てられます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the received CompressedCertificate message cannot be decompressed, the connection MUST be terminated with the \"bad_certificate\" alert.",
+      "ja": "受信したCompressedCertificateメッセージを解凍できない場合は、接続を \"bad_certificate\"アラートで終了する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the format of the Certificate message is altered using the server_certificate_type or client_certificate_type extensions [RFC7250], the resulting altered message is compressed instead.",
+      "ja": "証明書メッセージの形式がserver_certificate_typeまたはclient_certificate_type拡張機能[RFC7250]を使用して変更された場合、結果として生じる変更されたメッセージは代わりに圧縮されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "After decompression, the Certificate message MUST be processed as if it were encoded without being compressed. This way, the parsing and the verification have the same security properties as they would have in TLS normally.",
+      "ja": "解凍後、証明書メッセージは圧縮されずにエンコードされているかのように処理する必要があります。このようにして、解析と検証は、それらが通常TLSであると同じセキュリティプロパティを持ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "In order for certificate compression to function correctly, the underlying compression algorithm MUST output the same data that was provided as input by the peer.",
+      "ja": "証明書圧縮が正しく機能するためには、基礎となる圧縮アルゴリズムは、ピアによる入力として提供された同じデータを出力する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Since certificate chains are typically presented on a per-server-name or per-user basis, a malicious application does not have control over any individual fragments in the Certificate message, meaning that they cannot leak information about the certificate by modifying the plaintext.",
+      "ja": "証明書チェーンは通常、サーバー名またはユーザーごとに表示されているため、悪意のあるアプリケーションでは証明書メッセージ内の個々のフラグメントを制御しません。これは、平文を変更して証明書に関する情報をリークすることはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations SHOULD bound the memory usage when decompressing the CompressedCertificate message.",
+      "ja": "実装は、CompressedCertificateメッセージを解凍するときにメモリ使用量をバインドする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MUST limit the size of the resulting decompressed chain to the specified uncompressed length, and they MUST abort the connection if the size of the output of the decompression function exceeds that limit. TLS framing imposes a 16777216-byte limit on the certificate message size, and implementations MAY impose a limit that is lower than that; in both cases, they MUST apply the same limit as if no compression were used.",
+      "ja": "実装は、結果の解凍チェーンのサイズを指定された非圧縮長に制限する必要があり、解凍関数の出力のサイズがその制限を超えると、接続を中止する必要があります。TLSフレーミングは証明書メッセージサイズに16777216バイトの制限を課し、実装はそれより低い制限を課すことがあります。どちらの場合も、圧縮が使用されていない場合と同じ制限を適用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "While the Certificate message in TLS 1.3 is encrypted, third parties can draw inferences from the message length observed on the wire. TLS 1.3 provides a padding mechanism (discussed in Sections 5.4 and E.3 of [RFC8446]) to counteract such analysis. Certificate compression alters the length of the Certificate message, and the change in length is dependent on the actual contents of the certificate. Any padding scheme covering the Certificate message has to address compression within its design or disable it altogether.",
+      "ja": "TLS 1.3の証明書メッセージが暗号化されている間、第三者はワイヤ上で観察されたメッセージ長から推論を描くことができます。TLS 1.3は、このような分析を打ち消すためにパディング機構（セクション5.4および[E.3の[RFC8446]で説明しています）を提供します。証明書圧縮は証明書メッセージの長さを変更し、長さの変更は証明書の実際の内容によって異なります。証明書メッセージを網羅するパディング方式は、そのデザイン内で圧縮に対処するか、またはそれを完全に無効にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Middlebox Compatibility",
+      "section_title": true,
+      "ja": "6. ミドルボックスの互換性"
+    },
+    {
+      "indent": 3,
+      "text": "It's been observed that a significant number of middleboxes intercept and try to validate the Certificate message exchanged during a TLS handshake. This means that middleboxes that don't understand the CompressedCertificate message might misbehave and drop connections that adopt certificate compression. Because of that, the extension is only supported in the versions of TLS where the certificate message is encrypted in a way that prevents middleboxes from intercepting it -- that is, TLS version 1.3 [RFC8446] and higher.",
+      "ja": "かなりの数のミドルボックスが傍受され、TLSハンドシェイク中に交換された証明書メッセージを検証しようとすることが観察されています。つまり、CompressedCertificateメッセージが認識されていないミドルボックスは、証明書圧縮を採用する接続を誤ってドロップする可能性があります。そのため、拡張子は、ミドルボックスがITを遮断するのを防ぐ方法で暗号化されているTLSのバージョンでのみサポートされています - つまりTLSバージョン1.3 [RFC8446]以上。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IANA Considerations",
+      "section_title": true,
+      "ja": "7. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. TLS ExtensionType Values",
+      "section_title": true,
+      "ja": "7.1. TLS ExtensionType値"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created an entry, compress_certificate(27), in the \"TLS ExtensionType Values\" registry (defined in [RFC8446]) with the values in the \"TLS 1.3\" column set to \"CH, CR\" and the \"Recommended\" column entry set to \"Yes\".",
+      "ja": "IANAは、「TLS 1.3」列に設定されている「TLS 1.3」列に設定されている「TLS ExtenctType値」レジストリ（[RFC8446]で定義）、および「推奨されている」列エントリの値を使用して、エントリcompress_certificate（27）を作成しました。「はい」に設定してください。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. TLS HandshakeType",
+      "section_title": true,
+      "ja": "7.2. TLSハンドシーケタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created an entry, compressed_certificate(25), in the \"TLS Handshake Type\" registry (defined in [RFC8446]), with the \"DTLS-OK\" column value set to \"Yes\".",
+      "ja": "IANAは \"TLSハンドシェイクタイプ\"レジストリ（RFC8446]で定義されている）のエントリ、compressed_certificate（25）を作成しました。 \"dtls-ok\"列値が \"yes\"に設定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3. Compression Algorithms",
+      "section_title": true,
+      "ja": "7.3. 圧縮アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This document establishes a registry of compression algorithms supported for compressing the Certificate message, titled \"TLS Certificate Compression Algorithm IDs\", under the existing \"Transport Layer Security (TLS) Extensions\" registry.",
+      "ja": "このドキュメントは、「TLS証明書圧縮アルゴリズムID」という既存の「トランスポート層セキュリティ（TLS）拡張」レジストリの下で、証明書メッセージを圧縮するためにサポートされている圧縮アルゴリズムのレジストリを確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "The entries in the registry are:",
+      "ja": "レジストリ内のエントリは次のとおりです。"
+    },
+    {
+      "indent": 5,
+      "text": "+==================+===============================+===========+\n| Algorithm Number | Description                   | Reference |\n+==================+===============================+===========+\n| 0                | Reserved                      | RFC 8879  |\n+------------------+-------------------------------+-----------+\n| 1                | zlib                          | RFC 8879  |\n+------------------+-------------------------------+-----------+\n| 2                | brotli                        | RFC 8879  |\n+------------------+-------------------------------+-----------+\n| 3                | zstd                          | RFC 8879  |\n+------------------+-------------------------------+-----------+\n| 16384 to 65535   | Reserved for Experimental Use |           |\n+------------------+-------------------------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Table 1: TLS Certificate Compression Algorithm IDs",
+      "ja": "表1：TLS証明書圧縮アルゴリズムIDS"
+    },
+    {
+      "indent": 3,
+      "text": "The values in this registry shall be allocated under \"IETF Review\" policy for values strictly smaller than 256, under \"Specification Required\" policy for values 256-16383, and under \"Experimental Use\" otherwise (see [RFC8126] for the definition of relevant policies). Experimental Use extensions can be used both on private networks and over the open Internet.",
+      "ja": "このレジストリの値は、256-16383の値の「指定された」ポリシーの下で、256~16383の「仕様」の下で、「IETFレビュー」ポリシーを「IETFレビュー」ポリシーに割り当てなければならず、それ以外の場合は「実験的使用」の下で（関連することの定義については[RFC8126]を参照）ポリシー）。実験用途の拡張機能は、プライベートネットワーク上およびオープンインターネット上の両方で使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures for requesting values in the Specification Required space are specified in Section 17 of [RFC8447].",
+      "ja": "指定されたスペースの値を要求する手順は[RFC8447]のセクション17で指定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1950] Deutsch, P. and J-L. Gailly, \"ZLIB Compressed Data Format Specification version 3.3\", RFC 1950, DOI 10.17487/RFC1950, May 1996, <https://www.rfc-editor.org/info/rfc1950>.",
+      "ja": "[RFC1950] Deutsch、P、J-L。Gaillly、 \"ZLIB圧縮データ形式仕様バージョン3.3\"、RFC 1950、DOI 10.17487 / RFC1950、1996年5月、<https://www.rfc-editor.org/info/rfc1950>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCSで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7250] Wouters, P., Ed., Tschofenig, H., Ed., Gilmore, J., Weiler, S., and T. Kivinen, \"Using Raw Public Keys in Transport Layer Security (TLS) and Datagram Transport Layer Security (DTLS)\", RFC 7250, DOI 10.17487/RFC7250, June 2014, <https://www.rfc-editor.org/info/rfc7250>.",
+      "ja": "[RFC7250] Wouters、P.、ED、Tschofenig、H.、ED。、Gilmore、J.、Weiler、S.、T.Kivinen、「トランスポート層セキュリティ（TLS）およびデータグラムトランスポート層での生の公開鍵を使用する」セキュリティ（DTLS） \"、RFC 7250、DOI 10.17487 / RFC7250、2014年6月、<https://www.rfc-editor.org/info/rfc7250>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7924] Santesson, S. and H. Tschofenig, \"Transport Layer Security (TLS) Cached Information Extension\", RFC 7924, DOI 10.17487/RFC7924, July 2016, <https://www.rfc-editor.org/info/rfc7924>.",
+      "ja": "[RFC7924] Santesson、S.およびH.Tschofenig、「トランスポート層セキュリティ（TLSキャッシュ情報拡張」、RFC 7924、DOI 10.17487 / RFC7924、2016年7月、<https：//www.rfc-editor.org/info/RFC7924>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7932] Alakuijala, J. and Z. Szabadka, \"Brotli Compressed Data Format\", RFC 7932, DOI 10.17487/RFC7932, July 2016, <https://www.rfc-editor.org/info/rfc7932>.",
+      "ja": "[RFC7932] Alakuijala、J.およびZ.Szabadka、「Brotli圧縮データ形式」、RFC 7932、DOI 10.17487 / RFC7932、2016年7月、<https：//www.rfc-editor.org/info/rfc7932>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126]綿、M.、Leiba、B.およびT.Narten、「RFCSのIANAに関する考察のためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487 / RFC8126、2017年6月、<HTTPS：// WWW.rfc-editor.org / info / rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B、「RFC 2119キーワードの大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8446] Rescorla, E., \"The Transport Layer Security (TLS) Protocol Version 1.3\", RFC 8446, DOI 10.17487/RFC8446, August 2018, <https://www.rfc-editor.org/info/rfc8446>.",
+      "ja": "[RFC8446] RESCORLA、E.、「トランスポート層セキュリティ（TLS）プロトコルバージョン1.3」、RFC 8446、DOI 10.17487 / RFC8446、2018年8月、<https：//www.rfc-editor.org/info/rfc8446>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8447] Salowey, J. and S. Turner, \"IANA Registry Updates for TLS and DTLS\", RFC 8447, DOI 10.17487/RFC8447, August 2018, <https://www.rfc-editor.org/info/rfc8447>.",
+      "ja": "[RFC8447] Salowey、J.およびS.ターナー、「TLSおよびDTLSのIANAレジストリアップデート」、RFC 8447、DOI 10.17487 / RFC8447、2018年8月、<https：//www.rfc-editor.org/info/rfc8447>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8478] Collet, Y. and M. Kucherawy, Ed., \"Zstandard Compression and the application/zstd Media Type\", RFC 8478, DOI 10.17487/RFC8478, October 2018, <https://www.rfc-editor.org/info/rfc8478>.",
+      "ja": "[RFC8478] Collet、Y.およびM.Kucherawy、ED。、「ZSTandard Compressionおよびアプリケーション/ ZSTDメディアタイプ」、RFC 8478、DOI 10.17487 / RFC8478、2018年10月、<https：//www.rfc-editor.org/ info / rfc8478>。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5246] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.2\", RFC 5246, DOI 10.17487/RFC5246, August 2008, <https://www.rfc-editor.org/info/rfc5246>.",
+      "ja": "[RFC5246] Dierks、T.およびE. Rescorla、「トランスポート層セキュリティ（TLS）プロトコルバージョン1.2」、RFC 5246、DOI 10.17487 / RFC5246、2008年8月、<https：//www.rfc-editor.org/info/ RFC5246>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Certificate compression was originally introduced in the QUIC Crypto protocol, designed by Adam Langley and Wan-Teh Chang.",
+      "ja": "証明書圧縮はもともとAdam LangleyとWan-Teh Chancyによって設計されたQUIC暗号プロトコルで導入されました。"
+    },
+    {
+      "indent": 3,
+      "text": "This document has benefited from contributions and suggestions from David Benjamin, Ryan Hamilton, Christian Huitema, Benjamin Kaduk, Ilari Liusvaara, Piotr Sikora, Ian Swett, Martin Thomson, Sean Turner, and many others.",
+      "ja": "この文書は、David Benjamin、Ryan Hamilton、Christian Huitema、Benjamin Kaduk、Ilari Liusvaara、Piotr Sikora、Ian Swett、Martin Thomson、Sean Turner、そして他の多くの人々からの貢献や提案に恩恵を受けています。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Alessandro Ghedini Cloudflare, Inc.",
+      "ja": "アレッサンドロGhedini Cloudflare、Inc。"
+    },
+    {
+      "indent": 3,
+      "text": "Email: alessandro@cloudflare.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Victor Vasiliev Google",
+      "ja": "Victor Vasiliev Google"
+    },
+    {
+      "indent": 3,
+      "text": "Email: vasilvv@google.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
