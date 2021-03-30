@@ -12,6 +12,7 @@ from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException
 
+# ルールは必ず小文字で登録すること
 trans_rules = {
     'abstract': '概要',
     'introduction': 'はじめに',
@@ -30,11 +31,11 @@ trans_rules = {
     'where': 'ただし',
     'where:': 'ただし：',
     'assume:': '前提：',
-    "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in RFC 2119 [RFC2119].": 
+    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in rfc 2119 [rfc2119].": 
         "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はRFC 2119 [RFC2119]で説明されているように解釈されます。",
-    "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.": 
+    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"not recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in bcp 14 [rfc2119] [rfc8174] when, and only when, they appear in all capitals, as shown here.": 
         "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。",
-    "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.": 
+    "this document is subject to bcp 78 and the ietf trust's legal provisions relating to ietf documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. please review these documents carefully, as they describe your rights and restrictions with respect to this document. code components extracted from this document must include simplified bsd license text as described in section 4.e of the trust legal provisions and are provided without warranty as described in the simplified bsd license.": 
         "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。",
 }
 
@@ -133,6 +134,8 @@ class TranslatorSeleniumGoogletrans(Translator):
         ja = trans_rules.get(text.lower())
         if ja:
             return ja
+        # 「%」をURLエンコードする
+        text = text.replace('%', '%25')
         # 「/」をURLエンコードする
         text = text.replace('/', '%2F')
 
@@ -219,8 +222,8 @@ def trans_rfc(number, mode):
 
                 text = obj_contents_i['text']
 
-                # 「-」「*」「o」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳
-                pattern = r'^(- |\* |o |\+ |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |[a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
+                # 「-」「*」「o」「+」「$」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳する
+                pattern = r'^(- |\* |o |\+ |\$ |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |[a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
                 m = re.match(pattern, text)
                 if m:
                     pre_texts.append(m[1])

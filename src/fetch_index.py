@@ -10,7 +10,7 @@ def fetch_remote_index():
 
     url = 'https://tools.ietf.org/rfc/index'
     headers = { 'User-agent': '', 'referer': url }
-    page = requests.get(url, headers)
+    page = requests.get(url, headers, timeout=(9.1, 60))
     tree = html.fromstring(page.content)
 
     # RFC INDEX の内容を抽出
