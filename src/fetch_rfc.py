@@ -181,7 +181,7 @@ def fetch_rfc(number, force=False):
 
     # RFCページのDOMツリーの取得
     headers = {'User-agent': '', 'referer': url}
-    page = requests.get(url, headers, timeout=(9.1, 60))
+    page = requests.get(url, headers, timeout=(36.2, 180))
     tree = html.fromstring(cleanhtml(page.content))
 
     # タイトルの取得
