@@ -20,9 +20,21 @@
 - RFCのHTMLが例外的な構造になっている場合も上手に解釈できません（特に番号の小さいRFC）
 - RFC2220以降を対象とする (http://rfc-jp.nic.ad.jp/copyright/translate.html)
 
-### 開発者向け
 
-動作環境：Python3, MacOS or Windows
+<br>
+
+## 開発者向け
+
+### 実装機能
+- 文章のみ翻訳し、図や表はそのまま表示する
+- 文章がページ区切りで分割されていても1つの段落として翻訳する
+- インデントの深さも反映させる
+- 箇条書き（o + * - など）の記号はそのまま表示する
+- 表題（1.2.～ など）は文字を大きくする
+- 原本（英語RFC）へのリンクをスクロールしても常に表示する
+- 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示する（例：RFC2246）
+
+動作環境：Python3 + Windows or MacOS
 
 ```
 pip install requests lxml
@@ -32,11 +44,12 @@ pip install googletrans==4.0.0-rc1
 pip install selenium
 ```
 
-2021/02/27追記：googletransは安定版の3.0.0だと翻訳できません。
-別の翻訳手段として、seleniumによるGoogle翻訳も追加し、デフォルトの翻訳方法とします。
+Windowsの場合は、py -m pip に読み替えてください。
+
+2021/02/27 追記：googletrans 3.0.0 が使い物にならないので、SeleniumによるGoogle翻訳に切り替えました。
 従来の方法を使いたい場合は `--transmode py-googletrans` を指定してください。
 
-現状では、seleniumではFirefoxを使用するため、geckodriverをダウンロードしておいてください。
+SeleniumではFirefoxを使用しているため、geckodriver のダウンロードが必要です。
 geckodriverの配置場所を環境変数 WEBDRIVER_EXE_PATH に指定してから実行してください。
 詳細は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照ください。
 
