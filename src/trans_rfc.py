@@ -18,7 +18,7 @@ trans_rules = {
     'introduction': 'はじめに',
     'acknowledgement': '謝辞',
     'acknowledgements': '謝辞',
-    'status of this memo': '本文書の状態',
+    'status of this memo': '本文書の位置付け', #'本文書の状態',
     'copyright notice': '著作権表示',
     'table of contents': '目次',
     'conventions': '規約',
