@@ -136,6 +136,8 @@ class TranslatorSeleniumGoogletrans(Translator):
             return ja
         # 「%」をURLエンコードする
         text = text.replace('%', '%25')
+        # 「|」をURLエンコードする
+        text = text.replace('|', '%7C')
         # 「/」をURLエンコードする
         text = text.replace('/', '%2F')
 
@@ -222,8 +224,9 @@ def trans_rfc(number, mode):
 
                 text = obj_contents_i['text']
 
-                # 「-」「*」「o」「+」「$」「N.」などの記号的意味を持つ文字から始まる文は、その前文字を除外して翻訳する
-                pattern = r'^(- |\* |o |\+ |\$ |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |[a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
+                # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
+                # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
+                pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
                 m = re.match(pattern, text)
                 if m:
                     pre_texts.append(m[1])
