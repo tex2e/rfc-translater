@@ -1,0 +1,932 @@
+{
+  "title": {
+    "text": "RFC 8967 - MAC Authentication for the Babel Routing Protocol",
+    "ja": "RFC 8967 - BabelルーティングプロトコルのMAC認証"
+  },
+  "number": 8967,
+  "created_at": "2021-04-17 08:00:04.395897+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                             C. Dô\nRequest for Comments: 8967                                W. Kolodziejak\nObsoletes: 7298                                            J. Chroboczek\nCategory: Standards Track              IRIF, University of Paris-Diderot\nISSN: 2070-1721                                             January 2021",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 11,
+      "text": "MAC Authentication for the Babel Routing Protocol",
+      "ja": "BabelルーティングプロトコルのMAC認証"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a cryptographic authentication mechanism for the Babel routing protocol that has provisions for replay avoidance. This document obsoletes RFC 7298.",
+      "ja": "この文書では、再生回避の規定を持つBabelルーティングプロトコルの暗号認証メカニズムについて説明します。この文書はRFC 7298を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それは公開レビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8967.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法に関する情報は、https://www.rfc-editor.org/info/rfc8967で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2021 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2021 IETF信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Applicability\n  1.2.  Assumptions and Security Properties\n  1.3.  Specification of Requirements\n2.  Conceptual Overview of the Protocol\n3.  Data Structures\n  3.1.  The Interface Table\n  3.2.  The Neighbour Table\n4.  Protocol Operation\n  4.1.  MAC Computation\n  4.2.  Packet Transmission\n  4.3.  Packet Reception\n  4.4.  Expiring Per-Neighbour State\n5.  Incremental Deployment and Key Rotation\n6.  Packet Format\n  6.1.  MAC TLV\n  6.2.  PC TLV\n  6.3.  Challenge Request TLV\n  6.4.  Challenge Reply TLV\n7.  Security Considerations\n8.  IANA Considerations\n9.  References\n  9.1.  Normative References\n  9.2.  Informational References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "By default, the Babel routing protocol [RFC8966] trusts the information contained in every UDP datagram that it receives on the Babel port. An attacker can redirect traffic to itself or to a different node in the network, causing a variety of potential issues. In particular, an attacker might:",
+      "ja": "デフォルトでは、Babelルーティングプロトコル[RFC8966]は、それがBabelポートを受信したすべてのUDPデータグラムに含まれている情報を信頼します。攻撃者は、トラフィックを自分自身またはネットワーク内の異なるノードにリダイレクトすることができ、さまざまな潜在的な問題を引き起こす可能性があります。特に、攻撃者は次のようにします。"
+    },
+    {
+      "indent": 3,
+      "text": "* spoof a Babel packet and redirect traffic by announcing a route with a smaller metric, a larger sequence number, or a longer prefix;",
+      "ja": "* スプーブのパケットと、小さいメトリック、より大きなシーケンス番号、またはより長い接頭辞を持つルートをアナウンスすることによって、トラフィックをリダイレクトします。"
+    },
+    {
+      "indent": 3,
+      "text": "* spoof a malformed packet, which could cause an insufficiently robust implementation to crash or interfere with the rest of the network;",
+      "ja": "* 不正な形式のパケットを偽装すると、不十分な堅牢な実装がクラッシュまたは残りのネットワークを妨害する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* replay a previously captured Babel packet, which could cause traffic to be redirected or otherwise interfere with the network.",
+      "ja": "* 以前にキャプチャされたBabelパケットを再生します。これにより、トラフィックをリダイレクトさせるか、そうでなければネットワークを妨害する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Protecting a Babel network is challenging due to the fact that the Babel protocol uses both unicast and multicast communication. One possible approach, used notably by the Babel over Datagram Transport Layer Security (DTLS) protocol [RFC8968], is to use unicast communication for all semantically significant communication, and then use a standard unicast security protocol to protect the Babel traffic. In this document, we take the opposite approach: we define a cryptographic extension to the Babel protocol that is able to protect both unicast and multicast traffic and thus requires very few changes to the core protocol. This document obsoletes [RFC7298].",
+      "ja": "Babelプロトコルがユニキャストとマルチキャスト通信の両方を使用するという事実のため、Babelネットワークを保護することが困難です。特にデータグラムトランスポートレイヤセキュリティ（DTLS）プロトコル[RFC8968]によって、すべての意味的に重要な通信に対してユニキャスト通信を使用してから、Babelトラフィックを保護するために標準のユニキャストセキュリティプロトコルを使用することです。この文書では、反対のアプローチを取ります。ユニキャストとマルチキャストトラフィックの両方を保護することができる、ベイベルプロトコルに暗号拡張を定義し、コアプロトコルへの変更がほとんどありません。この文書は廃止されました[RFC7298]。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Applicability",
+      "section_title": true,
+      "ja": "1.1. 適用可能性"
+    },
+    {
+      "indent": 3,
+      "text": "The protocol defined in this document assumes that all interfaces on a given link are equally trusted and share a small set of symmetric keys (usually just one, and two during key rotation). The protocol is inapplicable in situations where asymmetric keying is required, where the trust relationship is partial, or where large numbers of trusted keys are provisioned on a single link at the same time.",
+      "ja": "このドキュメントで定義されているプロトコルは、特定のリンク上のすべてのインタフェースが同様に信頼され、小さなセットの対称キー（通常はキー回転中に1つ、2つ）を共有していることを前提としています。信頼関係が部分的にある、または同時に単一のリンク上に多数の信頼できるキーがプロビジョニングされている、非対称キーイングが必要な状況では、プロトコルが不可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol supports incremental deployment (where an insecure Babel network is made secure with no service interruption), and it supports graceful key rotation (where the set of keys is changed with no service interruption).",
+      "ja": "このプロトコルは、インクリメンタル展開をサポートしています（ここでは、不安Babelネットワークがサービスの中断なしで安全にされている場合）、優雅なキー回転（鍵のセットがサービス中断で変更されない場合）をサポートしています。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol does not require synchronised clocks, it does not require persistently monotonic clocks, and it does not require persistent storage except for what might be required for storing cryptographic keys.",
+      "ja": "このプロトコルは同期クロックを必要とせず、永続的に単調なクロックを必要とせず、暗号化キーを保存するために必要なものを除いて永続ストレージを必要としません。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Assumptions and Security Properties",
+      "section_title": true,
+      "ja": "1.2. 仮定とセキュリティのプロパティ"
+    },
+    {
+      "indent": 3,
+      "text": "The correctness of the protocol relies on the following assumptions:",
+      "ja": "プロトコルの正確さは次の仮定に依存しています。"
+    },
+    {
+      "indent": 3,
+      "text": "* that the Message Authentication Code (MAC) being used is invulnerable to forgery, i.e., that an attacker is unable to generate a packet with a correct MAC without access to the secret key;",
+      "ja": "* 使用されているメッセージ認証コード（MAC）は偽造にとって乱用、すなわち攻撃者が秘密鍵にアクセスすることなく正しいMACを有するパケットを生成することができないことである。"
+    },
+    {
+      "indent": 3,
+      "text": "* that a node never generates the same index or nonce twice over the lifetime of a key.",
+      "ja": "* ノードがキーの存続期間にわたって2回同じインデックスまたはノンスを2回生成することはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The first assumption is a property of the MAC being used. The second assumption can be met either by using a robust random number generator [RFC4086] and sufficiently large indices and nonces, by using a reliable hardware clock, or by rekeying often enough that collisions are unlikely.",
+      "ja": "最初の仮定は、使用されているMACのプロパティです。第2の仮定は、信頼性の高いハードウェアクロックを使用することによって、堅牢な乱数発生器[RFC4086]と十分に大きなインデックスとノンスを使用することによって、またはその衝突がほとんどありません。"
+    },
+    {
+      "indent": 3,
+      "text": "If the assumptions above are met, the protocol described in this document has the following properties:",
+      "ja": "上記の仮定が満たされている場合、この文書に記載されているプロトコルには次のプロパティがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "* it is invulnerable to spoofing: any Babel packet accepted as authentic is the exact copy of a packet originally sent by an authorised node;",
+      "ja": "* それはスプーフィングにとって厄介です：Authenticとして受け入れられたBabelパケットは、最初に許可されたノードによって送信されたパケットの正確なコピーです。"
+    },
+    {
+      "indent": 3,
+      "text": "* locally to a single node, it is invulnerable to replay: if a node has previously accepted a given packet, then it will never again accept a copy of this packet or an earlier packet from the same sender;",
+      "ja": "* 単一のノードにローカルには、再生には逆になります。ノードが以前に指定されたパケットを受け入れている場合は、このパケットのコピーまたは同じ送信者から以前のパケットのコピーを再度受け入れることはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "* among different nodes, it is only vulnerable to immediate replay: if a node A has accepted an authentic packet from C, then a node B will only accept a copy of that packet if B has accepted an older packet from C, and B has received no later packet from C.",
+      "ja": "* 異なるノードの中では、即時の再生に対してのみ脆弱である。ノードAがCから本物のパケットを受け入れた場合、ノードBはそのパケットのコピーのみを受け入れ、BがCからの古いパケットを受け入れ、Bが受信したCからの後のパケットはありません"
+    },
+    {
+      "indent": 3,
+      "text": "While this protocol makes efforts to mitigate the effects of a denial of service attack, it does not fully protect against such attacks.",
+      "ja": "この議定書は、サービス拒否攻撃の影響を軽減するための努力をしていますが、そのような攻撃に対して完全に保護されていません。"
+    },
+    {
+      "indent": 0,
+      "text": "1.3. Specification of Requirements",
+      "section_title": true,
+      "ja": "1.3. 要件の指定"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conceptual Overview of the Protocol",
+      "section_title": true,
+      "ja": "2. プロトコルの概念的概要"
+    },
+    {
+      "indent": 3,
+      "text": "When a node B sends out a Babel packet through an interface that is configured for MAC cryptographic protection, it computes one or more MACs (one per key) that it appends to the packet. When a node A receives a packet over an interface that requires MAC cryptographic protection, it independently computes a set of MACs and compares them to the MACs appended to the packet; if there is no match, the packet is discarded.",
+      "ja": "ノードBがMAC暗号保護用に構成されているインターフェースを介してBabelパケットを送信すると、それはパケットに付加されている1つまたは複数のMAC（キーごとに）を計算します。ノードAがMAC暗号保護を必要とするインタフェースを介してパケットを受信すると、それぞれ独立してMACSのセットを計算し、それらをパケットに付加されたMACSと比較する。一致しない場合は、パケットが破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to protect against replay, B maintains a per-interface 32-bit integer known as the \"packet counter\" (PC). Whenever B sends a packet through the interface, it embeds the current value of the PC within the region of the packet that is protected by the MACs and increases the PC by at least one. When A receives the packet, it compares the value of the PC with the one contained in the previous packet received from B, and unless it is strictly greater, the packet is discarded.",
+      "ja": "再生から保護するために、Bは「パケットカウンタ」（PC）として知られているインターフェースごとの32ビット整数を維持します。Bがインターフェースを介してパケットを送信するたびに、それはMACSによって保護されているパケットの領域内にPCの現在の値を埋め込み、PCを少なくとも1つ増加させる。Aがパケットを受信すると、PCの値をBから受信した前のパケットに含まれるものと比較し、それが厳密に大きくない限り、パケットは破棄される。"
+    },
+    {
+      "indent": 3,
+      "text": "By itself, the PC mechanism is not sufficient to protect against replay. Consider a peer A that has no information about a peer B (e.g., because it has recently rebooted). Suppose that A receives a packet ostensibly from B carrying a given PC; since A has no information about B, it has no way to determine whether the packet is freshly generated or a replay of a previously sent packet.",
+      "ja": "それ自体では、PCメカニズムは再生から保護するのに十分ではありません。ピアB（例えば、最近再起動したため）の情報がないピアAを考えてみましょう。所与のPCを搭載したBから表向きにパケットを受信すると仮定する。AがBについての情報を持たないので、パケットが新たに生成されているか、以前に送信されたパケットの再生かを判断する方法はない。"
+    },
+    {
+      "indent": 3,
+      "text": "In this situation, peer A discards the packet and challenges B to prove that it knows the MAC key. It sends a \"Challenge Request\", a TLV containing a unique nonce, a value that has never been used before and will never be used again. Peer B replies to the Challenge Request with a \"Challenge Reply\", a TLV containing a copy of the nonce chosen by A, in a packet protected by MAC and containing the new value of B's PC. Since the nonce has never been used before, B's reply proves B's knowledge of the MAC key and the freshness of the PC.",
+      "ja": "この状況では、ピアAはパケットと課題Bを破棄し、MACキーを知っていることを証明します。それは「チャレンジリクエスト」、固有のNonceを含むTLV、以前に使用されたことがない値、および再び使用されることはありません。ピアBは、Macによって保護されたパケットで、BのPCの新しい値を含む、「チャレンジ応答」でチャレンジ要求に返信します。Nonceは以前に使用されたことがないので、Bの返信はBのMACキーとPCの鮮度に関する知識を証明しています。"
+    },
+    {
+      "indent": 3,
+      "text": "By itself, this mechanism is safe against replay if B never resets its PC. In practice, however, this is difficult to ensure, as persistent storage is prone to failure, and hardware clocks, even when available, are occasionally reset. Suppose that B resets its PC to an earlier value and sends a packet with a previously used PC n. Peer A challenges B, B successfully responds to the challenge, and A accepts the PC equal to n + 1. At this point, an attacker C may send a replayed packet with PC equal to n + 2, which will be accepted by A.",
+      "ja": "それ自体では、このメカニズムはPCをリセットしない場合、このメカニズムは再生に対して安全です。ただし、実際には、永続的なストレージが障害が発生しやすく、ハードウェアクロックを確実にリセットすることができます。BがそのPCを以前の値にリセットし、以前に使用されているPC Nとパケットを送信するとします。ピア課題B、Bは、チャレンジに正常に応答し、AはN 1に等しいPCを受け入れます。この時点で、攻撃者Cは、N 2に等しいPCと再生されたパケットを送信することができ、これはAによって受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "Another mechanism is needed to protect against this attack. In this protocol, every PC is tagged with an \"index\", an arbitrary string of octets. Whenever B resets its PC, or whenever B doesn't know whether its PC has been reset, it picks an index that it has never used before (either by drawing it randomly or by using a reliable hardware clock) and starts sending PCs with that index. Whenever A detects that B has changed its index, it challenges B again.",
+      "ja": "この攻撃から保護するために別のメカニズムが必要です。このプロトコルでは、すべてのPCは「インデックス」で、任意のオクテットの文字列でタグ付けされています。BがPCをリセットするとき、またはBがそのPCがリセットされているかどうかがわからないときはいつでも、それが以前に使用されたことがないインデックスを選択し、それをランダムに描くか、信頼できるハードウェアクロックを使用して）を使ってPCの送信を開始します。インデックス。Bがそのインデックスを変更したことを検出するたびに、それは再びBに挑戦します。"
+    },
+    {
+      "indent": 3,
+      "text": "With this additional mechanism, this protocol is invulnerable to replay attacks (see Section 1.2).",
+      "ja": "この追加のメカニズムを使用すると、このプロトコルは再生攻撃にとって乱用できます（セクション1.2を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Data Structures",
+      "section_title": true,
+      "ja": "3. データ構造"
+    },
+    {
+      "indent": 3,
+      "text": "Every Babel node maintains a set of conceptual data structures described in Section 3.2 of [RFC8966]. This protocol extends these data structures as follows.",
+      "ja": "すべてのBabelノードは、[RFC8966]のセクション3.2で説明されている概念的データ構造のセットを維持しています。このプロトコルは次のようにこれらのデータ構造を拡張します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. The Interface Table",
+      "section_title": true,
+      "ja": "3.1. インタフェーステーブル"
+    },
+    {
+      "indent": 3,
+      "text": "Every Babel node maintains an interface table, as described in Section 3.2.3 of [RFC8966]. Implementations of this protocol MUST allow each interface to be provisioned with a set of one or more MAC keys and the associated MAC algorithms (see Section 4.1 for suggested algorithms and Section 7 for suggested methods for key generation). In order to allow incremental deployment of this protocol (see Section 5), implementations SHOULD allow an interface to be configured in a mode in which it participates in the MAC authentication protocol but accepts packets that are not authenticated.",
+      "ja": "[RFC8966]のセクション3.2.3で説明されているように、すべてのベイビルノードはインターフェイステーブルを維持します。このプロトコルの実装により、各インターフェイスを1つ以上のMACキーと関連するMACアルゴリズムのセットを使用してプロビジョニングする必要があります（推奨アルゴリズムについては、推奨されるアルゴリズムについてはセクション4.1を参照して、推奨される方法については推奨される方法について）。このプロトコルのインクリメンタル展開を可能にする（セクション5を参照）、実装は、それがMAC認証プロトコルに参加するモードでインタフェースを設定することを可能にする必要がありますが、認証されていないパケットを受け入れます。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol extends each table entry associated with an interface on which MAC authentication has been configured with two new pieces of data:",
+      "ja": "このプロトコルは、MAC認証が2つの新しいデータで構成されているインターフェイスに関連付けられている各テーブルエントリを拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "* a set of one or more MAC keys, each associated with a given MAC algorithm;",
+      "ja": "* それぞれが特定のMACアルゴリズムに関連付けられている1つ以上のMACキーのセット。"
+    },
+    {
+      "indent": 3,
+      "text": "* a pair (Index, PC), where Index is an arbitrary string of 0 to 32 octets, and PC is a 32-bit (4-octet) integer.",
+      "ja": "* Pair（Index、PC）。ここで、インデックスは0から32オクテットの任意の文字列、PCは32ビット（4オクテット）の整数です。"
+    },
+    {
+      "indent": 3,
+      "text": "We say that an index is fresh when it has never been used before with any of the keys currently configured on the interface. The Index field is initialised to a fresh index, for example, by drawing a random string of sufficient length (see Section 7 for suggested sizes), and the PC is initialised to an arbitrary value (typically 0).",
+      "ja": "インターフェイス上に現在設定されているキーが以前に使用されたことがない場合は、インデックスが新鮮であるとします。インデックスフィールドは、例えば十分な長さのランダムな文字列を描画することによって、新たなインデックスに初期化され（推奨サイズについてセクション7を参照）、PCは任意の値（典型的には0）に初期化される。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. The Neighbour Table",
+      "section_title": true,
+      "ja": "3.2. 隣人のテーブル"
+    },
+    {
+      "indent": 3,
+      "text": "Every Babel node maintains a neighbour table, as described in Section 3.2.4 of [RFC8966]. This protocol extends each entry in this table with two new pieces of data:",
+      "ja": "[RFC8966]のセクション3.2.4で説明されているように、すべてのBabelノードはネイバーテーブルを維持します。このプロトコルは、このテーブルの各エントリを2つの新しいデータで拡張します。"
+    },
+    {
+      "indent": 3,
+      "text": "* a pair (Index, PC), where Index is a string of 0 to 32 octets, and PC is a 32-bit (4-octet) integer;",
+      "ja": "* インデックスは0から32オクテットの文字列、PCは32ビット（4オクテット）の整数です。"
+    },
+    {
+      "indent": 3,
+      "text": "* a Nonce, which is an arbitrary string of 0 to 192 octets, and an associated challenge expiry timer.",
+      "ja": "* Nonceは、0から192オクテットの任意の文字列、および関連するチャレンジ有効期限タイマーです。"
+    },
+    {
+      "indent": 3,
+      "text": "The Index and PC are initially undefined, and they are managed as described in Section 4.3. The Nonce and challenge expiry timer are initially undefined, and they are used as described in Section 4.3.1.1.",
+      "ja": "インデックスとPCは最初は未定義であり、それらはセクション4.3に記載されているように管理されます。NonceとChallengeの有効期限タイマーは最初は未定義であり、4.3.1.1項で説明されているように使用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Protocol Operation",
+      "section_title": true,
+      "ja": "4. プロトコル操作"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. MAC Computation",
+      "section_title": true,
+      "ja": "4.1. MACの計算"
+    },
+    {
+      "indent": 3,
+      "text": "A Babel node computes the MAC of a Babel packet as follows.",
+      "ja": "Babelノードは、以下のようにBabelパケットのMACを計算する。"
+    },
+    {
+      "indent": 3,
+      "text": "First, the node builds a pseudo-header that will participate in MAC computation but will not be sent. If the packet is carried over IPv6, the pseudo-header has the following format:",
+      "ja": "まず、ノードはMAC計算に参加するが送信されない疑似ヘッダを構築する。パケットがIPv6を介して伝送されている場合、疑似ヘッダーは次の形式です。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+                                                               +\n|                                                               |\n+                          Src address                          +\n|                                                               |\n+                                                               +\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|           Src port            |                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +\n|                                                               |\n+                                                               +\n|                         Dest address                          |\n+                                                               +\n|                                                               |\n+                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                               |           Dest port           |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "If the packet is carried over IPv4, the pseudo-header has the following format:",
+      "ja": "パケットがIPv4を介して搬送されている場合、疑似ヘッダーは次の形式です。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                          Src address                          |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|           Src port            |        Dest address           |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                               |           Dest port           |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Fields:",
+      "ja": "田畑："
+    },
+    {
+      "indent": 3,
+      "text": "Src address The source IP address of the packet.",
+      "ja": "SRCパケットの送信元IPアドレス。"
+    },
+    {
+      "indent": 3,
+      "text": "Src port The source UDP port number of the packet.",
+      "ja": "SRCポートパケットのソースUDPポート番号。"
+    },
+    {
+      "indent": 3,
+      "text": "Dest address The destination IP address of the packet.",
+      "ja": "DESTパケットの宛先IPアドレス。"
+    },
+    {
+      "indent": 3,
+      "text": "Src port The destination UDP port number of the packet.",
+      "ja": "SRCポートパケットの宛先UDPポート番号。"
+    },
+    {
+      "indent": 3,
+      "text": "The node takes the concatenation of the pseudo-header and the Babel packet including the packet header but excluding the packet trailer (from octet 0 inclusive up to (Body Length + 4) exclusive) and computes a MAC with one of the implemented algorithms. Every implementation MUST implement HMAC-SHA256 as defined in [RFC6234] and Section 2 of [RFC2104], SHOULD implement keyed BLAKE2s [RFC7693] with 128-bit (16-octet) digests, and MAY implement other MAC algorithms.",
+      "ja": "このノードは、パケットヘッダとパケットヘッダを含むBabelパケットとの連結をとるが、パケットのトレーラを除く（オクテット0から（ボディ長4）排他）、実装されたアルゴリズムの1つとMACを計算する。すべての実装は[RFC6234]と[RFC2104]のセクション2で定義されているようにHMAC-SHA256を実装しなければなりませんが、128ビット（16オクテット）ダイジェストでキー付きBlake2S [RFC7693]を実装し、他のMACアルゴリズムを実装することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Packet Transmission",
+      "section_title": true,
+      "ja": "4.2. パケット送信"
+    },
+    {
+      "indent": 3,
+      "text": "A Babel node might delay actually sending TLVs by a small amount, in order to aggregate multiple TLVs in a single packet up to the interface MTU (Section 4 of [RFC8966]). For an interface on which MAC protection is configured, the TLV aggregation logic MUST take into account the overhead due to PC TLVs (one in each packet) and MAC TLVs (one per configured key).",
+      "ja": "Babelノードは、インタフェースMTUまでの単一のパケット内で複数のTLVを集約するために、実際にTLVを少量送信することができる（[RFC8966]のセクション4）。MAC保護が設定されているインターフェースの場合、TLVアグリゲーションロジックは、PC TLV（各パケット内の1つ）およびMAC TLV（登録済みキーごとに1つ）によるオーバーヘッドを考慮する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Before sending a packet, the following actions are performed:",
+      "ja": "パケットを送信する前に、以下の操作が実行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* a PC TLV containing the PC and Index associated with the outgoing interface MUST be appended to the packet body;",
+      "ja": "* 発信インターフェイスに関連付けられているPCとインデックスを含むPC TLVをパケット本体に追加する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "- the PC MUST be incremented by a strictly positive amount (typically just 1);",
+      "ja": "- PCは厳密に正の量（通常は1）でインクリメントされなければなりません。"
+    },
+    {
+      "indent": 6,
+      "text": "- if the PC overflows, a fresh index MUST be generated (as defined in Section 3.1);",
+      "ja": "- PCがオーバーフローしている場合は、（セクション3.1で定義されているように）新規インデックスを生成する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "a node MUST NOT include multiple PC TLVs in a single packet;",
+      "ja": "ノードには、単一のパケットに複数のPC TLVを含めてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* for each key configured on the interface, a MAC is computed as specified in Section 4.1 and stored in a MAC TLV that MUST be appended to the packet trailer (see Section 4.2 of [RFC8966]).",
+      "ja": "* インターフェイス上で構成された各キーについて、MACはセクション4.1で指定され、パケットトレーラに追加する必要があるMAC TLVに格納されます（[RFC8966]のセクション4.2を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Packet Reception",
+      "section_title": true,
+      "ja": "4.3. パケット受信"
+    },
+    {
+      "indent": 3,
+      "text": "When a packet is received on an interface that is configured for MAC protection, the following steps are performed before the packet is passed to normal processing:",
+      "ja": "パケットがMAC保護用に構成されているインターフェイスで受信されると、パケットが通常の処理に渡される前に次のステップが実行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* First, the receiver checks whether the trailer of the received packet carries at least one MAC TLV; if not, the packet MUST be immediately dropped and processing stops. Then, for each key configured on the receiving interface, the receiver computes the MAC of the packet. It then compares every generated MAC against every MAC included in the packet; if there is at least one match, the packet passes the MAC test; if there is none, the packet MUST be silently dropped and processing stops at this point. In order to avoid memory exhaustion attacks, an entry in the neighbour table MUST NOT be created before the MAC test has passed successfully. The MAC of the packet MUST NOT be computed for each MAC TLV contained in the packet, but only once for each configured key.",
+      "ja": "* まず、受信機は、受信したパケットのトレーラが少なくとも1つのMAC TLVを搬送するかどうかを確認する。そうでなければ、パケットをすぐにドロップされ、処理が停止する必要があります。次に、受信側インタフェース上に構成された各キーについて、受信機はパケットのMACを計算する。次に、パケットに含まれているすべてのMACから生成されたすべてのMacを比較します。少なくとも1つの一致がある場合、パケットはMACテストを渡します。NONEがない場合は、パケットをサイレントドロップしてこの時点で処理を停止してください。メモリの枯渇攻撃を避けるために、MACテストが正常に渡される前に、隣接テーブルのエントリを作成してはいけません。パケットのMACは、パケットに含まれるMAC TLVごとに計算してはいけませんが、設定された各キーに対して1回だけです。"
+    },
+    {
+      "indent": 3,
+      "text": "* If an entry for the sender does not exist in the neighbour table, it MAY be created at this point (or, alternatively, its creation can be delayed until a challenge needs to be sent, see below).",
+      "ja": "* 送信者のエントリが隣接テーブルに存在しない場合は、この時点で作成されてもよい（または、その作成は課題が送信されるまで遅れることができます。下記参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The packet body is then parsed a first time. During this \"preparse\" phase, the packet body is traversed and all TLVs are ignored except PC, Challenge Request, and Challenge Reply TLVs. When a PC TLV is encountered, the enclosed PC and Index are saved for later processing. If multiple PCs are found (which should not happen, see Section 4.2), only the first one is processed, the remaining ones MUST be silently ignored. If a Challenge Request is encountered, a Challenge Reply MUST be scheduled, as described in Section 4.3.1.2. If a Challenge Reply is encountered, it is tested for validity as described in Section 4.3.1.3, and a note is made of the result of the test.",
+      "ja": "* 次にパケット本体が初めて解析されます。この「準備」フェーズの間、パケット本体はトラバースされ、PC、チャレンジ要求を除いてすべてのTLVは無視されます。PC TLVに遭遇すると、囲まれたPCとインデックスは後の処理のために保存されます。複数のPCが見つかった場合（それが起こらないでください。セクション4.2を参照）、最初のものだけが処理され、残りのものは黙って無視されなければなりません。チャレンジ要求が発生した場合は、セクション4.3.1.2で説明されているように、チャレンジ応答をスケジュールする必要があります。チャレンジ応答が発生した場合は、4.3.1.3項に記載されているように妥当性についてテストされ、テストの結果についてメモが行われます。"
+    },
+    {
+      "indent": 3,
+      "text": "* The preparse phase above yields two pieces of data: the PC and Index from the first PC TLV, and a bit indicating whether the packet contains a successful Challenge Reply. If the packet does not contain a PC TLV, the packet MUST be dropped, and processing stops at this point. If the packet contains a successful Challenge Reply, then the PC and Index contained in the PC TLV MUST be stored in the neighbour table entry corresponding to the sender (which already exists in this case), and the packet is accepted.",
+      "ja": "* 上記の準備フェーズは、2つのデータを収率します。最初のPC TLVからのPCとインデックス、およびパケットにはチャレンジ応答が成功したかどうかを示すビットです。パケットにPC TLVが含まれていない場合は、パケットを削除し、この時点で処理が停止する必要があります。パケットにチャレンジ応答が成功した場合、PC TLVに含まれるPCとインデックスは、送信側（この場合は既に存在する）に対応する隣接テーブルエントリに格納され、パケットが受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Otherwise, if there is no entry in the neighbour table corresponding to the sender, or if such an entry exists but contains no Index, or if the Index it contains is different from the Index contained in the PC TLV, then a challenge MUST be sent as described in Section 4.3.1.1, the packet MUST be dropped, and processing stops at this stage.",
+      "ja": "* そうではなく、送信者に対応するネイバーテーブルにエントリがない場合、またはそのようなエントリが存在しているがインデックスが含まれていない場合、またはインデックスが含まれていない場合、またはそれが含むインデックスがPC TLVに含まれるインデックスとは異なる場合は、チャレンジを送信する必要があります。セクション4.3.1.1に記載されているように、パケットをドロップし、この段階で処理を停止します。"
+    },
+    {
+      "indent": 3,
+      "text": "* At this stage, the packet contains no successful Challenge Reply, and the Index contained in the PC TLV is equal to the Index in the neighbour table entry corresponding to the sender. The receiver compares the received PC with the PC contained in the neighbour table; if the received PC is smaller or equal than the PC contained in the neighbour table, the packet MUST be dropped and processing stops (no challenge is sent in this case, since the mismatch might be caused by harmless packet reordering on the link). Otherwise, the PC contained in the neighbour table entry is set to the received PC, and the packet is accepted.",
+      "ja": "* この段階では、パケットには成功したチャレンジ応答が含まれず、PC TLVに含まれるインデックスは送信者に対応するネイバーテーブルエントリ内のインデックスに等しい。受信機は、受信したPCを隣接テーブルに含まれるPCと比較する。受信したPCが隣接テーブルに含まれるPCと同じか等しい場合は、パケットをドロップして処理を停止しなければならない（この場合は、リンク上の無害なパケット並べ替えが原因であるため、チャレンジは送信されません）。そうでなければ、隣接テーブルエントリに含まれるPCが受信したPCに設定され、パケットが受け入れられる。"
+    },
+    {
+      "indent": 3,
+      "text": "In the algorithm described above, Challenge Requests are processed and challenges are sent before the (Index, PC) pair is verified against the neighbour table. This simplifies the implementation somewhat (the node may simply schedule outgoing requests as it walks the packet during the preparse phase) but relies on the rate limiting described in Section 4.3.1.1 to avoid sending too many challenges in response to replayed packets. As an optimisation, a node MAY ignore all Challenge Requests contained in a packet except the last one, and it MAY ignore a Challenge Request in the case where it is contained in a packet with an Index that matches the one in the neighbour table and a PC that is smaller or equal to the one contained in the neighbour table. Since it is still possible to replay a packet with an obsolete Index, the rate limiting described in Section 4.3.1.1 is required even if this optimisation is implemented.",
+      "ja": "上記のアルゴリズムでは、チャレンジ要求は処理され、（Index、PC）ペアが隣接テーブルに対して検証される前に課題が送信されます。これにより、実装がやや単純化されます（ゲージの準備フェーズ中にパケットを歩くときにノードは単に発信要求をスケジュールすることができます）が、再生されたパケットに応答しても多くの課題を送るのを避けるためにセクション4.3.1に記載されているレート制限に依存しています。最適化として、ノードは最後のものを除くパケットに含まれるすべてのチャレンジ要求を無視することができ、それが隣接テーブル内のインデックスと一致するインデックスを有するパケットに含まれる場合にはチャレンジ要求を無視することができる。隣接テーブルに含まれているものと小さくまたは等しいPC。廃止されたインデックスを持つパケットを再生することはまだ可能であるため、この最適化が実装されていてもセクション4.3.1.1に記載されているレート制限が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "The same is true of Challenge Replies. However, since validating a Challenge Reply has minimal additional cost (it is just a bitwise comparison of two strings of octets), a similar optimisation for Challenge Replies is not worthwhile.",
+      "ja": "チャレンジの返信についても同じことが言えます。しかしながら、チャレンジ応答を検証することは最小限の追加料金を有効にしているので、チャレンジ応答のための同様の最適化は価値がない。"
+    },
+    {
+      "indent": 3,
+      "text": "After the packet has been accepted, it is processed as normal, except that any PC, Challenge Request, and Challenge Reply TLVs that it contains are silently ignored.",
+      "ja": "パケットが受け入れられた後、それは任意のPC、チャレンジ要求、およびそれが含むChallenge Reply TLVが黙って無視されたことを除いて、通常として処理されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1. Challenge Requests and Replies",
+      "section_title": true,
+      "ja": "4.3.1. チャレンジリクエストと返信"
+    },
+    {
+      "indent": 3,
+      "text": "During the preparse stage, the receiver might encounter a mismatched Index, to which it will react by scheduling a Challenge Request. It might encounter a Challenge Request TLV, to which it will reply with a Challenge Reply TLV. Finally, it might encounter a Challenge Reply TLV, which it will attempt to match with a previously sent Challenge Request TLV in order to update the neighbour table entry corresponding to the sender of the packet.",
+      "ja": "準備段階の間、受信機はミスマッチインデックスに遭遇する可能性があり、そこにはチャレンジ要求をスケジュールすることによって反応する。チャレンジリクエストTLVに遭遇する可能性があります。これは、チャレンジ応答TLVで返信します。最後に、パケットの送信者に対応する隣接テーブルエントリを更新するために、以前に送信されたチャレンジ要求TLVと一致しようとするチャレンジ応答TLVが発生する可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1.1. Sending Challenges",
+      "section_title": true,
+      "ja": "4.3.1.1. 課題を送る"
+    },
+    {
+      "indent": 3,
+      "text": "When it encounters a mismatched Index during the preparse phase, a node picks a nonce that it has never used with any of the keys currently configured on the relevant interface, for example, by drawing a sufficiently large random string of bytes or by consulting a strictly monotonic hardware clock. It MUST then store the nonce in the entry of the neighbour table associated to the neighbour (the entry might need to be created at this stage), initialise the neighbour's challenge expiry timer to 30 seconds, and send a Challenge Request TLV to the unicast address corresponding to the neighbour.",
+      "ja": "準備フェーズ中にミスマッチインデックスに遭遇すると、ノードは、例えば、関連するインタフェース上で現在設定されているキーと共に使用されていないこと、または厳密にコンサルティングすることによって、それが該当するインターフェイスで使用されていないことを非CECを選択します。単調ハードウェアクロック次に、ネイバーに関連付けられているネイバーテーブルのエントリ（この段階でエントリを作成する必要があるかもしれません）のエントリにNonceを保存し、ネイバーのチャレンジの有効期限タイマーを30秒に初期化し、Unicastアドレスにチャレンジ要求TLVを送信します。隣人に対応する。"
+    },
+    {
+      "indent": 3,
+      "text": "A node MAY aggregate a Challenge Request with other TLVs; in other words, if it has already buffered TLVs to be sent to the unicast address of the neighbour, it MAY send the buffered TLVs in the same packet as the Challenge Request. However, it MUST arrange for the Challenge Request to be sent in a timely manner, as any packets received from that neighbour will be silently ignored until the challenge completes.",
+      "ja": "ノードは他のTLVとのチャレンジ要求を集約することがあります。言い換えれば、既に隣接するTLVを既にバッファされている場合、それはチャレンジ要求と同じパケット内にバッファリングされたTLVを送信することができる。ただし、そのネイバーから受信したパケットは、チャレンジが完了するまで静かに無視されるため、チャレンジ要求をタイムリーに送信するように配置する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A node MUST impose a rate limitation to the challenges it sends; the limit SHOULD default to one Challenge Request every 300 ms and MAY be configurable. This rate limiting serves two purposes. First, since a challenge may be sent in response to a packet replayed by an attacker, it limits the number of challenges that an attacker can cause a node to send. Second, it limits the number of challenges sent when there are multiple packets in flight from a single neighbour.",
+      "ja": "ノードは、送信する課題にレート制限を課す必要があります。制限は、300ミリ秒ごとに1つのチャレンジ要求にデフォルトで設定できます。このレート制限は2つの目的を果たします。第1に、攻撃者によって再生されたパケットに応答してチャレンジが送信されるので、攻撃者がノードが送信される可能性がある課題の数を制限する。第二に、それは単一の隣人からの飛行中に複数のパケットがあるときに送信される課題の数を制限します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1.2. Replying to Challenges",
+      "section_title": true,
+      "ja": "4.3.1.2. 挑戦に返信します"
+    },
+    {
+      "indent": 3,
+      "text": "When it encounters a Challenge Request during the preparse phase, a node constructs a Challenge Reply TLV by copying the Nonce from the Challenge Request into the Challenge Reply. It MUST then send the Challenge Reply to the unicast address from which the Challenge Request was sent. A challenge sent to a multicast address MUST be silently ignored.",
+      "ja": "準備フェーズ中にチャレンジ要求に遭遇すると、ノードはチャレンジ要求からNonceをチャレンジ応答にコピーすることによってチャレンジ応答TLVを構築します。それはそれからチャレンジ要求が送信されたユニキャストアドレスにチャレンジ応答を送信する必要があります。マルチキャストアドレスに送信されたチャレンジは黙って無視されなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "A node MAY aggregate a Challenge Reply with other TLVs; in other words, if it has already buffered TLVs to be sent to the unicast address of the sender of the Challenge Request, it MAY send the buffered TLVs in the same packet as the Challenge Reply. However, it MUST arrange for the Challenge Reply to be sent in a timely manner (within a few seconds) and SHOULD NOT send any other packets over the same interface before sending the Challenge Reply, as those would be dropped by the challenger.",
+      "ja": "ノードは他のTLVとチャレンジ応答を集約することがあります。言い換えれば、それが既にチャレンジ要求の送信者のユニキャストアドレスに送信されるようにバッファされている場合、それはチャレンジ応答と同じパケット内にバッファリングされたTLVを送信することができる。ただし、チャレンジ回答をタイムリーに送信するには、チャレンジレートを送信する前に同じインターフェイスを介して他のパケットを送信しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "Since a Challenge Reply might be caused by a replayed Challenge Request, a node MUST impose a rate limitation to the Challenge Replies it sends; the limit SHOULD default to one Challenge Reply for each peer every 300 ms and MAY be configurable.",
+      "ja": "チャレンジ応答が再生されたチャレンジ要求によって引き起こされる可能性があるので、ノードはチャレンジの返信にレート制限を課す必要があります。制限は、300 msごとに各ピアの1つのチャレンジ応答にデフォルトで、設定可能である可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1.3. Receiving Challenge Replies",
+      "section_title": true,
+      "ja": "4.3.1.3. チャレンジの返信を受け取る"
+    },
+    {
+      "indent": 3,
+      "text": "When it encounters a Challenge Reply during the preparse phase, a node consults the neighbour table entry corresponding to the neighbour that sent the Challenge Reply. If no challenge is in progress, i.e., if there is no Nonce stored in the neighbour table entry or the challenge timer has expired, the Challenge Reply MUST be silently ignored, and the challenge has failed.",
+      "ja": "準備フェーズ中にチャレンジ応答が発生すると、ノードはチャレンジ応答を送信したネイバーに対応するネイバーテーブルエントリを調べます。課題が進行中でない場合、すなわち、隣接テーブルエントリに格納されていないか、チャレンジタイマが満了した場合には、チャレンジ応答は黙って無視されなければならず、チャレンジは失敗した。"
+    },
+    {
+      "indent": 3,
+      "text": "Otherwise, the node compares the Nonce contained in the Challenge Reply with the Nonce contained in the neighbour table entry. If the two are equal (they have the same length and content), then the challenge has succeeded and the nonce stored in the neighbour table for this neighbour SHOULD be discarded; otherwise, the challenge has failed (and the nonce is not discarded).",
+      "ja": "それ以外の場合、ノードは、チャレンジ応答に含まれているNonceと隣接テーブルエントリに含まれているNonceとを比較します。2つが等しい場合（それらは同じ長さと内容を持ちます）、チャレンジは成功し、この隣接の隣接テーブルに格納されているNonceは破棄されるべきです。それ以外の場合、チャレンジは失敗しました（そしてNonceは破棄されません）。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Expiring Per-Neighbour State",
+      "section_title": true,
+      "ja": "4.4. 隣接の州の期限切れ"
+    },
+    {
+      "indent": 3,
+      "text": "The per-neighbour (Index, PC) pair is maintained in the neighbour table, and is normally discarded when the neighbour table entry expires. Implementations MUST ensure that an (Index, PC) pair is discarded within a finite time since the last time a packet has been accepted. In particular, unsuccessful challenges MUST NOT prevent an (Index, PC) pair from being discarded for unbounded periods of time.",
+      "ja": "隣接命令（索引、PC）ペアは、隣接テーブルに維持され、隣接テーブルエントリが期限切れになると通常は破棄されます。パケットが最後に受け入れられてから（インデックス、PC）ペアが有限時間内に破棄されることを実装する必要があります。特に、失敗した課題は、（Index、PC）ペアが無制限の期間廃棄されないようにする必要がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "A possible implementation strategy for implementations that use a Hello history (Appendix A of [RFC8966]) is to discard the (Index, PC) pair whenever the Hello history becomes empty. Another implementation strategy is to use a timer that is reset whenever a packet is accepted and to discard the (Index, PC) pair whenever the timer expires. If the latter strategy is used, the timer SHOULD default to a value of 5 minutes and MAY be configurable.",
+      "ja": "Hello履歴を使用する実装戦略（[RFC8966]の付録A）は、hello履歴が空になるたびに（Index、PC）のペアを破棄することです。もう1つの実装戦略は、パケットが受け入れられたときはいつでもリセットされ、タイマーが期限切れになるたびに（インデックス、PC）ペアを破棄するタイマーを使用することです。後者の戦略が使用されている場合、タイマーはデフォルトで5分の値に設定され、設定可能な場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Incremental Deployment and Key Rotation",
+      "section_title": true,
+      "ja": "5. 増分展開とキー回転"
+    },
+    {
+      "indent": 3,
+      "text": "In order to perform incremental deployment, the nodes in the network are first configured in a mode where packets are sent with authentication but not checked on reception. Once all the nodes in the network are configured to send authenticated packets, nodes are reconfigured to reject unauthenticated packets.",
+      "ja": "インクリメンタル展開を実行するために、ネットワーク内のノードは最初に、パケットが認証で送信されたが受信時にはチェックされないモードで設定されます。ネットワーク内のすべてのノードが認証されたパケットを送信するように構成されたら、ノードは認証されていないパケットを拒否するように再設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to perform key rotation, the new key is added to all the nodes. Once this is done, both the old and the new key are sent in all packets, and packets are accepted if they are properly signed by either of the keys. At that point, the old key is removed.",
+      "ja": "キー回転を実行するために、新しいキーがすべてのノードに追加されます。これが行われると、古いキーと新しいキーの両方がすべてのパケットで送信され、パケットはどちらのキーによって正しく署名されている場合は受け入れられます。その時点で、古いキーが削除されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to support the procedures described above, implementations of this protocol SHOULD support an interface configuration in which packets are sent authenticated but received packets are accepted without verification, and they SHOULD allow changing the set of keys associated with an interface without a restart.",
+      "ja": "上述の手順をサポートするために、このプロトコルの実装は、パケットが認証されたが確認されたパケットが検証されずに受け入れられるインタフェース構成をサポートする必要があり、それらは再起動なしでインターフェースに関連付けられたキーのセットを変更することを可能にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Packet Format",
+      "section_title": true,
+      "ja": "6. パケットフォーマット"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. MAC TLV",
+      "section_title": true,
+      "ja": "6.1. Mac TLV"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Type = 16   |    Length     |     MAC...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Fields:",
+      "ja": "田畑："
+    },
+    {
+      "indent": 3,
+      "text": "Type Set to 16 to indicate a MAC TLV.",
+      "ja": "Mac TLVを示すには、16に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Length The length of the body, in octets, exclusive of the Type and Length fields. The length depends on the MAC algorithm being used.",
+      "ja": "体の長さは、オクテットで、タイプフィールドと長さのフィールドを除く。長さは、使用されているMACアルゴリズムによって異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "MAC The body contains the MAC of the packet, computed as described in Section 4.1.",
+      "ja": "Mac本体には、セクション4.1で説明されているように計算されたパケットのMacが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "This TLV is allowed in the packet trailer (see Section 4.2 of [RFC8966]) and MUST be ignored if it is found in the packet body.",
+      "ja": "このTLVはPacket Trailerで許可されています（[RFC8966]のセクション4.2を参照）、パケット本体に見つかった場合は無視する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. PC TLV",
+      "section_title": true,
+      "ja": "6.2. PC TLV"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Type = 17   |    Length     |             PC                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                               |            Index...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Fields:",
+      "ja": "田畑："
+    },
+    {
+      "indent": 3,
+      "text": "Type Set to 17 to indicate a PC TLV.",
+      "ja": "PC TLVを示すには、17に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Length The length of the body, in octets, exclusive of the Type and Length fields.",
+      "ja": "体の長さは、オクテットで、タイプフィールドと長さのフィールドを除く。"
+    },
+    {
+      "indent": 3,
+      "text": "PC The Packet Counter (PC), a 32-bit (4-octet) unsigned integer that is increased with every packet sent over this interface. A fresh index (as defined in Section 3.1) MUST be generated whenever the PC overflows.",
+      "ja": "PCパケットカウンタ（PC）、このインタフェースを介して送信されたパケットごとに増加する32ビット（4オクテット）の符号なし整数。PCがオーバーフローするたびに、（セクション3.1で定義されているように）フレッシュインデックスを生成する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Index The sender's Index, an opaque string of 0 to 32 octets.",
+      "ja": "送信者のインデックス、0から32オクテットの不透明な文字列。"
+    },
+    {
+      "indent": 3,
+      "text": "Indices are limited to a size of 32 octets: a node MUST NOT send a TLV with an index of size strictly larger than 32 octets, and a node MAY ignore a PC TLV with an index of length strictly larger than 32 octets. Indices of length 0 are valid: if a node has reliable stable storage and the packet counter never overflows, then only one index is necessary, and the value of length 0 is the canonical choice.",
+      "ja": "インデックスは32オクテットのサイズに制限されています。ノードは32オクテットを超えるサイズのインデックスを持つTLVを送信してはならず、ノードは32オクテットよりも長い長さのインデックスを持つPC TLVを無視することができます。長さ0のインデックスが有効です：ノードが信頼できる安定したストレージを持ち、パケットカウンタがオーバーフローしない場合は、1つのインデックスだけが必要であり、長さ0の値は正規の選択です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Challenge Request TLV",
+      "section_title": true,
+      "ja": "6.3. チャレンジリクエストTLV"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Type = 18   |    Length     |     Nonce...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Fields:",
+      "ja": "田畑："
+    },
+    {
+      "indent": 3,
+      "text": "Type Set to 18 to indicate a Challenge Request TLV.",
+      "ja": "チャレンジ要求TLVを示すために18に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Length The length of the body, in octets, exclusive of the Type and Length fields.",
+      "ja": "体の長さは、オクテットで、タイプフィールドと長さのフィールドを除く。"
+    },
+    {
+      "indent": 3,
+      "text": "Nonce The nonce uniquely identifying the challenge, an opaque string of 0 to 192 octets.",
+      "ja": "課題を一意に識別し、0~192オクテットの不透明な文字列。"
+    },
+    {
+      "indent": 3,
+      "text": "Nonces are limited to a size of 192 octets: a node MUST NOT send a Challenge Request TLV with a nonce of size strictly larger than 192 octets, and a node MAY ignore a nonce that is of size strictly larger than 192 octets. Nonces of length 0 are valid: if a node has reliable stable storage, then it may use a sequential counter for generating nonces that get encoded in the minimum number of octets required; the value 0 is then encoded as the string of length 0.",
+      "ja": "Noncesは192オクテットのサイズに制限されています。ノードは、192オクテットよりも厳密にサイズのノンサイズを厳密に大きくしてチャレンジ要求TLVを送信してはいけません。ノードは、192オクテットよりも厳密に大きいサイズのNONCEを無視することができます。長さ0のノンスが有効です。ノードが信頼できる安定したストレージを持つ場合、それは必要なオクテットの最小数で符号化されるノンスを発生させるための順次カウンタを使用することができる。その後、値0は長さ0の文字列としてエンコードされます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. Challenge Reply TLV",
+      "section_title": true,
+      "ja": "6.4. チャレンジ返信TLV"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Type = 19   |    Length     |     Nonce...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Fields:",
+      "ja": "田畑："
+    },
+    {
+      "indent": 3,
+      "text": "Type Set to 19 to indicate a Challenge Reply TLV.",
+      "ja": "チャレンジ返信TLVを示すには、19に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Length The length of the body, in octets, exclusive of the Type and Length fields.",
+      "ja": "体の長さは、オクテットで、タイプフィールドと長さのフィールドを除く。"
+    },
+    {
+      "indent": 3,
+      "text": "Nonce A copy of the nonce contained in the corresponding Challenge Request.",
+      "ja": "対応するチャレンジ要求に含まれているNonceのコピーをNONCE。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a mechanism that provides basic security properties for the Babel routing protocol. The scope of this protocol is strictly limited: it only provides authentication (we assume that routing information is not confidential), it only supports symmetric keying, and it only allows for the use of a small number of symmetric keys on every link. Deployments that need more features, e.g., confidentiality or asymmetric keying, should use a more feature-rich security mechanism such as the one described in [RFC8968].",
+      "ja": "このドキュメントは、Babelルーティングプロトコルの基本的なセキュリティプロパティを提供するメカニズムを定義します。このプロトコルの範囲は厳密に制限されています：それは認証のみを提供する（ルーティング情報が機密ではないと仮定する）、それは対称的なキーイングをサポートするだけであり、それはすべてのリンク上で少数の対称キーを使用することを可能にします。より多くの機能、例えば機密性または非対称キーイングが必要な展開は、[RFC8968]に記載されているもののようなより多くの機能豊富なセキュリティメカニズムを使用するべきである。"
+    },
+    {
+      "indent": 3,
+      "text": "This mechanism relies on two assumptions, as described in Section 1.2. First, it assumes that the MAC being used is invulnerable to forgery (Section 1.1 of [RFC6039]); at the time of writing, HMAC-SHA256, which is mandatory to implement (Section 4.1), is believed to be safe against practical attacks.",
+      "ja": "このメカニズムは、セクション1.2で説明されているように、2つの仮定に依存しています。まず、使用されているMACが偽造に乱用できます（[RFC6039]のセクション1.1）。執筆時点では、実装に必須のHMAC-SHA256が実用的な攻撃に対して安全であると考えられています。"
+    },
+    {
+      "indent": 3,
+      "text": "Second, it assumes that indices and nonces are generated uniquely over the lifetime of a key used for MAC computation (more precisely, indices must be unique for a given (key, source) pair, and nonces must be unique for a given (key, source, destination) triple). This property can be satisfied either by using a cryptographically secure random number generator to generate indices and nonces that contain enough entropy (64-bit values are believed to be large enough for all practical applications) or by using a reliably monotonic hardware clock. If uniqueness cannot be guaranteed (e.g., because a hardware clock has been reset), then rekeying is necessary.",
+      "ja": "第二に、インデックスとノンスがMACの計算に使用される鍵の寿命を一意に生成されると仮定していると仮定します（より正確には、インデックスは特定の（キー、ソース）ペアに対して固有でなければならない、そしてノンスは与えられた（キー、ソース、宛先）トリプル）。このプロパティは、暗号的に安全な乱数ジェネレータを使用して、十分なエントロピーを含むインデックスやノンスを生成する（64ビット値がすべての実用的なアプリケーションに十分大きいと考えられている）、または確実な単調ハードウェアクロックを使用することによって満たすことができます。一意性が保証できない場合（例えば、ハードウェアクロックがリセットされているため）、REKKEYが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "The expiry mechanism mandated in Section 4.4 is required to prevent an attacker from delaying an authentic packet by an unbounded amount of time. If an attacker is able to delay the delivery of a packet (e.g., because it is located at a Layer 2 switch), then the packet will be accepted as long as the corresponding (Index, PC) pair is present at the receiver. If the attacker is able to cause the (Index, PC) pair to persist for arbitrary amounts of time (e.g., by repeatedly causing failed challenges), then it is able to delay the packet by arbitrary amounts of time, even after the sender has left the network, which could allow it to redirect or blackhole traffic to destinations previously advertised by the sender.",
+      "ja": "セクション4.4で義務付けられている有効期限は、攻撃者が認証機関のパケットを無制限の時間だけ遅らせるのを防ぐために必要です。攻撃者がパケットの配信を遅らせることができる場合（例えば、それがレイヤ2スイッチにあるため）、対応する（インデックス、PC）ペアが受信機に存在する限り、パケットは受け入れられる。攻撃者が（例えば、Index、PC）ペアを任意の時間に永続化させることができる場合（たとえば、失敗した課題を繰り返し発生させることによって）、送信者が持っている後でさえ、任意の量の時間でパケットを遅延させることができる。ネットワークを離れ、それはそれが以前に送信者によって宣伝されている宛先へのリダイレクトまたはブラックホールトラフィックを可能にする可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol exposes large numbers of packets and their MACs to an attacker that is able to capture packets; it is therefore vulnerable to brute-force attacks. Keys must be chosen in a manner that makes them difficult to guess. Ideally, they should have a length of 32 octets (both for HMAC-SHA256 and BLAKE2s), and be chosen randomly. If, for some reason, it is necessary to derive keys from a human-readable passphrase, it is recommended to use a key derivation function that hampers dictionary attacks, such as PBKDF2 [RFC8018], bcrypt [BCRYPT], or scrypt [RFC7914]. In that case, only the derived keys should be communicated to the routers; the original passphrase itself should be kept on the host used to perform the key generation (e.g., an administrator's secure laptop computer).",
+      "ja": "このプロトコルは、パケットをキャプチャすることができる攻撃者に多数のパケットとそれらのMACを公開します。したがって、ブルートフォース攻撃に対して脆弱です。鍵はそれらを推測するのが難しい方法で選ばなければなりません。理想的には、それらは32オクテット（HMAC-SHA256およびBlake2Sの両方）を持ち、ランダムに選択されるべきです。何らかの理由で、人間が読めるパスフレーズからのキーを導き出す必要がある場合は、PBKDF2 [RFC8018]、BCRYPT [BCRYPT]、またはScrypt [RFC7914]などの辞書攻撃を妨げるキー派生機能を使用することをお勧めします。。その場合、派生キーのみがルータに伝達されるべきです。元のパスフレーズ自体は、鍵生成を実行するために使用されるホスト（例えば、管理者の安全なラップトップコンピュータ）を維持する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "While it is probably not possible to be immune against denial of service (DoS) attacks in general, this protocol includes a number of mechanisms designed to mitigate such attacks. In particular, reception of a packet with no correct MAC creates no local Babel state (Section 4.3). Reception of a replayed packet with correct MAC, on the other hand, causes a challenge to be sent; this is mitigated somewhat by requiring that challenges be rate limited (Section 4.3.1.1).",
+      "ja": "一般的にサービス拒否（DOS）攻撃に対して免疫させることはおそらく不可能であるが、このプロトコルにはそのような攻撃を軽減するために設計されたいくつかのメカニズムが含まれています。特に、正しいMacのないパケットの受信は、ローカルBabel状態を作成しません（セクション4.3）。一方、正しいMACを使用した再生パケットの受信は、チャレンジを送信させます。これは、その課題がRait Limitedであることを要求することによってやや軽減されます（セクション4.3.1.1）。"
+    },
+    {
+      "indent": 3,
+      "text": "Receiving a replayed packet with an obsolete index causes an entry to be created in the neighbour table, which, at first sight, makes the protocol susceptible to resource exhaustion attacks (similarly to the familiar \"TCP SYN Flooding\" attack [RFC4987]). However, the MAC computation includes the sender address (Section 4.1), and thus the amount of storage that an attacker can force a node to consume is limited by the number of distinct source addresses used with a single MAC key (see also Section 4 of [RFC8966], which mandates that the source address is a link-local IPv6 address or a local IPv4 address).",
+      "ja": "廃止された索引付きの再生パケットを受信すると、エントリが隣接テーブルに作成されます。これは、最初の視点で、プロトコルをリソースの枯渇攻撃の影響を受けやすくします（おなじみの「TCP SYNフラッディングと同様に」攻撃[RFC4987]）。ただし、MACの計算は送信者アドレス（セクション4.1）を含み、したがって、攻撃者がノードを消費するように強制することができるストレージの量は、単一のMACキーで使用される異なる送信元アドレスの数によって制限されます（のセクション4も参照）。[RFC8966]。これは、送信元アドレスがリンクローカルIPv6アドレスまたはローカルIPv4アドレスであることを義務付けます）。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to make this kind of resource exhaustion attacks less effective, implementations may use a separate table of uncompleted challenges that is separate from the neighbour table used by the core protocol (the data structures described in Section 3.2 of [RFC8966] are conceptual, and any data structure that yields the same result may be used). Implementers might also consider using the fact that the nonces included in Challenge Requests and Replies can be fairly large (up to 192 octets), which should in principle allow encoding the per-challenge state as a secure \"cookie\" within the nonce itself; note, however, that any such scheme will need to prevent cookie replay.",
+      "ja": "この種のリソースの枯渇攻撃を効果的ではないようにするために、実装はコアプロトコルによって使用される隣接テーブルとは別の未完成の課題の別のテーブルを使用することができます（[RFC8966のセクション3.2で説明されているデータ構造]は概念的なもので、同じ結果をもたらす任意のデータ構造を使用することができる。また、チャレンジ要求と返信に含まれるノンスがかなり大きくなる可能性があるという事実を使用すると、原則として、チャレンジごとの状態を無限の「クッキー」としてエンコードすることができます。ただし、そのようなスキームはクッキーの再生を防ぐ必要があることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has allocated the following values in the Babel TLV Types registry:",
+      "ja": "IANAはBabel TLV Typesレジストリに次の値を割り当てました。"
+    },
+    {
+      "indent": 17,
+      "text": "+======+===================+===========+\n| Type | Name              | Reference |\n+======+===================+===========+\n| 16   | MAC               | RFC 8967  |\n+------+-------------------+-----------+\n| 17   | PC                | RFC 8967  |\n+------+-------------------+-----------+\n| 18   | Challenge Request | RFC 8967  |\n+------+-------------------+-----------+\n| 19   | Challenge Reply   | RFC 8967  |\n+------+-------------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Table 1",
+      "ja": "表1"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2104] Krawczyk, H., Bellare, M., and R. Canetti, \"HMAC: Keyed-Hashing for Message Authentication\", RFC 2104, DOI 10.17487/RFC2104, February 1997, <https://www.rfc-editor.org/info/rfc2104>.",
+      "ja": "[RFC2104] Krawczyk、H.、Bellare、M.、およびR. Canetti、 \"HMAC：メッセージ認証用keyed-hashing\"、RFC 2104、DOI 10.17487 / RFC2104、1997年2月、<https：//www.rfc-編集者.org / info / rfc2104>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCSで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6234] Eastlake 3rd, D. and T. Hansen, \"US Secure Hash Algorithms (SHA and SHA-based HMAC and HKDF)\", RFC 6234, DOI 10.17487/RFC6234, May 2011, <https://www.rfc-editor.org/info/rfc6234>.",
+      "ja": "[RFC6234]イーストレイク3RD、D.およびT.Hansen、「米国セキュアハッシュアルゴリズム（SHAおよびSHAベースのHMACおよびHKDF）」、RFC 6234、DOI 10.17487 / RFC6234、2011年5月、<https：///www.rfc-editor.org/info/rfc6234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7693] Saarinen, M-J., Ed. and J-P. Aumasson, \"The BLAKE2 Cryptographic Hash and Message Authentication Code (MAC)\", RFC 7693, DOI 10.17487/RFC7693, November 2015, <https://www.rfc-editor.org/info/rfc7693>.",
+      "ja": "[RFC7693] Saarinen、M-J。、ED。そしてJ-P。Aumasson、「Blake2暗号化ハッシュとメッセージ認証コード（Mac）」、RFC 7693、DOI 10.17487 / RFC7693、2015年11月、<https：//www.rfc-editor.org/info/rfc7693>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B、「RFC 2119キーワードの大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8966] Chroboczek, J. and D. Schinazi, \"The Babel Routing Protocol\", RFC 8966, DOI 10.17487/RFC8966, January 2021, <https://www.rfc-editor.org/info/rfc8966>.",
+      "ja": "[RFC8966] Chroboczek、J.およびD.Schinazi、「The Babel Routing Protocol」、RFC 8966、DOI 10.17487 / RFC8966、2021年1月、<https：//www.rfc-editor.org/info/rfc8966>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informational References",
+      "section_title": true,
+      "ja": "9.2. 情報参考文献"
+    },
+    {
+      "indent": 3,
+      "text": "[BCRYPT] Niels, P. and D. Mazières, \"A Future-Adaptable Password Scheme\", Proceedings of the FREENIX Track: 1999 USENIX Annual Technical Conference, June 1999.",
+      "ja": "[BCRYPT] Niels、P.およびD.Mazières、FreeNIXトラックの議事録：1999年6月のUsenix Annual Conference、1999年6月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4086] Eastlake 3rd, D., Schiller, J., and S. Crocker, \"Randomness Requirements for Security\", BCP 106, RFC 4086, DOI 10.17487/RFC4086, June 2005, <https://www.rfc-editor.org/info/rfc4086>.",
+      "ja": "[RFC4086]イーストレイク3RD、D.、Schiller、J.、S. Crocker、「セキュリティのためのランダム性要件」、BCP 106、RFC 4086、DOI 10.17487 / RFC4086、2005年6月、<https：//www.rfc-編集者.org / info / rfc4086>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4987] Eddy, W., \"TCP SYN Flooding Attacks and Common Mitigations\", RFC 4987, DOI 10.17487/RFC4987, August 2007, <https://www.rfc-editor.org/info/rfc4987>.",
+      "ja": "[RFC4987] EDDY、W。、「TCP SYNフラッディング攻撃および一般的な軽減」、RFC 4987、DOI 10.17487 / RFC4987、2007年8月、<https：//www.rfc-editor.org/info/rfc4987>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6039] Manral, V., Bhatia, M., Jaeggli, J., and R. White, \"Issues with Existing Cryptographic Protection Methods for Routing Protocols\", RFC 6039, DOI 10.17487/RFC6039, October 2010, <https://www.rfc-editor.org/info/rfc6039>.",
+      "ja": "[RFC6039]マネール、V.、Bhatia、M.、Jaeggli、J.、およびR.white、「ルーティングプロトコルのための既存の暗号保護方法に関する問題」、RFC 6039、DOI 10.17487 / RFC6039、2010年10月、<https：//www.rfc-editor.org/info/rfc6039>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7298] Ovsienko, D., \"Babel Hashed Message Authentication Code (HMAC) Cryptographic Authentication\", RFC 7298, DOI 10.17487/RFC7298, July 2014, <https://www.rfc-editor.org/info/rfc7298>.",
+      "ja": "[RFC7298] Ovsienko、D.、 \"Babel Hasedメッセージ認証コード（HMAC）暗号認証\"、RFC 7298、DOI 10.17487 / RFC7298、2014年7月、<https://www.rfc-editor.org/info/rfc7298>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7914] Percival, C. and S. Josefsson, \"The scrypt Password-Based Key Derivation Function\", RFC 7914, DOI 10.17487/RFC7914, August 2016, <https://www.rfc-editor.org/info/rfc7914>.",
+      "ja": "[RFC7914]パーシバー、C、S.Josefsson、「Scryptパスワードベースのキー派生機能」、RFC 7914、DOI 10.17487 / RFC7914、2016年8月、<https://www.rfc-editor.org/info/rfc7914>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8018] Moriarty, K., Ed., Kaliski, B., and A. Rusch, \"PKCS #5: Password-Based Cryptography Specification Version 2.1\", RFC 8018, DOI 10.17487/RFC8018, January 2017, <https://www.rfc-editor.org/info/rfc8018>.",
+      "ja": "[RFC8018] MoriAlty、K。、ED。、Kaliski、B.、およびA.RUSCH、「PKCS＃5：パスワードベースの暗号仕様バージョン2.1」、RFC 8018、DOI 10.17487 / RFC8018、2017年1月、<https：//www.rfc-editor.org/info/rfc8018>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8968] Décimo, A., Schinazi, D., and J. Chroboczek, \"Babel Routing Protocol over Datagram Transport Layer Security\", RFC 8968, DOI 10.17487/RFC8968, January 2021, <https://www.rfc-editor.org/info/rfc8968>.",
+      "ja": "[RFC8968]Décimo、A.、Schinazi、D.、およびJ.Chroboczek、「データグラムトランスポート層のセキュリティ上の「Babelルーティングプロトコル」、RFC 8968、DOI 10.17487 / RFC8968、2021年1月、<https：//www.rfc-編集者.org / info / rfc8968>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The protocol described in this document is based on the original HMAC protocol defined by Denis Ovsienko [RFC7298]. The use of a pseudo-header was suggested by David Schinazi. The use of an index to avoid replay was suggested by Markus Stenberg. The authors are also indebted to Antonin Décimo, Donald Eastlake, Toke Høiland-Jørgensen, Florian Horn, Benjamin Kaduk, Dave Taht, and Martin Vigoureux.",
+      "ja": "この文書に記載されているプロトコルは、Denis Ovsienko [RFC7298]で定義されている元のHMACプロトコルに基づいています。擬似ヘッダーの使用をDavid Schinaziによって提案した。再生を避けるための指標の使用は、Markus Stenbergによって示唆された。著者らはまた、AntoninDécimo、Donald Eastlake、TokeHøiland-Jørgensen、Florian Horn、Benjamin Kaduk、Dave Taht、Martin Vigoueuxにも留学いただけます。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Clara Dô IRIF, University of Paris-Diderot 75205 Paris CEDEX 13 France",
+      "ja": "クララ・ド・イリフ、パリ大学75205 Paris Cedex 13フランス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: clarado_perso@yahoo.fr",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Weronika Kolodziejak IRIF, University of Paris-Diderot 75205 Paris CEDEX 13 France",
+      "ja": "ヴェロニカkolodziejak iRIF、パリ大学 - ドイドロット75205 Paris Cedex 13フランス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: weronika.kolodziejak@gmail.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Juliusz Chroboczek IRIF, University of Paris-Diderot Case 7014 75205 Paris CEDEX 13 France",
+      "ja": "Juliusz Chroboczek IRIF、パリ大学ケース7014 75205 Paris Cedex 13フランス"
+    },
+    {
+      "indent": 3,
+      "text": "Email: jch@irif.fr",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
