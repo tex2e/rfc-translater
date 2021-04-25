@@ -1,0 +1,1434 @@
+{
+  "title": {
+    "text": "RFC 8985 - The RACK-TLP Loss Detection Algorithm for TCP",
+    "ja": "RFC 8985 - TCPのためのラック-TLP損失検出アルゴリズム"
+  },
+  "number": 8985,
+  "created_at": "2021-04-20 13:00:06.016957+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                          Y. Cheng\nRequest for Comments: 8985                                   N. Cardwell\nCategory: Standards Track                                   N. Dukkipati\nISSN: 2070-1721                                                   P. Jha\n                                                            Google, Inc.\n                                                           February 2021",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 13,
+      "text": "The RACK-TLP Loss Detection Algorithm for TCP",
+      "ja": "TCPのためのラック-TLP損失検出アルゴリズム"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document presents the RACK-TLP loss detection algorithm for TCP. RACK-TLP uses per-segment transmit timestamps and selective acknowledgments (SACKs) and has two parts. Recent Acknowledgment (RACK) starts fast recovery quickly using time-based inferences derived from acknowledgment (ACK) feedback, and Tail Loss Probe (TLP) leverages RACK and sends a probe packet to trigger ACK feedback to avoid retransmission timeout (RTO) events. Compared to the widely used duplicate acknowledgment (DupAck) threshold approach, RACK-TLP detects losses more efficiently when there are application-limited flights of data, lost retransmissions, or data packet reordering events. It is intended to be an alternative to the DupAck threshold approach.",
+      "ja": "この文書はTCPのためのラック-TLP損失検出アルゴリズムを示しています。RACK-TLPは、セグメントごとの送信タイムスタンプと選択認識（袋）を使用し、2つの部分を持ちます。最近の確認応答（RACK）は、確認応答（ACK）フィードバックから導出された時間ベースの推論を使用して高速回復を開始し、テールロスプローブ（TLP）はラックを活用し、ACKフィードバックをトリガして再送タイムアウト（RTO）イベントを回避するためにプローブパケットを送信します。広く使用されている重複確認応答（DUPACK）しきい値アプローチと比較して、RACK-TLPは、データのアプリケーションが限られている場合、再送信の失われたフライト、またはデータパケットの並べ替えイベントがある場合に、より効率的に損失を検出します。それはDUPACKしきい値アプローチに代わるものであることを意図しています。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それは公開レビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc8985.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法については、https：//www.rfc-editor.org/info/rfc8985で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2021 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2021 IETF信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Background\n  1.2.  Motivation\n2.  Terminology\n3.  RACK-TLP High-Level Design\n  3.1.  RACK: Time-Based Loss Inferences from ACKs\n  3.2.  TLP: Sending One Segment to Probe Losses Quickly with RACK\n  3.3.  RACK-TLP: Reordering Resilience with a Time Threshold\n    3.3.1.  Reordering Design Rationale\n    3.3.2.  Reordering Window Adaptation\n  3.4.  An Example of RACK-TLP in Action: Fast Recovery\n  3.5.  An Example of RACK-TLP in Action: RTO\n  3.6.  Design Summary\n4.  Requirements\n5.  Definitions\n  5.1.  Terms\n  5.2.  Per-Segment Variables\n  5.3.  Per-Connection Variables\n  5.4.  Per-Connection Timers\n6.  RACK Algorithm Details\n  6.1.  Upon Transmitting a Data Segment\n  6.2.  Upon Receiving an ACK\n  6.3.  Upon RTO Expiration\n7.  TLP Algorithm Details\n  7.1.  Initializing State\n  7.2.  Scheduling a Loss Probe\n  7.3.  Sending a Loss Probe upon PTO Expiration\n  7.4.  Detecting Losses Using the ACK of the Loss Probe\n    7.4.1.  General Case: Detecting Packet Losses Using RACK\n    7.4.2.  Special Case: Detecting a Single Loss Repaired by the\n            Loss Probe\n8.  Managing RACK-TLP Timers\n9.  Discussion\n  9.1.  Advantages and Disadvantages\n  9.2.  Relationships with Other Loss Recovery Algorithms\n  9.3.  Interaction with Congestion Control\n  9.4.  TLP Recovery Detection with Delayed ACKs\n  9.5.  RACK-TLP for Other Transport Protocols\n10. Security Considerations\n11. IANA Considerations\n12. References\n  12.1.  Normative References\n  12.2.  Informative References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This document presents RACK-TLP, a TCP loss detection algorithm that improves upon the widely implemented duplicate acknowledgment (DupAck) counting approach described in [RFC5681] and [RFC6675]; it is RECOMMENDED as an alternative to that earlier approach. RACK-TLP has two parts. Recent Acknowledgment (RACK) detects losses quickly using time-based inferences derived from ACK feedback. Tail Loss Probe (TLP) triggers ACK feedback by quickly sending a probe segment to avoid retransmission timeout (RTO) events.",
+      "ja": "この文書は、[RFC5681]と[RFC6675]に記載されている広く実施された重複確認応答（DUPACK）カウントアプローチを向上させるTCP損失検出アルゴリズムであるRACK-TLPを示しています。それは以前のアプローチの代わりに推奨されます。Rack-TLPには2つの部分があります。最近の確認応答（ラック）ACKフィードバックから導出された時間ベースの推論を使用して急速に損失を検出します。テールロスプローブ（TLP）は、再送信タイムアウト（RTO）イベントを避けるためにプローブセグメントを迅速に送信することによってACKフィードバックをトリガします。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Background",
+      "section_title": true,
+      "ja": "1.1. バックグラウンド"
+    },
+    {
+      "indent": 3,
+      "text": "In traditional TCP loss recovery algorithms [RFC5681] [RFC6675], a sender starts fast recovery when the number of DupAcks received reaches a threshold (DupThresh) that defaults to 3 (this approach is referred to as \"DupAck counting\" in the rest of the document). The sender also halves the congestion window during the recovery. The rationale behind the partial window reduction is that congestion does not seem severe since ACK clocking is still maintained. The time elapsed in fast recovery can be just one round trip, e.g., if the sender uses SACK-based recovery [RFC6675] and the number of lost segments is small.",
+      "ja": "従来のTCP損失回復アルゴリズム[RFC5681] [RFC6675]では、受信したDUPACKSの数が3にデフォルトのしきい値（Dupthresh）に達すると、送信者は高速回復を開始します（このアプローチは、その残りの部分では「Dupthresh」と呼ばれます。資料）。送信者はリカバリ中に輻輳ウィンドウを半分にします。部分的な窓の減少の背後にある理論的根拠は、ACKのクロッキングが依然として維持されているため、輻輳が深刻ではないということです。高速回復で経過した時間は、たった1回のラウンドトリップであり得る。送信者がSACKベースのリカバリ[RFC6675]を使用し、失われたセグメントの数が少ない場合には、たった1回のラウンドトリップであり得る。"
+    },
+    {
+      "indent": 3,
+      "text": "If fast recovery is not triggered or is triggered but fails to repair all the losses, then the sender resorts to RTO recovery. The RTO timer interval is conservatively the smoothed RTT (SRTT) plus four times the RTT variation, and is lower bounded to 1 second [RFC6298]. Upon RTO timer expiration, the sender retransmits the first unacknowledged segment and resets the congestion window to the loss window value (by default, 1 full-sized segment [RFC5681]). The rationale behind the congestion window reset is that an entire flight of data and the ACK clock were lost, so this deserves a cautious response. The sender then retransmits the rest of the data following the slow start algorithm [RFC5681]. The time elapsed in RTO recovery is one RTO interval plus the number of round trips needed to repair all the losses.",
+      "ja": "迅速な回復が起動されていないかトリガーされているが、すべての損失を修復できない場合は、送信者はRTOの回復にリゾートしています。RTOタイマ間隔は、控えめなRTT（SRTT）とRTTのバリエーションの4倍で、1秒[RFC6298]に下限されています。RTOタイマーの有効期限が切れると、送信者は最初の未確認セグメントを再送信し、輻輳ウィンドウを損失ウィンドウの値にリセットします（デフォルトでは、1フルサイズのセグメント[RFC5681]）。輻輳ウィンドウのリセットの背後にある根拠は、データの全体のフライトとACKクロックが失われたため、これは慎重な対応に値する。その後、送信者はスロースタートアルゴリズム[RFC5681]に続くデータの残りの部分を再送信します。RTO回復で経過した時間は1つのRTO間隔と、すべての損失を修復するのに必要な往復の数を加えたものです。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Motivation",
+      "section_title": true,
+      "ja": "1.2. 動機"
+    },
+    {
+      "indent": 3,
+      "text": "Fast recovery is the preferred form of loss recovery because it can potentially recover all losses in the timescale of a single round trip, with only a fractional congestion window reduction. RTO recovery and congestion window reset should ideally be the last resort and should ideally be used only when the entire flight is lost. However, in addition to losing an entire flight of data, the following situations can unnecessarily resort to RTO recovery with traditional TCP loss recovery algorithms [RFC5681] [RFC6675]:",
+      "ja": "迅速な回復は、単一の往復窓の減少のみで、単一の往復のタイムスケールのすべての損失を回復する可能性があるため、損失回復の好ましい形式です。RTOの回復と輻輳ウィンドウのリセットは理想的には最後のリゾートであり、理想的にはフライト全体が失われたときにのみ使用されるべきです。ただし、データのフライト全体を失うことに加えて、従来のTCP損失回復アルゴリズム[RFC5681] [RFC6675]では、次のような状況が不必要にRTO回復にリカバリーをリセットできます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Packet drops for short flows or at the end of an application data flight. When the sender is limited by the application (e.g., structured request/response traffic), segments lost at the end of the application data transfer often can only be recovered by RTO. Consider an example where only the last segment in a flight of 100 segments is lost. Lacking any DupAck, the sender RTO expires, reduces the congestion window to 1, and raises the congestion window to just 2 after the loss repair is acknowledged. In contrast, any single segment loss occurring between the first and the 97th segment would result in fast recovery, which would only cut the window in half.",
+      "ja": "1. パケットは短いフローまたはアプリケーションデータのフライトの終わりにドロップします。送信者がアプリケーション（例えば、構造化要求/応答トラフィック）によって制限されると、アプリケーションデータ転送の終わりに失われたセグメントはしばしばRTOによってのみ回復することができる。100個のセグメントの飛行中の最後のセグメントのみが失われた例を考えてみましょう。DUPACKを欠いている、送信者RTOは期限切れになり、輻輳ウィンドウを1に縮小し、損失修復が確認された後、輻輳ウィンドウをわずか2に上げます。対照的に、最初のセグメントと97番目のセグメントの間に発生する単一のセグメント損失は、迅速な回復をもたらし、それは窓を半分にしか切断しません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Lost retransmissions. Heavy congestion or traffic policers can cause retransmissions to be lost. Lost retransmissions cause a resort to RTO recovery since DupAck counting does not detect the loss of the retransmissions. Then the slow start after RTO recovery could cause burst losses again, which severely degrades performance [POLICER16].",
+      "ja": "2. 再送信を失った。渋滞や交通渋滞者は再送信を失うことがあります。DUPACK CUNTINGは再送信の損失を検出しないため、再送信を失った原因となります。その後、RTO回復後の遅い開始は再び破裂損失を引き起こす可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Packet reordering. In this document, \"reordering\" refers to the events where segments are delivered at the TCP receiver in a chronological order different from their chronological transmission order. Link-layer protocols (e.g., 802.11 block ACK), link bonding, or routers' internal load balancing (e.g., ECMP) can deliver TCP segments out of order. The degree of such reordering is usually within the order of the path round-trip time. If the reordering degree is beyond DupThresh, DupAck counting can cause a spurious fast recovery and unnecessary congestion window reduction. To mitigate the issue, Non-Congestion Robustness (NCR) for TCP [RFC4653] increases the DupThresh from the current fixed value of three duplicate ACKs [RFC5681] to approximate a congestion window of data having left the network.",
+      "ja": "3. パケットの並べ替えこの文書では、「並べ替え」とは、セグメントがTCP受信機でそれらの時系列の伝送順序とは異なる時系列で配信されるイベントを指す。リンク層プロトコル（例えば、802.11ブロックACK）、リンクボンディング、またはルータの内部負荷分散（例えば、ECMP）は、TCPセグメントを順不同で配信することができる。そのような並べ替えの程度は通常経路往復時間の順にあります。並べ替え度がDUPTHRESHを超えると、DUPACKカウンタはスプリアスの速い回復と不要な輻輳ウィンドウの削減を引き起こす可能性があります。問題を軽減するために、TCP [RFC4653]の非輻輳ロバストネス（NCR）は、ネットワークを離れたデータの輻輳ウィンドウを近似するために、3重複ACKS [RFC5681]の現在の固定値からDUPTHRESHを増加させます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. RACK-TLP High-Level Design",
+      "section_title": true,
+      "ja": "3. ラック-TLPハイレベルデザイン"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP allows senders to recover losses more effectively in all three scenarios described in the previous section. There are two design principles behind RACK-TLP. The first principle is to detect losses via ACK events as much as possible, to repair losses at round-trip timescales. The second principle is to gently probe the network to solicit additional ACK feedback, to avoid RTO expiration and subsequent congestion window reset. At a high level, the two principles are implemented in RACK and TLP, respectively.",
+      "ja": "RACK-TLPにより、送信者は前のセクションで説明されている3つのシナリオすべてでより効果的に損失を回復できます。Rack-TLPの後ろに2つの設計原理があります。最初の原則は、ACKイベントを介した損失を可能な限り検出し、ラウンドトリップタイムスケールでの損失を修復することです。第2の原則は、RTOの有効期限とそれに続く輻輳ウィンドウのリセットを避けるために、追加のACKフィードバックを求めるためにネットワークを緩やかにプローブすることです。高レベルでは、2つの原理はそれぞれラックとTLPに実装されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. RACK: Time-Based Loss Inferences from ACKs",
+      "section_title": true,
+      "ja": "3.1. ラック：ACKSからの時間ベースの損失推論"
+    },
+    {
+      "indent": 3,
+      "text": "The rationale behind RACK is that if a segment is delivered out of order, then the segments sent chronologically before that were either lost or reordered. This concept is not fundamentally different from those described in [RFC5681], [RFC6675], or [FACK]. RACK's key innovation is using per-segment transmission timestamps and widely deployed SACK [RFC2018] options to conduct time-based inferences instead of inferring losses by counting ACKs or SACKed sequences. Time-based inferences are more robust than DupAck counting approaches because they do not depend on flight size and thus are effective for application-limited traffic.",
+      "ja": "ラックの後ろの根拠は、セグメントが順序から配信されている場合、その前に年代順に送信されたセグメントが紛失または並べ替えられたことです。この概念は、[RFC5681]、[RFC6675]、または[FACK]に記載されているものとは根本的に異なりません。ラックの主要革新は、ACKSまたはSACKEDシーケンスをカウントすることによって損失を推測するのではなく、損失を推測するのではなく、時間ベースの推論を実行するために、セグメントごとの送信タイムスタンプと広く展開されたSACK [RFC2018]オプションを使用しています。時間ベースの推論は、フライトサイズに依存しないため、アプリケーション制限トラフィックに効果的であるため、デュパックカウントアプローチよりも堅牢です。"
+    },
+    {
+      "indent": 3,
+      "text": "Conceptually, RACK keeps a virtual timer for every data segment sent (including retransmissions). Each timer expires dynamically based on the latest RTT measurements plus an additional delay budget to accommodate potential packet reordering (called the \"reordering window\"). When a segment's timer expires, RACK marks the corresponding segment as lost for retransmission.",
+      "ja": "概念的には、ラックは送信されたすべてのデータセグメント（再送信を含む）に対して仮想タイマーを保持します。各タイマーは、最新のRTT測定値と潜在的なパケット並べ替えに対応するための追加の遅延予算に基づいて動的に期限切れになります（「並べ替えウィンドウ」と呼ばれます）。セグメントのタイマーが期限切れになると、RACKは対応するセグメントを再送信のために失われたようにマークします。"
+    },
+    {
+      "indent": 3,
+      "text": "In reality, as an algorithm, RACK does not arm a timer for every segment sent because it's not necessary. Instead, the sender records the most recent transmission time of every data segment sent, including retransmissions. For each ACK received, the sender calculates the latest RTT measurement (if eligible) and adjusts the expiration time of every segment sent but not yet delivered. If a segment has expired, RACK marks it as lost.",
+      "ja": "実際には、アルゴリズムとして、ラックは必要ではないため、送信されたすべてのセグメントに対してタイマーを凌駕しません。代わりに、送信者は、再送信を含む、送信されたすべてのデータセグメントの最新の送信時間を記録します。受信した各ACKに対して、送信者は最新のRTT測定（適格）を計算し、送信されたすべてのセグメントの有効期限を調整しますが、まだ配信されていません。セグメントが期限切れになっている場合、ラックはそれを失くらとしてマークします。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the time-based logic of RACK applies equally to retransmissions and original transmissions, it can detect lost retransmissions as well. If a segment has been retransmitted but its most recent (re)transmission timestamp has expired, then, after a reordering window, it's marked as lost.",
+      "ja": "ラックの時間ベースのロジックは再送信および元の送信に等しく適用されるので、それは失われた再送信も検出することができる。セグメントが再送信されているが、最新の（RE）送信タイムスタンプが期限切れになった場合、並べ替えウィンドウの後に失われたとマークされている。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. TLP: Sending One Segment to Probe Losses Quickly with RACK",
+      "section_title": true,
+      "ja": "3.2. TLP：ラックですぐに損失を損失にするために1つのセグメントを送信する"
+    },
+    {
+      "indent": 3,
+      "text": "RACK infers losses from ACK feedback; however, in some cases, ACKs are sparse, particularly when the inflight is small or when the losses are high. In some challenging cases, the last few segments in a flight are lost. With the operations described in [RFC5681] or [RFC6675], the sender's RTO would expire and reset the congestion window when, in reality, most of the flight has been delivered.",
+      "ja": "ラックはACKフィードバックからの損失を抑制します。しかしながら、場合によっては、特にインフレータが小さい場合、または損失が高い場合には、ACKはスパースである。いくつかの挑戦的な場合には、飛行中の最後の数のセグメントが失われます。[RFC5681]または[RFC6675]に記載されている操作で、送信者のRTOは、実際には、ほとんどのフライトが配信されたときに輻輳ウィンドウを期限切れにしてリセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "Consider an example where a sender with a large congestion window transmits 100 new data segments after an application write and only the last three segments are lost. Without RACK-TLP, the RTO expires, the sender retransmits the first unacknowledged segment, and the congestion window slow starts from 1. After all the retransmits are acknowledged, the congestion window is increased to 4. The total delivery time for this application transfer is three RTTs plus one RTO, a steep cost given that only a tiny fraction of the flight was lost. If instead the losses had occurred three segments sooner in the flight, then fast recovery would have recovered all losses within one round trip and would have avoided resetting the congestion window.",
+      "ja": "大きな輻輳ウィンドウを持つ送信者がアプリケーションの書き込み後に100個の新しいデータセグメントを送信し、最後の3つのセグメントのみが失われる例を検討してください。RTOが期限切れになると、送信者は最初の未確認のセグメントを再送信し、輻輳ウィンドウが遅くなります。すべての再送信が確認された後、輻輳ウィンドウは4に増えます。3つのRTTと1つのRTO、飛行のわずかな割合だけが失われたことを考える急な費用です。代わりに、損失が早く3つのセグメントが発生した場合、高速回復は1回のラウンドトリップ内のすべての損失を回復し、輻輳ウィンドウのリセットを回避しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Fast recovery would be preferable in such scenarios; TLP is designed to trigger the feedback RACK needed to enable that. After the last (100th) segment was originally sent, TLP sends the next available (new) segment or retransmits the last (highest-sequenced) segment in two round trips to probe the network, hence the name \"Tail Loss Probe\". The successful delivery of the probe would solicit an ACK. RACK uses this ACK to detect that the 98th and 99th segments were lost, trigger fast recovery, and retransmit both successfully. The total recovery time is four RTTs, and the congestion window is only partially reduced instead of being fully reset. If the probe was also lost, then the sender would invoke RTO recovery, resetting the congestion window.",
+      "ja": "そのようなシナリオにおいて、高速回復は好ましいでしょう。TLPは、それを有効にするのに必要なフィードバックラックをトリガーするように設計されています。最後の（100番目の）セグメントがもともと送信された後、TLPは次に利用可能な（新規）セグメントを送信し、またはネットワークを探すために2つのラウンドトリップで最後の（最高シーケンスされた）セグメントを再送信し、それ故に「テールロスプローブ」という名前。プローブの配達が成功するとACKを求めることができます。ラックはこのACKを使用して98番目のセグメントと99番目のセグメントが失われ、高速回復をトリガし、再送信を正常に検出します。総回復時間は4つのRTTで、輻輳ウィンドウは完全にリセットされるのではなく部分的にのみ減少します。プローブも失われた場合、送信者はRTOの回復を呼び出し、輻輳ウィンドウをリセットします。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. RACK-TLP: Reordering Resilience with a Time Threshold",
+      "section_title": true,
+      "ja": "3.3. RACK-TLP：タイムスレッショルドで回復力を並べ替える"
+    },
+    {
+      "indent": 0,
+      "text": "3.3.1. Reordering Design Rationale",
+      "section_title": true,
+      "ja": "3.3.1. 並べ替えデザイン根拠の根拠"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving an ACK indicating a SACKed segment, a sender cannot tell immediately whether that was a result of reordering or loss. It can only distinguish between the two in hindsight if the missing sequence ranges are filled in later without retransmission. Thus, a loss detection algorithm needs to budget some wait time -- a reordering window -- to try to disambiguate packet reordering from packet loss.",
+      "ja": "梱包されたセグメントを示すACKを受信すると、送信者はそれが並べ替えまたは損失の結果であったかどうかはすぐにわかりません。欠けているシーケンス範囲が後で再送信されずに埋められている場合、後に2つの間で2つのみを区別することができます。したがって、損失検出アルゴリズムはいくつかの待ち時間を予算する必要があります - 並べ替えウィンドウ - パケット損失からパケット並べ替えを解消しようとします。"
+    },
+    {
+      "indent": 3,
+      "text": "The reordering window in the DupAck counting approach is implicitly defined as the elapsed time to receive DupThresh SACKed segments or duplicate acknowledgments. This approach is effective if the network reordering degree (in sequence distance) is smaller than DupThresh and at least DupThresh segments after the loss is acknowledged. For cases where the reordering degree is larger than the default DupThresh of 3 packets, one alternative is to dynamically adapt DupThresh based on the FlightSize (e.g., the sender adjusts the DupThresh to half of the FlightSize). However, this does not work well with the following two types of reordering:",
+      "ja": "DUPACKカウントアプローチの並べ替えウィンドウは、Dupthresh Sacked Segmentsまたは重複確認を受信するための経過時間として暗黙的に定義されています。このアプローチは、ネットワーク並べ替え度（シーケンス距離）がDUPTHRESHよりも小さい場合に有効であり、損失が確認された後に少なくともDupThreshセグメントが承認された後に有効である。並べ替え度が3つのパケットのデフォルトのDupthreshより大きい場合の場合、1つの代替案は、FlightSizesに基づいてDUPthreshを動的に適応させることである（例えば、送信者はDupthreshをFlightSizeの半分に調整する）。ただし、これは以下の2種類の並べ替えではうまく機能しません。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Application-limited flights where the last non-full-sized segment is delivered first and then the remaining full-sized segments in the flight are delivered in order. This reordering pattern can occur when segments traverse parallel forwarding paths. In such scenarios, the degree of reordering in packet distance is one segment less than the flight size.",
+      "ja": "1. 最後の全サイズのセグメントが最初に配信され、次にフライト内の残りのフルサイズのセグメントが順番に配信されます。この並べ替えパターンは、セグメントを並列転送経路にトラバースするときに発生する可能性があります。このようなシナリオでは、パケット距離での並べ替えの程度は、フライトサイズより1セグメント以下です。"
+    },
+    {
+      "indent": 3,
+      "text": "2. A flight of segments that are delivered partially out of order. One cause for this pattern is wireless link-layer retransmissions with an inadequate reordering buffer at the receiver. In such scenarios, the wireless sender sends the data packets in order initially, but some are lost and then recovered by link-layer retransmissions; the wireless receiver delivers the TCP data packets in the order they are received due to the inadequate reordering buffer. The random wireless transmission errors in such scenarios cause the reordering degree, expressed in packet distance, to have highly variable values up to the flight size.",
+      "ja": "2. 部分的に故障しているセグメントの飛行。このパターンに対する1つの原因は、受信機で不適切な並べ替えバッファを持つ無線リンク層の再送信です。このようなシナリオでは、ワイヤレス送信側は最初に順番にデータパケットを送信しますが、リンクレイヤの再送信によって失われてから回復されます。ワイヤレス受信機は、不適切な並べ替えバッファにより受信された順序でTCPデータパケットを配信します。このようなシナリオにおけるランダム無線送信エラーは、パケット距離で表される並べ替え度を、飛行サイズまで高く可変の値を持ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the above two cases, the degree of reordering in packet distance is highly variable. This makes the DupAck counting approach ineffective, including dynamic adaptation variants as in [RFC4653]. Instead, the degree of reordering in time difference in such cases is usually within a single round-trip time. This is because the packets either traverse disjoint paths with similar propagation delays or are repaired quickly by the local access technology. Hence, using a time threshold instead of a packet threshold strikes a middle ground, allowing a bounded degree of reordering resilience while still allowing fast recovery. This is the rationale behind the RACK-TLP reordering resilience design.",
+      "ja": "上記の2つの場合において、パケット距離の並べ替え度は非常に変わります。これにより、[RFC4653]のように動的適応変動を含む、DUPACKカウンティングアプローチが無効になります。代わりに、そのような場合の時間差における並べ替えの程度は通常1回の往復時間内にある。これは、パケットが同様の伝播遅延を持つトラバースされたパスをトラバースするか、ローカルアクセステクノロジによって迅速に修復されるためです。したがって、パケットしきい値の代わりに時間しきい値を使用すると、中間のグランドが書き込まれ、依然として迅速な回復を可能にしながら並べ替えの程度を並べ替えます。これはRack-TLPの後ろの根拠です。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, RACK-TLP introduces a new dynamic reordering window parameter in time units, and the sender considers a data segment S lost if both of these conditions are met:",
+      "ja": "具体的には、Rack-TLPは時間単位で新しい動的並べ替えウィンドウパラメータを導入し、送信側はこれらの条件の両方が満たされた場合にデータセグメントSを失ったと見なします。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Another data segment sent later than S has been delivered.",
+      "ja": "1. S以前に送信された別のデータセグメントが配信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "2. S has not been delivered after the estimated round-trip time plus the reordering window.",
+      "ja": "2. 推定された往復時間と並べ替えウィンドウの後に配信されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that condition (1) implies at least one round trip of time has elapsed since S has been sent.",
+      "ja": "条件式（1）は、Sが送信されてから経過した時間の少なくとも1回の回転数を意味することに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3.2. Reordering Window Adaptation",
+      "section_title": true,
+      "ja": "3.3.2. 並べ替えウィンドウ適応"
+    },
+    {
+      "indent": 3,
+      "text": "The RACK reordering window adapts to the measured duration of reordering events within reasonable and specific bounds to disincentivize excessive reordering. More specifically, the sender sets the reordering window as follows:",
+      "ja": "ラック並べ替えウィンドウは、過度の並べ替えを解除するための合理的および特定の範囲内でイベントを並べ替える期間に適応します。具体的には、送信者は並べ替えウィンドウを次のように設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The reordering window SHOULD be set to zero if no reordering has been observed on the connection so far, and either (a) three segments have been SACKed since the last recovery or (b) the sender is already in fast or RTO recovery. Otherwise, the reordering window SHOULD start from a small fraction of the round-trip time or zero if no round-trip time estimate is available.",
+      "ja": "1. 並べ替えウィンドウはこれまでのところに並べ替えが見られない場合、（a）3つのセグメントが最後の回復または（b）で停止されている場合は、送信者がすでに高速またはRTOの回復に並べ替えられています。それ以外の場合、並べ替えウィンドウは、往復時間推定値が入手できない場合は、往復時間のごく一部またはゼロから始める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The RACK reordering window SHOULD adaptively increase (using the algorithm in \"Step 4: Update RACK reordering window\" below) if the sender receives a Duplicate Selective Acknowledgment (DSACK) option [RFC2883]. Receiving a DSACK suggests the sender made a spurious retransmission, which may have been due to the reordering window being too small.",
+      "ja": "2. 送信者が重複した選択確認（DSACK）オプションを受信した場合、ラック並べ替えウィンドウは適応的に増加する必要があります（下記の「ステップ4：アップデートラック並べ替えウィンドウ」）、[RFC2883]。DSACKを受信すると、送信者がスプリアスの再送信をしたことを示唆しており、これは並べ替えウィンドウが小さすぎるためでした。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The RACK reordering window MUST be bounded, and this bound SHOULD be SRTT.",
+      "ja": "3. ラックの並べ替えウィンドウを囲む必要があり、このバインドはSRTTになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Rules 2 and 3 are required to adapt to reordering caused by dynamics such as the prolonged link-layer loss recovery episodes described earlier. Each increase in the reordering window requires a new round trip where the sender receives a DSACK; thus, depending on the extent of reordering, it may take multiple round trips to fully adapt.",
+      "ja": "規則2および3は、前述の長いリンク層損失回復エピソードのようなダイナミクスによって引き起こされる並べ替えに適応することが要求される。並べ替えウィンドウの各増加には、送信者がDSACKを受信する新しい往復が必要です。したがって、並べ替えの程度に応じて、それは完全に適応するために複数の往復旅行をするかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "For short flows, the low initial reordering window helps recover losses quickly, at the risk of spurious retransmissions. The rationale is that spurious retransmissions for short flows are not expected to produce excessive additional network traffic. For long flows, the design tolerates reordering within a round trip. This handles reordering in small timescales (reordering within the round-trip time of the shortest path).",
+      "ja": "短いフローの場合、低い最初の並べ替えウィンドウは、スプリアスの再送信の危険にさらされている、迅速に損失を回復するのに役立ちます。根拠は、短いフローのためのスプリアスの再送信が過度の追加のネットワークトラフィックを生成することが期待されていないということです。長い流れのために、設計は往復の並べ替えを許容します。これは小さなタイムスケールでの並べ替えを処理します（最短経路の往復時間内に並べ替え）。"
+    },
+    {
+      "indent": 3,
+      "text": "However, the fact that the initial reordering window is low and the reordering window's adaptive growth is bounded means that there will continue to be a cost to reordering that disincentivizes excessive reordering.",
+      "ja": "しかしながら、最初の並べ替えウィンドウが低く、並べ替えウィンドウの適応成長が境界であるという事実は、過度の並べ替えを緩和する並べ替えへのコストであることを意味します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. An Example of RACK-TLP in Action: Fast Recovery",
+      "section_title": true,
+      "ja": "3.4. アクションのRACK-TLPの例：高速回復"
+    },
+    {
+      "indent": 3,
+      "text": "The following example in Figure 1 illustrates the RACK-TLP algorithm in action:",
+      "ja": "図1の次の例は、アクションのRACK-TLPアルゴリズムを示しています。"
+    },
+    {
+      "indent": 4,
+      "text": "Event  TCP DATA SENDER                            TCP DATA RECEIVER\n_____  ____________________________________________________________\n  1.   Send P0, P1, P2, P3          -->\n       [P1, P2, P3 dropped by network]",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 6,
+      "text": "2. <-- Receive P0, ACK P0",
+      "ja": "2. < -  P0、ACK P0を受信する"
+    },
+    {
+      "indent": 6,
+      "text": "3a. 2RTTs after (2), TLP timer fires 3b. TLP: retransmits P3 -->",
+      "ja": "3A。2RTT（2）の後、TLPタイマーは3Bを発射する。TLP：再送信P3  - >"
+    },
+    {
+      "indent": 6,
+      "text": "4. <-- Receive P3, SACK P3",
+      "ja": "4. < -  P3、SACK P3を受信する"
+    },
+    {
+      "indent": 6,
+      "text": "5a. Receive SACK for P3 5b. RACK: marks P1, P2 lost 5c. Retransmit P1, P2 --> [P1 retransmission dropped by network]",
+      "ja": "5A。P3 5Bのための袋を受け取る。ラック：P1、P2は5Cを失った。RESTRANSMIT P1、P2  - > [P1再送信がネットワークで落とした]"
+    },
+    {
+      "indent": 6,
+      "text": "6. <-- Receive P2, SACK P2 & P3",
+      "ja": "6. < -  P2、SACK P2＆P3を受け取る"
+    },
+    {
+      "indent": 6,
+      "text": "7a. RACK: marks P1 retransmission lost 7b. Retransmit P1 -->",
+      "ja": "7a。ラック：P1の再送信7bを損失します。再送信P1  - >"
+    },
+    {
+      "indent": 6,
+      "text": "8. <-- Receive P1, ACK P3",
+      "ja": "8. < -  P1、ACK P3を受信する"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 1: RACK-TLP Protocol Example",
+      "ja": "図1：RACK-TLPプロトコル例"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 1 illustrates a sender sending four segments (P0, P1, P2, P3) and losing the last three segments. After two round trips, TLP sends a loss probe, retransmitting the last segment, P3, to solicit SACK feedback and restore the ACK clock (Event 3). The delivery of P3 enables RACK to infer (Event 5b) that P1 and P2 were likely lost because they were sent before P3. The sender then retransmits P1 and P2. Unfortunately, the retransmission of P1 is lost again. However, the delivery of the retransmission of P2 allows RACK to infer that the retransmission of P1 was likely lost (Event 7a); hence, P1 should be retransmitted (Event 7b). Note that [RFC5681] mandates a principle that loss in two successive windows of data or the loss of a retransmission must be taken as two indications of congestion and therefore results in two separate congestion control reactions.",
+      "ja": "図1は、4つのセグメント（P0、P1、P2、P3）を送信し、最後の3つのセグメントを失う送信者を示しています。2回の往復後、TLPは損失プローブを送信し、最後のセグメント、P3を再送信し、袋のフィードバックを求め、ACKクロック（イベント3）を復元します。P3の送達により、P1とP2がP3の前に送信されたためにP1とP2が失われた可能性が高い推測（イベント5B）を推測できます。送信者は次にP1とP2を再送信します。残念ながら、P1の再送信は再び失われます。しかしながら、P2の再送信の送達は、P1の再送信が失われた可能性が低いと推測するためのラックを推測する（イベント7a）。したがって、P1は再送信されるべきです（イベント7b）。[RFC5681]は、データの2つの連続した窓の損失または再送信の喪失が2つの輻輳の指標とみなされなければならず、したがって2つの別々の輻輳制御反応をもたらさなければならないという原則を求めることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3.5. An Example of RACK-TLP in Action: RTO",
+      "section_title": true,
+      "ja": "3.5. ActionのRACK-TLPの例：RTO"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to enhancing fast recovery, RACK improves the accuracy of RTO recovery by reducing spurious retransmissions.",
+      "ja": "高速回復の強化に加えて、ラックはスプリアスの再送信を減らすことによってRTO回復の精度を向上させます。"
+    },
+    {
+      "indent": 3,
+      "text": "Without RACK, upon RTO timer expiration, the sender marks all the unacknowledged segments as lost. This approach can lead to spurious retransmissions. For example, consider a simple case where one segment was sent with an RTO of 1 second and then the application writes more data, causing a second and third segment to be sent right before the RTO of the first segment expires. Suppose none of the segments were lost. Without RACK, if there is a spurious RTO, then the sender marks all three segments as lost and retransmits the first segment. If the ACK for the original copy of the first segment arrives right after the spurious RTO retransmission, then the sender continues slow start and spuriously retransmits the second and third segments since it (erroneously) presumed they are lost.",
+      "ja": "ラックなしで、RTOタイマーの有効期限が切れると、送信者はすべての未確認セグメントを失われたようにマークします。このアプローチは偽の再送信につながる可能性があります。たとえば、1セグメントが1秒のRTOで送信され、その後、アプリケーションはより多くのデータを書き込み、最初のセグメントのRTOが期限切れになる直前に2番目と3番目のセグメントを送信させます。どのセグメントが失われていないとします。ラックなしで、スプリアスRTOがある場合、送信者は3つのセグメントすべてを失われたものとしてマークし、最初のセグメントを再送信します。最初のセグメントの元のコピーのACKがスプリアスRTO再送の直後に到着した場合、送信者は遅い開始を継続し、それが（誤って）推定されているため、2番目と3番目のセグメントを再送信し続けます。"
+    },
+    {
+      "indent": 3,
+      "text": "With RACK, upon RTO timer expiration, the only segment automatically marked as lost is the first segment (since it was sent an RTO ago); for all the other segments, RACK only marks the segment as lost if at least one round trip has elapsed since the segment was transmitted. Consider the previous example scenario, but this time with RACK. With RACK, when the RTO expires, the sender only marks the first segment as lost and retransmits that segment. The other two very recently sent segments are not marked as lost because they were sent less than one round trip ago and there were no ACKs providing evidence that they were lost. Upon receiving the ACK for the RTO retransmission, the RACK sender would not yet retransmit the second or third segment, but rather would re-arm the RTO timer and wait for a new RTO interval to elapse before marking the second or third segment as lost.",
+      "ja": "ラックを使用すると、RTOタイマーの有効期限が切れると、紛失としてマークされた唯一のセグメントは最初のセグメントです（RTOが前に送信されたため）。他のすべてのセグメントについて、ラックは、セグメントが送信されてから少なくとも1回のラウンドトリップが経過した場合にのみ、セグメントが失われただけマークを付けます。以前の例示的なシナリオを考慮してくださいが、今回はラックを付けます。ラックを使用すると、RTOが期限切れになると、送信者は最初のセグメントを紛失してそのセグメントを再送信するだけです。他の2つの最近送信されたセグメントは、彼らが1ラウンドの旅行を前に送られたので失われたとマークされておらず、彼らが失われたという証拠を提供するACKはありませんでした。RTO再送のためにACKを受信すると、ラック送信者はまだ第2または第3のセグメントを再送信しないであろうが、RTOタイマーを再編成し、2番目または3番目のセグメントを失われたようにマークする前に、新しいRTO間隔を経過するのを待つことになる。"
+    },
+    {
+      "indent": 0,
+      "text": "3.6. Design Summary",
+      "section_title": true,
+      "ja": "3.6. デザインの概要"
+    },
+    {
+      "indent": 3,
+      "text": "To summarize, RACK-TLP aims to adapt to small time-varying degrees of reordering, quickly recover most losses within one to two round trips, and avoid costly RTO recoveries. In the presence of reordering, the adaptation algorithm can impose sometimes needless delays when it waits to disambiguate loss from reordering, but the penalty for waiting is bounded to one round trip, and such delays are confined to flows long enough to have observed reordering.",
+      "ja": "要約すると、Rack-TLPは、小さな時変なる順序に適応することを目的としており、1~2回の往復のほとんどの損失を迅速に回復し、費用がかかるRTO回復を回避します。並べ替えの存在下では、適応アルゴリズムは、並べ替えによる損失を悪化させるのを待つときに不要な遅延がある場合がありますが、待機のペナルティは1回のラウンドトリップに囲まれており、そのような遅延は並べ替えを観察するのに十分な長さを超えるように制限されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Requirements",
+      "section_title": true,
+      "ja": "4. 要件"
+    },
+    {
+      "indent": 3,
+      "text": "The reader is expected to be familiar with the definitions given in the TCP congestion control [RFC5681], selective acknowledgment [RFC2018], and loss recovery [RFC6675] RFCs. RACK-TLP has the following requirements:",
+      "ja": "リーダーは、TCP輻輳制御[RFC5681]、選択確認応答[RFC2018]、および損失回復[RFC6675] RFCSによく知られていると予想されます。RACK-TLPには次の要件があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The connection MUST use selective acknowledgment (SACK) options [RFC2018], and the sender MUST keep SACK scoreboard information on a per-connection basis (\"SACK scoreboard\" has the same meaning here as in [RFC6675], Section 3).",
+      "ja": "1. 接続は選択認識（SACK）オプション[RFC2018]を使用し、送信者はSACKスコアボード情報を接続ごとに保持しなければなりません（「SACKスコアボード」は[RFC6675]と同じ意味を示します）。"
+    },
+    {
+      "indent": 3,
+      "text": "2. For each data segment sent, the sender MUST store its most recent transmission time with a timestamp whose granularity is finer than 1/4 of the minimum RTT of the connection. At the time of writing, microsecond resolution is suitable for intra-data center traffic, and millisecond granularity or finer is suitable for the Internet. Note that RACK-TLP can be implemented with TSO (TCP Segmentation Offload) support by having multiple segments in a TSO aggregate share the same timestamp.",
+      "ja": "2. 送信された各データセグメントに対して、送信者はその最新の送信時間を、その粒度が接続の最小RTTの1/4より細かいタイムスタンプで保存しなければなりません。書き込み時に、マイクロ秒分解能はデータ内の中心トラフィックに適しており、ミリ秒の粒度や細かい情報がインターネットに適しています。TSO集計に複数のセグメントを持つことで、TSO（TCPセグメンテーションオフロード）サポートを使用してRACK-TLPを実装できます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. RACK DSACK-based reordering window adaptation is RECOMMENDED but is not required.",
+      "ja": "3. ラックDSACKベースの並べ替えウィンドウ適応をお勧めしますが、必須ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "4. TLP requires RACK.",
+      "ja": "4. TLPにはラックが必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Definitions",
+      "section_title": true,
+      "ja": "5. 定義"
+    },
+    {
+      "indent": 3,
+      "text": "The reader is expected to be familiar with the variables SND.UNA, SND.NXT, SEG.ACK, and SEG.SEQ in [RFC793]; Sender Maximum Segment Size (SMSS) and FlightSize in [RFC5681]; DupThresh in [RFC6675]; and RTO and SRTT in [RFC6298]. A RACK-TLP implementation uses several new terms and needs to store new per-segment and per-connection state, described below.",
+      "ja": "リーダーは、[RFC793]の変数SND.UNA、SND.NXT、SEG.ACK、およびSEG.SEQに精通していると予想されます。送信者の最大セグメントサイズ（SMSS）とFlighSize In [RFC5681]。[RFC6675]のDupthresh;RFC6298のRTOとSRTT。RACK-TLP実装では、次に説明した新しい単数の新しい用語と接続ごとの状態を保存する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Terms",
+      "section_title": true,
+      "ja": "5.1. 条項"
+    },
+    {
+      "indent": 3,
+      "text": "These terms are used to explain the variables and algorithms below:",
+      "ja": "以下の変数とアルゴリズムを説明するためにこれらの用語が使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.segment Among all the segments that have been either selectively or cumulatively acknowledged, the term \"RACK.segment\" denotes the segment that was sent most recently (including retransmissions).",
+      "ja": "RACK.SEGMENTSのどちらかのセグメントの間で、選択的または累積的に確認されたすべてのセグメントの間で、「RACK.SEMUNGS」という用語は最後に送信されたセグメント（再送信を含む）を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.ack_ts Denotes the time when the full sequence range of RACK.segment was selectively or cumulatively acknowledged.",
+      "ja": "Rack.Ack_tsは、ラックの全シーケンス範囲が選択的または累積的に認識された時刻を表します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Per-Segment Variables",
+      "section_title": true,
+      "ja": "5.2. セグメントごとの変数"
+    },
+    {
+      "indent": 3,
+      "text": "These variables indicate the status of the most recent transmission of a data segment:",
+      "ja": "これらの変数は、データセグメントの最新の送信のステータスを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Segment.lost True if the most recent (re)transmission of the segment has been marked as lost and needs to be retransmitted. False otherwise.",
+      "ja": "segment.lost trueセグメントの最新の（RE）送信が失われたとマークされており、再送信される必要がある場合はtrue。それ以外の場合はfalseです。"
+    },
+    {
+      "indent": 3,
+      "text": "Segment.retransmitted True if the segment has ever been retransmitted. False otherwise.",
+      "ja": "セグメント。セグメントが再送信されたことがある場合はtrueを実行しました。それ以外の場合はfalseです。"
+    },
+    {
+      "indent": 3,
+      "text": "Segment.xmit_ts The time of the last transmission of a data segment, including retransmissions, if any, with a clock granularity specified in the \"Requirements\" section. A maximum value INFINITE_TS indicates an invalid timestamp that represents that the segment is not currently in flight.",
+      "ja": "segment.xmit_ts再送を含むデータセグメントの最後の送信の時刻が、「要件」セクションで指定されたクロック粒度を含む。最大値infinite_tsは、セグメントが現在フライト内ではないことを表す無効なタイムスタンプを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Segment.end_seq The next sequence number after the last sequence number of the data segment.",
+      "ja": "segment.end_seqデータセグメントの最後のシーケンス番号の後の次のシーケンス番号。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Per-Connection Variables",
+      "section_title": true,
+      "ja": "5.3. 接続ごとの変数"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.xmit_ts The latest transmission timestamp of RACK.segment.",
+      "ja": "Rack.xmit_ts Rackの最新の送信タイムスタンプ。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.end_seq The Segment.end_seq of RACK.segment.",
+      "ja": "rack.end_seq Rack.End_Seqのsegent.end_seq。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.segs_sacked Returns the total number of segments selectively acknowledged in the SACK scoreboard.",
+      "ja": "Rack.segs_sacked Sackスコアボードに選択的に認められたセグメントの総数を返します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.fack The highest selectively or cumulatively acknowledged sequence (i.e., forward acknowledgment).",
+      "ja": "ラック。最も高い選択的または累積確認されたシーケンス（すなわち前方肯定応答）。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.min_RTT The estimated minimum round-trip time (RTT) of the connection.",
+      "ja": "lack.min_rtt接続の推定最小往復時間（RTT）。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.rtt The RTT of the most recently delivered segment on the connection (either cumulatively acknowledged or selectively acknowledged) that was not marked as invalid as a possible spurious retransmission.",
+      "ja": "RACK.RTT接続上の最後に配信されたセグメントのRTT（累積認証済みまたは選択的に認められているか、選択的に認められている）は、可能なスプリアスの再送信のように無効としてマークされていませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.reordering_seen Indicates whether the sender has detected data segment reordering event(s).",
+      "ja": "Rack.Reordering_Seen送信者がデータセグメントの並べ替えイベントを検出したかどうかを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.reo_wnd A reordering window computed in the unit of time used for recording segment transmission times. It is used to defer the moment at which RACK marks a segment as lost.",
+      "ja": "RACK.REO_WNDセグメントの送信時間を記録するために使用される時間単位で計算された並べ替えウィンドウ。ラックが損失したときにラックがセグメントをマークする瞬間を延期するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.dsack_round Indicates if a DSACK option has been received in the latest round trip.",
+      "ja": "Rack.DSACK_ROUND DSACKオプションが最新の往復で受信されたかどうかを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.reo_wnd_mult The multiplier applied to adjust RACK.reo_wnd.",
+      "ja": "rack.reo_wnd_mult rack.reo_wndを調整するために適用された乗数。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK.reo_wnd_persist The number of loss recoveries before resetting RACK.reo_wnd.",
+      "ja": "RACK.REO_WND_PERSIST RACK.REO_WNDをリセットする前の損失回数回数。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP.is_retrans A boolean indicating whether there is an unacknowledged TLP retransmission.",
+      "ja": "TLP.IS_RETRANS未確認のTLP再送信があるかどうかを示すブール値。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP.end_seq The value of SND.NXT at the time of sending a TLP probe.",
+      "ja": "TLP.END_SEQ TLPプローブを送信する際のsnd.nxtの値。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP.max_ack_delay: The sender's budget for the maximum delayed ACK interval.",
+      "ja": "tlp.max_ack_delay：最大遅延ACK間隔の送信者の予算。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Per-Connection Timers",
+      "section_title": true,
+      "ja": "5.4. 接続ごとのタイマー"
+    },
+    {
+      "indent": 3,
+      "text": "RACK reordering timer A timer that allows RACK to wait for reordering to resolve in order to try to disambiguate reordering from loss when some segments are marked as SACKed.",
+      "ja": "ラック並べ替えタイマーいくつかのセグメントが解任されているとマークされている場合に損失から並べ替えることを試みるために、ラックが解決するのを待つ可能性があるタイマー。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP PTO A timer event indicating that an ACK is overdue and the sender should transmit a TLP segment to solicit SACK or ACK feedback.",
+      "ja": "TLP PTO ACKがOverdueであり、送信者がSACKまたはACKフィードバックを求めるためにTLPセグメントを送信する必要があることを示すタイマーイベント。"
+    },
+    {
+      "indent": 3,
+      "text": "These timers augment the existing timers maintained by a sender, including the RTO timer [RFC6298]. A RACK-TLP sender arms one of these three timers -- RACK reordering timer, TLP PTO timer, or RTO timer -- when it has unacknowledged segments in flight. The implementation can simplify managing all three timers by multiplexing a single timer among them with an additional variable to indicate the event to invoke upon the next timer expiration.",
+      "ja": "これらのタイマーは、RTOタイマー[RFC6298]を含む、送信者が維持した既存のタイマーを拡張します。ラック-TLP送信者腕この3つのタイマーの1つ - ラック並べ替えタイマー、TLP PTOタイマー、またはRTOタイマーは、飛行中に未確認のセグメントを持っています。実装は、次のタイマの有効期限が切断されたイベントを呼び出すために、単一のタイマーを追加の変数で多重化することによって、3つのタイマーすべてを管理することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. RACK Algorithm Details",
+      "section_title": true,
+      "ja": "6. ラックアルゴリズムの詳細"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Upon Transmitting a Data Segment",
+      "section_title": true,
+      "ja": "6.1. データセグメントを送信すると"
+    },
+    {
+      "indent": 3,
+      "text": "Upon transmitting a new segment or retransmitting an old segment, record the time in Segment.xmit_ts and set Segment.lost to FALSE. Upon retransmitting a segment, set Segment.retransmitted to TRUE.",
+      "ja": "新しいセグメントを送信するか古いセグメントを再送信すると、Segment.xmit_tsの時間を記録し、segment.lostをfalseに設定します。セグメントを再送すると、SEGMENT.RESTRANSTITED TRUEに設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_transmit_new_data(Segment):\n        Segment.xmit_ts = Now()\n        Segment.lost = FALSE",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "RACK_retransmit_data(Segment):\n        Segment.retransmitted = TRUE\n        Segment.xmit_ts = Now()\n        Segment.lost = FALSE",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Upon Receiving an ACK",
+      "section_title": true,
+      "ja": "6.2. ACKを受信すると"
+    },
+    {
+      "indent": 3,
+      "text": "Step 1: Update RACK.min_RTT.",
+      "ja": "ステップ1：rack.min_rttを更新します。"
+    },
+    {
+      "indent": 3,
+      "text": "Use the RTT measurements obtained via [RFC6298] or [RFC7323] to update the estimated minimum RTT in RACK.min_RTT. The sender SHOULD track a windowed min-filtered estimate of recent RTT measurements that can adapt when migrating to significantly longer paths rather than tracking a simple global minimum of all RTT measurements.",
+      "ja": "[RFC6298]または[RFC7323]で得られたRTT測定値を使用して、RACK.MIN_RTTの推定最小RTTを更新してください。送信者は、すべてのRTT測定値の単純なグローバルな最小値を追跡するのではなく、大幅に長いパスに移行するときに適応できる最近のRTT測定のウィンドウ化された最近の測定値の推定を追跡する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Step 2: Update the state for the most recently sent segment that has been delivered.",
+      "ja": "ステップ2：配信された最も最近送信されたセグメントの状態を更新します。"
+    },
+    {
+      "indent": 3,
+      "text": "In this step, RACK updates the state that tracks the most recently sent segment that has been delivered: RACK.segment. RACK maintains its latest transmission timestamp in RACK.xmit_ts and its highest sequence number in RACK.end_seq. These two variables are used in later steps to estimate if some segments not yet delivered were likely lost. Given the information provided in an ACK, each segment cumulatively ACKed or SACKed is marked as delivered in the scoreboard. Because an ACK can also acknowledge retransmitted data segments and because retransmissions can be spurious, the sender needs to take care to avoid spurious inferences. For example, if the sender were to use timing information from a spurious retransmission, the RACK.rtt could be vastly underestimated.",
+      "ja": "このステップでは、RACKは、配信された最も最近送信されたセグメントを追跡する状態を更新します。ラックは、Rack.End_SeqのRACK.XMIT_TSの最新の送信タイムスタンプとその最高のシーケンス番号を維持します。これら2つの変数は、まだ配信されていないセグメントが失われた可能性が高い場合に、後のステップで使用されます。ACKに提供された情報を考えると、累積的に累積されたまたは緩やかされた各セグメントは、スコアボードに配信されているとマークされています。ACKは再送信データセグメントを確認することもでき、再送信がスプリアスになる可能性があるため、スプリアスの推論を回避するためには、送信者が注意する必要があります。たとえば、送信者がスプリアスの再送信からタイミング情報を使用することになった場合、RACK.RTTは大幅に過小評価される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid spurious inferences, ignore a segment as invalid if any of its sequence range has been retransmitted before and if either of two conditions is true:",
+      "ja": "スプリアスの推論を避けるために、そのシーケンス範囲のいずれかが前に再送信された場合、および2つの条件のいずれかが当てはまる場合は、セグメントを無効にします。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The Timestamp Echo Reply field (TSecr) of the ACK's timestamp option [RFC7323], if available, indicates the ACK was not acknowledging the last retransmission of the segment.",
+      "ja": "1. ACKのTimesTampオプション[RFC7323]のTimestamp Echo Replyフィールド（TSECR）は、ACKがセグメントの最後の再送信を確認しなかったことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The segment was last retransmitted less than RACK.min_rtt ago.",
+      "ja": "2. セグメントはRACK.MIN_RTT ARISよりも小さい再送信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The second check is a heuristic when the TCP Timestamp option is not available or when the round-trip time is less than the TCP Timestamp clock granularity.",
+      "ja": "2回目のチェックは、TCPタイムスタンプオプションが利用できない場合、または往復時間がTCPタイムスタンプクロックの粒度よりも小さい場合、発見的です。"
+    },
+    {
+      "indent": 3,
+      "text": "Among all the segments newly ACKed or SACKed by this ACK that pass the checks above, update the RACK.rtt to be the RTT sample calculated using this ACK. Furthermore, record the most recent Segment.xmit_ts in RACK.xmit_ts if it is ahead of RACK.xmit_ts. If Segment.xmit_ts equals RACK.xmit_ts (e.g., due to clock granularity limits), then compare Segment.end_seq and RACK.end_seq to break the tie when deciding whether to update the RACK.segment's associated state.",
+      "ja": "上記のチェックを渡すこのACKによって新たにACKに新たに攻撃されたすべてのセグメントのうち、このACKを使用して計算されたRTTサンプルになるRACK.RTTを更新します。さらに、rack.xmit_tsの前にある場合、rack.xmit_tsで最新のsegment.xmit_tsを記録してください。segment.xmit_tsがrack.xmit_ts（例えば、クロック粒度制限のため）に等しい場合は、segment.end_seqとrack.end_seqを比較して、ラックを更新するかどうかを決定するときにTieを破ります。"
+    },
+    {
+      "indent": 3,
+      "text": "Step 2 may be summarized in pseudocode as:",
+      "ja": "ステップ2は、次のように疑似コードにまとめることができる。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_sent_after(t1, seq1, t2, seq2):\n    If t1 > t2:\n        Return true\n    Else if t1 == t2 AND seq1 > seq2:\n        Return true\n    Else:\n        Return false",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "RACK_update():\n    For each Segment newly acknowledged, cumulatively or selectively,\n    in ascending order of Segment.xmit_ts:\n        rtt = Now() - Segment.xmit_ts\n        If Segment.retransmitted is TRUE:\n            If ACK.ts_option.echo_reply < Segment.xmit_ts:\n               Continue\n            If rtt < RACK.min_rtt:\n               Continue",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 11,
+      "text": "RACK.rtt = rtt If RACK_sent_after(Segment.xmit_ts, Segment.end_seq RACK.xmit_ts, RACK.end_seq): RACK.xmit_ts = Segment.xmit_ts RACK.end_seq = Segment.end_seq",
+      "ja": "RACK.RTT = RTT RACK_SENT_AFTER（segment.xmit_ts、segment.end_seq rack.xmit_ts、rack.end_seq）：rack.xmit_ts = segment.xmit_ts rack.end_seq = segment.end_seq"
+    },
+    {
+      "indent": 3,
+      "text": "Step 3: Detect data segment reordering.",
+      "ja": "ステップ3：データセグメントの並べ替えを検出します。"
+    },
+    {
+      "indent": 3,
+      "text": "To detect reordering, the sender looks for original data segments being delivered out of order. To detect such cases, the sender tracks the highest sequence selectively or cumulatively acknowledged in the RACK.fack variable. \".fack\" stands for the most \"Forward ACK\" (this term is adopted from [FACK]). If a never-retransmitted segment that's below RACK.fack is (selectively or cumulatively) acknowledged, it has been delivered out of order. The sender sets RACK.reordering_seen to TRUE if such a segment is identified.",
+      "ja": "並べ替えを検出するために、送信者は順番に配信されている元のデータセグメントを探します。そのような場合を検出するために、送信者はラックで選択的または累積的に認識されている最高のシーケンスを追跡します。ファック変数。\".fack\"は最も「前方ACK」を表します（この用語は[FACK]から採用されています）。RACK.FACKを下回ることがない未再送信セグメントが（選択的または累積的に）認証されている場合は、それは順不同で配信されました。そのようなセグメントが識別されている場合、送信者はRack.Reordering_Seenをtrueに設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_detect_reordering(): For each Segment newly acknowledged, cumulatively or selectively, in ascending order of Segment.end_seq: If Segment.end_seq > RACK.fack: RACK.fack = Segment.end_seq Else if Segment.end_seq < RACK.fack AND Segment.retransmitted is FALSE: RACK.reordering_seen = TRUE",
+      "ja": "RACK_DETECT_REORDERING（）：各セグメントの昇格、累積的または選択的に、segment.end_seqの昇順で、segent.end_seq> rack.fack：RACK.FACK = segment.end_seq.Erse.End_Seq <Rack.FackおよびSegments。再送信されたことはfalseです.rack.reordering_seen = true"
+    },
+    {
+      "indent": 3,
+      "text": "Step 4: Update the RACK reordering window.",
+      "ja": "ステップ4：ラックの並べ替えウィンドウを更新します。"
+    },
+    {
+      "indent": 3,
+      "text": "The RACK reordering window, RACK.reo_wnd, serves as an adaptive allowance for settling time before marking a segment as lost. This step documents a detailed algorithm that follows the principles outlined in the \"Reordering Window Adaptation\" section.",
+      "ja": "ラック並べ替えウィンドウRACK.REO_WNDは、セグメントを失ったようにマークする前の整定時間の適応的手当として機能します。このステップは、「並べ替えウィンドウ適応」で概説されている原理に従う詳細なアルゴリズムを文書化しています。"
+    },
+    {
+      "indent": 3,
+      "text": "If no reordering has been observed based on the previous step, then one way the sender can enter fast recovery is when the number of SACKed segments matches or exceeds DupThresh (similar to [RFC6675]). Furthermore, when no reordering has been observed, the RACK.reo_wnd is set to 0 both upon entering and during fast recovery or RTO recovery.",
+      "ja": "前の手順に基づいて並べ替えが観察されていない場合は、送信者が高速回復を開始できる1つの方法は、Sacked Segmentsの数がDupThresh（RFC6675と同様）に一致または超える場合です。さらに、並べ替えが観察されていない場合は、rack.reo_wndが入り、迅速な回復またはRTO回復中に0に設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Otherwise, if some reordering has been observed, then RACK does not trigger fast recovery based on DupThresh.",
+      "ja": "それ以外の場合、いくつかの並べ替えが観察された場合、ラックはDuPthreshに基づいて高速回復を引き起こさない。"
+    },
+    {
+      "indent": 3,
+      "text": "Whether or not reordering has been observed, RACK uses the reordering window to assess whether any segments can be marked as lost. As a consequence, the sender also enters fast recovery when there are any number of SACKed segments, as long as the reorder window has passed for some non-SACKed segments.",
+      "ja": "並べ替えが観察されたかどうかは、ラックは並べ替えウィンドウを使用してセグメントを失ったとおりにマークできるかどうかを評価します。結果として、送信者は、並べ替えられたウィンドウがいくつかの非解約されていないセグメントに対して渡された限り、任意の数の緩和セグメントがあるときにも高速回復に入ります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the reordering window is not set to 0, it starts with a conservative RACK.reo_wnd of RACK.min_RTT/4. This value was chosen because Linux TCP used the same factor in its implementation to delay Early Retransmit [RFC5827] to reduce spurious loss detections in the presence of reordering, and experience showed this worked reasonably well [DMCG11].",
+      "ja": "並べ替えウィンドウが0に設定されていない場合は、控えめなラックで始まります.Rack.min_rtt / 4の控えめなラック。Linux TCPは、並べ替えの存在下でのスプリアス損失検出を減らすためにLinux TCPがその実装で同じ要素を使用しているため、この値が選択されました。"
+    },
+    {
+      "indent": 3,
+      "text": "However, the reordering detection in the previous step, Step 3, has a self-reinforcing drawback when the reordering window is too small to cope with the actual reordering. When that happens, RACK could spuriously mark reordered segments as lost, causing them to be retransmitted. In turn, the retransmissions can prevent the necessary conditions for Step 3 to detect reordering since this mechanism requires ACKs or SACKs only for segments that have never been retransmitted. In some cases, such scenarios can persist, causing RACK to continue to spuriously mark segments as lost without realizing the reordering window is too small.",
+      "ja": "しかしながら、前のステップ3での並べ替え検出は、並べ替えウィンドウが実際の並べ替えに対処するために小さすぎるときに自己補強された欠点を有する。それが起こると、ラックは並べ替えられたセグメントを紛失して紛失して再送信させることができます。次に、再送信は、このメカニズムが再送信されたことのないセグメントに対してのみACKまたはSACKSを必要とするため、ステップ3の必要条件が並べ替えを検出できます。場合によっては、このようなシナリオが持続することがあり、並べ替えウィンドウを実現せずに失われたようにラックが失われるようにラックを引き続き抑制することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid the issue above, RACK dynamically adapts to higher degrees of reordering using DSACK options from the receiver. Receiving an ACK with a DSACK option indicates a possible spurious retransmission, suggesting that RACK.reo_wnd may be too small. The RACK.reo_wnd increases linearly for every round trip in which the sender receives some DSACK option so that after N round trips in which a DSACK is received, the RACK.reo_wnd becomes (N+1) * min_RTT / 4, with an upper-bound of SRTT.",
+      "ja": "上記の問題を回避するために、ラックは受信機からのDSACKオプションを使用してより高い順序の並べ替えに動的に適応します。DSACKオプションを使用してACKを受信すると、rack.reo_wndが小さすぎる可能性があることを示唆している可能性があります。RACK.REO_WNDは、DSACKを受信したNラウンドトリップを受信した後、RACK.REO_WNDが上限で（N 1）* MIN_RTT / 4になるように、送信者がいくつかのDSACKオプションを受信するすべての往復のために直線的に増加します。SRTTの。"
+    },
+    {
+      "indent": 3,
+      "text": "If the reordering is temporary, then a large adapted reordering window would unnecessarily delay loss recovery later. Therefore, RACK persists using the inflated RACK.reo_wnd for up to 16 loss recoveries, after which it resets RACK.reo_wnd to its starting value, min_RTT / 4. The downside of resetting the reordering window is the risk of triggering spurious fast recovery episodes if the reordering remains high. The rationale for this approach is to bound such spurious recoveries to approximately once every 16 recoveries (less than 7%).",
+      "ja": "並べ替えが一時的な場合、大きな適応並べ替えウィンドウは後で損失回復を不必要に遅らせるであろう。したがって、ラックは膨張したrack.ro_wndを最大16台の損失回復のために持続します。この後、RACK.REO_WNDを開始値にリセットします。並べ替えは高いままです。このアプローチの理論的根拠は、そのようなスプリアス回数を16回の回収額に約1回（7％未満）に束ねることです。"
+    },
+    {
+      "indent": 3,
+      "text": "To track the linear scaling factor for the adaptive reordering window, RACK uses the variable RACK.reo_wnd_mult, which is initialized to 1 and adapts with the observed reordering.",
+      "ja": "適応並び替えウィンドウのリニアスケーリング係数を追跡するために、ラックは1に初期化され、観察された並べ替えに適応します。"
+    },
+    {
+      "indent": 3,
+      "text": "The following pseudocode implements the above algorithm for updating the RACK reordering window:",
+      "ja": "次の疑似コードは、ラック並べ替えウィンドウを更新するための上記のアルゴリズムを実装しています。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_update_reo_wnd():",
+      "ja": "RACK_UPDATE_REO_WND（）："
+    },
+    {
+      "indent": 7,
+      "text": "/* DSACK-based reordering window adaptation */\nIf RACK.dsack_round is not None AND\n   SND.UNA >= RACK.dsack_round:\n    RACK.dsack_round = None\n/* Grow the reordering window per round that sees DSACK.\n   Reset the window after 16 DSACK-free recoveries */\nIf RACK.dsack_round is None AND\n   any DSACK option is present on latest received ACK:\n    RACK.dsack_round = SND.NXT\n    RACK.reo_wnd_mult += 1\n    RACK.reo_wnd_persist = 16\nElse if exiting Fast or RTO recovery:\n    RACK.reo_wnd_persist -= 1\n    If RACK.reo_wnd_persist <= 0:\n        RACK.reo_wnd_mult = 1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "If RACK.reordering_seen is FALSE:\n    If in Fast or RTO recovery:\n        Return 0\n    Else if RACK.segs_sacked >= DupThresh:\n        Return 0\nReturn min(RACK.reo_wnd_mult * RACK.min_RTT / 4, SRTT)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Step 5: Detect losses.",
+      "ja": "ステップ5：損失を検出します。"
+    },
+    {
+      "indent": 3,
+      "text": "For each segment that has not been SACKed, RACK considers that segment lost if another segment that was sent later has been delivered and the reordering window has passed. RACK considers the reordering window to have passed if the RACK.segment was sent a sufficient time after the segment in question, if a sufficient time has elapsed since the RACK.segment was S/ACKed, or some combination of the two. More precisely, RACK marks a segment as lost if:",
+      "ja": "梱包されていない各セグメントについて、後で送信された別のセグメントが配信され、並べ替えウィンドウが通過した場合、ラックが失われたと見なします。ラックは、RACK.SEGMENTがS / ACKされてからの十分な時間が経過した場合、または2つの組み合わせで十分な時間が経過した場合、並べ替えウィンドウが渡されたと見なします。より正確には、ラックは損失としてセグメントをマークします。"
+    },
+    {
+      "indent": 4,
+      "text": "RACK.xmit_ts >= Segment.xmit_ts\n       AND\nRACK.xmit_ts - Segment.xmit_ts + (now - RACK.ack_ts) >= RACK.reo_wnd",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Solving this second condition for \"now\", the moment at which a segment is marked as lost, yields:",
+      "ja": "「今」のこの第2の条件を解くと、セグメントが失われたとマークされた瞬間、歩留まり："
+    },
+    {
+      "indent": 3,
+      "text": "now >= Segment.xmit_ts + RACK.reo_wnd + (RACK.ack_ts - RACK.xmit_ts)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Then (RACK.ack_ts - RACK.xmit_ts) is the round-trip time of the most recently (re)transmitted segment that's been delivered. When segments are delivered in order, the most recently (re)transmitted segment that's been delivered is also the most recently delivered; hence, RACK.rtt == RACK.ack_ts - RACK.xmit_ts. But if segments were reordered, then the segment delivered most recently was sent before the most recently (re)transmitted segment. Hence, RACK.rtt > (RACK.ack_ts - RACK.xmit_ts).",
+      "ja": "（Rack.ack_ts  -  rack.xmit_ts）は、配信されている最後に送信されたセグメントの往復時間です。セグメントが順番に配信されると、配信された最も最近の送信されたセグメントもまた最近配信されています。したがって、rack.rtt == rack.ack_ts  -  rack.xmit_ts。しかし、セグメントが並べ替えられた場合、最後に配信されたセグメントは最近（再）送信されたセグメントの前に送信されました。したがって、rack.rtt>（Rack.ack_ts  -  Rack.xmit_ts）。"
+    },
+    {
+      "indent": 3,
+      "text": "Since RACK.RTT >= (RACK.ack_ts - RACK.xmit_ts), the previous equation\nreduces to saying that the sender can declare a segment lost when:",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "now >= Segment.xmit_ts + RACK.reo_wnd + RACK.rtt",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "In turn, that is equivalent to stating that a RACK sender should declare a segment lost when:",
+      "ja": "次に、ラック送信者が失われたセグメントを宣言する必要があることと同じようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Segment.xmit_ts + RACK.rtt + RACK.reo_wnd - now <= 0",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Note that if the value on the left-hand side is positive, it represents the remaining wait time before the segment is deemed lost. But this risks a timeout (RTO) if no more ACKs come back (e.g., due to losses or application-limited transmissions) to trigger the marking. For timely loss detection, it is RECOMMENDED that the sender install a reordering timer. This timer expires at the earliest moment when RACK would conclude that all the unacknowledged segments within the reordering window were lost.",
+      "ja": "左側の値が正の場合、セグメントが失われたと見なされる前の残りの待ち時間を表します。しかし、これは、マーキングをトリガーするためにこれ以上のACKが戻ってきた（例えば、損失またはアプリケーションに限定的な送信のために）、タイムアウト（RTO）にリスクされます。タイムリーな損失検出の場合、送信者は並べ替えタイマーをインストールすることをお勧めします。このタイマーは、ラックが並べ替えウィンドウ内のすべての未確認セグメントが失われたと判断したときに最も早い瞬間に期限が切れます。"
+    },
+    {
+      "indent": 3,
+      "text": "The following pseudocode implements the algorithm above. When an ACK is received or the RACK reordering timer expires, call RACK_detect_loss_and_arm_timer(). The algorithm breaks timestamp ties by using the TCP sequence space since high-speed networks often have multiple segments with identical timestamps.",
+      "ja": "次の疑似コードは上記のアルゴリズムを実装しています。ACKを受信した場合、またはラックの並べ替えタイマーが期限切れになると、Rack_Detect_Loss_and_arm_timer（）を呼び出します。高速ネットワークが同一のタイムスタンプを持つ複数のセグメントを持つことが多いため、アルゴリズムはTCPシーケンススペースを使用することによってタイムスタンプタイを分割します。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_detect_loss():\n    timeout = 0\n    RACK.reo_wnd = RACK_update_reo_wnd()\n    For each segment, Segment, not acknowledged yet:\n        If RACK_sent_after(RACK.xmit_ts, RACK.end_seq,\n                           Segment.xmit_ts, Segment.end_seq):\n            remaining = Segment.xmit_ts + RACK.rtt +\n                        RACK.reo_wnd - Now()\n            If remaining <= 0:\n                Segment.lost = TRUE\n                Segment.xmit_ts = INFINITE_TS\n            Else:\n                timeout = max(remaining, timeout)\n    Return timeout",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "RACK_detect_loss_and_arm_timer():\n    timeout = RACK_detect_loss()\n    If timeout != 0\n        Arm the RACK timer to call\n        RACK_detect_loss_and_arm_timer() after timeout",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "As an optimization, an implementation can choose to check only segments that have been sent before RACK.xmit_ts. This can be more efficient than scanning the entire SACK scoreboard, especially when there are many segments in flight. The implementation can use a separate doubly linked list ordered by Segment.xmit_ts, insert a segment at the tail of the list when it is (re)transmitted, and remove a segment from the list when it is delivered or marked as lost. In Linux TCP, this optimization improved CPU usage by orders of magnitude during some fast recovery episodes on high-speed WAN networks.",
+      "ja": "最適化として、実装はRack.xmit_tsの前に送信されたセグメントのみをチェックすることを選択できます。特に飛行中に多くのセグメントがある場合は、サックスコアボード全体をスキャンするよりも効率的になる可能性があります。実装はSegent.xmit_tsによって順序付けられた別の二重リンクリストを使用し、それが送信されたときにリストの末尾にセグメントを挿入し、それが配信されたときまたは紛失したときにマークされたときにリストからセグメントを削除します。Linux TCPでは、この最適化は高速WANネットワーク上のいくつかの高速回復エピソードの間に、CPU使用率を桁違いに改善しました。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Upon RTO Expiration",
+      "section_title": true,
+      "ja": "6.3. rto ontirationに"
+    },
+    {
+      "indent": 3,
+      "text": "Upon RTO timer expiration, RACK marks the first outstanding segment as lost (since it was sent an RTO ago); for all the other segments, RACK only marks the segment as lost if the time elapsed since the segment was transmitted is at least the sum of the recent RTT and the reordering window.",
+      "ja": "RTOタイマーの満了時に、ラックは最初の未解決のセグメントを失われたようにマークします（RTOが前に送信されたため）。他のすべてのセグメントの場合、ラックはセグメントが送信されてからの時間が経過してからの時間が経過した場合にのみセグメントをマークします。少なくとも最近のRTTと並べ替えウィンドウの合計です。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK_mark_losses_on_RTO():\n    For each segment, Segment, not acknowledged yet:\n        If SEG.SEQ == SND.UNA OR\n           Segment.xmit_ts + RACK.rtt + RACK.reo_wnd - Now() <= 0:\n            Segment.lost = TRUE",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7. TLP Algorithm Details",
+      "section_title": true,
+      "ja": "7. TLPアルゴリズムの詳細"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Initializing State",
+      "section_title": true,
+      "ja": "7.1. 初期化状態"
+    },
+    {
+      "indent": 3,
+      "text": "Reset TLP.is_retrans and TLP.end_seq when initiating a connection, fast recovery, or RTO recovery.",
+      "ja": "接続、高速回復、またはRTOの回復を開始するときにTLP.IS_RETRANSおよびTLP.END_SEQをリセットします。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP_init(): TLP.end_seq = None TLP.is_retrans = false",
+      "ja": "tlp_init（）：tlp.end_seq =なしtlp.is_retrans = false"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Scheduling a Loss Probe",
+      "section_title": true,
+      "ja": "7.2. 損失プローブのスケジューリング"
+    },
+    {
+      "indent": 3,
+      "text": "The sender schedules a loss probe timeout (PTO) to transmit a segment during the normal transmission process. The sender SHOULD start or restart a loss probe PTO timer after transmitting new data (that was not itself a loss probe) or upon receiving an ACK that cumulatively acknowledges new data unless it is already in fast recovery, RTO recovery, or segments have been SACKed (i.e., RACK.segs_sacked is not zero). These conditions are excluded because they are addressed by similar mechanisms, like Limited Transmit [RFC3042], the RACK reordering timer, and Forward RTO-Recovery (F-RTO) [RFC5682].",
+      "ja": "送信者は、通常の送信プロセス中にセグメントを送信するために損失プローブタイムアウト（PTO）をスケジュールします。送信者は、新しいデータを送信した（それ自体損失プローブではなかった）、または累積的に回復していない限り、RTOの回復、またはセグメントが解任されていない限り、新しいデータを送信した後（それ自体損失プローブではなかった）、または累積的に確認したACKを受信した後に損失プローブPTOタイマーを開始または再起動する必要があります。（つまり、Rack.Segs_sackedはゼロではありません）。これらの条件は、限られた送信[RFC3042]、ラック並べ替えタイマー、および前方RTO回復（F-RTO）[RFC5682]と同様のメカニズムによってアドレス指定されているため、これらの条件は除外されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The sender calculates the PTO interval by taking into account a number of factors.",
+      "ja": "送信者は、いくつかの要因を考慮してPTO間隔を計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "First, the default PTO interval is 2*SRTT. By that time, it is prudent to declare that an ACK is overdue since under normal circumstances, i.e., no losses, an ACK typically arrives in one SRTT. Choosing the PTO to be exactly an SRTT would risk causing spurious probes given that network and end-host delay variance can cause an ACK to be delayed beyond the SRTT. Hence, the PTO is conservatively chosen to be the next integral multiple of SRTT.",
+      "ja": "まず、デフォルトのPTO間隔は2 * SRTTです。その時点までに、通常の状況下ではACKが遅れていること、すなわち損失が典型的には1つのSRTTに到達することが慎重に宣言することは賢明である。PTOを正確に選択することを選択すると、ネットワークとエンドホスト遅延分散がSRTTを超えてACKを遅らせる可能性があることを考えると、スプリアスプローブを引き起こす危険があります。したがって、PTOはSRTTの次の整数倍になるように保守的に選択されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Second, when there is no SRTT estimate available, the PTO SHOULD be 1 second. This conservative value corresponds to the RTO value when no SRTT is available, per [RFC6298].",
+      "ja": "第二に、利用可能なSRTT推定がない場合、PTOは1秒にする必要があります。この保守的な値は、[RFC6298]ごとにSRTTが使用できない場合のRTO値に対応しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Third, when the FlightSize is one segment, the sender MAY inflate the PTO by TLP.max_ack_delay to accommodate a potentially delayed acknowledgment and reduce the risk of spurious retransmissions. The actual value of TLP.max_ack_delay is implementation specific.",
+      "ja": "第3に、FlightSizeが1つのセグメントである場合、送信者はTLP.MAX_ACK_DELAYによってPTOを膨張させて潜在的に遅れた確認応答に対応し、スプリアスの再送信のリスクを軽減することができます。TLP.MAX_ACK_DELAYの実際の値は実装固有です。"
+    },
+    {
+      "indent": 3,
+      "text": "Finally, if the time at which an RTO would fire (here denoted as \"TCP_RTO_expiration()\") is sooner than the computed time for the PTO, then the sender schedules a TLP to be sent at that RTO time.",
+      "ja": "最後に、RTOが発射する時間（ここでは「TCP_RTO_Expiration（）」と表記されている）がPTOの計算された時間より早く、送信者はそのRTOの時点で送信されるべきTLPをスケジュールします。"
+    },
+    {
+      "indent": 3,
+      "text": "Summarizing these considerations in pseudocode form, a sender SHOULD use the following logic to select the duration of a PTO:",
+      "ja": "疑似コード形式でこれらの考慮事項を要約すると、送信者は次のロジックを使用してPTOの期間を選択する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP_calc_PTO():\n    If SRTT is available:\n        PTO = 2 * SRTT\n        If FlightSize is one segment:\n           PTO += TLP.max_ack_delay\n    Else:\n        PTO = 1 sec",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "If Now() + PTO > TCP_RTO_expiration():\n    PTO = TCP_RTO_expiration() - Now()",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7.3. Sending a Loss Probe upon PTO Expiration",
+      "section_title": true,
+      "ja": "7.3. PTOの有効期限に損失プローブを送る"
+    },
+    {
+      "indent": 3,
+      "text": "When the PTO timer expires, the sender MUST check whether both of the following conditions are met before sending a loss probe:",
+      "ja": "PTOタイマーが期限切れになると、送信プローブを送信する前に、次の両方の条件が満たされているかどうかを確認する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "1. First, there is no other previous loss probe still in flight. This ensures that, at any given time, the sender has at most one additional packet in flight beyond the congestion window limit. This invariant is maintained using the state variable TLP.end_seq, which indicates the latest unacknowledged TLP loss probe's ending sequence. It is reset when the loss probe has been acknowledged or is deemed lost or irrelevant.",
+      "ja": "1. まず、フライト内にまだ以前の損失プローブはありません。これにより、任意の時間に、送信者が輻輳ウィンドウの制限を超えて飛行中の最大1つのパケットを持っていることが保証されます。この不変量は、状態変数tlp.end_seqを使用して維持されます。これは、最新の未確認TLP損失プローブの終了シーケンスを示しています。損失プローブが承認された場合、または紛失または無関係と見なされるとリセットされます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Second, the sender has obtained an RTT measurement since the last loss probe transmission or the start of the connection, whichever was later. This condition ensures that loss probe retransmissions do not prevent taking the RTT samples necessary to adapt SRTT to an increase in path RTT.",
+      "ja": "2. 第二に、送信者は最後の損失プローブの送信または接続の開始、どちらか後にRTT測定を得た。この状態により、損失プローブの再送信は、SRTTを経路RTTの増加に適応させるのに必要なRTTサンプルの摂取を妨げないことを保証します。"
+    },
+    {
+      "indent": 3,
+      "text": "If either one of these two conditions is not met, then the sender MUST skip sending a loss probe and MUST proceed to re-arm the RTO timer, as specified at the end of this section.",
+      "ja": "これら2つの条件のいずれかが満たされていない場合、送信者は損失プローブの送信をスキップし、このセクションの最後に指定されているようにRTOタイマーを再アームするように進む必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If both conditions are met, then the sender SHOULD transmit a previously unsent data segment, if one exists and the receive window allows, and increment the FlightSize accordingly. Note that the FlightSize could be one packet greater than the congestion window temporarily until the next ACK arrives.",
+      "ja": "両方の条件が満たされている場合、送信側は存在し、受信ウィンドウが許可されている場合は、以前に未送信のデータセグメントを送信し、それに応じてFlightsizeをインクリメントする必要があります。FlightSizeは、次のACKが到着するまで、一時的に輻輳ウィンドウよりも1パケットが1パケットになる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If such an unsent segment is not available, then the sender SHOULD retransmit the highest-sequence segment sent so far and set TLP.is_retrans to true. This segment is chosen to deal with the retransmission ambiguity problem in TCP. Suppose a sender sends N segments and then retransmits the last segment (segment N) as a loss probe, after which the sender receives a SACK for segment N. As long as the sender waits for the RACK reordering window to expire, it doesn't matter if that SACK was for the original transmission of segment N or the TLP retransmission; in either case, the arrival of the SACK for segment N provides evidence that the N-1 segments preceding segment N were likely lost.",
+      "ja": "そのようなわからないセグメントが利用できない場合、送信者はこれまでに送信された最高シーケンスセグメントを再送信し、tlp.is_retransをtrueに設定する必要があります。このセグメントは、TCPの再送信の曖昧さ問題に対処するように選択されています。送信者がN個のセグメントを送信し、次に損失プローブとして最後のセグメント（セグメントN）を再送信し、その後送信者がセグメントNのための袋を受信した。送信者がRACK REDERINGウィンドウが期限切れになるのを待つ限り、そうではありません。その袋がセグメントNまたはTLP再送の元の送信のためのものである場合。いずれの場合も、セグメントNのための袋の到着は、セグメントNの前にあるN  -  1セグメントが失われた可能性が高いという証拠を提供する。"
+    },
+    {
+      "indent": 3,
+      "text": "In a case where there is only one original outstanding segment of data (N=1), the same logic (trivially) applies: an ACK for a single outstanding segment tells the sender that the N-1=0 segments preceding that segment were lost. Furthermore, whether there are N>1 or N=1 outstanding segments, there is a question about whether the original last segment or its TLP retransmission were lost; the sender estimates whether there was such a loss using TLP recovery detection (see below).",
+      "ja": "データのオリジナルの優れたセグメント（n = 1）しかない場合、同じ論理（自明）が適用されます。単一の未処理セグメントのACKは、そのセグメントの前にN-1 = 0セグメントが失われたことを送信者に指示します。。さらに、N> 1またはN = 1の優れたセグメントがあるかどうかは、元の最後のセグメントまたはそのTLP再送信が失われたかどうかについての質問があります。送信者は、TLP回復検出を使用してそのような損失があったかどうかを推定します（下記参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "The sender MUST follow the RACK transmission procedures in the \"Upon Transmitting a Data Segment\" section upon sending either a retransmission or a new data loss probe. This is critical for detecting losses using the ACK for the loss probe.",
+      "ja": "送信者は、再送信または新しいデータ損失プローブのいずれかを送信する際に、「データセグメントを送信すると、データセグメントを送信する」セクションのラック送信手順に従わなければならない。これは、損失プローブのためのACKを使用して損失を検出するために重要です。"
+    },
+    {
+      "indent": 3,
+      "text": "After attempting to send a loss probe, regardless of whether a loss probe was sent, the sender MUST re-arm the RTO timer, not the PTO timer, if the FlightSize is not zero. This ensures RTO recovery remains the last resort if TLP fails. The following pseudocode summarizes the operations.",
+      "ja": "損失プローブが送信されたかどうかにかかわらず、損失プローブを送信しようとした後、FlightSizeがゼロではない場合、送信者はPTOタイマーではなくRTOタイマーを再アームする必要があります。これにより、TLPが失敗した場合はRTO回復が最後のリージョンのままになります。次の疑似コードは操作を要約しています。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP_send_probe():",
+      "ja": "TLP_SEND_PROBE（）："
+    },
+    {
+      "indent": 7,
+      "text": "If TLP.end_seq is None and\n   Sender has taken a new RTT sample since last probe or\n   the start of connection:\n    TLP.is_retrans = false\n    Segment = send buffer segment starting at SND.NXT\n    If Segment exists and fits the peer receive window limit:\n       /* Transmit the lowest-sequence unsent Segment */\n       Transmit Segment\n       RACK_transmit_data(Segment)\n       TLP.end_seq = SND.NXT\n       Increase FlightSize by Segment length\n    Else:\n       /* Retransmit the highest-sequence Segment sent */\n       Segment = send buffer segment ending at SND.NXT\n       Transmit Segment\n       RACK_retransmit_data(Segment)\n       TLP.end_seq = SND.NXT\n       TLP.is_retrans = true",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "If FlightSize is not zero: Rearm RTO timer to fire at timeout = now + RTO",
+      "ja": "FlightSizeがゼロではない場合：Timeout = Now RTOの火事へのROUTM RTOタイマー"
+    },
+    {
+      "indent": 0,
+      "text": "7.4. Detecting Losses Using the ACK of the Loss Probe",
+      "section_title": true,
+      "ja": "7.4. 損失プローブの背面を使用した損失の検出"
+    },
+    {
+      "indent": 3,
+      "text": "When there is packet loss in a flight ending with a loss probe, the feedback solicited by a loss probe will reveal one of two scenarios, depending on the pattern of losses.",
+      "ja": "損失プローブで終わる飛行にパケット損失がある場合、損失プローブによって勧誘されたフィードバックは、損失のパターンに応じて、2つのシナリオのうちの1つを明らかにします。"
+    },
+    {
+      "indent": 0,
+      "text": "7.4.1. General Case: Detecting Packet Losses Using RACK",
+      "section_title": true,
+      "ja": "7.4.1. 一般的なケース：ラックを使用したパケット損失の検出"
+    },
+    {
+      "indent": 3,
+      "text": "If the loss probe and the ACK that acknowledges the probe are delivered successfully, RACK-TLP uses this ACK -- just as it would with any other ACK -- to detect if any segments sent prior to the probe were dropped. RACK would typically infer that any unacknowledged data segments sent before the loss probe were lost, since they were sent sufficiently far in the past (where at least one PTO has elapsed, plus one round trip for the loss probe to be ACKed). More specifically, RACK_detect_loss() (Step 5) would mark those earlier segments as lost. Then the sender would trigger a fast recovery to recover those losses.",
+      "ja": "損失プローブとプローブを確認するACKが正常に配信された場合、Rack-TLPはこのACKを使用します。これは、他のACKと同じように、プローブの前に送信されたセグメントがドロップされたかどうかを検出します。ラックは、通常、損失プローブが損失した以外に送信されていないデータセグメントが失われたことを推測します（少なくとも1つのPTOが経過し、損失プローブの損失プローブの1回の往復）。より具体的には、Rack_Detect_loss（ステップ5）は、それらの以前のセグメントを失われたようにマークします。その後、送信者はそれらの損失を回復するための迅速な回復を引き起こします。"
+    },
+    {
+      "indent": 0,
+      "text": "7.4.2. Special Case: Detecting a Single Loss Repaired by the Loss Probe",
+      "section_title": true,
+      "ja": "7.4.2. 特殊ケース：損失プローブによって修理された単一損失の検出"
+    },
+    {
+      "indent": 3,
+      "text": "If the TLP retransmission repairs all the lost in-flight sequence ranges (i.e., only the last segment in the flight was lost), the ACK for the loss probe appears to be a regular cumulative ACK, which would not normally trigger the congestion control response to this packet loss event. The following TLP recovery detection mechanism examines ACKs to detect this special case to make congestion control respond properly [RFC5681].",
+      "ja": "TLP再送がすべての紛失された内シーケンス範囲を修復する（すなわち、飛行中の最後のセグメントのみが失われた）場合、損失プローブのACKは通常の累積ACKであるように見え、これは通常輻輳制御応答を引き起こすことはありません。このパケット損失イベントに。次のTLP回復検出メカニズムはACKSを検証して輻輳制御が正しく対応している[RFC5681]。"
+    },
+    {
+      "indent": 3,
+      "text": "After a TLP retransmission, the sender checks for this special case of a single loss that is recovered by the loss probe itself. To accomplish this, the sender checks for a duplicate ACK or DSACK indicating that both the original segment and TLP retransmission arrived at the receiver, which means there was no loss. If the TLP sender does not receive such an indication, then it MUST assume that the original data segment, the TLP retransmission, or a corresponding ACK was lost for congestion control purposes.",
+      "ja": "TLPの再送信の後、送信者はこの特別なケースを損失プローブ自体によって回復される単一の損失の特別なケースをチェックします。これを達成するために、送信者は、元のセグメントとTLP再送信の両方が受信機に到着したことを示す重複ACKまたはDSACKをチェックします。これは損失がなかったことを意味します。TLP送信者がそのような指示を受け取らない場合は、元のデータセグメント、TLP再送、または対応するACKが輻輳制御の目的で失われたと仮定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the TLP retransmission is spurious, a receiver that uses DSACK would return an ACK that covers TLP.end_seq with a DSACK option (Case 1). If the receiver does not support DSACK, it would return a DupAck without any SACK option (Case 2). If the sender receives an ACK matching either case, then the sender estimates that the receiver received both the original data segment and the TLP probe retransmission. The sender considers the TLP episode to be done and records that fact by setting TLP.end_seq to None.",
+      "ja": "TLP再送がスプリアスである場合、DSACKを使用する受信機は、TLP.END_SEQをDSACKオプションでカバーするACKを返します（ケース1）。受信機がDSACKをサポートしていない場合は、SACKオプションなしでDUPACKを返します（ケース2）。送信者がどちらかのケースに一致するACKを受信した場合、送信者は受信者が元のデータセグメントとTLPプローブの再送信の両方を受信したと推定します。送信者は、TLPエピソードを完了させることを考慮し、TLP.END_SEQをNONEに設定することでその事実を記録します。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving an ACK that covers some sequence number after TLP.end_seq, the sender should have received any ACKs for the original segment and TLP probe retransmission segment. At that time, if the TLP.end_seq is still set and thus indicates that the TLP probe retransmission remains unacknowledged, then the sender should presume that at least one of its data segments was lost. The sender then SHOULD invoke a congestion control response equivalent to a fast recovery.",
+      "ja": "tlp.end_seqの後にいくつかのシーケンス番号をカバーするACKを受信すると、送信者は元のセグメントおよびTLPプローブ再送信セグメントの任意のACKを受信したはずです。その際、TLP.END_SEQがまだ設定されている場合、TLPプローブの再送信が未確認のままであることを示す場合、送信者はそのデータセグメントのうちの少なくとも1つが失われたと推定する必要があります。その後、送信者は高速回復と同等の輻輳制御応答を呼び出す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "More precisely, on each ACK, the sender executes the following:",
+      "ja": "より正確には、各ACKで、送信者は次のものを実行します。"
+    },
+    {
+      "indent": 3,
+      "text": "TLP_process_ack(ACK):\n    If TLP.end_seq is not None AND ACK's ack. number >= TLP.end_seq:\n        If not TLP.is_retrans:\n            TLP.end_seq = None    /* TLP of new data delivered */\n        Else if ACK has a DSACK option matching TLP.end_seq:\n            TLP.end_seq = None    /* Case 1, above */\n        Else If ACK's ack. number > TLP.end_seq:\n            TLP.end_seq = None    /* Repaired the single loss */\n            (Invoke congestion control to react to\n             the loss event the probe has repaired)\n        Else If ACK is a DupAck without any SACK option:\n            TLP.end_seq = None     /* Case 2, above */",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "8. Managing RACK-TLP Timers",
+      "section_title": true,
+      "ja": "8. Rack-TLPタイマーの管理"
+    },
+    {
+      "indent": 3,
+      "text": "The RACK reordering timer, the TLP PTO timer, the RTO, and Zero Window Probe (ZWP) timer [RFC793] are mutually exclusive and are used in different scenarios. When arming a RACK reordering timer or TLP PTO timer, the sender SHOULD cancel any other pending timers. An implementation is expected to have one timer with an additional state variable indicating the type of the timer.",
+      "ja": "ラック並べ替えタイマ、TLP PTOタイマー、RTO、ゼロウィンドウプローブ（ZWP）タイマ[RFC793]は相互に排他的で、さまざまなシナリオで使用されています。ラックを並べ替えるときにタイマーやTLP PTOタイマーを並べ替えると、送信者は他の保留中のタイマーをキャンセルする必要があります。実装は、タイマーの種類を示す追加の状態変数を持つ1つのタイマーを持つことが期待されます。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Discussion",
+      "section_title": true,
+      "ja": "9. 考察"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Advantages and Disadvantages",
+      "section_title": true,
+      "ja": "9.1. 長所と短所"
+    },
+    {
+      "indent": 3,
+      "text": "The biggest advantage of RACK-TLP is that every data segment, whether it is an original data transmission or a retransmission, can be used to detect losses of the segments sent chronologically prior to it. This enables RACK-TLP to use fast recovery in cases with application-limited flights of data, lost retransmissions, or data segment reordering events. Consider the following examples:",
+      "ja": "Rack-TLPの最大の利点は、それが元のデータ送信か再送信であろうと、すべてのデータセグメントを使用して、年代順に送信されたセグメントの損失を検出することができます。これにより、Rack-TLPは、データのアプリケーションが限られたデータ、再送信の失われたフライト、またはデータセグメントの並べ替えイベントの場合、迅速な回復を使用できます。次の例を考慮してください。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Packet drops at the end of an application data flight: Consider a sender that transmits an application-limited flight of three data segments (P1, P2, P3), and P1 and P3 are lost. Suppose the transmission of each segment is at least RACK.reo_wnd after the transmission of the previous segment. RACK will mark P1 as lost when the SACK of P2 is received, and this will trigger the retransmission of P1 as R1. When R1 is cumulatively acknowledged, RACK will mark P3 as lost, and the sender will retransmit P3 as R3. This example illustrates how RACK is able to repair certain drops at the tail of a transaction without an RTO recovery. Notice that neither the conventional duplicate ACK threshold [RFC5681], nor the loss recovery algorithm [RFC6675], nor the Forward Acknowledgment [FACK] algorithm can detect such losses because of the required segment or sequence count.",
+      "ja": "1. アプリケーションデータの終了時にパケットが降下するフライト：3つのデータセグメントのアプリケーション制限付きフライトを送信する送信者（P1、P2、P3）、P1とP3が失われます。各セグメントの送信が少なくともRACK.REO_WNDであるとします。前のセグメントの送信後。P2の袋を受信したときにラックが失われ、これによりP1の再送信がR1としてトリガされます。R1が累積的に確認応答されると、ラックは失われたようにP3をマークし、送信者はR3としてP3を再送信します。この例では、RTOの回復なしに、トランザクションの末尾でラックが特定のドロップを修復できる方法を示しています。従来の重複ACKスレッショルド[RFC5681]ノも損失回復アルゴリズム（RFC6675]、または順方向確認応答[FACK]アルゴリズムは、必要なセグメントまたはシーケンスカウントのためにそのような損失を検出できます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Lost retransmission: Consider a flight of three data segments (P1, P2, P3) that are sent; P1 and P2 are dropped. Suppose the transmission of each segment is at least RACK.reo_wnd after the transmission of the previous segment. When P3 is SACKed, RACK will mark P1 and P2 as lost, and they will be retransmitted as R1 and R2. Suppose R1 is lost again but R2 is SACKed; RACK will mark R1 as lost and trigger retransmission again. Again, neither the conventional three-duplicate ACK threshold approach, nor the loss recovery algorithm [RFC6675], nor the Forward Acknowledgment [FACK] algorithm can detect such losses. And such a lost retransmission can happen when TCP is being rate-limited, particularly by token bucket policers with a large bucket depth and low rate limit; in such cases, retransmissions are often lost repeatedly because standard congestion control requires multiple round trips to reduce the rate below the policed rate.",
+      "ja": "2. 再送信を失った：送信される3つのデータセグメント（P1、P2、P3）の飛行を検討してください。P1とP2が落とされます。各セグメントの送信が少なくともRACK.REO_WNDであるとします。前のセグメントの送信後。P3が解析されると、ラックはP1とP2を失われて示し、R1とR2として再送されます。R1が再び失われたが、R2が解約されるとします。ラックはR1を紛失して再送信します。やはり、従来の3重複ACKしきい値アプローチ、損失回復アルゴリズム（RFC6675]、または順方向確認応答[FACK]アルゴリズムもそのような損失を検出することはできません。そして、このような失われた再送信は、TCPが速度制限されているとき、特に大きなバケット深さおよび低速限界を有するトークンバケットポリサーによって起こる可能性がある。そのような場合、標準的な輻輳制御は、ポリシスレートより低い速度を下げるために複数の往復が必要なので、再送信はしばしば繰り返し失われます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Packet reordering: Consider a simple reordering event where a flight of segments are sent as (P1, P2, P3). P1 and P2 carry a full payload of Maximum Sender Size (MSS) octets, but P3 has only a 1-octet payload. Suppose the sender has detected reordering previously and thus RACK.reo_wnd is min_RTT/4. Now P3 is reordered and delivered first, before P1 and P2. As long as P1 and P2 are delivered within min_RTT/4, RACK will not consider P1 and P2 lost. But if P1 and P2 are delivered outside the reordering window, then RACK will still spuriously mark P1 and P2 as lost.",
+      "ja": "3. パケットの並べ替え：セグメントの飛行が送信されている単純な並べ替えイベントを（P1、P2、P3）と考えてください。P1とP2は最大送信者サイズ（MSS）オクテットの全ペイロードを持ちますが、P3は1オクテットペイロードしかありません。送信者が以前に並べ替えを検出したことを示し、したがってRACK.REO_WNDはmin_rtt / 4です。P3は、P1とP2の前にP3が最初に並べ替えられ、配信されます。P1とP2がMIN_RTT / 4内で配信されている限り、LACKはP1とP2が失われませんでした。しかし、P1とP2が並べ替えウィンドウの外側に配信されている場合、ラックは依然として損失しているようにP1とP2を偽装します。"
+    },
+    {
+      "indent": 3,
+      "text": "The examples above show that RACK-TLP is particularly useful when the sender is limited by the application, which can happen with interactive or request/response traffic. Similarly, RACK still works when the sender is limited by the receive window, which can happen with applications that use the receive window to throttle the sender.",
+      "ja": "上記の例では、Senderがアプリケーションによって制限されている場合に特に役立ちます。これは、対話型または要求/応答トラフィックで発生する可能性があります。同様に、送信者が受信ウィンドウによって制限されている場合、ラックはまだ機能します。これは、受信ウィンドウを使用して送信者をスロットルするアプリケーションで発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP works more efficiently with TCP Segmentation Offload (TSO) compared to DupAck counting. RACK always marks the entire TSO aggregate as lost because the segments in the same TSO aggregate have the same transmission timestamp. By contrast, the algorithms based on sequence counting (e.g., [RFC6675], [RFC5681]) may mark only a subset of segments in the TSO aggregate as lost, forcing the stack to perform expensive fragmentation of the TSO aggregate or to selectively tag individual segments as lost in the scoreboard.",
+      "ja": "RACK-TLPは、DUPACKカウントと比較してTCPセグメンテーションオフロード（TSO）でより効率的に機能します。ラックは、同じTSO集計内のセグメントに同じ送信タイムスタンプがあるため、常にTSO集計全体が失われます。対照的に、シーケンスカウントに基づくアルゴリズム（例えば、[RFC6675]、[RFC5681]）は、TSO集合体内のセグメントのサブセットのみを失われ、スタックを強制的に押してTSO集合体の高価な断片化を実行するか、または選択的にタグを付けることができる。スコアボードで紛失したセグメント。"
+    },
+    {
+      "indent": 3,
+      "text": "The main drawback of RACK-TLP is the additional state required compared to DupAck counting. RACK requires the sender to record the transmission time of each segment sent at a clock granularity that is finer than 1/4 of the minimum RTT of the connection. TCP implementations that already record this for RTT estimation do not require any new per-packet state. But implementations that are not yet recording segment transmission times will need to add per-packet internal state (expected to be either 4 or 8 octets per segment or TSO aggregate) to track transmission times. In contrast, the loss detection approach described in [RFC6675] does not require any per-packet state beyond the SACK scoreboard; this is particularly useful on ultra-low RTT networks where the RTT may be less than the sender TCP clock granularity (e.g., inside data centers). Another disadvantage is that the reordering timer may expire prematurely (like any other retransmission timer) and cause higher spurious retransmissions, especially if DSACK is not supported.",
+      "ja": "RACK-TLPの主な欠点は、DUPACKカウントと比較して必要とされる追加の状態です。ラックには、接続の最小RTTの1/4より細かいクロック粒度で送信された各セグメントの送信時間を記録する必要があります。 RTT推定にすでに記録しているTCP実装は、新しいパケットごとの状態を必要としません。しかし、セグメントの送信時間がまだ録音されていない実装は、送信時間を追跡するためにパケットごとの内部状態を追加する必要があります（セグメントまたはTSO集計当たり4または8オクテット）。対照的に、[RFC6675]に記載されている損失検出方法は、SACKスコアボードを超えてパケットごとの状態を必要としません。これは、RTTが送信者TCPクロック粒度（例えば、データ中心）よりも小さいことがある超低RTTネットワーク上で特に有用である。別の不利な点は、並べ替えタイマーが（他の任意の再送信タイマと同様に（他の任意の再送信タイマと同様に）期限切れになる可能性があり、特にDSACKがサポートされていない場合にはより高いスプリアス再送信を引き起こす可能性があることである。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Relationships with Other Loss Recovery Algorithms",
+      "section_title": true,
+      "ja": "9.2. 他の損失回復アルゴリズムとの関係"
+    },
+    {
+      "indent": 3,
+      "text": "The primary motivation of RACK-TLP is to provide a general alternative to some of the standard loss recovery algorithms [RFC5681] [RFC6675] [RFC5827] [RFC4653]. In particular, the SACK loss recovery algorithm for TCP [RFC6675] is not designed to handle lost retransmissions, so its NextSeg() does not work for lost retransmissions, and it does not specify the corresponding required additional congestion response. Therefore, the algorithm [RFC6675] MUST NOT be used with RACK-TLP; instead, a modified recovery algorithm that carefully addresses such a case is needed.",
+      "ja": "RACK-TLPの主な動機は、標準損失回復アルゴリズム[RFC5681] [RFC5827] [RFC4653]の一部に代わるものを提供することです。特に、TCP [RFC6675]のSACK損失回復アルゴリズムは、失われた再送信を処理するようには設計されていないため、そのNEXTSEG（）は失われた再送信のために機能しないため、対応する必要な追加の輻輳応答を指定しません。したがって、アルゴリズム[RFC6675]はRACK-TLPで使用してはいけません。代わりに、そのような場合に慎重に対処する修正回復アルゴリズムが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "The Early Retransmit mechanism [RFC5827] and NCR for TCP [RFC4653] dynamically adjust the duplicate ACK threshold based on the current or previous flight sizes. RACK-TLP takes a different approach by using a time-based reordering window. RACK-TLP can be seen as an extended Early Retransmit [RFC5827] without a FlightSize limit but with an additional reordering window. [FACK] considers an original segment to be lost when its sequence range is sufficiently far below the highest SACKed sequence. In some sense, RACK-TLP can be seen as a generalized form of FACK that operates in time space instead of sequence space, enabling it to better handle reordering, application-limited traffic, and lost retransmissions.",
+      "ja": "早期再送信メカニズム[RFC5827]とTCPのNCR [RFC4653]は、現在または前のフライトサイズに基づいて重複ACKしきい値を動的に調整します。Rack-TLPは、時間ベースの並べ替えウィンドウを使用して別の方法を取ります。RACK-TLPは、FlightSizeの制限なしではなく追加の並べ替えウィンドウを使用して、拡張早期再送信[RFC5827]と見なすことができます。[FACK]そのシーケンス範囲が最高の緩和されたシーケンスの十分にはるかにはるかに離れているときに、元のセグメントを失うことを考慮します。ある意味では、Rack-TLPは、シーケンススペースの代わりに時間空間で動作する一般化されたフォームの一般化された形式として見ることができ、並べ替え、アプリケーション制限されたトラフィック、および再送信を失うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP is compatible with the standard RTO [RFC6298], RTO Restart [RFC7765], F-RTO [RFC5682], and Eifel algorithms [RFC3522]. This is because RACK-TLP only detects loss by using ACK events. It neither changes the RTO timer calculation nor detects spurious RTOs. RACK-TLP slightly changes the behavior of [RFC6298] by preceding the RTO with a TLP and reducing potential spurious retransmissions after RTO.",
+      "ja": "RACK-TLPは、標準RTO [RFC6298]、RTO RTO RTO RTO RITS [RFC7765]、F-RTO [RFC5682]、およびEIFELアルゴリズム[RFC3522]と互換性があります。これは、RACK-TLPがACKイベントを使用して損失を検出するだけです。それはRTOタイマー計算を変更したり、スプリアスRTOSを検出したりしません。RTOの前にRTOの前にTLPを上記に先行し、RTOの後に潜在的なスプリアスの再送信を減らすことによって、[RFC6298]の動作をわずかに変えます。"
+    },
+    {
+      "indent": 0,
+      "text": "9.3. Interaction with Congestion Control",
+      "section_title": true,
+      "ja": "9.3. 輻輳制御との相互作用"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP intentionally decouples loss detection from congestion control. RACK-TLP only detects losses; it does not modify the congestion control algorithm [RFC5681] [RFC6937]. A segment marked as lost by RACK-TLP MUST NOT be retransmitted until congestion control deems this appropriate. As mentioned in the paragraph following Figure 1 (Section 3.4, Paragraph 3), [RFC5681] mandates a principle that loss in two successive windows of data or the loss of a retransmission must be taken as two indications of congestion and therefore trigger two separate reactions. The Proportional Rate Reduction (PRR) algorithm [RFC6937] is RECOMMENDED for the specific congestion control actions taken upon the losses detected by RACK-TLP. In the absence of PRR [RFC6937], when RACK-TLP detects a lost retransmission, the congestion control MUST trigger an additional congestion response per the aforementioned principle in [RFC5681]. If multiple original transmissions or retransmissions were lost in a window, the congestion control specified in [RFC5681] only reacts once per window. The congestion control implementer is advised to carefully consider this subtle situation introduced by RACK-TLP.",
+      "ja": "Rack-TLPは意図的に輻輳制御から損失検出を切り離します。 RACK-TLPは損失を検出します。輻輳制御アルゴリズム[RFC5681] [RFC6937]を変更しません。 RACK-TLPで紛失したようにマークされたセグメントは、輻輳制御が適切になるまで再送信されてはいけません。図1（3.4項のセクション3）で述べたように、[RFC5681]は、データの2つの連続した窓の損失または再送信の喪失が輻輳の2つの徴候と取られなければならず、したがって2つの別々の反応を引き起こさなければならないという原則を義務付けています。 。 RACK-TLPで検出された損失時に取られた特定の輻輳制御アクションには、比例率低減（PRR）アルゴリズム[RFC6937]をお勧めします。 PRR [RFC6937]がない場合、RACK-TLPが紛失を検出した場合、輻輳制御は、[RFC5681]の上記の原則ごとに追加の輻輳応答を引き起こさなければなりません。ウィンドウ内で複数の元の送信または再送信が失われた場合、[RFC5681]で指定された輻輳制御はウィンドウごとに1回だけ反応します。輻輳制御装置は、Rack-TLPによって導入されたこの微妙な状況を慎重に検討することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "The only exception -- the only way in which RACK-TLP modulates the congestion control algorithm -- is that one outstanding loss probe can be sent even if the congestion window is fully used. However, this temporary overcommit is accounted for and credited in the in-flight data tracked for congestion control, so that congestion control will erase the overcommit upon the next ACK.",
+      "ja": "唯一の例外 -  Rack-TLPが輻輳制御アルゴリズムを調整する唯一の方法は、輻輳ウィンドウが完全に使用されていても、1つの未処理の損失プローブを送信できることです。ただし、この一時的なオーバーコミットは、輻輳制御のために追跡されたインエンティングデータ内に会計処理され、その結果、輻輳制御は次のACKの上にオーバーコミットを消去します。"
+    },
+    {
+      "indent": 3,
+      "text": "If packet losses happen after reordering has been observed, RACK-TLP may take longer to detect losses than the pure DupAck counting approach. In this case, TCP may continue to increase the congestion window upon receiving ACKs during this time, making the sender more aggressive.",
+      "ja": "並べ替えが観察された後にパケット損失が発生した場合、Rack-TLPは純粋なDUPACKカウントアプローチよりも損失を検出するのに時間がかかることがあります。この場合、この間にTCPは輻輳ウィンドウを増やし続けることがあり、送信者はより積極的になることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The following simple example compares how RACK-TLP and non-RACK-TLP loss detection interact with congestion control: suppose a sender has a congestion window (cwnd) of 20 segments on a SACK-enabled connection. It sends 10 data segments, and all of them are lost.",
+      "ja": "次の簡単な例では、Rack-TLPと非RACK-TLP損失検出が輻輳制御と対話する方法を比較します。送信者がSACK対応の接続で20セグメントの輻輳ウィンドウ（CWND）を持っているとします。10個のデータセグメントを送信し、それらのすべてが失われます。"
+    },
+    {
+      "indent": 3,
+      "text": "Without RACK-TLP, the sender would time out, reset cwnd to 1, and retransmit the first segment. It would take four round trips (1 + 2 + 4 + 3 = 10) to retransmit all the 10 lost segments using slow start. The recovery latency would be RTO + 4*RTT, with an ending cwnd of 4 segments due to congestion window validation.",
+      "ja": "RACK-TLPがないと、送信者はタイムアウトし、CWNDを1にリセットし、最初のセグメントを再送信します。それは4つのラウンドトリップ（1 2 4 3 = 10）を取ります（1 2 4 3 = 10）、スロースタートを使用して10個の失われたセグメントをすべて再送信します。回復待ち時間はRTO 4 * RTTで、輻輳ウィンドウの検証により4セグメントの終了CWNDがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "With RACK-TLP, a sender would send the TLP after 2*RTT and get a DupAck, enabling RACK to detect the losses and trigger fast recovery. If the sender implements Proportional Rate Reduction [RFC6937], it would slow start to retransmit the remaining 9 lost segments since the number of segments in flight (0) is lower than the slow start threshold (10). The slow start would again take four round trips (1 + 2 + 4 + 3 = 10) to retransmit all the lost segments. The recovery latency would be 2*RTT + 4*RTT, with an ending cwnd set to the slow-start threshold of 10 segments.",
+      "ja": "RACK-TLPでは、送信者は2 * RTTの後にTLPを送信し、DUPACKを取得し、ラックを有効にして損失を検出し、迅速な回復をトリガーします。送信者が比例レート低減[RFC6937]を実装している場合、飛行中のセグメント数（0）の数はスロースタートスレッショルド（10）よりも低いため、残りの9個の失われたセグメントの再送信を開始します。遅い始動は再び4回の往復（1 2 4 3 = 10）を取り、すべての紛失したセグメントを再送信します。回復待ち時間は2 * RTT 4 * RTTで、終了CWNDは10セグメントのスロースタートしきい値に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The difference in recovery latency (RTO + 4*RTT vs 6*RTT) can be significant if the RTT is much smaller than the minimum RTO (1 second in [RFC6298]) or if the RTT is large. The former case can happen in local area networks, data center networks, or content distribution networks with deep deployments. The latter case can happen in developing regions with highly congested and/or high-latency networks.",
+      "ja": "RTTが最小RTO（RFC6298]の1秒）よりもはるかに小さい場合、またはRTTが大きい場合は、回復待ち時間（RTO 4 * RTT対6 * RTT）の差は重要になる可能性があります。前者の場合は、ローカルエリアネットワーク、データセンターネットワーク、または深い展開を含むコンテンツ配信ネットワークで発生する可能性があります。後者の場合は、非常に輻輳および/または高遅延ネットワークを備えた現像領域で発生する可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "9.4. TLP Recovery Detection with Delayed ACKs",
+      "section_title": true,
+      "ja": "9.4. 遅延ACKSによるTLP回復検出"
+    },
+    {
+      "indent": 3,
+      "text": "Delayed or stretched ACKs complicate the detection of repairs done by TLP since, with such ACKs, the sender takes a longer time to receive fewer ACKs than would normally be expected. To mitigate this complication, before sending a TLP loss probe retransmission, the sender should attempt to wait long enough that the receiver has sent any delayed ACKs that it is withholding. The sender algorithm described above features such a delay in the form of TLP.max_ack_delay. Furthermore, if the receiver supports DSACK, then, in the case of a delayed ACK, the sender's TLP recovery detection mechanism (see above) can use the DSACK information to infer that the original and TLP retransmission both arrived at the receiver.",
+      "ja": "遅延または伸張されたACKは、そのようなACKを使用して、送信者が通常予想されるよりも少ないACKを受信するのに時間が長くなるため、TLPによって行われた修理の検出を複雑にします。この複雑さを軽減するために、TLP損失プローブの再送信を送信する前に、送信者は受信者が源泉徴収であることを遅延したACKを送信したことを十分に長く待つことを試みるべきです。上記の送信者アルゴリズムは、tlp.max_ack_delayの形式の遅延を特徴としています。さらに、受信機がDSACKをサポートしている場合、遅延ACKの場合、送信者のTLP回復検出メカニズム（上記参照）はDSACK情報を使用して、原稿およびTLP再送信が両方とも受信機に到着したと推測することができる。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is ACK loss or a delayed ACK without a DSACK, then this algorithm is conservative because the sender will reduce the congestion window when, in fact, there was no packet loss. In practice, this is acceptable and potentially even desirable: if there is reverse path congestion, then reducing the congestion window can be prudent.",
+      "ja": "ACK損失またはDSACKなしの遅延ACKがある場合、このアルゴリズムは輻輳ウィンドウを減らすため、実際にはパケット損失がなかったときに送信者が輻輳ウィンドウを減らすためです。実際には、これは許容可能であり、潜在的に望ましくあります。逆の経路の輻輳がある場合は、輻輳ウィンドウを減らすことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "9.5. RACK-TLP for Other Transport Protocols",
+      "section_title": true,
+      "ja": "9.5. 他のトランスポートプロトコルのためのRACK-TLP"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP can be implemented in other transport protocols (e.g., [QUIC-LR]). The [SPROUT] loss detection algorithm was also independently designed to use a 10 ms reordering window to improve its loss detection similar to RACK.",
+      "ja": "Rack-TLPは他のトランスポートプロトコル（例えば、[QUIC-LR]）で実装できます。[SPROUT]損失検出アルゴリズムは、ラックと同様の損失検出を改善するために10msの並べ替えウィンドウを使用するように独立して設計されていました。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Security Considerations",
+      "section_title": true,
+      "ja": "10. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "RACK-TLP algorithm behavior is based on information conveyed in SACK options, so it has security considerations similar to those described in the Security Considerations section of [RFC6675].",
+      "ja": "RACK-TLPアルゴリズムの動作は、SACKオプションで伝達された情報に基づいているため、[RFC6675]の[セキュリティ上の考慮事項]セクションに記載されているセキュリティ上の考慮事項があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, RACK-TLP has a lower risk profile than the loss recovery algorithm [RFC6675] because it is not vulnerable to ACK-splitting attacks [SCWA99]: for an MSS-sized segment sent, the receiver or the attacker might send MSS ACKs that selectively or cumulatively acknowledge one additional byte per ACK. This would not fool RACK. In such a scenario, RACK.xmit_ts would not advance because all the sequence ranges within the segment were transmitted at the same time and thus carry the same transmission timestamp. In other words, SACKing only one byte of a segment or SACKing the segment in entirety have the same effect with RACK.",
+      "ja": "さらに、RACK-TLPは損失回復アルゴリズムよりもリスクプロファイルが低い[RFC6675] [SCWA99]：送信されたMSSサイズセグメントの場合、受信機または攻撃者はMSS ACKを送信することがあります。ACKごとに1つの追加バイトを選択的または累積的に確認する。これはラックをだますことはありません。このようなシナリオでは、セグメント内のすべてのシーケンス範囲が同時に送信され、したがって同じ送信タイムスタンプを伝送しているため、Rack.xmit_tsは進行しません。言い換えれば、セグメントの1バイトしか解約されたり、セグメントを全体として破棄したりすると、ラックと同じ効果があります。"
+    },
+    {
+      "indent": 0,
+      "text": "11. IANA Considerations",
+      "section_title": true,
+      "ja": "11. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "この文書にはIANAの行動がありません。"
+    },
+    {
+      "indent": 0,
+      "text": "12. References",
+      "section_title": true,
+      "ja": "12. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "12.1. Normative References",
+      "section_title": true,
+      "ja": "12.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2018] Mathis, M., Mahdavi, J., Floyd, S., and A. Romanow, \"TCP Selective Acknowledgment Options\", RFC 2018, DOI 10.17487/RFC2018, October 1996, <https://www.rfc-editor.org/info/rfc2018>.",
+      "ja": "[RFC2018] Mathis、M.、Mahdavi、J.、Floyd、S.、およびA. Romanow、「TCP選択認証オプション」、RFC 2018、DOI 10.17487 / RFC2018、<https：///www.rfc-editor.org/info/rfc2018>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCSで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2883] Floyd, S., Mahdavi, J., Mathis, M., and M. Podolsky, \"An Extension to the Selective Acknowledgement (SACK) Option for TCP\", RFC 2883, DOI 10.17487/RFC2883, July 2000, <https://www.rfc-editor.org/info/rfc2883>.",
+      "ja": "[RFC2883] Floyd、S.、Mahdavi、J.、Mathis、M.、およびM. Podolsky、「TCPのための延長」、RFC 2883、DOI 10.17487 / RFC2883、2000年7月、<https://www.rfc-editor.org/info/rfc2883>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5681] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, DOI 10.17487/RFC5681, September 2009, <https://www.rfc-editor.org/info/rfc5681>.",
+      "ja": "[RFC5681] Allman、M.、Paxson、V.およびE.Blanton、「TCP輻輳制御」、RFC 5681、DOI 10.17487 / RFC5681、2009年9月、<https：//www.rfc-editor.org/info/RFC5681>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6298] Paxson, V., Allman, M., Chu, J., and M. Sargent, \"Computing TCP's Retransmission Timer\", RFC 6298, DOI 10.17487/RFC6298, June 2011, <https://www.rfc-editor.org/info/rfc6298>.",
+      "ja": "[RFC6298] Paxson、V.、Allman、M.、Chu、J.、およびM.Sargent、「コンピューティングTCPの再送信タイマー」、RFC 6298、DOI 10.17487 / RFC6298、2011年6月、<https：///www.rfc-editor.org/info/rfc6298>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6675] Blanton, E., Allman, M., Wang, L., Jarvinen, I., Kojo, M., and Y. Nishida, \"A Conservative Loss Recovery Algorithm Based on Selective Acknowledgment (SACK) for TCP\", RFC 6675, DOI 10.17487/RFC6675, August 2012, <https://www.rfc-editor.org/info/rfc6675>.",
+      "ja": "[RFC6675] Blanton、E.、Allman、M.、Wang、L.、Jarvinen、I.、Kojo、M.、Y. Nishida、「TCPのための選択認識（SACK）に基づく保守的な損失回復アルゴリズム」RFC 6675、DOI 10.17487 / RFC6675、2012年8月、<https://www.rfc-editor.org/info/rfc6675>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7323] Borman, D., Braden, B., Jacobson, V., and R. Scheffenegger, Ed., \"TCP Extensions for High Performance\", RFC 7323, DOI 10.17487/RFC7323, September 2014, <https://www.rfc-editor.org/info/rfc7323>.",
+      "ja": "[RFC7323] Borman、D.、Braden、B.、Jacobson、V.、およびR.Scheffenegger、ED。、「高性能のためのTCP拡張」、RFC 7323、DOI 10.17487 / RFC7323、2014年9月、<https：//www.rfc-editor.org/info/rfc7323>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC793] Postel, J., \"Transmission Control Protocol\", STD 7, RFC 793, DOI 10.17487/RFC0793, September 1981, <https://www.rfc-editor.org/info/rfc793>.",
+      "ja": "[RFC793] Postel、J.、 \"Transmission Control Protocol\"、STD 7、RFC 793、DOI 10.17487 / RFC0793、1981年9月、<https：//www.rfc-editor.org/info/rfc793>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B、「RFC 2119キーワードの大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "12.2. Informative References",
+      "section_title": true,
+      "ja": "12.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[DMCG11] Dukkipati, N., Matthis, M., Cheng, Y., and M. Ghobadi, \"Proportional Rate Reduction for TCP\", Proceedings of the 2011 ACM SIGCOMM Conference on Internet Measurement Conference pp. 155-170, DOI 10.1145/2068816.2068832, November 2011, <https://doi.org/10.1145/2068816.2068832>.",
+      "ja": "[DMCG11] Dukkipati、N.、Matthis、M.、Cheng、Y.、およびM. Ghobadi、TCPの「比例率削減」、2011年ACM SIGCOMMインターネット測定会議PP。155-170、DOI 10.11452011年11月、<https://doi.org/10.1145/206886.2068832>。"
+    },
+    {
+      "indent": 3,
+      "text": "[FACK] Mathis, M. and J. Mahdavi, \"Forward acknowledgement: refining TCP congestion control\", ACM SIGCOMM Computer Communication Review Volume 26, Issue 4, DOI 10.1145/248157.248181, August 1996, <https://doi.org/10.1145/248157.248181>.",
+      "ja": "[FACK] Mathis、M.およびJ.Mahdavi、「前方承認：絞り込みTCP輻輳制御」、ACM SIGMOMM Computer Communication Revirom Revision 26、DISI 10.1145 / 248157.248181、1996年8月、<https：//doi.org/10.1145 / 248157.248181>。"
+    },
+    {
+      "indent": 3,
+      "text": "[POLICER16] Flach, T., Papageorge, P., Terzis, A., Pedrosa, L., Cheng, Y., Karim, T., Katz-Bassett, E., and R. Govindan, \"An Internet-Wide Analysis of Traffic Policing\", Proceedings of the 2016 ACM SIGCOMM Conference pp. 468-482, DOI 10.1145/2934872.2934873, August 2016, <https://doi.org/10.1145/2934872.2934873>.",
+      "ja": "[Policer16] Flach、T.、Papagorge、P.、Terzis、A.、Pedrosa、L.、Cheng、Y.、Karim、T.、Katz-Bassett、E.、R. Govindan、 \"インターネット全体トラフィックポリシングの分析「2016年ACM SIGCOMM会議PP。468-482、DOI 10.1145 / 2934872.2934873、<https：//doi.org/10.1145/2934872.2934873>。"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC-LR] Iyengar, J. and I. Swett, \"QUIC Loss Detection and Congestion Control\", Work in Progress, Internet-Draft, draft-ietf-quic-recovery-34, 14 January 2021, <https://tools.ietf.org/html/draft-ietf-quic-recovery-34>.",
+      "ja": "[QUIC-LR] Iyngar、J.およびI.SWETT、「QUICの損失検出および輻輳制御」、進行中の作業、インターネットドラフト、ドラフト -  IETF-QUIC-Recovery-34、<https：//Tools.ietf.org/html/draft-ietf-quic-recovery-34>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3042] Allman, M., Balakrishnan, H., and S. Floyd, \"Enhancing TCP's Loss Recovery Using Limited Transmit\", RFC 3042, DOI 10.17487/RFC3042, January 2001, <https://www.rfc-editor.org/info/rfc3042>.",
+      "ja": "[RFC3042] Allman、M.、Balakrishnan、H.、およびS. Floyd、2001年1月、<https：///www.rfc-編集者。ORG / INFO / RFC3042>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3522] Ludwig, R. and M. Meyer, \"The Eifel Detection Algorithm for TCP\", RFC 3522, DOI 10.17487/RFC3522, April 2003, <https://www.rfc-editor.org/info/rfc3522>.",
+      "ja": "[RFC3522] Ludwig、R.およびM.Meyer、「TCPのためのeipel検出アルゴリズム」、RFC 3522、DOI 10.17487 / RFC3522、2003年4月、<https：//www.rfc-editor.org/info/rfc3522>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4653] Bhandarkar, S., Reddy, A. L. N., Allman, M., and E. Blanton, \"Improving the Robustness of TCP to Non-Congestion Events\", RFC 4653, DOI 10.17487/RFC4653, August 2006, <https://www.rfc-editor.org/info/rfc4653>.",
+      "ja": "[RFC4653] Bhandarkar、S.、Reddy、AlN、Allman、M.、およびE.Blanton、「TCPの不整合イベントへの堅牢性の改善」、RFC 4653、DOI 10.17487 / RFC4653、2006年8月、<https：//www.rfc-editor.org/info/rfc4653>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5682] Sarolahti, P., Kojo, M., Yamamoto, K., and M. Hata, \"Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP\", RFC 5682, DOI 10.17487/RFC5682, September 2009, <https://www.rfc-editor.org/info/rfc5682>.",
+      "ja": "[RFC5682] Sarolahti、P.、Kojo、M.、Yamamoto、K.、およびM. HATA、「前方RTO回復（F-RTO）：TCPでのスプリアス再送タイムアウトを検出するためのアルゴリズム、RFC 5682、DOI 10.17487/ RFC5682、2009年9月、<https：//www.rfc-editor.org/info/rfc5682>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5827] Allman, M., Avrachenkov, K., Ayesta, U., Blanton, J., and P. Hurtig, \"Early Retransmit for TCP and Stream Control Transmission Protocol (SCTP)\", RFC 5827, DOI 10.17487/RFC5827, May 2010, <https://www.rfc-editor.org/info/rfc5827>.",
+      "ja": "[RFC5827] Allman、M.、Avrachenkov、K.、Ayesta、U.、Blanton、J.、およびP. Hurtig、「TCPおよびストリーム制御伝送プロトコル（SCTP）」、RFC 5827、DOI 10.17487 / RFC58272010年5月、<https://www.rfc-editor.org/info/rfc5827>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6937] Mathis, M., Dukkipati, N., and Y. Cheng, \"Proportional Rate Reduction for TCP\", RFC 6937, DOI 10.17487/RFC6937, May 2013, <https://www.rfc-editor.org/info/rfc6937>.",
+      "ja": "[RFC6937] Mathis、M.、Dukkipati、N.、Y。Cheng、RFC 6937、RFC 6937、DOI 10.17487 / RFC6937、2013年5月、<https：//www.rfc-editor.org/情報/ RFC6937>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7765] Hurtig, P., Brunstrom, A., Petlund, A., and M. Welzl, \"TCP and Stream Control Transmission Protocol (SCTP) RTO Restart\", RFC 7765, DOI 10.17487/RFC7765, February 2016, <https://www.rfc-editor.org/info/rfc7765>.",
+      "ja": "[RFC7765] Hurtig、P.、Brunstrom、A.、Petlund、A.、およびM. Welzl、 \"TCPおよびStream Control Transmission Protocol（SCTP）RTO再起動\"、RFC 7765、DOI 10.17487 / RFC7765、2016年2月、<HTTPS//www.rfc-editor.org/info/rfc7765>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SCWA99] Savage, S., Cardwell, N., Wetherall, D., and T. Anderson, \"TCP congestion control with a misbehaving receiver\", ACM Computer Communication Review 29(5), DOI 10.1145/505696.505704, October 1999, <https://doi.org/10.1145/505696.505704>.",
+      "ja": "[SCWA99] Savage、S、Cardwell、N.、Wetherall、D.、およびT.アンダーソン、「不正行為受信機によるTCP輻輳制御」、ACMコンピュータ通信レビュー29（5）、DOI 10.1145 / 505696.505704、1999年10月、<https://doi.org/10.1145/505696.505704>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SPROUT] Winstein, K., Sivaraman, A., and H. Balakrishnan, \"Stochastic Forecasts Achieve High Throughput and Low Delay over Cellular Networks\", 10th USENIX Symposium on Networked Systems Design and Implementation (NSDI '13)\", 2013.",
+      "ja": "[Sprout] Winstein、K.、Sivaraman、A.、Balakrishnan、「確率的予測は、セルラーネットワークを超えるスループットと低遅延を達成する」、ネットワークシステムの設計と実装（NSDI '13） \"、2013年。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors thank Matt Mathis for his insights in FACK and Michael Welzl for his per-packet timer idea that inspired this work. Eric Dumazet, Randy Stewart, Van Jacobson, Ian Swett, Rick Jones, Jana Iyengar, Hiren Panchasara, Praveen Balasubramanian, Yoshifumi Nishida, Bob Briscoe, Felix Weinrank, Michael Tüxen, Martin Duke, Ilpo Jarvinen, Theresa Enghardt, Mirja Kühlewind, Gorry Fairhurst, Markku Kojo, and Yi Huang contributed to this document or the implementations in Linux, FreeBSD, Windows, and QUIC.",
+      "ja": "この作品に触発された彼のパケットごとのタイマーのアイデアのための彼の洞察力のために彼の洞察を感謝しています。エリック・ダマゼ、ヴァン・ジョーンズ、イアン・スウェット、イアン・スウェット、イアン・スウェット、Rick Jonesara、Rick Jonesara、Rick Jonesara、Rick Jonesara、Rick Jonesara、Praveen Balasuramanian、Bob Brisco、MichaelTüxen、Martin Duke、MiChaelTüxen、Martin Jarvinen、MirjaKühlewind、Gorry FairHurst、Markku Kojo、そしてYi Huangはこの文書またはLinux、FreeBSD、Windows、およびQUICの実装に貢献しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Yuchung Cheng Google, Inc.",
+      "ja": "Yuchung Cheng Google、Inc。"
+    },
+    {
+      "indent": 3,
+      "text": "Email: ycheng@google.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Neal Cardwell Google, Inc.",
+      "ja": "ニールカードウェルGoogle、Inc。"
+    },
+    {
+      "indent": 3,
+      "text": "Email: ncardwell@google.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Nandita Dukkipati Google, Inc.",
+      "ja": "Nandita Dukkipati Google、Inc。"
+    },
+    {
+      "indent": 3,
+      "text": "Email: nanditad@google.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Priyaranjan Jha Google, Inc.",
+      "ja": "Priyaranjan JHA Google、Inc。"
+    },
+    {
+      "indent": 3,
+      "text": "Email: priyarjha@google.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
