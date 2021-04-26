@@ -20,6 +20,16 @@
 - RFCのHTMLが例外的な構造になっている場合も上手に解釈できません（特に番号の小さいRFC）
 - RFC2220以降を対象とする (http://rfc-jp.nic.ad.jp/copyright/translate.html)
 
+<br>
+
+## 翻訳を修正したいときは
+
+当サイトをご利用いただきありがとうございます。
+原文と翻訳は JSON ファイルで管理しているので、修正した JSON ファイルをプルリクエストしてくれると嬉しいです。
+マージされた場合は管理人の方で JSON から HTML に変換して公開します。
+
+TODO: fork から PR までの流れをここに書く。JSON の構造について説明する。
+
 
 <br>
 
@@ -32,7 +42,7 @@
 - 箇条書き（o + * - など）の記号はそのまま表示する
 - 表題（1.2.～ など）は文字を大きくする
 - 原本（英語RFC）へのリンクをスクロールしても常に表示する
-- 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示する（例：RFC2246）
+- 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示する（例：RFC2246, RFC2616）
 
 動作環境：Python3 + Windows or MacOS
 
@@ -58,8 +68,8 @@ python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
 python main.py --rfc 123 --fetch # RFCの取得だけ
 python main.py --rfc 123 --trans # RFCの翻訳だけ
 python main.py --rfc 123 --make # HTMLの生成だけ
-python main.py --begin 500 --end 700 # RFC 500〜700 を順番に翻訳する
-python main.py --make --begin 500 --end 700 # RFC 500〜700 のHTMLを生成する
+python main.py --begin 2220 --end 9000 # RFC 2220〜9000 を順番に翻訳する
+python main.py --make --begin 2220 --end 9000 # RFC 2220〜9000 のHTMLを生成する
 python main.py # 未翻訳RFCを順番に翻訳する
 python main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
 
