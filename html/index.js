@@ -43,7 +43,9 @@ document.addEventListener('DOMContentLoaded', function () {
               }
             }
           }
-          rfc_alert_obsoleted_by.innerHTML = rfc_links;
+          if (rfc_links !== "") {
+            rfc_alert_obsoleted_by.innerHTML = "このRFCは廃止されました。修正版は <span>" + rfc_links + "</span> です。";
+          }
         }
       }
     };
