@@ -111,6 +111,7 @@ pip install Mako
 pip install tqdm
 pip install googletrans==4.0.0-rc1
 pip install selenium
+pip install beautifulsoup4
 ```
 
 Windowsの場合は、py -m pip に読み替えてください。
