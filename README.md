@@ -25,10 +25,67 @@
 ## 翻訳を修正したいときは
 
 当サイトをご利用いただきありがとうございます。
-原文と翻訳は JSON ファイルで管理しているので、修正した JSON ファイルをプルリクエストしてくれると嬉しいです。
-マージされた場合は管理人の方で JSON から HTML に変換して公開します。
+翻訳修正の手順は以下の通りです。
 
-TODO: fork から PR までの流れをここに書く。JSON の構造について説明する。
+### 翻訳修正者
+
+1. GitHub上でForkします。
+2. ブランチを切ります。名前は適当なものにします。
+2. html/rfcXXXX.htmlの翻訳を修正します。
+   - updated_byを「翻訳編集 : 自動生成 + 一部修正」にします。名前などを残したい方は「一部修正(tex2e)」のような感じで書いてください。
+   - 見出しは`<h5>`を使います。1番目に英文、2番目に和文を書きます。
+      ```html
+      <div class="row">
+        <div class="col-sm-12 col-md-6">
+          <h5 class="text mt-2">
+      1.  Introduction
+          </h5>
+        </div>
+        <div class="col-sm-12 col-md-6">
+          <h5 class="text mt-2">
+      1. はじめに
+          </h5>
+        </div>
+      </div>
+      ```
+   - 文章は`<p>`を使います。「indent-X」classでインデントの深さを指定します。
+      ```html
+      <div class="row">
+        <div class="col-sm-12 col-md-6">
+          <p class="text indent-3">
+      Hello, world!
+          </p>
+        </div>
+        <div class="col-sm-12 col-md-6">
+          <p class="text indent-3">
+      こんにちは世界！
+          </p>
+        </div>
+      </div>
+      ```
+   - 図表は`<pre>`を使います。英文のみです。
+      ```html
+      <div class="row">
+        <div class="col-sm-12 col-md-12">
+          <pre class="text text-monospace">
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
+          |  Option Type  |  Opt Data Len |  Option Data
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
+          </pre>
+        </div>
+      </div>
+      ```
+3. HTMLをブラウザで開いて正しく表示されるか確認します。
+4. Forkしたレポジトリにpushします。
+4. GitHub上でPullRequestを出します。
+
+### 管理者
+
+1. PullRequestの修正差分を確認し、HTMLエスケープが適切に行われているかや、XSSに使われる危険なHTMLタグ（`script`, `a`, `img` など）がないことだけ確認する
+2. 問題がなければMergeし、ローカルにpullする
+3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認
+4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを逆作成し、変更差分を確認
+5. レポジトリにpushする
 
 
 <br>
