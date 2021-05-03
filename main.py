@@ -5,6 +5,7 @@ from src.trans_rfc import trans_rfc, TransMode
 from src.make_html import make_html
 from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
+from src.make_json_from_html import make_json_from_html
 
 def main(rfc_number, transmode):
     print('RFC %d:' % rfc_number)
@@ -50,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--fetch', action='store_true', help='only fetch RFC')
     parser.add_argument('--trans', action='store_true', help='only translate')
     parser.add_argument('--make', action='store_true', help='only make HTML')
+    parser.add_argument('--make-json', action='store_true', help='make JSON from HTML')
     parser.add_argument('--begin', type=int, help='begin rfc number')
     parser.add_argument('--end', type=int, help='end rfc number')
     parser.add_argument('--make-index', dest='make_index',
@@ -65,13 +67,13 @@ if __name__ == '__main__':
     if args.rfc:
         RFCs = [int(rfc_number) for rfc_number in args.rfc.split(",")]
 
-    # 翻訳ツールの選択
+    # 翻訳ツールの選択：デフォルトはSelenium+Google翻訳
     transmode = TransMode.SELENIUM_GOOGLE
     if args.transmode == 'py-googletrans':
         transmode = TransMode.PY_GOOGLETRANS
 
     if args.make_index:
-        # index.htmlの作成
+        # トップページ(index.html)の作成
         print("[+] index.htmlの作成")
         make_index()
     elif args.transtest:
@@ -97,20 +99,24 @@ if __name__ == '__main__':
         for rfc in RFCs:
             trans_rfc(rfc, transmode)
     elif args.make and args.begin and args.end:
-        # 範囲指定でrfcXXXX.htmlの作成
+        # 範囲指定でRFCのHTML(rfcXXXX.html)を作成
         print("[+] RFC %d - %d のHTMLを生成" % (args.begin, args.end))
         for rfc_number in range(args.begin, args.end):
             make_html(rfc_number)
     elif args.make and RFCs:
-        # 指定したrfcXXXX.htmlの作成
+        # 指定したRFCのHTML(rfcXXXX.html)を作成
         for rfc in RFCs:
             make_html(rfc)
+    elif args.make_json and RFCs:
+        # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
+        for rfc in RFCs:
+            make_json_from_html(rfc)
 
     elif RFCs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
             main(rfc, transmode)
     else:
-        # 未処理のRFCを順番に取得・翻訳・作成
+        # 未翻訳のRFCを順番に取得・翻訳・作成
         continuous_main(transmode, begin=args.begin, end=args.end, 
                         only_first=args.only_first)
