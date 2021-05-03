@@ -75,7 +75,7 @@
         </div>
       </div>
       ```
-3. HTMLをブラウザで開いて正しく表示されるか確認します。
+3. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
 4. Forkしたレポジトリにpushします。
 4. GitHub上でPullRequestを出します。
 
@@ -86,6 +86,8 @@
 3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認
 4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを逆作成し、変更差分を確認
 5. レポジトリにpushする
+
+TODO: HTMLエスケープ確認作業の一部自動化
 
 
 <br>
