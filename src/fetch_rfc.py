@@ -69,7 +69,7 @@ class Paragraph:
     def _find_toc_pattern(self, text):
         return (re.search(r'\.{6}|(?:\. ){6}', text) or
                # 1. Introduction から始まって Authors' Addresses で終わるとき
-               (re.search(r'\A\s*1\. +Introduction', text, re.MULTILINE) and
+               (re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and
                 re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
 
     # 箇条書きなどの判定
