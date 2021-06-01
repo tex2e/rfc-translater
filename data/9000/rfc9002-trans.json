@@ -1,0 +1,2278 @@
+{
+  "title": {
+    "text": "RFC 9002 - QUIC Loss Detection and Congestion Control",
+    "ja": "RFC 9002 - QUIC損失検出と輻輳制御"
+  },
+  "number": 9002,
+  "created_at": "2021-06-01 03:00:06.828572+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                   J. Iyengar, Ed.\nRequest for Comments: 9002                                        Fastly\nCategory: Standards Track                                  I. Swett, Ed.\nISSN: 2070-1721                                                   Google\n                                                                May 2021",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 15,
+      "text": "QUIC Loss Detection and Congestion Control",
+      "ja": "QUIC損失検出と輻輳制御"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes loss detection and congestion control mechanisms for QUIC.",
+      "ja": "この文書では、QUICの損失検出と輻輳制御メカニズムについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それは公開レビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9002.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法は、https://www.rfc-editor.org/info/rfc9002で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2021 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2021 IETF信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  Design of the QUIC Transmission Machinery\n4.  Relevant Differences between QUIC and TCP\n  4.1.  Separate Packet Number Spaces\n  4.2.  Monotonically Increasing Packet Numbers\n  4.3.  Clearer Loss Epoch\n  4.4.  No Reneging\n  4.5.  More ACK Ranges\n  4.6.  Explicit Correction for Delayed Acknowledgments\n  4.7.  Probe Timeout Replaces RTO and TLP\n  4.8.  The Minimum Congestion Window Is Two Packets\n  4.9.  Handshake Packets Are Not Special\n5.  Estimating the Round-Trip Time\n  5.1.  Generating RTT Samples\n  5.2.  Estimating min_rtt\n  5.3.  Estimating smoothed_rtt and rttvar\n6.  Loss Detection\n  6.1.  Acknowledgment-Based Detection\n    6.1.1.  Packet Threshold\n    6.1.2.  Time Threshold\n  6.2.  Probe Timeout\n    6.2.1.  Computing PTO\n    6.2.2.  Handshakes and New Paths\n    6.2.3.  Speeding up Handshake Completion\n    6.2.4.  Sending Probe Packets\n  6.3.  Handling Retry Packets\n  6.4.  Discarding Keys and Packet State\n7.  Congestion Control\n  7.1.  Explicit Congestion Notification\n  7.2.  Initial and Minimum Congestion Window\n  7.3.  Congestion Control States\n    7.3.1.  Slow Start\n    7.3.2.  Recovery\n    7.3.3.  Congestion Avoidance\n  7.4.  Ignoring Loss of Undecryptable Packets\n  7.5.  Probe Timeout\n  7.6.  Persistent Congestion\n    7.6.1.  Duration\n    7.6.2.  Establishing Persistent Congestion\n    7.6.3.  Example\n  7.7.  Pacing\n  7.8.  Underutilizing the Congestion Window\n8.  Security Considerations\n  8.1.  Loss and Congestion Signals\n  8.2.  Traffic Analysis\n  8.3.  Misreporting ECN Markings\n9.  References\n  9.1.  Normative References\n  9.2.  Informative References\nAppendix A.  Loss Recovery Pseudocode\n  A.1.  Tracking Sent Packets\n    A.1.1.  Sent Packet Fields\n  A.2.  Constants of Interest\n  A.3.  Variables of Interest\n  A.4.  Initialization\n  A.5.  On Sending a Packet\n  A.6.  On Receiving a Datagram\n  A.7.  On Receiving an Acknowledgment\n  A.8.  Setting the Loss Detection Timer\n  A.9.  On Timeout\n  A.10. Detecting Lost Packets\n  A.11. Upon Dropping Initial or Handshake Keys\nAppendix B.  Congestion Control Pseudocode\n  B.1.  Constants of Interest\n  B.2.  Variables of Interest\n  B.3.  Initialization\n  B.4.  On Packet Sent\n  B.5.  On Packet Acknowledgment\n  B.6.  On New Congestion Event\n  B.7.  Process ECN Information\n  B.8.  On Packets Lost\n  B.9.  Removing Discarded Packets from Bytes in Flight\nContributors\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC is a secure, general-purpose transport protocol, described in [QUIC-TRANSPORT]. This document describes loss detection and congestion control mechanisms for QUIC.",
+      "ja": "QUICは、[QUIC-Transport]で説明されている安全で汎用のトランスポートプロトコルです。この文書では、QUICの損失検出と輻輳制御メカニズムについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 表記法と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Definitions of terms that are used in this document:",
+      "ja": "この文書で使用されている用語の定義："
+    },
+    {
+      "indent": 3,
+      "text": "Ack-eliciting frames: All frames other than ACK, PADDING, and CONNECTION_CLOSE are considered ack-eliciting.",
+      "ja": "ACKエリケーションフレームACK、PADDING、およびCONNECTION_CLOSE以外のすべてのフレームはACKエリケーションと見なされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Ack-eliciting packets: Packets that contain ack-eliciting frames elicit an ACK from the receiver within the maximum acknowledgment delay and are called ack-eliciting packets.",
+      "ja": "ACK ELICITINGパケット：ACKエリケーションフレームを含むパケットは、最大の確認応答遅延内に受信機からACKを引き出し、ACKエリケーションパケットと呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "In-flight packets: Packets are considered in flight when they are ack-eliciting or contain a PADDING frame, and they have been sent but are not acknowledged, declared lost, or discarded along with old keys.",
+      "ja": "飛行中のパケット：パケットは、ACKエリケーションであるか、またはパディングフレームを含む場合には飛行中で検討されており、それらは送信されていますが、古いキーと一緒に失われた、または捨てられた宣言されていません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Design of the QUIC Transmission Machinery",
+      "section_title": true,
+      "ja": "3. QUIC伝達機械の設計"
+    },
+    {
+      "indent": 3,
+      "text": "All transmissions in QUIC are sent with a packet-level header, which indicates the encryption level and includes a packet sequence number (referred to below as a packet number). The encryption level indicates the packet number space, as described in Section 12.3 of [QUIC-TRANSPORT]. Packet numbers never repeat within a packet number space for the lifetime of a connection. Packet numbers are sent in monotonically increasing order within a space, preventing ambiguity. It is permitted for some packet numbers to never be used, leaving intentional gaps.",
+      "ja": "QUIC内のすべての送信は、パケットレベルのヘッダーを使用して送信されます。これは暗号化レベルを示し、パケットシーケンス番号（パケット番号と呼ばれます）を含みます。暗号化レベルは、[QUIC-Transport]のセクション12.3で説明したように、パケット番号スペースを示します。パケット番号は、接続の有効期間のパケット番号スペース内で決して繰り返されません。パケット番号は、スペース内で単調に増加する順序で送信され、あいまいさが防止されます。意図的なギャップを残して、いくつかのパケット番号が使用されないことが許可されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This design obviates the need for disambiguating between transmissions and retransmissions; this eliminates significant complexity from QUIC's interpretation of TCP loss detection mechanisms.",
+      "ja": "この設計は、送信と再送信の間の曖昧さを曖昧さする必要性を排除します。これにより、TCP損失検出メカニズムのQUICの解釈から重大な複雑さが排除されます。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC packets can contain multiple frames of different types. The recovery mechanisms ensure that data and frames that need reliable delivery are acknowledged or declared lost and sent in new packets as necessary. The types of frames contained in a packet affect recovery and congestion control logic:",
+      "ja": "QUICパケットには、さまざまなタイプの複数のフレームを含めることができます。リカバリメカニズムは、信頼できる配信が必要なデータとフレームが必要に応じて新しいパケットで紛失または宣言されていると宣言されていることを確認します。パケットに含まれるフレームの種類は、回復と輻輳制御ロジックに影響します。"
+    },
+    {
+      "indent": 3,
+      "text": "* All packets are acknowledged, though packets that contain no ack-eliciting frames are only acknowledged along with ack-eliciting packets.",
+      "ja": "* ACKエリケーションフレームを含まないパケットは、ACKエリケーションパケットと一緒に承認されているだけですが、すべてのパケットが確認されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Long header packets that contain CRYPTO frames are critical to the performance of the QUIC handshake and use shorter timers for acknowledgment.",
+      "ja": "* 暗号フレームを含む長いヘッダパケットは、QUICハンドシェイクの性能にとって重要であり、承認のために短いタイマーを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "* Packets containing frames besides ACK or CONNECTION_CLOSE frames count toward congestion control limits and are considered to be in flight.",
+      "ja": "* ACKまたはConnection_closeフレーム以外のフレームを含むパケットは、輻輳制御限界に向かって数え、飛行中のと考えられています。"
+    },
+    {
+      "indent": 3,
+      "text": "* PADDING frames cause packets to contribute toward bytes in flight without directly causing an acknowledgment to be sent.",
+      "ja": "* パディングフレームは、承認を送信することなく、直接アクセスされずにフライト内のバイトに貢献するようにパケットを貢献します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Relevant Differences between QUIC and TCP",
+      "section_title": true,
+      "ja": "4. QUICとTCPの関連違い"
+    },
+    {
+      "indent": 3,
+      "text": "Readers familiar with TCP's loss detection and congestion control will find algorithms here that parallel well-known TCP ones. However, protocol differences between QUIC and TCP contribute to algorithmic differences. These protocol differences are briefly described below.",
+      "ja": "TCPの損失検出および輻輳制御に精通している読者は、ここでは並行してよく知られているTCPのものをここで見つけるでしょう。ただし、QUICとTCPのプロトコルの違いは、アルゴリズムの違いに寄与しています。これらのプロトコルの違いは以下の簡単に説明されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Separate Packet Number Spaces",
+      "section_title": true,
+      "ja": "4.1. 別々のパケット番号スペース"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC uses separate packet number spaces for each encryption level, except 0-RTT and all generations of 1-RTT keys use the same packet number space. Separate packet number spaces ensures that the acknowledgment of packets sent with one level of encryption will not cause spurious retransmission of packets sent with a different encryption level. Congestion control and round-trip time (RTT) measurement are unified across packet number spaces.",
+      "ja": "QUICは、0-RTTを除く、各暗号化レベルに対して別々のパケット番号スペースを使用し、1-RTTキーのすべての世代は同じパケット番号スペースを使用します。別々のパケット番号スペースは、1レベルの暗号化で送信されたパケットの確認応答が異なる暗号化レベルで送信されたパケットのスプリアス再送を引き起こさないようにします。輻輳制御と往復時間（RTT）測定はパケット番号スペース間で統一されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Monotonically Increasing Packet Numbers",
+      "section_title": true,
+      "ja": "4.2. 単調なパケット番号を増やす"
+    },
+    {
+      "indent": 3,
+      "text": "TCP conflates transmission order at the sender with delivery order at the receiver, resulting in the retransmission ambiguity problem [RETRANSMISSION]. QUIC separates transmission order from delivery order: packet numbers indicate transmission order, and delivery order is determined by the stream offsets in STREAM frames.",
+      "ja": "TCPは、受信側で送信注文を送信して送信側で送信順を合流し、再送のあいまいさの問題が発生しました[再送]。QUICは配送順序からの伝送順序を分離します。パケット番号は伝送順序を示し、配送順序はストリームフレーム内のストリームオフセットによって決まります。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC's packet number is strictly increasing within a packet number space and directly encodes transmission order. A higher packet number signifies that the packet was sent later, and a lower packet number signifies that the packet was sent earlier. When a packet containing ack-eliciting frames is detected lost, QUIC includes necessary frames in a new packet with a new packet number, removing ambiguity about which packet is acknowledged when an ACK is received. Consequently, more accurate RTT measurements can be made, spurious retransmissions are trivially detected, and mechanisms such as Fast Retransmit can be applied universally, based only on packet number.",
+      "ja": "QUICのパケット番号は、パケット番号スペース内で厳密に増加し、送信順序を直接符号化します。より高いパケット番号は、パケットが後で送信されたことを表し、パケット番号が低いことは、パケットが以前に送信されたことを意味します。ACKエリケーションフレームを含むパケットが失われた場合、QUICは新しいパケット番号を有する新しいパケット内の必要なフレームを含み、ACKが受信されたときにどのパケットが確認されるかについてのあいまいさを削除する。その結果、より正確なRTT測定を行うことができ、スプリアスの再送信が簡単に検出され、そして高速再送信などのメカニズムは、パケット番号のみに基づいて普遍的に適用され得る。"
+    },
+    {
+      "indent": 3,
+      "text": "This design point significantly simplifies loss detection mechanisms for QUIC. Most TCP mechanisms implicitly attempt to infer transmission ordering based on TCP sequence numbers -- a nontrivial task, especially when TCP timestamps are not available.",
+      "ja": "この設計ポイントは、QUICの損失検出メカニズムを大幅に簡素化します。ほとんどのTCPメカニズムは暗黙のうちにTCPシーケンス番号に基づいて送信順序付けを推論しようとします - 特にTCPタイムスタンプが利用できない場合は、非処理タスクです。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Clearer Loss Epoch",
+      "section_title": true,
+      "ja": "4.3. 明確な損失のエポック"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC starts a loss epoch when a packet is lost. The loss epoch ends when any packet sent after the start of the epoch is acknowledged. TCP waits for the gap in the sequence number space to be filled, and so if a segment is lost multiple times in a row, the loss epoch may not end for several round trips. Because both should reduce their congestion windows only once per epoch, QUIC will do it once for every round trip that experiences loss, while TCP may only do it once across multiple round trips.",
+      "ja": "QUICは、パケットが失われたときに損失エポックを開始します。損失エポックは、エポックの開始後に送信されたパケットが確認されたときに終了します。TCPは埋められているシーケンス番号空間内のギャップを待つので、セグメントが一回行で複数回失われると、損失エポックはいくつかの往復のために終わらない場合があります。どちらもエポックごとに1回だけ輻輳ウィンドウを減らす必要があるので、QUICは損失を経験した往復のごとに1回行いますが、TCPは複数の往復にわたって一度だけ行います。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. No Reneging",
+      "section_title": true,
+      "ja": "4.4. ノーレンギング"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC ACK frames contain information similar to that in TCP Selective Acknowledgments (SACKs) [RFC2018]. However, QUIC does not allow a packet acknowledgment to be reneged, greatly simplifying implementations on both sides and reducing memory pressure on the sender.",
+      "ja": "QUIC ACKフレームには、TCP選択承認（SACKS）[RFC2018]の情報と同様の情報が含まれています。ただし、QUICでは、パケット確認応答を再調整し、両側の実装を大幅に簡素化し、送信者のメモリ圧力を低減できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. More ACK Ranges",
+      "section_title": true,
+      "ja": "4.5. もっとack範囲"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC supports many ACK ranges, as opposed to TCP's three SACK ranges. In high-loss environments, this speeds recovery, reduces spurious retransmits, and ensures forward progress without relying on timeouts.",
+      "ja": "TCPの3つの袋範囲とは対照的に、QUICは多くのACK範囲をサポートしています。高損失の環境では、この速度回復はスプリアスの再送信を減らし、タイムアウトに頼ることなく将来の進歩を保証します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Explicit Correction for Delayed Acknowledgments",
+      "section_title": true,
+      "ja": "4.6. 遅延確認応答の明示的な補正"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC endpoints measure the delay incurred between when a packet is received and when the corresponding acknowledgment is sent, allowing a peer to maintain a more accurate RTT estimate; see Section 13.2 of [QUIC-TRANSPORT].",
+      "ja": "QUICのエンドポイントは、パケットが受信されたときと対応する確認応答が送信されたときに発生する遅延を測定し、ピアがより正確なRTT推定値を維持できるようにします。[QUIC-Transport]の13.2項を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7. Probe Timeout Replaces RTO and TLP",
+      "section_title": true,
+      "ja": "4.7. プローブタイムアウトはRTOとTLPを置き換えます"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC uses a probe timeout (PTO; see Section 6.2), with a timer based on TCP's retransmission timeout (RTO) computation; see [RFC6298]. QUIC's PTO includes the peer's maximum expected acknowledgment delay instead of using a fixed minimum timeout.",
+      "ja": "QUICはプローブタイムアウト（PTO; 6.2を参照）を使用し、TCPの再送信タイムアウト（RTO）計算に基づくタイマーを使用します。[RFC6298]を参照してください。QUICのPTOは、最小タイムアウトを使用する代わりに、ピアの最大予想確認応答遅延を含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "Similar to the RACK-TLP loss detection algorithm for TCP [RFC8985], QUIC does not collapse the congestion window when the PTO expires, since a single packet loss at the tail does not indicate persistent congestion. Instead, QUIC collapses the congestion window when persistent congestion is declared; see Section 7.6. In doing this, QUIC avoids unnecessary congestion window reductions, obviating the need for correcting mechanisms such as Forward RTO-Recovery (F-RTO) [RFC5682]. Since QUIC does not collapse the congestion window on a PTO expiration, a QUIC sender is not limited from sending more in-flight packets after a PTO expiration if it still has available congestion window. This occurs when a sender is application limited and the PTO timer expires. This is more aggressive than TCP's RTO mechanism when application limited, but identical when not application limited.",
+      "ja": "TCP [RFC8985]のRACK-TLP損失検出アルゴリズムと同様に、PTOが期限切れになったときにQUICは輻輳ウィンドウを折りたたんでいません。代わりに、永続的な輻輳が宣言されている場合、QUICが輻輳ウィンドウを折りたたみます。7.6項を参照してください。これにより、不要な輻輳ウィンドウの削減は不要な輻輳ウィンドウの削減を避け、前方RTO回復（F-RTO）[RFC5682]などのメカニズムを修正する必要性を避けます。QUICはPTOの有効期限で輻輳ウィンドウを折りたたんではないので、QUICの送信者は、それでも利用可能な輻輳ウィンドウがある場合、PTOの有効期限後により多くの飛行パケットの送信を制限されません。これは、送信者がアプリケーション制限されており、PTOタイマーが期限切れになると発生します。これは、アプリケーション制限時のTCPのRTOメカニズムよりも積極的ですが、アプリケーション制限が制限されていない場合は同一です。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC allows probe packets to temporarily exceed the congestion window whenever the timer expires.",
+      "ja": "QUICは、タイマーが期限切れになるたびにプローブパケットが輻輳ウィンドウを一時的に超えることを可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8. The Minimum Congestion Window Is Two Packets",
+      "section_title": true,
+      "ja": "4.8. 最小輻輳ウィンドウは2つのパケットです"
+    },
+    {
+      "indent": 3,
+      "text": "TCP uses a minimum congestion window of one packet. However, loss of that single packet means that the sender needs to wait for a PTO to recover (Section 6.2), which can be much longer than an RTT. Sending a single ack-eliciting packet also increases the chances of incurring additional latency when a receiver delays its acknowledgment.",
+      "ja": "TCPは1つのパケットの最小輻輳ウィンドウを使用します。ただし、その単一パケットの損失は、送信者がPTOが回復するのを待つ必要があることを意味します（セクション6.2）。これはRTTよりもはるかに長くなります。単一のACK EILICTINGパケットを送信すると、受信側がその確認応答を遅らせると、追加の待ち時間を発生させる可能性もあります。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC therefore recommends that the minimum congestion window be two packets. While this increases network load, it is considered safe since the sender will still reduce its sending rate exponentially under persistent congestion (Section 6.2).",
+      "ja": "したがって、最小輻輳ウィンドウが2つのパケットになることをお勧めします。これはネットワーク負荷を増加させますが、送信者は依然として永続的な輻輳下で指数関数的にその送信レートを短縮するため、安全と見なされます（セクション6.2）。"
+    },
+    {
+      "indent": 0,
+      "text": "4.9. Handshake Packets Are Not Special",
+      "section_title": true,
+      "ja": "4.9. ハンドシェイクパケットは特別ではありません"
+    },
+    {
+      "indent": 3,
+      "text": "TCP treats the loss of SYN or SYN-ACK packet as persistent congestion and reduces the congestion window to one packet; see [RFC5681]. QUIC treats loss of a packet containing handshake data the same as other losses.",
+      "ja": "TCP SYNまたはSYN-ACKパケットの損失を永続的な輻輳として扱い、輻輳ウィンドウを1パケットに短縮します。[RFC5681]を参照してください。QUICは、ハンドシェイクデータを含むパケットの損失を他の損失と同じで扱います。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Estimating the Round-Trip Time",
+      "section_title": true,
+      "ja": "5. 往復時間の推定"
+    },
+    {
+      "indent": 3,
+      "text": "At a high level, an endpoint measures the time from when a packet was sent to when it is acknowledged as an RTT sample. The endpoint uses RTT samples and peer-reported host delays (see Section 13.2 of [QUIC-TRANSPORT]) to generate a statistical description of the network path's RTT. An endpoint computes the following three values for each path: the minimum value over a period of time (min_rtt), an exponentially weighted moving average (smoothed_rtt), and the mean deviation (referred to as \"variation\" in the rest of this document) in the observed RTT samples (rttvar).",
+      "ja": "ハイレベルでは、エンドポイントは、パケットがRTTサンプルとして認識されたときに送信されたときの時間を測定します。エンドポイントは、RTTサンプルとピアポート済みホスト遅延を使用して、ネットワークパスのRTTの統計的記述を生成するために、[QUIC-transport]のセクション13.2を参照）。エンドポイントは、各パスについて次の3つの値を計算します。期間（min_rtt）、指数関数的に重み付けされた移動平均（Smoothed_rtt）、および平均偏差（このドキュメントの残りの部分で「変動」と呼ばれます）観察されたRTTサンプル（RTTVAR）。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Generating RTT Samples",
+      "section_title": true,
+      "ja": "5.1. RTTサンプルの生成"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint generates an RTT sample on receiving an ACK frame that meets the following two conditions:",
+      "ja": "エンドポイントは、次の2つの条件を満たすACKフレームを受信する上でRTTサンプルを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "* the largest acknowledged packet number is newly acknowledged, and",
+      "ja": "* 最大の確認されたパケット番号は新しく認められ、"
+    },
+    {
+      "indent": 3,
+      "text": "* at least one of the newly acknowledged packets was ack-eliciting.",
+      "ja": "* 新しく確認されたパケットのうちの少なくとも1つはACK ELICITINGでした。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTT sample, latest_rtt, is generated as the time elapsed since the largest acknowledged packet was sent:",
+      "ja": "RTTサンプルLATTED_RTTは、最大の承認されたパケットが送信されてから経過した時間として生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "latest_rtt = ack_time - send_time_of_largest_acked",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "An RTT sample is generated using only the largest acknowledged packet in the received ACK frame. This is because a peer reports acknowledgment delays for only the largest acknowledged packet in an ACK frame. While the reported acknowledgment delay is not used by the RTT sample measurement, it is used to adjust the RTT sample in subsequent computations of smoothed_rtt and rttvar (Section 5.3).",
+      "ja": "RTTサンプルは、受信したACKフレーム内の最大の確認されたパケットのみを使用して生成されます。これは、ACKフレーム内の最大の確認されたパケットのみの確認応答遅延を報告するためです。報告された確認応答遅延はRTTサンプル測定によって使用されていないが、それはSmoothed_RTTおよびRTTVARの後続の計算でRTTサンプルを調整するために使用される（セクション5.3）。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid generating multiple RTT samples for a single packet, an ACK frame SHOULD NOT be used to update RTT estimates if it does not newly acknowledge the largest acknowledged packet.",
+      "ja": "単一のパケットの複数のRTTサンプルの生成を回避するために、ACKフレームを使用してRTT推定値を更新する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "An RTT sample MUST NOT be generated on receiving an ACK frame that does not newly acknowledge at least one ack-eliciting packet. A peer usually does not send an ACK frame when only non-ack-eliciting packets are received. Therefore, an ACK frame that contains acknowledgments for only non-ack-eliciting packets could include an arbitrarily large ACK Delay value. Ignoring such ACK frames avoids complications in subsequent smoothed_rtt and rttvar computations.",
+      "ja": "RTTサンプルは、少なくとも1つのACKエリケーションパケットを新たに確認しないACKフレームを受信する上で生成されてはならない。非ACKエリシティパケットのみを受信した場合、ピアは通常ACKフレームを送信しません。したがって、非ACKエリケーションパケットのみに対する確認応答を含むACKフレームは、任意の大きなACK遅延値を含み得る。そのようなACKフレームを無視すると、その後のSmoothed_RTTおよびRTTVAR計算における合併症が回避される。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender might generate multiple RTT samples per RTT when multiple ACK frames are received within an RTT. As suggested in [RFC6298], doing so might result in inadequate history in smoothed_rtt and rttvar. Ensuring that RTT estimates retain sufficient history is an open research question.",
+      "ja": "複数のACKフレームがRTT内で受信されたときに、送信者がRTTごとに複数のRTTサンプルを生成する可能性があります。[RFC6298]で示唆されているように、そうすることで、滑らかな履歴が不十分な歴史とRTTVARが発生する可能性があります。RTT推定値が十分な歴史を保持するようにすることは、開放的な研究の問題です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Estimating min_rtt",
+      "section_title": true,
+      "ja": "5.2. min_rttの推定"
+    },
+    {
+      "indent": 3,
+      "text": "min_rtt is the sender's estimate of the minimum RTT observed for a given network path over a period of time. In this document, min_rtt is used by loss detection to reject implausibly small RTT samples.",
+      "ja": "min_rttは、一定期間にわたる特定のネットワークパスについて観察された最小RTTの送信者の推定値です。この文書では、MIN_RTTは損失検出によって使用されて、致命的に小さいRTTサンプルを拒否します。"
+    },
+    {
+      "indent": 3,
+      "text": "min_rtt MUST be set to the latest_rtt on the first RTT sample. min_rtt MUST be set to the lesser of min_rtt and latest_rtt (Section 5.1) on all other samples.",
+      "ja": "min_rttは、最初のRTTサンプルのlatter_rttに設定する必要があります。min_rttは、他のすべてのサンプルのmin_rttとlatest_rtt（セクション5.1）に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint uses only locally observed times in computing the min_rtt and does not adjust for acknowledgment delays reported by the peer. Doing so allows the endpoint to set a lower bound for the smoothed_rtt based entirely on what it observes (see Section 5.3) and limits potential underestimation due to erroneously reported delays by the peer.",
+      "ja": "エンドポイントは、MIN_RTTを計算する際のローカルに観測された時間だけを使用し、ピアによって報告された確認応答遅延に対して調整しません。そうすることで、エンドポイントは、それが観察されたものに基づいて滑らかな_rttの下限を設定することを可能にします（セクション5.3を参照）、ピアによる誤って報告された遅延のために潜在的な過小評価を制限します。"
+    },
+    {
+      "indent": 3,
+      "text": "The RTT for a network path may change over time. If a path's actual RTT decreases, the min_rtt will adapt immediately on the first low sample. If the path's actual RTT increases, however, the min_rtt will not adapt to it, allowing future RTT samples that are smaller than the new RTT to be included in smoothed_rtt.",
+      "ja": "ネットワークパスのRTTは時間とともに変化する可能性があります。パスの実際のRTTが減少すると、MIN_RTTは最初の低サンプルにすぐに適応します。しかしながら、経路の実際のRTTが増加すると、MIN_RTTはそれには適応しないため、将来のRTTサンプルがsmoothed_rttに含まれることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints SHOULD set the min_rtt to the newest RTT sample after persistent congestion is established. This avoids repeatedly declaring persistent congestion when the RTT increases. This also allows a connection to reset its estimate of min_rtt and smoothed_rtt after a disruptive network event; see Section 5.3.",
+      "ja": "エンドポイントは、永続的な輻輳が確立された後にMIN_RTTを最新のRTTサンプルに設定する必要があります。これにより、RTTが増加すると永続的な輻輳を繰り返し宣言します。これにより、接続が破壊的なネットワークイベントの後にMIN_RTTとSmoothed_RTTの推定値をリセットすることもできます。セクション5.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints MAY reestablish the min_rtt at other times in the connection, such as when traffic volume is low and an acknowledgment is received with a low acknowledgment delay. Implementations SHOULD NOT refresh the min_rtt value too often since the actual minimum RTT of the path is not frequently observable.",
+      "ja": "エンドポイントは、トラフィックボリュームがローのときなど、接続内の他の時点でMIN_RTTを再確立し、確認応答が低い確認遅延で受信されます。実際のパスの実際の最小RTTが頻繁に観察できないため、実装はMIN_RTT値を更新しないでください。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Estimating smoothed_rtt and rttvar",
+      "section_title": true,
+      "ja": "5.3. 滑らかな_RTTとRTTVARの推定"
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt is an exponentially weighted moving average of an endpoint's RTT samples, and rttvar estimates the variation in the RTT samples using a mean variation.",
+      "ja": "Smoothed_RTTは、エンドポイントのRTTサンプルの指数関数的に重み付けされた移動平均であり、RTTVARは平均変動を使用してRTTサンプルの変動を推定します。"
+    },
+    {
+      "indent": 3,
+      "text": "The calculation of smoothed_rtt uses RTT samples after adjusting them for acknowledgment delays. These delays are decoded from the ACK Delay field of ACK frames as described in Section 19.3 of [QUIC-TRANSPORT].",
+      "ja": "smoothed_rttの計算は、確認応答遅延のためにそれらを調整した後にRTTサンプルを使用します。これらの遅延は、[QUIC-Transport]のセクション19.3で説明されているACKフレームのACK遅延フィールドから復号されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The peer might report acknowledgment delays that are larger than the peer's max_ack_delay during the handshake (Section 13.2.1 of [QUIC-TRANSPORT]). To account for this, the endpoint SHOULD ignore max_ack_delay until the handshake is confirmed, as defined in Section 4.1.2 of [QUIC-TLS]. When they occur, these large acknowledgment delays are likely to be non-repeating and limited to the handshake. The endpoint can therefore use them without limiting them to the max_ack_delay, avoiding unnecessary inflation of the RTT estimate.",
+      "ja": "ピアは、ハンドシェイク中にピアのMAX_ACK_DELAYより大きい確認遅延を報告することがあります（[QUIC-transport]のセクション13.2.1）。これを考慮するために、[QUIC-TLS]のセクション4.1.2で定義されているように、ハンドシェイクが確認されるまで、エンドポイントはMAX_ACK_DELAYを無視する必要があります。発生すると、これらの大きな確認応答遅延は非繰り返しが非繰り返し、ハンドシェイクに限定される可能性があります。したがって、エンドポイントは、それらをMAX_ACK_DELAYに制限することなくそれらを使用することができ、RTT推定の不必要なインフレを回避します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that a large acknowledgment delay can result in a substantially inflated smoothed_rtt if there is an error either in the peer's reporting of the acknowledgment delay or in the endpoint's min_rtt estimate. Therefore, prior to handshake confirmation, an endpoint MAY ignore RTT samples if adjusting the RTT sample for acknowledgment delay causes the sample to be less than the min_rtt.",
+      "ja": "肯定応答遅延のピアの報告またはエンドポイントのMIN_RTT推定値のいずれかで、大規模な確認応答遅延が実質的に膨張した滑らかな_RTTをもたらす可能性があることに注意してください。したがって、ハンドシェイクの確認の前に、確認応答遅延のためにRTTサンプルを調整すると、エンドポイントはRTTサンプルを無視することがあります。サンプルがMIN_RTTよりも小さくなります。"
+    },
+    {
+      "indent": 3,
+      "text": "After the handshake is confirmed, any acknowledgment delays reported by the peer that are greater than the peer's max_ack_delay are attributed to unintentional but potentially repeating delays, such as scheduler latency at the peer or loss of previous acknowledgments. Excess delays could also be due to a noncompliant receiver. Therefore, these extra delays are considered effectively part of path delay and incorporated into the RTT estimate.",
+      "ja": "ハンドシェイクが確認された後、ピアのMAX_ACK_DELAYより大きいピアによって報告された肯定応答遅延は、意図しないが潜在的に繰り返される遅延が、ピアまたは以前の確認応答の損失のスケジューラの待ち時間などの遅延遅延を繰り返すことができる。余分な遅延は、不完全な受信機によるものでもあり得る。したがって、これらの余分な遅延は経路遅延の一部と考えられ、RTT推定に組み込まれる。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, when adjusting an RTT sample using peer-reported acknowledgment delays, an endpoint:",
+      "ja": "したがって、ピア報告確認応答遅延を使用してRTTサンプルを調整するときは、エンドポイントです。"
+    },
+    {
+      "indent": 3,
+      "text": "* MAY ignore the acknowledgment delay for Initial packets, since these acknowledgments are not delayed by the peer (Section 13.2.1 of [QUIC-TRANSPORT]);",
+      "ja": "* これらの確認応答はピアによって遅れていないため、初期パケットの確認遅延を無視することができます（[QUIC-Transport]のセクション13.2.1）。"
+    },
+    {
+      "indent": 3,
+      "text": "* SHOULD ignore the peer's max_ack_delay until the handshake is confirmed;",
+      "ja": "* ハンドシェイクが確認されるまで、ピアのMAX_ACK_DELAYを無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* MUST use the lesser of the acknowledgment delay and the peer's max_ack_delay after the handshake is confirmed; and",
+      "ja": "* handshakeが確認された後に、肯定応答遅延のより少ないを使用する必要があります。そして"
+    },
+    {
+      "indent": 3,
+      "text": "* MUST NOT subtract the acknowledgment delay from the RTT sample if the resulting value is smaller than the min_rtt. This limits the underestimation of the smoothed_rtt due to a misreporting peer.",
+      "ja": "* 結果の値がmin_rttより小さければ、RTTサンプルからの確認遅延を減算しないでください。これは、誤動作しているピアによる滑らかな_RTTの過小評価を制限します。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, an endpoint might postpone the processing of acknowledgments when the corresponding decryption keys are not immediately available. For example, a client might receive an acknowledgment for a 0-RTT packet that it cannot decrypt because 1-RTT packet protection keys are not yet available to it. In such cases, an endpoint SHOULD subtract such local delays from its RTT sample until the handshake is confirmed.",
+      "ja": "さらに、対応する復号化キーがすぐに利用可能でない場合、エンドポイントは確認応答の処理を延期する可能性があります。たとえば、1-RTTのパケット保護キーがまだ利用できないため、クライアントは復号化できない0-RTTパケットの確認応答を受信することがあります。そのような場合、エンドポイントは、ハンドシェイクが確認されるまでそのRTTサンプルからそのような局所遅延を減算する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Similar to [RFC6298], smoothed_rtt and rttvar are computed as follows.",
+      "ja": "[RFC6298]と同様に、smoothed_rttとrttvarは次のように計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint initializes the RTT estimator during connection establishment and when the estimator is reset during connection migration; see Section 9.4 of [QUIC-TRANSPORT]. Before any RTT samples are available for a new path or when the estimator is reset, the estimator is initialized using the initial RTT; see Section 6.2.2.",
+      "ja": "エンドポイントは、接続確立中、および接続移行中に推定量がリセットされたときにRTT推定量を初期化します。[QUIC-Transport]のセクション9.4を参照してください。RTTサンプルが新しいパスに使用可能な場合、または推定器がリセットされている場合、推定器は初期RTTを使用して初期化されます。6.2.2項を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt and rttvar are initialized as follows, where kInitialRtt contains the initial RTT value:",
+      "ja": "smoothed_rttとrttvarは次のように初期化されます。ここで、kinitialrttに最初のRTT値が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt = kInitialRtt rttvar = kInitialRtt / 2",
+      "ja": "smoothed_rtt = KinitialRTT RTTVAR = KINITIALRTT / 2"
+    },
+    {
+      "indent": 3,
+      "text": "RTT samples for the network path are recorded in latest_rtt; see Section 5.1. On the first RTT sample after initialization, the estimator is reset using that sample. This ensures that the estimator retains no history of past samples. Packets sent on other paths do not contribute RTT samples to the current path, as described in Section 9.4 of [QUIC-TRANSPORT].",
+      "ja": "ネットワークパスのRTTサンプルはlattion_rttに記録されます。セクション5.1を参照してください。初期化後の最初のRTTサンプルでは、そのサンプルを使用して推定器をリセットします。これにより、推定量が過去のサンプルの履歴を保持しないようにします。[QUIC-Transport]のセクション9.4で説明されているように、他のパスで送信されたパケットは、RTTサンプルを現在のパスに寄与しません。"
+    },
+    {
+      "indent": 3,
+      "text": "On the first RTT sample after initialization, smoothed_rtt and rttvar are set as follows:",
+      "ja": "初期化後の最初のRTTサンプルでは、smoothed_rttとrttvarが次のように設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt = latest_rtt rttvar = latest_rtt / 2",
+      "ja": "smoothed_rtt = latest_rtt rttvar = latest_rtt / 2."
+    },
+    {
+      "indent": 3,
+      "text": "On subsequent RTT samples, smoothed_rtt and rttvar evolve as follows:",
+      "ja": "後続のRTTサンプルで、smoothed_rttとrttvarは次のように進化します。"
+    },
+    {
+      "indent": 3,
+      "text": "ack_delay = decoded acknowledgment delay from ACK frame\nif (handshake confirmed):\n  ack_delay = min(ack_delay, max_ack_delay)\nadjusted_rtt = latest_rtt\nif (latest_rtt >= min_rtt + ack_delay):\n  adjusted_rtt = latest_rtt - ack_delay\nsmoothed_rtt = 7/8 * smoothed_rtt + 1/8 * adjusted_rtt\nrttvar_sample = abs(smoothed_rtt - adjusted_rtt)\nrttvar = 3/4 * rttvar + 1/4 * rttvar_sample",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "6. Loss Detection",
+      "section_title": true,
+      "ja": "6. 損失検出"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC senders use acknowledgments to detect lost packets and a PTO to ensure acknowledgments are received; see Section 6.2. This section provides a description of these algorithms.",
+      "ja": "QUIC送信者は承認を検出して承認を受けていることを確認するためのPTOとPTOを検出します。6.2項を参照してください。このセクションでは、これらのアルゴリズムについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "If a packet is lost, the QUIC transport needs to recover from that loss, such as by retransmitting the data, sending an updated frame, or discarding the frame. For more information, see Section 13.3 of [QUIC-TRANSPORT].",
+      "ja": "パケットが失われた場合、QUICトランスポートは、データを再送信し、更新されたフレームを送信する、またはフレームを破棄することなどによって、その損失から回復する必要があります。詳しくは、[QUIC-transport]の節13.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Loss detection is separate per packet number space, unlike RTT measurement and congestion control, because RTT and congestion control are properties of the path, whereas loss detection also relies upon key availability.",
+      "ja": "RTT測定および輻輳制御とは異なり、RTT測定および輻輳制御とは異なり、PACKET測定および輻輳制御とは異なり、損失検出は別々ですが、損失検出も鍵の可用性に依存しています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Acknowledgment-Based Detection",
+      "section_title": true,
+      "ja": "6.1. 確認応答ベースの検出"
+    },
+    {
+      "indent": 3,
+      "text": "Acknowledgment-based loss detection implements the spirit of TCP's Fast Retransmit [RFC5681], Early Retransmit [RFC5827], Forward Acknowledgment [FACK], SACK loss recovery [RFC6675], and RACK-TLP [RFC8985]. This section provides an overview of how these algorithms are implemented in QUIC.",
+      "ja": "確認応答ベースの損失検出[RFC5681]、早期再送信[RFC5827]、前方承認[FACK]、SACK Loss Recovery [RFC6675]、およびRACK-TLP [RFC8985]の精神を実装しています。このセクションでは、これらのアルゴリズムがQUICでどのように実装されているかの概要を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "A packet is declared lost if it meets all of the following conditions:",
+      "ja": "以下のすべての条件を満たす場合、パケットは失われた場合に宣言されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* The packet is unacknowledged, in flight, and was sent prior to an acknowledged packet.",
+      "ja": "* パケットは、録音されており、承認されたパケットの前に送信されました。"
+    },
+    {
+      "indent": 3,
+      "text": "* The packet was sent kPacketThreshold packets before an acknowledged packet (Section 6.1.1), or it was sent long enough in the past (Section 6.1.2).",
+      "ja": "* パケットは承認されたパケット（6.1.1項）の前にkpacketthresholdパケットに送信されたか、過去に十分な長さに送信されました（6.1.2項）。"
+    },
+    {
+      "indent": 3,
+      "text": "The acknowledgment indicates that a packet sent later was delivered, and the packet and time thresholds provide some tolerance for packet reordering.",
+      "ja": "確認応答は、後で送信されたパケットが配信され、パケットおよび時間のしきい値がパケットの並べ替えに許容範囲を提供することを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Spuriously declaring packets as lost leads to unnecessary retransmissions and may result in degraded performance due to the actions of the congestion controller upon detecting loss. Implementations can detect spurious retransmissions and increase the packet or time reordering threshold to reduce future spurious retransmissions and loss events. Implementations with adaptive time thresholds MAY choose to start with smaller initial reordering thresholds to minimize recovery latency.",
+      "ja": "不要な再送信を失うように誤って宣言すると、損失を検出する際の輻輳コントローラの動作によるパフォーマンスが低下する可能性があります。実装はスプリアスの再送信を検出し、将来のスプリアスの再送信および損失イベントを減らすためにパケットまたは並べ替えしきい値を増やすことができます。適応時間しきい値を持つ実装は、回復待ち時間を最小限に抑えるために、より小さな初期並べ替えしきい値から始めることを選択できます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1.1. Packet Threshold",
+      "section_title": true,
+      "ja": "6.1.1. パケットしきい値"
+    },
+    {
+      "indent": 3,
+      "text": "The RECOMMENDED initial value for the packet reordering threshold (kPacketThreshold) is 3, based on best practices for TCP loss detection [RFC5681] [RFC6675]. In order to remain similar to TCP, implementations SHOULD NOT use a packet threshold less than 3; see [RFC5681].",
+      "ja": "TCP損失検出のベストプラクティス（RFC5681] [RFC6675]のベストプラクティスに基づく、パケット並べ替え閾値（kpacketthreshold）の推奨初期値は3です。TCPと同様のままで、実装は3未満のパケットしきい値を使用しないでください。[RFC5681]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Some networks may exhibit higher degrees of packet reordering, causing a sender to detect spurious losses. Additionally, packet reordering could be more common with QUIC than TCP because network elements that could observe and reorder TCP packets cannot do that for QUIC and also because QUIC packet numbers are encrypted. Algorithms that increase the reordering threshold after spuriously detecting losses, such as RACK [RFC8985], have proven to be useful in TCP and are expected to be at least as useful in QUIC.",
+      "ja": "いくつかのネットワークは、より高い程度のパケット並べ替えを示すことがあり、送信者にスプリアス損失を検出させる可能性がある。さらに、TCPパケットを観察して並べ替えることができ、QUICのパケット番号が暗号化される可能性があるネットワーク要素は、TCPよりもQUICとQUICとより一般的である可能性があります。ラック[RFC8985]などの損失を誤って検出した後の並べ替え閾値を増大させるアルゴリズムは、TCPにおいて有用であり、少なくともQUICにおいて有用であると予想される。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1.2. Time Threshold",
+      "section_title": true,
+      "ja": "6.1.2. 時間しきい値"
+    },
+    {
+      "indent": 3,
+      "text": "Once a later packet within the same packet number space has been acknowledged, an endpoint SHOULD declare an earlier packet lost if it was sent a threshold amount of time in the past. To avoid declaring packets as lost too early, this time threshold MUST be set to at least the local timer granularity, as indicated by the kGranularity constant. The time threshold is:",
+      "ja": "同じパケット番号スペース内の後のパケットが確認されたら、エンドポイントは過去のしきい値を送信した場合に失われた以前のパケットを宣言する必要があります。損失しすぎるとパケットを宣言することを回避するために、この時間しきい値は、kgranularity定数によって示されるように、少なくともローカルタイマの粒度に設定されなければなりません。時間しきい値は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "max(kTimeThreshold * max(smoothed_rtt, latest_rtt), kGranularity)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "If packets sent prior to the largest acknowledged packet cannot yet be declared lost, then a timer SHOULD be set for the remaining time.",
+      "ja": "最大の確認されたパケットの前に送信されたパケットがまだ宣言されない場合は、残りの時間にタイマーを設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Using max(smoothed_rtt, latest_rtt) protects from the two following cases:",
+      "ja": "max（smoothed_rtt、latest_rtt）を使用すると、次の2つのケースから保護します。"
+    },
+    {
+      "indent": 3,
+      "text": "* the latest RTT sample is lower than the smoothed RTT, perhaps due to reordering where the acknowledgment encountered a shorter path;",
+      "ja": "* 最新のRTTサンプルは、おそらく承認が短いパスに遭遇した並べ替えのために、平滑化されたRTTよりも低い。"
+    },
+    {
+      "indent": 3,
+      "text": "* the latest RTT sample is higher than the smoothed RTT, perhaps due to a sustained increase in the actual RTT, but the smoothed RTT has not yet caught up.",
+      "ja": "* 最新のRTTサンプルは、おそらく実際のRTTの持続的な増加のために平滑化されたRTTよりも高いが、滑らかなRTTはまだ追いついていない。"
+    },
+    {
+      "indent": 3,
+      "text": "The RECOMMENDED time threshold (kTimeThreshold), expressed as an RTT multiplier, is 9/8. The RECOMMENDED value of the timer granularity (kGranularity) is 1 millisecond.",
+      "ja": "RTT乗数として表される推奨時間しきい値（ktimetthreshold）は9/8です。タイマ粒度の推奨値（kgranularity）は1ミリ秒です。"
+    },
+    {
+      "indent": 6,
+      "text": "|  Note: TCP's RACK [RFC8985] specifies a slightly larger\n|  threshold, equivalent to 5/4, for a similar purpose.\n|  Experience with QUIC shows that 9/8 works well.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY experiment with absolute thresholds, thresholds from previous connections, adaptive thresholds, or the including of RTT variation. Smaller thresholds reduce reordering resilience and increase spurious retransmissions, and larger thresholds increase loss detection delay.",
+      "ja": "実装は、絶対しきい値、以前の接続からのしきい値、適応しきい値、またはRTTの変動を含むことを試みることができる。小さなしきい値が並べ替えを減らし、スプリアスの再送信を増加させ、そしてより大きなしきい値を増加させる損失検出遅延を増加させる。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Probe Timeout",
+      "section_title": true,
+      "ja": "6.2. プローブタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "A Probe Timeout (PTO) triggers the sending of one or two probe datagrams when ack-eliciting packets are not acknowledged within the expected period of time or the server may not have validated the client's address. A PTO enables a connection to recover from loss of tail packets or acknowledgments.",
+      "ja": "プローブタイムアウト（PTO）は、ACKエリサイトパケットが予想される期間内に承認されない場合、またはサーバがクライアントのアドレスを検証していない場合に、1つまたは2つのプローブデータグラムの送信をトリガします。PTOは、テールパケットの損失または確認応答から回復することを可能にする。"
+    },
+    {
+      "indent": 3,
+      "text": "As with loss detection, the PTO is per packet number space. That is, a PTO value is computed per packet number space.",
+      "ja": "損失検出と同様に、PTOはパケット番号スペースあたりです。すなわち、パケット番号スペースあたりPTO値が算出される。"
+    },
+    {
+      "indent": 3,
+      "text": "A PTO timer expiration event does not indicate packet loss and MUST NOT cause prior unacknowledged packets to be marked as lost. When an acknowledgment is received that newly acknowledges packets, loss detection proceeds as dictated by the packet and time threshold mechanisms; see Section 6.1.",
+      "ja": "PTOタイマーの有効期限イベントはパケット損失を示すものではなく、未確認の未確認のパケットを失ったとおりにマークしないでください。新たにパケットを確認することが、損失検出が受信されると、損失検出はパケットおよび時間しきい値メカニズムによって決定されるように進行する。セクション6.1を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The PTO algorithm used in QUIC implements the reliability functions of Tail Loss Probe [RFC8985], RTO [RFC5681], and F-RTO algorithms for TCP [RFC5682]. The timeout computation is based on TCP's RTO period [RFC6298].",
+      "ja": "QUICで使用されるPTOアルゴリズムは、TAIL損失プローブ[RFC8985]、RTO [RFC5681]、およびTCP [RFC5682]の信頼性機能を実装しています。タイムアウト計算はTCPのRTO期間[RFC6298]に基づいています。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.1. Computing PTO",
+      "section_title": true,
+      "ja": "6.2.1. PTOのコンピューティング"
+    },
+    {
+      "indent": 3,
+      "text": "When an ack-eliciting packet is transmitted, the sender schedules a timer for the PTO period as follows:",
+      "ja": "ACKエリケーションパケットが送信されると、送信者は次のようにPTO期間のタイマーをスケジュールします。"
+    },
+    {
+      "indent": 3,
+      "text": "PTO = smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The PTO period is the amount of time that a sender ought to wait for an acknowledgment of a sent packet. This time period includes the estimated network RTT (smoothed_rtt), the variation in the estimate (4*rttvar), and max_ack_delay, to account for the maximum time by which a receiver might delay sending an acknowledgment.",
+      "ja": "PTO期間は、送信者が送信されたパケットの確認応答を待つべきな時間です。この期間には、推定ネットワークRTT（Smoothed_RTT）、推定値（4 * RTTVAR）、およびMAX_ACK_DELAYが含まれ、受信側が確認応答の送信を遅らせる可能性がある最大時間を考慮しています。"
+    },
+    {
+      "indent": 3,
+      "text": "When the PTO is armed for Initial or Handshake packet number spaces, the max_ack_delay in the PTO period computation is set to 0, since the peer is expected to not delay these packets intentionally; see Section 13.2.1 of [QUIC-TRANSPORT].",
+      "ja": "PTOが初期またはハンドシェイクパケット数のスペースのために武装されると、ピアはこれらのパケットを意図的に遅らせないと予想されるので、PTO期間計算のMAX_ACK_DELAYは0に設定される。[QUIC-Transport]の13.2.1項を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The PTO period MUST be at least kGranularity to avoid the timer expiring immediately.",
+      "ja": "PTO期間は、すぐに期限切れになるタイマーを回避するために少なくともkgranularityでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "When ack-eliciting packets in multiple packet number spaces are in flight, the timer MUST be set to the earlier value of the Initial and Handshake packet number spaces.",
+      "ja": "複数のパケット番号スペース内のACKエリションパケットが飛行中の場合、タイマーは初期およびハンドシェイクのパケット番号のスペースの以前の値に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint MUST NOT set its PTO timer for the Application Data packet number space until the handshake is confirmed. Doing so prevents the endpoint from retransmitting information in packets when either the peer does not yet have the keys to process them or the endpoint does not yet have the keys to process their acknowledgments. For example, this can happen when a client sends 0-RTT packets to the server; it does so without knowing whether the server will be able to decrypt them. Similarly, this can happen when a server sends 1-RTT packets before confirming that the client has verified the server's certificate and can therefore read these 1-RTT packets.",
+      "ja": "ハンドシェイクが確認されるまで、エンドポイントはアプリケーションデータパケット番号スペースのPTOタイマーを設定してはなりません。そうすることで、ピアのいずれかがそれらを処理するためのキーがまだある場合、またはエンドポイントがまだ承認を処理するためのキーを持っていないときに、エンドポイントがパケット内の情報を再送信するのを防ぎます。たとえば、クライアントが0-RTTパケットをサーバーに送信したときに発生する可能性があります。サーバーがそれらを復号化できるかどうかを知らずにそうします。同様に、これは、クライアントがサーバーの証明書を検証していることを確認する前にサーバーが1-RTTパケットを送信し、したがってこれらの1 RTTパケットを読み取ることができる場合に発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender SHOULD restart its PTO timer every time an ack-eliciting packet is sent or acknowledged, or when Initial or Handshake keys are discarded (Section 4.9 of [QUIC-TLS]). This ensures the PTO is always set based on the latest estimate of the RTT and for the correct packet across packet number spaces.",
+      "ja": "ACK EILICTINGパケットが送信または確認されるたびに、送信者はPTOタイマーを再起動するか、最初またはハンドシェイクキーを破棄する（[QUIC-TLS]のセクション4.9）。これにより、RTTの最新の見積もりとパケット番号スペース間の正しいパケットについては、PTOが常に設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a PTO timer expires, the PTO backoff MUST be increased, resulting in the PTO period being set to twice its current value. The PTO backoff factor is reset when an acknowledgment is received, except in the following case. A server might take longer to respond to packets during the handshake than otherwise. To protect such a server from repeated client probes, the PTO backoff is not reset at a client that is not yet certain that the server has finished validating the client's address. That is, a client does not reset the PTO backoff factor on receiving acknowledgments in Initial packets.",
+      "ja": "PTOタイマーが期限切れになると、PTOバックオフを増やす必要があり、PTO期間が現在の値に設定されています。次の場合を除いて、確認応答を受信したときにPTOバックオフファクタがリセットされます。他の方法よりもハンドシェイク中にパケットに対応するのに長い時間がかかる場合があります。そのようなサーバを繰り返しクライアントプローブから保護するために、PTOバックオフはクライアントでは、クライアントのアドレスの検証が完了したことがまだ確実ではないクライアントでリセットされません。すなわち、クライアントは、初期パケット内の確認応答を受信してPTOバックオフファクタをリセットしない。"
+    },
+    {
+      "indent": 3,
+      "text": "This exponential reduction in the sender's rate is important because consecutive PTOs might be caused by loss of packets or acknowledgments due to severe congestion. Even when there are ack-eliciting packets in flight in multiple packet number spaces, the exponential increase in PTO occurs across all spaces to prevent excess load on the network. For example, a timeout in the Initial packet number space doubles the length of the timeout in the Handshake packet number space.",
+      "ja": "継続的なPTOが厳しい渋滞によるパケットの損失や承認によって引き起こされる可能性があるため、送信者の率のこの指数の減少は重要です。複数のパケット番号スペースに飛行中のACKエリチコンパケットがある場合でも、ネットワーク上の余分な負荷を防ぐために、PTOの指数関数的増加がすべてのスペースにわたって発生します。たとえば、初期パケット番号スペースのタイムアウトは、ハンドシェイクパケット番号スペース内のタイムアウトの長さを2倍にします。"
+    },
+    {
+      "indent": 3,
+      "text": "The total length of time over which consecutive PTOs expire is limited by the idle timeout.",
+      "ja": "連続したPTOが期限切れになる時間の合計時間は、アイドルタイムアウトによって制限されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The PTO timer MUST NOT be set if a timer is set for time threshold loss detection; see Section 6.1.2. A timer that is set for time threshold loss detection will expire earlier than the PTO timer in most cases and is less likely to spuriously retransmit data.",
+      "ja": "時間しきい値損失検出にタイマーが設定されている場合は、PTOタイマーを設定しないでください。セクション6.1.2を参照してください。時間しきい値損失検出に設定されたタイマーは、ほとんどの場合、PTOタイマーよりも早く期限切れになり、データを再送信する可能性が低い。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.2. Handshakes and New Paths",
+      "section_title": true,
+      "ja": "6.2.2. ハンドシェイクと新しい道"
+    },
+    {
+      "indent": 3,
+      "text": "Resumed connections over the same network MAY use the previous connection's final smoothed RTT value as the resumed connection's initial RTT. When no previous RTT is available, the initial RTT SHOULD be set to 333 milliseconds. This results in handshakes starting with a PTO of 1 second, as recommended for TCP's initial RTO; see Section 2 of [RFC6298].",
+      "ja": "同じネットワーク上での接続を再開すると、再開された接続の初期RTTとして以前の接続の最終的なスムージングRTT値を使用できます。以前のRTTが利用可能な場合は、最初のRTTを333ミリ秒に設定する必要があります。これにより、TCPの最初のRTOに推奨されるように、1秒のPTOからハンドシェイクを開始します。[RFC6298]のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A connection MAY use the delay between sending a PATH_CHALLENGE and receiving a PATH_RESPONSE to set the initial RTT (see kInitialRtt in Appendix A.2) for a new path, but the delay SHOULD NOT be considered an RTT sample.",
+      "ja": "接続は、PATH_CHALLENGEを送信し、新しいパスについて初期RTT（付録A.2のKinitialRTTを参照）を設定するためにPATH_RESPONSEを受信することによって遅延を使用することができますが、遅延はRTTサンプルと見なされるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When the Initial keys and Handshake keys are discarded (see Section 6.4), any Initial packets and Handshake packets can no longer be acknowledged, so they are removed from bytes in flight. When Initial or Handshake keys are discarded, the PTO and loss detection timers MUST be reset, because discarding keys indicates forward progress and the loss detection timer might have been set for a now-discarded packet number space.",
+      "ja": "最初のキーとハンドシェイクキーが破棄されると（セクション6.4を参照）、最初のパケットとハンドシェイクのパケットは承認されなくなりますので、フライトのバイトから削除されます。初期キーまたはハンドシェイクキーを破棄すると、キーが廃棄されることを示し、損失検出タイマが現在廃棄されたパケット番号スペースに設定されている可能性があるため、PTOおよび損失検出タイマをリセットする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.2.1. Before Address Validation",
+      "section_title": true,
+      "ja": "6.2.2.1. アドレス検証の前に"
+    },
+    {
+      "indent": 3,
+      "text": "Until the server has validated the client's address on the path, the amount of data it can send is limited to three times the amount of data received, as specified in Section 8.1 of [QUIC-TRANSPORT]. If no additional data can be sent, the server's PTO timer MUST NOT be armed until datagrams have been received from the client because packets sent on PTO count against the anti-amplification limit.",
+      "ja": "サーバーがパス上のクライアントのアドレスを検証したまで、送信できるデータの量は、[QUIC-Transport]のセクション8.1で指定されているデータ量の3倍に制限されます。追加のデータを送信できる場合は、PTOのキャンセットに応じてPTOカウントで送信されたパケットがクライアントから受信されるまで、サーバーのPTOタイマーを武装させないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "When the server receives a datagram from the client, the amplification limit is increased and the server resets the PTO timer. If the PTO timer is then set to a time in the past, it is executed immediately. Doing so avoids sending new 1-RTT packets prior to packets critical to the completion of the handshake. In particular, this can happen when 0-RTT is accepted but the server fails to validate the client's address.",
+      "ja": "サーバーがクライアントからデータグラムを受信すると、増幅制限が増加し、サーバーはPTOタイマーをリセットします。PTOタイマーが過去の時間に設定されている場合は、直ちに実行されます。そうすることで、パケットの前に新しい1-RTTパケットの送信をハンドシェイクの完了に送信することを避けます。特に、これは0-RTTが受け入れられている場合に発生する可能性がありますが、サーバーはクライアントのアドレスを検証できません。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the server could be blocked until more datagrams are received from the client, it is the client's responsibility to send packets to unblock the server until it is certain that the server has finished its address validation (see Section 8 of [QUIC-TRANSPORT]). That is, the client MUST set the PTO timer if the client has not received an acknowledgment for any of its Handshake packets and the handshake is not confirmed (see Section 4.1.2 of [QUIC-TLS]), even if there are no packets in flight. When the PTO fires, the client MUST send a Handshake packet if it has Handshake keys, otherwise it MUST send an Initial packet in a UDP datagram with a payload of at least 1200 bytes.",
+      "ja": "より多くのデータグラムがクライアントから受信されるまでサーバをブロックすることができるので、サーバがそのアドレス検証を終了したことが確実であるまで、サーバをブロック解除するためのクライアントの責任である（[QUIC-Transport]のセクション8を参照）。。つまり、クライアントがそのハンドシェイクパケットのいずれかの承認を受け付けていない場合は、クライアントがPTOタイマーを設定し、パケットがない場合でも、[QUIC-TLSのセクション4.1.2参照）を参照してください。飛行中です。PTOが発射されると、クライアントはハンドシェイクキーがある場合はハンドシェイクパケットを送信する必要があります。そうしないと、少なくとも1200バイトのペイロードでUDPデータグラムに初期パケットを送信する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.3. Speeding up Handshake Completion",
+      "section_title": true,
+      "ja": "6.2.3. ハンドシェイクの終了をスピードアップする"
+    },
+    {
+      "indent": 3,
+      "text": "When a server receives an Initial packet containing duplicate CRYPTO data, it can assume the client did not receive all of the server's CRYPTO data sent in Initial packets, or the client's estimated RTT is too small. When a client receives Handshake or 1-RTT packets prior to obtaining Handshake keys, it may assume some or all of the server's Initial packets were lost.",
+      "ja": "サーバーが重複する暗号データを含む初期パケットを受信すると、クライアントが最初のパケットで送信されたすべてのサーバーの暗号データを受信しなかったか、クライアントの推定RTTが小さすぎます。ハンドシェイクキーを入手する前にクライアントがハンドシェイクまたは1-RTTパケットを受信すると、サーバーの最初のパケットの一部または全部が失われたと見なすことがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "To speed up handshake completion under these conditions, an endpoint MAY, for a limited number of times per connection, send a packet containing unacknowledged CRYPTO data earlier than the PTO expiry, subject to the address validation limits in Section 8.1 of [QUIC-TRANSPORT]. Doing so at most once for each connection is adequate to quickly recover from a single packet loss. An endpoint that always retransmits packets in response to receiving packets that it cannot process risks creating an infinite exchange of packets.",
+      "ja": "ハンドシェイクの完了をスピードアップするために、これらの条件下では、エンドポイントが接続ごとに限られた回数の場合、未確認の暗号データを含むパケットをPTOの有効期限より前に早く送信し、[QUIC-Transport]のセクション8.1のアドレス検証制限に従います。。接続ごとに最大で一度だけ行うことは、単一のパケット損失からすばやく回復するのに十分です。パケットの受信に応答して常にパケットを再送信するエンドポイントは、無限のパケット交換を作成することができません。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints can also use coalesced packets (see Section 12.2 of [QUIC-TRANSPORT]) to ensure that each datagram elicits at least one acknowledgment. For example, a client can coalesce an Initial packet containing PING and PADDING frames with a 0-RTT data packet, and a server can coalesce an Initial packet containing a PING frame with one or more packets in its first flight.",
+      "ja": "エンドポイントは、各データグラムが少なくとも1回の確認応答を誘発するように、合体パケットを使用することもできます（[QUIC-transport]のセクション12.2参照）。例えば、クライアントは、PINGフレームを含む初期パケットと0  -  RTTデータパケットを含む初期パケットを合体することができ、サーバはその最初のフライト内の1つまたは複数のパケットを含むPingフレームを含む初期パケットを合体することができる。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2.4. Sending Probe Packets",
+      "section_title": true,
+      "ja": "6.2.4. プローブパケットを送信します"
+    },
+    {
+      "indent": 3,
+      "text": "When a PTO timer expires, a sender MUST send at least one ack-eliciting packet in the packet number space as a probe. An endpoint MAY send up to two full-sized datagrams containing ack-eliciting packets to avoid an expensive consecutive PTO expiration due to a single lost datagram or to transmit data from multiple packet number spaces. All probe packets sent on a PTO MUST be ack-eliciting.",
+      "ja": "PTOタイマーが満了すると、送信者はプローブとしてパケット番号スペースに少なくとも1つのACKエリシティパケットを送信しなければならない。エンドポイントは、単一の失われたデータグラムのために、または複数のパケット番号スペースからデータを送信するために高価な連続したPTOの有効期限を回避するために、ACKエリションパケットを含む最大2つのフルサイズのデータグラムを送信することができる。PTOで送信されたすべてのプローブパケットはACKエリケーションでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to sending data in the packet number space for which the timer expired, the sender SHOULD send ack-eliciting packets from other packet number spaces with in-flight data, coalescing packets if possible. This is particularly valuable when the server has both Initial and Handshake data in flight or when the client has both Handshake and Application Data in flight because the peer might only have receive keys for one of the two packet number spaces.",
+      "ja": "タイマーが期限切れになったパケット番号スペースにデータを送信することに加えて、送信者は、可能であれば、インエレクトリックデータを使用して他のパケット番号スペースからACKエリシティパケットを送信する必要があります。これは、サーバーがフライト内の最初とハンドシェイクデータの両方を持つとき、またはクライアントがフライト内のハンドシェイクとアプリケーションデータの両方を持ち、1つのパケット番号スペースの1つの受信キーのみを持つ可能性があるため、特に価値があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the sender wants to elicit a faster acknowledgment on PTO, it can skip a packet number to eliminate the acknowledgment delay.",
+      "ja": "送信者がPTOでより速い確認応答を引き出すことを望んでいる場合、それは確認遅延を排除するためにパケット番号をスキップすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint SHOULD include new data in packets that are sent on PTO expiration. Previously sent data MAY be sent if no new data can be sent. Implementations MAY use alternative strategies for determining the content of probe packets, including sending new or retransmitted data based on the application's priorities.",
+      "ja": "エンドポイントには、PTOの有効期限で送信されるパケット内の新しいデータを含める必要があります。新しいデータが送信されない場合、以前に送信されたデータを送信することができます。実装は、アプリケーションの優先順位に基づいて新規または再送信されたデータを送信することを含む、プローブパケットの内容を決定するための代替戦略を使用することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is possible the sender has no new or previously sent data to send. As an example, consider the following sequence of events: new application data is sent in a STREAM frame, deemed lost, then retransmitted in a new packet, and then the original transmission is acknowledged. When there is no data to send, the sender SHOULD send a PING or other ack-eliciting frame in a single packet, rearming the PTO timer.",
+      "ja": "送信者に送信する新規または以前に送信されたデータがない可能性があります。一例として、次の一連のイベントを考慮してください。新しいアプリケーションデータがストリームフレームで送信され、失われたと見なされ、新しいパケットに再送信され、次に元の送信が確認されます。送信するデータがない場合、送信者はPTOタイマーを1つのパケットに単一のパケットに送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Alternatively, instead of sending an ack-eliciting packet, the sender MAY mark any packets still in flight as lost. Doing so avoids sending an additional packet but increases the risk that loss is declared too aggressively, resulting in an unnecessary rate reduction by the congestion controller.",
+      "ja": "あるいは、ACKエリケーションパケットを送信する代わりに、送信者は損失のまだ飛行中に任意のパケットをマークすることができる。そうすることで、追加のパケットを送信することは避けますが、損失が積極的に宣言されているリスクを高め、その結果、輻輳コントローラによる不要なレート削減が可能になります。"
+    },
+    {
+      "indent": 3,
+      "text": "Consecutive PTO periods increase exponentially, and as a result, connection recovery latency increases exponentially as packets continue to be dropped in the network. Sending two packets on PTO expiration increases resilience to packet drops, thus reducing the probability of consecutive PTO events.",
+      "ja": "連続したPTO期間は指数関数的に増加し、その結果、接続回復待ち時間はネットワーク内でパケットが削除され続けると指数関数的に増加します。PTOの有効期限に2つのパケットを送信すると、弾力性がパケットの降下に増え、続いてPTOイベントの確率が低下します。"
+    },
+    {
+      "indent": 3,
+      "text": "When the PTO timer expires multiple times and new data cannot be sent, implementations must choose between sending the same payload every time or sending different payloads. Sending the same payload may be simpler and ensures the highest priority frames arrive first. Sending different payloads each time reduces the chances of spurious retransmission.",
+      "ja": "PTOタイマーが複数回期限切れになり、新しいデータを送信できない場合、実装はたびに同じペイロードを送信したり、異なるペイロードを送信するのを選択する必要があります。同じペイロードを送信することは簡単であり、最初に最高の優先順位のフレームが到着することを保証します。さまざまなペイロードを送信するたびに、スプリアスの再送信の可能性を軽減します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Handling Retry Packets",
+      "section_title": true,
+      "ja": "6.3. リトライパケットの処理"
+    },
+    {
+      "indent": 3,
+      "text": "A Retry packet causes a client to send another Initial packet, effectively restarting the connection process. A Retry packet indicates that the Initial packet was received but not processed. A Retry packet cannot be treated as an acknowledgment because it does not indicate that a packet was processed or specify the packet number.",
+      "ja": "リトライパケットは、クライアントが別の初期パケットを送信し、接続プロセスを効果的に再起動させます。再試行パケットは、初期パケットが受信されたが処理されていないことを示す。パケットが処理されたことを示したり、パケット番号を指定したりしないため、再試行パケットを確認応答として扱うことはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients that receive a Retry packet reset congestion control and loss recovery state, including resetting any pending timers. Other connection state, in particular cryptographic handshake messages, is retained; see Section 17.2.5 of [QUIC-TRANSPORT].",
+      "ja": "保留中のタイマーをリセットすることを含む、リトライパケットリセット輻輳制御と損失回復状態を受信するクライアント。他の接続状態、特に暗号化ハンドシェイクメッセージは保持されています。[QUIC-Transport]の17.2.5項を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The client MAY compute an RTT estimate to the server as the time period from when the first Initial packet was sent to when a Retry or a Version Negotiation packet is received. The client MAY use this value in place of its default for the initial RTT estimate.",
+      "ja": "クライアントは、最初の初期パケットが再試行またはバージョンネゴシエーションパケットを受信したときに送信されたときの期間として、サーバへのRTT推定値を計算することができる。クライアントは、最初のRTT推定値のデフォルトの代わりにこの値を使用できます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. Discarding Keys and Packet State",
+      "section_title": true,
+      "ja": "6.4. キーとパケットの状態を破棄します"
+    },
+    {
+      "indent": 3,
+      "text": "When Initial and Handshake packet protection keys are discarded (see Section 4.9 of [QUIC-TLS]), all packets that were sent with those keys can no longer be acknowledged because their acknowledgments cannot be processed. The sender MUST discard all recovery state associated with those packets and MUST remove them from the count of bytes in flight.",
+      "ja": "最初とハンドシェイクのパケット保護キーが破棄されたとき（[QUIC-TLS]のセクション4.9を参照）、それらのキーで送信されたすべてのパケットは、それらの承認を処理できないために認識できなくなります。送信者は、それらのパケットに関連付けられているすべての回復状態を破棄し、フライトのバイト数から削除する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints stop sending and receiving Initial packets once they start exchanging Handshake packets; see Section 17.2.2.1 of [QUIC-TRANSPORT]. At this point, recovery state for all in-flight Initial packets is discarded.",
+      "ja": "エンドポイントハンドシェイクパケットの交換を開始すると、初期パケットの送受信を停止します。[QUIC-Transport]のセクション17.2.2.1を参照してください。この時点で、全空間初期パケットの回復状態は破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When 0-RTT is rejected, recovery state for all in-flight 0-RTT packets is discarded.",
+      "ja": "0-RTTが拒否されると、すべての飛行0-RTTパケットの回復状態は破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a server accepts 0-RTT, but does not buffer 0-RTT packets that arrive before Initial packets, early 0-RTT packets will be declared lost, but that is expected to be infrequent.",
+      "ja": "サーバーが0-RTTを受け入れるが、初期パケットの前に到着する0-RTTパケットをバッファしない場合、早期0-RTTパケットは失われますが、それはまれであると予想されます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is expected that keys are discarded at some time after the packets encrypted with them are either acknowledged or declared lost. However, Initial and Handshake secrets are discarded as soon as Handshake and 1-RTT keys are proven to be available to both client and server; see Section 4.9.1 of [QUIC-TLS].",
+      "ja": "それらで暗号化されたパケットが承認されたか宣言された後に、キーがしばらく廃棄されることが予想されます。ただし、ハンドシェイクと1-RTTキーがクライアントとサーバーの両方で利用可能であることが証明されているとすぐに、最初とハンドシェイクの秘密は廃棄されます。[QUIC-TLS]の4.9.1項を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Congestion Control",
+      "section_title": true,
+      "ja": "7. 渋滞管理"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies a sender-side congestion controller for QUIC similar to TCP NewReno [RFC6582].",
+      "ja": "このドキュメントでは、TCP Newreno [RFC6582]と同様のQUIC用の送信側輻輳コントローラを指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "The signals QUIC provides for congestion control are generic and are designed to support different sender-side algorithms. A sender can unilaterally choose a different algorithm to use, such as CUBIC [RFC8312].",
+      "ja": "輻輳制御のための信号QUICは一般的であり、異なる送信側アルゴリズムをサポートするように設計されています。送信者は、キュービック[RFC8312]など、使用する別のアルゴリズムを一方的に選択できます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a sender uses a different controller than that specified in this document, the chosen controller MUST conform to the congestion control guidelines specified in Section 3.1 of [RFC8085].",
+      "ja": "送信者がこの文書で指定されたものとは異なるコントローラを使用している場合、選択されたコントローラは[RFC8085]のセクション3.1で指定されている輻輳制御ガイドラインに準拠している必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Similar to TCP, packets containing only ACK frames do not count toward bytes in flight and are not congestion controlled. Unlike TCP, QUIC can detect the loss of these packets and MAY use that information to adjust the congestion controller or the rate of ACK-only packets being sent, but this document does not describe a mechanism for doing so.",
+      "ja": "TCPと同様に、ACKフレームのみを含むパケットはフライトのバイトにはカウントされず、輻輳制御されていません。TCPとは異なり、QUICはこれらのパケットの損失を検出でき、その情報を使用して輻輳コントローラまたは送信されているACK専用パケットのレートを調整することができますが、この文書はそうするためのメカニズムを説明していません。"
+    },
+    {
+      "indent": 3,
+      "text": "The congestion controller is per path, so packets sent on other paths do not alter the current path's congestion controller, as described in Section 9.4 of [QUIC-TRANSPORT].",
+      "ja": "輻輳コントローラはパスごとに、他のパスで送信されたパケットは、[QUIC-Transport]のセクション9.4で説明されているように、現在のパスの輻輳コントローラを変更しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm in this document specifies and uses the controller's congestion window in bytes.",
+      "ja": "このドキュメントのアルゴリズムは、コントローラの輻輳ウィンドウをバイト単位で指定して使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint MUST NOT send a packet if it would cause bytes_in_flight (see Appendix B.2) to be larger than the congestion window, unless the packet is sent on a PTO timer expiration (see Section 6.2) or when entering recovery (see Section 7.3.2).",
+      "ja": "パケットがPTOタイマの有効期限で送信されない限り、または回復を入力するときにパケットが輻輳ウィンドウよりも大きくなる場合は、エンドポイントを送信してはいけません。.2）。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Explicit Congestion Notification",
+      "section_title": true,
+      "ja": "7.1. 明示的な輻輳通知"
+    },
+    {
+      "indent": 3,
+      "text": "If a path has been validated to support Explicit Congestion Notification (ECN) [RFC3168] [RFC8311], QUIC treats a Congestion Experienced (CE) codepoint in the IP header as a signal of congestion. This document specifies an endpoint's response when the peer-reported ECN-CE count increases; see Section 13.4.2 of [QUIC-TRANSPORT].",
+      "ja": "明示的な輻輳通知（ECN）[RFC3168] [RFC8311]をサポートするためにパスが検証されている場合、QUICはIPヘッダー内の輻輳経験豊富な（CE）コードポイントを輻輳のシグナルとして扱います。このドキュメントは、ピアポートされたECN-CEカウントが増加したときのエンドポイントの応答を指定します。[QUIC-Transport]の13.4.2項を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Initial and Minimum Congestion Window",
+      "section_title": true,
+      "ja": "7.2. 初期および最小輻輳ウィンドウ"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC begins every connection in slow start with the congestion window set to an initial value. Endpoints SHOULD use an initial congestion window of ten times the maximum datagram size (max_datagram_size), while limiting the window to the larger of 14,720 bytes or twice the maximum datagram size. This follows the analysis and recommendations in [RFC6928], increasing the byte limit to account for the smaller 8-byte overhead of UDP compared to the 20-byte overhead for TCP.",
+      "ja": "QUICは、輻輳ウィンドウが初期値に設定された状態で、スロースタートですべての接続を開始します。エンドポイントは、最大データグラム・サイズ（MAX_DATARM_SIZE）の10倍の初期輻輳ウィンドウを使用しながら、ウィンドウを14,720バイトまたは最大データグラム・サイズの2倍の2倍に制限する必要があります。これは[RFC6928]の分析と推奨に従い、TCPのための20バイトのオーバーヘッドと比較してUDPの8バイトのオーバーヘッドを小さくするためにバイト制限を増やします。"
+    },
+    {
+      "indent": 3,
+      "text": "If the maximum datagram size changes during the connection, the initial congestion window SHOULD be recalculated with the new size. If the maximum datagram size is decreased in order to complete the handshake, the congestion window SHOULD be set to the new initial congestion window.",
+      "ja": "接続中に最大データグラム・サイズが変更された場合は、最初の輻輳ウィンドウを新しいサイズで再計算する必要があります。ハンドシェイクを完了するために最大データグラムサイズが小さくなると、輻輳ウィンドウを新しい初期輻輳ウィンドウに設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Prior to validating the client's address, the server can be further limited by the anti-amplification limit as specified in Section 8.1 of [QUIC-TRANSPORT]. Though the anti-amplification limit can prevent the congestion window from being fully utilized and therefore slow down the increase in congestion window, it does not directly affect the congestion window.",
+      "ja": "クライアントのアドレスを検証する前に、[QUIC-Transport]のセクション8.1で指定されているように、サーバーはさらに増幅制限によってさらに制限されます。輻輳ウィンドウが完全に利用されるのを防ぐことができ、したがって輻輳ウィンドウの増加を遅くすることは輻輳ウィンドウに直接影響を与えないことがありますが。"
+    },
+    {
+      "indent": 3,
+      "text": "The minimum congestion window is the smallest value the congestion window can attain in response to loss, an increase in the peer-reported ECN-CE count, or persistent congestion. The RECOMMENDED value is 2 * max_datagram_size.",
+      "ja": "最小輻輳ウィンドウは、損失に応じて輻輳ウィンドウが達成できる最小値です。ピアポートされたECN-CEカウントの増加、または永続的な輻輳があります。推奨値は2 * max_datagram_sizeです。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3. Congestion Control States",
+      "section_title": true,
+      "ja": "7.3. 輻輳制御状態"
+    },
+    {
+      "indent": 3,
+      "text": "The NewReno congestion controller described in this document has three distinct states, as shown in Figure 1.",
+      "ja": "この文書に記載されているニューノーの輻輳コントローラは、図1に示すように、3つの異なる状態があります。"
+    },
+    {
+      "indent": 4,
+      "text": "                New path or      +------------+\n           persistent congestion |   Slow     |\n       (O)---------------------->|   Start    |\n                                 +------------+\n                                       |\n                               Loss or |\n                       ECN-CE increase |\n                                       v\n+------------+     Loss or       +------------+\n| Congestion |  ECN-CE increase  |  Recovery  |\n| Avoidance  |------------------>|   Period   |\n+------------+                   +------------+\n          ^                            |\n          |                            |\n          +----------------------------+\n             Acknowledgment of packet\n               sent during recovery",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Figure 1: Congestion Control States and Transitions",
+      "ja": "図1：輻輳制御状態と遷移"
+    },
+    {
+      "indent": 3,
+      "text": "These states and the transitions between them are described in subsequent sections.",
+      "ja": "これらの状態とそれらの間の遷移は後続のセクションで説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3.1. Slow Start",
+      "section_title": true,
+      "ja": "7.3.1. 遅いスタート"
+    },
+    {
+      "indent": 3,
+      "text": "A NewReno sender is in slow start any time the congestion window is below the slow start threshold. A sender begins in slow start because the slow start threshold is initialized to an infinite value.",
+      "ja": "Newreno Senderは、輻輳ウィンドウがスロースタートしきい値を下回っている時期を遅くします。スロースタートしきい値が無限値に初期化されるため、送信者はスロースタートで始まります。"
+    },
+    {
+      "indent": 3,
+      "text": "While a sender is in slow start, the congestion window increases by the number of bytes acknowledged when each acknowledgment is processed. This results in exponential growth of the congestion window.",
+      "ja": "送信側がスロースタート中にある間、輻輳ウィンドウは、各確認応答が処理されたときに認識されたバイト数だけ増加します。これにより、輻輳ウィンドウの指数関数的成長が生じる。"
+    },
+    {
+      "indent": 3,
+      "text": "The sender MUST exit slow start and enter a recovery period when a packet is lost or when the ECN-CE count reported by its peer increases.",
+      "ja": "送信者はスロースタートを終了し、パケットが失われたとき、またはそのピアによって報告されたECN-CEカウントが増加するときに回復期間を入力する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender reenters slow start any time the congestion window is less than the slow start threshold, which only occurs after persistent congestion is declared.",
+      "ja": "送信者は輻輳ウィンドウがスロースタートしきい値より小さい時間が遅いほど遅いスタートを再入力します。これは、永続的な輻輳が宣言された後にのみ発生します。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3.2. Recovery",
+      "section_title": true,
+      "ja": "7.3.2. 回復"
+    },
+    {
+      "indent": 3,
+      "text": "A NewReno sender enters a recovery period when it detects the loss of a packet or when the ECN-CE count reported by its peer increases. A sender that is already in a recovery period stays in it and does not reenter it.",
+      "ja": "Newreno Senderは、パケットの損失を検出したとき、またはそのピアによって報告されたECN-CEカウントが増加するときに回復期間を入力します。復旧期間中にすでに復旧している送信者はそれにまとまり、それを再入力しません。"
+    },
+    {
+      "indent": 3,
+      "text": "On entering a recovery period, a sender MUST set the slow start threshold to half the value of the congestion window when loss is detected. The congestion window MUST be set to the reduced value of the slow start threshold before exiting the recovery period.",
+      "ja": "回復期間を入力すると、送信者は損失が検出されたときに輻輳ウィンドウの値の半分にスロースタートしきい値を設定する必要があります。輻輳ウィンドウは、回復期間を終了する前に、スロースタートしきい値の縮小値に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY reduce the congestion window immediately upon entering a recovery period or use other mechanisms, such as Proportional Rate Reduction [PRR], to reduce the congestion window more gradually. If the congestion window is reduced immediately, a single packet can be sent prior to reduction. This speeds up loss recovery if the data in the lost packet is retransmitted and is similar to TCP as described in Section 5 of [RFC6675].",
+      "ja": "実装は、回復期間を入力すると輻輳ウィンドウを減らすか、比例率の低下[PRR]などの他のメカニズムを使用して、輻輳ウィンドウをより徐々に減らすことができます。輻輳ウィンドウが直ちに短縮された場合は、削減前に単一のパケットを送信できます。失われたパケット内のデータが再送信され、[RFC6675]のセクション5で説明されているようにTCPと似ている場合、これは損失回復を高速化します。"
+    },
+    {
+      "indent": 3,
+      "text": "The recovery period aims to limit congestion window reduction to once per round trip. Therefore, during a recovery period, the congestion window does not change in response to new losses or increases in the ECN-CE count.",
+      "ja": "回復期間は、乱れ窓の削減を往復に一度制限することを目指しています。したがって、回復期間中に、輻輳ウィンドウは新しい損失に応じて、またはECN-CEカウントの増加に応じて変化しません。"
+    },
+    {
+      "indent": 3,
+      "text": "A recovery period ends and the sender enters congestion avoidance when a packet sent during the recovery period is acknowledged. This is slightly different from TCP's definition of recovery, which ends when the lost segment that started recovery is acknowledged [RFC5681].",
+      "ja": "回復期間は終了し、復旧期間中に送信されたパケットが確認されたときに輻輳回避を開始します。これはTCPの回復の定義とは少し異なり、回復を開始した紛失したセグメントが確認されたときに終了します[RFC5681]。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3.3. Congestion Avoidance",
+      "section_title": true,
+      "ja": "7.3.3. 渋滞回避"
+    },
+    {
+      "indent": 3,
+      "text": "A NewReno sender is in congestion avoidance any time the congestion window is at or above the slow start threshold and not in a recovery period.",
+      "ja": "Newreno Senderは、輻輳ウィンドウが遅いスタートしきい値以上であり、回復期間内ではなく、輻輳回避です。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender in congestion avoidance uses an Additive Increase Multiplicative Decrease (AIMD) approach that MUST limit the increase to the congestion window to at most one maximum datagram size for each congestion window that is acknowledged.",
+      "ja": "輻輳回避の送信者は、認められた各輻輳ウィンドウに対して、輻輳ウィンドウへの増加を最大1つの最大データグラムサイズに制限しなければならないアディティブ増加増加減少（AIMD）アプローチを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "The sender exits congestion avoidance and enters a recovery period when a packet is lost or when the ECN-CE count reported by its peer increases.",
+      "ja": "送信者は輻輳回避を終了し、パケットが紛失したとき、またはそのピアによって報告されたECN-CEカウントが増加するときに回復期間が入ります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.4. Ignoring Loss of Undecryptable Packets",
+      "section_title": true,
+      "ja": "7.4. 未決定のパケットの損失を無視します"
+    },
+    {
+      "indent": 3,
+      "text": "During the handshake, some packet protection keys might not be available when a packet arrives, and the receiver can choose to drop the packet. In particular, Handshake and 0-RTT packets cannot be processed until the Initial packets arrive, and 1-RTT packets cannot be processed until the handshake completes. Endpoints MAY ignore the loss of Handshake, 0-RTT, and 1-RTT packets that might have arrived before the peer had packet protection keys to process those packets. Endpoints MUST NOT ignore the loss of packets that were sent after the earliest acknowledged packet in a given packet number space.",
+      "ja": "ハンドシェイク中に、パケットが到着したときに一部のパケット保護キーが使用できない場合があり、受信側はパケットをドロップすることを選択できます。特に、ハンドシェイクと0-RTTパケットは、初期パケットが到着するまで処理できず、ハンドシェイクが完了するまで1-RTTパケットを処理できません。エンドポイントは、ピアがそれらのパケットを処理するためのパケット保護キーを持っていた前に到着した可能性があるハンドシェイク、0-RTT、および1-RTTパケットの損失を無視することができます。エンドポイントは、特定のパケット番号スペース内の最も早い承認されたパケットの後に送信されたパケットの損失を無視してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "7.5. Probe Timeout",
+      "section_title": true,
+      "ja": "7.5. プローブタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "Probe packets MUST NOT be blocked by the congestion controller. A sender MUST however count these packets as being additionally in flight, since these packets add network load without establishing packet loss. Note that sending probe packets might cause the sender's bytes in flight to exceed the congestion window until an acknowledgment is received that establishes loss or delivery of packets.",
+      "ja": "プローブパケットは輻輳コントローラによってブロックされてはいけません。ただし、これらのパケットはパケット損失を確立せずにネットワーク負荷を追加するため、送信者はこれらのパケットを追加的にカウントする必要があります。プローブパケットを送信すると、パケットの損失または配信を確立する確認応答が受信されるまで、送信者のバイトが輻輳ウィンドウを超えるようになる可能性があることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "7.6. Persistent Congestion",
+      "section_title": true,
+      "ja": "7.6. 永続的な渋滞"
+    },
+    {
+      "indent": 3,
+      "text": "When a sender establishes loss of all packets sent over a long enough duration, the network is considered to be experiencing persistent congestion.",
+      "ja": "送信者が十分な長さにわたって送信されたすべてのパケットの損失を確立すると、ネットワークは永続的な輻輳を経験していると考えられています。"
+    },
+    {
+      "indent": 0,
+      "text": "7.6.1. Duration",
+      "section_title": true,
+      "ja": "7.6.1. 期間"
+    },
+    {
+      "indent": 3,
+      "text": "The persistent congestion duration is computed as follows:",
+      "ja": "永続的な輻輳期間は次のように計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "(smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay) *\n    kPersistentCongestionThreshold",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Unlike the PTO computation in Section 6.2, this duration includes the max_ack_delay irrespective of the packet number spaces in which losses are established.",
+      "ja": "セクション6.2のPTO計算とは異なり、この期間は、損失が確立されたパケット番号スペースに関係なくMAX_ACK_DELAYを含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "This duration allows a sender to send as many packets before establishing persistent congestion, including some in response to PTO expiration, as TCP does with Tail Loss Probes [RFC8985] and an RTO [RFC5681].",
+      "ja": "この期間により、TCPがTail Loss Probes [RFC8985]とRTO [RFC5681]を使用すると、PTOの有効期限に応じていくらかのものを含めて、永続的な輻輳を確立する前に送信者が多くのパケットを送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Larger values of kPersistentCongestionThreshold cause the sender to become less responsive to persistent congestion in the network, which can result in aggressive sending into a congested network. Too small a value can result in a sender declaring persistent congestion unnecessarily, resulting in reduced throughput for the sender.",
+      "ja": "KperSistentCongestionThresholdの値が大きいと、送信者はネットワーク内の永続的な輻輳に応答しなくなり、これにより、混雑したネットワークへの積極的な送信が可能になります。値が小さすぎると、送信者が不必要に永続的な輻輳を宣言することができ、送信者にスループットが低下します。"
+    },
+    {
+      "indent": 3,
+      "text": "The RECOMMENDED value for kPersistentCongestionThreshold is 3, which results in behavior that is approximately equivalent to a TCP sender declaring an RTO after two TLPs.",
+      "ja": "KperSistentCongestionThresholdの推奨値は3です。これにより、2つのTLPの後にRTOを宣言するTCP送信者とほぼ同等の動作が可能になります。"
+    },
+    {
+      "indent": 3,
+      "text": "This design does not use consecutive PTO events to establish persistent congestion, since application patterns impact PTO expiration. For example, a sender that sends small amounts of data with silence periods between them restarts the PTO timer every time it sends, potentially preventing the PTO timer from expiring for a long period of time, even when no acknowledgments are being received. The use of a duration enables a sender to establish persistent congestion without depending on PTO expiration.",
+      "ja": "アプリケーションパターンがPTOの有効期限に影響を与えるため、この設計は連続したPTOイベントを使用して永続的な輻輳を確立しません。例えば、それらの間に少量のデータを送信する送信者は、送信が受信されていなくても、それが送信するたびにPTOタイマーを再起動する。期間の使用により、送信者はPTOの有効期限に依存せずに永続的な輻輳を確立することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "7.6.2. Establishing Persistent Congestion",
+      "section_title": true,
+      "ja": "7.6.2. 持続的輻輳を確立する"
+    },
+    {
+      "indent": 3,
+      "text": "A sender establishes persistent congestion after the receipt of an acknowledgment if two packets that are ack-eliciting are declared lost, and:",
+      "ja": "ACK誘発の2つのパケットが失われた場合、送信者は確認応答を受信した後に永続的な輻輳を確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "* across all packet number spaces, none of the packets sent between the send times of these two packets are acknowledged;",
+      "ja": "* すべてのパケット番号スペースでは、これら2つのパケットの送信時間の間に送信されたパケットはどれも認証されません。"
+    },
+    {
+      "indent": 3,
+      "text": "* the duration between the send times of these two packets exceeds the persistent congestion duration (Section 7.6.1); and",
+      "ja": "* これら2つのパケットの送信時間間の期間は永続的な輻輳期間を超えています（7.6.1項）。そして"
+    },
+    {
+      "indent": 3,
+      "text": "* a prior RTT sample existed when these two packets were sent.",
+      "ja": "* これら2つのパケットが送信されたときに以前のRTTサンプルが存在しました。"
+    },
+    {
+      "indent": 3,
+      "text": "These two packets MUST be ack-eliciting, since a receiver is required to acknowledge only ack-eliciting packets within its maximum acknowledgment delay; see Section 13.2 of [QUIC-TRANSPORT].",
+      "ja": "受信機は、その最大肯定応答遅延内にACK誘発パケットのみを確認するために必要とされるので、これら2つのパケットはACKエリケーションでなければならない。[QUIC-Transport]の13.2項を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The persistent congestion period SHOULD NOT start until there is at least one RTT sample. Before the first RTT sample, a sender arms its PTO timer based on the initial RTT (Section 6.2.2), which could be substantially larger than the actual RTT. Requiring a prior RTT sample prevents a sender from establishing persistent congestion with potentially too few probes.",
+      "ja": "持続的な輻輳期間は、少なくとも1つのRTTサンプルがあるまで開始しないでください。最初のRTTサンプルの前に、送信者は最初のRTT（セクション6.2.2）に基づいてそのPTOタイマーをアームし、これは実際のRTTよりも実質的に大きくなる可能性があります。以前のRTTサンプルを必要とすると、送信者が潜在的にあまりにも少なすぎるプローブで持続的な輻輳を確立するのを防ぎます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since network congestion is not affected by packet number spaces, persistent congestion SHOULD consider packets sent across packet number spaces. A sender that does not have state for all packet number spaces or an implementation that cannot compare send times across packet number spaces MAY use state for just the packet number space that was acknowledged. This might result in erroneously declaring persistent congestion, but it will not lead to a failure to detect persistent congestion.",
+      "ja": "ネットワークの輻輳はパケット番号のスペースの影響を受けないため、永続的な輻輳はパケット番号スペースを越えて送信されたパケットを検討する必要があります。パケット番号スペース間で送信時間を比較できないすべてのパケット番号スペースの状態を持たない送信者は、確認されたパケット番号スペースだけで状態を使用することができます。これは誤って永続的な輻輳を宣言することになる可能性がありますが、持続的な輻輳を検出できなかったことはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When persistent congestion is declared, the sender's congestion window MUST be reduced to the minimum congestion window (kMinimumWindow), similar to a TCP sender's response on an RTO [RFC5681].",
+      "ja": "永続的な輻輳が宣言されると、RTO [RFC5681]でのTCP送信者の応答と同様に、送信者の輻輳ウィンドウを最小輻輳ウィンドウ（KminimumWindow）に縮小する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.6.3. Example",
+      "section_title": true,
+      "ja": "7.6.3. 例"
+    },
+    {
+      "indent": 3,
+      "text": "The following example illustrates how a sender might establish persistent congestion. Assume:",
+      "ja": "次の例は、送信者が永続的な輻輳を確立することができる方法を示しています。仮："
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt + max(4*rttvar, kGranularity) + max_ack_delay = 2\nkPersistentCongestionThreshold = 3",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Consider the following sequence of events:",
+      "ja": "次の一連のイベントを考えてください。"
+    },
+    {
+      "indent": 14,
+      "text": "+========+===================================+\n| Time   | Action                            |\n+========+===================================+\n| t=0    | Send packet #1 (application data) |\n+--------+-----------------------------------+\n| t=1    | Send packet #2 (application data) |\n+--------+-----------------------------------+\n| t=1.2  | Receive acknowledgment of #1      |\n+--------+-----------------------------------+\n| t=2    | Send packet #3 (application data) |\n+--------+-----------------------------------+\n| t=3    | Send packet #4 (application data) |\n+--------+-----------------------------------+\n| t=4    | Send packet #5 (application data) |\n+--------+-----------------------------------+\n| t=5    | Send packet #6 (application data) |\n+--------+-----------------------------------+\n| t=6    | Send packet #7 (application data) |\n+--------+-----------------------------------+\n| t=8    | Send packet #8 (PTO 1)            |\n+--------+-----------------------------------+\n| t=12   | Send packet #9 (PTO 2)            |\n+--------+-----------------------------------+\n| t=12.2 | Receive acknowledgment of #9      |\n+--------+-----------------------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Table 1",
+      "ja": "表1"
+    },
+    {
+      "indent": 3,
+      "text": "Packets 2 through 8 are declared lost when the acknowledgment for packet 9 is received at \"t = 12.2\".",
+      "ja": "パケット2~8は、パケット9の確認応答が「T = 12.2」で受信されたときに失われた宣言されている。"
+    },
+    {
+      "indent": 3,
+      "text": "The congestion period is calculated as the time between the oldest and newest lost packets: \"8 - 1 = 7\". The persistent congestion duration is \"2 * 3 = 6\". Because the threshold was reached and because none of the packets between the oldest and the newest lost packets were acknowledged, the network is considered to have experienced persistent congestion.",
+      "ja": "輻輳期間は、最も古くて最新の紛失したパケットの間の時間として計算されます。 \"8  -  1 = 7\"。永続的な輻輳期間は「2 * 3 = 6」です。しきい値に達し、最も古い失われたパケットと最新のパケットの間のパケットのどれもが確認されていないため、ネットワークは永続的な輻輳を経験したと考えられています。"
+    },
+    {
+      "indent": 3,
+      "text": "While this example shows PTO expiration, they are not required for persistent congestion to be established.",
+      "ja": "この例ではPTOの有効期限を示していますが、それらは持続的な輻輳が確立される必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "7.7. Pacing",
+      "section_title": true,
+      "ja": "7.7. ペーシング"
+    },
+    {
+      "indent": 3,
+      "text": "A sender SHOULD pace sending of all in-flight packets based on input from the congestion controller.",
+      "ja": "送信者は、輻輳コントローラからの入力に基づいてすべての入り口パケットの送信を歩き回る必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Sending multiple packets into the network without any delay between them creates a packet burst that might cause short-term congestion and losses. Senders MUST either use pacing or limit such bursts. Senders SHOULD limit bursts to the initial congestion window; see Section 7.2. A sender with knowledge that the network path to the receiver can absorb larger bursts MAY use a higher limit.",
+      "ja": "遅延なしに複数のパケットをネットワークに送信すると、短期間の輻輳や損失を引き起こす可能性があるパケットバーストが作成されます。送信者は、ペーシングを使用するか、そのようなバーストを制限する必要があります。送信者は破裂を初期輻輳ウィンドウに制限する必要があります。セクション7.2を参照してください。受信機へのネットワーク経路が大きなバーストを吸収できるという知識を有する送信者は、より高い限界を使用することができる。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation should take care to architect its congestion controller to work well with a pacer. For instance, a pacer might wrap the congestion controller and control the availability of the congestion window, or a pacer might pace out packets handed to it by the congestion controller.",
+      "ja": "実装は、その輻輳コントローラをアーキテクチャしてペーサーとうまく機能するように注意する必要があります。たとえば、ペーサーは輻輳コントローラーをラップし、輻輳ウィンドウの可用性を制御したり、パケットが輻輳コントローラーで手渡されたパケットを扱う可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Timely delivery of ACK frames is important for efficient loss recovery. To avoid delaying their delivery to the peer, packets containing only ACK frames SHOULD therefore not be paced.",
+      "ja": "ACKフレームのタイムリーな配信は、効率的な損失回復にとって重要です。ピアへの配信を遅らせることを避けるために、ACKフレームのみを含むパケットはペーシングされないはずです。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints can implement pacing as they choose. A perfectly paced sender spreads packets exactly evenly over time. For a window-based congestion controller, such as the one in this document, that rate can be computed by averaging the congestion window over the RTT. Expressed as a rate in units of bytes per time, where congestion_window is in bytes:",
+      "ja": "エンドポイントは、選択したときにペーシングを実装できます。完全にペースされた送信者は時間の経過とともに均等にパケットを広げます。この文書のようなウィンドウベースの輻輳コントローラの場合、そのレートはRTTの上の輻輳ウィンドウを平均することによって計算できます。congention_windowがバイト内の1時間あたりのバイト単位でレートとして表されます。"
+    },
+    {
+      "indent": 3,
+      "text": "rate = N * congestion_window / smoothed_rtt",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Or expressed as an inter-packet interval in units of time:",
+      "ja": "または時間単位でパケット間間隔として表現されています。"
+    },
+    {
+      "indent": 3,
+      "text": "interval = ( smoothed_rtt * packet_size / congestion_window ) / N",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Using a value for \"N\" that is small, but at least 1 (for example, 1.25) ensures that variations in RTT do not result in underutilization of the congestion window.",
+      "ja": "小さい「n」の値を使用するが、少なくとも1（例えば1.25）の値を用いることで、RTTのばらつきが輻輳ウィンドウの低下をもたらさないようにする。"
+    },
+    {
+      "indent": 3,
+      "text": "Practical considerations, such as packetization, scheduling delays, and computational efficiency, can cause a sender to deviate from this rate over time periods that are much shorter than an RTT.",
+      "ja": "パケット化、スケジューリング遅延、および計算効率などの実用的な考慮事項は、送信者がRTTよりもはるかに短い期間にわたってこのレートから逸脱する原因となります。"
+    },
+    {
+      "indent": 3,
+      "text": "One possible implementation strategy for pacing uses a leaky bucket algorithm, where the capacity of the \"bucket\" is limited to the maximum burst size and the rate the \"bucket\" fills is determined by the above function.",
+      "ja": "ペーシングのための可能な1つの実装戦略は、「バケット」の容量が最大バーストサイズに制限され、「バケット」フィルが上記の関数によって決定される漏洩バケットアルゴリズムを使用する。"
+    },
+    {
+      "indent": 0,
+      "text": "7.8. Underutilizing the Congestion Window",
+      "section_title": true,
+      "ja": "7.8. 渋滞窓を和らげる"
+    },
+    {
+      "indent": 3,
+      "text": "When bytes in flight is smaller than the congestion window and sending is not pacing limited, the congestion window is underutilized. This can happen due to insufficient application data or flow control limits. When this occurs, the congestion window SHOULD NOT be increased in either slow start or congestion avoidance.",
+      "ja": "飛行中のバイト数が輻輳ウィンドウよりも小さい場合は、送信が制限されていない場合、輻輳ウィンドウは不十分になります。これは、不十分なアプリケーションデータまたはフロー制御の制限が原因で発生する可能性があります。これが発生すると、渋滞窓口や輻輳回避のいずれかで輻輳ウィンドウを上げるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender that paces packets (see Section 7.7) might delay sending packets and not fully utilize the congestion window due to this delay. A sender SHOULD NOT consider itself application limited if it would have fully utilized the congestion window without pacing delay.",
+      "ja": "パケットをペース（7.7節を参照）がパケットの送信を遅らせることができ、この遅延のために輻輳ウィンドウを完全に利用できない場合があります。送信者は、ペーシング遅延なしに輻輳ウィンドウを完全に利用している場合は、それ自体が制限されていると考えるべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender MAY implement alternative mechanisms to update its congestion window after periods of underutilization, such as those proposed for TCP in [RFC7661].",
+      "ja": "送信者は、[RFC7661]のTCPのために提案されたもののような、低謝受しの期間後にその輻輳ウィンドウを更新するための代替メカニズムを実装することができる。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Loss and Congestion Signals",
+      "section_title": true,
+      "ja": "8.1. 損失と輻輳の信号"
+    },
+    {
+      "indent": 3,
+      "text": "Loss detection and congestion control fundamentally involve the consumption of signals, such as delay, loss, and ECN markings, from unauthenticated entities. An attacker can cause endpoints to reduce their sending rate by manipulating these signals: by dropping packets, by altering path delay strategically, or by changing ECN codepoints.",
+      "ja": "損失の検出と輻輳制御は、認証されていないエンティティから、遅延、損失、およびECNのマーキングなどの信号の消費を基本的に含みます。攻撃者は、これらの信号を操作することによってエンドポイントがそれらの送信速度を減らすことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Traffic Analysis",
+      "section_title": true,
+      "ja": "8.2. 交通分析"
+    },
+    {
+      "indent": 3,
+      "text": "Packets that carry only ACK frames can be heuristically identified by observing packet size. Acknowledgment patterns may expose information about link characteristics or application behavior. To reduce leaked information, endpoints can bundle acknowledgments with other frames, or they can use PADDING frames at a potential cost to performance.",
+      "ja": "ACKフレームのみを持つパケットは、パケットサイズを観察することによってヒューリスティックに識別できます。確認応答パターンは、リンク特性またはアプリケーションの動作に関する情報を公開することがあります。リークされた情報を減らすために、エンドポイントは他のフレームとの確認応答をバンドルすることも、パディングフレームをパフォーマンスに潜在的なコストで使用することもできます。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Misreporting ECN Markings",
+      "section_title": true,
+      "ja": "8.3. ECNマーキングを誤動産する"
+    },
+    {
+      "indent": 3,
+      "text": "A receiver can misreport ECN markings to alter the congestion response of a sender. Suppressing reports of ECN-CE markings could cause a sender to increase their send rate. This increase could result in congestion and loss.",
+      "ja": "受信機は、送信者の輻輳応答を変更するためにECNマーキングを誤って誤動させることができる。ECN-CEマーキングのレポートを抑制すると、送信者が送信率を高める可能性があります。この増加は渋滞および損失を引き起こす可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A sender can detect suppression of reports by marking occasional packets that it sends with an ECN-CE marking. If a packet sent with an ECN-CE marking is not reported as having been CE marked when the packet is acknowledged, then the sender can disable ECN for that path by not setting ECN-Capable Transport (ECT) codepoints in subsequent packets sent on that path [RFC3168].",
+      "ja": "送信者は、ECN-CEマーキングで送信している時折パケットをマーキングすることで、レポートの抑制を検出できます。ECN-CEマーキングで送信されたパケットが、パケットが確認されたときにCEマークされていると報告されていない場合、送信側は、そのパスのECN対応トランスポート（ECT）コードポイントを設定していないことによってそのパスのECNを無効にできます。パス[RFC3168]。"
+    },
+    {
+      "indent": 3,
+      "text": "Reporting additional ECN-CE markings will cause a sender to reduce their sending rate, which is similar in effect to advertising reduced connection flow control limits and so no advantage is gained by doing so.",
+      "ja": "追加のECN-CEマーキングを報告すると、送信者が送信レートを削減させます。これは、接続フロー制御の制限を広告するための効果が似ています。そのため、そうすることで利点は得られません。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints choose the congestion controller that they use. Congestion controllers respond to reports of ECN-CE by reducing their rate, but the response may vary. Markings can be treated as equivalent to loss [RFC3168], but other responses can be specified, such as [RFC8511] or [RFC8311].",
+      "ja": "エンドポイント使用する輻輳コントローラを選択します。輻輳コントローラは、それらのレートを減らすことによってECN-CEのレポートに応答しますが、応答は異なる場合があります。マーキングは損失[RFC3168]と同等のものとして扱うことができますが、[RFC8511]や[RFC8311]など、他の応答を指定できます。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC-TLS] Thomson, M., Ed. and S. Turner, Ed., \"Using TLS to Secure QUIC\", RFC 9001, DOI 10.17487/RFC9001, May 2021, <https://www.rfc-editor.org/info/rfc9001>.",
+      "ja": "[QUIC-TLS] Thomson、M.、ED。S.ターナー、ed。、「TLSをセキュリティに使用する」、RFC 9001、DOI 10.17487 / RFC9001、2021年5月、<https：//www.rfc-editor.org/info/rfc9001>。"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC-TRANSPORT] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[QUIC-Transport] Iyengar、J.、ED。そして、「Q. Thomson」、「QUIC：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487 / RFC9000、<https：//www.rfc-editor.org/info/rfc9000>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCSで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3168] Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition of Explicit Congestion Notification (ECN) to IP\", RFC 3168, DOI 10.17487/RFC3168, September 2001, <https://www.rfc-editor.org/info/rfc3168>.",
+      "ja": "[RFC3168] Ramakrishnan、K.、Floyd、S.、およびD. Black、「IPへの明示的輻輳通知（ECN）の追加」、RFC 3168、DOI 10.17487 / RFC3168、2001年9月、<https：// www。rfc-editor.org/info/rfc3168>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8085] Eggert, L., Fairhurst, G., and G. Shepherd, \"UDP Usage Guidelines\", BCP 145, RFC 8085, DOI 10.17487/RFC8085, March 2017, <https://www.rfc-editor.org/info/rfc8085>.",
+      "ja": "[RFC8085] eggert、L.、Fairhurst、G.、およびG.Shepherd、 \"UDP使用ガイドライン\"、BCP 145、RFC 8085、DOI 10.17487 / RFC8085、2017年3月、<https：//www.rfc-editor.org/ info / rfc8085>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B、「RFC 2119キーワードの大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[FACK] Mathis, M. and J. Mahdavi, \"Forward acknowledgement: Refining TCP Congestion Control\", ACM SIGCOMM Computer Communication Review, DOI 10.1145/248157.248181, August 1996, <https://doi.org/10.1145/248157.248181>.",
+      "ja": "[FACK] Mathis、M.およびJ.Mahdavi、「前向き承認：TCP輻輳制御」、ACM SIGMOCMM Computer Compulment Review、DOI 10.1145 / 248157.248181、<https://doi.org/10.1145/248157.248181>。"
+    },
+    {
+      "indent": 3,
+      "text": "[PRR] Mathis, M., Dukkipati, N., and Y. Cheng, \"Proportional Rate Reduction for TCP\", RFC 6937, DOI 10.17487/RFC6937, May 2013, <https://www.rfc-editor.org/info/rfc6937>.",
+      "ja": "Mathis、M.、Dukkipati、N.、Y. Cheng、RFC 6937、DOI 10.17487 / RFC6937、2013年5月、<https：//www.rfc-editor.org/情報/ RFC6937>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RETRANSMISSION] Karn, P. and C. Partridge, \"Improving Round-Trip Time Estimates in Reliable Transport Protocols\", ACM Transactions on Computer Systems, DOI 10.1145/118544.118549, November 1991, <https://doi.org/10.1145/118544.118549>.",
+      "ja": "[再送]カーン、P.およびC.パーリッジ、「信頼できる輸送プロトコルにおける往復時間推定の改善」、コンピュータシステム、DOI 10.1145 / 118544.118549、1991年11月、<https：//doi.org/10.1145/118544.118549>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2018] Mathis, M., Mahdavi, J., Floyd, S., and A. Romanow, \"TCP Selective Acknowledgment Options\", RFC 2018, DOI 10.17487/RFC2018, October 1996, <https://www.rfc-editor.org/info/rfc2018>.",
+      "ja": "[RFC2018] Mathis、M.、Mahdavi、J.、Floyd、S.、およびA. Romanow、「TCP選択認証オプション」、RFC 2018、DOI 10.17487 / RFC2018、<https：///www.rfc-editor.org/info/rfc2018>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3465] Allman, M., \"TCP Congestion Control with Appropriate Byte Counting (ABC)\", RFC 3465, DOI 10.17487/RFC3465, February 2003, <https://www.rfc-editor.org/info/rfc3465>.",
+      "ja": "[RFC3465] Allman、M.、「適切なバイトカウント（ABC）」、RFC 3465、DOI 10.17487 / RFC3465、<https：//www.rfc-editor.org/info/rfc3465>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5681] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, DOI 10.17487/RFC5681, September 2009, <https://www.rfc-editor.org/info/rfc5681>.",
+      "ja": "[RFC5681] Allman、M.、Paxson、V.およびE.Blanton、「TCP輻輳制御」、RFC 5681、DOI 10.17487 / RFC5681、2009年9月、<https：//www.rfc-editor.org/info/RFC5681>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5682] Sarolahti, P., Kojo, M., Yamamoto, K., and M. Hata, \"Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP\", RFC 5682, DOI 10.17487/RFC5682, September 2009, <https://www.rfc-editor.org/info/rfc5682>.",
+      "ja": "[RFC5682] Sarolahti、P.、Kojo、M.、Yamamoto、K.、およびM. HATA、「前方RTO回復（F-RTO）：TCPでのスプリアス再送タイムアウトを検出するためのアルゴリズム、RFC 5682、DOI 10.17487/ RFC5682、2009年9月、<https：//www.rfc-editor.org/info/rfc5682>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5827] Allman, M., Avrachenkov, K., Ayesta, U., Blanton, J., and P. Hurtig, \"Early Retransmit for TCP and Stream Control Transmission Protocol (SCTP)\", RFC 5827, DOI 10.17487/RFC5827, May 2010, <https://www.rfc-editor.org/info/rfc5827>.",
+      "ja": "[RFC5827] Allman、M.、Avrachenkov、K.、Ayesta、U.、Blanton、J.、およびP. Hurtig、「TCPおよびストリーム制御伝送プロトコル（SCTP）」、RFC 5827、DOI 10.17487 / RFC58272010年5月、<https://www.rfc-editor.org/info/rfc5827>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6298] Paxson, V., Allman, M., Chu, J., and M. Sargent, \"Computing TCP's Retransmission Timer\", RFC 6298, DOI 10.17487/RFC6298, June 2011, <https://www.rfc-editor.org/info/rfc6298>.",
+      "ja": "[RFC6298] Paxson、V.、Allman、M.、Chu、J.、およびM.Sargent、「コンピューティングTCPの再送信タイマー」、RFC 6298、DOI 10.17487 / RFC6298、2011年6月、<https：///www.rfc-editor.org/info/rfc6298>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6582] Henderson, T., Floyd, S., Gurtov, A., and Y. Nishida, \"The NewReno Modification to TCP's Fast Recovery Algorithm\", RFC 6582, DOI 10.17487/RFC6582, April 2012, <https://www.rfc-editor.org/info/rfc6582>.",
+      "ja": "[RFC6582] Henderson、T.、Floyd、S.、Gurtov、A.、およびY。西田、「TCPの高速回復アルゴリズムへのニューレノ修正」、RFC 6582、DOI 10.17487 / RFC6582、2012年4月、<https：//www.rfc-editor.org/info/rfc6582>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6675] Blanton, E., Allman, M., Wang, L., Jarvinen, I., Kojo, M., and Y. Nishida, \"A Conservative Loss Recovery Algorithm Based on Selective Acknowledgment (SACK) for TCP\", RFC 6675, DOI 10.17487/RFC6675, August 2012, <https://www.rfc-editor.org/info/rfc6675>.",
+      "ja": "[RFC6675] Blanton、E.、Allman、M.、Wang、L.、Jarvinen、I.、Kojo、M.、Y. Nishida、「TCPのための選択認識（SACK）に基づく保守的な損失回復アルゴリズム」RFC 6675、DOI 10.17487 / RFC6675、2012年8月、<https://www.rfc-editor.org/info/rfc6675>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6928] Chu, J., Dukkipati, N., Cheng, Y., and M. Mathis, \"Increasing TCP's Initial Window\", RFC 6928, DOI 10.17487/RFC6928, April 2013, <https://www.rfc-editor.org/info/rfc6928>.",
+      "ja": "[RFC6928] Chu、J.、Dukkipati、N.、Cheng、Y.、およびM. Mathis、「TCPの初期ウィンドウの増加」、RFC 6928、DOI 10.17487 / RFC6928、2013年4月、<https：//www.rfc-editor.org/info/rfc6928>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7661] Fairhurst, G., Sathiaseelan, A., and R. Secchi, \"Updating TCP to Support Rate-Limited Traffic\", RFC 7661, DOI 10.17487/RFC7661, October 2015, <https://www.rfc-editor.org/info/rfc7661>.",
+      "ja": "[RFC7661] FairHurst、G.、SathiaseLan、A.、R.Secchi、RFC 7661、DOI 10.17487 / RFC7661、2015年10月、<https：///www.rfc-編集者.ORG / INFO / RFC7661>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8311] Black, D., \"Relaxing Restrictions on Explicit Congestion Notification (ECN) Experimentation\", RFC 8311, DOI 10.17487/RFC8311, January 2018, <https://www.rfc-editor.org/info/rfc8311>.",
+      "ja": "[RFC8311]ブラック、D.、「明示的輻輳通知（ECN）実験（ECN）実験に関するリラックス制限」、RFC 8311、DOI 10.17487 / RFC8311、2018年1月、<https：//www.rfc-editor.org/info/rfc8311>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8312] Rhee, I., Xu, L., Ha, S., Zimmermann, A., Eggert, L., and R. Scheffenegger, \"CUBIC for Fast Long-Distance Networks\", RFC 8312, DOI 10.17487/RFC8312, February 2018, <https://www.rfc-editor.org/info/rfc8312>.",
+      "ja": "[RFC8312] Rhee、I.、Xu、L.、HA、S・、Zimmermann、A.、Heghert、L.、およびR.ScheffeNgger、RFC 8312、DOI 10.17487 / RFC83122018年2月、<https：//www.rfc-editor.org/info/rfc8312>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8511] Khademi, N., Welzl, M., Armitage, G., and G. Fairhurst, \"TCP Alternative Backoff with ECN (ABE)\", RFC 8511, DOI 10.17487/RFC8511, December 2018, <https://www.rfc-editor.org/info/rfc8511>.",
+      "ja": "[RFC8511] Khademi、N.、Welzl、M.、Armitage、G.、およびG. FairHurst、「ECN（ABE）のTCP代替バックオフ、RFC 8511、DOI 10.17487 / RFC8511、2017年12月、<https：//www.rfc-editor.org/info/rfc8511>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8985] Cheng, Y., Cardwell, N., Dukkipati, N., and P. Jha, \"The RACK-TLP Loss Detection Algorithm for TCP\", RFC 8985, DOI 10.17487/RFC8985, February 2021, <https://www.rfc-editor.org/info/rfc8985>.",
+      "ja": "[RFC8985] Cheng、Y.、Cardwell、N.、Dukkipati、N.、およびP.JHA、「TCP用ラック-TLP損失検出アルゴリズム」、RFC 8985、DOI 10.17487 / RFC8985、2021年2月、<https：//www.rfc-editor.org/info/rfc8985>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Loss Recovery Pseudocode",
+      "section_title": true,
+      "ja": "付録A.損失回復疑似コード"
+    },
+    {
+      "indent": 3,
+      "text": "We now describe an example implementation of the loss detection mechanisms described in Section 6.",
+      "ja": "ここで、セクション6に記載されている損失検出メカニズムの実装例を説明する。"
+    },
+    {
+      "indent": 3,
+      "text": "The pseudocode segments in this section are licensed as Code Components; see the copyright notice.",
+      "ja": "このセクションの疑似コードセグメントはコードコンポーネントとしてライセンスされています。著作権表示を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1. Tracking Sent Packets",
+      "section_title": true,
+      "ja": "A.1. トラッキング送信パケット"
+    },
+    {
+      "indent": 3,
+      "text": "To correctly implement congestion control, a QUIC sender tracks every ack-eliciting packet until the packet is acknowledged or lost. It is expected that implementations will be able to access this information by packet number and crypto context and store the per-packet fields (Appendix A.1.1) for loss recovery and congestion control.",
+      "ja": "輻輳制御を正しく実装するために、QUIC送信者は、パケットが確認されたり失われるまで、すべてのACKエリケーションパケットを追跡します。実装はパケット番号と暗号コンテキストによってこの情報にアクセスし、損失回復と輻輳制御のためにパケットごとのフィールド（付録A.1.1）を格納することができると予想されます。"
+    },
+    {
+      "indent": 3,
+      "text": "After a packet is declared lost, the endpoint can still maintain state for it for an amount of time to allow for packet reordering; see Section 13.3 of [QUIC-TRANSPORT]. This enables a sender to detect spurious retransmissions.",
+      "ja": "パケットが失われた後、パケットの並べ替えを許可する時間の間、エンドポイントは依然として状態を維持できます。[QUIC-Transport]のセクション13.3を参照してください。これにより、送信者はスプリアスの再送信を検出することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Sent packets are tracked for each packet number space, and ACK processing only applies to a single space.",
+      "ja": "送信されたパケットは各パケット番号スペースに対して追跡され、ACK処理は単一のスペースにのみ適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "A.1.1. Sent Packet Fields",
+      "section_title": true,
+      "ja": "A.1.1. パケットフィールドを送信しました"
+    },
+    {
+      "indent": 3,
+      "text": "packet_number: The packet number of the sent packet.",
+      "ja": "packet_number：送信されたパケットのパケット番号。"
+    },
+    {
+      "indent": 3,
+      "text": "ack_eliciting: A Boolean that indicates whether a packet is ack-eliciting. If true, it is expected that an acknowledgment will be received, though the peer could delay sending the ACK frame containing it by up to the max_ack_delay.",
+      "ja": "ack_elicating：パケットがACKエリケーションかどうかを示すブール値。trueの場合、ピアはそれを含むACKフレームをMAX_ACK_DELAYで送信することを遅らせることができますが、確認応答が受信されることが予想されます。"
+    },
+    {
+      "indent": 3,
+      "text": "in_flight: A Boolean that indicates whether the packet counts toward bytes in flight.",
+      "ja": "IN_FLIGHLIGHLIGHT：パケットがフライト内のバイトに向かってカウントされているかどうかを示すブール値。"
+    },
+    {
+      "indent": 3,
+      "text": "sent_bytes: The number of bytes sent in the packet, not including UDP or IP overhead, but including QUIC framing overhead.",
+      "ja": "sent_bytes：UDPまたはIPオーバーヘッドを含まないが、QUICフレーミングオーバーヘッドを含む、パケット内で送信されたバイト数。"
+    },
+    {
+      "indent": 3,
+      "text": "time_sent: The time the packet was sent.",
+      "ja": "time_sent：パケットが送信された時刻。"
+    },
+    {
+      "indent": 0,
+      "text": "A.2. Constants of Interest",
+      "section_title": true,
+      "ja": "A.2. 関心の定数"
+    },
+    {
+      "indent": 3,
+      "text": "Constants used in loss recovery are based on a combination of RFCs, papers, and common practice.",
+      "ja": "損失回復に使用される定数は、RFC、論文、および一般的な慣習の組み合わせに基づいています。"
+    },
+    {
+      "indent": 3,
+      "text": "kPacketThreshold: Maximum reordering in packets before packet threshold loss detection considers a packet lost. The value recommended in Section 6.1.1 is 3.",
+      "ja": "kpacketthreshold：パケットしきい値損失検出前のパケット内の最大並べ替えは、パケットが失われたと見なされます。6.1.1項で推奨される値は3です。"
+    },
+    {
+      "indent": 3,
+      "text": "kTimeThreshold: Maximum reordering in time before time threshold loss detection considers a packet lost. Specified as an RTT multiplier. The value recommended in Section 6.1.2 is 9/8.",
+      "ja": "ktimetthreshold：時間しきい値損失検出前の時間内の最大並べ替えは、パケットが失われたと見なします。RTT乗数として指定します。6.1.2項で推奨される値は9/8です。"
+    },
+    {
+      "indent": 3,
+      "text": "kGranularity: Timer granularity. This is a system-dependent value, and Section 6.1.2 recommends a value of 1 ms.",
+      "ja": "kgranularity：タイマー粒度。これはシステム依存値で、セクション6.1.2は1msの値を推奨しています。"
+    },
+    {
+      "indent": 3,
+      "text": "kInitialRtt: The RTT used before an RTT sample is taken. The value recommended in Section 6.2.2 is 333 ms.",
+      "ja": "KinitialRTT：RTTサンプルの前に使用されたRTTが撮影されます。6.2.2項で推奨される値は333 msです。"
+    },
+    {
+      "indent": 3,
+      "text": "kPacketNumberSpace: An enum to enumerate the three packet number spaces:",
+      "ja": "KpacketNumberspace：3つのパケット番号スペースを列挙する列挙："
+    },
+    {
+      "indent": 3,
+      "text": "enum kPacketNumberSpace {\n  Initial,\n  Handshake,\n  ApplicationData,\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "A.3. Variables of Interest",
+      "section_title": true,
+      "ja": "A.3. 関心の変数"
+    },
+    {
+      "indent": 3,
+      "text": "Variables required to implement the congestion control mechanisms are described in this section.",
+      "ja": "このセクションでは、輻輳制御メカニズムを実装するために必要な変数について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "latest_rtt: The most recent RTT measurement made when receiving an acknowledgment for a previously unacknowledged packet.",
+      "ja": "latest_rtt：以前に未確認パケットの確認応答を受信したときに最新のRTT測定。"
+    },
+    {
+      "indent": 3,
+      "text": "smoothed_rtt: The smoothed RTT of the connection, computed as described in Section 5.3.",
+      "ja": "smoothed_rtt：セクション5.3で説明されているように、接続の滑らかなRTT。"
+    },
+    {
+      "indent": 3,
+      "text": "rttvar: The RTT variation, computed as described in Section 5.3.",
+      "ja": "RTTVAR：5.3項に記載されているように計算されたRTTの変動。"
+    },
+    {
+      "indent": 3,
+      "text": "min_rtt: The minimum RTT seen over a period of time, ignoring acknowledgment delay, as described in Section 5.2.",
+      "ja": "min_rtt：セクション5.2で説明されているように、確認応答遅延を無視して、一定期間にわたる最小RTT。"
+    },
+    {
+      "indent": 3,
+      "text": "first_rtt_sample: The time that the first RTT sample was obtained.",
+      "ja": "first_rtt_サンプル：最初のRTTサンプルが得られた時間。"
+    },
+    {
+      "indent": 3,
+      "text": "max_ack_delay: The maximum amount of time by which the receiver intends to delay acknowledgments for packets in the Application Data packet number space, as defined by the eponymous transport parameter (Section 18.2 of [QUIC-TRANSPORT]). Note that the actual ack_delay in a received ACK frame may be larger due to late timers, reordering, or loss.",
+      "ja": "MAX_ACK_DELAY：エポモストランスポートパラメータで定義されているように、受信機がアプリケーションデータパケット番号スペース内のパケットの確認応答を遅らせる最大時間（[QUIC-Transport]のセクション18.2）。受信したACKフレーム内の実際のACK_DELAYは、遅いタイマー、並べ替え、または損失のために大きくなる可能性があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "loss_detection_timer: Multi-modal timer used for loss detection.",
+      "ja": "Loss_Detection_Timer：損失検出に使用されるマルチモーダルタイマー。"
+    },
+    {
+      "indent": 3,
+      "text": "pto_count: The number of times a PTO has been sent without receiving an acknowledgment.",
+      "ja": "PTO_COUNT：確認応答を受信せずにPTOが送信された回数。"
+    },
+    {
+      "indent": 3,
+      "text": "time_of_last_ack_eliciting_packet[kPacketNumberSpace]: The time the most recent ack-eliciting packet was sent.",
+      "ja": "time_of_last_ack_eliciting_packet [kpacketNumberspace]：最新のACKエリケーションパケットが送信された時刻。"
+    },
+    {
+      "indent": 3,
+      "text": "largest_acked_packet[kPacketNumberSpace]: The largest packet number acknowledged in the packet number space so far.",
+      "ja": "largest_acked_packet [kpacketNumberspace]：これまでのところパケット番号スペースに認められた最大のパケット番号。"
+    },
+    {
+      "indent": 3,
+      "text": "loss_time[kPacketNumberSpace]: The time at which the next packet in that packet number space can be considered lost based on exceeding the reordering window in time.",
+      "ja": "Loss_time [kPacketNumberspace]：そのパケット番号スペースの次のパケットが並べ替えウィンドウを超えて失われたと見なすことができる時間。"
+    },
+    {
+      "indent": 3,
+      "text": "sent_packets[kPacketNumberSpace]: An association of packet numbers in a packet number space to information about them. Described in detail above in Appendix A.1.",
+      "ja": "sent_packets [kpacketNumberspace]：パケット番号スペース内のパケット番号の関連付けをそれらに関する情報に関連付けます。付録A.1で上記で詳細に説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "A.4. Initialization",
+      "section_title": true,
+      "ja": "A.4. 初期化"
+    },
+    {
+      "indent": 3,
+      "text": "At the beginning of the connection, initialize the loss detection variables as follows:",
+      "ja": "接続の開始時に、次のように損失検出変数を初期化します。"
+    },
+    {
+      "indent": 3,
+      "text": "loss_detection_timer.reset() pto_count = 0 latest_rtt = 0 smoothed_rtt = kInitialRtt rttvar = kInitialRtt / 2 min_rtt = 0 first_rtt_sample = 0 for pn_space in [ Initial, Handshake, ApplicationData ]: largest_acked_packet[pn_space] = infinite time_of_last_ack_eliciting_packet[pn_space] = 0 loss_time[pn_space] = 0",
+      "ja": "Loss_Detection_Timer.Reset（）PTY_COUNT = 0 smoothed_count = 0 smoothed_rtt = 0 restvar = kinitialrtt / 2 min_rtt = 0 first_rtt_sample = 0 for [Initial、Handshake、ApplicationData]：largest_space_packet [pn_space] = Infinite time_of_last_ack_eliciting_packet [pn_space] = 0 loss_time [pn_space] = 0"
+    },
+    {
+      "indent": 0,
+      "text": "A.5. On Sending a Packet",
+      "section_title": true,
+      "ja": "A.5. パケットを送信する"
+    },
+    {
+      "indent": 3,
+      "text": "After a packet is sent, information about the packet is stored. The parameters to OnPacketSent are described in detail above in Appendix A.1.1.",
+      "ja": "パケットが送信された後、パケットに関する情報が格納されます。ONPACKETSENTへのパラメータは、付録A.1.1で上で詳細に説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for OnPacketSent follows:",
+      "ja": "OnPacketSentの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketSent(packet_number, pn_space, ack_eliciting, in_flight, sent_bytes): sent_packets[pn_space][packet_number].packet_number = packet_number sent_packets[pn_space][packet_number].time_sent = now() sent_packets[pn_space][packet_number].ack_eliciting = ack_eliciting sent_packets[pn_space][packet_number].in_flight = in_flight sent_packets[pn_space][packet_number].sent_bytes = sent_bytes if (in_flight): if (ack_eliciting): time_of_last_ack_eliciting_packet[pn_space] = now() OnPacketSentCC(sent_bytes) SetLossDetectionTimer()",
+      "ja": "OnPacketSent（packet_number、pn_space、ack_elicating、in_flight、sent_bytes）：sent_packets [pn_space] .packet_number = packet_number sent_packets [pn_space] [packet_number] .time_sent = now（）sent_packets [pn_space]。[packet_number] .ack_elicating = ack_elicating set_packets [[Packet_Number] .in_flight = in_flight = in_flight = in_flight = in_packets [pn_space] .sent_bytes = sent_bytes（in_flightiting）：if（ack_elicating）：time_of_last_ack_eliciting_packet [pn_space] = now（）onpacketsentcc（sent_bytes）setLossDetectionTimer（）"
+    },
+    {
+      "indent": 0,
+      "text": "A.6. On Receiving a Datagram",
+      "section_title": true,
+      "ja": "A.6. データグラムを受信する"
+    },
+    {
+      "indent": 3,
+      "text": "When a server is blocked by anti-amplification limits, receiving a datagram unblocks it, even if none of the packets in the datagram are successfully processed. In such a case, the PTO timer will need to be rearmed.",
+      "ja": "サーバーがアンチアンプの制限によってブロックされている場合、データグラム内のどのパケットが正常に処理されていなくても、データグラムを受信します。そのような場合、PTOタイマーを整理する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for OnDatagramReceived follows:",
+      "ja": "OnDatagagramの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "OnDatagramReceived(datagram):\n  // If this datagram unblocks the server, arm the\n  // PTO timer to avoid deadlock.\n  if (server was at anti-amplification limit):\n    SetLossDetectionTimer()\n    if loss_detection_timer.timeout < now():\n      // Execute PTO if it would have expired\n      // while the amplification limit applied.\n      OnLossDetectionTimeout()",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "A.7. On Receiving an Acknowledgment",
+      "section_title": true,
+      "ja": "A.7. 謝辞を受け取る"
+    },
+    {
+      "indent": 3,
+      "text": "When an ACK frame is received, it may newly acknowledge any number of packets.",
+      "ja": "ACKフレームが受信されると、それは新たにパケットの数のパケットを確認することができる。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for OnAckReceived and UpdateRtt follow:",
+      "ja": "OnAckreceivedとUpdaterTTの疑似コード："
+    },
+    {
+      "indent": 3,
+      "text": "IncludesAckEliciting(packets): for packet in packets: if (packet.ack_eliciting): return true return false",
+      "ja": "IncessAkfeliciting（パケット）：パケット内のパケットの場合：if（packet.ack_elicating）：true true return false"
+    },
+    {
+      "indent": 3,
+      "text": "OnAckReceived(ack, pn_space):\n  if (largest_acked_packet[pn_space] == infinite):\n    largest_acked_packet[pn_space] = ack.largest_acked\n  else:\n    largest_acked_packet[pn_space] =\n        max(largest_acked_packet[pn_space], ack.largest_acked)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// DetectAndRemoveAckedPackets finds packets that are newly\n// acknowledged and removes them from sent_packets.\nnewly_acked_packets =\n    DetectAndRemoveAckedPackets(ack, pn_space)\n// Nothing to do if there are no newly acked packets.\nif (newly_acked_packets.empty()):\n  return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Update the RTT if the largest acknowledged is newly acked\n// and at least one ack-eliciting was newly acked.\nif (newly_acked_packets.largest().packet_number ==\n        ack.largest_acked &&\n    IncludesAckEliciting(newly_acked_packets)):\n  latest_rtt =\n    now() - newly_acked_packets.largest().time_sent\n  UpdateRtt(ack.ack_delay)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Process ECN information if present. if (ACK frame contains ECN information): ProcessECN(ack, pn_space)",
+      "ja": "//存在する場合はECN情報を処理してください。if（ACKフレームにECN情報が含まれています）：ProcessECN（ACK、PN_SPACE）"
+    },
+    {
+      "indent": 5,
+      "text": "lost_packets = DetectAndRemoveLostPackets(pn_space)\nif (!lost_packets.empty()):\n  OnPacketsLost(lost_packets)\nOnPacketsAcked(newly_acked_packets)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Reset pto_count unless the client is unsure if\n// the server has validated the client's address.\nif (PeerCompletedAddressValidation()):\n  pto_count = 0\nSetLossDetectionTimer()",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "UpdateRtt(ack_delay):\n  if (first_rtt_sample == 0):\n    min_rtt = latest_rtt\n    smoothed_rtt = latest_rtt\n    rttvar = latest_rtt / 2\n    first_rtt_sample = now()\n    return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// min_rtt ignores acknowledgment delay.\nmin_rtt = min(min_rtt, latest_rtt)\n// Limit ack_delay by max_ack_delay after handshake\n// confirmation.\nif (handshake confirmed):\n  ack_delay = min(ack_delay, max_ack_delay)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Adjust for acknowledgment delay if plausible.\nadjusted_rtt = latest_rtt\nif (latest_rtt >= min_rtt + ack_delay):\n  adjusted_rtt = latest_rtt - ack_delay",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "rttvar = 3/4 * rttvar + 1/4 * abs(smoothed_rtt - adjusted_rtt)\nsmoothed_rtt = 7/8 * smoothed_rtt + 1/8 * adjusted_rtt",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "A.8. Setting the Loss Detection Timer",
+      "section_title": true,
+      "ja": "A.8. 損失検出タイマーの設定"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC loss detection uses a single timer for all timeout loss detection. The duration of the timer is based on the timer's mode, which is set in the packet and timer events further below. The function SetLossDetectionTimer defined below shows how the single timer is set.",
+      "ja": "QUICの損失検出は、すべてのタイムアウト損失検出のためにシングルタイマーを使用します。タイマーの持続時間は、パケットとタイマイベントに設定されているタイマーモードに基づいています。以下に定義されている関数SetLossDetectionTimerは、シングルタイマーがどのように設定されるかを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This algorithm may result in the timer being set in the past, particularly if timers wake up late. Timers set in the past fire immediately.",
+      "ja": "このアルゴリズムは、特にタイマーが遅く起動している場合に、タイマーが過去に設定される可能性があります。タイマーはすぐに過去の火の中に設定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for SetLossDetectionTimer follows (where the \"^\" operator represents exponentiation):",
+      "ja": "SetLossDetectionTimerの疑似コードは次のようになります（ \"^\"演算子は余分なものを表します）。"
+    },
+    {
+      "indent": 3,
+      "text": "GetLossTimeAndSpace():\n  time = loss_time[Initial]\n  space = Initial\n  for pn_space in [ Handshake, ApplicationData ]:\n    if (time == 0 || loss_time[pn_space] < time):\n      time = loss_time[pn_space];\n      space = pn_space\n  return time, space",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "GetPtoTimeAndSpace():\n  duration = (smoothed_rtt + max(4 * rttvar, kGranularity))\n      * (2 ^ pto_count)\n  // Anti-deadlock PTO starts from the current time\n  if (no ack-eliciting packets in flight):\n    assert(!PeerCompletedAddressValidation())\n    if (has handshake keys):\n      return (now() + duration), Handshake\n    else:\n      return (now() + duration), Initial\n  pto_timeout = infinite\n  pto_space = Initial\n  for space in [ Initial, Handshake, ApplicationData ]:\n    if (no ack-eliciting packets in flight in space):\n        continue;\n    if (space == ApplicationData):\n      // Skip Application Data until handshake confirmed.\n      if (handshake is not confirmed):\n        return pto_timeout, pto_space\n      // Include max_ack_delay and backoff for Application Data.\n      duration += max_ack_delay * (2 ^ pto_count)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": " t = time_of_last_ack_eliciting_packet[space] + duration if (t < pto_timeout): pto_timeout = t pto_space = space return pto_timeout, pto_space",
+      "ja": "t = time_of_last_ack_eliciting_packet [space] duration（t <pto_timeout）：pto_timeout = t pto_space = space return pto_spaceを返す"
+    },
+    {
+      "indent": 3,
+      "text": "PeerCompletedAddressValidation():\n  // Assume clients validate the server's address implicitly.\n  if (endpoint is server):\n    return true\n  // Servers complete address validation when a\n  // protected packet is received.\n  return has received Handshake ACK ||\n       handshake confirmed",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "SetLossDetectionTimer():\n  earliest_loss_time, _ = GetLossTimeAndSpace()\n  if (earliest_loss_time != 0):\n    // Time threshold loss detection.\n    loss_detection_timer.update(earliest_loss_time)\n    return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "if (server is at anti-amplification limit): // The server's timer is not set if nothing can be sent. loss_detection_timer.cancel() return",
+      "ja": "if（サーバーが増幅されていない限界にある）：//何も送信できる場合は、サーバーのタイマーが設定されていません。Loss_Detection_Timer.cancel（）Return."
+    },
+    {
+      "indent": 5,
+      "text": "if (no ack-eliciting packets in flight &&\n    PeerCompletedAddressValidation()):\n  // There is nothing to detect lost, so no timer is set.\n  // However, the client needs to arm the timer if the\n  // server might be blocked by the anti-amplification limit.\n  loss_detection_timer.cancel()\n  return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "timeout, _ = GetPtoTimeAndSpace() loss_detection_timer.update(timeout)",
+      "ja": "タイムアウト、_ = getTotImeanDSpace（）Loss_Detection_Timer.Update（タイムアウト）"
+    },
+    {
+      "indent": 0,
+      "text": "A.9. On Timeout",
+      "section_title": true,
+      "ja": "A.9. タイムアウトについて"
+    },
+    {
+      "indent": 3,
+      "text": "When the loss detection timer expires, the timer's mode determines the action to be performed.",
+      "ja": "損失検出タイマーが期限切れになると、タイマのモードは実行されるアクションを決定します。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for OnLossDetectionTimeout follows:",
+      "ja": "OnLossDetectionTimeoutの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "OnLossDetectionTimeout():\n  earliest_loss_time, pn_space = GetLossTimeAndSpace()\n  if (earliest_loss_time != 0):\n    // Time threshold loss Detection\n    lost_packets = DetectAndRemoveLostPackets(pn_space)\n    assert(!lost_packets.empty())\n    OnPacketsLost(lost_packets)\n    SetLossDetectionTimer()\n    return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "if (no ack-eliciting packets in flight):\n  assert(!PeerCompletedAddressValidation())\n  // Client sends an anti-deadlock packet: Initial is padded\n  // to earn more anti-amplification credit,\n  // a Handshake packet proves address ownership.\n  if (has Handshake keys):\n    SendOneAckElicitingHandshakePacket()\n  else:\n    SendOneAckElicitingPaddedInitialPacket()\nelse:\n  // PTO. Send new data if available, else retransmit old data.\n  // If neither is available, send a single PING frame.\n  _, pn_space = GetPtoTimeAndSpace()\n  SendOneOrTwoAckElicitingPackets(pn_space)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "pto_count++ SetLossDetectionTimer()",
+      "ja": "pto_count setlossDetectionTimer（）"
+    },
+    {
+      "indent": 0,
+      "text": "A.10. Detecting Lost Packets",
+      "section_title": true,
+      "ja": "A.10. 失われたパケットの検出"
+    },
+    {
+      "indent": 3,
+      "text": "DetectAndRemoveLostPackets is called every time an ACK is received or the time threshold loss detection timer expires. This function operates on the sent_packets for that packet number space and returns a list of packets newly detected as lost.",
+      "ja": "DetectandRemovelostpacketsは、ACKが受信されたとき、または時間しきい値損失検出タイマーが期限切れになるたびに呼び出されます。この機能はそのパケット番号スペースのSENT_PACKETSで動作し、新しく検出されたパケットのリストを失ったとおりに返します。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for DetectAndRemoveLostPackets follows:",
+      "ja": "DetectandRemovelostpacketsの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "DetectAndRemoveLostPackets(pn_space):\n  assert(largest_acked_packet[pn_space] != infinite)\n  loss_time[pn_space] = 0\n  lost_packets = []\n  loss_delay = kTimeThreshold * max(latest_rtt, smoothed_rtt)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Minimum time of kGranularity before packets are deemed lost.\nloss_delay = max(loss_delay, kGranularity)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Packets sent before this time are deemed lost.\nlost_send_time = now() - loss_delay",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "foreach unacked in sent_packets[pn_space]: if (unacked.packet_number > largest_acked_packet[pn_space]): continue",
+      "ja": "SENT_PACKETS [PN_SPACE]では開始されていない場合：if（unacked.packet_number> largest_akked_packet [pn_space]）：続行"
+    },
+    {
+      "indent": 5,
+      "text": "  // Mark packet as lost, or set time when it should be marked.\n  // Note: The use of kPacketThreshold here assumes that there\n  // were no sender-induced gaps in the packet number space.\n  if (unacked.time_sent <= lost_send_time ||\n      largest_acked_packet[pn_space] >=\n        unacked.packet_number + kPacketThreshold):\n    sent_packets[pn_space].remove(unacked.packet_number)\n    lost_packets.insert(unacked)\n  else:\n    if (loss_time[pn_space] == 0):\n      loss_time[pn_space] = unacked.time_sent + loss_delay\n    else:\n      loss_time[pn_space] = min(loss_time[pn_space],\n                                unacked.time_sent + loss_delay)\nreturn lost_packets",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "A.11. Upon Dropping Initial or Handshake Keys",
+      "section_title": true,
+      "ja": "A.11. 初期またはハンドシェイクキーを落とすと"
+    },
+    {
+      "indent": 3,
+      "text": "When Initial or Handshake keys are discarded, packets from the space are discarded and loss detection state is updated.",
+      "ja": "初期キーまたはハンドシェイクキーが破棄されると、スペースからのパケットが破棄され、損失検出状態が更新されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for OnPacketNumberSpaceDiscarded follows:",
+      "ja": "OnPacketNumberspacedisedの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketNumberSpaceDiscarded(pn_space):\n  assert(pn_space != ApplicationData)\n  RemoveFromBytesInFlight(sent_packets[pn_space])\n  sent_packets[pn_space].clear()\n  // Reset the loss detection and PTO timer\n  time_of_last_ack_eliciting_packet[pn_space] = 0\n  loss_time[pn_space] = 0\n  pto_count = 0\n  SetLossDetectionTimer()",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Congestion Control Pseudocode",
+      "section_title": true,
+      "ja": "付録B.輻輳制御疑似コード"
+    },
+    {
+      "indent": 3,
+      "text": "We now describe an example implementation of the congestion controller described in Section 7.",
+      "ja": "ここで、セクション7で説明されている輻輳コントローラの実装例を説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The pseudocode segments in this section are licensed as Code Components; see the copyright notice.",
+      "ja": "このセクションの疑似コードセグメントはコードコンポーネントとしてライセンスされています。著作権表示を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "B.1. Constants of Interest",
+      "section_title": true,
+      "ja": "B.1. 関心の定数"
+    },
+    {
+      "indent": 3,
+      "text": "Constants used in congestion control are based on a combination of RFCs, papers, and common practice.",
+      "ja": "輻輳制御で使用される定数は、RFC、論文、および一般的な慣習の組み合わせに基づいています。"
+    },
+    {
+      "indent": 3,
+      "text": "kInitialWindow: Default limit on the initial bytes in flight as described in Section 7.2.",
+      "ja": "KinitialWindow：7.2の説明に従って、フライト内の初期バイトのデフォルト制限。"
+    },
+    {
+      "indent": 3,
+      "text": "kMinimumWindow: Minimum congestion window in bytes as described in Section 7.2.",
+      "ja": "KminimumWindow：7.2項で説明されているように、バイト単位の最小輻輳ウィンドウ。"
+    },
+    {
+      "indent": 3,
+      "text": "kLossReductionFactor: Scaling factor applied to reduce the congestion window when a new loss event is detected. Section 7 recommends a value of 0.5.",
+      "ja": "KlossReductionFactor：新しい損失イベントが検出されたときに輻輳ウィンドウを減らすために適用されるスケーリング係数。セクション7は0.5の値を推奨します。"
+    },
+    {
+      "indent": 3,
+      "text": "kPersistentCongestionThreshold: Period of time for persistent congestion to be established, specified as a PTO multiplier. Section 7.6 recommends a value of 3.",
+      "ja": "KPersistentCongestionThreshold：PTO乗数として指定される永続的輻輳の期間。セクション7.6は3の値を推奨しています。"
+    },
+    {
+      "indent": 0,
+      "text": "B.2. Variables of Interest",
+      "section_title": true,
+      "ja": "B.2. 関心の変数"
+    },
+    {
+      "indent": 3,
+      "text": "Variables required to implement the congestion control mechanisms are described in this section.",
+      "ja": "このセクションでは、輻輳制御メカニズムを実装するために必要な変数について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "max_datagram_size: The sender's current maximum payload size. This does not include UDP or IP overhead. The max datagram size is used for congestion window computations. An endpoint sets the value of this variable based on its Path Maximum Transmission Unit (PMTU; see Section 14.2 of [QUIC-TRANSPORT]), with a minimum value of 1200 bytes.",
+      "ja": "max_datagram_size：送信者の現在の最大ペイロードサイズ。これにはUDPまたはIPオーバーヘッドは含まれません。MAXデータグラムのサイズは、輻輳ウィンドウの計算に使用されます。エンドポイントは、そのパス最大伝送ユニット（PMTU; [QUICトランスポート]のセクション14.2参照）に基づいてこの変数の値を設定します。最小値1200バイトです。"
+    },
+    {
+      "indent": 3,
+      "text": "ecn_ce_counters[kPacketNumberSpace]: The highest value reported for the ECN-CE counter in the packet number space by the peer in an ACK frame. This value is used to detect increases in the reported ECN-CE counter.",
+      "ja": "ECN_CE_COUNTERS [KPACKETNUMBERSPACE]：ACKフレーム内のピアによってパケット番号スペースのECN-CEカウンタについて報告された最高値。この値は、報告されたECN-CEカウンタの増加を検出するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "bytes_in_flight: The sum of the size in bytes of all sent packets that contain at least one ack-eliciting or PADDING frame and have not been acknowledged or declared lost. The size does not include IP or UDP overhead, but does include the QUIC header and Authenticated Encryption with Associated Data (AEAD) overhead. Packets only containing ACK frames do not count toward bytes_in_flight to ensure congestion control does not impede congestion feedback.",
+      "ja": "BYTES_IN_FLIGHLIGHLIGHLIGHT：少なくとも1つのACKエリケーションまたはパディングフレームを含むすべての送信パケットのサイズ単位の合計が、承認されていないか宣言されていません。サイズにはIPまたはUDPのオーバーヘッドは含まれていませんが、関連するデータ（AEAD）オーバーヘッドを使用したQUICヘッダーと認証された暗号化があります。ACKフレームを含むパケットは、輻輳コントロールが輻輳フィードバックを妨げないようにするためにBYTES_IN_FLIGHTにはカウントされません。"
+    },
+    {
+      "indent": 3,
+      "text": "congestion_window: Maximum number of bytes allowed to be in flight.",
+      "ja": "congetion_window：フライト内にあることを許可されている最大バイト数。"
+    },
+    {
+      "indent": 3,
+      "text": "congestion_recovery_start_time: The time the current recovery period started due to the detection of loss or ECN. When a packet sent after this time is acknowledged, QUIC exits congestion recovery.",
+      "ja": "congention_recovery_start_time：損失またはECNの検出により現在の回復期間が開始された時刻。この時間以降に送信されたパケットが確認されたら、QUICは輻輳回復を終了します。"
+    },
+    {
+      "indent": 3,
+      "text": "ssthresh: Slow start threshold in bytes. When the congestion window is below ssthresh, the mode is slow start and the window grows by the number of bytes acknowledged.",
+      "ja": "ssthresh：スロースタートしきい値がバイト単位で。輻輳ウィンドウがSSTHRESHの下にあるとき、モードは遅い開始、ウィンドウは認められたバイト数によって増加します。"
+    },
+    {
+      "indent": 3,
+      "text": "The congestion control pseudocode also accesses some of the variables from the loss recovery pseudocode.",
+      "ja": "輻輳制御疑似コードはまた、損失回復疑似コードからの変数のいくつかにアクセスする。"
+    },
+    {
+      "indent": 0,
+      "text": "B.3. Initialization",
+      "section_title": true,
+      "ja": "B.3. 初期化"
+    },
+    {
+      "indent": 3,
+      "text": "At the beginning of the connection, initialize the congestion control variables as follows:",
+      "ja": "接続の開始時に、次のように輻輳制御変数を初期化します。"
+    },
+    {
+      "indent": 3,
+      "text": "congestion_window = kInitialWindow bytes_in_flight = 0 congestion_recovery_start_time = 0 ssthresh = infinite for pn_space in [ Initial, Handshake, ApplicationData ]: ecn_ce_counters[pn_space] = 0",
+      "ja": "congention_window = kinitialWindow = 0 congention_recovery_start_time = 0 ssthresh = [Initial、Handshake、ApplicationData]：ECN_CE_COUNTERS [PN_SPACE] = 0"
+    },
+    {
+      "indent": 0,
+      "text": "B.4. On Packet Sent",
+      "section_title": true,
+      "ja": "B.4. 送信されたパケットについて"
+    },
+    {
+      "indent": 3,
+      "text": "Whenever a packet is sent and it contains non-ACK frames, the packet increases bytes_in_flight.",
+      "ja": "パケットが送信され、それがACK以外のフレームを含むときはいつでも、パケットはbytes_in_flightを増加させます。"
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketSentCC(sent_bytes):\n  bytes_in_flight += sent_bytes",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "B.5. On Packet Acknowledgment",
+      "section_title": true,
+      "ja": "B.5. パケット承認について"
+    },
+    {
+      "indent": 3,
+      "text": "This is invoked from loss detection's OnAckReceived and is supplied with the newly acked_packets from sent_packets.",
+      "ja": "これは損失検出のONACKRECEIVEDから呼び出され、SENT_PACKETSから新しくacked_packetsが付属しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In congestion avoidance, implementers that use an integer representation for congestion_window should be careful with division and can use the alternative approach suggested in Section 2.1 of [RFC3465].",
+      "ja": "輻輳回避では、Congention_Windowの整数表現を使用する実装者は除算に注意しており、[RFC3465]のセクション2.1で提案されている代替アプローチを使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "InCongestionRecovery(sent_time):\n  return sent_time <= congestion_recovery_start_time",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketsAcked(acked_packets): for acked_packet in acked_packets: OnPacketAcked(acked_packet)",
+      "ja": "OnPacketSacked（acked_packets）：acked_packetsのacked_packetの場合：onpacketaked（acked_packet）"
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketAcked(acked_packet):\n  if (!acked_packet.in_flight):\n    return;\n  // Remove from bytes_in_flight.\n  bytes_in_flight -= acked_packet.sent_bytes\n  // Do not increase congestion_window if application\n  // limited or flow control limited.\n  if (IsAppOrFlowControlLimited())\n    return\n  // Do not increase congestion window in recovery period.\n  if (InCongestionRecovery(acked_packet.time_sent)):\n    return\n  if (congestion_window < ssthresh):\n    // Slow start.\n    congestion_window += acked_packet.sent_bytes\n  else:\n    // Congestion avoidance.\n    congestion_window +=\n      max_datagram_size * acked_packet.sent_bytes\n      / congestion_window",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "B.6. On New Congestion Event",
+      "section_title": true,
+      "ja": "B.6. 新しい渋滞イベントについて"
+    },
+    {
+      "indent": 3,
+      "text": "This is invoked from ProcessECN and OnPacketsLost when a new congestion event is detected. If not already in recovery, this starts a recovery period and reduces the slow start threshold and congestion window immediately.",
+      "ja": "これは、新しい輻輳イベントが検出されたときにPROCESSECNとONPACKETSLOSTから呼び出されます。まだ回復していない場合、これはリカバリ期間を開始し、遅い開始しきい値と輻輳ウィンドウをすぐに減らします。"
+    },
+    {
+      "indent": 3,
+      "text": "OnCongestionEvent(sent_time):\n  // No reaction if already in a recovery period.\n  if (InCongestionRecovery(sent_time)):\n    return",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Enter recovery period.\ncongestion_recovery_start_time = now()\nssthresh = congestion_window * kLossReductionFactor\ncongestion_window = max(ssthresh, kMinimumWindow)\n// A packet can be sent to speed up loss recovery.\nMaybeSendOnePacket()",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "B.7. Process ECN Information",
+      "section_title": true,
+      "ja": "B.7. プロセスECN情報"
+    },
+    {
+      "indent": 3,
+      "text": "This is invoked when an ACK frame with an ECN section is received from the peer.",
+      "ja": "ECNセクションのACKフレームがピアから受信されたときに呼び出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "ProcessECN(ack, pn_space):\n  // If the ECN-CE counter reported by the peer has increased,\n  // this could be a new congestion event.\n  if (ack.ce_counter > ecn_ce_counters[pn_space]):\n    ecn_ce_counters[pn_space] = ack.ce_counter\n    sent_time = sent_packets[ack.largest_acked].time_sent\n    OnCongestionEvent(sent_time)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "B.8. On Packets Lost",
+      "section_title": true,
+      "ja": "B.8. 失われたパケットについて"
+    },
+    {
+      "indent": 3,
+      "text": "This is invoked when DetectAndRemoveLostPackets deems packets lost.",
+      "ja": "DetectandRemoveloStpacketsがパケットが失われたと判断すると、これは呼び出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "OnPacketsLost(lost_packets):\n  sent_time_of_last_loss = 0\n  // Remove lost packets from bytes_in_flight.\n  for lost_packet in lost_packets:\n    if lost_packet.in_flight:\n      bytes_in_flight -= lost_packet.sent_bytes\n      sent_time_of_last_loss =\n        max(sent_time_of_last_loss, lost_packet.time_sent)\n  // Congestion event if in-flight packets were lost\n  if (sent_time_of_last_loss != 0):\n    OnCongestionEvent(sent_time_of_last_loss)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "// Reset the congestion window if the loss of these\n// packets indicates persistent congestion.\n// Only consider packets sent after getting an RTT sample.\nif (first_rtt_sample == 0):\n  return\npc_lost = []\nfor lost in lost_packets:\n  if lost.time_sent > first_rtt_sample:\n    pc_lost.insert(lost)\nif (InPersistentCongestion(pc_lost)):\n  congestion_window = kMinimumWindow\n  congestion_recovery_start_time = 0",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "B.9. Removing Discarded Packets from Bytes in Flight",
+      "section_title": true,
+      "ja": "B.9. 飛行中のバイトから破棄されたパケットを削除する"
+    },
+    {
+      "indent": 3,
+      "text": "When Initial or Handshake keys are discarded, packets sent in that space no longer count toward bytes in flight.",
+      "ja": "初期キーまたはハンドシェイクキーが破棄されると、そのスペースで送信されたパケットは、フライトでバイトにカウントされなくなります。"
+    },
+    {
+      "indent": 3,
+      "text": "Pseudocode for RemoveFromBytesInFlight follows:",
+      "ja": "RemoveFromBytesInflightの疑似コードは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "RemoveFromBytesInFlight(discarded_packets):\n  // Remove any unacknowledged packets from flight.\n  foreach packet in discarded_packets:\n    if packet.in_flight\n      bytes_in_flight -= size",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Contributors",
+      "ja": "貢献者"
+    },
+    {
+      "indent": 3,
+      "text": "The IETF QUIC Working Group received an enormous amount of support from many people. The following people provided substantive contributions to this document:",
+      "ja": "IETF熟練したワーキンググループは、多くの人々から膨大な量のサポートを受けました。以下の人々はこの文書への実質的な貢献を提供しました："
+    },
+    {
+      "indent": 3,
+      "text": "* Alessandro Ghedini * Benjamin Saunders * Gorry Fairhurst * 山本和彦 (Kazu Yamamoto) * 奥 一穂 (Kazuho Oku) * Lars Eggert * Magnus Westerlund * Marten Seemann * Martin Duke * Martin Thomson * Mirja Kühlewind * Nick Banks * Praveen Balasubramanian",
+      "ja": "* Alessandro Ghedini * Benjamin Saunders * Gorry Fairhurst * *山本和（山本和雄）* Lars Egger * Magnus Westerlund *マルテンSeemann * Martin Duke * Martin Thomson * MirjaKühlewind* Nick Banks * Praveen Balasubramanian"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Jana Iyengar (editor) Fastly",
+      "ja": "Jana Iyengar（編集者）早く"
+    },
+    {
+      "indent": 3,
+      "text": "Email: jri.ietf@gmail.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Ian Swett (editor) Google",
+      "ja": "IAN SWETT（編集）Google"
+    },
+    {
+      "indent": 3,
+      "text": "Email: ianswett@google.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
