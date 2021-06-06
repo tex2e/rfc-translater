@@ -1,11 +1,10 @@
 
+import os
+import re
+import json
+import textwrap
 import requests
 from lxml import html
-import re
-import textwrap
-import json
-import os
-
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -181,9 +180,14 @@ def _get_line_len_diff(text1, text2):
     return abs(len(first_line1) - len(first_line2))
 
 
-# RFC取得先リンクにデータが存在しないときのエラークラス
+# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
+# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
 class RFCNotFound(Exception):
     pass
+
+# それ以外の例外（HTML構造に関するエラーなど）はExceptionを投げること。
+# class Exception:
+
 
 # 本文中にあるaタグ（RFCへのリンクなど）を削除する
 def _cleanhtml(raw_html):
@@ -194,7 +198,8 @@ def _cleanhtml(raw_html):
 # [EntryPoint]
 # RFCの取得処理
 def fetch_rfc(number, force=False):
-    url = 'https://tools.ietf.org/html/rfc%d' % number
+    # url = 'https://tools.ietf.org/html/rfc%d' % number   # 2021/06/06 URL変更
+    url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
@@ -215,17 +220,27 @@ def fetch_rfc(number, force=False):
     if len(title) == 0:
         raise RFCNotFound
 
-    # ページが存在するか確認
-    content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
-    if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
-        raise RFCNotFound
+    if not force:
+        # タイトルの設定
+        # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
 
-    # タイトルの設定
-    # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
-    content_h1 = tree.xpath('//span[@class="h1"]/text()')
-    if len(content_h1) == 0:
-        raise "Cannot extract RFC Title!"
-    title = "RFC %s - %s" % (number, content_h1[0])
+        # <span class="h1">タイトル</span>
+        content_h1 = tree.xpath('//span[@class="h1"]/text()')
+        # <meta name="description" content="タイトル (RFC)">
+        content_description = tree.xpath('//meta[@name="description"]/@content')
+
+        if len(content_h1) > 0:
+            title = "RFC %s - %s" % (number, content_h1[0])
+        elif len(content_description) > 0:
+            tmp = content_description[0]
+            tmp = re.sub(r' ?\(RFC ?\)$', '', tmp)
+            title = "RFC %s - %s" % (number, tmp)
+        else:
+            raise Exception("Cannot extract RFC Title!")
+
+    else:
+        # forceオプションありのときは、タイトルが存在しなくても実行
+        title = "RFC %s" % number
 
     # DOMツリーから文章を取得
     # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
@@ -248,15 +263,15 @@ def fetch_rfc(number, force=False):
 
             contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
             contents[i+0] = '' # ページ区切りの除去
-            if i + 1 >= contents_len: 
+            if i + 1 >= contents_len:
                 continue
             contents[i+1] = '' # 余分な改行の除去
-            if i + 2 >= contents_len: 
+            if i + 2 >= contents_len:
                 continue
             contents[i+2] = '' # 余分な空白の除去
-            if i + 3 >= contents_len: 
+            if i + 3 >= contents_len:
                 continue
-            if not isinstance(contents[i+3], str): 
+            if not isinstance(contents[i+3], str):
                 continue
             contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
 
