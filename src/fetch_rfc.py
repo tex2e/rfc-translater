@@ -257,13 +257,13 @@ def fetch_rfc(number, force=False):
         # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
 
         # <span class="h1">タイトル</span>
-        content_h1 = tree.xpath('//span[@class="h1"]/text()')
+        # content_h1 = tree.xpath('//span[@class="h1"]/text()') # 6/17 改行で複数に分割する場合があるため廃止
         # <meta name="description" content="タイトル (RFC)">
         content_description = tree.xpath('//meta[@name="description"]/@content')
 
-        if len(content_h1) > 0:
-            title = "RFC %s - %s" % (number, content_h1[0])
-        elif len(content_description) > 0:
+        # if len(content_h1) > 0:
+        #     title = "RFC %s - %s" % (number, content_h1[0]) # 6/17 改行で複数に分割する場合があるため廃止
+        if len(content_description) > 0:
             tmp = content_description[0]
             tmp = re.sub(r' ?\(RFC ?\)$', '', tmp)
             title = "RFC %s - %s" % (number, tmp)
