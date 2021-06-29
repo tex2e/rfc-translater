@@ -1,11 +1,10 @@
 
+import os
+import re
+import json
+import textwrap
 import requests
 from lxml import html
-import re
-import textwrap
-import json
-import os
-
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -13,7 +12,7 @@ JST = timezone(timedelta(hours=+9), 'JST')
 BREAK = '\n\x07\n'
 
 class Paragraph:
-    # 段落情報を持つクラス
+    # 段落情報を持つクラス。コードや図表かの判定はここで行う。
     #
     # Properties:
     # * text: 段落の文章
@@ -39,6 +38,11 @@ class Paragraph:
             self._find_section_title_pattern(self.text))
         # 目次の判定
         self.is_toc = self._find_toc_pattern(self.text)
+        # 注釈の判定（|  Note: は必ず図表判定されてしまうので、修正する）
+        if self._find_note(self.text):
+            self.is_code = False  # コード・図表ではない
+            self.indent += 3  #「|  」の幅だけ増やす
+            self.text = self._convert_note_from_figure_to_text(self.text)  #「|  」の除去
 
         # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
         if self.is_toc:
@@ -78,6 +82,9 @@ class Paragraph:
 
     # 図表・ソースコード・数式の判定
     def _find_code_pattern(self, text):
+        if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
+            return False
+
         if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
                 or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
                 or text.find('+--') >= 0  # directory tree
@@ -126,9 +133,9 @@ class Paragraph:
 
         return False
 
+    # 見出しの判定
     def _find_section_title_pattern(self, text):
-        # セクションのタイトルの判定
-        # "N." が現れたときはセクションのタイトルとして検出する
+        # "N." が現れたときは見出しとして検出する
         if len(text.split('\n')) >= 2:
             return False
         if text.endswith('.'):
@@ -140,6 +147,30 @@ class Paragraph:
         if re.match(r'^Appendix [A-F](?:\. [-a-zA-Z0-9\'\. ]+)?$', text):
             return True
         return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.\d{1,2} ', text)
+
+    # 注釈の正規表現
+    REGEX_PATTERN_NOTE1 = r'\A\s*\|  Note(?:\(\*\d\))?:'  # 1行目
+    REGEX_PATTERN_NOTE2 = r'\A\s*\|  '                    # 2行目以降
+    # 注釈の判定
+    def _find_note(self, text):
+        # |  Note: や |  Note (*1): から始まる場合は、注釈と見なす。
+        lines = text.split("\n")
+        if not re.search(self.__class__.REGEX_PATTERN_NOTE1, lines[0]):
+            return False
+        for line in lines[1:]:
+            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line):
+                return False
+        return True
+
+    # 注釈を図表からテキストに変換する
+    def _convert_note_from_figure_to_text(self, text):
+        # 各行の行頭文字列「  |  」を取り除く。
+        lines_with_pipe = text.split("\n")
+        lines_without_pipe = []
+        for line in lines_with_pipe:
+            tmp = re.sub(self.__class__.REGEX_PATTERN_NOTE2, ' ', line)
+            lines_without_pipe.append(tmp)
+        return ''.join(lines_without_pipe)
 
 
 class Paragraphs:
@@ -181,9 +212,14 @@ def _get_line_len_diff(text1, text2):
     return abs(len(first_line1) - len(first_line2))
 
 
-# RFC取得先リンクにデータが存在しないときのエラークラス
+# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
+# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
 class RFCNotFound(Exception):
     pass
+
+# それ以外の例外（HTML構造に関するエラーなど）はExceptionを投げること。
+# class Exception:
+
 
 # 本文中にあるaタグ（RFCへのリンクなど）を削除する
 def _cleanhtml(raw_html):
@@ -194,7 +230,8 @@ def _cleanhtml(raw_html):
 # [EntryPoint]
 # RFCの取得処理
 def fetch_rfc(number, force=False):
-    url = 'https://tools.ietf.org/html/rfc%d' % number
+    # url = 'https://tools.ietf.org/html/rfc%d' % number   # 2021/06/06 URL変更
+    url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
@@ -215,17 +252,27 @@ def fetch_rfc(number, force=False):
     if len(title) == 0:
         raise RFCNotFound
 
-    # ページが存在するか確認
-    content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
-    if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
-        raise RFCNotFound
+    if not force:
+        # タイトルの設定
+        # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
 
-    # タイトルの設定
-    # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
-    content_h1 = tree.xpath('//span[@class="h1"]/text()')
-    if len(content_h1) == 0:
-        raise "Cannot extract RFC Title!"
-    title = "RFC %s - %s" % (number, content_h1[0])
+        # <span class="h1">タイトル</span>
+        # content_h1 = tree.xpath('//span[@class="h1"]/text()') # 6/17 改行で複数に分割する場合があるため廃止
+        # <meta name="description" content="タイトル (RFC)">
+        content_description = tree.xpath('//meta[@name="description"]/@content')
+
+        # if len(content_h1) > 0:
+        #     title = "RFC %s - %s" % (number, content_h1[0]) # 6/17 改行で複数に分割する場合があるため廃止
+        if len(content_description) > 0:
+            tmp = content_description[0]
+            tmp = re.sub(r' ?\(RFC ?\)$', '', tmp)
+            title = "RFC %s - %s" % (number, tmp)
+        else:
+            raise Exception("Cannot extract RFC Title!")
+
+    else:
+        # forceオプションありのときは、タイトルが存在しなくても実行
+        title = "RFC %s" % number
 
     # DOMツリーから文章を取得
     # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
@@ -248,15 +295,15 @@ def fetch_rfc(number, force=False):
 
             contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
             contents[i+0] = '' # ページ区切りの除去
-            if i + 1 >= contents_len: 
+            if i + 1 >= contents_len:
                 continue
             contents[i+1] = '' # 余分な改行の除去
-            if i + 2 >= contents_len: 
+            if i + 2 >= contents_len:
                 continue
             contents[i+2] = '' # 余分な空白の除去
-            if i + 3 >= contents_len: 
+            if i + 3 >= contents_len:
                 continue
-            if not isinstance(contents[i+3], str): 
+            if not isinstance(contents[i+3], str):
                 continue
             contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
 
