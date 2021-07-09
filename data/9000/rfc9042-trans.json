@@ -1,0 +1,484 @@
+{
+  "title": {
+    "text": "RFC 9042 - Sieve Email Filtering: Delivery by MAILBOXID",
+    "ja": "RFC 9042 - Sieve Eメールフィルタリング：MailBoxIDによる配信"
+  },
+  "number": 9042,
+  "created_at": "2021-07-03 02:59:05.555723+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                  B. Gondwana, Ed.\nRequest for Comments: 9042                                      Fastmail\nUpdates: 5228                                                  June 2021\nCategory: Standards Track\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "Sieve Email Filtering: Delivery by MAILBOXID",
+      "ja": "Sieve Eメールフィルタリング：MailBoxIDによる配信"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "The OBJECTID capability of IMAP (RFC 8474) allows clients to identify mailboxes by a unique identifier that survives renaming.",
+      "ja": "IMAP（RFC 8474）のObjectID機能により、クライアントは名前を変更している一意の識別子によってメールボックスを識別できます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document extends the Sieve email filtering language (RFC 5228) to allow using that same unique identifier as a target for fileinto rules and for testing the existence of mailboxes.",
+      "ja": "このドキュメントはSieve Eメールフィルタリング言語（RFC 5228）を拡張して、FileIntoルールのターゲットと同じ一意の識別子を使用し、メールボックスの存在をテストするために使用できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書は、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それは公開レビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9042.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法は、https://www.rfc-editor.org/info/frfc9042で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2021 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（C）2021 IETF信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Simplified BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Simplified BSD License.",
+      "ja": "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions Used in This Document\n3.  Sieve Capability String\n4.  Argument :mailboxid to Command fileinto\n  4.1.  Interaction with Mailbox Extension\n  4.2.  Interaction with Special-Use Extension\n5.  Interaction with FCC Extension\n6.  Test mailboxidexists\n7.  Interaction with Variables Extension\n8.  Security Considerations\n9.  IANA Considerations\n10. References\n  10.1.  Normative References\n  10.2.  Informative References\nAcknowledgements\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Sieve rules [RFC5228] are sometimes created using graphical interfaces, which allow users to select the mailbox to be used as a target for a rule.",
+      "ja": "Sieve Rules [RFC5228]は、グラフィカルインターフェイスを使用して作成されることがあります。これにより、ユーザーはルールのターゲットとして使用されるメールボックスを選択できます。"
+    },
+    {
+      "indent": 3,
+      "text": "If that mailbox is renamed, the client may also update its internal representation of the rule and update the Sieve script to match; however, this is a multistep process and subject to partial failures. Also, if the folder is renamed by a different mechanism (e.g., another IMAP client), the rules will get out of sync.",
+      "ja": "そのメールボックスの名前が変更されている場合、クライアントはルールの内部表現を更新し、一致するSieveスクリプトを更新することもできます。ただし、これは多段階のプロセスであり、部分的な失敗の対象となります。また、フォルダが別のメカニズム（例えば別のIMAPクライアント）によって名前変更された場合、ルールは同期から抜け出します。"
+    },
+    {
+      "indent": 3,
+      "text": "By telling fileinto to reference the immutable MAILBOXID specified by [RFC8474], using the extension specified herein, Sieve rules can continue to target the same mailbox, even if it gets renamed.",
+      "ja": "ここで指定された拡張子を使用して、[RFC8474]で指定された不変メールボックスIDを参照するようにFileIntoに指示すると、名前が変更されたとしても、Sieve Rulesは同じメールボックスをターゲットにし続けることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions Used in This Document",
+      "section_title": true,
+      "ja": "2. この文書で使用されている規約"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Sieve Capability String",
+      "section_title": true,
+      "ja": "3. ふるい能力弦"
+    },
+    {
+      "indent": 3,
+      "text": "Scripts that use the extensions defined in this document MUST explicitly require the capability \"mailboxid\".",
+      "ja": "このドキュメントで定義されている拡張子を使用するスクリプトは、機能 \"mailboxid\"を明示的に必要とする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Example:",
+      "ja": "例："
+    },
+    {
+      "indent": 3,
+      "text": "require \"mailboxid\";",
+      "ja": "\"mailboxid\"を要求します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Argument :mailboxid to Command fileinto",
+      "section_title": true,
+      "ja": "4. 引数：MailBoxID fileIntoをコマンドします"
+    },
+    {
+      "indent": 3,
+      "text": "Normally, the fileinto command delivers the message in the mailbox specified using its positional mailbox argument. However, if the optional :mailboxid argument is also specified, the fileinto command first checks whether a mailbox exists in the user's personal namespace [RFC2342] with the specified MAILBOXID [RFC8474].",
+      "ja": "通常、fileIntoコマンドは、Positional Mailbox引数を使用して指定されたメールボックス内のメッセージを配信します。ただし、オプション：mailboxid引数も指定されている場合、fileIntoコマンドは最初にユーザーの個人的な名前空間[RFC2342]で、指定されたメールボックス[RFC8474]にメールボックスが存在するかどうかを確認します。"
+    },
+    {
+      "indent": 3,
+      "text": "If a matching mailbox is found, that mailbox is used for delivery.",
+      "ja": "一致するメールボックスが見つかった場合、そのメールボックスは配信に使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If there is no such mailbox, the fileinto action proceeds as it would without the :mailboxid argument.",
+      "ja": "そのようなメールボックスがない場合、FileIntoアクションは：mailboxid引数なしでそれがそうするように続行されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The tagged argument :mailboxid to fileinto consumes one additional token, a string containing the OBJECTID of the target mailbox.",
+      "ja": "tagged引数：mailboxidからfileIntoへの追加トークン、ターゲットメールボックスのObjectIDを含む文字列を消費します。"
+    },
+    {
+      "indent": 3,
+      "text": "Example:",
+      "ja": "例："
+    },
+    {
+      "indent": 3,
+      "text": "require \"fileinto\";\nrequire \"mailboxid\";",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "if header :contains [\"from\"] \"coyote\" {\n    fileinto :mailboxid \"F6352ae03-b7f5-463c-896f-d8b48ee3\"\n             \"INBOX.harassment\";\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Interaction with Mailbox Extension",
+      "section_title": true,
+      "ja": "4.1. メールボックス拡張子との対話"
+    },
+    {
+      "indent": 3,
+      "text": "For servers that also support the mailbox extension defined in [RFC5490], if both the :create and :mailboxid arguments are provided to a fileinto command and no matching mailbox is found, then a new mailbox will be created.",
+      "ja": "[RFC5490]で定義されているメールボックス拡張機能もサポートしているサーバーの場合、次の場合は：create and：mailboxid引数がfileItoコマンドに提供され、一致するメールボックスが見つからない場合は、新しいメールボックスが作成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This new mailbox will have the name specified by the positional mailbox argument ([RFC5228], Section 4.1); however, it will get a different MAILBOXID (chosen by the server) rather than the one specified by the :mailboxid argument to fileinto.",
+      "ja": "この新しいメールボックスは、Positional Mailbox引数で指定された名前を持ちます（[RFC5228]、セクション4.1）。ただし、：mailboxid引数からfileIntoで指定されたものではなく、異なるメールボックスID（サーバーによって選択されています）が表示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Example:",
+      "ja": "例："
+    },
+    {
+      "indent": 3,
+      "text": "require \"fileinto\";\nrequire \"mailboxid\";\nrequire \"mailbox\";",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "fileinto :mailboxid \"Fnosuch\" :create \"INBOX.no-such-folder\"; # creates INBOX.no-such-folder, but it doesn't # get the \"Fnosuch\" mailboxid.",
+      "ja": "FileInto：メールボックスID \"fnosuch\"： \"inbox.no-folder\"を作成します。＃inbox.no-folderを作成しますが、それは \"fnosuch\" mailboxidを取得しません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Interaction with Special-Use Extension",
+      "section_title": true,
+      "ja": "4.2. 特殊使用拡張との対話"
+    },
+    {
+      "indent": 3,
+      "text": "For servers that also support delivery to special-use mailboxes [RFC8579], it is an error to specify both :mailboxid and :specialuse in the same fileinto command.",
+      "ja": "特殊使用メールボックスへの配信もサポートするサーバーの場合は、MailBoxIDと：同じFileIntoコマンドのSpecialUSEの両方を指定するためのエラーです。"
+    },
+    {
+      "indent": 3,
+      "text": "Advanced filtering based on both special-use and MAILBOXID can be built with explicit specialuse_exists and mailboxidexists tests.",
+      "ja": "特殊使用とメールボックスIDの両方に基づく高度なフィルタリングは、明示的なSpecialUSE_EXISTSおよびMailBoxideXistsテストで構築できます。"
+    },
+    {
+      "indent": 6,
+      "text": "|  Note to developers of Sieve generation tools:\n|\n|  It is advisable to use special-use rather than MAILBOXID when\n|  creating rules that are based on a special-use purpose (e.g.,\n|  delivery directly to the Junk folder based on a header that was\n|  added by a scanning agent earlier in the mail flow).",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "5. Interaction with FCC Extension",
+      "section_title": true,
+      "ja": "5. FCC拡張子との対話"
+    },
+    {
+      "indent": 3,
+      "text": "This document extends the definition of the :fcc argument defined in [RFC8580] so that it can optionally be used with the :mailboxid argument. The syntax for FCC is extended here using ABNF [RFC5234]:",
+      "ja": "このドキュメントは、[RFC8580]で定義されている：fcc引数の定義を拡張して、次のようにune：mailboxid引数で使用できます。FCCの構文は、ABNF [RFC5234]を使用してここで拡張されています。"
+    },
+    {
+      "indent": 3,
+      "text": "MAILBOXID-OPT = \":mailboxid\" objectid",
+      "ja": "mailboxid-opt = \"：mailboxid\" objectid"
+    },
+    {
+      "indent": 3,
+      "text": "FCC-OPTS =/ MAILBOXID-OPT",
+      "ja": "fcc-opts = / mailboxid-opt."
+    },
+    {
+      "indent": 3,
+      "text": "If the optional :mailboxid argument is specified with :fcc, it instructs the Sieve interpreter to check whether a mailbox exists with the specific MAILBOXID. If such a mailbox exists, the generated message is filed into that mailbox. Otherwise, the generated message is filed into the :fcc target mailbox.",
+      "ja": "オプション：mailboxid引数が次のように指定されている場合、FCCでは、Sieveインタプリタに、メールボックスが特定のメールボックスIDと存在するかどうかを確認します。そのようなメールボックスが存在する場合、生成されたメッセージはそのメールボックスにファイルされます。それ以外の場合、生成されたメッセージは：FCCターゲットメールボックスにファイルされます。"
+    },
+    {
+      "indent": 3,
+      "text": "As with fileinto, it is an error to specify both :mailboxid and :specialuse for the same fcc rule.",
+      "ja": "FileIntoと同様に、mailboxidと：同じFCCルールのSpecialUSEの両方を指定するためのエラーです。"
+    },
+    {
+      "indent": 3,
+      "text": "Example:",
+      "ja": "例："
+    },
+    {
+      "indent": 3,
+      "text": "require [\"enotify\", \"fcc\", \"mailboxid\"];\nnotify :fcc \"INBOX.Sent\"\n       :mailboxid \"F6352ae03-b7f5-463c-896f-d8b48ee3\"\n       :message \"You got mail!\"\n       \"mailto:ken@example.com\";",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "6. Test mailboxidexists",
+      "section_title": true,
+      "ja": "6. メールボックスXistsをテストします"
+    },
+    {
+      "indent": 3,
+      "text": "Usage: mailboxidexists <mailbox-objectids: string-list>",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The mailboxidexists test is true if every string argument provided is the MAILBOXID of a mailbox that exists in the mailstore and that allows the user in whose context the Sieve script runs to deliver messages into it.",
+      "ja": "メールボックスのテストは、提供されているすべての文字列引数がメールボックスに存在するメールボックスのメールボックスであり、そのコンテキストがそのコンテキストでメッセージを配信するために実行されるようにする場合はtrueです。"
+    },
+    {
+      "indent": 3,
+      "text": "When the mailstore is an IMAP server that also supports IMAP Access Control List (ACL) [RFC4314], delivery is allowed if the user has the 'p' or 'i' rights for the mailbox (see Section 5.2 of [RFC4314]).",
+      "ja": "MailStoreがIMAPアクセス制御リスト（ACL）[RFC4314]をサポートするIMAPサーバーである場合、ユーザーにメールボックスの「P」または「I」権限がある場合は配信が許可されます（[RFC4314]のセクション5.2を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "When the mailstore is an IMAP server that does not support IMAP ACL, delivery is allowed if the READ-WRITE response code is present for the mailbox when selected by the user (see Section 7.1 of [RFC3501]).",
+      "ja": "メールストアがIMAP ACLをサポートしていないIMAPサーバーである場合、ユーザーによって選択されたときに読み書き応答コードがメールボックスに存在する場合は配信が許可されます（[RFC3501]のセクション7.1参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that a successful mailboxidexists test for a mailbox doesn't necessarily mean that a \"fileinto :mailboxid\" action on this mailbox would succeed. For example, the fileinto action might put the user over quota. The mailboxidexists test only verifies existence of the mailbox and whether the user in whose context the Sieve script runs has permissions to execute fileinto on it.",
+      "ja": "メールボックスのメールボックスのテストを成功させることは必ずしもこのメールボックス上の \"fileInto：mailboxid\"アクションが成功することを意味することに注意してください。たとえば、FileIntoアクションはユーザーにクォータを介して置くことがあります。メールボックスXistsテストは、メールボックスの存在を検証し、そのコンテキストでSieveスクリプトが実行されているユーザーがFileIntoを実行する権限を持っているかどうかのみです。"
+    },
+    {
+      "indent": 3,
+      "text": "Example:",
+      "ja": "例："
+    },
+    {
+      "indent": 3,
+      "text": "require \"fileinto\";\nrequire \"mailboxid\";",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "if header :contains [\"from\"] \"coyote\" {\n    if mailboxidexists \"F6352ae03-b7f5-463c-896f-d8b48ee3\" {\n        fileinto :mailboxid \"F6352ae03-b7f5-463c-896f-d8b48ee3\"\n                            \"INBOX.name.will.not.be.used\";\n    } else {\n        fileinto \"INBOX.harassment\";\n    }\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 6,
+      "text": "|  Note to implementers:\n|\n|  This test behaves identically to the mailboxexists test defined\n|  in [RFC5490] but operates on MAILBOXIDs rather than mailbox\n|  names.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7. Interaction with Variables Extension",
+      "section_title": true,
+      "ja": "7. 変数拡張子との対話"
+    },
+    {
+      "indent": 3,
+      "text": "There is no special interaction defined; however, as an OBJECTID is a string in this document, OBJECTID values can contain variable expansions if [RFC5229] is enabled.",
+      "ja": "特別な対話は定義されていません。ただし、ObjectIDがこのドキュメントの文字列であるため、[RFC5229]が有効になっている場合、ObjectID値には可変展開を含めることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Because MAILBOXID is always generated by the server, implementations MUST NOT allow Sieve to make an end run around this protection by creating mailboxes with the specified ID by using :create and :mailboxid in a fileinto rule for a nonexistent mailbox.",
+      "ja": "MailBoxIDは常にサーバーによって生成されているため、実装は、jail-create and：mailboxidを使用して、指定されたIDを使用してメールボックスを使用してこの保護を終了することを許可してはいけません。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers are referred to the Security Considerations sections of [RFC5228] and [RFC8474].",
+      "ja": "実装者は、[RFC5228]と[RFC8474]のセキュリティ上の考慮事項のセクションに参照されています。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following capability to the \"Sieve Extensions\" registry at <https://www.iana.org/assignments/sieve-extensions>:",
+      "ja": "IANAは、<https://www.iana.org/assignments/sive-extensions>で、 \"Sieve Extensions\"レジストリに次の機能を追加しました>："
+    },
+    {
+      "indent": 3,
+      "text": "Capability name:  mailboxid\nDescription:  adds a test for checking mailbox existence by OBJECTID\n   and new optional arguments to fileinto and :fcc that allow\n   selecting the destination mailbox by OBJECTID.\nRFC number:  RFC 9042\nContact address:  EXTRA discussion list <extra@ietf.org>",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCSで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2342] Gahrns, M. and C. Newman, \"IMAP4 Namespace\", RFC 2342, DOI 10.17487/RFC2342, May 1998, <https://www.rfc-editor.org/info/rfc2342>.",
+      "ja": "[RFC2342] Gahrns、M.およびC. Newman、 \"IMAP4 Namespace\"、RFC 2342、DOI 10.17487 / RFC2342、1998年5月、<https：//www.rfc-editor.org/info/rfc2342>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5228] Guenther, P., Ed. and T. Showalter, Ed., \"Sieve: An Email Filtering Language\", RFC 5228, DOI 10.17487/RFC5228, January 2008, <https://www.rfc-editor.org/info/rfc5228>.",
+      "ja": "[RFC5228] GUENTHER、P、ED。T. Showalter、Ed。、「篩：Eメールフィルタリング言語」、RFC 5228、DOI 10.17487 / RFC5228、2008年1月、<https://www.rfc-editor.org/info/rfc5228>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5234] Crocker, D., Ed. and P. Overell, \"Augmented BNF for Syntax Specifications: ABNF\", STD 68, RFC 5234, DOI 10.17487/RFC5234, January 2008, <https://www.rfc-editor.org/info/rfc5234>.",
+      "ja": "[RFC5234] Crocker、D.、ED。2008年1月、<https://www.rfc-editor.org/info/rfc-editor.org/info/rfc- editor.org/info/rfc523,2008、<https://www.rfc-editor.org/info/rfc- editor.org/info/rfc- editor.org/info/rfc- editor.org/info/rfc- editor.org/info/rfc- editor.org/info/rfc5234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B、「RFC 2119キーワードの大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8474] Gondwana, B., Ed., \"IMAP Extension for Object Identifiers\", RFC 8474, DOI 10.17487/RFC8474, September 2018, <https://www.rfc-editor.org/info/rfc8474>.",
+      "ja": "[RFC8474] Gondwana、B.、ED。、「オブジェクト識別子のIMAP拡張」、RFC 8474、DOI 10.17487 / RFC8474、2018年9月、<https：//www.rfc-editor.org/info/rfc8474>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8580] Murchison, K. and B. Gondwana, \"Sieve Extension: File Carbon Copy (FCC)\", RFC 8580, DOI 10.17487/RFC8580, May 2019, <https://www.rfc-editor.org/info/rfc8580>.",
+      "ja": "[RFC8580] Murchison、K.およびB. Gondwana、 \"Sieve Extension：ファイルカーボンコピー（FCC）\"、RFC 8580、DOI 10.17487 / RFC8580、2019年5月、<https：//www.rfc-editor.org/info/RFC8580>。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3501] Crispin, M., \"INTERNET MESSAGE ACCESS PROTOCOL - VERSION 4rev1\", RFC 3501, DOI 10.17487/RFC3501, March 2003, <https://www.rfc-editor.org/info/rfc3501>.",
+      "ja": "[RFC3501]クリスピン、M.、「インターネットメッセージアクセスプロトコル - バージョン4REV1」、RFC 3501、DOI 10.17487 / RFC3501、2003年3月、<https：//www.rfc-editor.org/info/rfc3501>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4314] Melnikov, A., \"IMAP4 Access Control List (ACL) Extension\", RFC 4314, DOI 10.17487/RFC4314, December 2005, <https://www.rfc-editor.org/info/rfc4314>.",
+      "ja": "[RFC4314] Melnikov、A。、「IMAP4アクセス制御リスト（ACL）拡張」、RFC 4314、DOI 10.17487 / RFC4314、2005年12月、<https：//www.rfc-editor.org/info/rfc4314>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5229] Homme, K., \"Sieve Email Filtering: Variables Extension\", RFC 5229, DOI 10.17487/RFC5229, January 2008, <https://www.rfc-editor.org/info/rfc5229>.",
+      "ja": "[RFC5229] Homme、K.、「Sieve Eメールフィルタリング：変数拡張機能」、RFC 5229、DOI 10.17487 / RFC5229、2008年1月、<https：//www.rfc-editor.org/info/rfc529>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5490] Melnikov, A., \"The Sieve Mail-Filtering Language -- Extensions for Checking Mailbox Status and Accessing Mailbox Metadata\", RFC 5490, DOI 10.17487/RFC5490, March 2009, <https://www.rfc-editor.org/info/rfc5490>.",
+      "ja": "[RFC5490] Melnikov、A。、「Sieve Mail-Filtering Language  - メールボックスステータスをチェックし、メールボックスメタデータへのアクセス」、RFC 5490、DOI 10.17487 / RFC5490、2009年3月、<https：//www.rfc-編集者。org / info / rfc5490>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8579] Bosch, S., \"Sieve Email Filtering: Delivering to Special-Use Mailboxes\", RFC 8579, DOI 10.17487/RFC8579, May 2019, <https://www.rfc-editor.org/info/rfc8579>.",
+      "ja": "[RFC8579] Bosch、S.、Sieve Eメールフィルタリング：2019年5月、<https：//www.rfc-editor.org/info/rfc8579>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document borrows heavily from [RFC5490] for the matching mailboxexists test and from [RFC8579] for an example of modifying the fileinto command.",
+      "ja": "この文書は、FileIntoコマンドを変更する例については、一致するメールボックスファイルのテストと[RFC8579]から[RFC5490]から厳しくなります。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Ned Freed, Ken Murchison, and Alexey Melnikov for feedback on the EXTRA mailing list.",
+      "ja": "Ned Freed、Ken Murchison、Alexey Melnikovのおかげで、追加のメーリングリストにフィードバックしてください。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Bron Gondwana (editor) Fastmail Level 2 114 William St Melbourne VIC 3000 Australia",
+      "ja": "Bron Gondwana（編集）Fastmail Level 2 114 William St Melbourne Vic 3000オーストラリア"
+    },
+    {
+      "indent": 3,
+      "text": "Email: brong@fastmailteam.com\nURI:   https://www.fastmail.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
