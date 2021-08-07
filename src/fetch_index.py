@@ -34,6 +34,9 @@ def fetch_remote_index():
     for rfc_content in rfc_text:
         # 各行の前後空白を削除
         tmp = ' '.join(map(lambda l: l.strip(), rfc_content.split('\n')))
+        # 発行されていないRFCは無視
+        if re.search(r'Not Issued', tmp):
+            continue
         rfcs.append(tmp)
     # pprint(rfcs)
 
