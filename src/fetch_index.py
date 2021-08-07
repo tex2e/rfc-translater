@@ -15,15 +15,11 @@ OUTPUT_PATH = os.path.join(OUTPUT_DIR, "obsoletes.json")
 def fetch_remote_index():
     # 発行されているRFCの番号の一覧をページから取得する
 
-    # url = 'https://tools.ietf.org/rfc/index'
     url = 'https://www.ietf.org/download/rfc-index.txt'
     headers = { 'User-agent': '', 'referer': url }
     page = requests.get(url, headers, timeout=(36.2, 180))
-    #tree = html.fromstring(page.content)
 
     # RFC INDEX の内容を抽出
-    #rfc_index = tree.xpath('//div[@class="content"]/pre//text()')
-    #rfc_index = ''.join(rfc_index)
     rfc_index_page = page.content.decode('utf-8')
     # RFCの一覧のみを抽出
     rfc_index_list = rfc_index_page.split(
@@ -38,15 +34,8 @@ def fetch_remote_index():
         if re.search(r'Not Issued', tmp):
             continue
         rfcs.append(tmp)
-    # pprint(rfcs)
 
-    #contents = re.compile(r'\n\n+').split(tmp)[2:] # 空行区切り、先頭の余分な文字を除去
-    #rfcs = []
-    #for content in contents:
-    #    content = re.sub(r'\n +', ' ', content)
-    #    if re.search(r'Not Issued', content):
-    #        continue
-    #    rfcs.append(content)
+    # pprint(rfcs)
 
     rfc_numbers = [] # rfcの番号一覧
     data = {} # 廃止・更新情報一覧

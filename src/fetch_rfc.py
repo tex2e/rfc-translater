@@ -230,7 +230,6 @@ def _cleanhtml(raw_html):
 # [EntryPoint]
 # RFCの取得処理
 def fetch_rfc(number, force=False):
-    # url = 'https://tools.ietf.org/html/rfc%d' % number   # 2021/06/06 URL変更
     url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
