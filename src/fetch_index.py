@@ -7,36 +7,48 @@ import re
 import glob
 import json
 
+from pprint import pprint
+
 OUTPUT_DIR  = "html"
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "obsoletes.json")
 
 def fetch_remote_index():
     # 発行されているRFCの番号の一覧をページから取得する
 
-    url = 'https://tools.ietf.org/rfc/index'
+    # url = 'https://tools.ietf.org/rfc/index'
+    url = 'https://www.ietf.org/download/rfc-index.txt'
     headers = { 'User-agent': '', 'referer': url }
     page = requests.get(url, headers, timeout=(36.2, 180))
-    tree = html.fromstring(page.content)
+    #tree = html.fromstring(page.content)
 
     # RFC INDEX の内容を抽出
-    rfc_index = tree.xpath('//div[@class="content"]/pre//text()')
-    rfc_index = ''.join(rfc_index)
-    tmp = rfc_index.split(
-        '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')[2]
+    #rfc_index = tree.xpath('//div[@class="content"]/pre//text()')
+    #rfc_index = ''.join(rfc_index)
+    rfc_index_page = page.content.decode('utf-8')
     # RFCの一覧のみを抽出
-    contents = re.compile(r'\n\n+').split(tmp)[2:] # 空行区切り、先頭の余分な文字を除去
+    rfc_index_list = rfc_index_page.split(
+        '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')[1]
+    # 空行区切りでリスト化
+    rfc_text = rfc_index_list.split('\n\n')
     rfcs = []
-    for content in contents:
-        content = re.sub(r'\n +', ' ', content)
-        if re.search(r'Not Issued', content):
-            continue
-        rfcs.append(content)
+    for rfc_content in rfc_text:
+        # 各行の前後空白を削除
+        tmp = ' '.join(map(lambda l: l.strip(), rfc_content.split('\n')))
+        rfcs.append(tmp)
+    # pprint(rfcs)
+
+    #contents = re.compile(r'\n\n+').split(tmp)[2:] # 空行区切り、先頭の余分な文字を除去
+    #rfcs = []
+    #for content in contents:
+    #    content = re.sub(r'\n +', ' ', content)
+    #    if re.search(r'Not Issued', content):
+    #        continue
+    #    rfcs.append(content)
 
     rfc_numbers = [] # rfcの番号一覧
     data = {} # 廃止・更新情報一覧
     for rfc in rfcs:
-        #m = re.match(r'^RFC(\d+)', rfc)
-        m = re.match(r'^RFC(?P<rfc>\d+) (?P<content>.+)$', rfc)
+        m = re.match(r'^(?P<rfc>\d+) (?P<content>.+)$', rfc)
         if m:
             rfc_number = m["rfc"]
             rfc_numbers.append(int(rfc_number))
@@ -66,6 +78,7 @@ def fetch_remote_index():
     if os.path.isdir(OUTPUT_DIR):
         with open(OUTPUT_PATH, 'w', encoding="utf-8", newline="\n") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+    # pprint(data)
 
     return rfc_numbers
 
