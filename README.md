@@ -8,7 +8,7 @@
 
 ### 流れ
 1. RFCのインデックス取得 https://tools.ietf.org/rfc/index (fetch_index)
-1. RFCスクレイピング https://tools.ietf.org/html/rfcXXXX (fetch_rfc)
+1. RFCスクレイピング https://datatracker.ietf.org/doc/html/rfcXXXX (fetch_rfc)
 2. セクション毎に分割 & 改行の除去 (fetch_rfc)
 3. Google翻訳で英語を日本語にする (trans_rfc)
 4. セクション毎に英文、日本語文を並べて表示するページの生成 (make_html)
@@ -128,8 +128,8 @@ python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
 python main.py --rfc 123 --fetch # RFCの取得だけ
 python main.py --rfc 123 --trans # RFCの翻訳だけ
 python main.py --rfc 123 --make # HTMLの生成だけ
-python main.py --begin 2220 --end 9000 # RFC 2220〜9000 を順番に翻訳する
-python main.py --make --begin 2220 --end 9000 # RFC 2220〜9000 のHTMLを生成する
+python main.py --begin 2220 --end 10000 # RFC 2220〜10000 を順番に翻訳する
+python main.py --make --begin 2220 --end 10000 # RFC 2220〜10000 のHTMLを生成する
 python main.py # 未翻訳RFCを順番に翻訳する
 python main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
 
