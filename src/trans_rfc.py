@@ -3,7 +3,6 @@ import os
 import re
 import json
 import time
-from googletrans import Translator as GoogleTranslater # pip install googletrans
 from tqdm import tqdm # pip install tqdm
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
@@ -71,6 +70,7 @@ class TranslatorGoogletrans(Translator):
     # py-googletrans
 
     def __init__(self, total, desc=''):
+        from googletrans import Translator as GoogleTranslater # pip install googletrans
         super(TranslatorGoogletrans, self).__init__(total, desc)
 
         self.translator = GoogleTranslater()
