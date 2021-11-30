@@ -1,0 +1,590 @@
+{
+  "title": {
+    "text": "RFC 9156 - DNS Query Name Minimisation to Improve Privacy",
+    "ja": "RFC 9156 - DNSクエリ名プライバシーを向上させるための最小化"
+  },
+  "number": 9156,
+  "created_at": "2021-11-24 03:00:00.674635+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     S. Bortzmeyer\nRequest for Comments: 9156                                         AFNIC\nObsoletes: 7816                                               R. Dolmans\nCategory: Standards Track                                     NLnet Labs\nISSN: 2070-1721                                               P. Hoffman\n                                                                   ICANN\n                                                           November 2021",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 13,
+      "text": "DNS Query Name Minimisation to Improve Privacy",
+      "ja": "DNSクエリ名プライバシーを向上させるための最小化"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a technique called \"QNAME minimisation\" to improve DNS privacy, where the DNS resolver no longer always sends the full original QNAME and original QTYPE to the upstream name server. This document obsoletes RFC 7816.",
+      "ja": "このドキュメントでは、DNSのプライバシーを改善するための「QNAME最小化」という手法について説明します。ここで、DNSリゾルバは、常にフルオリジナルのQNameとオリジナルのQTypeをアップストリームネームサーバーに送信しなくなりました。この文書はRFC 7816を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット規格のトラック文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書はインターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表します。それはパブリックレビューを受け、インターネットエンジニアリングステアリンググループ（IESG）による出版の承認を受けました。インターネット規格に関する詳細情報は、RFC 7841のセクション2で利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9156.",
+      "ja": "この文書の現在のステータス、任意のエラータ、およびフィードバックを提供する方法は、https://www.rfc-editor.org/info/rfc9156で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2021 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（C）2021 IETFの信頼と文書著者として識別された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "この文書は、この文書の公開日に有効なIETF文書（https://trustee.ietf.org/License-Info）に関するBCP 78およびIETF信頼の法的規定の対象となります。この文書に関してあなたの権利と制限を説明するので、これらの文書をよくレビューしてください。この文書から抽出されたコードコンポーネントには、信託法定規定のセクション4。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction and Background\n  1.1.  Experience from RFC 7816\n  1.2.  Terminology\n2.  Description of QNAME Minimisation\n  2.1.  QTYPE Selection\n  2.2.  QNAME Selection\n  2.3.  Limitation of the Number of Queries\n  2.4.  Implementation by Stub and Forwarding Resolvers\n3.  Algorithm to Perform QNAME Minimisation\n4.  QNAME Minimisation Examples\n5.  Performance Considerations\n6.  Security Considerations\n7.  References\n  7.1.  Normative References\n  7.2.  Informative References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction and Background",
+      "section_title": true,
+      "ja": "1. 紹介と背景"
+    },
+    {
+      "indent": 3,
+      "text": "The problem statement for this document is described in [RFC9076]. This specific solution is not intended to fully solve the DNS privacy problem; instead, it should be viewed as one tool amongst many.",
+      "ja": "この文書の問題文は[RFC9076]に記載されています。この特定の解決策は、DNSプライバシー問題を完全に解決することを意図していません。代わりに、それは多くのツールとして見るべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "QNAME minimisation follows the principle explained in Section 6.1 of [RFC6973]: the less data you send out, the fewer privacy problems you have.",
+      "ja": "QNAMEの最小化は[RFC6973]のセクション6.1で説明されている原則に従います。"
+    },
+    {
+      "indent": 3,
+      "text": "Before QNAME minimisation, when a resolver received the query \"What is the AAAA record for www.example.com?\", it sent to the root (assuming a resolver, whose cache is empty) the very same question. Sending the full QNAME to the authoritative name server was a tradition, not a protocol requirement. In a conversation with one of the authors in January 2015, Paul Mockapetris explained that this tradition comes from a desire to optimise the number of requests, when the same name server is authoritative for many zones in a given name (something that was more common in the old days, where the same name servers served .com and the root) or when the same name server is both recursive and authoritative (something that is strongly discouraged now). Whatever the merits of this choice at this time, the DNS is quite different now.",
+      "ja": "QNameの最小化の前に、リゾルバがクエリを「www.example.comのAAAAレコードとは何ですか？」を受信したとき、それはルートに送信されます（キャッシュが空であると仮定すると仮定します）。完全なQNameを信頼できるネームサーバーに送信することは、プロトコル要件ではなく伝統でした。2015年1月に著者の1つと会話では、Paul Mockapetrisは、同じネームサーバーが特定の名前で多くのゾーンに権威ある場合に、この伝統が要求数を最適化したいという願望から来ていると説明しました（もっと一般的なものでした。同じネームサーバーが.comとrootである場合、または同じネームサーバーが再帰的で権限の両方である場合（現在は今は強く推奨されているもの）。現時点でこの選択のメリットが何であれ、DNSは今はかなり異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "QNAME minimisation is compatible with the current DNS system and therefore can easily be deployed. Because it is only a change to the way that the resolver operates, it does not change the DNS protocol itself. The behaviour suggested here (minimising the amount of data sent in QNAMEs from the resolver) is allowed by Section 5.3.3 of [RFC1034] and Section 7.2 of [RFC1035].",
+      "ja": "QName最小化は現在のDNSシステムと互換性があり、したがって簡単に展開できます。リゾルバが動作する方法への変更だけなので、DNSプロトコル自体は変更されません。ここで示唆された行動（リゾルバからQNamesで送信されたデータ量を最小限に抑える）は、[RFC1034]のセクション5.3.3と[RFC1035]のセクション7.2によって許可されています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Experience from RFC 7816",
+      "section_title": true,
+      "ja": "1.1. RFC 7816からの経験"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes [RFC7816]. [RFC7816] was categorised \"Experimental\", but ideas from it were widely deployed since its publication. Many resolver implementations now support QNAME minimisation. The lessons learned from implementing QNAME minimisation were used to create this new revision.",
+      "ja": "この文書は廃止されました[RFC7816]。[RFC7816]は「実験的」に分類されましたが、その出版物からのアイデアは広く展開されました。多くのリゾルバ実装はQName最小化をサポートするようになりました。QNAME最小化を実装することから学んだ教訓は、この新しいリビジョンを作成するために使用されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Data from DNSThought [dnsthought-qnamemin], Verisign [verisign-qnamemin], and APNIC [apnic-qnamemin] shows that a large percentage of the resolvers deployed on the Internet already support QNAME minimisation in some way.",
+      "ja": "DNSthound [dnsthount-qnamemin]、verisign [verisign-qnamemin]、およびAPNIC [APNIC-QNAMIN]からのデータは、インターネット上にデプロイされているリゾルバの大部分が既にQName最小化をサポートしていることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Academic research has been performed on QNAME minimisation [devries-qnamemin]. This work shows that QNAME minimisation in relaxed mode causes almost no problems. The paper recommends using the A QTYPE and limiting the number of queries in some way. Some of the issues that the paper found are covered in Section 5.",
+      "ja": "学術研究はQNAME最小化[Devries-QNAMEMIN]について実行されました。この作業は、緩和モードでのQNAME最小化がほとんど問題ないことを示しています。この論文は、a qtypeを使用し、何らかの方法でクエリの数を制限することを推奨します。紙が見つかった問題のいくつかはセクション5で説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "1.2. Terminology",
+      "section_title": true,
+      "ja": "1.2. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The terminology used in this document is defined in [RFC8499].",
+      "ja": "この文書で使用されている用語は[RFC8499]で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, a \"cold\" cache is one that is empty, having literally no entries in it. A \"warm\" cache is one that has some entries in it.",
+      "ja": "このドキュメントでは、「コールド」キャッシュは空のもので、文字通りエントリが含まれていません。「暖かい」キャッシュは、その中にいくつかのエントリを持つものです。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Description of QNAME Minimisation",
+      "section_title": true,
+      "ja": "2. QNAME最小化の説明"
+    },
+    {
+      "indent": 3,
+      "text": "The idea behind QNAME minimisation is to minimise the amount of privacy-sensitive data sent from the DNS resolver to the authoritative name server. This section describes how to do QNAME minimisation. The algorithm is summarised in Section 3.",
+      "ja": "QName最小化の背後にある考え方は、DNSリゾルバから信頼できるネームサーバに送信されたプライバシーに敏感なデータの量を最小限に抑えることです。このセクションでは、QNAME最小化方法について説明します。アルゴリズムはセクション3にまとめられています。"
+    },
+    {
+      "indent": 3,
+      "text": "When a resolver is not able to answer a query from cache, it has to send a query to an authoritative name server. Traditionally, these queries would contain the full QNAME and the original QTYPE as received in the client query.",
+      "ja": "リゾルバがキャッシュからクエリに応答できない場合は、権限のあるネームサーバーにクエリを送信する必要があります。伝統的に、これらのクエリには、クライアントクエリで受信されたフルQNAMEと元のQTypeが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The full QNAME and original QTYPE are only needed at the name server that is authoritative for the record requested by the client. All other name servers queried while resolving the query only need to receive enough of the QNAME to be able to answer with a delegation. The QTYPE in these queries is not relevant, as the name server is not able to authoritatively answer the records the client is looking for. Sending the full QNAME and original QTYPE to these name servers therefore exposes more privacy-sensitive data than necessary to resolve the client's request.",
+      "ja": "完全なQNameと元のQTypeは、クライアントによって要求されたレコードに対して権限があるネームサーバーでのみ必要です。照会を解決しながら、他のすべてのネームサーバーは照会を受領するだけで十分なQNameを受信する必要があります。これらのクエリのQTypeは、ネームサーバが権限に応答できないため、クライアントが探しているレコードに応答できないため、関連性がありません。したがって、フルQNameおよび元のQTypeをこれらのネームサーバに送信することで、クライアントの要求を解決するために必要なプライバシーに敏感なデータを公開します。"
+    },
+    {
+      "indent": 3,
+      "text": "A resolver that implements QNAME minimisation obscures the QNAME and QTYPE in queries directed to an authoritative name server that is not known to be responsible for the original QNAME. These queries contain:",
+      "ja": "QNameの最小化を実装するリゾルバは、元のQNameの責任を負うことが知られていない権限のあるネームサーバーに向けられたクエリ内のQNameとQTypeを隠しています。これらのクエリには次のものが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "* a QTYPE selected by the resolver to possibly obscure the original QTYPE",
+      "ja": "* オリジナルのQTypeを曖昧にする可能性があるためにレゾルバによって選択されたQType"
+    },
+    {
+      "indent": 3,
+      "text": "* the QNAME that is the original QNAME, stripped to just one label more than the longest matching domain name for which the name server is known to be authoritative",
+      "ja": "* 元のQNameであるQNameは、ネームサーバーが権威あることが知られている最も長い一致するドメイン名を超える1つのラベルだけに削除されました。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. QTYPE Selection",
+      "section_title": true,
+      "ja": "2.1. QTYPE選択"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this document relaxes the recommendation in [RFC7816] to use the NS QTYPE to hide the original QTYPE. Using the NS QTYPE is still allowed. The authority of NS records lies at the child side. The parent side of the delegation will answer using a referral, like it will do for queries with other QTYPEs. Using the NS QTYPE therefore has no added value over other QTYPEs.",
+      "ja": "このドキュメントでは、[RFC7816]の推奨事項がNS QTYPEを使用して元のQTYPEを非表示にします。NS QTypeを使用することはまだ許可されています。NSレコードの権限は子ども側にあります。委任の親側は、他のQTYPEのクエリに対して行うように、紹介を使用して回答します。そのため、NS QTypeを使用すると、他のQTypesに対して値を追加しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The QTYPE to use while minimising queries can be any possible data type (as defined in Section 3.1 of [RFC6895]) for which the authority always lies below the zone cut (i.e., not DS, NSEC, NSEC3, OPT, TSIG, TKEY, ANY, MAILA, MAILB, AXFR, and IXFR), as long as there is no relation between the incoming QTYPE and the selection of the QTYPE to use while minimising. The A or AAAA QTYPEs are always good candidates to use because these are the least likely to raise issues in DNS software and middleboxes that do not properly support all QTYPEs. QTYPE=A or QTYPE=AAAA queries will also blend into traffic from nonminimising resolvers, making it in some cases harder to observe that the resolver is using QNAME minimisation. Using a QTYPE that occurs most in incoming queries will slightly reduce the number of queries, as there is no extra check needed for delegations on non-apex records.",
+      "ja": "使用にQTYPE最小化クエリはゾーンカット（すなわち、しないDS、NSEC、NSEC3、OPT、TSIG、TKEY、以下の権限が常に嘘（[RFC6895]のセクション3.1で定義されるように）任意の可能なデータ型とすることができるが受信QTypeと最小化している間に使用するQTypeの選択との間に関係がない限り、maila、mailb、axfr、およびixfr）、maila、mailb、axfr、およびixfr）。AまたはAAAAのQTYPESは、すべてのQTYPESを正しくサポートしていないDNSソフトウェアおよびミドルボックスで問題を引き起こす可能性が最も低いため、使用する候補者です。Qtype = AまたはQtype = AAAAクエリは、非単純リゾルバからのトラフィックにもブレンドされ、場合によってはリゾルバがQName最小化を使用していることを確認できます。ほとんどの着信クエリで問題が発生するQTypeを使用すると、非APEXレコード上の委任に必要な追加のチェックがないため、クエリ数がわずかに減少します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. QNAME Selection",
+      "section_title": true,
+      "ja": "2.2. QNAME SELECTION."
+    },
+    {
+      "indent": 3,
+      "text": "The minimising resolver works perfectly when it knows the zone cut (zone cuts are described in Section 6 of [RFC2181]). But zone cuts do not necessarily exist at every label boundary. In the name www.foo.bar.example, it is possible that there is a zone cut between \"foo\" and \"bar\" but not between \"bar\" and \"example\". So, assuming that the resolver already knows the name servers of example, when it receives the query \"What is the AAAA record of www.foo.bar.example?\", it does not always know where the zone cut will be. To find the zone cut, it will query the example name servers for a record for bar.example. It will get a non-referral answer, so it has to query the example name servers again with one more label, and so on. (Section 3 describes this algorithm in deeper detail.)",
+      "ja": "最小化リゾルバは、ゾーンカットを知っているときに完全に機能します（ゾーンカットは[RFC2181]のセクション6に記載されています）。しかし、ゾーンカットは必ずしもすべてのラベル境界に存在しません。www.foo.bar.exampleでは、 \"foo\"と \"bar\"の間にカットされているが \"bar\"と \"例\"の間ではないゾーンがある可能性があります。したがって、リゾルバがすでに例のネームサーバを知っていると仮定して、クエリを受信したときに「www.foo.bar.exampleのAAAAレコードとは何ですか？」、ゾーンカットがどこにあるのかは必ずしもわかりません。ゾーンカットを見つけるには、Bar.Exampleのレコードの例のネームサーバーを照会します。それは非紹介答えを得るので、それはもう1つのラベルを使って再び例ネームサーバーを照会する必要があります。（セクション3は、詳細な詳細でこのアルゴリズムを説明しています。）"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. Limitation of the Number of Queries",
+      "section_title": true,
+      "ja": "2.3. クエリ数の制限"
+    },
+    {
+      "indent": 3,
+      "text": "When using QNAME minimisation, the number of labels in the received QNAME can influence the number of queries sent from the resolver. This opens an attack vector and can decrease performance. Resolvers supporting QNAME minimisation MUST implement a mechanism to limit the number of outgoing queries per user request.",
+      "ja": "QName最小化を使用する場合、受信したQName内のラベル数は、レゾルバから送信されたクエリの数に影響を与える可能性があります。これは攻撃ベクトルを開き、パフォーマンスを低下させる可能性があります。QName最小化をサポートするリゾルバは、ユーザー要求ごとの発信クエリの数を制限するためのメカニズムを実装する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Take for example an incoming QNAME with many labels, like www.host.group.department.example.com, where host.group.department.example.com is hosted on example.com's name servers. (Such deep domains are especially common under ip6.arpa.) Assume a resolver that knows only the name servers of example.com. Without QNAME minimisation, it would send these example.com name servers a query for www.host.group.department.example.com and immediately get a specific referral or an answer, without the need for more queries to probe for the zone cut. For such a name, a cold resolver with QNAME minimisation will send more queries, one per label. Once the cache is warm, there will be less difference with a traditional resolver. Testing of this is described in [Huque-QNAME-Min].",
+      "ja": "たとえば、www.host.group.department.example.comのような、多くのラベルを持つ着信QNameが、host.group.department.example.comがexample.comのネームサーバーでホストされています。（このような深いドメインはIP6.ARPAでは特に一般的です。）example.comのネームサーバのみを知っているリゾルバを想定しています。QNAMEの最小化なしでは、これらのExample.com Name Servers www.host.group.department.example.comのクエリを送信し、ゾーンカットのプローブを探す必要なしに特定の紹介または回答を得ることができます。そのような名前では、QNAME最小化を備えたコールドレゾルバは、ラベルごとに1つずつのクエリを送信します。キャッシュが暖かいと、伝統的なレゾルバとの違いが少なくなります。これのテストは[Huque-Qname-Min]に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The behaviour of sending multiple queries can be exploited by sending queries with a large number of labels in the QNAME that will be answered using a wildcard record. Take for example a record for *.example.com, hosted on example.com's name servers. An incoming query containing a QNAME with more than 100 labels, ending in example.com, will result in a query per label. By using random labels, the attacker can bypass the cache and always require the resolver to send many queries upstream. Note that [RFC8198] can limit this attack in some cases.",
+      "ja": "複数のクエリを送信する動作は、ワイルドカードレコードを使用して回答されるQNAME内の多数のラベルを使用してクエリを送信することによって悪用できます。example.comのネームサーバでホストされている* .example.comのレコードを取る。example.comで終わる、100を超えるラベルを持つQNameを含む着信クエリは、ラベルごとにクエリになります。ランダムなラベルを使用することによって、攻撃者はキャッシュを迂回し、常にリゾルバがアップストリームの多くのクエリを送信するように要求する必要があります。[RFC8198]がこの攻撃を制限することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "One mechanism that MAY be used to reduce this attack vector is by appending more than one label per iteration for QNAMEs with a large number of labels. To do this, a maximum number of QNAME minimisation iterations MUST be selected (MAX_MINIMISE_COUNT); a RECOMMENDED value is 10. Optionally, a value for the number of queries that should only have one label appended MAY be selected (MINIMISE_ONE_LAB); a good value is 4. The assumption here is that the number of labels on delegations higher in the hierarchy are rather small; therefore, not exposing too many labels early on has the most privacy benefit.",
+      "ja": "この攻撃ベクトルを減らすために使用され得る1つのメカニズムは、多数のラベルを持つQNamesのために繰り返しごとに複数のラベルを追加することです。これを行うには、最大数のQName最小化反復を選択する必要があります（max_minimise_count）。オプションで、1つのラベルを付加した場合のみの照会の数の値を選択することができます（minimise_one_lab）。良い値は4です。ここでの仮定は、階層内のより高い委任のラベル数がかなり小さいということです。したがって、早期に多くのラベルを露出させないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "Another potential, optional mechanism for limiting the number of queries is to assume that labels that begin with an underscore (_) character do not represent privacy-relevant administrative boundaries. For example, if the QNAME is \"_25._tcp.mail.example.org\" and the algorithm has already searched for \"mail.example.org\", the next query can be for all the underscore-prefixed names together, namely \"_25._tcp.mail.example.org\".",
+      "ja": "別の可能性のある、クエリの数を制限するためのオプションのメカニズムは、アンダースコア（_）文字で始まるラベルがプライバシー関連の管理境界を表していないと仮定することです。たとえば、QNameが \"_25._tcp.mail.example.org\"で、アルゴリズムが \"mail.example.org\"で検索されている場合、次のクエリはすべてのアンダースコアプレフィックス名、つまり \"_25）の場合もあります。._tcp.mail.example.org \"。"
+    },
+    {
+      "indent": 3,
+      "text": "When a resolver needs to send out a query, it will look for the closest-known delegation point in its cache. The number of not-yet-exposed labels is the difference between this closest name server and the incoming QNAME. The first MINIMISE_ONE_LAB labels will be handled as described in Section 2. The number of labels that are still not exposed now need to be divided proportionally over the remaining iterations (MAX_MINIMISE_COUNT - MINIMISE_ONE_LAB). If the not-yet-exposed labels cannot be equally divided over the remaining iterations, the remainder of the division should be added to the last iterations. For example, when resolving a QNAME with 18 labels with MAX_MINIMISE_COUNT set to 10 and MINIMISE_ONE_LAB set to 4, the number of labels added per iteration are: 1,1,1,1,2,2,2,2,3,3.",
+      "ja": "リゾルバがクエリを送信する必要がある場合は、そのキャッシュ内の最も近い委任ポイントを探します。未だ開封されていないラベルの数は、この最も近いネームサーバーと着信QNameの違いです。最初のMINIMISE_ONE_LABラベルはセクション2の説明に従って処理されます。まだ露出していないラベルの数は、残りの反復（MAX_MINIMISE_COUNT  -  MINIMISE_ONE_LAB）に比例して分割される必要があります。未だ露出したラベルを残りの反復で等しく分割できない場合は、最後の反復に分割の残りの部分を追加する必要があります。たとえば、MAX_MINIMISE_COUNTを持つ18ラベルを10とMINIMISE_ONE_LABに設定したQNameを4に設定して4に設定されている場合は、1,1,1,1,2,2,2,2,3,3です。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. Implementation by Stub and Forwarding Resolvers",
+      "section_title": true,
+      "ja": "2.4. スタブと転送リゾルバによる実装"
+    },
+    {
+      "indent": 3,
+      "text": "Stub and forwarding resolvers MAY implement QNAME minimisation. Minimising queries that will be sent to an upstream resolver does not help in hiding data from the upstream resolver because all information will end up there anyway. It might however limit the data exposure between the upstream resolver and the authoritative name server in the situation where the upstream resolver does not support QNAME minimisation. Using QNAME minimisation in a stub or forwarding resolver that does not have a mechanism to find and cache zone cuts will drastically increase the number of outgoing queries.",
+      "ja": "スタブおよび転送リゾルバは、QNAME最小化を実装することができる。アップストリームリゾルバに送信されるクエリの最小化は、すべての情報がそこに終わるため、アップストリームリゾルバからデータを隠すのに役立ちません。ただし、アップストリームリゾルバがQNAME最小化をサポートしていない状況で、アップストリームリゾルバと信頼できるネームサーバーの間のデータエクスポージャーを制限する可能性があります。検索およびキャッシュゾーンカットのメカニズムを持たないスタブまたは転送リゾルバでQName最小化を使用すると、発信クエリの数が大幅に増加します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Algorithm to Perform QNAME Minimisation",
+      "section_title": true,
+      "ja": "3. QNAME最小化を実行するためのアルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This algorithm performs name resolution with QNAME minimisation in the presence of zone cuts that are not yet known.",
+      "ja": "このアルゴリズムは、まだ知られていないゾーンカットの存在下でQNAME最小化を伴う名前解決を実行します。"
+    },
+    {
+      "indent": 3,
+      "text": "Although a validating resolver already has the logic to find the zone cuts, implementers of resolvers may want to use this algorithm to locate the zone cuts.",
+      "ja": "検証されているリゾルバはゾーンカットを見つけるためのロジックをすでに持っていますが、リゾルバの実装者はこのアルゴリズムを使用してゾーンカットを見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "(0) If the query can be answered from the cache, do so; otherwise, iterate as follows:",
+      "ja": "(0) クエリをキャッシュから答えることができる場合は、そうします。それ以外の場合は、次のように繰り返します。"
+    },
+    {
+      "indent": 3,
+      "text": "(1) Get the closest delegation point that can be used for the original QNAME from the cache.",
+      "ja": "(1) キャッシュから元のQNameに使用できる最も近い委任ポイントを入手してください。"
+    },
+    {
+      "indent": 8,
+      "text": "(1a) For queries with a QTYPE for which the authority only lies at the parent side (like QTYPE=DS), this is the NS RRset with the owner matching the most labels with QNAME stripped by one label. QNAME will be a subdomain of (but not equal to) this NS RRset. Call this ANCESTOR.",
+      "ja": "（1a）権限が親の側にあるだけに存在するQTypeを使用したクエリの場合（Qtype = DSのような）、これは、所有者が1つのラベルによってストリッピングされたほとんどのラベルと一致する所有者を持つNS RRSetです。QNAMEは、このNS RRSetのサブドメインになります（ただし等しくない）。この先祖に電話してください。"
+    },
+    {
+      "indent": 8,
+      "text": "(1b) For queries with other original QTYPEs, this is the NS RRset with the owner matching the most labels with QNAME. QNAME will be equal to or a subdomain of this NS RRset. Call this ANCESTOR.",
+      "ja": "（1b）他のオリジナルのQTypesを使用したクエリの場合、これは所有者がQNameで最もラベルと一致するNS RRSetです。QNAMEはこのNS RRSetのサブドメインに等しくなります。この先祖に電話してください。"
+    },
+    {
+      "indent": 3,
+      "text": "(2) Initialise CHILD to the same as ANCESTOR.",
+      "ja": "(2) 祖先と同じ子供たちの初期化。"
+    },
+    {
+      "indent": 3,
+      "text": "(3) If CHILD is the same as QNAME, or if CHILD is one label shorter than QNAME and the original QTYPE can only be at the parent side (like QTYPE=DS), resolve the original query as normal, starting from ANCESTOR's name servers. Start over from step 0 if new names need to be resolved as a result of this answer, for example, when the answer contains a CNAME or DNAME [RFC6672] record.",
+      "ja": "(3) 子がqnameと同じである場合、または子がQNameよりも短いラベルであり、元のQTypeは（Qtype = DSのような）1つのラベルである場合（qtype = dsのように）、元のクエリを正常に解決します。たとえば、この回答の結果として新しい名前を解決する必要がある場合は、ステップ0から始めます。たとえば、答えにCNAMEまたはDNAME [RFC6672]レコードが含まれている場合。"
+    },
+    {
+      "indent": 3,
+      "text": "(4) Otherwise, update the value of CHILD by adding the next relevant label or labels from QNAME to the start of CHILD. The number of labels to add is discussed in Section 2.3.",
+      "ja": "(4) それ以外の場合は、QNAMEから次の関連ラベルまたはLABELを追加のLabelを追加して、子の値を更新します。追加するラベルの数はセクション2.3で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "(5) Look for a cache entry for the RRset at CHILD with the original QTYPE. If the cached response code is NXDOMAIN and the resolver has support for [RFC8020], the NXDOMAIN can be used in response to the original query, and stop. If the cached response code is NOERROR (including NODATA), go back to step 3. If the cached response code is NXDOMAIN and the resolver does not support [RFC8020], go back to step 3.",
+      "ja": "(5) オリジナルのQTypeを使用して、子のRRSetのキャッシュエントリを探します。キャッシュされた応答コードがNXDomainとResolverが[RFC8020]のサポートを持っている場合、NXDomainは元のクエリに応答して使用でき、停止することができます。キャッシュされた応答コードがNOERROR（NODATAを含む）の場合は、ステップ3に戻ります。キャッシュされた応答コードがNXDomainであり、リゾルバが[RFC8020]をサポートしていない場合は、手順3に戻ります。"
+    },
+    {
+      "indent": 3,
+      "text": "(6) Query for CHILD with the selected QTYPE using one of ANCESTOR's name servers. The response can be:",
+      "ja": "(6) 選択されたQTypeを使用して、先祖の名前サーバーを使用して子供の照会。応答は次のとおりです。"
+    },
+    {
+      "indent": 8,
+      "text": "(6a) A referral. Cache the NS RRset from the authority section, and go back to step 1.",
+      "ja": "（6a）紹介。権限セクションからNS RRセットをキャッシュし、ステップ1に戻ります。"
+    },
+    {
+      "indent": 8,
+      "text": "(6b) A DNAME response. Proceed as if a DNAME is received for the original query. Start over from step 0 to resolve the new name based on the DNAME target.",
+      "ja": "（6b）D名の応答。元のクエリに対してDNAMEが受信されているように進みます。DNAMEターゲットに基づいて新しい名前を解決するには、ステップ0から進みます。"
+    },
+    {
+      "indent": 8,
+      "text": "(6c) All other NOERROR answers (including NODATA). Cache this answer. Regardless of the answered RRset type, including CNAMEs, continue with the algorithm from step 3 by building the original QNAME.",
+      "ja": "（6c）他のすべてのNOERROR回答（NODATAを含む）。この回答をキャッシュします。CNAMEを含む回答されたRRSETタイプに関係なく、元のQNAMEを構築することによってステップ3のアルゴリズムに進みます。"
+    },
+    {
+      "indent": 8,
+      "text": "(6d) An NXDOMAIN response. If the resolver supports [RFC8020], return an NXDOMAIN response to the original query, and stop. If the resolver does not support [RFC8020], go to step 3.",
+      "ja": "（6D）NXDOMAIN応答。リゾルバが[RFC8020]をサポートしている場合は、NXDomain応答を元のクエリに返し、停止します。リゾルバが[RFC8020]をサポートしていない場合は、手順3に進みます。"
+    },
+    {
+      "indent": 8,
+      "text": "(6e) A timeout or response with another RCODE. The implementation may choose to retry step 6 with a different ANCESTOR name server.",
+      "ja": "（6e）別のRCODEを使用したタイムアウトまたは応答。実装は、異なる祖先ネームサーバーでステップ6を再試行することを選択できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. QNAME Minimisation Examples",
+      "section_title": true,
+      "ja": "4. QNAME最小化例"
+    },
+    {
+      "indent": 3,
+      "text": "As a first example, assume that a resolver receives a request to resolve foo.bar.baz.example. Assume that the resolver already knows that ns1.nic.example is authoritative for .example and that the resolver does not know a more specific authoritative name server. It will send the query with QNAME=baz.example and the QTYPE selected to hide the original QTYPE to ns1.nic.example.",
+      "ja": "最初の例として、リゾルバがfoo.bar.baz.exampleを解決するための要求を受信するとします。リゾルバが、ns1.nic.exampleが.exampleのために信頼できるものであること、およびリゾルバがより具体的な権威ある名前サーバーを知らないことをすでに知っているとします。QNAME = BAZ.EXAMPLEを使用してクエリを送信し、元のQTypeをNS1.nic.exampleに非表示にするように選択したQTypeを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "+=======+=================+=========================+======+\n| QTYPE | QNAME           | TARGET                  | NOTE |\n+=======+=================+=========================+======+\n| MX    | a.b.example.org | root name server        |      |\n+-------+-----------------+-------------------------+------+\n| MX    | a.b.example.org | org name server         |      |\n+-------+-----------------+-------------------------+------+\n| MX    | a.b.example.org | example.org name server |      |\n+-------+-----------------+-------------------------+------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 6,
+      "text": "Table 1: Cold Cache, Traditional Resolution Algorithm without QNAME Minimisation, Request for MX Record of a.b.example.org",
+      "ja": "表1：コールドキャッシュ、QNAMEの最小化なしの従来の解像度アルゴリズム、a.b.example.orgのMXレコードの要求"
+    },
+    {
+      "indent": 3,
+      "text": "The following are more detailed examples of requests for an MX record of a.b.example.org with QNAME minimisation, using A QTYPE to hide the original QTYPE and using other names and authoritative servers:",
+      "ja": "以下は、QName最小化を伴うa.b.example.orgのMXレコードの要求の例として、QTypeを使用し、オリジナルのQTypeを非表示にし、他の名前と権限サーバーを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "+=======+=================+=========================+============+\n| QTYPE | QNAME           | TARGET                  | NOTE       |\n+=======+=================+=========================+============+\n| A     | org             | root name server        |            |\n+-------+-----------------+-------------------------+------------+\n| A     | example.org     | org name server         |            |\n+-------+-----------------+-------------------------+------------+\n| A     | b.example.org   | example.org name server |            |\n+-------+-----------------+-------------------------+------------+\n| A     | a.b.example.org | example.org name server | \"a\" may be |\n|       |                 |                         | delegated  |\n+-------+-----------------+-------------------------+------------+\n| MX    | a.b.example.org | example.org name server |            |\n+-------+-----------------+-------------------------+------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "Table 2: Cold Cache with QNAME Minimisation",
+      "ja": "表2：QNAME最小化を備えたコールドキャッシュ"
+    },
+    {
+      "indent": 3,
+      "text": "Note that, in the above example, one query would have been saved if the incoming QTYPE was the same as the QTYPE selected by the resolver to hide the original QTYPE. Only one query for a.b.example.org would have been needed if the original QTYPE would have been A. Using the most-used QTYPE to hide the original QTYPE therefore slightly reduces the number of outgoing queries compared to using any other QTYPE to hide the original QTYPE.",
+      "ja": "上記の例では、着信QTypeがリゾルバによって選択されたQTypeと同じである場合、1つのクエリが保存されていました。オリジナルのQTypeがAになっている場合、abexample.orgの照会は1つだけです。qtype。"
+    },
+    {
+      "indent": 3,
+      "text": "+=======+=================+=========================+============+\n| QTYPE | QNAME           | TARGET                  | NOTE       |\n+=======+=================+=========================+============+\n| A     | example.org     | org name server         |            |\n+-------+-----------------+-------------------------+------------+\n| A     | b.example.org   | example.org name server |            |\n+-------+-----------------+-------------------------+------------+\n| A     | a.b.example.org | example.org name server | \"a\" may be |\n|       |                 |                         | delegated  |\n+-------+-----------------+-------------------------+------------+\n| MX    | a.b.example.org | example.org name server |            |\n+-------+-----------------+-------------------------+------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "Table 3: Warm Cache with QNAME Minimisation",
+      "ja": "表3：QNAME最小化を備えた暖かいキャッシュ"
+    },
+    {
+      "indent": 0,
+      "text": "5. Performance Considerations",
+      "section_title": true,
+      "ja": "5. パフォーマンスに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The main goal of QNAME minimisation is to improve privacy by sending less data. However, it may have other advantages. For instance, if a resolver sends a root name server queries for A.example followed by B.example followed by C.example, the result will be three NXDOMAINs, since .example does not exist in the root zone. When using QNAME minimisation, the resolver would send only one question (for .example itself) to which they could answer NXDOMAIN. The resolver can cache this answer and use it to prove that nothing below .example exists [RFC8020]. A resolver now knows a priori that neither B.example nor C.example exist. Thus, in this common case, the total number of upstream queries under QNAME minimisation could be counterintuitively less than the number of queries under the traditional iteration (as described in the DNS standard).",
+      "ja": "QNAME最小化の主な目的は、より少ないデータを送信することによってプライバシーを向上させることです。しかしながら、それは他の利点を有するかもしれない。たとえば、リゾルバがa.exampleの後にB.exampleの後にa.exampleの後に続いてcit citのroot nameサーバークエリを送信すると、次はルートゾーンには存在しません。QNAMEの最小化を使用すると、リゾルバはNXDomainに答えることができる質問が1つだけ送信されます。リゾルバはこの回答をキャッシュすることができ、それを使用して、以下のものを下回ることを証明できます。サンプルが存在します[RFC8020]。Resolverは、B.Example NOR C.Exampleも存在しないことを先験的に知っています。したがって、この一般的な場合では、QName最小化下のアップストリームクエリの総数は、（DNS規格で説明されているように）従来の反復下のクエリの数よりも厳密に小さい可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "QNAME minimisation can increase the number of queries based on the incoming QNAME. This is described in Section 2.3. As described in [devries-qnamemin], QNAME minimisation both increases the number of DNS lookups by up to 26% and leads to up to 5% more failed lookups. Filling the cache in a production resolver will soften that overhead.",
+      "ja": "QNAME最小化は、着信QNAMEに基づいてクエリの数を増やすことができます。これについてはセクション2.3に記載されています。[Devries-QNAMEMIN]で説明されているように、QNAME最小化は両方ともDNSルックアップの数を最大26％増加させ、最大5％後の検索につながります。本番リゾルバにキャッシュを埋めると、そのオーバーヘッドを柔らかくします。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "QNAME minimisation's benefits are clear in the case where you want to decrease exposure of the queried name to the authoritative name server. But minimising the amount of data sent also, in part, addresses the case of a wire sniffer as well as the case of privacy invasion by the authoritative name servers. Encryption is of course a better defense against wire sniffers, but, unlike QNAME minimisation, it changes the protocol and cannot be deployed unilaterally. Also, the effect of QNAME minimisation on wire sniffers depends on whether the sniffer is on the DNS path.",
+      "ja": "QNAMEの最小化の利点は、照会された名前の照会を信頼できるネームサーバーに削減したい場合に明確です。しかし、送信されたデータの量を最小限に抑えるには、Wire Snifferの場合と、信頼できるネームサーバーによるプライバシー侵入の場合と同様にアドレス指定します。暗号化はもちろんワイヤースニッファに対するより良い防御ですが、QNAMEの最小化とは異なり、プロトコルを変更し、一方的に展開することはできません。また、ワイヤスニファのQNAME最小化の効果は、スニファがDNS経路上にあるかどうかによって異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "QNAME minimisation offers no protection against the recursive resolver, which still sees the full request coming from the stub resolver.",
+      "ja": "QNAME最小化は再帰的リゾルバに対して保護されていません。これはまだスタブリゾルバからの完全な要求を見ています。"
+    },
+    {
+      "indent": 3,
+      "text": "A resolver using QNAME minimisation can possibly be used to cause a query storm to be sent to servers when resolving queries containing a QNAME with a large number of labels, as described in Section 2.3. That section proposes methods to significantly dampen the effects of such attacks.",
+      "ja": "QName最小化を使用したリゾルバは、セクション2.3で説明されているように、多数のラベルを持つQNAMEを含むクエリを解決するときにクエリストームをサーバーに送信させるために使用することができます。そのセクションは、そのような攻撃の影響を著しく減衰させる方法を提案します。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034] Mockapetris, P., \"Domain names - concepts and facilities\", STD 13, RFC 1034, DOI 10.17487/RFC1034, November 1987, <https://www.rfc-editor.org/info/rfc1034>.",
+      "ja": "[RFC1034] Mockapetris、P.、「ドメイン名 - コンセプトと施設」、STD 13、RFC 1034、DOI 10.17487 / RFC1034、1987年11月、<https：//www.rfc-editor.org/info/rfc1034>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, DOI 10.17487/RFC1035, November 1987, <https://www.rfc-editor.org/info/rfc1035>.",
+      "ja": "[RFC1035] Mockapetris、P.、「ドメイン名 - 実装と仕様」、STD 13、RFC 1035、DOI 10.17487 / RFC1035、1987年11月、<https：//www.rfc-editor.org/info/rfc1035>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] BRADNER、S、「RFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487 / RFC2119、1997年3月、<https：//www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6973] Cooper, A., Tschofenig, H., Aboba, B., Peterson, J., Morris, J., Hansen, M., and R. Smith, \"Privacy Considerations for Internet Protocols\", RFC 6973, DOI 10.17487/RFC6973, July 2013, <https://www.rfc-editor.org/info/rfc6973>.",
+      "ja": "[RFC6973] Cooper、A.、Tschofenig、H.、Aboba、B.、Peterson、J.、Morris、J.、Hansen、M.、R. Smith、「インターネットプロトコルに関するプライバシーに関する考察」、RFC 6973、DOI2017487 / RFC6973、2013年7月、<https：//www.rfc-editor.org/info/rfc6973>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B.、RFC 2119キーワードの「大文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487 / RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8499] Hoffman, P., Sullivan, A., and K. Fujiwara, \"DNS Terminology\", BCP 219, RFC 8499, DOI 10.17487/RFC8499, January 2019, <https://www.rfc-editor.org/info/rfc8499>.",
+      "ja": "[RFC8499] Hoffman、P.、Sullivan、A.、K. Fujiwara、「DNS用語」、BCP 219、RFC 8499、DOI 10.17487 / RFC8499、2019年1月、<https：//www.rfc-editor.org/情報/ RFC8499>。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[apnic-qnamemin] Huston, G. and J. Damas, \"Measuring Query Name Minimization\", September 2020, <https://indico.dns-oarc.net/event/34/contributions/787/ attachments/777/1326/2020-09-28-oarc33-qname-minimisation.pdf>.",
+      "ja": "[APNIC-QNAMEMIN] Huston、G.およびJ.Damas、「クエリ名最小化の測定」、2020年9月、<https：//indico.dns-oarc.net/event/34/contributions/787/ attachments / 777/1326/2020-09-28-oarc33-qname-minimision.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[devries-qnamemin] de Vries, W., Scheitle, Q., Müller, M., Toorop, W., Dolmans, R., and R. van Rijswijk-Deij, \"A First Look at QNAME Minimization in the Domain Name System\", March 2019, <https://nlnetlabs.nl/downloads/publications/ devries2019.pdf>.",
+      "ja": "[Devries-QNAMEMIN] De Vries、W.、Scheitle、Q.、Müller、M.、Toorop、W、Dolmans、R.、R. Van Rijswijk-Deij、 \"ドメイン名のQName最小化システム \"2019年3月、<https://nlnetlabs.nl/downloads/publications/ devries2019.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[dnsthought-qnamemin] \"Qname Minimisation\", October 2021, <https://dnsthought.nlnetlabs.nl/#qnamemin>.",
+      "ja": "[DNSTHount-QNAMEMIN] \"QNAME最小化\"、2021年10月、<https://dnsthourt.nlnetlabs.nl/#quminmin>。"
+    },
+    {
+      "indent": 3,
+      "text": "[Huque-QNAME-Min] Huque, S., \"Query name minimization and authoritative server behavior\", May 2015, <https://indico.dns-oarc.net/event/21/contribution/9>.",
+      "ja": "[Huque-QName-Min] Huque、S。、「クエリ名最小化と信頼できるサーバの動作」、<https：//indico.dns-oarc.net/event/21/contribution/9>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2181] Elz, R. and R. Bush, \"Clarifications to the DNS Specification\", RFC 2181, DOI 10.17487/RFC2181, July 1997, <https://www.rfc-editor.org/info/rfc2181>.",
+      "ja": "[RFC2181] ELZ、R.およびR. BUSH、「DNS仕様への説明」、RFC 2181、DOI 10.17487 / RFC2181、1997年7月、<https：//www.rfc-editor.org/info/rfc2181>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6672] Rose, S. and W. Wijngaards, \"DNAME Redirection in the DNS\", RFC 6672, DOI 10.17487/RFC6672, June 2012, <https://www.rfc-editor.org/info/rfc6672>.",
+      "ja": "[RFC6672]ローズ、S、およびW. Wijngaards、「DNSのDNAMEリダイレクト」、RFC 6672、DOI 10.17487 / RFC6672、2012年6月、<https://www.rfc-editor.org/info/rfc6672>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6895] Eastlake 3rd, D., \"Domain Name System (DNS) IANA Considerations\", BCP 42, RFC 6895, DOI 10.17487/RFC6895, April 2013, <https://www.rfc-editor.org/info/rfc6895>.",
+      "ja": "[RFC6895]イーストレイク3RD、D.、「ドメインネームシステム（DNS）IANA考慮事項」、BCP 42、RFC 6895、DOI 10.17487 / RFC6895、2013年4月、<https：//www.rfc-editor.org/info/rfc6895>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7816] Bortzmeyer, S., \"DNS Query Name Minimisation to Improve Privacy\", RFC 7816, DOI 10.17487/RFC7816, March 2016, <https://www.rfc-editor.org/info/rfc7816>.",
+      "ja": "[RFC7816] Bortzmeyer、S。、「DNSクエリ名のプライバシーを改善するための最小化」、RFC 7816、DOI 10.17487 / RFC7816、2016年3月、<https：//www.rfc-editor.org/info/rfc7816>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8020] Bortzmeyer, S. and S. Huque, \"NXDOMAIN: There Really Is Nothing Underneath\", RFC 8020, DOI 10.17487/RFC8020, November 2016, <https://www.rfc-editor.org/info/rfc8020>.",
+      "ja": "[RFC8020] Bortzmeyer、S.およびS.Huque、 \"NXDomain：Instruce Nothing\"、RFC 8020、DOI 10.17487 / RFC8020、2016年11月、<https：//www.rfc-editor.org/info/rfc8020>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8198] Fujiwara, K., Kato, A., and W. Kumari, \"Aggressive Use of DNSSEC-Validated Cache\", RFC 8198, DOI 10.17487/RFC8198, July 2017, <https://www.rfc-editor.org/info/rfc8198>.",
+      "ja": "[RFC8198]藤原、K。、加藤、A.、およびW。kumari、「DNSSEC検証キャッシュの積極的な使用」、RFC 8198、DOI 10.17487 / RFC8198、2017年7月、<https：//www.rfc-編集者。org / info / rfc8198>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9076] Wicinski, T., Ed., \"DNS Privacy Considerations\", RFC 9076, DOI 10.17487/RFC9076, July 2021, <https://www.rfc-editor.org/info/rfc9076>.",
+      "ja": "[RFC9076] WicinSki、T.、ED。、「DNSプライバシーに関する考慮事項」、RFC 9076、DOI 10.17487 / RFC9076、2021年7月、<https：//www.rfc-editor.org/info/rfc9076>。"
+    },
+    {
+      "indent": 3,
+      "text": "[verisign-qnamemin] Thomas, M., \"Maximizing Qname Minimization: A New Chapter in DNS Protocol Evolution\", September 2020, <https://blog.verisign.com/security/maximizing-qname-minimization-a-new-chapter-in-dns-protocol-evolution/>.",
+      "ja": "[Verisign-QNAMEMIN] Thomas、M。、「QNAMEの最小化の最大化：2020年9月のDNSプロトコルの進化の新章」、<https://blog.verisign.com/security/maximizing-qname-minimization-a-new-章-in-dns-protocol-evolution />。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The acknowledgments from RFC 7816 apply here. In addition, many participants from the DNSOP Working Group helped with proposals for simplification, clarification, and general editorial help.",
+      "ja": "RFC 7816からの謝辞はここに適用されます。さらに、DNSOPワーキンググループの多くの参加者は、単純化、説明、および一般的な編集のヘルプの提案を支援しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Stephane Bortzmeyer AFNIC 1, rue Stephenson 78180 Montigny-le-Bretonneux France",
+      "ja": "Stephane Bortzmeyer Afnic 1、Rue Stephenson 78180 Montigny-Le-Bretonneunnuxフランス"
+    },
+    {
+      "indent": 3,
+      "text": "Phone: +33 1 39 30 83 46\nEmail: bortzmeyer+ietf@nic.fr\nURI:   https://www.afnic.fr/",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Ralph Dolmans NLnet Labs",
+      "ja": "Ralph Dolmans NLNet Labs."
+    },
+    {
+      "indent": 3,
+      "text": "Email: ralph@nlnetlabs.nl",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Paul Hoffman ICANN",
+      "ja": "Paul Hoffman icann."
+    },
+    {
+      "indent": 3,
+      "text": "Email: paul.hoffman@icann.org",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
