@@ -29,9 +29,7 @@
 
 ### 翻訳修正者
 
-1. GitHub上でForkします。
-2. ブランチを切ります。名前は適当なものにします。
-3. html/rfcXXXX.htmlの翻訳を修正します。
+1. html/rfcXXXX.htmlの翻訳を修正します。
    - updated_byを「翻訳編集 : 自動生成 + 一部修正」にします。名前などを残したい方は「一部修正(tex2e)」のような感じで書いてください。
    - 見出しは`<h5>`を使います。1番目に英文、2番目に和文を書きます。
       ```html
@@ -75,16 +73,15 @@
         </div>
       </div>
       ```
-4. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
-5. Forkしたレポジトリにpushします。
-6. GitHub上でPullRequestを出します。
+2. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
+3. GitHub上でPullRequestなどを出します。
 
 ### 管理者
 
-1. PullRequestの修正差分を確認し、HTMLエスケープが適切に行われているかや、XSSに関連する文字列（`script`, `a`, `img`, `javascript` など）がないことだけ確認する
+1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認する
 2. 問題がなければMergeし、ローカルにpullする
-3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認
-4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを逆作成し、変更差分を確認
+3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認する
+4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認する
 5. レポジトリにpushする
 
 <br>

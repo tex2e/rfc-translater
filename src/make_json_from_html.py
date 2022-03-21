@@ -56,6 +56,8 @@ def make_json_from_html(rfc_number):
 
         # インデント
         row_data['indent'] = 0
+
+        # 文章のとき、indent-N というクラス名から、インデントレベル N を取得する
         if tag_name == 'p':
             indent = 0
             for class_ in texts[0].attrs.get('class'):
@@ -63,10 +65,10 @@ def make_json_from_html(rfc_number):
                     row_data['indent'] = int(class_.replace('indent-', ''))
                     break
 
-        # 英文
+        # 英文 (en)
         row_data['text'] = texts[0].text.strip()
 
-        # タグ名が図表のとき
+        # 図表のとき、各要素を HTML から取得する
         if texts[0].name == 'pre':
             # 翻訳なしフラグ
             row_data['raw'] = True
@@ -82,12 +84,11 @@ def make_json_from_html(rfc_number):
             # 翻訳文
             row_data['ja'] = ""
 
-        # タグ名が見出しのとき
+        # 見出しのとき、見出しフラグをTrueにする
         if texts[0].name == 'h5':
-            # 見出しフラグ
             row_data['section_title'] = True
 
-        # 翻訳文
+        # 翻訳文 (ja)
         if len(texts) >= 2:
             row_data['ja'] = texts[1].text.strip()
 
