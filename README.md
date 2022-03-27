@@ -80,8 +80,8 @@
 
 1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認する
 2. 問題がなければMergeし、ローカルにpullする
-3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認する
-4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認する
+3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認する
+4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認する
 5. レポジトリにpushする
 
 <br>
