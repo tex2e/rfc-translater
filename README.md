@@ -30,8 +30,7 @@
 ### 翻訳修正者
 
 1. html/rfcXXXX.htmlの翻訳を修正します。
-   - updated_byを「翻訳編集 : 自動生成 + 一部修正」にします。名前などを残したい方は「一部修正(tex2e)」のような感じで書いてください。
-   - 見出しは`<h5>`を使います。1番目に英文、2番目に和文を書きます。
+   - 見出しは`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -46,7 +45,7 @@
         </div>
       </div>
       ```
-   - 文章は`<p>`を使います。「indent-X」classでインデントの深さを指定します。
+   - 文章は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -61,7 +60,7 @@
         </div>
       </div>
       ```
-   - 図表は`<pre>`を使います。英文のみです。
+   - 図表やプログラムは`<pre class="text text-monospace">`を使います。英文のみです。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-12">
@@ -74,15 +73,16 @@
       </div>
       ```
 2. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
-3. GitHub上でPullRequestなどを出します。
+3. GitHub上でPullRequestを出します。
 
 ### 管理者
 
-1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認する
-2. 問題がなければMergeし、ローカルにpullする
-3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認する
-4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認する
-5. レポジトリにpushする
+1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認します。
+2. 問題がなければMergeし、ローカルにpullします。
+3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認します。
+4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認します。
+5. (必要に応じて) 問題点があれば `git checkout -- html/rfc<対象RFC>.html` で元に戻して、元データの JSON やプログラムの不備を調査します。
+6. レポジトリにpushします。
 
 <br>
 
