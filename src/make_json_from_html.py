@@ -92,6 +92,10 @@ def make_json_from_html(rfc_number):
         if len(texts) >= 2:
             row_data['ja'] = texts[1].text.strip()
 
+        # HTMLに翻訳文が無い（消えてしまった）場合は、空文字を追加する
+        if not ('ja' in row_data):
+            row_data['ja'] = ""
+
         # 各段落情報の追加
         data['contents'].append(row_data)
 
