@@ -1,0 +1,1715 @@
+{
+  "title": {
+    "text": "RFC 9250 - DNS over Dedicated QUIC Connections (RFC 9250)",
+    "ja": "RFC 9250 - 専用のQUIC接続を超えるDNS（RFC 9250）"
+  },
+  "number": 9250,
+  "created_at": "2022-05-13 03:00:02.753255+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        C. Huitema\nRequest for Comments: 9250                          Private Octopus Inc.\nCategory: Standards Track                                   S. Dickinson\nISSN: 2070-1721                                               Sinodun IT\n                                                               A. Mankin\n                                                              Salesforce\n                                                                May 2022",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "DNS over Dedicated QUIC Connections",
+      "ja": "専用のQUIC接続に関するDNS"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes the use of QUIC to provide transport confidentiality for DNS. The encryption provided by QUIC has similar properties to those provided by TLS, while QUIC transport eliminates the head-of-line blocking issues inherent with TCP and provides more efficient packet-loss recovery than UDP. DNS over QUIC (DoQ) has privacy properties similar to DNS over TLS (DoT) specified in RFC 7858, and latency characteristics similar to classic DNS over UDP. This specification describes the use of DoQ as a general-purpose transport for DNS and includes the use of DoQ for stub to recursive, recursive to authoritative, and zone transfer scenarios.",
+      "ja": "このドキュメントでは、DNSの輸送機密性を提供するためのQUICの使用について説明しています。QUICが提供する暗号化は、TLSが提供するものと同様の特性を持っていますが、QUIC輸送はTCPに固有の頭部ブロッキングの問題を排除し、UDPよりも効率的なパケットロスリカバリを提供します。DNS over QUIC（DOQ）には、RFC 7858で指定されたTLS（DOT）を超えるDNSと同様のプライバシープロパティがあり、UDP上の古典的なDNSと同様のレイテンシ特性があります。この仕様では、DNSの汎用輸送としてのDOQの使用について、DOQを再帰的、再帰的、ゾーン転送シナリオへのスタブへのDOQの使用が含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9250.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9250で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Key Words\n3.  Design Considerations\n  3.1.  Provide DNS Privacy\n  3.2.  Design for Minimum Latency\n  3.3.  Middlebox Considerations\n  3.4.  No Server-Initiated Transactions\n4.  Specifications\n  4.1.  Connection Establishment\n    4.1.1.  Port Selection\n  4.2.  Stream Mapping and Usage\n    4.2.1.  DNS Message IDs\n  4.3.  DoQ Error Codes\n    4.3.1.  Transaction Cancellation\n    4.3.2.  Transaction Errors\n    4.3.3.  Protocol Errors\n    4.3.4.  Alternative Error Codes\n  4.4.  Connection Management\n  4.5.  Session Resumption and 0-RTT\n  4.6.  Message Sizes\n5.  Implementation Requirements\n  5.1.  Authentication\n  5.2.  Fallback to Other Protocols on Connection Failure\n  5.3.  Address Validation\n  5.4.  Padding\n  5.5.  Connection Handling\n    5.5.1.  Connection Reuse\n    5.5.2.  Resource Management\n    5.5.3.  Using 0-RTT and Session Resumption\n    5.5.4.  Controlling Connection Migration for Privacy\n  5.6.  Processing Queries in Parallel\n  5.7.  Zone Transfer\n  5.8.  Flow Control Mechanisms\n6.  Security Considerations\n7.  Privacy Considerations\n  7.1.  Privacy Issues with 0-RTT data\n  7.2.  Privacy Issues with Session Resumption\n  7.3.  Privacy Issues with Address Validation Tokens\n  7.4.  Privacy Issues with Long Duration Sessions\n  7.5.  Traffic Analysis\n8.  IANA Considerations\n  8.1.  Registration of a DoQ Identification String\n  8.2.  Reservation of a Dedicated Port\n  8.3.  Reservation of an Extended DNS Error Code: Too Early\n  8.4.  DNS-over-QUIC Error Codes Registry\n9.  References\n  9.1.  Normative References\n  9.2.  Informative References\nAppendix A.  The NOTIFY Service\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Domain Name System (DNS) concepts are specified in \"Domain names - concepts and facilities\" [RFC1034]. The transmission of DNS queries and responses over UDP and TCP is specified in \"Domain names - implementation and specification\" [RFC1035].",
+      "ja": "ドメイン名システム（DNS）の概念は、「ドメイン名 - 概念と施設」[RFC1034]で指定されています。UDPおよびTCPを介したDNSクエリと応答の送信は、「ドメイン名 - 実装と仕様」[RFC1035]で指定されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document presents a mapping of the DNS protocol over the QUIC transport [RFC9000] [RFC9001]. DNS over QUIC is referred to here as DoQ, in line with \"DNS Terminology\" [DNS-TERMS].",
+      "ja": "このドキュメントでは、QUICトランスポート[RFC9000] [RFC9001]を介したDNSプロトコルのマッピングを示しています。DNS over QUICは、「DNS用語」[DNS-Terms]に沿って、ここではDOQと呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The goals of the DoQ mapping are:",
+      "ja": "DOQマッピングの目標は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Provide the same DNS privacy protection as DoT [RFC7858]. This includes an option for the client to authenticate the server by means of an authentication domain name as specified in \"Usage Profiles for DNS over TLS and DNS over DTLS\" [RFC8310].",
+      "ja": "1. DOT [RFC7858]と同じDNSプライバシー保護を提供します。これには、クライアントが「DTLSを介したDNSおよびDNSのDNSの使用プロファイル」[RFC8310]で指定されているように、認証ドメイン名を使用してサーバーを認証するオプションが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Provide an improved level of source address validation for DNS servers compared to classic DNS over UDP.",
+      "ja": "2. UDPを介したクラシックDNSと比較して、DNSサーバーのソースアドレス検証の改善されたレベルを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Provide a transport that does not impose path MTU limitations on the size of DNS responses it can send.",
+      "ja": "3. 送信できるDNS応答のサイズにPATH MTU制限を課さないトランスポートを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to achieve these goals, and to support ongoing work on encryption of DNS, the scope of this document includes:",
+      "ja": "これらの目標を達成し、DNSの暗号化に関する継続的な作業をサポートするために、このドキュメントの範囲には以下が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "* the \"stub to recursive resolver\" scenario (also called the \"stub to recursive\" scenario in this document)",
+      "ja": "* 「このドキュメントの「再帰的なリゾルバ」シナリオ（「再帰」シナリオとも呼ばれる」シナリオ"
+    },
+    {
+      "indent": 3,
+      "text": "* the \"recursive resolver to authoritative nameserver\" scenario (also called the \"recursive to authoritative\" scenario in this document), and",
+      "ja": "* 「権威ある名前サーバーへの再帰的リゾルバー」シナリオ（このドキュメントの「権威への再帰」シナリオとも呼ばれます）、および"
+    },
+    {
+      "indent": 3,
+      "text": "* the \"nameserver to nameserver\" scenario (mainly used for zone transfers (XFR) [RFC1995] [RFC5936]).",
+      "ja": "* 「nameserver to nameserver」シナリオ（主にゾーン転送（XFR）[RFC1995] [RFC5936]に使用される）。"
+    },
+    {
+      "indent": 3,
+      "text": "In other words, this document specifies QUIC as a general-purpose transport for DNS.",
+      "ja": "言い換えれば、このドキュメントは、DNSの汎用輸送としてQUICを指定しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The specific non-goals of this document are:",
+      "ja": "このドキュメントの特定の非ゴールは次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. No attempt is made to evade potential blocking of DoQ traffic by middleboxes.",
+      "ja": "1. ミドルボックスによるDOQトラフィックの潜在的なブロッキングを回避する試みは行われません。"
+    },
+    {
+      "indent": 3,
+      "text": "2. No attempt to support server-initiated transactions, which are used only in DNS Stateful Operations (DSO) [RFC8490].",
+      "ja": "2. DNSステートフルオペレーション（DSO）[RFC8490]でのみ使用されるサーバー開始トランザクションをサポートしようとする試みはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifying the transmission of an application over QUIC requires specifying how the application's messages are mapped to QUIC streams, and generally how the application will use QUIC. This is done for HTTP in \"Hypertext Transfer Protocol Version 3 (HTTP/3)\" [HTTP/3]. The purpose of this document is to define the way DNS messages can be transmitted over QUIC.",
+      "ja": "QUICを介したアプリケーションの送信を指定するには、アプリケーションのメッセージがQUICストリームにマッピングされる方法と、一般にアプリケーションがQUICを使用する方法を指定する必要があります。これは、「ハイパーテキスト転送プロトコルバージョン3（HTTP/3）」[HTTP/3]のHTTPに対して行われます。このドキュメントの目的は、DNSメッセージをQUICで送信する方法を定義することです。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS over HTTPS (DoH) [RFC8484] can be used with HTTP/3 to get some of the benefits of QUIC. However, a lightweight direct mapping for DoQ can be regarded as a more natural fit for both the recursive to authoritative and zone transfer scenarios, which rarely involve intermediaries. In these scenarios, the additional overhead of HTTP is not offset by, for example, benefits of HTTP proxying and caching behavior.",
+      "ja": "HTTPS（DOH）[RFC8484]上のDNSをHTTP/3で使用して、QUICの利点をいくつか取得できます。ただし、DOQの軽量の直接マッピングは、仲介者がめったに関与しない権威あるおよびゾーン転送シナリオとゾーン転送シナリオの両方に、より自然な適合と見なすことができます。これらのシナリオでは、HTTPの追加オーバーヘッドは、たとえば、HTTPのプロキシおよびキャッシュ動作の利点によって相殺されません。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, Section 3 presents the reasoning that guided the proposed design. Section 4 specifies the actual mapping of DoQ. Section 5 presents guidelines on the implementation, usage, and deployment of DoQ.",
+      "ja": "このドキュメントでは、セクション3では、提案された設計を導いた理由を示します。セクション4では、DOQの実際のマッピングを指定しています。セクション5では、DOQの実装、使用、および展開に関するガイドラインを示します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Key Words",
+      "section_title": true,
+      "ja": "2. キーワード"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Design Considerations",
+      "section_title": true,
+      "ja": "3. 設計上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This section and its subsections present the design guidelines that were used for DoQ. While all other sections in this document are normative, this section is informative in nature.",
+      "ja": "このセクションとそのサブセクションは、DOQに使用された設計ガイドラインを示しています。このドキュメントの他のすべてのセクションは規範的ですが、このセクションは本質的に有益です。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Provide DNS Privacy",
+      "section_title": true,
+      "ja": "3.1. DNSプライバシーを提供します"
+    },
+    {
+      "indent": 3,
+      "text": "DoT [RFC7858] defines how to mitigate some of the issues described in \"DNS Privacy Considerations\" [RFC9076] by specifying how to transmit DNS messages over TLS. The \"Usage Profiles for DNS over TLS and DNS over DTLS\" [RFC8310] specify Strict and Opportunistic usage profiles for DoT including how stub resolvers can authenticate recursive resolvers.",
+      "ja": "DOT [RFC7858]は、TLSを介してDNSメッセージを送信する方法を指定することにより、「DNSプライバシーに関する考慮事項」[RFC9076]に記載されている問題のいくつかを軽減する方法を定義します。「TLSおよびDNSを介したDNSの使用プロファイルとDTLSを超える」[RFC8310]は、スタブリソースバーが再帰的リゾルバーを認証する方法など、DOTの厳格で日和見的使用プロファイルを指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC connection setup includes the negotiation of security parameters using TLS, as specified in \"Using TLS to Secure QUIC\" [RFC9001], enabling encryption of the QUIC transport. Transmitting DNS messages over QUIC will provide essentially the same privacy protections as DoT [RFC7858] including Strict and Opportunistic usage profiles [RFC8310]. Further discussion on this is provided in Section 7.",
+      "ja": "QUIC接続のセットアップには、「TLSを使用してQUICを確保する」[RFC9001]で指定されているTLSを使用したセキュリティパラメーターの交渉が含まれ、QUIC輸送の暗号化を可能にします。QUICを介してDNSメッセージを送信すると、厳格および日和見的使用プロファイル[RFC8310]を含むDOT [RFC7858]と本質的に同じプライバシー保護が提供されます。これに関するさらなる議論は、セクション7で提供されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Design for Minimum Latency",
+      "section_title": true,
+      "ja": "3.2. 最小レイテンシの設計"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC is specifically designed to reduce protocol-induced delays, with features such as:",
+      "ja": "QUICは、次のような機能を備えたプロトコル誘導の遅延を削減するように特別に設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Support for 0-RTT data during session resumption.",
+      "ja": "1. セッション再開中の0-RTTデータのサポート。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Support for advanced packet-loss recovery procedures as specified in \"QUIC Loss Detection and Congestion Control\" [RFC9002].",
+      "ja": "2. 「QUIC損失検出と輻輳制御」で指定されている高度なパケット損失回復手順のサポート[RFC9002]。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Mitigation of head-of-line blocking by allowing parallel delivery of data on multiple streams.",
+      "ja": "3. 複数のストリーム上のデータの並列配信を許可することにより、頭部ブロッキングの緩和。"
+    },
+    {
+      "indent": 3,
+      "text": "This mapping of DNS to QUIC will take advantage of these features in three ways:",
+      "ja": "DNSからQUICへのマッピングは、これらの機能を3つの方法で活用します。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Optional support for sending 0-RTT data during session resumption (the security and privacy implications of this are discussed in later sections).",
+      "ja": "1. セッション再開中に0-RTTデータを送信するためのオプションのサポート（これのセキュリティとプライバシーへの影響については、後のセクションで説明します）。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Long-lived QUIC connections over which multiple DNS transactions are performed, generating the sustained traffic required to benefit from advanced recovery features.",
+      "ja": "2. 複数のDNSトランザクションが実行される長寿命のQUIC接続により、高度な回復機能から利益を得るために必要な持続的なトラフィックが生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Mapping of each DNS Query/Response transaction to a separate stream, to mitigate head-of-line blocking. This enables servers to respond to queries \"out of order\". It also enables clients to process responses as soon as they arrive, without having to wait for in-order delivery of responses previously posted by the server.",
+      "ja": "3. 各DNSクエリ/応答トランザクションの個別のストリームへのマッピング。これにより、サーバーは「故障していない」クエリに応答できます。また、クライアントが到着したらすぐに応答を処理することができます。これは、以前にサーバーが投稿した応答の注文の配信を待つ必要がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "These considerations are reflected in the mapping of DNS traffic to QUIC streams in Section 4.2.",
+      "ja": "これらの考慮事項は、セクション4.2のQUICストリームへのDNSトラフィックのマッピングに反映されています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Middlebox Considerations",
+      "section_title": true,
+      "ja": "3.3. ミドルボックスの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Using QUIC might allow a protocol to disguise its purpose from devices on the network path using encryption and traffic analysis resistance techniques like padding, traffic pacing, and traffic shaping. This specification does not include any measures that are designed to avoid such classification; the padding mechanisms defined in Section 5.4 are intended to obfuscate the specific records contained in DNS queries and responses, but not the fact that this is DNS traffic. Consequently, firewalls and other middleboxes might be able to distinguish DoQ from other protocols that use QUIC, like HTTP, and apply different treatment.",
+      "ja": "QUICを使用すると、プロトコルは、パディング、交通ペース、トラフィックの形成などの暗号化とトラフィック分析の抵抗技術を使用して、ネットワークパス上のデバイスから目的を偽装することができます。この仕様には、そのような分類を回避するように設計された措置は含まれていません。セクション5.4で定義されているパディングメカニズムは、DNSクエリと応答に含まれる特定のレコードを難読化することを目的としていますが、これはDNSトラフィックであるという事実ではありません。その結果、ファイアウォールやその他のミドルボックスは、HTTPなどのQUICを使用する他のプロトコルとDOQを区別し、異なる治療を適用できる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The lack of measures in this specification to avoid protocol classification is not an endorsement of such practices.",
+      "ja": "プロトコルの分類を回避するためのこの仕様における措置の欠如は、そのようなプラクティスの承認ではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. No Server-Initiated Transactions",
+      "section_title": true,
+      "ja": "3.4. サーバー開始トランザクションはありません"
+    },
+    {
+      "indent": 3,
+      "text": "As stated in Section 1, this document does not specify support for server-initiated transactions within established DoQ connections. That is, only the initiator of the DoQ connection may send queries over the connection.",
+      "ja": "セクション1で述べたように、このドキュメントでは、確立されたDOQ接続内のサーバー開始トランザクションのサポートを指定していません。つまり、DOQ接続のイニシエーターのみが接続上にクエリを送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "DSO does support server-initiated transactions within existing connections. However, DoQ as defined here does not meet the criteria for an applicable transport for DSO because it does not guarantee in-order delivery of messages; see Section 4.2 of [RFC8490].",
+      "ja": "DSOは、既存の接続内でサーバーが開始したトランザクションをサポートしています。ただし、ここで定義されているDOQは、メッセージの注文の配信を保証しないため、DSOに該当する輸送の基準を満たしていません。[RFC8490]のセクション4.2を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Specifications",
+      "section_title": true,
+      "ja": "4. 仕様"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Connection Establishment",
+      "section_title": true,
+      "ja": "4.1. 接続確立"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ connections are established as described in the QUIC transport specification [RFC9000]. During connection establishment, DoQ support is indicated by selecting the Application-Layer Protocol Negotiation (ALPN) token \"doq\" in the crypto handshake.",
+      "ja": "DOQ接続は、QUIC輸送仕様[RFC9000]に記載されているように確立されています。接続確立中、DOQサポートは、暗号握手でアプリケーション層プロトコルネゴシエーション（ALPN）トークン「DOQ」を選択することにより示されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.1. Port Selection",
+      "section_title": true,
+      "ja": "4.1.1. ポート選択"
+    },
+    {
+      "indent": 3,
+      "text": "By default, a DNS server that supports DoQ MUST listen for and accept QUIC connections on the dedicated UDP port 853 (Section 8), unless there is a mutual agreement to use another port.",
+      "ja": "デフォルトでは、DOQをサポートするDNSサーバーは、別のポートを使用する相互の合意がない限り、専用のUDPポート853（セクション8）のQUIC接続を聞き、受け入れる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "By default, a DNS client desiring to use DoQ with a particular server MUST establish a QUIC connection to UDP port 853 on the server, unless there is a mutual agreement to use another port.",
+      "ja": "デフォルトでは、特定のサーバーでDOQを使用しようとするDNSクライアントは、別のポートを使用する相互契約がない限り、サーバー上のUDPポート853へのQUIC接続を確立する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ connections MUST NOT use UDP port 53. This recommendation against use of port 53 for DoQ is to avoid confusion between DoQ and the use of DNS over UDP [RFC1035]. The risk of confusion exists even if two parties agreed on port 53, as other parties without knowledge of that agreement might still try to use that port.",
+      "ja": "DOQ接続はUDPポート53を使用してはなりません。DOQでポート53の使用に対するこの推奨事項は、DOQとUDPよりもDNSの使用との間の混乱を避けることです[RFC1035]。その合意の知識のない他の当事者がまだそのポートを使用しようとする可能性があるため、2つの当事者がポート53で合意したとしても、混乱のリスクが存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "In the stub to recursive scenario, the use of port 443 as a mutually agreed alternative port can be operationally beneficial, since port 443 is used by many services using QUIC and HTTP-3 and is thus less likely to be blocked than other ports. Several mechanisms for stubs to discover recursives offering encrypted transports, including the use of custom ports, are the subject of ongoing work.",
+      "ja": "スタブから再帰シナリオでは、ポート443がQUICおよびHTTP-3を使用して多くのサービスで使用されているため、他のポートよりもブロックされる可能性が低いため、相互に合意した代替ポートとしてのポート443の使用は運用上有益です。カスタムポートの使用を含む暗号化されたトランスポートを提供する再帰を発見するスタブのいくつかのメカニズムは、進行中の作業の対象です。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Stream Mapping and Usage",
+      "section_title": true,
+      "ja": "4.2. ストリームマッピングと使用"
+    },
+    {
+      "indent": 3,
+      "text": "The mapping of DNS traffic over QUIC streams takes advantage of the QUIC stream features detailed in Section 2 of [RFC9000], the QUIC transport specification.",
+      "ja": "QUICストリーム上のDNSトラフィックのマッピングは、QUIC輸送仕様である[RFC9000]のセクション2で詳述されているQUICストリーム機能を活用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS query/response traffic [RFC1034] [RFC1035] follows a simple pattern in which the client sends a query, and the server provides one or more responses (multiple responses can occur in zone transfers).",
+      "ja": "DNSクエリ/応答トラフィック[RFC1034] [RFC1035]は、クライアントがクエリを送信する単純なパターンに従い、サーバーが1つ以上の応答を提供します（ゾーン転送で複数の応答が発生する可能性があります）。"
+    },
+    {
+      "indent": 3,
+      "text": "The mapping specified here requires that the client select a separate QUIC stream for each query. The server then uses the same stream to provide all the response messages for that query. In order for multiple responses to be parsed, a 2-octet length field is used in exactly the same way as the 2-octet length field defined for DNS over TCP [RFC1035]. The practical result of this is that the content of each QUIC stream is exactly the same as the content of a TCP connection that would manage exactly one query.",
+      "ja": "ここで指定されているマッピングでは、クライアントがクエリごとに個別のQUICストリームを選択する必要があります。サーバーは同じストリームを使用して、そのクエリのすべての応答メッセージを提供します。複数の応答を解析するために、TCPを介してDNSに対して定義された2-OCTETの長さフィールドとまったく同じ方法で2オクセットの長さフィールドが使用されます[RFC1035]。これの実際的な結果は、各QUICストリームのコンテンツが、正確に1つのクエリを管理するTCP接続のコンテンツとまったく同じであることです。"
+    },
+    {
+      "indent": 3,
+      "text": "All DNS messages (queries and responses) sent over DoQ connections MUST be encoded as a 2-octet length field followed by the message content as specified in [RFC1035].",
+      "ja": "DOQ接続を介して送信されるすべてのDNSメッセージ（クエリと応答）は、[RFC1035]で指定されているように、2オクセットの長さフィールドとしてエンコードし、その後にメッセージコンテンツをエンコードする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The client MUST select the next available client-initiated bidirectional stream for each subsequent query on a QUIC connection, in conformance with the QUIC transport specification [RFC9000]. Packet losses and other network events might cause queries to arrive in a different order. Servers SHOULD process queries as they arrive, as not doing so would cause unnecessary delays.",
+      "ja": "クライアントは、QUIC輸送仕様[RFC9000]に準拠して、QUIC接続の後続の各クエリに対して、次に利用可能なクライアントが使用できる双方向ストリームを選択する必要があります。パケットの損失やその他のネットワークイベントにより、クエリが別の順序で到着する可能性があります。サーバーは、到着時にクエリを処理する必要があります。そうしないと不必要な遅延が発生するためです。"
+    },
+    {
+      "indent": 3,
+      "text": "The client MUST send the DNS query over the selected stream and MUST indicate through the STREAM FIN mechanism that no further data will be sent on that stream.",
+      "ja": "クライアントは、選択したストリームを介してDNSクエリを送信する必要があり、ストリームフィンメカニズムを通じて、そのストリームにそれ以上のデータが送信されないことを示す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The server MUST send the response(s) on the same stream and MUST indicate, after the last response, through the STREAM FIN mechanism that no further data will be sent on that stream.",
+      "ja": "サーバーは同じストリームで応答を送信する必要があり、最後の応答の後、ストリームフィンメカニズムを介して、そのストリームにそれ以上のデータが送信されないことを示す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, a single DNS transaction consumes a single bidirectional client-initiated stream. This means that the client's first query occurs on QUIC stream 0, the second on 4, and so on (see Section 2.1 of [RFC9000]).",
+      "ja": "したがって、単一のDNSトランザクションは、単一の双方向のクライアント開始ストリームを消費します。これは、クライアントの最初のクエリがQUICストリーム0、4の2番目などで発生することを意味します（[RFC9000]のセクション2.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MAY defer processing of a query until the STREAM FIN has been indicated on the stream selected by the client.",
+      "ja": "サーバーは、クライアントが選択したストリームでストリームフィンが示されるまで、クエリの処理を延期する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers and clients MAY monitor the number of \"dangling\" streams. These are open streams where the following events have not occurred after implementation-defined timeouts:",
+      "ja": "サーバーとクライアントは、「ダングリング」ストリームの数を監視できます。これらは、実装定義のタイムアウト後に次のイベントが発生していないオープンストリームです。"
+    },
+    {
+      "indent": 3,
+      "text": "* the expected queries or responses have not been received or,",
+      "ja": "* 予想されるクエリまたは応答は受信されていません、または"
+    },
+    {
+      "indent": 3,
+      "text": "* the expected queries or responses have been received but not the STREAM FIN",
+      "ja": "* 予想されるクエリまたは応答は受信されましたが、ストリームフィンは受けていません"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY impose a limit on the number of such dangling streams. If limits are encountered, implementations MAY close the connection.",
+      "ja": "実装は、そのようなぶら下がっているストリームの数に制限を課す可能性があります。制限が発生した場合、実装は接続を閉じる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. DNS Message IDs",
+      "section_title": true,
+      "ja": "4.2.1. DNSメッセージID"
+    },
+    {
+      "indent": 3,
+      "text": "When sending queries over a QUIC connection, the DNS Message ID MUST be set to 0. The stream mapping for DoQ allows for unambiguous correlation of queries and responses, so the Message ID field is not required.",
+      "ja": "QUIC接続を介してクエリを送信する場合、DNSメッセージIDを0に設定する必要があります。DOQのストリームマッピングにより、クエリと応答の明確な相関関係が可能になるため、メッセージIDフィールドは必要ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "This has implications for proxying DoQ messages to and from other transports. For example, proxies may have to manage the fact that DoQ can support a larger number of outstanding queries on a single connection than, for example, DNS over TCP, because DoQ is not limited by the Message ID space. This issue already exists for DoH, where a Message ID of 0 is recommended.",
+      "ja": "これは、他の輸送機関との間でDOQメッセージをプロキシングすることに影響を与えます。たとえば、DOQはメッセージIDスペースに制限されていないため、Proxiesは単一の接続でDNSよりも1つの接続でより多くの発行済みクエリをサポートできるという事実を管理する必要があります。この問題は、0のメッセージIDが推奨されるDOHにはすでに存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "When forwarding a DNS message from DoQ over another transport, a DNS Message ID MUST be generated according to the rules of the protocol that is in use. When forwarding a DNS message from another transport over DoQ, the Message ID MUST be set to 0.",
+      "ja": "DOQからのDNSメッセージを別のトランスポートに転送する場合、使用中のプロトコルのルールに従ってDNSメッセージIDを生成する必要があります。DOQを介して別のトランスポートからDNSメッセージを転送する場合、メッセージIDを0に設定する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. DoQ Error Codes",
+      "section_title": true,
+      "ja": "4.3. DOQエラーコード"
+    },
+    {
+      "indent": 3,
+      "text": "The following error codes are defined for use when abruptly terminating streams, for use as application protocol error codes when aborting reading of streams, or for immediately closing connections:",
+      "ja": "以下のエラーコードは、ストリームを突然終了するときに使用する場合、ストリームの読み取りを中止するときのアプリケーションプロトコルエラーコードとして使用する場合、または接続を直ちに閉じるために使用するために定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_NO_ERROR (0x0): No error. This is used when the connection or stream needs to be closed, but there is no error to signal.",
+      "ja": "DOQ_NO_ERROR（0x0）：エラーなし。これは、接続またはストリームを閉じる必要がある場合に使用されますが、信号するエラーはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_INTERNAL_ERROR (0x1): The DoQ implementation encountered an internal error and is incapable of pursuing the transaction or the connection.",
+      "ja": "DOQ_INTERNAL_ERROR（0x1）：DOQ実装は内部エラーに遭遇し、トランザクションまたは接続を追求することができません。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_PROTOCOL_ERROR (0x2): The DoQ implementation encountered a protocol error and is forcibly aborting the connection.",
+      "ja": "doq_protocol_error（0x2）：DOQ実装はプロトコルエラーに遭遇し、接続を強制的に中止しています。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_REQUEST_CANCELLED (0x3): A DoQ client uses this to signal that it wants to cancel an outstanding transaction.",
+      "ja": "DOQ_REQUEST_CANCELLED（0x3）：DOQクライアントはこれを使用して、優れたトランザクションをキャンセルしたいことを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_EXCESSIVE_LOAD (0x4): A DoQ implementation uses this to signal when closing a connection due to excessive load.",
+      "ja": "doq_excessive_load（0x4）：DOQ実装は、これを使用して、過度の負荷のために接続を閉じるときに信号を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_UNSPECIFIED_ERROR (0x5): A DoQ implementation uses this in the absence of a more specific error code.",
+      "ja": "doq_unspecified_error（0x5）：DOQ実装は、より具体的なエラーコードがない場合にこれを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "DOQ_ERROR_RESERVED (0xd098ea5e): An alternative error code used for tests.",
+      "ja": "doq_error_reserved（0xd098ea5e）：テストに使用される代替エラーコード。"
+    },
+    {
+      "indent": 3,
+      "text": "See Section 8.4 for details on registering new error codes.",
+      "ja": "新しいエラーコードの登録の詳細については、セクション8.4を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1. Transaction Cancellation",
+      "section_title": true,
+      "ja": "4.3.1. トランザクションキャンセル"
+    },
+    {
+      "indent": 3,
+      "text": "In QUIC, sending STOP_SENDING requests that a peer cease transmission on a stream. If a DoQ client wishes to cancel an outstanding request, it MUST issue a QUIC STOP_SENDING, and it SHOULD use the error code DOQ_REQUEST_CANCELLED. It MAY use a more specific error code registered according to Section 8.4. The STOP_SENDING request may be sent at any time but will have no effect if the server response has already been sent, in which case the client will simply discard the incoming response. The corresponding DNS transaction MUST be abandoned.",
+      "ja": "QUICでは、STOP_SENDINGの送信では、ピアがストリームで送信を停止することを要求します。DOQクライアントが未解決のリクエストをキャンセルしたい場合、QUIC stop_sendingを発行する必要があり、エラーコードdoq_request_cancelledを使用する必要があります。セクション8.4に従って登録されているより具体的なエラーコードを使用する場合があります。stop_sendingリクエストはいつでも送信される場合がありますが、サーバーの応答が既に送信されている場合、クライアントは単に着信応答を破棄します。対応するDNSトランザクションは放棄する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers that receive STOP_SENDING act in accordance with Section 3.5 of [RFC9000]. Servers SHOULD NOT continue processing a DNS transaction if they receive a STOP_SENDING.",
+      "ja": "[RFC9000]のセクション3.5に従ってSTOP_SENDING ACTを受信するサーバー。サーバーがSTOP_SENDINGを受け取った場合、DNSトランザクションの処理を継続しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MAY impose implementation limits on the total number or rate of cancellation requests. If limits are encountered, servers MAY close the connection. In this case, servers wanting to help client debugging MAY use the error code DOQ_EXCESSIVE_LOAD. There is always a trade-off between helping good faith clients debug issues and allowing denial-of-service attackers to test server defenses; depending on circumstances servers might very well choose to send different error codes.",
+      "ja": "サーバーは、キャンセル要求の総数またはレートに実装制限を課す場合があります。制限が発生した場合、サーバーは接続を閉じることができます。この場合、クライアントのデバッグを支援したいサーバーは、エラーコードdoq_excessive_loadを使用する場合があります。誠実なクライアントが問題をデバッグするのを支援することと、サービス拒否攻撃者がサーバーの防御をテストできるようにすることとの間には、常にトレードオフがあります。状況に応じて、サーバーは異なるエラーコードを送信することを非常によく選択する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this mechanism provides a way for secondaries to cancel a single zone transfer occurring on a given stream without having to close the QUIC connection.",
+      "ja": "このメカニズムは、QUIC接続を閉じることなく、特定のストリームで発生する単一のゾーン転送をキャンセルする方法を提供することに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MUST NOT continue processing a DNS transaction if they receive a RESET_STREAM request from the client before the client indicates the STREAM FIN. The server MUST issue a RESET_STREAM to indicate that the transaction is abandoned unless:",
+      "ja": "クライアントがストリームフィンを示す前に、クライアントからreset_streamリクエストを受信した場合、サーバーはDNSトランザクションの処理を継続してはなりません。サーバーは、reset_streamを発行して、トランザクションが放棄されないことを示す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* it has already done so for another reason or",
+      "ja": "* 別の理由ですでにそうしています"
+    },
+    {
+      "indent": 3,
+      "text": "* it has already both sent the response and indicated the STREAM FIN.",
+      "ja": "* すでに応答を送信し、ストリームフィンを示しています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2. Transaction Errors",
+      "section_title": true,
+      "ja": "4.3.2. トランザクションエラー"
+    },
+    {
+      "indent": 3,
+      "text": "Servers normally complete transactions by sending a DNS response (or responses) on the transaction's stream, including cases where the DNS response indicates a DNS error. For example, a client SHOULD be notified of a Server Failure (SERVFAIL, [RFC1035]) through a response with the Response Code set to SERVFAIL.",
+      "ja": "サーバーは通常、DNS応答がDNSエラーを示す場合を含む、トランザクションのストリームでDNS応答（または応答）を送信することにより、トランザクションを完了します。たとえば、クライアントには、サーバー障害（ServFail、[RFC1035]）がServFailに設定された応答を使用して通知する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a server is incapable of sending a DNS response due to an internal error, it SHOULD issue a QUIC RESET_STREAM frame. The error code SHOULD be set to DOQ_INTERNAL_ERROR. The corresponding DNS transaction MUST be abandoned. Clients MAY limit the number of unsolicited QUIC RESET_STREAM frames received on a connection before choosing to close the connection.",
+      "ja": "サーバーが内部エラーのためにDNS応答を送信できない場合、QUIC RESET_STREAMフレームを発行する必要があります。エラーコードは、doq_internal_errorに設定する必要があります。対応するDNSトランザクションは放棄する必要があります。クライアントは、接続を閉じることを選択する前に、接続で受信した未承諾QUIC reset_streamフレームの数を制限する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this mechanism provides a way for primaries to abort a single zone transfer occurring on a given stream without having to close the QUIC connection.",
+      "ja": "このメカニズムは、PrimariesがQUIC接続を閉じることなく、特定のストリームで発生する単一のゾーン転送を中止する方法を提供することに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.3. Protocol Errors",
+      "section_title": true,
+      "ja": "4.3.3. プロトコルエラー"
+    },
+    {
+      "indent": 3,
+      "text": "Other error scenarios can occur due to malformed, incomplete, or unexpected messages during a transaction. These include (but are not limited to):",
+      "ja": "他のエラーシナリオは、トランザクション中の不正な、不完全、または予期しないメッセージが原因で発生する可能性があります。これらには（ただし、これらに限定されない）が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "* a client or server receives a message with a non-zero Message ID",
+      "ja": "* クライアントまたはサーバーは、ゼロ以外のメッセージIDでメッセージを受信します"
+    },
+    {
+      "indent": 3,
+      "text": "* a client or server receives a STREAM FIN before receiving all the bytes for a message indicated in the 2-octet length field",
+      "ja": "* クライアントまたはサーバーは、2-OCTETの長さフィールドに示されているメッセージのすべてのバイトを受信する前にストリームフィンを受信します"
+    },
+    {
+      "indent": 3,
+      "text": "* a client receives a STREAM FIN before receiving all the expected responses",
+      "ja": "* クライアントは、予想されるすべての応答を受信する前にストリームフィンを受け取ります"
+    },
+    {
+      "indent": 3,
+      "text": "* a server receives more than one query on a stream",
+      "ja": "* サーバーはストリームで複数のクエリを受信します"
+    },
+    {
+      "indent": 3,
+      "text": "* a client receives a different number of responses on a stream than expected (e.g., multiple responses to a query for an A record)",
+      "ja": "* クライアントは、予想よりもストリーム上で異なる数の応答を受け取ります（たとえば、Aレコードのクエリに対する複数の応答）"
+    },
+    {
+      "indent": 3,
+      "text": "* a client receives a STOP_SENDING request",
+      "ja": "* クライアントがstop_sendingリクエストを受信します"
+    },
+    {
+      "indent": 3,
+      "text": "* the client or server does not indicate the expected STREAM FIN after sending requests or responses (see Section 4.2)",
+      "ja": "* クライアントまたはサーバーは、リクエストまたは応答を送信した後、予想されるストリームフィンを示していません（セクション4.2を参照）"
+    },
+    {
+      "indent": 3,
+      "text": "* an implementation receives a message containing the edns-tcp-keepalive EDNS(0) Option [RFC7828] (see Section 5.5.2)",
+      "ja": "* 実装では、EDNS-TCP-Keepalive EDNS（0）オプション[RFC7828]を含むメッセージを受信します（セクション5.5.2を参照）"
+    },
+    {
+      "indent": 3,
+      "text": "* a client or a server attempts to open a unidirectional QUIC stream",
+      "ja": "* クライアントまたはサーバーが一方向のQUICストリームを開こうとします"
+    },
+    {
+      "indent": 3,
+      "text": "* a server attempts to open a server-initiated bidirectional QUIC stream",
+      "ja": "* サーバーがサーバーが開始する双方向のQUICストリームを開こうとする"
+    },
+    {
+      "indent": 3,
+      "text": "* a server receives a \"replayable\" transaction in 0-RTT data (for servers not willing to handle this case, see Section 4.5)",
+      "ja": "* サーバーは、0-RTTデータで「再生可能な」トランザクションを受信します（このケースを処理しないサーバーについては、セクション4.5を参照）"
+    },
+    {
+      "indent": 3,
+      "text": "If a peer encounters such an error condition, it is considered a fatal error. It SHOULD forcibly abort the connection using QUIC's CONNECTION_CLOSE mechanism and SHOULD use the DoQ error code DOQ_PROTOCOL_ERROR. In some cases, it MAY instead silently abandon the connection, which uses fewer of the local resources but makes debugging at the offending node more difficult.",
+      "ja": "ピアがそのようなエラー状態に遭遇した場合、それは致命的なエラーと見なされます。QuicのConnection_Closeメカニズムを使用して接続を強制的に中止し、DOQエラーコードdoq_protocol_errorを使用する必要があります。場合によっては、代わりに、ローカルリソースの使用量が少ないが、問題のノードでのデバッグをより困難にする接続を静かに放棄することがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "It is noted that the restrictions on use of the above EDNS(0) option has implications for proxying messages from TCP/DoT/DoH over DoQ.",
+      "ja": "上記のEDN（0）オプションの使用に関する制限は、TCP/DOT/DOHからのメッセージのプロキシをDOQでプロキシングすることに影響を与えることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.4. Alternative Error Codes",
+      "section_title": true,
+      "ja": "4.3.4. 代替エラーコード"
+    },
+    {
+      "indent": 3,
+      "text": "This specification describes specific error codes in Sections 4.3.1, 4.3.2, and 4.3.3. These error codes are meant to facilitate investigation of failures and other incidents. New error codes may be defined in future versions of DoQ or registered as specified in Section 8.4.",
+      "ja": "この仕様では、セクション4.3.1、4.3.2、および4.3.3の特定のエラーコードについて説明します。これらのエラーコードは、障害やその他のインシデントの調査を容易にするためのものです。新しいエラーコードは、DOQの将来のバージョンで定義されるか、セクション8.4で指定されているように登録されている場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Because new error codes can be defined without negotiation, use of an error code in an unexpected context or receipt of an unknown error code MUST be treated as equivalent to DOQ_UNSPECIFIED_ERROR.",
+      "ja": "新しいエラーコードはネゴシエーションなしで定義できるため、予期しないコンテキストでのエラーコードの使用または不明なエラーコードの受領は、doq_unspecifed_errorに相当するものとして扱う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY wish to test the support for the error code extension mechanism by using error codes not listed in this document, or they MAY use DOQ_ERROR_RESERVED.",
+      "ja": "実装では、このドキュメントにリストされていないエラーコードを使用して、エラーコード拡張メカニズムのサポートをテストする場合があります。または、doq_error_reservedを使用する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Connection Management",
+      "section_title": true,
+      "ja": "4.4. 接続管理"
+    },
+    {
+      "indent": 3,
+      "text": "Section 10 of [RFC9000], the QUIC transport specification, specifies that connections can be closed in three ways:",
+      "ja": "[RFC9000]のセクション10、QUIC輸送仕様は、接続を3つの方法で閉じることができることを指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "* idle timeout",
+      "ja": "* アイドルタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "* immediate close",
+      "ja": "* すぐ近く"
+    },
+    {
+      "indent": 3,
+      "text": "* stateless reset",
+      "ja": "* ステートレスリセット"
+    },
+    {
+      "indent": 3,
+      "text": "Clients and servers implementing DoQ SHOULD negotiate use of the idle timeout. Closing on idle timeout is done without any packet exchange, which minimizes protocol overhead. Per Section 10.1 of [RFC9000], the QUIC transport specification, the effective value of the idle timeout is computed as the minimum of the values advertised by the two endpoints. Practical considerations on setting the idle timeout are discussed in Section 5.5.2.",
+      "ja": "DOQを実装するクライアントとサーバーは、アイドルタイムアウトの使用を交渉する必要があります。アイドルタイムアウトの閉鎖は、パケット交換なしで行われ、プロトコルオーバーヘッドを最小限に抑えます。[RFC9000]のセクション10.1、QUIC輸送仕様であるアイドルタイムアウトの有効値は、2つのエンドポイントによって宣伝された値の最小値として計算されます。アイドルタイムアウトの設定に関する実際的な考慮事項については、セクション5.5.2で説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD monitor the idle time incurred on their connection to the server, defined by the time spent since the last packet from the server has been received. When a client prepares to send a new DNS query to the server, it SHOULD check whether the idle time is sufficiently lower than the idle timer. If it is, the client SHOULD send the DNS query over the existing connection. If not, the client SHOULD establish a new connection and send the query over that connection.",
+      "ja": "クライアントは、サーバーからの最後のパケットが受信されてから費やされた時間によって定義されたサーバーへの接続で発生したアイドル時間を監視する必要があります。クライアントが新しいDNSクエリをサーバーに送信する準備をする場合、アイドル時間がアイドルタイマーよりも十分に低いかどうかを確認する必要があります。もしそうなら、クライアントは既存の接続を介してDNSクエリを送信する必要があります。そうでない場合、クライアントは新しい接続を確立し、その接続を介してクエリを送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MAY discard their connections to the server before the idle timeout expires. A client that has outstanding queries SHOULD close the connection explicitly using QUIC's CONNECTION_CLOSE mechanism and the DoQ error code DOQ_NO_ERROR.",
+      "ja": "クライアントは、アイドルタイムアウトの有効期限が切れる前に、サーバーへの接続を破棄する場合があります。優れたクエリを持っているクライアントは、QUICのConnection_CloseメカニズムとDOQエラーコードDOQ_NO_ERRORを使用して、接続を明示的に閉じる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients and servers MAY close the connection for a variety of other reasons, indicated using QUIC's CONNECTION_CLOSE. Client and servers that send packets over a connection discarded by their peer might receive a stateless reset indication. If a connection fails, all the in-progress transactions on that connection MUST be abandoned.",
+      "ja": "クライアントとサーバーは、QUICのConnection_Closeを使用して示されている他のさまざまな理由で接続を閉じることができます。ピアによって破棄された接続にパケットを送信するクライアントとサーバーは、ステートレスリセットの表示を受け取る可能性があります。接続が失敗した場合、その接続のすべての進行中のトランザクションを放棄する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Session Resumption and 0-RTT",
+      "section_title": true,
+      "ja": "4.5. セッション再開と0-RTT"
+    },
+    {
+      "indent": 3,
+      "text": "A client MAY take advantage of the session resumption and 0-RTT mechanisms supported by QUIC transport [RFC9000] and QUIC TLS [RFC9001] if the server supports them. Clients SHOULD consider potential privacy issues associated with session resumption before deciding to use this mechanism and specifically evaluate the trade-offs presented in the various sections of this document. The privacy issues are detailed in Sections 7.1 and 7.2, and the implementation considerations are discussed in Section 5.5.3.",
+      "ja": "クライアントは、サーバーがサポートしている場合、QUIC Transport [RFC9000]およびQUIC TLS [RFC9001]によってサポートされるセッション再開と0-RTTメカニズムを活用できます。クライアントは、このメカニズムを使用することを決定する前に、セッション再開に関連する潜在的なプライバシーの問題を考慮し、このドキュメントのさまざまなセクションで提示されたトレードオフを具体的に評価する必要があります。プライバシーの問題はセクション7.1および7.2で詳しく説明されており、実装の考慮事項についてはセクション5.5.3で説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The 0-RTT mechanism MUST NOT be used to send DNS requests that are not \"replayable\" transactions. In this specification, only transactions that have an OPCODE of QUERY or NOTIFY are considered replayable; therefore, other OPCODES MUST NOT be sent in 0-RTT data. See Appendix A for a detailed discussion of why NOTIFY is included here.",
+      "ja": "0-RTTメカニズムは、「再生可能な」トランザクションではないDNS要求を送信するために使用してはなりません。この仕様では、クエリまたは通知のオペコードがあるトランザクションのみが再生可能と見なされます。したがって、他のオペコードを0-RTTデータで送信してはなりません。通知がここに含まれる理由の詳細な説明については、付録Aを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MAY support session resumption, and MAY do that with or without supporting 0-RTT, using the mechanisms described in Section 4.6.1 of [RFC9001]. Servers supporting 0-RTT MUST NOT immediately process non-replayable transactions received in 0-RTT data but instead MUST adopt one of the following behaviors:",
+      "ja": "サーバーはセッションの再開をサポートする場合があり、[RFC9001]のセクション4.6.1で説明されているメカニズムを使用して、0-RTTをサポートする場合または使用せずに行うことがあります。0-RTTをサポートするサーバーは、0-RTTデータで受信した非複製不可能なトランザクションをすぐに処理する必要はありませんが、代わりに次の動作のいずれかを採用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* Queue the offending transaction and only process it after the QUIC handshake has been completed, as defined in Section 4.1.1 of [RFC9001].",
+      "ja": "* 問題の握手が完了した後、[RFC9001]のセクション4.1.1で定義されているように、問題の握手が完了した後にのみ処理します。"
+    },
+    {
+      "indent": 3,
+      "text": "* Reply to the offending transaction with a response code REFUSED and an Extended DNS Error Code (EDE) \"Too Early\" using the extended RCODE mechanisms defined in [RFC6891] and the extended DNS errors defined in [RFC8914]; see Section 8.3.",
+      "ja": "* 応答コードを使用した問題のある取引への返信は、[RFC6891]で定義された拡張RCODEメカニズムと[RFC8914]で定義された拡張DNSエラーを使用して、拡張DNSエラーコード（EDE）「EDE）「早すぎる」。セクション8.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "* Close the connection with the error code DOQ_PROTOCOL_ERROR.",
+      "ja": "* エラーコードdoq_protocol_errorで接続を閉じます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Message Sizes",
+      "section_title": true,
+      "ja": "4.6. メッセージサイズ"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ queries and responses are sent on QUIC streams, which in theory can carry up to 2^62 bytes. However, DNS messages are restricted in practice to a maximum size of 65535 bytes. This maximum size is enforced by the use of a 2-octet message length field in DNS over TCP [RFC1035] and DoT [RFC7858], and by the definition of the \"application/dns-message\" for DoH [RFC8484]. DoQ enforces the same restriction.",
+      "ja": "DOQクエリと応答は、理論的には最大2^62バイトを運ぶことができます。ただし、DNSメッセージは、実際には最大サイズの65535バイトに制限されています。この最大サイズは、TCP [RFC1035]およびDOT [RFC7858]を介したDNSでの2オクタートメッセージ長フィールドの使用、およびDOH [RFC8484]の「アプリケーション/DNSメッサージ」の定義によって強制されます。DOQは同じ制限を実施します。"
+    },
+    {
+      "indent": 3,
+      "text": "The Extension Mechanisms for DNS (EDNS(0)) [RFC6891] allow peers to specify the UDP message size. This parameter is ignored by DoQ. DoQ implementations always assume that the maximum message size is 65535 bytes.",
+      "ja": "DNS（EDNS（0））[RFC6891]の拡張メカニズムにより、ピアはUDPメッセージサイズを指定できます。このパラメーターはDOQによって無視されます。DOQの実装は、常に最大メッセージサイズが65535バイトであると想定しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Implementation Requirements",
+      "section_title": true,
+      "ja": "5. 実装要件"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Authentication",
+      "section_title": true,
+      "ja": "5.1. 認証"
+    },
+    {
+      "indent": 3,
+      "text": "For the stub to recursive scenario, the authentication requirements are the same as described in DoT [RFC7858] and \"Usage Profiles for DNS over TLS and DNS over DTLS\" [RFC8310]. [RFC8932] states that DNS privacy services SHOULD provide credentials that clients can use to authenticate the server. Given this, and to align with the authentication model for DoH, DoQ stubs SHOULD use a Strict usage profile. Client authentication for the encrypted stub to recursive scenario is not described in any DNS RFC.",
+      "ja": "スタブから再帰シナリオの場合、認証要件はDOT [RFC7858]に記載されているものと同じです。また、「DTLSを超えるTLSおよびDNSのDNSの使用プロファイル」[RFC8310]です。[RFC8932]は、DNSプライバシーサービスがクライアントがサーバーを認証するために使用できる資格情報を提供する必要があると述べています。これを考慮して、DOHの認証モデルに合わせるには、DOQスタブでは厳密な使用プロファイルを使用する必要があります。暗号化されたスタブから再帰シナリオのクライアント認証は、DNS RFCでは説明されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "For zone transfer, the authentication requirements are the same as described in [RFC9103].",
+      "ja": "ゾーン転送の場合、認証要件は[RFC9103]の記述と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "For the recursive to authoritative scenario, authentication requirements are unspecified at the time of writing and are the subject of ongoing work in the DPRIVE WG.",
+      "ja": "信頼できるシナリオへの再帰的な場合、執筆時点で認証要件は不特定であり、DPRIVE WGで継続的な作業の対象となっています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Fallback to Other Protocols on Connection Failure",
+      "section_title": true,
+      "ja": "5.2. 接続障害に関する他のプロトコルへのフォールバック"
+    },
+    {
+      "indent": 3,
+      "text": "If the establishment of the DoQ connection fails, clients MAY attempt to fall back to DoT and then potentially cleartext, as specified in DoT [RFC7858] and \"Usage Profiles for DNS over TLS and DNS over DTLS\" [RFC8310], depending on their usage profile.",
+      "ja": "DOQ接続の確立が失敗した場合、クライアントは、DOT [RFC7858]で指定されているように、DTLS上のDNSおよびDNSの使用量プロファイル」[RFC8310]で使用されます。プロフィール。"
+    },
+    {
+      "indent": 3,
+      "text": "DNS clients SHOULD remember server IP addresses that don't support DoQ. Mobile clients might also remember the lack of DoQ support by given IP addresses on a per-context basis (e.g., per network or provisioning domain).",
+      "ja": "DNSクライアントは、DOQをサポートしていないサーバーIPアドレスを覚えておく必要があります。モバイルクライアントは、コンテキストごとのIPアドレスによるDOQサポートの欠如を覚えている場合もあります（ネットワークごとまたはプロビジョニングドメインなど）。"
+    },
+    {
+      "indent": 3,
+      "text": "Timeouts, connection refusals, and QUIC handshake failures are indicators that a server does not support DoQ. Clients SHOULD NOT attempt DoQ queries to a server that does not support DoQ for a reasonable period (such as one hour per server). DNS clients following an out-of-band key-pinned usage profile [RFC7858] MAY be more aggressive about retrying after DoQ connection failures.",
+      "ja": "タイムアウト、接続の拒否、およびQUICハンドシェイク障害は、サーバーがDOQをサポートしていないことを示す指標です。クライアントは、妥当な期間（サーバーごとに1時間など）DOQをサポートしていないサーバーにDOQクエリを試みるべきではありません。帯域外のキーピン化された使用法プロファイル[RFC7858]に従ってDNSクライアントは、DOQ接続の障害後の再試行についてより積極的になる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Address Validation",
+      "section_title": true,
+      "ja": "5.3. アドレス検証"
+    },
+    {
+      "indent": 3,
+      "text": "Section 8 of [RFC9000], the QUIC transport specification, defines Address Validation procedures to avoid servers being used in address amplification attacks. DoQ implementations MUST conform to this specification, which limits the worst-case amplification to a factor 3.",
+      "ja": "[RFC9000]のセクション8であるQUIC輸送仕様は、アドレス増幅攻撃で使用されているサーバーを避けるためのアドレス検証手順を定義しています。DOQの実装は、この仕様に準拠する必要があり、最悪のケース増幅を要因3に制限します。"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ implementations SHOULD consider configuring servers to use the Address Validation using Retry Packets procedure defined in Section 8.1.2 of [RFC9000], the QUIC transport specification. This procedure imposes a 1-RTT delay for verifying the return routability of the source address of a client, similar to the DNS Cookies mechanism [RFC7873].",
+      "ja": "DOQの実装では、[RFC9000]のセクション8.1.2で定義されているRetryパケット手順を使用して、QUIC輸送仕様で定義されたアドレス検証を使用してサーバーを構成することを検討する必要があります。この手順では、DNS Cookiesメカニズム[RFC7873]と同様に、クライアントのソースアドレスの返品ルーティング可能性を確認するための1-RTT遅延を課します。"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ implementations that configure Address Validation using Retry Packets SHOULD implement the Address Validation for Future Connections procedure defined in Section 8.1.3 of [RFC9000], the QUIC transport specification. This defines how servers can send NEW_TOKEN frames to clients after the client address is validated in order to avoid the 1-RTT penalty during subsequent connections by the client from the same address.",
+      "ja": "RETRYパケットを使用してアドレス検証を構成するDOQ実装は、[RFC9000]のセクション8.1.3、QUIC輸送仕様で定義されている将来の接続手順のアドレス検証を実装する必要があります。これは、同じアドレスからクライアントによる後続の接続中に1-RTTペナルティを回避するために、クライアントアドレスが検証された後、サーバーがクライアントにnew_tokenフレームをクライアントに送信する方法を定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Padding",
+      "section_title": true,
+      "ja": "5.4. パディング"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MUST protect against the traffic analysis attacks described in Section 7.5 by the judicious injection of padding. This could be done either by padding individual DNS messages using the EDNS(0) Padding Option [RFC7830] or by padding QUIC packets (see Section 19.1 of [RFC9000]).",
+      "ja": "実装は、パディングの賢明な注射により、セクション7.5に記載されているトラフィック分析攻撃から保護する必要があります。これは、EDNS（0）パディングオプション[RFC7830]を使用して個々のDNSメッセージをパディングするか、QUICパケットをパディングすることで実行できます（[RFC9000]のセクション19.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "In theory, padding at the QUIC packet level could result in better performance for the equivalent protection, because the amount of padding can take into account non-DNS frames such as acknowledgements or flow control updates, and also because QUIC packets can carry multiple DNS messages. However, applications can only control the amount of padding in QUIC packets if the implementation of QUIC exposes adequate APIs. This leads to the following recommendations:",
+      "ja": "理論的には、QUICパケットレベルでのパディングは、パディングの量が確認やフロー制御の更新などの非DNSフレームを考慮することができるため、QUICパケットが複数のDNSメッセージを伝えることができるため、同等の保護のパフォーマンスが向上する可能性があります。。ただし、アプリケーションは、QUICの実装が適切なAPIを公開する場合にのみ、QUICパケット内のパディングの量を制御できます。これは、次の推奨事項につながります。"
+    },
+    {
+      "indent": 3,
+      "text": "* If the implementation of QUIC exposes APIs to set a padding policy, DoQ SHOULD use that API to align the packet length to a small set of fixed sizes.",
+      "ja": "* QUICの実装がAPIを公開してパディングポリシーを設定する場合、DOQはそのAPIを使用してパケットの長さを小さな固定サイズのセットに合わせる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* If padding at the QUIC packet level is not available or not used, DoQ MUST ensure that all DNS queries and responses are padded to a small set of fixed sizes, using the EDNS(0) padding extension as specified in [RFC7830].",
+      "ja": "* QUICパケットレベルのパディングが使用できないか使用されていない場合、DOQは、[RFC7830]で指定されているEDN（0）パディング延長を使用して、すべてのDNSクエリと応答が固定サイズの小さなセットにパッドで供給されることを確認する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations might choose not to use a QUIC API for padding if it is significantly simpler to reuse existing DNS message padding logic that is applied to other encrypted transports.",
+      "ja": "実装は、他の暗号化されたトランスポートに適用される既存のDNSメッセージパディングロジックを再利用するのが大幅に簡単である場合、パディングにQUIC APIを使用しないことを選択する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the absence of a standard policy for padding sizes, implementations SHOULD follow the recommendations of the Experimental status \"Padding Policies for Extension Mechanisms for DNS (EDNS(0))\" [RFC8467]. While Experimental, these recommendations are referenced because they are implemented and deployed for DoT and provide a way for implementations to be fully compliant with this specification.",
+      "ja": "パディングサイズの標準ポリシーがない場合、実装は、実験ステータス「DNS（EDNS（0））の拡張メカニズムのパディングポリシー」[RFC8467]の推奨事項に従う必要があります。実験的ですが、これらの推奨事項は、DOT用に実装および展開され、実装がこの仕様に完全に準拠する方法を提供するため、参照されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5. Connection Handling",
+      "section_title": true,
+      "ja": "5.5. 接続処理"
+    },
+    {
+      "indent": 3,
+      "text": "\"DNS Transport over TCP - Implementation Requirements\" [RFC7766] provides updated guidance on DNS over TCP, some of which is applicable to DoQ. This section provides similar advice on connection handling for DoQ.",
+      "ja": "「TCPを介したDNS輸送 - 実装要件」[RFC7766]は、TCPを介したDNSに関する更新されたガイダンスを提供します。その一部はDOQに適用できます。このセクションでは、DOQの接続処理に関する同様のアドバイスを提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5.1. Connection Reuse",
+      "section_title": true,
+      "ja": "5.5.1. 接続の再利用"
+    },
+    {
+      "indent": 3,
+      "text": "Historic implementations of DNS clients are known to open and close TCP connections for each DNS query. To amortize connection setup costs, both clients and servers SHOULD support connection reuse by sending multiple queries and responses over a single persistent QUIC connection.",
+      "ja": "DNSクライアントの歴史的な実装は、各DNSクエリのTCP接続を開設および閉じることが知られています。接続のセットアップコストを償却するには、クライアントとサーバーの両方が、単一の永続的なQUIC接続で複数のクエリと応答を送信することにより、接続の再利用をサポートする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to achieve performance on par with UDP, DNS clients SHOULD send their queries concurrently over the QUIC streams on a QUIC connection. That is, when a DNS client sends multiple queries to a server over a QUIC connection, it SHOULD NOT wait for an outstanding reply before sending the next query.",
+      "ja": "UDPと同等のパフォーマンスを達成するために、DNSクライアントは、QUIC接続のQUICストリームを介してクエリを同時に送信する必要があります。つまり、DNSクライアントがQUIC接続を介して複数のクエリをサーバーに送信した場合、次のクエリを送信する前に未払いの返信を待たないでください。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5.2. Resource Management",
+      "section_title": true,
+      "ja": "5.5.2. 資源管理"
+    },
+    {
+      "indent": 3,
+      "text": "Proper management of established and idle connections is important to the healthy operation of a DNS server.",
+      "ja": "DNSサーバーの健全な動作にとって、確立されたアイドル接続とアイドル接続の適切な管理が重要です。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation of DoQ SHOULD follow best practices similar to those specified for DNS over TCP [RFC7766], in particular with regard to:",
+      "ja": "DOQの実装は、特に以下に関して、TCP [RFC7766]を介してDNSに指定されたものと同様のベストプラクティスに従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* Concurrent Connections (Section 6.2.2 of [RFC7766], updated by Section 6.4 of [RFC9103])",
+      "ja": "* 同時接続（[RFC7766]のセクション6.2.2、[RFC9103]のセクション6.4で更新）"
+    },
+    {
+      "indent": 3,
+      "text": "* Security Considerations (Section 10 of [RFC7766])",
+      "ja": "* セキュリティ上の考慮事項（[RFC7766]のセクション10）"
+    },
+    {
+      "indent": 3,
+      "text": "Failure to do so may lead to resource exhaustion and denial of service.",
+      "ja": "そうしないと、リソースの疲労とサービスの拒否につながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients that want to maintain long duration DoQ connections SHOULD use the idle timeout mechanisms defined in Section 10.1 of [RFC9000], the QUIC transport specification. Clients and servers MUST NOT send the edns-tcp-keepalive EDNS(0) Option [RFC7828] in any messages sent on a DoQ connection (because it is specific to the use of TCP/TLS as a transport).",
+      "ja": "長期間のDOQ接続を維持したいクライアントは、[RFC9000]のセクション10.1、QUIC輸送仕様で定義されているアイドルタイムアウトメカニズムを使用する必要があります。クライアントとサーバーは、DOQ接続で送信されたメッセージにEDNS-TCP-Keepalive EDNS（0）オプション[RFC7828]を送信してはなりません（TCP/TLSの輸送としての使用に固有のためです）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not make specific recommendations for timeout values on idle connections. Clients and servers should reuse and/or close connections depending on the level of available resources. Timeouts may be longer during periods of low activity and shorter during periods of high activity.",
+      "ja": "このドキュメントでは、アイドル接続のタイムアウト値について特定の推奨事項を作成しません。クライアントとサーバーは、利用可能なリソースのレベルに応じて、接続を再利用および/または閉鎖する必要があります。タイムアウトは、活動が低い期間中は長く、活動が高い期間中は短くなる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5.3. Using 0-RTT and Session Resumption",
+      "section_title": true,
+      "ja": "5.5.3. 0-RTTとセッション再開を使用します"
+    },
+    {
+      "indent": 3,
+      "text": "Using 0-RTT for DoQ has many compelling advantages. Clients can establish connections and send queries without incurring a connection delay. Servers can thus negotiate low values of the connection timers, which reduces the total number of connections that they need to manage. They can do that because the clients that use 0-RTT will not incur latency penalties if new connections are required for a query.",
+      "ja": "DOQに0-RTTを使用するには、多くの説得力のある利点があります。クライアントは、接続遅延を発生させることなく、接続を確立し、クエリを送信できます。したがって、サーバーは、接続タイマーの低い値をネゴシエートすることができ、管理する必要がある接続の総数が減少します。0-RTTを使用するクライアントは、クエリに新しい接続が必要な場合、レイテンシーペナルティが発生しないため、それを行うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Session resumption and 0-RTT data transmission create privacy risks detailed in Sections 7.1 and 7.2. The following recommendations are meant to reduce the privacy risks while enjoying the performance benefits of 0-RTT data, subject to the restrictions specified in Section 4.5.",
+      "ja": "セッション再開と0-RTTデータ送信は、セクション7.1および7.2で詳述されているプライバシーリスクを作成します。以下の推奨事項は、セクション4.5で指定された制限を条件として、0-RTTデータのパフォーマンスメリットを享受しながら、プライバシーリスクを減らすことを目的としています。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD use resumption tickets only once, as specified in Appendix C.4 of [RFC8446]. By default, clients SHOULD NOT use session resumption if the client's connectivity has changed.",
+      "ja": "クライアントは、[RFC8446]の付録C.4に指定されているように、再開チケットを一度だけ使用する必要があります。デフォルトでは、クライアントの接続が変更された場合、クライアントはセッション再開を使用しないでください。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients could receive address validation tokens from the server using the NEW_TOKEN mechanism; see Section 8 of [RFC9000]. The associated tracking risks are mentioned in Section 7.3. Clients SHOULD only use the address validation tokens when they are also using session resumption thus avoiding additional tracking risks.",
+      "ja": "クライアントは、new_tokenメカニズムを使用して、サーバーからアドレス検証トークンを受信できます。[RFC9000]のセクション8を参照してください。関連する追跡リスクは、セクション7.3で言及されています。クライアントは、セッション再開を使用している場合にのみアドレス検証トークンを使用する必要があります。したがって、追加の追跡リスクを回避する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers SHOULD issue session resumption tickets with a sufficiently long lifetime (e.g., 6 hours), so that clients are not tempted to either keep the connection alive or frequently poll the server to renew session resumption tickets. Servers SHOULD implement the anti-replay mechanisms specified in Section 8 of [RFC8446].",
+      "ja": "サーバーは、セッション再開チケットを十分に長い寿命（6時間）で発行する必要があります。そのため、クライアントは接続を生かし続けるか、サーバーを頻繁に投票してセッション再開チケットを更新するように誘惑されません。サーバーは、[RFC8446]のセクション8で指定されているアンチレプレイメカニズムを実装する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5.4. Controlling Connection Migration for Privacy",
+      "section_title": true,
+      "ja": "5.5.4. プライバシーのための接続移行の制御"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ implementations might consider using the connection migration features defined in Section 9 of [RFC9000]. These features enable connections to continue operating as the client's connectivity changes. As detailed in Section 7.4, these features trade off privacy for latency. By default, clients SHOULD be configured to prioritize privacy and start new sessions if their connectivity changes.",
+      "ja": "DOQ実装では、[RFC9000]のセクション9で定義されている接続移行機能の使用を検討する場合があります。これらの機能により、クライアントの接続が変化するにつれて接続が動作を続けることができます。セクション7.4で詳述されているように、これらの機能はレイテンシのためにプライバシーをトレードオフします。デフォルトでは、クライアントはプライバシーに優先順位を付け、接続性が変更された場合に新しいセッションを開始するように構成する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.6. Processing Queries in Parallel",
+      "section_title": true,
+      "ja": "5.6. 並行してクエリを処理します"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in Section 7 of [RFC7766] \"DNS Transport over TCP - Implementation Requirements\", resolvers are RECOMMENDED to support the preparing of responses in parallel and sending them out of order. In DoQ, they do that by sending responses on their specific stream as soon as possible, without waiting for availability of responses for previously opened streams.",
+      "ja": "[RFC7766]のセクション7で指定されているように、「TCPに対するDNS輸送 - 実装要件」は、並行して応答の準備をサポートし、それらを順番に送信するために推奨されます。DOQでは、以前に開かれたストリームの応答の可用性を待つことなく、できるだけ早く特定のストリームに応答を送信することでそれを行います。"
+    },
+    {
+      "indent": 0,
+      "text": "5.7. Zone Transfer",
+      "section_title": true,
+      "ja": "5.7. ゾーン転送"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9103] specifies zone transfer over TLS (XoT) and includes updates to [RFC1995] (IXFR), [RFC5936] (AXFR), and [RFC7766]. Considerations relating to the reuse of XoT connections described there apply analogously to zone transfers performed using DoQ connections. One reason for reiterating such specific guidance is the lack of effective connection reuse in existing TCP/TLS zone transfer implementations today. The following recommendations apply:",
+      "ja": "[RFC9103]は、TLS（XOT）を介したゾーン転送を指定し、[RFC1995]（IXFR）、[RFC5936]（AXFR）、および[RFC7766]の更新を含めます。そこに記載されているXOT接続の再利用に関する考慮事項は、DOQ接続を使用して実行されたゾーン転送に類似して適用されます。このような特定のガイダンスを繰り返す理由の1つは、今日の既存のTCP/TLSゾーン転送の実装における効果的な接続再利用の欠如です。次の推奨事項が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* DoQ servers MUST be able to handle multiple concurrent IXFR requests on a single QUIC connection.",
+      "ja": "* DOQサーバーは、単一のQUIC接続で複数の同時のIXFR要求を処理できる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* DoQ servers MUST be able to handle multiple concurrent AXFR requests on a single QUIC connection.",
+      "ja": "* DOQサーバーは、単一のQUIC接続で複数の同時AXFR要求を処理できる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* DoQ implementations SHOULD",
+      "ja": "* DOQ実装は必要です"
+    },
+    {
+      "indent": 6,
+      "text": "- use the same QUIC connection for both AXFR and IXFR requests to the same primary",
+      "ja": "- AXFRとIXFR要求の両方に同じプライマリに同じQUIC接続を使用します"
+    },
+    {
+      "indent": 6,
+      "text": "- send those requests in parallel as soon as they are queued, i.e., do not wait for a response before sending the next query on the connection (this is analogous to pipelining requests on a TCP/TLS connection)",
+      "ja": "- これらのリクエストは、キューがキューになったらすぐに並行して送信します。つまり、接続の次のクエリを送信する前に応答を待たないでください（これは、TCP/TLS接続のパイプラインリクエストに類似しています）"
+    },
+    {
+      "indent": 6,
+      "text": "- send the response(s) for each request as soon as they are available, i.e., response streams MAY be sent intermingled",
+      "ja": "- リクエストが利用可能になり次第、各リクエストに対して応答を送信します。つまり、応答ストリームを混ぜ合わせることができます"
+    },
+    {
+      "indent": 0,
+      "text": "5.8. Flow Control Mechanisms",
+      "section_title": true,
+      "ja": "5.8. フロー制御メカニズム"
+    },
+    {
+      "indent": 3,
+      "text": "Servers and clients manage flow control using the mechanisms defined in Section 4 of [RFC9000]. These mechanisms allow clients and servers to specify how many streams can be created, how much data can be sent on a stream, and how much data can be sent on the union of all streams. For DoQ, controlling how many streams are created allows servers to control how many new requests the client can send on a given connection.",
+      "ja": "サーバーとクライアントは、[RFC9000]のセクション4で定義されたメカニズムを使用してフロー制御を管理します。これらのメカニズムにより、クライアントとサーバーは、作成できるストリームの数、ストリームで送信できるデータの量、およびすべてのストリームのユニオンで送信できるデータの量を指定できます。DOQの場合、作成されたストリームの数を制御することで、サーバーが特定の接続でクライアントが送信できる新しいリクエストの数を制御できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Flow control exists to protect endpoint resources. For servers, global and per-stream flow control limits control how much data can be sent by clients. The same mechanisms allow clients to control how much data can be sent by servers. Values that are too small will unnecessarily limit performance. Values that are too large might expose endpoints to overload or memory exhaustion. Implementations or deployments will need to adjust flow control limits to balance these concerns. In particular, zone transfer implementations will need to control these limits carefully to ensure both large and concurrent zone transfers are well managed.",
+      "ja": "エンドポイントリソースを保護するためのフロー制御が存在します。サーバーの場合、グローバルおよびストリームごとのフロー制御制限は、クライアントが送信できるデータの量を制御します。同じメカニズムにより、クライアントはサーバーで送信できるデータの量を制御できます。小さすぎる値は、不必要にパフォーマンスを制限します。大きすぎる値は、エンドポイントを過負荷またはメモリの疲労にさらしている可能性があります。実装または展開は、これらの懸念のバランスをとるためにフロー制御制限を調整する必要があります。特に、ゾーン転送の実装は、これらの制限を慎重に制御して、大規模および同時ゾーン転送の両方が十分に管理されるようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Initial values of parameters control how many requests and how much data can be sent by clients and servers at the beginning of the connection. These values are specified in transport parameters exchanged during the connection handshake. The parameter values received in the initial connection also control how many requests and how much data can be sent by clients using 0-RTT data in a resumed connection. Using too small values of these initial parameters would restrict the usefulness of allowing 0-RTT data.",
+      "ja": "パラメーターの初期値は、接続の先頭にクライアントとサーバーが送信できるリクエストの数と量のデータを制御します。これらの値は、接続ハンドシェイク中に交換される輸送パラメーターで指定されています。初期接続で受信されたパラメーター値は、再開された接続で0-RTTデータを使用してクライアントが送信できるリクエストの数と量のデータを制御します。これらの初期パラメーターの値が小さすぎると、0-RTTデータが許可されるという有用性が制限されます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティ上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "A Threat Analysis of the Domain Name System is found in [RFC3833]. This analysis was written before the development of DoT, DoH, and DoQ, and probably needs to be updated.",
+      "ja": "ドメイン名システムの脅威分析は[RFC3833]にあります。この分析は、DOT、DOH、およびDOQの開発の前に書かれており、おそらく更新する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations of DoQ should be comparable to those of DoT [RFC7858]. DoT as specified in [RFC7858] only addresses the stub to recursive scenario, but the considerations about person-in-the-middle attacks, middleboxes, and caching of data from cleartext connections also apply for DoQ to the resolver to authoritative server scenario. As stated in Section 5.1, the authentication requirements for securing zone transfer using DoQ are the same as those for zone transfer over DoT; therefore, the general security considerations are entirely analogous to those described in [RFC9103].",
+      "ja": "DOQのセキュリティ上の考慮事項は、DOT [RFC7858]のセキュリティに関する考慮事項に匹敵する必要があります。[RFC7858]で指定されているDOTは、スタブに再帰シナリオにのみ対処しますが、中間者攻撃、ミドルボックス、クリアテキスト接続からのデータのキャッシュに関する考慮事項は、DOQにも制度的なサーバーシナリオに適用されます。セクション5.1で述べたように、DOQを使用してゾーン転送を保護するための認証要件は、DOTを超えるゾーン転送の要件と同じです。したがって、一般的なセキュリティ上の考慮事項は、[RFC9103]に記載されているものと完全に類似しています。"
+    },
+    {
+      "indent": 3,
+      "text": "DoQ relies on QUIC, which itself relies on TLS 1.3 and thus supports by default the protections against downgrade attacks described in [BCP195]. QUIC-specific issues and their mitigations are described in Section 21 of [RFC9000].",
+      "ja": "DOQはQUICに依存しており、それ自体がTLS 1.3に依存しているため、[BCP195]に記載されている格下げ攻撃に対する保護をデフォルトでサポートしています。QUIC固有の問題とそれらの緩和は、[RFC9000]のセクション21で説明されています。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Privacy Considerations",
+      "section_title": true,
+      "ja": "7. プライバシーに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The general considerations of encrypted transports provided in \"DNS Privacy Considerations\" [RFC9076] apply to DoQ. The specific considerations provided there do not differ between DoT and DoQ, and they are not discussed further here. Similarly, \"Recommendations for DNS Privacy Service Operators\" [RFC8932] (which covers operational, policy, and security considerations for DNS privacy services) is also applicable to DoQ services.",
+      "ja": "「DNSプライバシーに関する考慮事項」[RFC9076]で提供される暗号化されたトランスポートの一般的な考慮事項は、DOQに適用されます。そこに与えられた特定の考慮事項は、DOTとDOQの間で違いはありません。これらはここではこれ以上議論されていません。同様に、「DNSプライバシーサービスオペレーターの推奨事項」[RFC8932]（DNSプライバシーサービスの運用、ポリシー、およびセキュリティ上の考慮事項をカバーする）もDOQサービスに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC incorporates the mechanisms of TLS 1.3 [RFC8446], and this enables QUIC transmission of \"0-RTT\" data. This can provide interesting latency gains, but it raises two concerns:",
+      "ja": "QUICには、TLS 1.3 [RFC8446]のメカニズムが組み込まれており、これにより「0-RTT」データのQUIC伝送が可能になります。これは興味深い待ち時間の利益を提供する可能性がありますが、2つの懸念を引き起こします。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Adversaries could replay the 0-RTT data and infer its content from the behavior of the receiving server.",
+      "ja": "1. 敵は0-RTTデータを再生し、受信サーバーの動作からそのコンテンツを推測できます。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The 0-RTT mechanism relies on TLS session resumption, which can provide linkability between successive client sessions.",
+      "ja": "2. 0-RTTメカニズムは、TLSセッションの再開に依存しており、これにより、連続したクライアントセッション間のリンク可能性が得られます。"
+    },
+    {
+      "indent": 3,
+      "text": "These issues are developed in Sections 7.1 and 7.2.",
+      "ja": "これらの問題は、セクション7.1および7.2で開発されています。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Privacy Issues with 0-RTT data",
+      "section_title": true,
+      "ja": "7.1. 0-RTTデータのプライバシーの問題"
+    },
+    {
+      "indent": 3,
+      "text": "The 0-RTT data can be replayed by adversaries. That data may trigger queries by a recursive resolver to authoritative resolvers. Adversaries may be able to pick a time at which the recursive resolver outgoing traffic is observable and thus find out what name was queried for in the 0-RTT data.",
+      "ja": "0-RTTデータは、敵が再生できます。そのデータは、権威あるリゾルバーへの再帰的リゾルバーによってクエリをトリガーする場合があります。敵は、再帰リゾルバーの発信トラフィックが観察可能な時間を選択できるため、0-RTTデータでどの名前がクエリされたかを見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This risk is in fact a subset of the general problem of observing the behavior of the recursive resolver discussed in \"DNS Privacy Considerations\" [RFC9076]. The attack is partially mitigated by reducing the observability of this traffic. The mandatory replay protection mechanisms in TLS 1.3 [RFC8446] limit but do not eliminate the risk of replay. 0-RTT packets can only be replayed within a narrow window, which is only wide enough to account for variations in clock skew and network transmission.",
+      "ja": "このリスクは、実際には、「DNSプライバシーに関する考慮事項」[RFC9076]で議論されている再帰リゾルバーの行動を観察する一般的な問題のサブセットです。攻撃は、このトラフィックの観察性を低下させることにより部分的に軽減されます。TLS 1.3 [RFC8446]の必須のリプレイ保護メカニズムは、リプレイのリスクを排除しません。0-RTTパケットは、狭いウィンドウ内でのみ再生できます。これは、クロックスキューとネットワーク伝送のバリエーションを考慮するのに十分な幅のみです。"
+    },
+    {
+      "indent": 3,
+      "text": "The recommendation for TLS 1.3 [RFC8446] is that the capability to use 0-RTT data should be turned off by default and only enabled if the user clearly understands the associated risks. In the case of DoQ, allowing 0-RTT data provides significant performance gains, and there is a concern that a recommendation to not use it would simply be ignored. Instead, a set of practical recommendations is provided in Sections 4.5 and 5.5.3.",
+      "ja": "TLS 1.3 [RFC8446]の推奨は、0-RTTデータを使用する機能をデフォルトでオフにし、ユーザーが関連するリスクを明確に理解している場合にのみ有効にする必要があることです。DOQの場合、0-RTTデータを許可すると、パフォーマンスが大幅に向上し、使用しないという推奨が単に無視されるという懸念があります。代わりに、一連の実用的な推奨事項がセクション4.5および5.5.3に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The specifications in Section 4.5 block the most obvious risks of replay attacks, as they only allow for transactions that will not change the long-term state of the server.",
+      "ja": "セクション4.5の仕様は、サーバーの長期的な状態を変更しないトランザクションのみを可能にするため、リプレイ攻撃の最も明らかなリスクをブロックします。"
+    },
+    {
+      "indent": 3,
+      "text": "The attacks described above apply to the stub resolver to recursive resolver scenario, but similar attacks might be envisaged in the recursive resolver to authoritative resolver scenario, and the same mitigations apply.",
+      "ja": "上記の攻撃は、スタブリゾルバーに再帰的なリゾルバーシナリオに適用されますが、同様の攻撃は、権威あるリゾルバーシナリオへの再帰的なリゾルバーで想定されている可能性があり、同じ緩和が適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Privacy Issues with Session Resumption",
+      "section_title": true,
+      "ja": "7.2. セッション再開に関するプライバシーの問題"
+    },
+    {
+      "indent": 3,
+      "text": "The QUIC session resumption mechanism reduces the cost of re-establishing sessions and enables 0-RTT data. There is a linkability issue associated with session resumption, if the same resumption token is used several times. Attackers on path between client and server could observe repeated usage of the token and use that to track the client over time or over multiple locations.",
+      "ja": "QUICセッション再開メカニズムは、セッションの再確立コストを削減し、0-RTTデータを有効にします。同じ再開トークンが数回使用される場合、セッション再開に関連するリンク可能性の問題があります。クライアントとサーバーの間のパスの攻撃者は、トークンの繰り返しの使用法を観察し、それを使用してクライアントを長期または複数の場所で追跡することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The session resumption mechanism allows servers to correlate the resumed sessions with the initial sessions and thus to track the client. This creates a virtual long duration session. The series of queries in that session can be used by the server to identify the client. Servers can most probably do that already if the client address remains constant, but session resumption tickets also enable tracking after changes of the client's address.",
+      "ja": "セッション再開メカニズムにより、サーバーは再開されたセッションを最初のセッションと相関させ、クライアントを追跡できます。これにより、仮想の長期セッションが作成されます。そのセッションの一連のクエリは、サーバーがクライアントを識別するために使用できます。サーバーは、クライアントアドレスが一定のままである場合、おそらくすでにそれを行うことができますが、セッション再開チケットは、クライアントのアドレスを変更した後の追跡も可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "The recommendations in Section 5.5.3 are designed to mitigate these risks. Using session tickets only once mitigates the risk of tracking by third parties. Refusing to resume a session if addresses change mitigates the incremental risk of tracking by the server (but the risk of tracking by IP address remains).",
+      "ja": "セクション5.5.3の推奨事項は、これらのリスクを軽減するように設計されています。セッションチケットを使用すると、サードパーティによる追跡のリスクを軽減します。アドレスが変更された場合、セッションの再開を拒否すると、サーバーによる追跡の増分リスクが軽減されます（ただし、IPアドレスによる追跡のリスクは残ります）。"
+    },
+    {
+      "indent": 3,
+      "text": "The privacy trade-offs here may be context specific. Stub resolvers will have a strong motivation to prefer privacy over latency since they often change location. However, recursive resolvers that use a small set of static IP addresses are more likely to prefer the reduced latency provided by session resumption and may consider this a valid reason to use resumption tickets even if the IP address changed between sessions.",
+      "ja": "ここでのプライバシートレードオフは、コンテキスト固有の場合があります。スタブリゾルバーは、場所を変更することが多いため、レイテンシよりもプライバシーを好む強い動機を持ちます。ただし、静的IPアドレスの小さなセットを使用する再帰リゾルバーは、セッション再開によって提供されるレイテンシの削減を好む可能性が高く、これをセッション間にIPアドレスが変更された場合でも再開チケットを使用する正当な理由と考える場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Encrypted zone transfer ([RFC9103]) explicitly does not attempt to hide the identity of the parties involved in the transfer; at the same time, such transfers are not particularly latency sensitive. This means that applications supporting zone transfers may decide to apply the same protections as stub to recursive applications.",
+      "ja": "暗号化されたゾーン転送（[RFC9103]）は、譲渡に関与する当事者の身元を明示的に隠そうとしません。同時に、そのような転送は特に潜在性に敏感ではありません。これは、ゾーン転送をサポートするアプリケーションが、スタブと同じ保護を再帰アプリケーションに適用することを決定する可能性があることを意味します。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3. Privacy Issues with Address Validation Tokens",
+      "section_title": true,
+      "ja": "7.3. アドレス検証トークンに関するプライバシーの問題"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC specifies address validation mechanisms in Section 8 of [RFC9000]. Use of an address validation token allows QUIC servers to avoid an extra RTT for new connections. Address validation tokens are typically tied to an IP address. QUIC clients normally only use these tokens when setting up a new connection from a previously used address. However, clients are not always aware that they are using a new address. This could be due to NAT, or because the client does not have an API available to check if the IP address has changed (which can be quite often for IPv6). There is a linkability risk if clients mistakenly use address validation tokens after unknowingly moving to a new location.",
+      "ja": "QUICは、[RFC9000]のセクション8のアドレス検証メカニズムを指定します。アドレス検証トークンを使用すると、QUICサーバーが新しい接続用の追加のRTTを回避できます。アドレス検証トークンは通常、IPアドレスに結び付けられます。QUICクライアントは通常、以前に使用したアドレスから新しい接続を設定するときにのみこれらのトークンを使用します。ただし、クライアントは新しいアドレスを使用していることを常に認識しているわけではありません。これは、NATが原因である可能性があります。または、クライアントがIPアドレスが変更されたかどうかを確認できるAPIを使用できないためです（IPv6の場合は非常に頻繁に行うことがあります）。知らないうちに新しい場所に移動した後、クライアントがアドレス検証トークンを誤って使用する場合、リンク可能性のリスクがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The recommendations in Section 5.5.3 mitigates this risk by tying the usage of the NEW_TOKEN to that of session resumption, though this recommendation does not cover the case where the client is unaware of the address change.",
+      "ja": "セクション5.5.3の推奨事項は、new_tokenの使用をセッション再開の使用と結び付けることにより、このリスクを軽減しますが、この推奨事項は、クライアントがアドレスの変更に気付いていない場合をカバーしていません。"
+    },
+    {
+      "indent": 0,
+      "text": "7.4. Privacy Issues with Long Duration Sessions",
+      "section_title": true,
+      "ja": "7.4. 長期セッションのプライバシーの問題"
+    },
+    {
+      "indent": 3,
+      "text": "A potential alternative to session resumption is the use of long duration sessions: if a session remains open for a long time, new queries can be sent without incurring connection establishment delays. It is worth pointing out that the two solutions have similar privacy characteristics. Session resumption may allow servers to keep track of the IP addresses of clients, but long duration sessions have the same effect.",
+      "ja": "セッション再開の潜在的な代替手段は、長期間のセッションの使用です。セッションが長時間開いたままである場合、接続確立の遅延を発生させることなく新しいクエリを送信できます。2つのソリューションには同様のプライバシー特性があることを指摘する価値があります。セッションの再開により、サーバーはクライアントのIPアドレスを追跡することができますが、長期セッションは同じ効果があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In particular, a DoQ implementation might take advantage of the connection migration features of QUIC to maintain a session even if the client's connectivity changes, for example, if the client migrates from a Wi-Fi connection to a cellular network connection and then to another Wi-Fi connection. The server would be able to track the client location by monitoring the succession of IP addresses used by the long duration connection.",
+      "ja": "特に、DOQの実装は、クライアントの接続が変更された場合でも、クライアントがWi-Fi接続からセルラーネットワーク接続に移行し、次に別のWiに移行した場合でもセッションを維持するためにQUICの接続移行機能を活用する可能性があります。-fi接続。サーバーは、長期的な接続で使用されるIPアドレスの継承を監視することにより、クライアントの場所を追跡できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The recommendation in Section 5.5.4 mitigates the privacy concerns related to long duration sessions using multiple client addresses.",
+      "ja": "セクション5.5.4の推奨事項は、複数のクライアントアドレスを使用した長期セッションに関連するプライバシーの懸念を軽減します。"
+    },
+    {
+      "indent": 0,
+      "text": "7.5. Traffic Analysis",
+      "section_title": true,
+      "ja": "7.5. トラフィック分析"
+    },
+    {
+      "indent": 3,
+      "text": "Even though QUIC packets are encrypted, adversaries can gain information from observing packet lengths, in both queries and responses, as well as packet timing. Many DNS requests are emitted by web browsers. Loading a specific web page may require resolving dozens of DNS names. If an application adopts a simple mapping of one query or response per packet, or \"one QUIC STREAM frame per packet\", then the succession of packet lengths may provide enough information to identify the requested site.",
+      "ja": "QUICパケットは暗号化されていますが、敵はパケットの長さ、応答の両方でパケットの長さを観察することから情報を得ることができます。多くのDNSリクエストは、Webブラウザーによって放出されます。特定のWebページをロードするには、数十のDNS名を解決する必要がある場合があります。アプリケーションがパケットごとに1つのクエリまたは応答の単純なマッピング、または「パケットごとに1つのQuicストリームフレーム」を採用する場合、パケットの長さの連続は、要求されたサイトを識別するのに十分な情報を提供する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations SHOULD use the mechanisms defined in Section 5.4 to mitigate this attack.",
+      "ja": "実装は、セクション5.4で定義されているメカニズムを使用して、この攻撃を軽減する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Registration of a DoQ Identification String",
+      "section_title": true,
+      "ja": "8.1. DOQ識別文字列の登録"
+    },
+    {
+      "indent": 3,
+      "text": "This document creates a new registration for the identification of DoQ in the \"TLS Application-Layer Protocol Negotiation (ALPN) Protocol IDs\" registry [RFC7301].",
+      "ja": "このドキュメントでは、「TLSアプリケーション層プロトコルネゴシエーション（ALPN）プロトコルIDS」レジストリ[RFC7301]にDOQを識別するための新しい登録を作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"doq\" string identifies DoQ:",
+      "ja": "「doq」文字列はdoqを識別します："
+    },
+    {
+      "indent": 3,
+      "text": "Protocol: DoQ",
+      "ja": "プロトコル：DOQ"
+    },
+    {
+      "indent": 3,
+      "text": "Identification Sequence: 0x64 0x6F 0x71 (\"doq\")",
+      "ja": "識別シーケンス：0x64 0x6f 0x71（ \"doq\"）"
+    },
+    {
+      "indent": 3,
+      "text": "Specification: This document",
+      "ja": "仕様：このドキュメント"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Reservation of a Dedicated Port",
+      "section_title": true,
+      "ja": "8.2. 専用のポートの予約"
+    },
+    {
+      "indent": 3,
+      "text": "For both TCP and UDP, port 853 is currently reserved for \"DNS query-response protocol run over TLS/DTLS\" [RFC7858].",
+      "ja": "TCPとUDPの両方について、ポート853は現在、「TLS/DTLSを超えて実行されるDNSクエリ応答プロトコル」[RFC7858]に予約されています。"
+    },
+    {
+      "indent": 3,
+      "text": "However, the specification for DNS over DTLS (DoD) [RFC8094] is experimental, limited to stub to resolver, and no implementations or deployments currently exist to the authors' knowledge (even though several years have passed since the specification was published).",
+      "ja": "ただし、DTL（DOD）[RFC8094]を超えるDNSの仕様は実験的であり、スタブに制限されており、著者の知識には現在実装や展開が存在しません（仕様が公開されてから数年が経過していますが）。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification additionally reserves the use of UDP port 853 for DoQ. QUIC version 1 was designed to be able to coexist with other protocols on the same port, including DTLS; see Section 17.2 of [RFC9000]. This means that deployments that serve DoD and DoQ (QUIC version 1) on the same port will be able to demultiplex the two due to the second most significant bit in each UDP payload. Such deployments ought to check the signatures of future versions or extensions (e.g., [GREASING-QUIC]) of QUIC and DTLS before deploying them to serve DNS on the same port.",
+      "ja": "この仕様は、DOQにUDPポート853の使用を留保します。QUICバージョン1は、DTLを含む同じポート上の他のプロトコルと共存できるように設計されています。[RFC9000]のセクション17.2を参照してください。これは、同じポートでDODとDOQ（QUICバージョン1）を提供する展開が、各UDPペイロードで2番目に重要なビットのために2つを否定することができることを意味します。このような展開は、同じポートでDNSを提供するためにそれらを展開する前に、QUICおよびDTLの将来のバージョンまたは拡張機能（[Greasing-Quic]）の署名をチェックする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has updated the following value in the \"Service Name and Transport Protocol Port Number Registry\" in the System range. The registry for that range requires IETF Review or IESG Approval [RFC6335].",
+      "ja": "IANAは、システム範囲の「サービス名と輸送プロトコルポート番号レジストリ」の次の値を更新しました。その範囲のレジストリには、IETFレビューまたはIESG承認[RFC6335]が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Service Name: domain-s",
+      "ja": "サービス名：domain-s"
+    },
+    {
+      "indent": 3,
+      "text": "Port Number: 853",
+      "ja": "ポート番号：853"
+    },
+    {
+      "indent": 3,
+      "text": "Transport Protocol(s): UDP",
+      "ja": "輸送プロトコル：UDP"
+    },
+    {
+      "indent": 3,
+      "text": "Assignee: IESG",
+      "ja": "譲受人：IESG"
+    },
+    {
+      "indent": 3,
+      "text": "Contact: IETF Chair",
+      "ja": "連絡先：IETFチェア"
+    },
+    {
+      "indent": 3,
+      "text": "Description: DNS query-response protocol run over DTLS or QUIC",
+      "ja": "説明：DNSクエリ応答プロトコルがDTLまたはQUICを介して実行される"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: [RFC7858][RFC8094] This document",
+      "ja": "参照：[RFC7858] [RFC8094]このドキュメント"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, IANA has updated the Description field for the corresponding TCP port 853 allocation to be \"DNS query-response protocol run over TLS\" and removed [RFC8094] from the TCP allocation's Reference field for consistency and clarity.",
+      "ja": "さらに、IANAは、対応するTCPポート853の割り当ての説明フィールドを「DNSクエリ応答プロトコルがTLSを介して実行する」と更新し、一貫性と明確さのためにTCP割り当ての参照フィールドから[RFC8094]を削除しました。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Reservation of an Extended DNS Error Code: Too Early",
+      "section_title": true,
+      "ja": "8.3. 拡張DNSエラーコードの予約：早すぎる"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has registered the following value in the \"Extended DNS Error Codes\" registry [RFC8914]:",
+      "ja": "IANAは、「拡張DNSエラーコード」レジストリ[RFC8914]に次の値を登録しています。"
+    },
+    {
+      "indent": 3,
+      "text": "INFO-CODE: 26",
+      "ja": "情報コード：26"
+    },
+    {
+      "indent": 3,
+      "text": "Purpose: Too Early",
+      "ja": "目的：早すぎる"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: This document",
+      "ja": "参照：このドキュメント"
+    },
+    {
+      "indent": 0,
+      "text": "8.4. DNS-over-QUIC Error Codes Registry",
+      "section_title": true,
+      "ja": "8.4. DNS-over-quicエラーコードレジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added a registry for \"DNS-over-QUIC Error Codes\" on the \"Domain Name System (DNS) Parameters\" web page.",
+      "ja": "IANAは、「ドメイン名システム（DNS）パラメーター」Webページに「DNS-Over-Quicエラーコード」のレジストリを追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"DNS-over-QUIC Error Codes\" registry governs a 62-bit space. This space is split into three regions that are governed by different policies:",
+      "ja": "「DNS-over-quicエラーコード」レジストリは、62ビットスペースを管理します。このスペースは、異なるポリシーによって管理される3つの地域に分割されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Permanent registrations for values between 0x00 and 0x3f (in hexadecimal; inclusive), which are assigned using Standards Action or IESG Approval as defined in Sections 4.9 and 4.10 of [RFC8126]",
+      "ja": "* 0x00から0x3Fの間の値（16進数、包括的）の永続的な登録。[RFC8126]のセクション4.9および4.10で定義されているように、標準アクションまたはIESG承認を使用して割り当てられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Permanent registrations for values larger than 0x3f, which are assigned using the Specification Required policy ([RFC8126])",
+      "ja": "* 仕様が必要なポリシーを使用して割り当てられる0x3Fを超える値の永続的な登録（[RFC8126]）"
+    },
+    {
+      "indent": 3,
+      "text": "* Provisional registrations for values larger than 0x3f, which require Expert Review, as defined in Section 4.5 of [RFC8126].",
+      "ja": "* [RFC8126]のセクション4.5で定義されているように、専門家のレビューを必要とする0x3Fを超える値の暫定登録。"
+    },
+    {
+      "indent": 3,
+      "text": "Provisional reservations share the range of values larger than 0x3f with some permanent registrations. This is by design to enable conversion of provisional registrations into permanent registrations without requiring changes in deployed systems. (This design is aligned with the principles set in Section 22 of [RFC9000].)",
+      "ja": "暫定的な予約は、0x3Fを超える値の範囲を共有し、一部の恒久的な登録を行います。これは、展開されたシステムの変更を必要とせずに、暫定登録を恒久的な登録に変換できるように設計することです。（この設計は、[RFC9000]のセクション22に設定された原則と一致しています。）"
+    },
+    {
+      "indent": 3,
+      "text": "Registrations in this registry MUST include the following fields:",
+      "ja": "このレジストリの登録には、次のフィールドを含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Value: The assigned codepoint",
+      "ja": "値：割り当てられたCodePoint"
+    },
+    {
+      "indent": 3,
+      "text": "Status: \"Permanent\" or \"Provisional\"",
+      "ja": "ステータス：「永久」または「暫定」"
+    },
+    {
+      "indent": 3,
+      "text": "Contact: Contact details for the registrant",
+      "ja": "連絡先：登録者の連絡先の詳細"
+    },
+    {
+      "indent": 3,
+      "text": "In addition, permanent registrations MUST include:",
+      "ja": "さらに、恒久的な登録には以下を含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Error: A short mnemonic for the parameter",
+      "ja": "エラー：パラメーターの短いニーモニック"
+    },
+    {
+      "indent": 3,
+      "text": "Specification: A reference to a publicly available specification for the value (optional for provisional registrations)",
+      "ja": "仕様：値の公開されている仕様への参照（暫定登録のオプション）"
+    },
+    {
+      "indent": 3,
+      "text": "Description: A brief description of the error code semantics, which MAY be a summary if a specification reference is provided",
+      "ja": "説明：エラーコードセマンティクスの簡単な説明。これは、仕様参照が提供されている場合の要約になる場合があります"
+    },
+    {
+      "indent": 3,
+      "text": "Provisional registrations of codepoints are intended to allow for private use and experimentation with extensions to DoQ. However, provisional registrations could be reclaimed and reassigned for other purposes. In addition to the parameters listed above, provisional registrations MUST include:",
+      "ja": "コードポイントの暫定的な登録は、プライベートな使用とdoqへの拡張を実験することを目的としています。ただし、暫定的な登録は、他の目的のために再生および再割り当てされる可能性があります。上記のパラメーターに加えて、暫定的な登録には以下を含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Date: The date of last update to the registration",
+      "ja": "日付：登録の最終更新日"
+    },
+    {
+      "indent": 3,
+      "text": "A request to update the date on any provisional registration can be made without review from the designated expert(s).",
+      "ja": "暫定登録の日付を更新するリクエストは、指定された専門家からのレビューなしで行うことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The initial content of this registry is shown in Table 1 and all entries share the following fields:",
+      "ja": "このレジストリの初期コンテンツを表1に示し、すべてのエントリが次のフィールドを共有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Status: Permanent",
+      "ja": "ステータス：永続的"
+    },
+    {
+      "indent": 3,
+      "text": "Contact: DPRIVE WG",
+      "ja": "連絡先：DPRIVE WG"
+    },
+    {
+      "indent": 3,
+      "text": "Specification: Section 4.3",
+      "ja": "仕様：セクション4.3"
+    },
+    {
+      "indent": 3,
+      "text": "+============+=======================+=============================+\n| Value      | Error                 | Description                 |\n+============+=======================+=============================+\n| 0x0        | DOQ_NO_ERROR          | No error                    |\n+------------+-----------------------+-----------------------------+\n| 0x1        | DOQ_INTERNAL_ERROR    | Implementation error        |\n+------------+-----------------------+-----------------------------+\n| 0x2        | DOQ_PROTOCOL_ERROR    | Generic protocol violation  |\n+------------+-----------------------+-----------------------------+\n| 0x3        | DOQ_REQUEST_CANCELLED | Request cancelled by client |\n+------------+-----------------------+-----------------------------+\n| 0x4        | DOQ_EXCESSIVE_LOAD    | Closing a connection for    |\n|            |                       | excessive load              |\n+------------+-----------------------+-----------------------------+\n| 0x5        | DOQ_UNSPECIFIED_ERROR | No error reason specified   |\n+------------+-----------------------+-----------------------------+\n| 0xd098ea5e | DOQ_ERROR_RESERVED    | Alternative error code used |\n|            |                       | for tests                   |\n+------------+-----------------------+-----------------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Table 1: Initial DNS-over-QUIC Error Codes Entries",
+      "ja": "表1：初期DNS-over-quicエラーコードエントリ"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034] Mockapetris, P., \"Domain names - concepts and facilities\", STD 13, RFC 1034, DOI 10.17487/RFC1034, November 1987, <https://www.rfc-editor.org/info/rfc1034>.",
+      "ja": "[RFC1034] Mockapetris、P。、「ドメイン名 - 概念と施設」、STD 13、RFC 1034、DOI 10.17487/RFC1034、1987年11月、<https://www.rfc-editor.org/info/rfc1034>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, DOI 10.17487/RFC1035, November 1987, <https://www.rfc-editor.org/info/rfc1035>.",
+      "ja": "[RFC1035] Mockapetris、P。、「ドメイン名 - 実装と仕様」、STD 13、RFC 1035、DOI 10.17487/RFC1035、1987年11月、<https://www.rfc-editor.org/info/rfc1035>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1995] Ohta, M., \"Incremental Zone Transfer in DNS\", RFC 1995, DOI 10.17487/RFC1995, August 1996, <https://www.rfc-editor.org/info/rfc1995>.",
+      "ja": "[RFC1995] OHTA、M。、「DNSの増分ゾーン転送」、RFC 1995、DOI 10.17487/RFC1995、1996年8月、<https://www.rfc-editor.org/info/rfc1995>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5936] Lewis, E. and A. Hoenes, Ed., \"DNS Zone Transfer Protocol (AXFR)\", RFC 5936, DOI 10.17487/RFC5936, June 2010, <https://www.rfc-editor.org/info/rfc5936>.",
+      "ja": "[RFC5936] Lewis、E。and A. Hoenes、ed。、「DNS Zone Transfer Protocol（AXFR）」、RFC 5936、DOI 10.17487/RFC5936、2010年6月、<https://www.rfc-editor.org/info/RFC5936>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6891] Damas, J., Graff, M., and P. Vixie, \"Extension Mechanisms for DNS (EDNS(0))\", STD 75, RFC 6891, DOI 10.17487/RFC6891, April 2013, <https://www.rfc-editor.org/info/rfc6891>.",
+      "ja": "[RFC6891] Damas、J.、Graff、M。、およびP. Vixie、「DNSの拡張メカニズム（EDNS（0））」、STD 75、RFC 6891、DOI 10.17487/RFC6891、2013年4月、<https：///www.rfc-editor.org/info/rfc6891>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7301] Friedl, S., Popov, A., Langley, A., and E. Stephan, \"Transport Layer Security (TLS) Application-Layer Protocol Negotiation Extension\", RFC 7301, DOI 10.17487/RFC7301, July 2014, <https://www.rfc-editor.org/info/rfc7301>.",
+      "ja": "[RFC7301] Friedl、S.、Popov、A.、Langley、A。、およびE. Stephan、「輸送層セキュリティ（TLS）アプリケーション層プロトコル交渉拡張」、RFC 7301、DOI 10.17487/RFC7301、2014年7月、<https://www.rfc-editor.org/info/rfc7301>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7766] Dickinson, J., Dickinson, S., Bellis, R., Mankin, A., and D. Wessels, \"DNS Transport over TCP - Implementation Requirements\", RFC 7766, DOI 10.17487/RFC7766, March 2016, <https://www.rfc-editor.org/info/rfc7766>.",
+      "ja": "[RFC7766] Dickinson、J.、Dickinson、S.、Bellis、R.、Mankin、A。、およびD. Wessels、「TCPを介したDNS輸送 - 実装要件」、RFC 7766、DOI 10.17487/RFC7766、2016年3月、<<<https://www.rfc-editor.org/info/rfc7766>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7830] Mayrhofer, A., \"The EDNS(0) Padding Option\", RFC 7830, DOI 10.17487/RFC7830, May 2016, <https://www.rfc-editor.org/info/rfc7830>.",
+      "ja": "[RFC7830] Mayrhofer、A。、「EDNS（0）パディングオプション」、RFC 7830、DOI 10.17487/RFC7830、2016年5月、<https://www.rfc-editor.org/info/rfc7830>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7858] Hu, Z., Zhu, L., Heidemann, J., Mankin, A., Wessels, D., and P. Hoffman, \"Specification for DNS over Transport Layer Security (TLS)\", RFC 7858, DOI 10.17487/RFC7858, May 2016, <https://www.rfc-editor.org/info/rfc7858>.",
+      "ja": "[RFC7858] Hu、Z.、Zhu、L.、Heidemann、J.、Mankin、A.、Wessels、D。、およびP. Hoffman、「輸送層のセキュリティ上のDNSの仕様」、RFC 7858、doi10.17487/rfc7858、2016年5月、<https://www.rfc-editor.org/info/rfc7858>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：// wwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8310] Dickinson, S., Gillmor, D., and T. Reddy, \"Usage Profiles for DNS over TLS and DNS over DTLS\", RFC 8310, DOI 10.17487/RFC8310, March 2018, <https://www.rfc-editor.org/info/rfc8310>.",
+      "ja": "[RFC8310] Dickinson、S.、Gillmor、D。、およびT. Reddy、「DTLS上のDNSおよびDNSの使用プロファイル」、RFC 8310、DOI 10.17487/RFC8310、2018年3月、<https：//www.rfc-editor.org/info/rfc8310>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8446] Rescorla, E., \"The Transport Layer Security (TLS) Protocol Version 1.3\", RFC 8446, DOI 10.17487/RFC8446, August 2018, <https://www.rfc-editor.org/info/rfc8446>.",
+      "ja": "[RFC8446] Rescorla、E。、「輸送層セキュリティ（TLS）プロトコルバージョン1.3」、RFC 8446、DOI 10.17487/RFC8446、2018年8月、<https://www.rfc-editor.org/info/rfc846>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8467] Mayrhofer, A., \"Padding Policies for Extension Mechanisms for DNS (EDNS(0))\", RFC 8467, DOI 10.17487/RFC8467, October 2018, <https://www.rfc-editor.org/info/rfc8467>.",
+      "ja": "[RFC8467] Mayrhofer、A。、「DNSの拡張メカニズムのためのパディングポリシー（EDNS（0））」、RFC 8467、DOI 10.17487/RFC8467、2018年10月、<https://www.rfc-editor.org/info/RFC8467>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8914] Kumari, W., Hunt, E., Arends, R., Hardaker, W., and D. Lawrence, \"Extended DNS Errors\", RFC 8914, DOI 10.17487/RFC8914, October 2020, <https://www.rfc-editor.org/info/rfc8914>.",
+      "ja": "[RFC8914] Kumari、W.、Hunt、E.、Arends、R.、Hardaker、W。、およびD. Lawrence、「拡張DNSエラー」、RFC 8914、DOI 10.17487/RFC8914、2020年10月、<https：///www.rfc-editor.org/info/rfc8914>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9000] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[RFC9000] Iyengar、J.、ed。and M. Thomson、ed。、「Quic：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487/RFC9000、2021年5月、<https://www.rfc-editor.org/info/rfc9000>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9001] Thomson, M., Ed. and S. Turner, Ed., \"Using TLS to Secure QUIC\", RFC 9001, DOI 10.17487/RFC9001, May 2021, <https://www.rfc-editor.org/info/rfc9001>.",
+      "ja": "[RFC9001] Thomson、M.、ed。and S. Turner、ed。、「TLSを使用してQUICを確保する」、RFC 9001、DOI 10.17487/RFC9001、2021年5月、<https://www.rfc-editor.org/info/rfc9001>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9103] Toorop, W., Dickinson, S., Sahib, S., Aras, P., and A. Mankin, \"DNS Zone Transfer over TLS\", RFC 9103, DOI 10.17487/RFC9103, August 2021, <https://www.rfc-editor.org/info/rfc9103>.",
+      "ja": "[RFC9103] Toorop、W.、Dickinson、S.、Sahib、S.、Aras、P。、およびA. Mankin、「DNS Zone Transfer over TLS」、RFC 9103、DOI 10.17487/RFC9103、2021年8月、<https：//www.rfc-editor.org/info/rfc9103>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[BCP195] Sheffer, Y., Holz, R., and P. Saint-Andre, \"Recommendations for Secure Use of Transport Layer Security (TLS) and Datagram Transport Layer Security (DTLS)\", BCP 195, RFC 7525, May 2015.",
+      "ja": "[BCP195] Sheffer、Y.、Holz、R。、およびP. Saint-Andre、「輸送層セキュリティ（TLS）およびデータグラム輸送層のセキュリティ（DTLS）の安全な使用に関する推奨事項」、BCP 195、RFC 7525、2015年5月。"
+    },
+    {
+      "indent": 14,
+      "text": "Moriarty, K. and S. Farrell, \"Deprecating TLS 1.0 and TLS 1.1\", BCP 195, RFC 8996, March 2021.",
+      "ja": "Moriarty、K。およびS. Farrell、「TLS 1.0およびTLS 1.1を非難する」、BCP 195、RFC 8996、2021年3月。"
+    },
+    {
+      "indent": 14,
+      "text": "<https://www.rfc-editor.org/info/bcp195>",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[DNS-TERMS] Hoffman, P. and K. Fujiwara, \"DNS Terminology\", Work in Progress, Internet-Draft, draft-ietf-dnsop-rfc8499bis-03, 28 September 2021, <https://datatracker.ietf.org/doc/html/ draft-ietf-dnsop-rfc8499bis-03>.",
+      "ja": "[DNS-TERMS] Hoffman、P。and K. Fujiwara、「DNS用語」、進行中の作業、インターネットドラフト、ドラフト-ITEF-DNSOP-RFC8499BIS-03、2021年9月28日、<https：//datatracker.ietf。org/doc/html/draft-itf-dnsop-rfc8499bis-03>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DNS0RTT] Kahn Gillmor, D., \"DNS + 0-RTT\", Message to DNS-Privacy WG mailing list, 6 April 2016, <https://www.ietf.org/mail-archive/web/dns-privacy/current/msg01276.html>.",
+      "ja": "[DNS0RTT] Kahn Gillmor、D。、 \"DNS 0-RTT\"、DNS-Privacy WGメーリングリストへのメッセージ、2016年4月6日、<https://www.ietf.org/mail-archive/web/dns-privacy/Current/MSG01276.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[GREASING-QUIC] Thomson, M., \"Greasing the QUIC Bit\", Work in Progress, Internet-Draft, draft-ietf-quic-bit-grease-02, 10 November 2021, <https://datatracker.ietf.org/doc/html/draft-ietf-quic-bit-grease-02>.",
+      "ja": "[Greasing-Quic] Thomson、M。、「greasing the quic bit」、Work in Progress、Internet-draft、Draft-Itic-Bit-Grease-02、2021年11月10日、<https：//datatracker.ietf。org/doc/html/draft-itf-quic-bit-grease-02>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/3] Bishop, M., Ed., \"Hypertext Transfer Protocol Version 3 (HTTP/3)\", Work in Progress, Internet-Draft, draft-ietf-quic-http-34, 2 February 2021, <https://datatracker.ietf.org/doc/html/draft-ietf-quic-http-34>.",
+      "ja": "[HTTP/3] Bishop、M.、ed。、「HyperText Transfer Protocolバージョン3（http/3）」、Work in Progress、Internet-Draft、Draft-Itef-Quic-http-34、2月2日、<https：//datatracker.ietf.org/doc/html/draft-ietf-quic-http-34>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1996] Vixie, P., \"A Mechanism for Prompt Notification of Zone Changes (DNS NOTIFY)\", RFC 1996, DOI 10.17487/RFC1996, August 1996, <https://www.rfc-editor.org/info/rfc1996>.",
+      "ja": "[RFC1996] Vixie、P。、「ゾーン変更の迅速な通知のメカニズム（DNS通知）」、RFC 1996、DOI 10.17487/RFC1996、1996年8月、<https://www.rfc-editor.org/info/rfc1996>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3833] Atkins, D. and R. Austein, \"Threat Analysis of the Domain Name System (DNS)\", RFC 3833, DOI 10.17487/RFC3833, August 2004, <https://www.rfc-editor.org/info/rfc3833>.",
+      "ja": "[RFC3833] Atkins、D。およびR. Austein、「ドメイン名システム（DNS）の脅威分析」、RFC 3833、DOI 10.17487/RFC3833、2004年8月、<https://www.rfc-editor.org/info/RFC3833>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6335] Cotton, M., Eggert, L., Touch, J., Westerlund, M., and S. Cheshire, \"Internet Assigned Numbers Authority (IANA) Procedures for the Management of the Service Name and Transport Protocol Port Number Registry\", BCP 165, RFC 6335, DOI 10.17487/RFC6335, August 2011, <https://www.rfc-editor.org/info/rfc6335>.",
+      "ja": "[RFC6335] Cotton、M.、Eggert、L.、Touch、J.、Westerlund、M。、およびS. Cheshire、「インターネットが割り当てられた数字権（IANA）手順サービス名と輸送プロトコルポート番号レジストリの管理のための手順\"、BCP 165、RFC 6335、DOI 10.17487/RFC6335、2011年8月、<https://www.rfc-editor.org/info/rfc635>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7828] Wouters, P., Abley, J., Dickinson, S., and R. Bellis, \"The edns-tcp-keepalive EDNS0 Option\", RFC 7828, DOI 10.17487/RFC7828, April 2016, <https://www.rfc-editor.org/info/rfc7828>.",
+      "ja": "[RFC7828] Wouters、P.、Eabley、J.、Dickinson、S.、およびR. Bellis、「EDNS-TCP-Keepalive EDNS0オプション」、RFC 7828、DOI 10.17487/RFC7828、2016年4月、<https：//////////www.rfc-editor.org/info/rfc7828>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7873] Eastlake 3rd, D. and M. Andrews, \"Domain Name System (DNS) Cookies\", RFC 7873, DOI 10.17487/RFC7873, May 2016, <https://www.rfc-editor.org/info/rfc7873>.",
+      "ja": "[RFC7873] EastLake 3rd、D。およびM. Andrews、「ドメイン名システム（DNS）Cookies」、RFC 7873、DOI 10.17487/RFC7873、2016年5月、<https://www.rfc-editor.org/info/rfc7873>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8094] Reddy, T., Wing, D., and P. Patil, \"DNS over Datagram Transport Layer Security (DTLS)\", RFC 8094, DOI 10.17487/RFC8094, February 2017, <https://www.rfc-editor.org/info/rfc8094>.",
+      "ja": "[RFC8094] Reddy、T.、Wing、D。、およびP. Patil、「DNS over Datagram Transport Layer Security（DTLS）」、RFC 8094、DOI 10.17487/RFC8094、2017年2月、<https：//www.rfc-editor.org/info/rfc8094>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8484] Hoffman, P. and P. McManus, \"DNS Queries over HTTPS (DoH)\", RFC 8484, DOI 10.17487/RFC8484, October 2018, <https://www.rfc-editor.org/info/rfc8484>.",
+      "ja": "[RFC8484] Hoffman、P。and P. McManus、「dns queries over https（doh）（doh）（doh）」、RFC 8484、doi 10.17487/rfc8484、2018年10月、<https://www.rfc-editor.org/info/rfc8484>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8490] Bellis, R., Cheshire, S., Dickinson, J., Dickinson, S., Lemon, T., and T. Pusateri, \"DNS Stateful Operations\", RFC 8490, DOI 10.17487/RFC8490, March 2019, <https://www.rfc-editor.org/info/rfc8490>.",
+      "ja": "[RFC8490] Bellis、R.、Cheshire、S.、Dickinson、J.、Dickinson、S.、Lemon、T.、およびT. Pusateri、「DNS Stateful Operations」、RFC 8490、DOI 10.17487/RFC8490、2019年3月、<https://www.rfc-editor.org/info/rfc8490>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8932] Dickinson, S., Overeinder, B., van Rijswijk-Deij, R., and A. Mankin, \"Recommendations for DNS Privacy Service Operators\", BCP 232, RFC 8932, DOI 10.17487/RFC8932, October 2020, <https://www.rfc-editor.org/info/rfc8932>.",
+      "ja": "[RFC8932] Dickinson、S.、Overeinder、B.、Van Rijswijk-Deij、R。、およびA. Mankin、「DNSプライバシーサービスオペレーターの推奨」、BCP 232、RFC 8932、DOI 10.17487/RFC8932、10月2020年、<<<<<https://www.rfc-editor.org/info/rfc8932>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9002] Iyengar, J., Ed. and I. Swett, Ed., \"QUIC Loss Detection and Congestion Control\", RFC 9002, DOI 10.17487/RFC9002, May 2021, <https://www.rfc-editor.org/info/rfc9002>.",
+      "ja": "[RFC9002] Iyengar、J.、ed。およびI. Swett、ed。、「Quic損失検出と混雑制御」、RFC 9002、DOI 10.17487/RFC9002、2021年5月、<https://www.rfc-editor.org/info/rfc9002>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9076] Wicinski, T., Ed., \"DNS Privacy Considerations\", RFC 9076, DOI 10.17487/RFC9076, July 2021, <https://www.rfc-editor.org/info/rfc9076>.",
+      "ja": "[RFC9076] Wicinski、T.、ed。、「DNSプライバシーに関する考慮事項」、RFC 9076、DOI 10.17487/RFC9076、2021年7月、<https://www.rfc-editor.org/info/rfc9076>"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. The NOTIFY Service",
+      "section_title": true,
+      "ja": "付録A.通知サービス"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix discusses why it is considered acceptable to send NOTIFY (see [RFC1996]) in 0-RTT data.",
+      "ja": "この付録では、0-RTTデータで通知（[RFC1996]を参照）を送信することが許容できると見なされる理由について説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Section 4.5 says \"The 0-RTT mechanism MUST NOT be used to send DNS requests that are not \"replayable\" transactions\". This specification supports sending a NOTIFY in 0-RTT data because although a NOTIFY technically changes the state of the receiving server, the effect of replaying NOTIFYs has negligible impact in practice.",
+      "ja": "セクション4.5には、「0-RTTメカニズムを使用して、「再生可能な」トランザクションではないDNSリクエストを送信するために使用してはなりません」。この仕様は、Notifyが受信サーバーの状態を技術的に変更しますが、通知を再生する効果は実際には無視できる影響を与えるため、0-RTTデータで通知を送信することをサポートします。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTIFY messages prompt a secondary to either send an SOA query or an XFR request to the primary on the basis that a newer version of the zone is available. It has long been recognized that NOTIFYs can be forged and, in theory, used to cause a secondary to send repeated unnecessary requests to the primary. For this reason, most implementations have some form of throttling of the SOA/XFR queries triggered by the receipt of one or more NOTIFYs.",
+      "ja": "通知メッセージは、ゾーンの新しいバージョンが利用可能であることに基づいて、SOAクエリまたはXFRリクエストをプライマリに送信するためにセカンダリをプロンプトにプロンプトします。通知を偽造できることは長い間認識されており、理論的には、セカンダリを引き起こすために使用されています。このため、ほとんどの実装には、1つ以上の通知を受け取ってトリガーされるSOA/XFRクエリの何らかの形のスロットリングがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9103] describes the privacy risks associated with both NOTIFY and SOA queries and does not include addressing those risks within the scope of encrypting zone transfers. Given this, the privacy benefit of using DoQ for NOTIFY is not clear, but for the same reason, sending NOTIFY as 0-RTT data has no privacy risk above that of sending it using cleartext DNS.",
+      "ja": "[RFC9103]は、通知とSOAクエリの両方に関連するプライバシーリスクを説明し、暗号化ゾーン転送の範囲内でそれらのリスクに対処することは含まれません。これを考えると、notifyにDOQを使用することのプライバシーの利点は明確ではありませんが、同じ理由で、0-RTTデータがClearText DNSを使用して送信するプライバシーリスクはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document liberally borrows text from the HTTP/3 specification [HTTP/3] edited by Mike Bishop and from the DoT specification [RFC7858] authored by Zi Hu, Liang Zhu, John Heidemann, Allison Mankin, Duane Wessels, and Paul Hoffman.",
+      "ja": "このドキュメントは、マイク・ビショップが編集したHTTP/3仕様[HTTP/3]と、Zi Hu、Liang Zhu、John Heidemann、Allison Mankin、Duane Wessels、Paul Hoffmanによって執筆されたDOT仕様[RFC7858]からテキストを自由に借用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The privacy issue with 0-RTT data and session resumption was analyzed by Daniel Kahn Gillmor (DKG) in a message to the IETF DPRIVE Working Group [DNS0RTT].",
+      "ja": "0-RTTデータとセッション再開に関するプライバシーの問題は、IETF DPRIVEワーキンググループ[DNS0RTT]へのメッセージでDaniel Kahn Gillmor（DKG）によって分析されました。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Tony Finch for an extensive review of the initial draft version of this document, and to Robert Evans for the discussion of 0-RTT privacy issues. Early reviews by Paul Hoffman and Martin Thomson and interoperability tests conducted by Stephane Bortzmeyer helped improve the definition of the protocol.",
+      "ja": "このドキュメントの最初のドラフトバージョンの広範なレビューをしてくれたTony Finchに感謝します。また、0-RTTプライバシーの問題について議論してくれたRobert Evansに感謝します。Paul HoffmanとMartin Thomsonによる初期のレビューとStephane Bortzmeyerが実施した相互運用性テストは、プロトコルの定義の改善に役立ちました。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks also to Martin Thomson and Martin Duke for their later reviews focusing on the low-level QUIC details, which helped clarify several aspects of DoQ. Thanks to Andrey Meshkov, Loganaden Velvindron, Lucas Pardue, Matt Joras, Mirja Kuelewind, Brian Trammell, and Phillip Hallam-Baker for their reviews and contributions.",
+      "ja": "また、Martin ThomsonとMartin Dukeにも、DOQのいくつかの側面を明確にするのに役立った低レベルのQUIC詳細に焦点を当てた後のレビューに感謝します。Andrey Meshkov、Loganaden Velvindron、Lucas Pardue、Matt Joras、Mirja Kuelewind、Brian Trammell、Phillip Hallam-Bakerのレビューと貢献に感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Christian Huitema Private Octopus Inc. 427 Golfcourse Rd Friday Harbor, WA 98250 United States of America Email: huitema@huitema.net",
+      "ja": "Christian Huitema Private Octopus Inc. 427 GolfCourse Rd Friday Harbor、WA 98250アメリカ合衆国メールメール：huitema@huitema.net"
+    },
+    {
+      "indent": 3,
+      "text": "Sara Dickinson Sinodun IT Oxford Science Park Oxford OX4 4GA United Kingdom Email: sara@sinodun.com",
+      "ja": "SARA DICKINSON SINODUN IT OXFORD SCIENCE PARK OXFORD OX4 4GA United Kingdom Email：sara@sinodun.com"
+    },
+    {
+      "indent": 3,
+      "text": "Allison Mankin Salesforce Email: allison.mankin@gmail.com",
+      "ja": "Allison Mankin Salesforceメール：allison.mankin@gmail.com"
+    }
+  ]
+}
