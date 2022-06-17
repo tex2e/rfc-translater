@@ -144,7 +144,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser = self._browser
         # 翻訳したい文をURLに埋め込んでからアクセスする
         text_for_url = urllib.parse.quote_plus(text, safe='')
-        url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
+        url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
         browser.get(url)
         # 数秒待機する
         wait_time = 3 + len(text) / 1000
