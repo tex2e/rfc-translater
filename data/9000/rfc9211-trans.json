@@ -1,0 +1,626 @@
+{
+  "title": {
+    "text": "RFC 9211 - The Cache-Status HTTP Response Header Field (RFC 9211)",
+    "ja": "RFC 9211 - キャッシュステータスHTTP応答ヘッダーフィールド（RFC 9211）"
+  },
+  "number": 9211,
+  "created_at": "2022-06-20 02:59:03.276684+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     M. Nottingham\nRequest for Comments: 9211                                        Fastly\nCategory: Standards Track                                      June 2022\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "The Cache-Status HTTP Response Header Field",
+      "ja": "Cache-Status HTTP応答ヘッダーフィールド"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "To aid debugging, HTTP caches often append header fields to a response, explaining how they handled the request in an ad hoc manner. This specification defines a standard mechanism to do so that is aligned with HTTP's caching model.",
+      "ja": "デバッグを支援するために、HTTPキャッシュはしばしばヘッダーフィールドを応答に追加し、アドホックな方法でリクエストをどのように処理したかを説明します。この仕様は、HTTPのキャッシュモデルに合わせて行う標準メカニズムを定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9211.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9211で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Notational Conventions\n2.  The Cache-Status HTTP Response Header Field\n  2.1.  The hit Parameter\n  2.2.  The fwd Parameter\n  2.3.  The fwd-status Parameter\n  2.4.  The ttl Parameter\n  2.5.  The stored Parameter\n  2.6.  The collapsed Parameter\n  2.7.  The key Parameter\n  2.8.  The detail Parameter\n3.  Examples\n4.  Defining New Cache-Status Parameters\n5.  IANA Considerations\n6.  Security Considerations\n7.  References\n  7.1.  Normative References\n  7.2.  Informative References\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "To aid debugging (both by humans and automated tools), HTTP caches often append header fields to a response explaining how they handled the request. Unfortunately, the semantics of these header fields are often unclear, and both the semantics and syntax used vary between implementations.",
+      "ja": "デバッグ（人間と自動化されたツールの両方）を支援するために、HTTPキャッシュは、多くの場合、リクエストの処理方法を説明する応答にヘッダーフィールドを追加します。残念ながら、これらのヘッダーフィールドのセマンティクスはしばしば不明であり、使用されるセマンティクスと構文の両方が実装間で異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification defines a new HTTP response header field, \"Cache-Status\", for this purpose with standardized syntax and semantics.",
+      "ja": "この仕様は、標準化された構文とセマンティクスを備えたこの目的のために、新しいHTTP応答ヘッダー「キャッシュステータス」を定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Notational Conventions",
+      "section_title": true,
+      "ja": "1.1. 表記規則"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses the following terminology from Section 3 of [STRUCTURED-FIELDS] to specify syntax and parsing: List, String, Token, Integer, and Boolean.",
+      "ja": "このドキュメントでは、[構造化場]のセクション3の次の用語を使用して、リスト、文字列、トークン、整数、およびブール値の構文と解析を指定します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document also uses terminology from [HTTP] and [HTTP-CACHING].",
+      "ja": "このドキュメントでは、[http]および[httpキャッシング]の用語も使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. The Cache-Status HTTP Response Header Field",
+      "section_title": true,
+      "ja": "2. Cache-Status HTTP応答ヘッダーフィールド"
+    },
+    {
+      "indent": 3,
+      "text": "The Cache-Status HTTP response header field indicates how caches have handled that response and its corresponding request. The syntax of this header field conforms to [STRUCTURED-FIELDS].",
+      "ja": "Cache-Status HTTP Responseヘッダーフィールドは、キャッシュがその応答とそれに対応するリクエストをどのように処理したかを示します。このヘッダーフィールドの構文は、[構造化場]に準拠しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Its value is a List. Each member of the List represents a cache that has handled the request. The first member represents the cache closest to the origin server, and the last member represents the cache closest to the user (possibly including the user agent's cache itself if it appends a value).",
+      "ja": "その価値はリストです。リストの各メンバーは、リクエストを処理したキャッシュを表します。最初のメンバーは、Origin Serverに最も近いキャッシュを表し、最後のメンバーはユーザーに最も近いキャッシュを表します（おそらく、値を追加する場合、ユーザーエージェントのキャッシュ自体を含めます）。"
+    },
+    {
+      "indent": 3,
+      "text": "Caches determine when it is appropriate to add the Cache-Status header field to a response. Some might add it to all responses, whereas others might only do so when specifically configured to, or when the request contains a header field that activates a debugging mode. See Section 6 for related security considerations.",
+      "ja": "キャッシュは、キャッシュステータスヘッダーフィールドを応答に追加することがいつ適切であるかを決定します。すべての応答に追加する人もいれば、特別に構成された場合、またはリクエストにデバッグモードをアクティブにするヘッダーフィールドが含まれている場合にのみ、それを行う場合があります。関連するセキュリティに関する考慮事項については、セクション6を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "An intermediary SHOULD NOT append a Cache-Status member to responses that it generates locally, even if that intermediary contains a cache, unless the generated response is based upon a stored response (e.g., 304 (Not Modified) and 206 (Partial Content) are both based upon a stored response). For example, a proxy generating a 400 response due to a malformed request will not add a Cache-Status value, because that response was generated by the proxy, not the origin server.",
+      "ja": "仲介者は、生成された応答が保存された応答（304（変更されていない）および206（部分コンテンツ）に基づいている場合を除き、その仲介者がキャッシュを含んでいても、ローカルで生成する応答にキャッシュステータスメンバーを追加するべきではありません。両方とも保存された応答に基づいています）。たとえば、不正な要求のために400の応答を生成するプロキシは、その応答がOrigin Serverではなくプロキシによって生成されたため、キャッシュステータス値を追加しません。"
+    },
+    {
+      "indent": 3,
+      "text": "When adding a value to the Cache-Status header field, caches SHOULD preserve the existing field value, to allow debugging of the entire chain of caches handling the request.",
+      "ja": "キャッシュステータスヘッダーフィールドに値を追加する場合、キャッシュは既存のフィールド値を保持して、リクエストを処理するキャッシュのチェーン全体のデバッグを可能にする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Each List member identifies the cache that inserted it, and this identifier MUST be a String or Token. Depending on the deployment, this might be a product or service name (e.g., \"ExampleCache\" or \"Example CDN\"), a hostname (\"cache-3.example.com\"), an IP address, or a generated string.",
+      "ja": "各リストメンバーは、それを挿入したキャッシュを識別し、この識別子は文字列またはトークンでなければなりません。展開に応じて、これは製品またはサービス名（例：「ExampleCache」または「例CDN」）、ホスト名（「cache-3.example.com」）、IPアドレス、または生成された文字列です。"
+    },
+    {
+      "indent": 3,
+      "text": "Each member of the list can have parameters that describe that cache's handling of the request. While these parameters are OPTIONAL, caches are encouraged to provide as much information as possible.",
+      "ja": "リストの各メンバーには、そのキャッシュがリクエストの処理を説明するパラメーターを持つことができます。これらのパラメーターはオプションですが、キャッシュはできるだけ多くの情報を提供することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification defines the following parameters.",
+      "ja": "この仕様は、次のパラメーターを定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. The hit Parameter",
+      "section_title": true,
+      "ja": "2.1. ヒットパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"hit\" is a Boolean that, when true, indicates that the request was satisfied by the cache; that is, it was not forwarded, and the response was obtained from the cache.",
+      "ja": "「ヒット」の値はブール値であり、本当の場合、要求がキャッシュによって満たされたことを示します。つまり、転送されておらず、応答はキャッシュから得られました。"
+    },
+    {
+      "indent": 3,
+      "text": "A response that was originally produced by the origin but was modified by the cache (for example, a 304 or 206 status code) is still considered a hit, as long as it did not go forward (e.g., for validation).",
+      "ja": "元々は原点によって生成されたが、キャッシュ（たとえば、304または206ステータスコードなど）によって変更された応答は、前進しない限り（例：検証の場合）、ヒットと見なされます。"
+    },
+    {
+      "indent": 3,
+      "text": "A response that was in cache but not able to be used without going forward (e.g., because it was stale or partial) is not considered a hit. Note that a stale response that is used without going forward (e.g., because the origin server is not available) can be considered a hit.",
+      "ja": "キャッシュにあったが、今後も使用できない応答は（例えば、古くても部分的であったため）、ヒットとは見なされません。今後も使用せずに使用される古い応答（たとえば、Origin Serverが利用できないため）は、ヒットと見なすことができることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "\"hit\" and \"fwd\" are exclusive; only one of them should appear on each list member.",
+      "ja": "「ヒット」と「FWD」は排他的です。各リストメンバーに表示されるはずです。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. The fwd Parameter",
+      "section_title": true,
+      "ja": "2.2. FWDパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "\"fwd\", when present, indicates that the request went forward towards the origin; its value is a Token that indicates why.",
+      "ja": "「FWD」は、存在する場合、リクエストが起源に向かって前進したことを示します。その価値は、理由を示すトークンです。"
+    },
+    {
+      "indent": 3,
+      "text": "The following parameter values are defined to explain why the request went forward, from most specific to least:",
+      "ja": "次のパラメーター値は、リクエストが最も具体的なものから最小になった理由を説明するために定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "bypass: The cache was configured to not handle this request.",
+      "ja": "バイパス：キャッシュは、このリクエストを処理しないように構成されました。"
+    },
+    {
+      "indent": 3,
+      "text": "method: The request method's semantics require the request to be forwarded.",
+      "ja": "方法：要求方法のセマンティクスでは、リクエストを転送する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "uri-miss: The cache did not contain any responses that matched the request URI.",
+      "ja": "URI-Miss：キャッシュには、リクエストURIと一致する応答は含まれていませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "vary-miss: The cache contained a response that matched the request URI, but it could not select a response based upon this request's header fields and stored Vary header fields.",
+      "ja": "Vary-Miss：キャッシュには、リクエストURIと一致する応答が含まれていましたが、このリクエストのヘッダーフィールドに基づいて応答を選択できず、ヘッダーフィールドは異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "miss: The cache did not contain any responses that could be used to satisfy this request (to be used when an implementation cannot distinguish between uri-miss and vary-miss).",
+      "ja": "MISS：キャッシュには、この要求を満たすために使用できる応答は含まれていませんでした（実装ではURI-MissとVary-Missを区別できない場合に使用されます）。"
+    },
+    {
+      "indent": 3,
+      "text": "request: The cache was able to select a fresh response for the request, but the request's semantics (e.g., Cache-Control request directives) did not allow its use.",
+      "ja": "リクエスト：キャッシュはリクエストの新しい応答を選択することができましたが、リクエストのセマンティクス（例：キャッシュコントロールリクエストディレクティブ）ではその使用を許可しませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "stale: The cache was able to select a response for the request, but it was stale.",
+      "ja": "古く：キャッシュはリクエストの応答を選択することができましたが、古くなっていました。"
+    },
+    {
+      "indent": 3,
+      "text": "partial: The cache was able to select a partial response for the request, but it did not contain all of the requested ranges (or the request was for the complete response).",
+      "ja": "部分的：キャッシュはリクエストの部分的な応答を選択することができましたが、要求された範囲のすべてを含むわけではありませんでした（または完全な応答の要求は要求でした）。"
+    },
+    {
+      "indent": 3,
+      "text": "The most specific reason known to the cache SHOULD be used, to the extent that it is possible to implement. See also [HTTP-CACHING], Section 4.",
+      "ja": "キャッシュに知られている最も具体的な理由は、実装できる限り使用する必要があります。[HTTPキャッシュ]、セクション4も参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.3. The fwd-status Parameter",
+      "section_title": true,
+      "ja": "2.3. FWD-STATUSパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"fwd-status\" is an Integer that indicates which status code (see [HTTP], Section 15) the next-hop server returned in response to the forwarded request. The fwd-status parameter is only meaningful when fwd is present. If fwd-status is not present but the fwd parameter is, it defaults to the status code sent in the response.",
+      "ja": "「FWD-Status」の値は、次のホップサーバーが転送された要求に応じて返されたステータスコード（[http]、セクション15を参照）を示す整数です。FWD-STATUSパラメーターは、FWDが存在する場合にのみ意味があります。FWD-STATUSが存在しないが、FWDパラメーターがそうである場合、応答で送信されたステータスコードにデフォルトです。"
+    },
+    {
+      "indent": 3,
+      "text": "This parameter is useful to distinguish cases when the next-hop server sends a 304 (Not Modified) response to a conditional request or a 206 (Partial Content) response because of a range request.",
+      "ja": "このパラメーターは、範囲要求のために条件付き要求または206（部分コンテンツ）応答に対して304（変更されていない）応答を送信する場合のケースを区別するのに役立ちます。"
+    },
+    {
+      "indent": 0,
+      "text": "2.4. The ttl Parameter",
+      "section_title": true,
+      "ja": "2.4. TTLパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"ttl\" is an Integer that indicates the response's remaining freshness lifetime (see [HTTP-CACHING], Section 4.2.1) as calculated by the cache, as an integer number of seconds, measured as closely as possible to when the response header section is sent by the cache. This includes freshness assigned by the cache through, for example, heuristics (see [HTTP-CACHING], Section 4.2.2), local configuration, or other factors. It may be negative, to indicate staleness.",
+      "ja": "「TTL」の値は、キャッシュによって計算された応答の残りの新鮮さの寿命（[httpキャッシュ]、セクション4.2.1を参照）を示す整数であり、整数数秒数として、可能な限り密接に測定されます。応答ヘッダーセクションはキャッシュによって送信されます。これには、たとえばヒューリスティック（[httpキャッシュ]、セクション4.2.2を参照）、ローカル構成、またはその他の要因など、キャッシュによって割り当てられた鮮度が含まれます。老化を示すことは否定的かもしれません。"
+    },
+    {
+      "indent": 0,
+      "text": "2.5. The stored Parameter",
+      "section_title": true,
+      "ja": "2.5. 保存されたパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"stored\" is a Boolean that indicates whether the cache stored the response (see [HTTP-CACHING], Section 3); a true value indicates that it did. The stored parameter is only meaningful when fwd is present.",
+      "ja": "「保存」の値は、キャッシュが応答を保存したかどうかを示すブール値です（[httpキャッシュ]、セクション3を参照）。真の値は、それが行ったことを示しています。保存されたパラメーターは、FWDが存在する場合にのみ意味があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.6. The collapsed Parameter",
+      "section_title": true,
+      "ja": "2.6. 崩壊したパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"collapsed\" is a Boolean that indicates whether this request was collapsed together with one or more other forward requests (see [HTTP-CACHING], Section 4). If true, the response was successfully reused; if not, a new request had to be made. If not present, the request was not collapsed with others. The collapsed parameter is only meaningful when fwd is present.",
+      "ja": "「崩壊」の値は、この要求が1つ以上の他のフォワード要求と一緒に崩壊したかどうかを示すブール値です（[httpキャッシュ]、セクション4を参照）。真実の場合、応答は正常に再利用されました。そうでない場合は、新しいリクエストを行う必要がありました。存在しない場合、リクエストは他の人と崩壊しませんでした。崩壊したパラメーターは、FWDが存在する場合にのみ意味があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2.7. The key Parameter",
+      "section_title": true,
+      "ja": "2.7. キーパラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"key\" is a String that conveys a representation of the cache key (see [HTTP-CACHING], Section 2) used for the response. Note that this may be implementation specific.",
+      "ja": "「キー」の値は、応答に使用されるキャッシュキー（[httpキャッシュ]、セクション2を参照）を伝える文字列です。これは実装固有の可能性があることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2.8. The detail Parameter",
+      "section_title": true,
+      "ja": "2.8. 詳細パラメーター"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"detail\" is either a String or a Token that allows implementations to convey additional information not captured in other parameters, such as implementation-specific states or other caching-related metrics.",
+      "ja": "「詳細」の値は、実装固有の状態やその他のキャッシュ関連メトリックなど、他のパラメーターでキャプチャされていない追加情報を伝達できるようにする文字列またはトークンのいずれかです。"
+    },
+    {
+      "indent": 3,
+      "text": "For example:",
+      "ja": "例えば："
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; hit; detail=MEMORY",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The semantics of a detail parameter are always specific to the cache that sent it; even if a details parameter from another cache shares the same value, it might not mean the same thing.",
+      "ja": "詳細パラメーターのセマンティクスは、常に送信したキャッシュに固有です。別のキャッシュの詳細パラメーターが同じ値を共有している場合でも、同じことを意味しない場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This parameter is intentionally limited. If an implementation's developer or operator needs to convey additional information in an interoperable fashion, they are encouraged to register extension parameters (see Section 4) or define another header field.",
+      "ja": "このパラメーターは意図的に制限されています。実装の開発者またはオペレーターが相互運用可能な方法で追加情報を伝える必要がある場合、それらは拡張パラメーターを登録すること（セクション4を参照）を登録するか、別のヘッダーフィールドを定義することをお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Examples",
+      "section_title": true,
+      "ja": "3. 例"
+    },
+    {
+      "indent": 3,
+      "text": "The following is an example of a minimal cache hit:",
+      "ja": "以下は、最小限のキャッシュヒットの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; hit",
+      "ja": "Cache-status：ExampleCache;打つ"
+    },
+    {
+      "indent": 3,
+      "text": "However, a polite cache will give some more information, e.g.:",
+      "ja": "ただし、丁寧なキャッシュはさらに情報を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; hit; ttl=376",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "A stale hit just has negative freshness, as in this example:",
+      "ja": "この例のように、古いヒットはネガティブな新鮮さを持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; hit; ttl=-412",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Whereas this is an example of a complete miss:",
+      "ja": "一方、これは完全なミスの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; fwd=uri-miss",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "This is an example of a miss that successfully validated on the backend server:",
+      "ja": "これは、バックエンドサーバーで正常に検証されたミスの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; fwd=stale; fwd-status=304",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "This is an example of a miss that was collapsed with another request:",
+      "ja": "これは、別のリクエストで崩壊したミスの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; fwd=uri-miss; collapsed",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "This is an example of a miss that the cache attempted to collapse, but couldn't:",
+      "ja": "これは、キャッシュが崩壊しようとしたができなかったミスの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ExampleCache; fwd=uri-miss; collapsed=?0",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following is an example of going through two separate layers of caching, where the cache closest to the origin responded to an earlier request with a stored response, and a second cache stored that response and later reused it to satisfy the current request:",
+      "ja": "以下は、キャッシュの2つの別々のレイヤーを通過する例です。このキャッシュは、起源に最も近いキャッシュが保存された応答で以前のリクエストに応答し、2番目のキャッシュはその応答を保存し、現在の要求を満たすためにそれを再利用しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: OriginCache; hit; ttl=1100,\n              \"CDN Company Here\"; hit; ttl=545",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following is an example of going through a three-layer caching system, where the closest to the origin is a reverse proxy (where the response was served from cache); the next is a forward proxy interposed by the network (where the request was forwarded because there wasn't any response cached with its URI, the request was collapsed with others, and the resulting response was stored); and the closest to the user is a browser cache (where there wasn't any response cached with the request's URI):",
+      "ja": "以下は、3層キャッシングシステムを通過する例です。これは、原点に最も近いものが逆プロキシ（応答がキャッシュから提供された）です。次は、ネットワークが挿入する前方のプロキシです（URIでキャッシュされた応答がなかったためにリクエストが転送され、要求は他の人と崩壊し、結果の応答が保存されました）。ユーザーに最も近いのは、ブラウザキャッシュ（リクエストのURIでキャッシュされた応答がなかった場合）です。"
+    },
+    {
+      "indent": 3,
+      "text": "Cache-Status: ReverseProxyCache; hit\nCache-Status: ForwardProxyCache; fwd=uri-miss; collapsed; stored\nCache-Status: BrowserCache; fwd=uri-miss",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "4. Defining New Cache-Status Parameters",
+      "section_title": true,
+      "ja": "4. 新しいキャッシュステータスパラメーターの定義"
+    },
+    {
+      "indent": 3,
+      "text": "New Cache-Status parameters can be defined by registering them in the \"HTTP Cache-Status\" registry.",
+      "ja": "新しいキャッシュステータスパラメーターは、「httpキャッシュステータス」レジストリに登録することで定義できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Registration requests are reviewed and approved by a designated expert, per [RFC8126], Section 4.5. A specification document is appreciated but not required.",
+      "ja": "登録リクエストは、[RFC8126]、セクション4.5ごとに指定された専門家によってレビューおよび承認されます。仕様ドキュメントは高く評価されていますが、必要ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The expert(s) should consider the following factors when evaluating requests:",
+      "ja": "専門家は、リクエストを評価する際に次の要因を考慮する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* Community feedback",
+      "ja": "* コミュニティフィードバック"
+    },
+    {
+      "indent": 3,
+      "text": "* If the value is sufficiently well defined",
+      "ja": "* 値が十分に定義されている場合"
+    },
+    {
+      "indent": 3,
+      "text": "* Generic parameters are preferred over vendor-specific, application-specific, or deployment-specific values. If a generic value cannot be agreed upon in the community, the parameter's name should be correspondingly specific (e.g., with a prefix that identifies the vendor, application, or deployment).",
+      "ja": "* ジェネリックパラメーターは、ベンダー固有、アプリケーション固有、または展開固有の値よりも好まれます。コミュニティで一般的な値を合意できない場合、パラメーターの名前はそれに応じて具体的でなければなりません（たとえば、ベンダー、アプリケーション、または展開を識別するプレフィックスを使用）。"
+    },
+    {
+      "indent": 3,
+      "text": "Registration requests should use the following template:",
+      "ja": "登録リクエストは、次のテンプレートを使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Name: [a name for the Cache-Status parameter's key; see Section 3.1.2 of [STRUCTURED-FIELDS] for syntactic requirements]",
+      "ja": "名前：[Cache-Statusパラメーターのキーの名前。構文要件については、[構造化場]のセクション3.1.2を参照してください]"
+    },
+    {
+      "indent": 3,
+      "text": "Type: [the Structured Type of the parameter's value; see Section 3.1.2 of [STRUCTURED-FIELDS]]",
+      "ja": "タイプ：[パラメーターの値の構造化されたタイプ。[構造化場]のセクション3.1.2を参照してください]"
+    },
+    {
+      "indent": 3,
+      "text": "Description: [a description of the parameter's semantics]",
+      "ja": "説明：[パラメーターのセマンティクスの説明]"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: [to a specification defining this parameter, if available]",
+      "ja": "参照：[利用可能な場合は、このパラメーターを定義する仕様に]"
+    },
+    {
+      "indent": 3,
+      "text": "See the registry at <https://www.iana.org/assignments/http-cache-status> for details on where to send registration requests.",
+      "ja": "登録リクエストの送信先の詳細については、<https://www.iana.org/assignments/http-cache-status>のレジストリを参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created the \"HTTP Cache-Status\" registry at <https://www.iana.org/assignments/http-cache-status> and populated it with the types defined in Section 2; see Section 4 for its associated procedures.",
+      "ja": "IANAは、<https://www.iana.org/assignments/http-cache-status>に「http cache-status」レジストリを作成し、セクション2で定義されたタイプを作成しました。関連する手順については、セクション4を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following entry in the \"Hypertext Transfer Protocol (HTTP) Field Name Registry\" defined in [HTTP], Section 18.4:",
+      "ja": "IANAは、[HTTP]で定義されている「HyperText Transfer Protocol（HTTP）フィールド名レジストリ」、セクション18.4に次のエントリを追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Field name: Cache-Status Status: permanent Reference: RFC 9211",
+      "ja": "フィールド名：キャッシュステータスステータス：永久参照：RFC 9211"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティ上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Attackers can use the information in Cache-Status to probe the behavior of the cache (and other components) and infer the activity of those using the cache. The Cache-Status header field may not create these risks on its own, but it can assist attackers in exploiting them.",
+      "ja": "攻撃者は、キャッシュステータスの情報を使用して、キャッシュ（およびその他のコンポーネント）の動作を調べ、キャッシュを使用しているもののアクティビティを推測できます。Cache-Statusヘッダーフィールドは、これらのリスクを単独で作成しない場合がありますが、攻撃者がそれらを悪用するのを支援できます。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, knowing if a cache has stored a response can help an attacker execute a timing attack on sensitive data.",
+      "ja": "たとえば、キャッシュが応答を保存しているかどうかを知ることで、攻撃者が機密データに対するタイミング攻撃を実行するのに役立ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, exposing the cache key can help an attacker understand modifications to the cache key, which may assist cache poisoning attacks. See [ENTANGLE] for details.",
+      "ja": "さらに、キャッシュキーを公開すると、攻撃者がキャッシュキーの変更を理解するのに役立ち、キャッシュ中毒攻撃を支援する可能性があります。詳細については、[entangle]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The underlying risks can be mitigated with a variety of techniques (e.g., using encryption and authentication and avoiding the inclusion of attacker-controlled data in the cache key), depending on their exact nature. Note that merely obfuscating the key does not mitigate this risk.",
+      "ja": "正確な性質に応じて、根本的なリスクは、さまざまな手法（例えば、暗号化と認証を使用し、攻撃者制御データをキャッシュキーに含めることを避ける）で軽減できます。単にキーを難読化しても、このリスクを軽減しないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid assisting such attacks, the Cache-Status header field can be omitted, only sent when the client is authorized to receive it, or sent with sensitive information (e.g., the key parameter) only when the client is authorized.",
+      "ja": "このような攻撃を支援するために、キャッシュステータスヘッダーフィールドは省略できます。クライアントがそれを受信することを許可された場合にのみ送信するか、クライアントが許可されている場合にのみ、機密情報（例：キーパラメーター）で送信されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP Semantics\", STD 97, RFC 9110, DOI 10.17487/RFC9110, June 2022, <https://www.rfc-editor.org/info/rfc9110>.",
+      "ja": "[HTTP] Fielding、R.、Ed。、Nottingham、M.、Ed。、およびJ. Reschke、ed。、 \"HTTP Semantics\"、Std 97、RFC 9110、DOI 10.17487/RFC9110、2022年6月、<https：//www.rfc-editor.org/info/rfc9110>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP-CACHING] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP Caching\", STD 98, RFC 9111, DOI 10.17487/RFC9111, June 2022, <https://www.rfc-editor.org/info/rfc9111>.",
+      "ja": "[HTTPキャッシュ] Fielding、R.、Ed。、Nottingham、M.、Ed。、およびJ. Reschke、ed。、 \"Http Caching\"、Std 98、RFC 9111、DOI 10.17487/RFC9111、2022年6月、<https：//www.rfc-editor.org/info/rfc9111>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：// wwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[STRUCTURED-FIELDS] Nottingham, M. and P-H. Kamp, \"Structured Field Values for HTTP\", RFC 8941, DOI 10.17487/RFC8941, February 2021, <https://www.rfc-editor.org/info/rfc8941>.",
+      "ja": "[構造化場]ノッティンガム、M。およびP-H。Kamp、「HTTPの構造化されたフィールド値」、RFC 8941、DOI 10.17487/RFC8941、2021年2月、<https://www.rfc-editor.org/info/rfc8941>。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[ENTANGLE] Kettle, J., \"Web Cache Entanglement: Novel Pathways to Poisoning\", September 2020, <https://portswigger.net/research/web-cache-entanglement>.",
+      "ja": "[Entangle] Kettle、J。、「Webキャッシュエンタングルメント：中毒への新しい経路」、2020年9月、<https://portswigger.net/research/web-cache-entanglement>。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Mark Nottingham Fastly Prahran Australia Email: mnot@mnot.net URI: https://www.mnot.net/",
+      "ja": "マークノッティンガム急速プラランオーストラリアメールメール：mnot@mnot.net uri：https：//www.mnot.net/"
+    }
+  ]
+}
