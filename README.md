@@ -113,25 +113,23 @@ Windowsの場合は、py -m pip に読み替えてください。
 **注意：翻訳作業は非常に時間がかかります。1つのRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
 開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいやっていました。
 
-2021/02/27 追記：googletrans 3.0.0 が使い物にならないので、SeleniumによるGoogle翻訳に切り替えました。
-従来の方法を使いたい場合は `--transmode py-googletrans` を指定してください。
-
 SeleniumではFirefoxを使用しているため、geckodriver のダウンロードが必要です。
-geckodriverの配置場所を環境変数 WEBDRIVER_EXE_PATH に指定してから実行してください。
-詳細は src/trans_rfc.py の WEBDRIVER_EXE_PATH を参照ください。
+- Windowsの場合は、geckodriverの配置場所を環境変数 WEBDRIVER_EXE_PATH に指定してから実行してください (src/trans_rfc.py 参照)。
+- Linux(Ubuntu)の場合は、以下のパッケージをインストールしてください。
+    ```
+    sudo apt install python3-pip firefox
+    pip install selenium
+    ```
 
 ```bash
-python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
-python main.py --rfc 123 --fetch # RFCの取得だけ
-python main.py --rfc 123 --trans # RFCの翻訳だけ
-python main.py --rfc 123 --make # HTMLの生成だけ
-python main.py --begin 2220 --end 10000 # RFC 2220〜10000 を順番に翻訳する
-python main.py --make --begin 2220 --end 10000 # RFC 2220〜10000 のHTMLを生成する
-python main.py # 未翻訳RFCを順番に翻訳する
-python main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
-
-python main.py --rfc 123 --transmode selenium       # Seleniumを使用してGoogle翻訳(デフォルト)
-python main.py --rfc 123 --transmode py-googletrans # googletransを使用してGoogle翻訳
+python3 main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
+python3 main.py --rfc 123 --fetch # RFCの取得だけ
+python3 main.py --rfc 123 --trans # RFCの翻訳だけ
+python3 main.py --rfc 123 --make # HTMLの生成だけ
+python3 main.py --begin 2220 --end 10000 # RFC 2220〜10000 を順番に翻訳する
+python3 main.py --make --begin 2220 --end 10000 # RFC 2220〜10000 のHTMLを生成する
+python3 main.py # 未翻訳RFCを順番に翻訳する
+python3 main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
 ```
 
 生成物：
@@ -140,13 +138,16 @@ python main.py --rfc 123 --transmode py-googletrans # googletransを使用して
 3. make_html（生成） ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
 
 ```bash
-python main.py --make-index # インデックスページの作成
+python3 main.py --make-index # インデックスページの作成
 ```
 
-ローカルで成果物の確認
+生成物：
+1. html/index.html (トップページ)
+
+ローカルで成果物の確認：
 
 ```bash
-python -m http.server
+python3 -m http.server
 # localhost:8000/htmlにアクセス
 ```
 
@@ -158,6 +159,7 @@ RFCを解析した結果、本来プログラムとして解釈すべき部分�
 
 ---
 
+<!--
 #### Figs
 
 各RFCから図のみを集めて公開するサイト「RFC Figs」について（現在、更新予定はありません）
@@ -176,3 +178,4 @@ python3 figs/make_html.py 7000
 # インデックスページの作成
 python3 figs/make_index.py
 ```
+-->

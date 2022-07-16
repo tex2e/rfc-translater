@@ -1,14 +1,12 @@
 
 import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
-# from src.trans_rfc import trans_rfc, TransMode
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
 from src.make_index import make_index
 from src.fetch_index import diff_remote_and_local_index
 from src.make_json_from_html import make_json_from_html
 
-# def main(rfc_number, transmode):
 def main(rfc_number):
     print('RFC %d:' % rfc_number)
 
@@ -32,7 +30,6 @@ def main(rfc_number):
     if res is False: return False
     make_html(rfc_number)
 
-# def continuous_main(transmode, begin=None, end=None, only_first=False):
 def continuous_main(begin=None, end=None, only_first=False):
     numbers = list(diff_remote_and_local_index())
     if begin and end:  # 開始と終了区間の設定
@@ -63,7 +60,6 @@ if __name__ == '__main__':
                         action='store_true', help='make index.html')
     parser.add_argument('--transtest', action='store_true')
     parser.add_argument('--force', '-f', action='store_true')
-    # parser.add_argument('--transmode', type=str)
     parser.add_argument('--only-first', action='store_true')
     args = parser.parse_args()
 
@@ -71,11 +67,6 @@ if __name__ == '__main__':
     RFCs = None
     if args.rfc:
         RFCs = [int(rfc_number) for rfc_number in args.rfc.split(",")]
-
-    # # 翻訳ツールの選択：デフォルトはSelenium+Google翻訳
-    # transmode = TransMode.SELENIUM_GOOGLE
-    # if args.transmode == 'py-googletrans':
-    #     transmode = TransMode.PY_GOOGLETRANS
 
     if args.make_index:
         # トップページ(index.html)の作成
@@ -125,7 +116,5 @@ if __name__ == '__main__':
             main(rfc)
     else:
         # 未翻訳のRFCを順番に取得・翻訳・作成
-        # continuous_main(transmode, begin=args.begin, end=args.end, 
-        #                 only_first=args.only_first)
         continuous_main(begin=args.begin, end=args.end, 
                         only_first=args.only_first)
