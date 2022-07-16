@@ -95,14 +95,14 @@ if __name__ == '__main__':
             fetch_rfc(rfc_number)
     elif args.fetch and RFCs:
         # 指定したRFCの取得
-        print("[+] RFC %d を取得")
         for rfc in RFCs:
+            print("[+] RFC %d を取得" % rfc)
             fetch_rfc(rfc, args.force)
     elif args.trans and RFCs:
         # RFCの翻訳
-        print("[+] RFC %d を翻訳")
         for rfc in RFCs:
-            # trans_rfc(rfc, transmode)
+            print("[+] RFC %d を翻訳" % rfc)
+            #trans_rfc(rfc, transmode)
             trans_rfc(rfc)
     elif args.make and args.begin and args.end:
         # 範囲指定でRFCのHTML(rfcXXXX.html)を作成

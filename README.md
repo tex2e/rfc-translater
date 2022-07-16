@@ -8,7 +8,7 @@
 
 ### 流れ
 1. RFCのインデックス取得 https://tools.ietf.org/rfc/index (fetch_index)
-1. RFCスクレイピング https://tools.ietf.org/html/rfcXXXX (fetch_rfc)
+1. RFCスクレイピング https://datatracker.ietf.org/doc/html/rfcXXXX (fetch_rfc)
 2. セクション毎に分割 & 改行の除去 (fetch_rfc)
 3. Google翻訳で英語を日本語にする (trans_rfc)
 4. セクション毎に英文、日本語文を並べて表示するページの生成 (make_html)
@@ -29,11 +29,8 @@
 
 ### 翻訳修正者
 
-1. GitHub上でForkします。
-2. ブランチを切ります。名前は適当なものにします。
-2. html/rfcXXXX.htmlの翻訳を修正します。
-   - updated_byを「翻訳編集 : 自動生成 + 一部修正」にします。名前などを残したい方は「一部修正(tex2e)」のような感じで書いてください。
-   - 見出しは`<h5>`を使います。1番目に英文、2番目に和文を書きます。
+1. html/rfcXXXX.htmlの翻訳を修正します。
+   - 見出しは`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -48,7 +45,7 @@
         </div>
       </div>
       ```
-   - 文章は`<p>`を使います。「indent-X」classでインデントの深さを指定します。
+   - 文章は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -63,7 +60,7 @@
         </div>
       </div>
       ```
-   - 図表は`<pre>`を使います。英文のみです。
+   - 図表やプログラムは`<pre class="text text-monospace">`を使います。英文のみです。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-12">
@@ -75,20 +72,17 @@
         </div>
       </div>
       ```
-3. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
-4. Forkしたレポジトリにpushします。
-4. GitHub上でPullRequestを出します。
+2. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
+3. GitHub上でPullRequestを出します。
 
 ### 管理者
 
-1. PullRequestの修正差分を確認し、HTMLエスケープが適切に行われているかや、XSSに使われる危険なHTMLタグ（`script`, `a`, `img` など）がないことだけ確認する
-2. 問題がなければMergeし、ローカルにpullする
-3. `main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認
-4. `main.py --make --rfc <対象RFC>` でJSONからHTMLを逆作成し、変更差分を確認
-5. レポジトリにpushする
-
-TODO: HTMLエスケープ確認作業の一部自動化
-
+1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認します。
+2. 問題がなければMergeし、ローカルにpullします。
+3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認します。
+4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認します。
+5. (必要に応じて) 問題点があれば `git checkout -- html/rfc<対象RFC>.html` で元に戻して、元データの JSON やプログラムの不備を調査します。
+6. レポジトリにpushします。
 
 <br>
 
@@ -111,9 +105,13 @@ pip install Mako
 pip install tqdm
 #pip install googletrans==4.0.0-rc1
 pip install selenium
+pip install beautifulsoup4
 ```
 
 Windowsの場合は、py -m pip に読み替えてください。
+
+**注意：翻訳作業は非常に時間がかかります。1つのRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
+開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいやっていました。
 
 2021/02/27 追記：googletrans 3.0.0 が使い物にならないので、SeleniumによるGoogle翻訳に切り替えました。
 従来の方法を使いたい場合は `--transmode py-googletrans` を指定してください。
@@ -127,8 +125,8 @@ python main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
 python main.py --rfc 123 --fetch # RFCの取得だけ
 python main.py --rfc 123 --trans # RFCの翻訳だけ
 python main.py --rfc 123 --make # HTMLの生成だけ
-python main.py --begin 2220 --end 9000 # RFC 2220〜9000 を順番に翻訳する
-python main.py --make --begin 2220 --end 9000 # RFC 2220〜9000 のHTMLを生成する
+python main.py --begin 2220 --end 10000 # RFC 2220〜10000 を順番に翻訳する
+python main.py --make --begin 2220 --end 10000 # RFC 2220〜10000 のHTMLを生成する
 python main.py # 未翻訳RFCを順番に翻訳する
 python main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
 
@@ -136,8 +134,7 @@ python main.py --rfc 123 --transmode selenium       # Seleniumを使用してGoo
 python main.py --rfc 123 --transmode py-googletrans # googletransを使用してGoogle翻訳
 ```
 
-生成物
-
+生成物：
 1. fetch_rfc（取得） ... data/A000/B00/rfcABCD.json (段落区切りで取り出した文章)
 2. trans_rfc（翻訳） ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
 3. make_html（生成） ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
@@ -153,13 +150,17 @@ python -m http.server
 # localhost:8000/htmlにアクセス
 ```
 
+RFCを解析した結果、本来プログラムとして解釈すべき部分を文章として解釈してしまった場合、プログラムのインデントを削除してJSON化するツール：
+[https://tex2e.github.io/rfc-translater/html/format.html](https://tex2e.github.io/rfc-translater/html/format.html)
+
+
 <br>
 
 ---
 
 #### Figs
 
-各RFCから図のみを集めて公開するサイト「RFC Figs」について
+各RFCから図のみを集めて公開するサイト「RFC Figs」について（現在、更新予定はありません）
 
 ```bash
 # 1000個のRFC毎に図を集め、JSONファイルで保存する

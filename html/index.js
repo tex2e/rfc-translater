@@ -53,4 +53,24 @@ document.addEventListener('DOMContentLoaded', function () {
     httpRequest.send();
   }
 
+  // add theme toggle button to page
+  const themeToggleButton = document.createElement('button');
+  const buttonToOriginalContainer = document.getElementsByClassName('jump-to-original-rfc-container')[0];
+  const buttonToOriginal = buttonToOriginalContainer.childNodes[0];
+  let darkMode = false;
+  themeToggleButton.innerHTML = 'Dark';
+  themeToggleButton.classList.add('btn', 'btn-light', 'btn-sm');
+
+  themeToggleButton.addEventListener('click', function () {
+    if (darkMode) {
+      themeToggleButton.innerHTML = 'Dark'
+      darkMode = false;
+    } else {
+      themeToggleButton.innerHTML = 'Light'
+      darkMode = true;
+    }
+    document.body.classList.toggle('dark-theme');
+  });
+
+  buttonToOriginalContainer.insertBefore(themeToggleButton, buttonToOriginal);
 });

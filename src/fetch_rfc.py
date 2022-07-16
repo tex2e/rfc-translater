@@ -1,11 +1,10 @@
 
+import os
+import re
+import json
+import textwrap
 import requests
 from lxml import html
-import re
-import textwrap
-import json
-import os
-
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -13,20 +12,37 @@ JST = timezone(timedelta(hours=+9), 'JST')
 BREAK = '\n\x07\n'
 
 class Paragraph:
-    # 段落情報を持つクラス
+    # 段落情報を持つクラス。コードや図表かの判定はここで行う。
+    #
+    # Properties:
+    # * text: 段落の文章
+    # * indent: 段落のインデント数
+    # * is_code: コードや図表かどうかのフラグ。Trueの場合は翻訳処理を行わない
+    # * is_section_title: 見出しかどうかのフラグ
+    # * is_toc: 目次かどうかのフラグ
 
     def __init__(self, text, is_code=None):
+        # 段落文章（インデントは除く）
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
-        self.indent = get_line_len_diff(text, self.text)
+        # インデント数の取得
+        self.indent = _get_line_len_diff(text, self.text)
+        # コード・図表の判定
         self.is_code = is_code
         if not self.is_code:
             self.is_code = (
                 not self._find_list_pattern(self.text)
                 and self._find_code_pattern(self.text))
+        # 見出しの判定
         self.is_section_title = (
             self.indent <= 2 and
             self._find_section_title_pattern(self.text))
+        # 目次の判定
         self.is_toc = self._find_toc_pattern(self.text)
+        # 注釈の判定（|  Note: は必ず図表判定されてしまうので、修正する）
+        if self._find_note(self.text):
+            self.is_code = False  # コード・図表ではない
+            self.indent += 3  #「|  」の幅だけ増やす
+            self.text = self._convert_note_from_figure_to_text(self.text)  #「|  」の除去
 
         # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
         if self.is_toc:
@@ -53,18 +69,22 @@ class Paragraph:
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
             (self.indent, self.is_code, self.text)
 
+    # 目次の判定
     def _find_toc_pattern(self, text):
-        # 目次の判定
-        return (re.search(r'\.{6}|(?:\. ){6}', text) or 
-               (re.search(r'\A\s*1\. +Introduction\n', text, re.MULTILINE) and
+        return (re.search(r'\.{6}|(?:\. ){6}', text) or
+               # 1. Introduction から始まって Authors' Addresses で終わるとき
+               (re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and
                 re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
 
+    # 箇条書きなどの判定
     def _find_list_pattern(self, text):
-        # 箇条書きなどの判定
         return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
 
+    # 図表・ソースコード・数式の判定
     def _find_code_pattern(self, text):
-        # 図表・ソースコード・数式の判定
+        if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
+            return False
+
         if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
                 or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
                 or text.find('+--') >= 0  # directory tree
@@ -113,9 +133,9 @@ class Paragraph:
 
         return False
 
+    # 見出しの判定
     def _find_section_title_pattern(self, text):
-        # セクションのタイトルの判定
-        # "N." が現れたときはセクションのタイトルとして検出する
+        # "N." が現れたときは見出しとして検出する
         if len(text.split('\n')) >= 2:
             return False
         if text.endswith('.'):
@@ -128,47 +148,89 @@ class Paragraph:
             return True
         return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.\d{1,2} ', text)
 
+    # 注釈の正規表現
+    REGEX_PATTERN_NOTE1 = r'\A\s*\|  Note(?:\(\*\d\))?:'  # 1行目
+    REGEX_PATTERN_NOTE2 = r'\A\s*\|  '                    # 2行目以降
+    # 注釈の判定
+    def _find_note(self, text):
+        # |  Note: や |  Note (*1): から始まる場合は、注釈と見なす。
+        lines = text.split("\n")
+        if not re.search(self.__class__.REGEX_PATTERN_NOTE1, lines[0]):
+            return False
+        for line in lines[1:]:
+            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line):
+                return False
+        return True
+
+    # 注釈を図表からテキストに変換する
+    def _convert_note_from_figure_to_text(self, text):
+        # 各行の行頭文字列「  |  」を取り除く。
+        lines_with_pipe = text.split("\n")
+        lines_without_pipe = []
+        for line in lines_with_pipe:
+            tmp = re.sub(self.__class__.REGEX_PATTERN_NOTE2, ' ', line)
+            lines_without_pipe.append(tmp)
+        return ''.join(lines_without_pipe)
+
 
 class Paragraphs:
-    # 段落(Paragraph)の集合
+    # 段落(Paragraph)の集まり
+    #
+    # Properties:
+    # * paragraphs: 段落(Paragraph)の配列
 
-    def __init__(self, text, has_header=True):
-        is_header = has_header
-        chunks = re.compile(r'\n\n+').split(text) # 2つ以上改行が連続する部分が段落区切り
+    def __init__(self, text, ignore_header=True):
+        # Arguments:
+        # * text: 全ての段落を含む1つの文字列（段落の区切りは\n\n）
+        # * ignore_header: 最初の段落（ヘッダ）は翻訳しない
+
+        # 2つ以上改行が連続する部分が段落区切りなので、段落ごとに文字列を分割する
+        chunks = re.compile(r'\n\n+').split(text)
         self.paragraphs = []
         for i, chunk in enumerate(chunks):
-            is_header = (i == 0 and has_header)
-            self.paragraphs.append(Paragraph(chunk, is_code=is_header))
+            # 最初の段落は著者の情報などのメタ情報のため翻訳しない
+            is_header = (i == 0 and ignore_header)
+            # 文字列を段落にしてから配列に追加していく
+            paragraph = Paragraph(chunk, is_code=is_header)
+            self.paragraphs.append(paragraph)
 
     def __getitem__(self, key):
+        assert isinstance(key, int)
         return self.paragraphs[key]
 
     def __iter__(self):
         return iter(self.paragraphs)
 
-
-def get_indent(text):
+# 単一行の2つの文字列のインデントの差を求める関数
+def _get_indent(text):
     return len(text) - len(text.lstrip())
 
-def get_line_len_diff(text1, text2):
+# 複数行の2つの文字列のインデントの差を求める関数
+def _get_line_len_diff(text1, text2):
     first_line1 = text1.split('\n')[0]
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
 
 
+# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
+# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
 class RFCNotFound(Exception):
     pass
 
+# それ以外の例外（HTML構造に関するエラーなど）はExceptionを投げること。
+# class Exception:
 
-def cleanhtml(raw_html):
-    # 本文中にあるRFCへのリンクを削除する
+
+# 本文中にあるaタグ（RFCへのリンクなど）を削除する
+def _cleanhtml(raw_html):
     cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
     cleantext = re.sub(cleaner, b'', raw_html)
     return cleantext
 
+# [EntryPoint]
+# RFCの取得処理
 def fetch_rfc(number, force=False):
-
-    url = 'https://tools.ietf.org/html/rfc%d' % number
+    url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
     output_dir = 'data/%04d' % (number//1000%10*1000)
     output_file = '%s/rfc%d.json' % (output_dir, number)
 
@@ -182,23 +244,40 @@ def fetch_rfc(number, force=False):
     # RFCページのDOMツリーの取得
     headers = {'User-agent': '', 'referer': url}
     page = requests.get(url, headers, timeout=(36.2, 180))
-    tree = html.fromstring(cleanhtml(page.content))
+    tree = html.fromstring(_cleanhtml(page.content))
 
     # タイトルの取得
     title = tree.xpath('//title/text()')
     if len(title) == 0:
         raise RFCNotFound
-    title = title[0]
 
-    # ページが存在するか確認
-    content_h1 = tree.xpath('//div[@class="content"]/h1/text()')
-    if len(content_h1) >= 1 and content_h1[0].startswith('Not found:'):
-        raise RFCNotFound
+    if not force:
+        # タイトルの設定
+        # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
+
+        # <span class="h1">タイトル</span>
+        # content_h1 = tree.xpath('//span[@class="h1"]/text()') # 6/17 改行で複数に分割する場合があるため廃止
+        # <meta name="description" content="タイトル (RFC)">
+        content_description = tree.xpath('//meta[@name="description"]/@content')
+
+        # if len(content_h1) > 0:
+        #     title = "RFC %s - %s" % (number, content_h1[0]) # 6/17 改行で複数に分割する場合があるため廃止
+        if len(content_description) > 0:
+            tmp = content_description[0]
+            tmp = re.sub(r' ?\(RFC ?\)$', '', tmp)
+            title = "RFC %s - %s" % (number, tmp)
+        else:
+            raise Exception("Cannot extract RFC Title!")
+
+    else:
+        # forceオプションありのときは、タイトルが存在しなくても実行
+        title = "RFC %s" % number
 
     # DOMツリーから文章を取得
+    # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
     contents = tree.xpath(
-        '//pre/text() | '  # 本文
-        '//pre/a/text() | '  # 本文中のリンク
+        '//pre[not(contains(@class,"meta-info"))]/text() | '    # 本文（ただし文書冒頭のメタ情報は除く）
+        '//pre[not(contains(@class,"meta-info"))]/a/text() | '  # 本文中のリンク
         # セクションのタイトル
         '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
                    '@class="h4" or @class="h5" or @class="h6"]//text() |'
@@ -206,7 +285,7 @@ def fetch_rfc(number, force=False):
         '//a[@class="invisible"]'  # ページの区切り
     )
 
-    # ページ区切りで段落がページをまたぐ場合の処理
+    # ページ区切りで段落がページをまたぐ場合の処理（RFC8650～はページ区切りが無くなったので関係ない）
     contents_len = len(contents)
     for i, content in enumerate(contents):
         # ページ区切りのとき
@@ -215,15 +294,15 @@ def fetch_rfc(number, force=False):
 
             contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
             contents[i+0] = '' # ページ区切りの除去
-            if i + 1 >= contents_len: 
+            if i + 1 >= contents_len:
                 continue
             contents[i+1] = '' # 余分な改行の除去
-            if i + 2 >= contents_len: 
+            if i + 2 >= contents_len:
                 continue
             contents[i+2] = '' # 余分な空白の除去
-            if i + 3 >= contents_len: 
+            if i + 3 >= contents_len:
                 continue
-            if not isinstance(contents[i+3], str): 
+            if not isinstance(contents[i+3], str):
                 continue
             contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
 
@@ -231,8 +310,8 @@ def fetch_rfc(number, force=False):
             first, last = 0, -1
             prev_last_line = contents[i-1].split('\n')[last]    # 前ページの最後の行
             next_first_line = contents[i+3].split('\n')[first]  # 次ページの最初の行
-            indent1 = get_indent(prev_last_line)
-            indent2 = get_indent(next_first_line)
+            indent1 = _get_indent(prev_last_line)
+            indent2 = _get_indent(next_first_line)
             # print('newpage:', i)
             # print('  ', indent1, prev_last_line)
             # print('  ', indent2, next_first_line)
@@ -256,6 +335,7 @@ def fetch_rfc(number, force=False):
     # 全ての段落を結合する（段落の区切りは\n\n）
     text = ''.join(contents).strip()
 
+    # 文字列を段落の配列に変換する
     paragraphs = Paragraphs(text)
 
     # 段落情報をJSONに変換する
@@ -278,6 +358,7 @@ def fetch_rfc(number, force=False):
         if paragraph.is_toc:
             obj['contents'][-1]['toc'] = True
 
+    # JSONの保存
     json_file = open(output_file, 'w', encoding="utf-8")
     json.dump(obj, json_file, indent=2, ensure_ascii=False)
 

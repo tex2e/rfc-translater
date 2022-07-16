@@ -1,0 +1,368 @@
+{
+  "title": {
+    "text": "RFC 9149 - TLS Ticket Requests (RFC 9149)",
+    "ja": "RFC 9149 - TLSチケットリクエスト（RFC 9149）"
+  },
+  "number": 9149,
+  "created_at": "2022-04-28 02:59:03.436742+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                          T. Pauly\nRequest for Comments: 9149                                    Apple Inc.\nCategory: Standards Track                                    D. Schinazi\nISSN: 2070-1721                                               Google LLC\n                                                               C.A. Wood\n                                                              Cloudflare\n                                                              April 2022",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 26,
+      "text": "TLS Ticket Requests",
+      "ja": "TLSチケットリクエスト"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "TLS session tickets enable stateless connection resumption for clients without server-side, per-client state. Servers vend an arbitrary number of session tickets to clients, at their discretion, upon connection establishment. Clients store and use tickets when resuming future connections. This document describes a mechanism by which clients can specify the desired number of tickets needed for future connections. This extension aims to provide a means for servers to determine the number of tickets to generate in order to reduce ticket waste while simultaneously priming clients for future connection attempts.",
+      "ja": "TLSセッションチケットは、サーバー側のクライアント状態のないクライアントのステートレス接続再開を可能にします。サーバーは、接続の確立時に、裁量で任意の数のセッションチケットをクライアントに改造します。クライアントは、将来の接続を再開するときにチケットを保存および使用します。このドキュメントでは、クライアントが将来の接続に必要な希望する数のチケットを指定できるメカニズムについて説明します。この拡張機能の目的は、サーバーがチケットの廃棄物を削減し、同時に将来の接続の試みのためにクライアントをプライミングするために生成するチケットの数を決定する手段を提供することを目的としています。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9149.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9149で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Requirements Language\n2.  Use Cases\n3.  Ticket Requests\n4.  IANA Considerations\n5.  Performance Considerations\n6.  Security Considerations\n7.  References\n  7.1.  Normative References\n  7.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "As described in [RFC8446], TLS servers vend clients an arbitrary number of session tickets at their own discretion in NewSessionTicket messages. There are at least three limitations with this design.",
+      "ja": "[RFC8446]で説明されているように、TLSサーバーは、NewsessionTicketメッセージの独自の裁量で、任意の数のセッションチケットをクライアントに獲得します。このデザインには少なくとも3つの制限があります。"
+    },
+    {
+      "indent": 3,
+      "text": "First, servers vend some (often hard-coded) number of tickets per connection. Some server implementations return a different default number of tickets for session resumption than for the initial connection that created the session. No static choice, whether fixed or dependent upon resumption, is ideal for all situations.",
+      "ja": "まず、サーバーは、接続ごとに一部の（多くの場合ハードコーディングされた）チケット数を販売します。一部のサーバーの実装では、セッションを作成した初期接続とは異なるデフォルトのチケット数のチケット数を返します。固定または再開に依存しているかどうかにかかわらず、静的な選択はすべての状況に理想的ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Second, clients do not have a way of expressing their desired number of tickets, which can impact future connection establishment. For example, clients can open parallel TLS connections to the same server for HTTP, or they can race TLS connections across different network interfaces. The latter is especially useful in transport systems that implement Happy Eyeballs [RFC8305]. Since clients control connection concurrency and resumption, a standard mechanism for requesting more than one ticket is desirable for avoiding ticket reuse. See Appendix C.4 of [RFC8446] for discussion of ticket reuse risks.",
+      "ja": "第二に、クライアントには、将来の接続施設に影響を与える可能性のあるチケットの数を表現する方法がありません。たとえば、クライアントは、HTTPの同じサーバーへの並列TLS接続を開くことができます。または、異なるネットワークインターフェイスでTLS接続を競うことができます。後者は、ハッピーアイボールを実装する輸送システムで特に役立ちます[RFC8305]。クライアントは接続の並行性と再開を制御するため、チケットの再利用を避けるために、複数のチケットを要求するための標準的なメカニズムが望ましいです。チケットの再利用リスクの議論については、[RFC8446]の付録C.4を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Third, all tickets in the client's possession ultimately derive from some initial connection. Especially when the client was initially authenticated with a client certificate, that session may need to be refreshed from time to time. Consequently, a server may periodically force a new connection even when the client presents a valid ticket. When that happens, it is possible that any other tickets derived from the same original session are equally invalid. A client avoids a full handshake on subsequent connections if it replaces all stored tickets with new ones obtained from the just-performed full handshake. The number of tickets the server should vend for a new connection may therefore need to be larger than the number for routine resumption.",
+      "ja": "第三に、クライアントが所有するすべてのチケットは、最終的に最初の接続に由来します。特に、クライアントが最初にクライアント証明書を使用して認証された場合、そのセッションは時々更新する必要がある場合があります。その結果、クライアントが有効なチケットを提示した場合でも、サーバーは定期的に新しい接続を強制する場合があります。それが起こると、同じ元のセッションから派生した他のチケットが同様に無効である可能性があります。クライアントは、すべての保存されたチケットをパフォーマンスのある完全な握手から取得した新しいチケットに置き換えると、後続の接続に対する完全な握手を回避します。したがって、新しい接続のためにサーバーが獲得するチケットの数は、日常的な再開のために数よりも大きくなる必要がある場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies a new TLS extension, \"ticket_request\", that clients can use to express their desired number of session tickets. Servers can use this extension as a hint for the number of NewSessionTicket messages to vend. This extension is only applicable to TLS 1.3 [RFC8446], DTLS 1.3 [RFC9147], and future versions of (D)TLS.",
+      "ja": "このドキュメントは、クライアントが希望する数のセッションチケットを表現するために使用できる新しいTLS拡張機能「Ticket_Request」を指定します。サーバーは、この拡張機能を使用して、NewsessionTicketメッセージの数のヒントとして使用できます。この拡張は、TLS 1.3 [RFC8446]、DTLS 1.3 [RFC9147]、および（d）TLSの将来のバージョンにのみ適用できます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Requirements Language",
+      "section_title": true,
+      "ja": "1.1. 要件言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Use Cases",
+      "section_title": true,
+      "ja": "2. ユースケース"
+    },
+    {
+      "indent": 3,
+      "text": "The ability to request one or more tickets is useful for a variety of purposes:",
+      "ja": "1つ以上のチケットをリクエストする機能は、さまざまな目的に役立ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "Parallel HTTP connections: To improve performance, a client may open parallel connections. To avoid ticket reuse, the client may use distinct tickets on each connection. Clients must therefore bound the number of parallel connections they initiate by the number of tickets in their possession or risk ticket reuse.",
+      "ja": "並列HTTP接続：パフォーマンスを改善するために、クライアントは並列接続を開くことができます。チケットの再利用を避けるために、クライアントは各接続で異なるチケットを使用する場合があります。したがって、クライアントは、所有するチケットの数またはリスクチケットの再利用によって開始する並列接続の数を拘束する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Connection racing: Happy Eyeballs V2 [RFC8305] describes techniques for performing connection racing. The Transport Services Implementation document [TAPS] also describes how connections can race across interfaces and address families. In such cases, clients may use more than one ticket while racing connection attempts in order to establish one successful connection. Having multiple tickets equips clients with enough tickets to initiate connection racing while avoiding ticket reuse and ensuring that their cache of tickets does not empty during such races. Moreover, as some servers may implement single-use tickets, distinct tickets prevent premature ticket invalidation by racing.",
+      "ja": "接続レース：Happy Eyeballs V2 [RFC8305]は、接続レースを実行するためのテクニックについて説明しています。トランスポートサービスの実装ドキュメント[TAPS]は、接続がインターフェイス間でどのように競争し、家族に対処できるかについても説明しています。そのような場合、クライアントは、1つの成功した接続を確立するために、レース接続の試みで複数のチケットを使用する場合があります。複数のチケットを持つことは、チケットの再利用を避け、そのようなレース中にチケットのキャッシュが空にならないようにしながら、接続レースを開始するのに十分なチケットをクライアントに装備します。さらに、一部のサーバーが片足のチケットを実装する可能性があるため、異なるチケットはレースによる早期のチケットの無効化を防ぎます。"
+    },
+    {
+      "indent": 3,
+      "text": "Less ticket waste: Currently, TLS servers use application-specific, and often implementation-specific, logic to determine how many tickets to issue. By moving the burden of ticket count to clients, servers do not generate wasteful tickets. As an example, clients might only request one ticket during resumption. Moreover, as ticket generation might involve expensive computation, e.g., public key cryptographic operations, avoiding waste is desirable.",
+      "ja": "チケットの廃棄物の減少：現在、TLSサーバーはアプリケーション固有の、多くの場合実装固有のロジックを使用して、発行するチケットの数を決定します。チケットカウントの負担をクライアントに移動することにより、サーバーは無駄なチケットを生成しません。例として、クライアントは再開中に1つのチケットのみを要求する場合があります。さらに、チケットの生成には高価な計算が含まれる可能性があるため、たとえば公開キーの暗号操作など、廃棄物を回避することが望ましいです。"
+    },
+    {
+      "indent": 3,
+      "text": "Decline resumption: Clients can indicate they do not intend to resume a connection by sending a ticket request with count of zero.",
+      "ja": "衰退の再開：クライアントは、ゼロのカウントでチケットリクエストを送信して接続を再開するつもりはないことを示すことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Ticket Requests",
+      "section_title": true,
+      "ja": "3. チケットリクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "As discussed in Section 1, clients may want different numbers of tickets for new or resumed connections. Clients may indicate to servers their desired number of tickets to receive on a single connection, in the case of a new or resumed connection, via the following \"ticket_request\" extension:",
+      "ja": "セクション1で説明したように、クライアントは、新規または再開された接続のために異なる数のチケットを必要とする場合があります。クライアントは、次の「Ticket_Request」拡張機能を介して、新しい接続または再開された接続の場合に、単一の接続で受信するための希望する数のチケット数をサーバーすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "enum {\n    ticket_request(58), (65535)\n} ExtensionType;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Clients MAY send this extension in ClientHello. It contains the following structure:",
+      "ja": "クライアントは、この拡張機能をclienthelloで送信する場合があります。次の構造が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "struct {\n    uint8 new_session_count;\n    uint8 resumption_count;\n} ClientTicketRequest;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "new_session_count: The number of tickets desired by the client if the server chooses to negotiate a new connection.",
+      "ja": "new_session_count：サーバーが新しい接続のネゴシエートを選択した場合、クライアントが望むチケットの数。"
+    },
+    {
+      "indent": 3,
+      "text": "resumption_count: The number of tickets desired by the client if the server is willing to resume using a ticket presented in this ClientHello.",
+      "ja": "Resumption_count：このclienthelloに提示されたチケットを使用してサーバーが再開する場合にクライアントが望むチケットの数。"
+    },
+    {
+      "indent": 3,
+      "text": "A client starting a new connection SHOULD set new_session_count to the desired number of session tickets and resumption_count to 0. Once a client's ticket cache is primed, a resumption_count of 1 is a good choice that allows the server to replace each ticket with a new ticket without over-provisioning the client with excess tickets. However, clients that race multiple connections and place a separate ticket in each will ultimately end up with just the tickets from a single resumed session. In that case, clients can send a resumption_count equal to the number of connections they are attempting in parallel. (Clients that send a resumption_count less than the number of parallel connection attempts might end up with zero tickets.)",
+      "ja": "新しい接続を開始するクライアントは、new_session_countを希望のセッションチケット数に設定し、resumption_countを0に設定する必要があります。クライアントのチケットキャッシュがプライミングされたら、Resumption_count 1の1つは、サーバーが各チケットを新しいチケットで交換できるようにするのに適しています。余分なチケットでクライアントを過剰に分割します。ただし、複数の接続を競い合い、それぞれに別のチケットを配置するクライアントは、最終的には1回の再開されたセッションのチケットだけになります。その場合、クライアントは、並行して試みている接続の数に等しいResumption_Countを送信できます。（resumption_countを送信するクライアントは、並列接続の試行の数よりも少ないクライアントがチケットゼロになる可能性があります。）"
+    },
+    {
+      "indent": 3,
+      "text": "When a client presenting a previously obtained ticket finds that the server nevertheless negotiates a new connection, the client SHOULD assume that any other tickets associated with the same session as the presented ticket are also no longer valid for resumption. This includes tickets obtained during the initial (new) connection and all tickets subsequently obtained as part of subsequent resumptions. Requesting more than one ticket when servers complete a new connection helps keep the session cache primed.",
+      "ja": "以前に取得したチケットを提示したクライアントが、それにもかかわらずサーバーが新しい接続に交渉していることがわかった場合、クライアントは、提示されたチケットと同じセッションに関連付けられている他のチケットも再開するのにもはや有効ではないと想定する必要があります。これには、初期（新しい）接続中に取得されたチケットと、その後のすべてのチケットがその後その後の衝撃の一部として取得されます。サーバーが新しい接続を完了したときに複数のチケットを要求すると、セッションキャッシュのプライミングを維持することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers SHOULD NOT send more tickets than requested for the connection type selected by the server (new or resumed connection). Moreover, servers SHOULD place a limit on the number of tickets they are willing to send, whether for new or resumed connections, to save resources. Therefore, the number of NewSessionTicket messages sent will typically be the minimum of the server's self-imposed limit and the number requested. Servers MAY send additional tickets, typically using the same limit, if the tickets that are originally sent are somehow invalidated.",
+      "ja": "サーバーは、サーバーによって選択された接続タイプ（新規または再開された接続）の要求よりも多くのチケットを送信してはなりません。さらに、サーバーは、リソースを節約するために、新しい接続または再開された接続のいずれであろうと、彼らが喜んで送る意思のあるチケットの数に制限を設ける必要があります。したがって、送信されるNewsessionTicketメッセージの数は、通常、サーバーの自己課された制限と要求された数の最小値となります。サーバーは、元々送信されたチケットが何らかの形で無効になっている場合、通常同じ制限を使用して追加のチケットを送信する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A server that supports and uses a client \"ticket_request\" extension MUST also send the \"ticket_request\" extension in the EncryptedExtensions message. It contains the following structure:",
+      "ja": "クライアントの「Ticket_Request」拡張機能をサポートおよび使用するサーバーは、暗号化されたTextensionsメッセージに「Ticket_Request」拡張機能を送信する必要があります。次の構造が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "struct {\n    uint8 expected_count;\n} ServerTicketRequestHint;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "expected_count: The number of tickets the server expects to send in this connection.",
+      "ja": "expection_count：サーバーがこれに関連して送信すると予想されるチケットの数。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MUST NOT send the \"ticket_request\" extension in any handshake message, including ServerHello or HelloRetryRequest messages. A client MUST abort the connection with an \"illegal_parameter\" alert if the \"ticket_request\" extension is present in any server handshake message.",
+      "ja": "サーバーは、serverhelloやhelloretryrequestメッセージを含むハンドシェイクメッセージに「ticket_request」拡張機能を送信してはなりません。クライアントは、「ticket_request」拡張機能がサーバーのハンドシェイクメッセージに存在する場合、「Illegal_parameter」アラートで接続を中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a client receives a HelloRetryRequest, the presence (or absence) of the \"ticket_request\" extension MUST be maintained in the second ClientHello message. Moreover, if this extension is present, a client MUST NOT change the value of ClientTicketRequest in the second ClientHello message.",
+      "ja": "クライアントがHelloretryRequestを受信した場合、「Ticket_Request」拡張子の存在（または不在）を2番目のClientHelloメッセージで維持する必要があります。さらに、この拡張機能が存在する場合、クライアントは2番目のClientHelloメッセージでClientTicketRequestの値を変更してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. IANA Considerations",
+      "section_title": true,
+      "ja": "4. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following entry to the \"TLS ExtensionType Values\" registry [RFC8446] [RFC8447]:",
+      "ja": "IANAは、次のエントリを「TLS ExtensionType値」レジストリ[RFC8446] [RFC8447]に追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "+=======+================+=========+===========+=============+\n| Value | Extension Name | TLS 1.3 | DTLS-Only | Recommended |\n+=======+================+=========+===========+=============+\n| 58    | ticket_request | CH, EE  | N         | Y           |\n+-------+----------------+---------+-----------+-------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 10,
+      "text": "Table 1: Addition to TLS ExtensionType Values Registry",
+      "ja": "表1：TLS ExtensionType値レジストリへの追加"
+    },
+    {
+      "indent": 0,
+      "text": "5. Performance Considerations",
+      "section_title": true,
+      "ja": "5. パフォーマンスに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Servers can send tickets in NewSessionTicket messages any time after the server Finished message (see Section 4.6.1 of [RFC8446]). A server that chooses to send a large number of tickets to a client can potentially harm application performance if the tickets are sent before application data. For example, if the transport connection has a constrained congestion window, ticket messages could delay sending application data. To avoid this, servers should prioritize sending application data over tickets when possible.",
+      "ja": "サーバーは、サーバーがメッセージを完了した後でもNewsessionTicketメッセージにチケットを送信できます（[RFC8446]のセクション4.6.1を参照）。クライアントに多数のチケットを送信することを選択したサーバーは、アプリケーションデータの前にチケットが送信された場合、アプリケーションのパフォーマンスに害を及ぼす可能性があります。たとえば、トランスポート接続に制約された混雑ウィンドウがある場合、チケットメッセージはアプリケーションデータの送信を遅らせる可能性があります。これを回避するために、サーバーは可能な場合はチケットを介してアプリケーションデータを送信することを優先する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティ上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Ticket reuse is a security and privacy concern. Moreover, clients must take care when pooling tickets as a means of avoiding or amortizing handshake costs. If servers do not rotate session ticket encryption keys frequently, clients may be encouraged to obtain and use tickets beyond common lifetime windows of, e.g., 24 hours. Despite ticket lifetime hints provided by servers, clients SHOULD dispose of cached tickets after some reasonable amount of time that mimics the session ticket encryption key rotation period. Specifically, as specified in Section 4.6.1 of [RFC8446], clients MUST NOT cache tickets for longer than 7 days.",
+      "ja": "チケットの再利用は、セキュリティとプライバシーの懸念です。さらに、クライアントは、握手コストを回避または償却する手段として、チケットをプールするときは注意しなければなりません。サーバーがセッションチケット暗号化キーを頻繁に回転させない場合、クライアントは、たとえば24時間の一般的な生涯ウィンドウを超えてチケットを取得して使用することをお勧めします。サーバーが提供するチケットの生涯のヒントにもかかわらず、クライアントは、セッションチケット暗号化キーローテーション期間を模倣する合理的な時間の後にキャッシュされたチケットを処分する必要があります。具体的には、[RFC8446]のセクション4.6.1で指定されているように、クライアントはチケットを7日以上キャッシュしてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In some cases, a server may send NewSessionTicket messages immediately upon sending the server Finished message rather than waiting for the client Finished message. If the server has not verified the client's ownership of its IP address, e.g., with the TLS cookie extension (see Section 4.2.2 of [RFC8446]), an attacker may take advantage of this behavior to create an amplification attack proportional to the count value toward a target by performing a (DTLS) key exchange over UDP with spoofed packets. Servers SHOULD limit the number of NewSessionTicket messages they send until they have verified the client's ownership of its IP address.",
+      "ja": "場合によっては、サーバーは、クライアントが完成したメッセージを待つのではなく、サーバーが完成したメッセージを送信するとすぐにNewsessionTicketメッセージを送信する場合があります。サーバーがクライアントのIPアドレスの所有権を確認していない場合、たとえばTLS Cookie拡張機能（[RFC8446]のセクション4.2.2を参照）を使用して、攻撃者はこの動作を利用してカウントに比例した増幅攻撃を作成することができます。スプーフィングされたパケットを使用してUDPを介して（DTLS）キー交換を実行することにより、ターゲットに値を付けます。サーバーは、IPアドレスのクライアントの所有権を確認するまで、送信するNewsessionTicketメッセージの数を制限する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers that do not enforce a limit on the number of NewSessionTicket messages sent in response to a \"ticket_request\" extension could leave themselves open to DoS attacks, especially if ticket creation is expensive.",
+      "ja": "「Ticket_Request」拡張機能に応じて送信されたNewsessionTicketメッセージの数に制限を強制しないサーバーは、特にチケットの作成が高価な場合、DOS攻撃に対して開かれたままになる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8446] Rescorla, E., \"The Transport Layer Security (TLS) Protocol Version 1.3\", RFC 8446, DOI 10.17487/RFC8446, August 2018, <https://www.rfc-editor.org/info/rfc8446>.",
+      "ja": "[RFC8446] Rescorla、E。、「輸送層セキュリティ（TLS）プロトコルバージョン1.3」、RFC 8446、DOI 10.17487/RFC8446、2018年8月、<https://www.rfc-editor.org/info/rfc846>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8447] Salowey, J. and S. Turner, \"IANA Registry Updates for TLS and DTLS\", RFC 8447, DOI 10.17487/RFC8447, August 2018, <https://www.rfc-editor.org/info/rfc8447>.",
+      "ja": "[RFC8447] Salowey、J。およびS. Turner、「TLSおよびDTLSのIANAレジストリの更新」、RFC 8447、DOI 10.17487/RFC8447、2018年8月、<https://www.rfc-editor.org/info/rfc8447>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9147] Rescorla, E., Tschofenig, H., and N. Modadugu, \"The Datagram Transport Layer Security (DTLS) Protocol Version 1.3\", RFC 9147, DOI 10.17487/RFC9147, April 2022, <https://www.rfc-editor.org/info/rfc9147>.",
+      "ja": "[RFC9147] Rescorla、E.、Tschofenig、H。、およびN. Modadugu、「データグラム輸送層セキュリティ（DTLS）プロトコルバージョン1.3」、RFC 9147、DOI 10.17487/RFC9147、2022年4月、<https：// www。rfc-editor.org/info/rfc9147>。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8305] Schinazi, D. and T. Pauly, \"Happy Eyeballs Version 2: Better Connectivity Using Concurrency\", RFC 8305, DOI 10.17487/RFC8305, December 2017, <https://www.rfc-editor.org/info/rfc8305>.",
+      "ja": "[RFC8305] Schinazi、D。and T. Pauly、「Happy Eyeballsバージョン2：並行性を使用したより良い接続性」、RFC 8305、DOI 10.17487/RFC8305、2017年12月、<https://www.rfc-editor.org/info/RFC8305>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TAPS] Brunstrom, A., Ed., Pauly, T., Ed., Enghardt, T., Tiesel, P., and M. Welzl, \"Implementing Interfaces to Transport Services\", Work in Progress, Internet-Draft, draft-ietf-taps-impl-12, 7 March 2022, <https://datatracker.ietf.org/doc/html/draft-ietf-taps-impl-12>.",
+      "ja": "[Taps] Brunstrom、A.、Ed。、Pauly、T.、Ed。、Enghardt、T.、Tiesel、P.、およびM. Welzl、「輸送サービスへのインターフェイスの実装」、進行中の作業、インターネットドラフト、Draft-ITETF-TAPS-IMPL-12、2022年3月7日、<https://datatracker.ietf.org/doc/html/draft-ietf-taps-impl-12>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank David Benjamin, Eric Rescorla, Nick Sullivan, Martin Thomson, Hubert Kario, and other members of the TLS Working Group for discussions on earlier draft versions of this document. Viktor Dukhovni contributed text allowing clients to send multiple counts in a ticket request.",
+      "ja": "著者は、デビッド・ベンジャミン、エリック・レスコルラ、ニック・サリバン、マーティン・トムソン、ヒューバート・カリオ、およびTLSワーキンググループの他のメンバーに、この文書の以前のドラフトバージョンに関する議論について感謝します。Viktor Dukhovniは、クライアントがチケットリクエストで複数のカウントを送信できるようにするテキストを提供しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tommy Pauly Apple Inc. One Apple Park Way Cupertino, CA 95014 United States of America Email: tpauly@apple.com",
+      "ja": "Tommy Pauly Apple Inc. One Apple Park Way Cupertino、CA 95014アメリカ合衆国電子メール：tpauly@apple.com"
+    },
+    {
+      "indent": 3,
+      "text": "David Schinazi Google LLC 1600 Amphitheatre Parkway Mountain View, CA 94043 United States of America Email: dschinazi.ietf@gmail.com",
+      "ja": "David Schinazi Google LLC 1600 Amphitheater Parkway Mountain View、CA 94043アメリカ合衆国電子メール：dschinazi.ietf@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Christopher A. Wood Cloudflare 101 Townsend St San Francisco, CA 94107 United States of America Email: caw@heapingbits.net",
+      "ja": "クリストファーA.ウッドクラウドフラア101タウンゼントセントサンフランシスコ、カリフォルニア94107アメリカ合衆国電子メール：caw@heaping.net"
+    }
+  ]
+}

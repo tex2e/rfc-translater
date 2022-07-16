@@ -3,7 +3,6 @@ import os
 import re
 import json
 import time
-from googletrans import Translator as GoogleTranslater # pip install googletrans
 from tqdm import tqdm # pip install tqdm
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
@@ -73,6 +72,7 @@ class Translator:
 #     # py-googletrans
 
 #     def __init__(self, total, desc=''):
+#         from googletrans import Translator as GoogleTranslater # pip install googletrans
 #         super(TranslatorGoogletrans, self).__init__(total, desc)
 
 #         self.translator = GoogleTranslater()
@@ -153,7 +153,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser = self._browser
         # 翻訳したい文をURLに埋め込んでからアクセスする
         text_for_url = urllib.parse.quote_plus(text, safe='')
-        url = "https://translate.google.co.jp/#en/ja/{0}".format(text_for_url)
+        url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
         browser.get(url)
         # 数秒待機する
         wait_time = 3 + len(text) / 1000
