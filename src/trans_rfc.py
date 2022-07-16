@@ -11,6 +11,8 @@ import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+import platform
 
 # ルールは必ず小文字で登録すること
 trans_rules = {
@@ -39,9 +41,9 @@ trans_rules = {
         "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。",
 }
 
-class TransMode:
-    PY_GOOGLETRANS  = 1
-    SELENIUM_GOOGLE = 2
+# class TransMode:
+#     PY_GOOGLETRANS  = 1
+#     SELENIUM_GOOGLE = 2
 
 
 # 翻訳抽象クラス
@@ -67,50 +69,50 @@ class Translator:
         return True
 
 
-class TranslatorGoogletrans(Translator):
-    # py-googletrans
+# class TranslatorGoogletrans(Translator):
+#     # py-googletrans
 
-    def __init__(self, total, desc=''):
-        super(TranslatorGoogletrans, self).__init__(total, desc)
+#     def __init__(self, total, desc=''):
+#         super(TranslatorGoogletrans, self).__init__(total, desc)
 
-        self.translator = GoogleTranslater()
+#         self.translator = GoogleTranslater()
 
-    def translate(self, text, dest='ja'):
-        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
-        ja = trans_rules.get(text.lower())
-        if ja:
-            return ja
-        # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
-        text = re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text)
-        # 翻訳処理
-        ja = self.translator.translate(text, dest='ja')
-        # 翻訳の間隔を開ける
-        wait_time = 3 + len(text) / 100 # IMPORTANT!!!
-        # プログレスバーに詳細情報を追加
-        self.output_progress(len=len(text), wait_time=wait_time)
-        time.sleep(wait_time)
-        return ja.text
+#     def translate(self, text, dest='ja'):
+#         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
+#         ja = trans_rules.get(text.lower())
+#         if ja:
+#             return ja
+#         # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
+#         text = re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text)
+#         # 翻訳処理
+#         ja = self.translator.translate(text, dest='ja')
+#         # 翻訳の間隔を開ける
+#         wait_time = 3 + len(text) / 100 # IMPORTANT!!!
+#         # プログレスバーに詳細情報を追加
+#         self.output_progress(len=len(text), wait_time=wait_time)
+#         time.sleep(wait_time)
+#         return ja.text
 
-    def translate_texts(self, texts, dest='ja'):
-        # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
-        texts = list(map(lambda text: re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text), texts))
-        # 翻訳処理
-        texts_ja = self.translator.translate(texts, dest='ja')
-        res = [text_ja.text for text_ja in texts_ja]
-        total_len = sum([len(t) for t in texts])
-        # 翻訳の間隔を開ける
-        wait_time = 5 + total_len / 1000 # IMPORTANT!!!
-        # プログレスバーに詳細情報を追加
-        self.output_progress(len=total_len, wait_time=wait_time)
-        time.sleep(wait_time)
-        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
-        for i, text in enumerate(texts):
-            ja = trans_rules.get(text.lower())
-            if ja:
-                res[i] = ja
-        # 関数の括弧（）は半角に変換する
-        res = [re.sub(r'（）', '()', text_ja) for text_ja in res]
-        return res
+#     def translate_texts(self, texts, dest='ja'):
+#         # URLエンコード処理でエラー回避用に、&の後ろに空白を入れる
+#         texts = list(map(lambda text: re.sub(r'&(#?[a-zA-Z0-9]+);', r'& \1;', text), texts))
+#         # 翻訳処理
+#         texts_ja = self.translator.translate(texts, dest='ja')
+#         res = [text_ja.text for text_ja in texts_ja]
+#         total_len = sum([len(t) for t in texts])
+#         # 翻訳の間隔を開ける
+#         wait_time = 5 + total_len / 1000 # IMPORTANT!!!
+#         # プログレスバーに詳細情報を追加
+#         self.output_progress(len=total_len, wait_time=wait_time)
+#         time.sleep(wait_time)
+#         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
+#         for i, text in enumerate(texts):
+#             ja = trans_rules.get(text.lower())
+#             if ja:
+#                 res[i] = ja
+#         # 関数の括弧（）は半角に変換する
+#         res = [re.sub(r'（）', '()', text_ja) for text_ja in res]
+#         return res
 
 
 class TranslatorSeleniumGoogletrans(Translator):
@@ -119,11 +121,18 @@ class TranslatorSeleniumGoogletrans(Translator):
     def __init__(self, total, desc=''):
         super(TranslatorSeleniumGoogletrans, self).__init__(total, desc)
 
-        WEBDRIVER_EXE_PATH = os.getenv('WEBDRIVER_EXE_PATH',
-            default='C:\Apps\webdriver\geckodriver.exe')
         options = Options()
         options.add_argument('--headless')
-        browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
+        browser = None
+        if platform.system() == 'Windows':
+            WEBDRIVER_EXE_PATH = os.getenv('WEBDRIVER_EXE_PATH',
+                default='C:\Apps\webdriver\geckodriver.exe')
+            browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
+        else:
+            # sudo apt install python3-pip firefox
+            # sudo pip3 install selenium
+            options.binary_location = '/usr/bin/firefox'
+            browser = webdriver.Firefox(options=options)
         browser.implicitly_wait(3)
         self._browser = browser
 
@@ -150,7 +159,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         wait_time = 3 + len(text) / 1000
         time.sleep(wait_time)
         # 翻訳結果を抽出する
-        elems = browser.find_elements_by_css_selector("span[jsname='W297wb']")
+        elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
         ja = "".join(elem.text for elem in elems)
         # プログレスバーに詳細情報を追加
         self.output_progress(len=len(text), wait_time=wait_time)
@@ -174,7 +183,8 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number, mode):
+# def trans_rfc(number, mode):
+def trans_rfc(number):
 
     input_dir = 'data/%04d' % (number//1000%10*1000)
     input_file = '%s/rfc%d.json' % (input_dir, number)
@@ -189,10 +199,11 @@ def trans_rfc(number, mode):
             obj = json.load(f)
 
     desc = 'RFC %d' % number
-    if mode == TransMode.PY_GOOGLETRANS:
-        translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
-    else:
-        translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
+    # if mode == TransMode.PY_GOOGLETRANS:
+    #     translator = TranslatorGoogletrans(total=len(obj['contents']), desc=desc)
+    # else:
+    #     translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
+    translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
     is_canceled = False
 
     try:
@@ -235,8 +246,8 @@ def trans_rfc(number, mode):
                     pre_texts.append('')
                     texts.append(text)
 
-            if mode == TransMode.PY_GOOGLETRANS:
-                translator.increment_count(len(texts))
+            # if mode == TransMode.PY_GOOGLETRANS:
+            #     translator.increment_count(len(texts))
 
             texts_ja = translator.translate_texts(texts)
 
@@ -276,26 +287,27 @@ def trans_rfc(number, mode):
         return False
 
 
-def trans_test(mode=TransMode.SELENIUM_GOOGLE):
-    if mode == TransMode.PY_GOOGLETRANS:
-        translator = TranslatorGoogletrans(total=1)
-        ja = translator.translate('test', dest='ja')
-        return ja == 'テスト'
-    else:
-        translator = TranslatorSeleniumGoogletrans(total=1)
-        ja = translator.translate('test', dest='ja')
-        print('result:', ja)
-        return ja in ('テスト', 'しけん')
+def trans_test():
+    #def trans_test(mode=TransMode.SELENIUM_GOOGLE):
+    # if mode == TransMode.PY_GOOGLETRANS:
+    #     translator = TranslatorGoogletrans(total=1)
+    #     ja = translator.translate('test', dest='ja')
+    #     return ja == 'テスト'
+    # else:
+    translator = TranslatorSeleniumGoogletrans(total=1)
+    ja = translator.translate('test', dest='ja')
+    print('result:', ja)
+    return ja in ('テスト', 'しけん')
 
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(total=1)
-    parser.add_argument('text', help='english text')
-    args = parser.parse_args()
+# if __name__ == '__main__':
+#     import argparse
+#     parser = argparse.ArgumentParser(total=1)
+#     parser.add_argument('text', help='english text')
+#     args = parser.parse_args()
 
-    translator = TranslatorGoogletrans(total=1)
-    ja = translator.translate(args.text, dest='ja')
-    print(ja)
+#     translator = TranslatorGoogletrans(total=1)
+#     ja = translator.translate(args.text, dest='ja')
+#     print(ja)
 
 
 # googletrans:

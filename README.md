@@ -106,10 +106,10 @@ TODO: HTMLエスケープ確認作業の一部自動化
 動作環境：Python3 + Windows or MacOS
 
 ```
-pip install requests lxml
+pip install requests lxml beautifulsoup4
 pip install Mako
 pip install tqdm
-pip install googletrans==4.0.0-rc1
+#pip install googletrans==4.0.0-rc1
 pip install selenium
 ```
 
