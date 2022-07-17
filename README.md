@@ -1,6 +1,8 @@
 
 # RFC Translater
 
+RFCを翻訳するツール群 & 翻訳済みRFCサイト
+
 ### 目的
 1. RFCの英語を読むのが辛いので、Google翻訳した文を横に並べたものを読みたい。
 [RFCの日本語訳リンク集](https://www.nic.ad.jp/ja/tech/rfc-jp-links.html)では原文と日本語訳が別々のページで、日本語訳が正しいのか判断しにくい問題がある。
@@ -107,33 +109,39 @@ pip3 install requests lxml beautifulsoup4 Mako tqdm selenium beautifulsoup4
 
 さらに、以下のツールが実行に必要です。
 - **Windows**: FireFox のサイトから geckodriver.exe をダウンロードし、src/trans_rfc.py から呼び出せるように環境変数 WEBDRIVER_EXE_PATH に exe のパスを設定ください。
-- **Linux (Ubuntu)** の場合は、以下のパッケージをインストールしてください。
+- **Linux (Ubuntu)** の場合は、以下のパッケージをインストールください。
     ```
     sudo apt install python3-pip firefox
+    sudo pip install selenium
     ```
 
 ### 実行コマンド例
 
 **注意：翻訳処理は非常に時間がかかります。1個のRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
-開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいやっていました。
+開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいしていました。
 
 #### 取得・翻訳・生成
 
 ```bash
-python3 main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
-python3 main.py --rfc 123 --fetch # RFCの取得だけ
-python3 main.py --rfc 123 --trans # RFCの翻訳だけ
-python3 main.py --rfc 123 --make # HTMLの生成だけ
-python3 main.py --begin 2220 --end 10000 # RFC 2220〜10000 を順番に翻訳する
-python3 main.py --make --begin 2220 --end 10000 # RFC 2220〜10000 のHTMLを生成する
-python3 main.py # 未翻訳RFCを順番に翻訳する
-python3 main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先頭から1つ選択し翻訳する
+python3 main.py --rfc 1234         # RFC1234を翻訳する（取得+翻訳+HTML生成）
+python3 main.py --rfc 1234 --fetch # RFCの取得だけ
+python3 main.py --rfc 1234 --trans # RFCの翻訳だけ
+python3 main.py --rfc 1234 --make  # HTMLの生成だけ
+python3 main.py --begin 2220 --end 10000        # RFC2220〜10000を翻訳する
+python3 main.py --make --begin 2220 --end 10000 # RFC2220〜10000のHTMLを生成する
+python3 main.py                           # 未翻訳RFCを順番に翻訳する
+python3 main.py --begin 8000 --only-first # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
 ```
 
 生成物：
-1. fetch_rfc（取得） ... data/A000/B00/rfcABCD.json (段落区切りで取り出した文章)
-2. trans_rfc（翻訳） ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
-3. make_html（生成） ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
+
+| ファイルパス | 説明 | 生成元プログラム |
+|-----------|-----|--------------|
+| html/obsoletes.json | 廃止RFCの一覧 | fetch_index (取得)
+| data/A000/rfcABCD.json | 段落区切りで文章化した情報 | fetch_rfc（取得）
+| data/A000/rfcABCD-trans.json | 各文章の翻訳を付与した情報 | trans_rfc（翻訳）
+| html/rfcABCD.html | 原文と翻訳を並べて表示するHTML | make_html（生成）
+
 
 #### トップページの生成
 
@@ -142,10 +150,13 @@ python3 main.py --make-index # インデックスページの作成
 ```
 
 生成物：
-1. html/index.html (トップページ)
+
+| ファイルパス | 説明 | 生成元プログラム |
+|-----------|-----|--------------|
+| html/index.html | トップページ| make_index (生成)
 
 
-### 確認方法
+### 翻訳結果確認
 ローカルで成果物の確認：
 ```bash
 python3 -m http.server
@@ -157,12 +168,9 @@ RFCを解析した結果、本来プログラムとして解釈すべき部分�
 [https://tex2e.github.io/rfc-translater/html/format.html](https://tex2e.github.io/rfc-translater/html/format.html)
 
 
-<br>
-
----
 
 <!--
-#### Figs
+### Figs
 
 各RFCから図のみを集めて公開するサイト「RFC Figs」について（現在、更新予定はありません）
 
