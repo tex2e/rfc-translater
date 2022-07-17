@@ -3,22 +3,22 @@
 
 ### 目的
 1. RFCの英語を読むのが辛いので、Google翻訳した文を横に並べたものを読みたい。
-[RFCの日本語訳リンク集](https://www.nic.ad.jp/ja/tech/rfc-jp-links.html)では原文と日本語訳が別々のページになっていて、日本語訳が正しいのか判断しにくい問題がある
-2. RFCの本文は改行されているので、改行を削除した上でGoogle翻訳に貼り付けないと正しく翻訳されない。改行を削除する煩わしさを解決する
+[RFCの日本語訳リンク集](https://www.nic.ad.jp/ja/tech/rfc-jp-links.html)では原文と日本語訳が別々のページで、日本語訳が正しいのか判断しにくい問題がある。
+2. RFCの本文は改行済みのため、改行を削除してからGoogle翻訳に貼り付けないと正しく翻訳されない。改行を削除する煩わしさを解決する。
 
 ### 流れ
-1. RFCのインデックス取得 https://tools.ietf.org/rfc/index (fetch_index)
-1. RFCスクレイピング https://datatracker.ietf.org/doc/html/rfcXXXX (fetch_rfc)
-2. セクション毎に分割 & 改行の除去 (fetch_rfc)
-3. Google翻訳で英語を日本語にする (trans_rfc)
-4. セクション毎に英文、日本語文を並べて表示するページの生成 (make_html)
-5. 有名なRFCやアクセス数の多いページに対しては、翻訳の修正作業などを行う (人手)
+1. **src/fetch_index.py**: RFC一覧の取得。取得先： https://tools.ietf.org/rfc/index
+2. **src/fetch_rfc.py**: 個別RFCの取得。取得先： https://datatracker.ietf.org/doc/html/rfcXXXX
+3. **src/fetch_rfc.py**: セクション毎に分割 & 改行の除去
+4. **src/trans_rfc.py**: Google翻訳で英語を日本語に変換
+5. **src/make_html.py**: セクション毎に英文と日本語文を並べて表示するページの生成
+6. 人手: 有名なRFCやアクセス数の多いページは翻訳修正作業などを行う
 
 ### 注意事項
-- 複数ページにわたる図や表は上手に解釈できないことがあります
-- 図や表の中に空行が含まれるときも上手に解釈できないことがあります
-- RFCのHTMLが例外的な構造になっている場合も上手に解釈できません（特に番号の小さいRFC）
-- RFC2220以降を対象とする (http://rfc-jp.nic.ad.jp/copyright/translate.html)
+- 複数ページにまたがる図表は適切に解釈できない場合があります。
+- 図や表の中に空行が含まれるときも適切に解釈できない場合があります。
+- RFCのHTMLが例外的な構造になっている場合も適切に解釈できません (特に番号の小さいRFC)。
+- 翻訳はRFC2220以降を対象とします (http://rfc-jp.nic.ad.jp/copyright/translate.html)。
 
 <br>
 
@@ -30,7 +30,7 @@
 ### 翻訳修正者
 
 1. html/rfcXXXX.htmlの翻訳を修正します。
-   - 見出しは`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
+   - **見出し**は`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -45,7 +45,7 @@
         </div>
       </div>
       ```
-   - 文章は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
+   - **文章**は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
@@ -60,7 +60,7 @@
         </div>
       </div>
       ```
-   - 図表やプログラムは`<pre class="text text-monospace">`を使います。英文のみです。
+   - **図表やプログラム**は`<pre class="text text-monospace">`を使います。英文のみです。
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-12">
@@ -77,49 +77,47 @@
 
 ### 管理者
 
-1. PullRequestの差分を確認し、HTMLエスケープが適切に行われているかを確認します。
-2. 問題がなければMergeし、ローカルにpullします。
+1. PullRequestの差分を確認し、HTML構造に問題がないか確認します。
+2. PullRequestのブランチをローカルにPullします。
 3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認します。
 4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認します。
-5. (必要に応じて) 問題点があれば `git checkout -- html/rfc<対象RFC>.html` で元に戻して、元データの JSON やプログラムの不備を調査します。
-6. レポジトリにpushします。
+5. 問題点があれば `git checkout -- html/rfc<対象RFC>.html` で元に戻して、元データの JSON やプログラムの不備を調査します。
+6. 問題がなければMergeし、リモートにPushします。
 
 <br>
 
 ## 開発者向け
 
 ### 実装機能
-- 文章のみ翻訳し、図や表はそのまま表示する
-- 文章がページ区切りで分割されていても1つの段落として翻訳する
-- インデントの深さも反映させる
-- 箇条書き（o + * - など）の記号はそのまま表示する
-- 表題（1.2.～ など）は文字を大きくする
-- 原本（英語RFC）へのリンクをスクロールしても常に表示する
-- 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示する（例：RFC2246, RFC2616）
+- 文章のみ翻訳し、図や表はそのまま表示する。
+- 文章がページ区切りで分割されていても1つの段落として翻訳する。
+- インデントの深さも反映させる。
+- 箇条書き（o + * - など）の記号はそのまま表示する。
+- 表題（1.2.～ など）は見出しとして文字を大きくする。
+- 原本（英語RFC）へのリンクをスクロールしても常に表示する。
+- 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示する (例：RFC2246, RFC2616)。
 
-動作環境：Python3 + Windows or MacOS
+### 動作環境
+Python3 + Selenium (FireFox) on Windows / MacOS / Ubuntu (headless)
 
+以下のライブラリがPythonでの実行に必要です。Windowsの場合は、py -m pip に読み替えてください。
 ```
-pip install requests lxml beautifulsoup4
-pip install Mako
-pip install tqdm
-#pip install googletrans==4.0.0-rc1
-pip install selenium
-pip install beautifulsoup4
+pip3 install requests lxml beautifulsoup4 Mako tqdm selenium beautifulsoup4
 ```
 
-Windowsの場合は、py -m pip に読み替えてください。
-
-**注意：翻訳作業は非常に時間がかかります。1つのRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
-開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいやっていました。
-
-SeleniumではFirefoxを使用しているため、geckodriver のダウンロードが必要です。
-- Windowsの場合は、geckodriverの配置場所を環境変数 WEBDRIVER_EXE_PATH に指定してから実行してください (src/trans_rfc.py 参照)。
-- Linux(Ubuntu)の場合は、以下のパッケージをインストールしてください。
+さらに、以下のツールが実行に必要です。
+- **Windows**: FireFox のサイトから geckodriver.exe をダウンロードし、src/trans_rfc.py から呼び出せるように環境変数 WEBDRIVER_EXE_PATH に exe のパスを設定ください。
+- **Linux (Ubuntu)** の場合は、以下のパッケージをインストールしてください。
     ```
     sudo apt install python3-pip firefox
-    pip install selenium
     ```
+
+### 実行コマンド例
+
+**注意：翻訳処理は非常に時間がかかります。1個のRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
+開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいやっていました。
+
+#### 取得・翻訳・生成
 
 ```bash
 python3 main.py --rfc 123 # RFC 123を翻訳する（取得+翻訳+HTML生成）
@@ -137,6 +135,8 @@ python3 main.py --begin 8000 --only-first # RFC 8000以降の未翻訳RFCを先�
 2. trans_rfc（翻訳） ... data/A000/B00/rfcABCD-trans.json (各文章の翻訳を加えたもの)
 3. make_html（生成） ... html/rfcABCD.html (原文と翻訳を並べて表示するHTML)
 
+#### トップページの生成
+
 ```bash
 python3 main.py --make-index # インデックスページの作成
 ```
@@ -144,13 +144,15 @@ python3 main.py --make-index # インデックスページの作成
 生成物：
 1. html/index.html (トップページ)
 
-ローカルで成果物の確認：
 
+### 確認方法
+ローカルで成果物の確認：
 ```bash
 python3 -m http.server
 # localhost:8000/htmlにアクセス
 ```
 
+### その他
 RFCを解析した結果、本来プログラムとして解釈すべき部分を文章として解釈してしまった場合、プログラムのインデントを削除してJSON化するツール：
 [https://tex2e.github.io/rfc-translater/html/format.html](https://tex2e.github.io/rfc-translater/html/format.html)
 
