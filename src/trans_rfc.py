@@ -24,6 +24,7 @@ trans_rules = {
     'table of contents': '目次',
     'conventions': '規約',
     'terminology': '用語',
+    'background': '背景',
     'discussion': '考察',
     'references': '参考文献',
     'normative references': '引用文献',
