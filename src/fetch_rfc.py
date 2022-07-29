@@ -38,10 +38,10 @@ class Paragraph:
             self._find_section_title_pattern(self.text))
         # 目次の判定
         self.is_toc = self._find_toc_pattern(self.text)
-        # 注釈の判定（|  Note: は必ず図表判定されてしまうので、修正する）
+        # 引用・注釈の判定（|  Note: は必ず図表判定されてしまうので、修正する）
         if self._find_note(self.text):
-            self.is_code = False  # コード・図表ではない
-            self.indent += 3  #「|  」の幅だけ増やす
+            self.is_code = False  # 本文と見なす
+            self.indent += 15  # 引用だとわかるように字下げする
             self.text = self._convert_note_from_figure_to_text(self.text)  #「|  」の除去
 
         # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
@@ -148,17 +148,18 @@ class Paragraph:
             return True
         return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.\d{1,2} ', text)
 
-    # 注釈の正規表現
-    REGEX_PATTERN_NOTE1 = r'\A\s*\|  Note(?:\(\*\d\))?:'  # 1行目
-    REGEX_PATTERN_NOTE2 = r'\A\s*\|  '                    # 2行目以降
-    # 注釈の判定
+    # 引用・注釈の正規表現
+    REGEX_PATTERN_NOTE1 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(])'       # 1行目〜L-1行目
+    REGEX_PATTERN_NOTE2 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(]).*\.$'  # L行目
+    # 引用・注釈の判定
     def _find_note(self, text):
-        # |  Note: や |  Note (*1): から始まる場合は、注釈と見なす。
+        # 段落全体が | から始まる場合は引用・注釈と見なす。最後の行は必ず「.」で終わっていることが条件。
         lines = text.split("\n")
-        if not re.search(self.__class__.REGEX_PATTERN_NOTE1, lines[0]):
-            return False
-        for line in lines[1:]:
-            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line):
+        for line in lines[:-1]:
+            if not re.search(self.__class__.REGEX_PATTERN_NOTE1, line):
+                return False
+        for line in lines[-1:]:
+            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line): # 追加で行末が「.」かどうか確認する
                 return False
         return True
 
@@ -168,9 +169,9 @@ class Paragraph:
         lines_with_pipe = text.split("\n")
         lines_without_pipe = []
         for line in lines_with_pipe:
-            tmp = re.sub(self.__class__.REGEX_PATTERN_NOTE2, ' ', line)
+            tmp = re.sub(self.__class__.REGEX_PATTERN_NOTE1, ' ', line)
             lines_without_pipe.append(tmp)
-        return ''.join(lines_without_pipe)
+        return "\n".join(lines_without_pipe).strip()
 
 
 class Paragraphs:
@@ -200,6 +201,7 @@ class Paragraphs:
 
     def __iter__(self):
         return iter(self.paragraphs)
+
 
 # 単一行の2つの文字列のインデントの差を求める関数
 def _get_indent(text):
