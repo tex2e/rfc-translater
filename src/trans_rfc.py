@@ -26,6 +26,7 @@ trans_rules = {
     'terminology': '用語',
     'background': '背景',
     'discussion': '考察',
+    'security considerations': 'セキュリティに関する考慮事項',
     'references': '参考文献',
     'normative references': '引用文献',
     'informative references': '参考引用',

@@ -248,35 +248,28 @@ def fetch_rfc(number, force=False):
     page = requests.get(url, headers, timeout=(36.2, 180))
     tree = html.fromstring(_cleanhtml(page.content))
 
-    # タイトルの取得
+    # タイトルの取得（RFC有無確認用）
     title = tree.xpath('//title/text()')
     if len(title) == 0:
         raise RFCNotFound
 
     if not force:
-        # タイトルの設定
-        # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
-
-        # <span class="h1">タイトル</span>
-        # content_h1 = tree.xpath('//span[@class="h1"]/text()') # 6/17 改行で複数に分割する場合があるため廃止
+        # タイトルの取得
+        # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
         # <meta name="description" content="タイトル (RFC)">
         content_description = tree.xpath('//meta[@name="description"]/@content')
-
-        # if len(content_h1) > 0:
-        #     title = "RFC %s - %s" % (number, content_h1[0]) # 6/17 改行で複数に分割する場合があるため廃止
         if len(content_description) > 0:
             tmp = content_description[0]
-            tmp = re.sub(r' ?\(RFC ?\)$', '', tmp)
+            tmp = re.sub(r' ?\(RFC \d+?\)$', '', tmp)
             title = "RFC %s - %s" % (number, tmp)
         else:
             raise Exception("Cannot extract RFC Title!")
-
     else:
         # forceオプションありのときは、タイトルが存在しなくても実行
         title = "RFC %s" % number
 
     # DOMツリーから文章を取得
-    # MEMO: RFCのHTMLの構造が変化したときは、ここで対応できないか検討すること！
+    # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
     contents = tree.xpath(
         '//pre[not(contains(@class,"meta-info"))]/text() | '    # 本文（ただし文書冒頭のメタ情報は除く）
         '//pre[not(contains(@class,"meta-info"))]/a/text() | '  # 本文中のリンク
