@@ -38,7 +38,7 @@ class Paragraph:
             self._find_section_title_pattern(self.text))
         # 目次の判定
         self.is_toc = self._find_toc_pattern(self.text)
-        # 引用・注釈の判定（|  Note: は必ず図表判定されてしまうので、修正する）
+        # 引用・注釈の判定
         if self._find_note(self.text):
             self.is_code = False  # 本文と見なす
             self.indent += 15  # 引用だとわかるように字下げする
