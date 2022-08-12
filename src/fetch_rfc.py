@@ -21,7 +21,7 @@ class Paragraph:
     # * is_section_title: 見出しかどうかのフラグ
     # * is_toc: 目次かどうかのフラグ
 
-    def __init__(self, text, is_code=None):
+    def __init__(self, text: str, is_code=None):
         # 段落文章（インデントは除く）
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         # インデント数の取得
@@ -70,18 +70,18 @@ class Paragraph:
             (self.indent, self.is_code, self.text)
 
     # 目次の判定
-    def _find_toc_pattern(self, text):
+    def _find_toc_pattern(self, text: str) -> bool:
         return (re.search(r'\.{6}|(?:\. ){6}', text) or
                # 1. Introduction から始まって Authors' Addresses で終わるとき
                (re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and
                 re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
 
     # 箇条書きなどの判定
-    def _find_list_pattern(self, text):
+    def _find_list_pattern(self, text: str) -> bool:
         return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
 
     # 図表・ソースコード・数式の判定
-    def _find_code_pattern(self, text):
+    def _find_code_pattern(self, text: str) -> bool:
         if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
             return False
 
@@ -134,7 +134,7 @@ class Paragraph:
         return False
 
     # 見出しの判定
-    def _find_section_title_pattern(self, text):
+    def _find_section_title_pattern(self, text: str) -> bool:
         # "N." が現れたときは見出しとして検出する
         if len(text.split('\n')) >= 2:
             return False
@@ -152,7 +152,7 @@ class Paragraph:
     REGEX_PATTERN_NOTE1 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(])'       # 1行目〜L-1行目
     REGEX_PATTERN_NOTE2 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(]).*\.$'  # L行目
     # 引用・注釈の判定
-    def _find_note(self, text):
+    def _find_note(self, text: str) -> bool:
         # 段落全体が | から始まる場合は引用・注釈と見なす。最後の行は必ず「.」で終わっていることが条件。
         lines = text.split("\n")
         for line in lines[:-1]:
@@ -164,7 +164,7 @@ class Paragraph:
         return True
 
     # 注釈を図表からテキストに変換する
-    def _convert_note_from_figure_to_text(self, text):
+    def _convert_note_from_figure_to_text(self, text: str) -> str:
         # 各行の行頭文字列「  |  」を取り除く。
         lines_with_pipe = text.split("\n")
         lines_without_pipe = []
@@ -180,7 +180,7 @@ class Paragraphs:
     # Properties:
     # * paragraphs: 段落(Paragraph)の配列
 
-    def __init__(self, text, ignore_header=True):
+    def __init__(self, text: str, ignore_header=True):
         # Arguments:
         # * text: 全ての段落を含む1つの文字列（段落の区切りは\n\n）
         # * ignore_header: 最初の段落（ヘッダ）は翻訳しない
@@ -195,20 +195,20 @@ class Paragraphs:
             paragraph = Paragraph(chunk, is_code=is_header)
             self.paragraphs.append(paragraph)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: int) -> Paragraph:
         assert isinstance(key, int)
         return self.paragraphs[key]
 
-    def __iter__(self):
+    def __iter__(self) -> iter:
         return iter(self.paragraphs)
 
 
 # 単一行の2つの文字列のインデントの差を求める関数
-def _get_indent(text):
+def _get_indent(text: str) -> int:
     return len(text) - len(text.lstrip())
 
 # 複数行の2つの文字列のインデントの差を求める関数
-def _get_line_len_diff(text1, text2):
+def _get_line_len_diff(text1: str, text2: str) -> int:
     first_line1 = text1.split('\n')[0]
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
@@ -224,21 +224,35 @@ class RFCNotFound(Exception):
 
 
 # 本文中にあるaタグ（RFCへのリンクなど）を削除する
-def _cleanhtml(raw_html):
+def _cleanhtml(raw_html: bytes) -> bytes:
     cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
     cleantext = re.sub(cleaner, b'', raw_html)
     return cleantext
 
 # [EntryPoint]
 # RFCの取得処理
-def fetch_rfc(number, force=False):
-    url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
-    output_dir = 'data/%04d' % (number//1000%10*1000)
-    output_file = '%s/rfc%d.json' % (output_dir, number)
+def fetch_rfc(number: int | str, force=False) -> None:
+
+    # 整数はRFC、文字列はDraft
+    if type(number) is int:
+        is_draft = False
+        url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
+        output_dir = 'data/%04d' % (number//1000%10*1000)
+        output_file = f'{output_dir}/rfc{number}.json'
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):
+        is_draft = True
+        organization   = m['org']
+        working_group  = m['wg']
+        rfc_draft_name = m['name']
+        url = f'https://datatracker.ietf.org/doc/html/draft-{organization}-{working_group}-{rfc_draft_name}'
+        output_dir = f'data/draft/{working_group}'
+        output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
+    else:
+        raise RuntimeError(f"fetch_rfc: Unknown format number={number}")
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not force and os.path.isfile(output_file):
-        return 0
+        return
 
     # 出力先ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)
@@ -260,7 +274,8 @@ def fetch_rfc(number, force=False):
         content_description = tree.xpath('//meta[@name="description"]/@content')
         if len(content_description) > 0:
             tmp = content_description[0]
-            tmp = re.sub(r' ?\(RFC \d+?\)$', '', tmp)
+            tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
+            tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
             title = "RFC %s - %s" % (number, tmp)
         else:
             raise Exception("Cannot extract RFC Title!")
@@ -341,6 +356,9 @@ def fetch_rfc(number, force=False):
         'updated_by': '',
         'contents': [],
     }
+    if is_draft:
+        obj['is_draft'] = True
+
     for paragraph in paragraphs:
         obj['contents'].append({
             'indent': paragraph.indent,

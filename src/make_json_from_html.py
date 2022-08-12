@@ -9,7 +9,7 @@ import textwrap
 from bs4 import BeautifulSoup
 from pprint import pprint
 
-def make_json_from_html(rfc_number):
+def make_json_from_html(rfc_number: int) -> None:
 
     # RFCデータ(HTML)の読み込み
     input_file = 'html/rfc%d.html' % rfc_number

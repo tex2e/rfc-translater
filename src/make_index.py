@@ -7,7 +7,7 @@ import glob
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
-def make_index():
+def make_index() -> None:
     output_file = os.path.normpath('html/index.html')
 
     files = []

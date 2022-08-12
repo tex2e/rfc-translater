@@ -89,7 +89,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser.implicitly_wait(3)
         self._browser = browser
 
-    def translate(self, text, dest='ja'):
+    def translate(self, text: str, dest='ja') -> str:
         if len(text) == 0:
             return ""
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
@@ -118,7 +118,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         self.output_progress(len=len(text), wait_time=wait_time)
         return ja
 
-    def translate_texts(self, texts, dest='ja'):
+    def translate_texts(self, texts: list[str], dest='ja') -> list[str]:
         res = []
         for text in texts:
             ja = self.translate(text)
@@ -132,16 +132,30 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def chunks(l, n):
+def chunks(l: list, n: int) -> list:
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number):
+def trans_rfc(rfc_number: int | str) -> bool:
 
-    input_dir = 'data/%04d' % (number//1000%10*1000)
-    input_file = '%s/rfc%d.json' % (input_dir, number)
-    output_file = '%s/rfc%d-trans.json' % (input_dir, number)
-    midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
+    # 整数はRFC、文字列はDraft
+    if type(rfc_number) is int:
+        is_draft = False
+        input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
+        input_file = f'{input_dir}/rfc{rfc_number}.json'
+        output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
+        midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
+        is_draft = True
+        organization   = m['org']
+        working_group  = m['wg']
+        rfc_draft_name = m['name']
+        input_dir = f'data/draft/{working_group}'
+        input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
+        output_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
+        midway_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-midway.json'
+    else:
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
         with open(midway_file, 'r', encoding="utf-8") as f:
@@ -150,7 +164,7 @@ def trans_rfc(number):
         with open(input_file, 'r', encoding="utf-8") as f:
             obj = json.load(f)
 
-    desc = 'RFC %d' % number
+    desc = 'RFC %s' % rfc_number
     translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
     is_canceled = False
 
@@ -159,11 +173,11 @@ def trans_rfc(number):
         if not obj['title'].get('ja'):  # 既に翻訳済みの段落はスキップする
             titles = obj['title']['text'].split(' - ', 1)  # "RFC XXXX - Title"
             if len(titles) <= 1:
-                obj['title']['ja'] = "RFC %d" % number
+                obj['title']['ja'] = "RFC %s" % rfc_number
             else:
                 text = titles[1]
                 ja = translator.translate(text)
-                obj['title']['ja'] = "RFC %d - %s" % (number, ja)
+                obj['title']['ja'] = "RFC %s - %s" % (rfc_number, ja)
 
         # 段落の翻訳
         #   複数の段落をまとめて翻訳する
@@ -232,7 +246,7 @@ def trans_rfc(number):
         return False
 
 
-def trans_test():
+def trans_test() -> bool:
     translator = TranslatorSeleniumGoogletrans(total=1)
     ja = translator.translate('test', dest='ja')
     print('result:', ja)
