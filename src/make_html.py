@@ -42,7 +42,7 @@ def make_html(rfc_number: int | str) -> None:
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template('templates/rfc.html')
-    output = mytemplate.render_unicode(ctx=obj)
+    output = mytemplate.render_unicode(ctx=obj, is_draft=is_draft)
 
     # 出力ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)

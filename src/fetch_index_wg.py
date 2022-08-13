@@ -95,6 +95,47 @@ def get_draft_detail(path: str) -> dict:
     return res
 
 
+def fetch_local_draft_index() -> list[str]:
+    # 作成したRFC Draftに対応するHTMLの番号の一覧をローカルディスクから取得する。
+
+    pathname = 'html/draft/draft*.html'
+    rfc_drafts = []
+    for filename in glob.glob(pathname):
+        m = re.match(r'^html[/\\]draft[/\\](?P<draftname>draft-.*)\.html', filename)
+        if m:
+            rfc_drafts.append(m['draftname'])
+
+    return rfc_drafts
+
+def fetch_remote_draft_index() -> list[str]:
+
+    pathname = 'data/draft/working-group.json'
+
+    with open(pathname, 'r') as f:
+        data = json.load(f)
+
+    rfc_drafts = []
+
+    for working_group in data:
+        for draft in data[working_group]['drafts']:
+            draft_name = draft['path']
+            draft_name = re.sub(r'^/doc/|/$', '', draft_name)
+            draft_latest_version = draft['versions'][-1]
+            if draft_latest_version is None:
+                continue
+            rfc_drafts.append(f'{draft_name}-{draft_latest_version}')
+
+    return rfc_drafts
+
+def diff_remote_and_local_index() -> list[int]:
+    # RFC Indexとローカルのhtml/のRFCの差分を作成する。
+    # 返り値は、RFC番号の一覧
+    remote_index = fetch_remote_index()
+    local_index  = fetch_local_index()
+    diff_index = set(remote_index) - set(local_index)
+    return diff_index
+
+
 if __name__ == '__main__':
     # print(fetch_index_wg())
 

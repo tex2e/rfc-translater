@@ -3,13 +3,13 @@ import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
-from src.make_index import make_index
+from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.make_json_from_html import make_json_from_html
 from src.fetch_index_wg import fetch_index_wg
 
 def main(rfc_number: int | str) -> None:
-    print('RFC %s:' % rfc_number)
+    print('[+] RFC %s:' % rfc_number)
 
     try:
         fetch_rfc(rfc_number)
@@ -26,13 +26,14 @@ def main(rfc_number: int | str) -> None:
             f.write('')
         return
 
-    # res = trans_rfc(rfc_number, transmode)
     res = trans_rfc(rfc_number)
     if res is False: return False
     make_html(rfc_number)
 
 def continuous_main(begin=None, end=None, only_first=False):
-    numbers = list(diff_remote_and_local_index())
+    numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
+    print('[+] diff_remote_and_local:')
+    print(numbers)
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
     elif begin:  # 開始のみ設定
@@ -42,7 +43,6 @@ def continuous_main(begin=None, end=None, only_first=False):
         numbers = numbers[0:1]
 
     for rfc_number in numbers:
-        # res = main(rfc_number, transmode)
         res = main(rfc_number)
         if res is False:
             break
@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--only-first', action='store_true')
     parser.add_argument('--draft', type=str, help='RFC draft (ex. draft-ietf-tls-esni-14)')
     parser.add_argument('--fetch-index-wg', action='store_true')
+    parser.add_argument('--make-index-draft', action='store_true')
     args = parser.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）
@@ -77,7 +78,11 @@ if __name__ == '__main__':
         # トップページ(index.html)の作成
         print("[+] index.htmlの作成")
         make_index()
-    if args.fetch_index_wg:
+    elif args.make_index_draft:
+        # トップページ(draft/index.html)の作成
+        print("[+] draft/index.htmlの作成")
+        make_index_draft()
+    elif args.fetch_index_wg:
         # WorkingGroupのRFCとドラフト一覧の作成
         print("[+] WorkingGroupのRFCとDraft一覧収集")
         fetch_index_wg()
