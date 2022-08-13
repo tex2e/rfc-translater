@@ -55,6 +55,24 @@ document.addEventListener('DOMContentLoaded', function () {
     httpRequest.send();
   }
 
+  var rfc_wg = document.getElementById('rfc_wg');
+  if (!rfc_draft && rfc_wg) {
+    // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
+    var httpRequest = new XMLHttpRequest();
+    httpRequest.onreadystatechange = function () {
+      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
+        var rfc_number = parseInt(document.getElementById('rfc_number').innerText);
+        var data = JSON.parse(httpRequest.responseText);
+        var wg = data[rfc_number];
+        if (wg) {
+          rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/wg/' + wg + '/documents/" class="badge badge-primary">' + wg + '</a>';
+        }
+      }
+    };
+    httpRequest.open('GET', 'group-rfcs.json');
+    httpRequest.send();
+  }
+
   // Add theme toggle button to page
   const themeToggleButton = document.createElement('button');
   const buttonToOriginalContainer = document.getElementsByClassName('jump-to-original-rfc-container')[0];
