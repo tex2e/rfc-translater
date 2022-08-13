@@ -8,8 +8,12 @@ from lxml import html
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
+from pprint import pprint
+
 # 段落がページをまたぐことを表す文字
 BREAK = '\n\x07\n'
+# 箇条書き（複数行）で改行を表す文字列
+BREAK_INSERT = '\x06'
 
 class Paragraph:
     # 段落情報を持つクラス。コードや図表かの判定はここで行う。
@@ -20,6 +24,11 @@ class Paragraph:
     # * is_code: コードや図表かどうかのフラグ。Trueの場合は翻訳処理を行わない
     # * is_section_title: 見出しかどうかのフラグ
     # * is_toc: 目次かどうかのフラグ
+
+    TYPE_CODE = 'code'
+    TYPE_SECTIOIN_TITLE = 'section_title'
+    TYPE_TOC = 'toc'
+    TYPE_SENTENCE = 'sentence'
 
     def __init__(self, text: str, is_code=None):
         # 段落文章（インデントは除く）
@@ -32,6 +41,13 @@ class Paragraph:
             self.is_code = (
                 not self._find_list_pattern(self.text)
                 and self._find_code_pattern(self.text))
+        # 箇条書き（複数行）の判定
+        is_ul_li = False
+        if not self.is_code:
+            if is_ul_li := self._find_ul_li(self.text):
+                self.text = self._insert_newline_between_li(self.text)
+                # pprint(self.text)
+
         # 見出しの判定
         self.is_section_title = (
             self.indent <= 2 and
@@ -56,7 +72,7 @@ class Paragraph:
             # 図表・コードのときは、改行に置き換える
             self.text = self.text.replace(BREAK, '\n')
         else:
-            # 文章のときは、空白1つに置き換える (ページ間の余分な空白も取り除く)
+            # 箇条書き（複数行）以外の文章のときは、空白1つに置き換える (ページ間の余分な空白も取り除く)
             self.text = re.sub(BREAK + r'\s+', ' ', self.text)
 
         # 文章のときの処理
@@ -65,9 +81,23 @@ class Paragraph:
             self.text = re.sub(r'\n *', ' ', self.text)  # 複数行を1行にまとめる
             self.text = re.sub(r' +', ' ', self.text)  # 連続した空白を1つにまとめる
 
+        if is_ul_li:
+            # 箇条書き（複数行）の場合、項目同士の間に空行を入れる
+            self.text = re.sub(r' *' + BREAK_INSERT + r' *', '\n\n', self.text).strip("\n")
+            # pprint(is_ul_li)
+
     def __str__(self):
         return 'Paragraph: level: %d, is_code: %s\n%s' % \
             (self.indent, self.is_code, self.text)
+
+    def get_text_type(self):
+        if self.is_toc:
+            return self.TYPE_TOC
+        if self.is_code:
+            return self.TYPE_CODE
+        if self.is_section_title:
+            return self.TYPE_SECTIOIN_TITLE
+        return self.TYPE_SENTENCE
 
     # 目次の判定
     def _find_toc_pattern(self, text: str) -> bool:
@@ -76,21 +106,43 @@ class Paragraph:
                (re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and
                 re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
 
-    # 箇条書きなどの判定
+    # 箇条書きなどの判定（1行）
     def _find_list_pattern(self, text: str) -> bool:
         return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
+
+    # 箇条書きの判定（複数行）
+    def _find_ul_li(self, text: str) -> bool:
+        lines = text.split('\n')
+        if len(lines) <= 2:
+            return False
+        indent = _get_indent(lines[0])
+        regex = re.compile(rf'^(?: {{{indent}}}\*  | {{{indent+3}}})[a-zA-Z0-9_<]', re.MULTILINE)
+        return all(re.match(regex, line) for line in lines)
+
+    # 箇条書き（複数行）の場合は、各項目の間に改行を入れる
+    # 例：
+    #    *  Item1      <---この後ろに改行を入れる
+    #    *  Item2
+    def _insert_newline_between_li(self, text: str) -> str:
+        lines = text.split('\n')
+        res = []
+        for line in lines:
+            if re.match(r'^ *\*  ', line):
+                res.append(BREAK_INSERT)
+            res.append(line)
+        return "\n".join(res).strip("\n")
 
     # 図表・ソースコード・数式の判定
     def _find_code_pattern(self, text: str) -> bool:
         if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
             return False
 
-        if (re.search(r'---|__|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
+        if (re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
                 or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
                 or text.find('+--') >= 0  # directory tree
-                or re.search(r'^\/\*|\/\* | \*\/$', text)  # src
+                or re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text)  # src
                 or re.search(r'(?:enum|struct) \{', text)  # tls
-                or text.find('::=') >= 0  # syntax
+                or re.search(r'\s::=\s', text)  # syntax
                 or re.search(r'": (?:[\[\{\"\']|true,|false,)', text)  # json
                 or re.search(r'= +[\[\(\{<*%#&]', text) # src, syntax
                 or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
@@ -127,10 +179,9 @@ class Paragraph:
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
         if (len(re.findall(r'[~+*/=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold
-                and (not re.search(r'[.,:]\)?$', text)) # 文末が「.,:」ではない
+                and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)) # 文末が「.,:」ではない
                 ):
             return True
-
         return False
 
     # 見出しの判定
@@ -144,12 +195,12 @@ class Paragraph:
             return False
         if text.endswith(','):
             return False
-        if re.match(r'^Appendix [A-F](?:\. [-a-zA-Z0-9\'\. ]+)?$', text):
+        if re.match(r'^Appendix [A-Z](?:\. [-a-zA-Z0-9\'\.: ]+)?$', text):
             return True
         return re.match(r'^(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.(?:\d{1,2}\.)+(?:\d{1,2})? |^[A-Z]\.\d{1,2} ', text)
 
     # 引用・注釈の正規表現
-    REGEX_PATTERN_NOTE1 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(])'       # 1行目〜L-1行目
+    REGEX_PATTERN_NOTE1 = r'\A(?:   ){0,3}\|  _?(?=[a-zA-Z0-9"\'\[\(])'     # 1行目〜L-1行目
     REGEX_PATTERN_NOTE2 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(]).*\.$'  # L行目
     # 引用・注釈の判定
     def _find_note(self, text: str) -> bool:
