@@ -13,20 +13,23 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 import platform
 
-# ルールは必ず小文字で登録すること
+# 変換元は必ず小文字で記載すること
 trans_rules = {
     'abstract': '概要',
     'introduction': 'はじめに',
     'acknowledgement': '謝辞',
     'acknowledgements': '謝辞',
+    'acknowledgments': '謝辞',
     'status of this memo': '本文書の位置付け', #'本文書の状態',
     'copyright notice': '著作権表示',
     'table of contents': '目次',
+    "author's address": '著者の連絡先',
     'conventions': '規約',
     'terminology': '用語',
     'background': '背景',
     'discussion': '考察',
     'security considerations': 'セキュリティに関する考慮事項',
+    'iana considerations': 'IANAの考慮事項',
     'references': '参考文献',
     'normative references': '引用文献',
     'informative references': '参考引用',
@@ -107,13 +110,15 @@ class TranslatorSeleniumGoogletrans(Translator):
         # 翻訳したい文をURLに埋め込んでからアクセスする
         text_for_url = urllib.parse.quote_plus(text, safe='')
         url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
+        # print('[+] url:', url)
         browser.get(url)
         # 数秒待機する
         wait_time = 3 + len(text) / 1000
         time.sleep(wait_time)
         # 翻訳結果を抽出する
         elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
-        ja = "".join(elem.text for elem in elems)
+        ja = "\n".join(elem.text for elem in elems)
+        ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
         # プログレスバーに詳細情報を追加
         self.output_progress(len=len(text), wait_time=wait_time)
         return ja
@@ -200,9 +205,11 @@ def trans_rfc(rfc_number: int | str) -> bool:
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
                 # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
                 pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
-                m = re.match(pattern, text)
-                if m:
+                if m := re.match(pattern, text):
                     pre_texts.append(m[1])
+                    texts.append(m[2])
+                elif m := re.match(r'^Appendix ([A-Z])\. (.*)$', text):
+                    pre_texts.append(f'付録{m[1]}. ')
                     texts.append(m[2])
                 else:
                     pre_texts.append('')
@@ -217,10 +224,10 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         print("", flush=True)
 
-    except json.decoder.JSONDecodeError as e:
-        print('[-] googletrans is blocked by Google :(')
-        print('[-]', datetime.now(JST))
-        is_canceled = True
+    # except json.decoder.JSONDecodeError as e:
+    #     print('[-] googletrans is blocked by Google :(')
+    #     print('[-]', datetime.now(JST))
+    #     is_canceled = True
     except NoSuchElementException as e:
         print('[-] Google Translate is blocked by Google :(')
         print('[-]', datetime.now(JST))
@@ -248,6 +255,8 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
 def trans_test() -> bool:
     translator = TranslatorSeleniumGoogletrans(total=1)
-    ja = translator.translate('test', dest='ja')
+    ja = translator.translate('test sample.', dest='ja')
     print('result:', ja)
-    return ja in ('テスト', 'しけん')
+
+if __name__ == '__main__':
+    trans_test()

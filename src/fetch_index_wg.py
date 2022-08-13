@@ -7,13 +7,18 @@ import glob
 import json
 from pprint import pprint
 
-OUTPUT_DIR  = "data/draft"
-OUTPUT_PATH = os.path.join(OUTPUT_DIR, "working-group.json")
+# ドラフトの一覧の保存先
+OUTPUT_DIR1  = "data/draft"
+OUTPUT_PATH1 = os.path.join(OUTPUT_DIR1, "drafts.json")
+
+# WorkingGroupのRFCの一覧の保存先
+OUTPUT_DIR2  = "html"
+OUTPUT_PATH2 = os.path.join(OUTPUT_DIR2, "group-rfcs.json")
 
 def fetch_index_wg() -> None:
-    # 収集結果はdata/draft/working-group.jsonに保存する
 
-    data = {}
+    data_drafts = {}
+    data_wg_rfcs = {}
 
     # Working Groupの一覧を取得
     url = 'https://datatracker.ietf.org/wg/'
@@ -26,19 +31,24 @@ def fetch_index_wg() -> None:
     for working_group in working_groups:
         draft_pathes, rfcs = get_draft_documents(working_group)
 
-        data[working_group] = {}
-        data[working_group]['rfcs'] = rfcs
-        data[working_group]['drafts'] = []
-
+        # data/draft/drafts.json
+        data_drafts[working_group] = {}
+        data_drafts[working_group]['drafts'] = []
         for draft in draft_pathes:
             detail = get_draft_detail(draft)
-            data[working_group]['drafts'].append(detail)
+            data_drafts[working_group]['drafts'].append(detail)
 
-    # pprint(data)
+        # html/group-rfcs.json
+        for rfc in rfcs:
+            data_wg_rfcs[rfc] = working_group
 
-    if os.path.isdir(OUTPUT_DIR):
-        with open(OUTPUT_PATH, 'w', encoding="utf-8", newline="\n") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+    # pprint(data_drafts)
+
+    with open(OUTPUT_PATH1, 'w', encoding="utf-8", newline="\n") as f:
+        json.dump(data_drafts, f, ensure_ascii=False, indent=2)
+
+    with open(OUTPUT_PATH2, 'w', encoding="utf-8", newline="\n") as f:
+        json.dump(data_wg_rfcs, f, ensure_ascii=False, indent=2)
 
     return
 
@@ -52,18 +62,18 @@ def get_draft_documents(wg_name: str) -> (list[str], list[str]):
     headers = {'User-agent': ''}
     page = requests.get(url, headers, timeout=(36.2, 180))
     content = page.content.decode('utf-8')
-    drafts = re.findall(r'<a href="(/doc/draft-[^/]+/)">', content)
-    drafts = sorted(set(drafts))
+    drafts = re.findall(r'<a href="/doc/(draft-[^/]+)/">', content)
+    # drafts = sorted(set(drafts))
     # pprint(drafts)
     rfcs = re.findall(r'<a href="/doc/rfc(\d+)/">', content)
     # pprint(rfcs)
     return drafts, rfcs
 
 # Draftの詳細を取得
-# ex. https://datatracker.ietf.org/doc/draft-ietf-tls-subcerts/15
-def get_draft_detail(path: str) -> dict:
-    url = f'https://datatracker.ietf.org{path}'
-    print('[+] +-- url:', url)
+# ex. https://datatracker.ietf.org/doc/draft-ietf-tls-subcerts/
+def get_draft_detail(draft_name: str) -> dict:
+    url = f'https://datatracker.ietf.org/doc/{draft_name}/'
+    print('[+]   url:', url)
     headers = {'User-agent': ''}
     page = requests.get(url, headers, timeout=(36.2, 180))
     content = page.content.decode('utf-8')
@@ -84,12 +94,14 @@ def get_draft_detail(path: str) -> dict:
     # Versions
     regex = re.compile(r'href="/doc/draft-[^/]+/(\d+)/"')
     versions = re.findall(regex, content)
+    latest_version = versions[-1]
 
     res = {
-        'path': path,
+        'name': draft_name,
+        # 'path': f'/doc/{draft_name}/',
         'last_updated': last_updated,
         'is_expired': is_expired,
-        'versions': versions
+        'latest_version': latest_version
     }
     # print(res)
     return res
@@ -120,7 +132,7 @@ def fetch_remote_draft_index() -> list[str]:
         for draft in data[working_group]['drafts']:
             draft_name = draft['path']
             draft_name = re.sub(r'^/doc/|/$', '', draft_name)
-            draft_latest_version = draft['versions'][-1]
+            draft_latest_version = draft['latest_version']
             if draft_latest_version is None:
                 continue
             rfc_drafts.append(f'{draft_name}-{draft_latest_version}')
@@ -140,12 +152,13 @@ if __name__ == '__main__':
     # print(fetch_index_wg())
 
     # https://datatracker.ietf.org/doc/draft-ietf-tls-hybrid-design/
-    res = get_draft_detail('/doc/draft-ietf-tls-hybrid-design/')
+    res = get_draft_detail('draft-ietf-tls-hybrid-design')
     exp = {
-        'path': '/doc/draft-ietf-tls-hybrid-design/',
+        'name': 'draft-ietf-tls-hybrid-design',
+        # 'path': '/doc/draft-ietf-tls-hybrid-design/',
         'last_updated': '2022-07-25',
         'is_expired': True,
-        'versions': ['00', '01', '02', '03', '04']
+        'latest_version': '04'
     }
     pprint(res)
     assert res == exp
@@ -154,5 +167,5 @@ if __name__ == '__main__':
     drafts, rfcs = get_draft_documents('tls')
     pprint(drafts)
     pprint(rfcs)
-    assert '/doc/draft-ietf-tls-56-bit-ciphersuites/' in drafts
+    assert 'draft-ietf-tls-56-bit-ciphersuites' in drafts
     assert '2246' in rfcs
