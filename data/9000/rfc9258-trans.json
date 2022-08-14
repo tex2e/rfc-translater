@@ -1,0 +1,591 @@
+{
+  "title": {
+    "text": "RFC 9258 - Importing External Pre-Shared Keys (PSKs) for TLS 1.3",
+    "ja": "RFC 9258 - TLS 1.3用の外部の事前共有キー（PSK）のインポート"
+  },
+  "number": 9258,
+  "created_at": "2022-07-31 02:47:13.022949+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       D. Benjamin\nRequest for Comments: 9258                                  Google, LLC.\nCategory: Standards Track                                     C. A. Wood\nISSN: 2070-1721                                               Cloudflare\n                                                               July 2022",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 9,
+      "text": "Importing External Pre-Shared Keys (PSKs) for TLS 1.3",
+      "ja": "TLS 1.3用の外部の事前共有キー（PSK）のインポート"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes an interface for importing external Pre-Shared Keys (PSKs) into TLS 1.3.",
+      "ja": "このドキュメントでは、外部の事前共有キー（PSK）をTLS 1.3にインポートするためのインターフェイスについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9258.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9258で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  Terminology\n4.  Overview\n5.  PSK Importer\n  5.1.  External PSK Diversification\n  5.2.  Binder Key Derivation\n6.  Deprecating Hash Functions\n7.  Incremental Deployment\n8.  Security Considerations\n9.  Privacy Considerations\n10. IANA Considerations\n11. References\n  11.1.  Normative References\n  11.2.  Informative References\nAppendix A.  Addressing Selfie\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "TLS 1.3 [RFC8446] supports Pre-Shared Key (PSK) authentication, wherein PSKs can be established via session tickets from prior connections or via some external, out-of-band mechanism. The protocol mandates that each PSK only be used with a single hash function. This was done to simplify protocol analysis. TLS 1.2 [RFC5246], in contrast, has no such requirement, as a PSK may be used with any hash algorithm and the TLS 1.2 pseudorandom function (PRF). While there is no known way in which the same external PSK might produce related output in TLS 1.3 and prior versions, only limited analysis has been done. Applications SHOULD provision separate PSKs for (D)TLS 1.3 and prior versions. In cases where this is not possible (e.g., there are already-deployed external PSKs or provisioning is otherwise limited), reusing external PSKs across different versions of TLS may produce related outputs, which may, in turn, lead to security problems; see Appendix E.7 of [RFC8446].",
+      "ja": "TLS 1.3 [RFC8446]は、事前に共有キー（PSK）認証をサポートしています。これは、PSKを以前の接続からのセッションチケットまたは外部の帯域外メカニズムを介して確立できます。プロトコルは、各PSKが単一のハッシュ関数でのみ使用されることを義務付けています。これは、プロトコル分析を簡素化するために行われました。対照的に、TLS 1.2 [RFC5246]には、PSKがハッシュアルゴリズムとTLS 1.2擬似ランダム関数（PRF）で使用される可能性があるため、そのような要件はありません。同じ外部PSKがTLS 1.3および以前のバージョンで関連する出力を生成する可能性のある方法はありませんが、限られた分析のみが行われています。アプリケーションは、（d）TLS 1.3および以前のバージョンに個別のPSKを提供する必要があります。これが不可能な場合（たとえば、すでに展開された外部PSKまたはプロビジョニングが限られています）、異なるバージョンのTLSにわたって外部PSKを再利用すると、関連する出力が生成される可能性があり、これによりセキュリティの問題につながる可能性があります。[RFC8446]の付録E.7を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "To mitigate such problems, this document specifies a PSK importer interface by which external PSKs may be imported and subsequently bound to a specific key derivation function (KDF) and hash function for use in TLS 1.3 [RFC8446] and DTLS 1.3 [RFC9147]. In particular, it describes a mechanism for importing PSKs derived from external PSKs by including the target KDF, (D)TLS protocol version, and an optional context string to ensure uniqueness. This process yields a set of candidate PSKs, each of which are bound to a target KDF and protocol, that are separate from those used in (D)TLS 1.2 and prior versions. This expands what would normally have been a single PSK and identity into a set of PSKs and identities.",
+      "ja": "このような問題を軽減するために、このドキュメントは、外部PSKをインポートし、その後、TLS 1.3 [RFC8446]およびDTLS 1.3 [RFC9147]で使用するための特定のキー誘導関数（KDF）およびハッシュ関数に結合するPSKインポーターインターフェイスを指定します。特に、ターゲットKDF、（d）TLSプロトコルバージョン、および一意性を確保するためのオプションのコンテキスト文字列を含めることにより、外部PSKから派生したPSKをインポートするメカニズムを説明します。このプロセスは、それぞれがターゲットKDFとプロトコルにバインドされている候補PSKのセットを生成します。これは、（d）TLS 1.2および以前のバージョンで使用されるものとは別です。これにより、通常、単一のPSKとアイデンティティがPSKとアイデンティティのセットに拡大します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 慣習と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Terminology",
+      "section_title": true,
+      "ja": "3. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The following terms are used throughout this document:",
+      "ja": "次の用語は、このドキュメント全体で使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "External PSK (EPSK): A PSK established or provisioned out of band (i.e., not from a TLS connection) that is a tuple of (Base Key, External Identity, Hash).",
+      "ja": "外部PSK（EPSK）：バンドから確立またはプロビジョニングされたPSK（つまり、TLS接続からではなく）（ベースキー、外部アイデンティティ、ハッシュ）。"
+    },
+    {
+      "indent": 3,
+      "text": "Base Key: The secret value of an EPSK.",
+      "ja": "ベースキー：EPSKの秘密の値。"
+    },
+    {
+      "indent": 3,
+      "text": "External Identity: A sequence of bytes used to identify an EPSK.",
+      "ja": "外部アイデンティティ：EPSKを識別するために使用されるバイトのシーケンス。"
+    },
+    {
+      "indent": 3,
+      "text": "Target protocol: The protocol for which a PSK is imported for use.",
+      "ja": "ターゲットプロトコル：PSKが使用するためにインポートされるプロトコル。"
+    },
+    {
+      "indent": 3,
+      "text": "Target KDF: The KDF for which a PSK is imported for use.",
+      "ja": "ターゲットKDF：PSKが使用するためにインポートされるKDF。"
+    },
+    {
+      "indent": 3,
+      "text": "Imported PSK (IPSK): A TLS PSK derived from an EPSK, optional context string, target protocol, and target KDF.",
+      "ja": "インポートされたPSK（IPSK）：EPSK、オプションのコンテキスト文字列、ターゲットプロトコル、およびターゲットKDFに由来するTLS PSK。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-imported PSK: An EPSK that is used directly as a TLS PSK without being imported.",
+      "ja": "非輸入PSK：インポートせずにTLS PSKとして直接使用されるEPSK。"
+    },
+    {
+      "indent": 3,
+      "text": "Imported Identity: A sequence of bytes used to identify an IPSK.",
+      "ja": "インポートされたID：IPSKを識別するために使用されるバイトのシーケンス。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses presentation language from Section 3 of [RFC8446].",
+      "ja": "このドキュメントでは、[RFC8446]のセクション3のプレゼンテーション言語を使用しています。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Overview",
+      "section_title": true,
+      "ja": "4. 概要"
+    },
+    {
+      "indent": 3,
+      "text": "The PSK importer interface mirrors that of the TLS exporter interface (see [RFC8446]) in that it diversifies a key based on some contextual information. In contrast to the exporter interface, wherein output uniqueness is achieved via an explicit label and context string, the PSK importer interface defined herein takes an external PSK and identity and \"imports\" it into TLS, creating a set of \"derived\" PSKs and identities that are each unique. Each of these derived PSKs are bound to a target protocol, KDF identifier, and optional context string. Additionally, the resulting PSK binder keys are modified with a new derivation label to prevent confusion with non-imported PSKs. Through this interface, importing external PSKs with different identities yields distinct PSK binder keys.",
+      "ja": "PSKインポーターインターフェイスは、TLS輸出業者インターフェイス（[RFC8446]を参照）のインターフェースを反映しています。出力が明示的なラベルとコンテキスト文字列を介して出力が達成される輸出者インターフェイスとは対照的に、ここで定義されているPSKインポーターインターフェイスは外部PSKとアイデンティティを取得し、TLSに「インポート」し、「派生」PSKとアイデンティティのセットを作成しますそれはそれぞれユニークです。これらの派生PSKのそれぞれは、ターゲットプロトコル、KDF識別子、およびオプションのコンテキスト文字列にバインドされています。さらに、結果のPSKバインダーキーは、非難されていないPSKとの混乱を防ぐために、新しい派生ラベルで変更されます。このインターフェイスを通じて、異なるアイデンティティで外部PSKをインポートすると、異なるPSKバインダーキーが得られます。"
+    },
+    {
+      "indent": 3,
+      "text": "Imported keys do not require negotiation for use since a client and server will not agree upon identities if imported incorrectly. Endpoints may incrementally deploy PSK importer support by offering non-imported PSKs for TLS versions prior to TLS 1.3. Non-imported and imported PSKs are not equivalent since their identities are different. See Section 7 for more details.",
+      "ja": "インポートされたキーは、クライアントとサーバーが誤ってインポートされた場合、IDに同意しないため、使用するための交渉を必要としません。エンドポイントは、TLS 1.3の前にTLSバージョンに非輸入されていないPSKを提供することにより、PSKインポーターサポートを段階的に展開する場合があります。アイデンティティが異なるため、非難および輸入PSKは同等ではありません。詳細については、セクション7を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints that import external keys MUST NOT use the keys that are input to the import process for any purpose other than the importer, and they MUST NOT use the derived keys for any purpose other than TLS PSKs. Moreover, each external PSK fed to the importer process MUST be associated with one hash function at most. This is analogous to the rules in Section 4.2.11 of [RFC8446]. See Section 8 for more discussion.",
+      "ja": "外部キーをインポートするエンドポイントは、インポーター以外の目的でインポートプロセスに入力されるキーを使用してはなりません。また、TLS PSK以外の目的で派生キーを使用してはなりません。さらに、インポータープロセスに供給された各外部PSKは、せいぜい1つのハッシュ関数に関連付けられている必要があります。これは、[RFC8446]のセクション4.2.11のルールに類似しています。詳細については、セクション8を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "5. PSK Importer",
+      "section_title": true,
+      "ja": "5. PSK輸入業者"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes the PSK importer interface and its underlying diversification mechanism and binder key computation modification.",
+      "ja": "このセクションでは、PSKインポーターインターフェイスとその基礎となる多様化メカニズムとバインダーの重要な計算の変更について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. External PSK Diversification",
+      "section_title": true,
+      "ja": "5.1. 外部PSK多様化"
+    },
+    {
+      "indent": 3,
+      "text": "As input, the PSK importer interface takes an EPSK with External Identity external_identity and base key epsk (as defined in Section 3) along with an optional context. It then transforms the input into a set of PSKs and imported identities for use in a connection based on target protocols and KDFs. In particular, for each supported target protocol target_protocol and KDF target_kdf, the importer constructs an ImportedIdentity structure as follows:",
+      "ja": "入力として、PSKインポーターインターフェイスは、Optional Contextとともに、外部IDENTITION_IDENTITYとベースキーEPSK（セクション3で定義されている）を備えたEPSKを取得します。次に、ターゲットプロトコルとKDFSに基づいて接続で使用するために、入力をPSKのセットとインポートされたアイデンティティに変換します。特に、サポートされている各ターゲットプロトコルターゲット_ProtoColとKDF Target_KDFについて、インポーターは次のように輸入品構造を構築します。"
+    },
+    {
+      "indent": 3,
+      "text": "struct {\n   opaque external_identity<1...2^16-1>;\n   opaque context<0..2^16-1>;\n   uint16 target_protocol;\n   uint16 target_kdf;\n} ImportedIdentity;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The list of ImportedIdentity.target_kdf values is maintained by IANA as described in Section 10. External PSKs MUST NOT be imported for (D)TLS 1.2 or prior versions. See Section 7 for discussion on how imported PSKs for TLS 1.3 and non-imported PSKs for earlier versions coexist for incremental deployment.",
+      "ja": "ImportedIdentity.target_kdf値のリストは、セクション10で説明されているようにIANAによって維持されます。外部PSKは（d）TLS 1.2または以前のバージョンのためにインポートする必要はありません。TLS 1.3のインポートPSKおよび以前のバージョンの非輸入PSKSをインクリメンタルな展開のために共存する方法については、セクション7を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "ImportedIdentity.context MUST include the context used to determine the EPSK, if any exists. For example, ImportedIdentity.context may include information about peer roles or identities to mitigate Selfie-style reflection attacks [Selfie]. See Appendix A for more details. Since the EPSK is a key derived from an external protocol or sequence of protocols, ImportedIdentity.context MUST include a channel binding for the deriving protocols [RFC5056]. The details of this binding are protocol specific and out of scope for this document.",
+      "ja": "ImportedIdentity.contextが存在する場合は、EPSKを決定するために使用されるコンテキストを含める必要があります。たとえば、ImportedIdentity.Contextには、セルフィースタイルの反射攻撃[自撮り]を緩和するためのピアロールまたはアイデンティティに関する情報が含まれている場合があります。詳細については、付録Aを参照してください。EPSKは外部プロトコルまたはプロトコルのシーケンスから導出される重要なものであるため、IntermedIdentity.contextを導出プロトコルのチャネル結合[RFC5056]を含める必要があります。このバインディングの詳細は、プロトコル固有であり、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "ImportedIdentity.target_protocol MUST be the (D)TLS protocol version for which the PSK is being imported. For example, TLS 1.3 [RFC8446] uses 0x0304, which will therefore also be used by QUICv1 [QUIC]. Note that this means the number of PSKs derived from an EPSK is a function of the number of target protocols.",
+      "ja": "importedIdentity.target_protocolは、PSKがインポートされている（d）TLSプロトコルバージョンでなければなりません。たとえば、TLS 1.3 [RFC8446]は0x0304を使用しているため、Quicv1 [Quic]でも使用されます。これは、EPSKから派生したPSKの数がターゲットプロトコルの数の関数であることを意味することに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Given an ImportedIdentity and corresponding EPSK with base key epsk, an imported PSK IPSK with base key ipskx is computed as follows:",
+      "ja": "輸入品とベースキーEPSKを使用した対応するEPSKを考えると、ベースキーIPSKXを備えたインポートされたPSK IPSKが次のように計算されます。"
+    },
+    {
+      "indent": 6,
+      "text": "epskx = HKDF-Extract(0, epsk)\nipskx = HKDF-Expand-Label(epskx, \"derived psk\",\n                          Hash(ImportedIdentity), L)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "L corresponds to the KDF output length of ImportedIdentity.target_kdf as defined in Section 10. For hash-based KDFs, such as HKDF_SHA256 (0x0001), this is the length of the hash function output, e.g., 32 octets for SHA256. This is required for the IPSK to be of length suitable for supported ciphersuites. Internally, HKDF-Expand-Label uses a label corresponding to ImportedIdentity.target_protocol (e.g., \"tls13\" for TLS 1.3, as per Section 7.1 of [RFC8446] or \"dtls13\" for DTLS 1.3, as per Section 5.10 of [RFC9147]).",
+      "ja": "Lは、セクション10で定義されているkdf出力のインポートIndidentity.target_kdfのKDF出力の長さに対応します。HKDF_SHA256（0x0001）などのハッシュベースのKDFの場合、これはハッシュ関数出力の長さです。これは、IPSKがサポートされている暗号網に適した長さであるために必要です。内部的には、HKDF-Expand-Labelは、[RFC8446]のセクション7.1またはDTLS 1.3の「DTLS13」に従って、[RFC9147]のセクション5.10のセクション1.3の「DTLS13」に従って、TLS 1.3の「TLS13」（例えば、TLS 1.3の「TLS13」）に対応するラベルを使用します。。"
+    },
+    {
+      "indent": 3,
+      "text": "The identity of ipskx as sent on the wire is ImportedIdentity, i.e., the serialized content of ImportedIdentity is used as the content of PskIdentity.identity in the PSK extension. The corresponding PSK input for the TLS 1.3 key schedule is \"ipskx\".",
+      "ja": "ワイヤーに送られたIPSKXのアイデンティティは、ImportedIdentityです。つまり、ImportedIdentityのシリアル化されたコンテンツは、PSK拡張機能のPSKIDEDITY.INTINTITYの内容として使用されます。TLS 1.3キースケジュールの対応するPSK入力は「IPSKX」です。"
+    },
+    {
+      "indent": 3,
+      "text": "As the maximum size of the PSK extension is 2^16 - 1 octets, an Imported Identity that exceeds this size is likely to cause a decoding error. Therefore, the PSK importer interface SHOULD reject any ImportedIdentity that exceeds this size.",
+      "ja": "PSK拡張の最大サイズは2^16-1オクテットであるため、このサイズを超えるインポートされたアイデンティティは、デコードエラーを引き起こす可能性があります。したがって、PSKインポーターインターフェイスは、このサイズを超える輸入品を拒否する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The hash function used for HMAC-based Key Derivation Function (HKDF) [RFC5869] is that which is associated with the EPSK. It is not the hash function associated with ImportedIdentity.target_kdf. If the EPSK does not have such an associated hash function, SHA-256 [SHA2] SHOULD be used. Diversifying EPSK by ImportedIdentity.target_kdf ensures that an IPSK is only used as input keying material to one KDF at most, thus satisfying the requirements in [RFC8446]. See Section 8 for more details.",
+      "ja": "HMACベースのキー導出関数（HKDF）[RFC5869]に使用されるハッシュ関数は、EPSKに関連するものです。ImportedIdentity.target_kdfに関連するハッシュ関数ではありません。EPSKにそのような関連するハッシュ関数がない場合、SHA-256 [SHA2]を使用する必要があります。ImportedIdentity.target_kdfによってEpskを多様化することにより、IPSKは最大で1つのKDFへの入力キーイング材料としてのみ使用されることを保証し、[RFC8446]の要件を満たすことができます。詳細については、セクション8を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints SHOULD generate a compatible ipskx for each target ciphersuite they offer. For example, importing a key for TLS_AES_128_GCM_SHA256 and TLS_AES_256_GCM_SHA384 would yield two PSKs: one for HKDF-SHA256 and another for HKDF-SHA384. In contrast, if TLS_AES_128_GCM_SHA256 and TLS_CHACHA20_POLY1305_SHA256 are supported, only one derived key is necessary. Each ciphersuite uniquely identifies the target KDF. Future specifications that change the way the KDF is negotiated will need to update this specification to make clear how target KDFs are determined for the import process.",
+      "ja": "エンドポイントは、提供するターゲットの各ターゲットの互換性のあるIPSKXを生成する必要があります。たとえば、TLS_AES_128_GCM_SHA256およびTLS_AES_256_GCM_SHA384のキーをインポートすると、2つのPSKが得られます。対照的に、TLS_AES_128_GCM_SHA256およびTLS_CHACHA20_POLY1305_SHA256がサポートされている場合、派生キーが1つだけ必要です。各ciphersuiteは、ターゲットKDFを一意に識別します。KDFの交渉方法を変更する将来の仕様では、この仕様を更新して、インポートプロセスのターゲットKDFがどのように決定されるかを明確にする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "EPSKs MAY be imported before the start of a connection if the target KDFs, protocols, and context string(s) are known a priori. EPSKs MAY also be imported for early data use if they are bound to the protocol settings and configuration that are required for sending early data. Minimally, this means that the Application-Layer Protocol Negotiation (ALPN) value [RFC7301], QUIC transport parameters (if used for QUIC), and any other relevant parameters that are negotiated for early data MUST be provisioned alongside these EPSKs.",
+      "ja": "ターゲットKDF、プロトコル、およびコンテキスト文字列が先験的に既知の場合、接続の開始前にEPSKがインポートされる場合があります。EPSKは、早期データの送信に必要なプロトコル設定と構成にバインドされている場合、早期データの使用のためにインポートされる場合があります。最終的には、これは、アプリケーション層プロトコル交渉（ALPN）値[RFC7301]、QUIC輸送パラメーター（QUICに使用される場合）、および初期データと交渉されたその他の関連パラメーターをこれらのEpskとともに提供する必要があることを意味します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Binder Key Derivation",
+      "section_title": true,
+      "ja": "5.2. バインダーキー導入"
+    },
+    {
+      "indent": 3,
+      "text": "To prevent confusion between imported and non-imported PSKs, imported PSKs change the PSK binder key derivation label. In particular, the standard TLS 1.3 PSK binder key computation is defined as follows:",
+      "ja": "インポートされたPSKと非輸入PSKの間の混乱を防ぐために、輸入されたPSKはPSKバインダーキー派生ラベルを変更します。特に、標準のTLS 1.3 PSKバインダーキー計算は次のように定義されています。"
+    },
+    {
+      "indent": 4,
+      "text": "          0\n          |\n          v\nPSK ->  HKDF-Extract = Early Secret\n          |\n          +-----> Derive-Secret(., \"ext binder\" | \"res binder\", \"\")\n          |                     = binder_key\n          V",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Imported PSKs use the string \"imp binder\" rather than \"ext binder\" or \"res binder\" when deriving binder_key. This means the binder key is computed as follows:",
+      "ja": "インポートされたPSKは、binder_keyを導出するときに「ext binder」または「res binder」ではなく、文字列「IMPバインダー」を使用します。これは、バインダーキーが次のように計算されることを意味します。"
+    },
+    {
+      "indent": 4,
+      "text": "          0\n          |\n          v\nPSK ->  HKDF-Extract = Early Secret\n          |\n          +-----> Derive-Secret(., \"ext binder\"\n          |                      | \"res binder\"\n          |                      | \"imp binder\", \"\")\n          |                     = binder_key\n          V",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "This new label ensures a client and server will negotiate use of an external PSK if and only if (a) both endpoints import the PSK or (b) neither endpoint imports the PSK. As binder_key is a leaf key, changing its computation does not affect any other key.",
+      "ja": "この新しいラベルにより、クライアントとサーバーは、（a）両方のエンドポイントがPSKをインポートする場合、または（b）どちらのエンドポイントがPSKをインポートしない場合にのみ、外部PSKの使用を交渉します。Binder_keyはリーフキーであるため、計算を変更しても他のキーには影響しません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Deprecating Hash Functions",
+      "section_title": true,
+      "ja": "6. ハッシュ関数を非難します"
+    },
+    {
+      "indent": 3,
+      "text": "If a client or server wishes to deprecate a hash function and no longer use it for TLS 1.3, it removes the corresponding KDF from the set of target KDFs used for importing keys. This does not affect the KDF operation used to derive imported PSKs.",
+      "ja": "クライアントまたはサーバーがハッシュ関数を非難し、TLS 1.3に使用しない場合、キーのインポートに使用されるターゲットKDFのセットから対応するKDFを削除します。これは、インポートされたPSKの導出に使用されるKDF操作には影響しません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Incremental Deployment",
+      "section_title": true,
+      "ja": "7. 増分展開"
+    },
+    {
+      "indent": 3,
+      "text": "In deployments that already have PSKs provisioned and in use with TLS 1.2, attempting to incrementally deploy the importer mechanism would result in concurrent use of the already-provisioned PSK directly as both a TLS 1.2 PSK and an EPSK, which, in turn, could mean that the same KDF and key would be used in two different protocol contexts. This is not a recommended configuration; see Section 8 for more details. However, the benefits of using TLS 1.3 and PSK importers may prove sufficiently compelling that existing deployments choose to enable this noncompliant configuration for a brief transition period while new software (using TLS 1.3 and importers) is deployed. Operators are advised to make any such transition period as short as possible.",
+      "ja": "既にPSKがプロビジョニングしており、TLS 1.2で使用されている展開では、インポーターメカニズムを徐々に展開しようとすると、TLS 1.2 PSKとEPSKの両方として、すでにプロビジョニングされたPSKが直接使用されます。同じKDFとキーが2つの異なるプロトコルコンテキストで使用されること。これは推奨される構成ではありません。詳細については、セクション8を参照してください。ただし、TLS 1.3およびPSK輸入業者を使用する利点は、既存の展開が短い移行期間のこの非接続構成を有効にすることを選択することを十分に説得力があることを証明する可能性があります。オペレーターは、そのような移行期間を可能な限り短くすることをお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The PSK importer security goals can be roughly stated as follows: avoid PSK reuse across KDFs while properly authenticating endpoints. When modeled as computational extractors, KDFs assume that input keying material (IKM) is sampled from some \"source\" probability distribution and that any two IKM values are chosen independently of each other [Kraw10]. This source-independence requirement implies that the same IKM value cannot be used for two different KDFs.",
+      "ja": "PSKインポーターのセキュリティ目標は、次のように大まかに述べることができます。KDF全体でPSKの再利用を避けながら、エンドポイントを適切に認証します。計算抽出器としてモデル化されると、KDFSは、入力キーイング材料（IKM）が「ソース」確率分布からサンプリングされ、2つのIKM値が互いに独立して選択されると想定しています[kraw10]。このソース独立要件は、2つの異なるKDFで同じIKM値を使用できないことを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "PSK-based authentication is functionally equivalent to session resumption in that a connection uses existing key material to authenticate both endpoints. Following the work of [BAA15], this is a form of compound authentication. Loosely speaking, compound authentication is the property that an execution of multiple authentication protocols, wherein at least one is uncompromised, jointly authenticates all protocols. Therefore, authenticating with an externally provisioned PSK should ideally authenticate both the TLS connection and the external provisioning process. Typically, the external provisioning process produces a PSK and corresponding context from which the PSK was derived and in which it should be used. If available, this is used as the ImportedIdentity.context value. We refer to an external PSK without such context as \"context-free\".",
+      "ja": "PSKベースの認証は、接続が既存のキーマテリアルを使用して両方のエンドポイントを認証するという点で、セッション再開と機能的に同等です。[BAA15]の研究に続いて、これは複合認証の一形態です。ゆるく言えば、複合認証は、少なくとも1つが妥協しない複数の認証プロトコルの実行が、すべてのプロトコルを共同で認証するプロパティです。したがって、外部からプロビジョニングされたPSKで認証する必要は、TLS接続と外部プロビジョニングプロセスの両方を理想的に認証する必要があります。通常、外部プロビジョニングプロセスは、PSKと対応するコンテキストを生成し、そこからPSKが導出され、使用する必要があります。利用可能な場合、これはimportedIdentity.context値として使用されます。「コンテキストフリー」などのコンテキストのない外部PSKを参照します。"
+    },
+    {
+      "indent": 3,
+      "text": "Thus, in considering the source-independence and compound authentication requirements, the PSK importer interface described in this document aims to achieve the following goals:",
+      "ja": "したがって、ソース独立および複合認証要件を考慮する際に、このドキュメントに記載されているPSKインポーターインターフェイスは、次の目標を達成することを目的としています。"
+    },
+    {
+      "indent": 3,
+      "text": "1. Externally provisioned PSKs imported into a TLS connection achieve compound authentication of the provisioning process and connection.",
+      "ja": "1. TLS接続にインポートされた外部プロビジョニングPSKは、プロビジョニングプロセスと接続の複合認証を実現します。"
+    },
+    {
+      "indent": 3,
+      "text": "2. Context-free PSKs only achieve authentication within the context of a single connection.",
+      "ja": "2. コンテキストのないPSKは、単一の接続のコンテキスト内でのみ認証を実現します。"
+    },
+    {
+      "indent": 3,
+      "text": "3. Imported PSKs are not used as IKM for two different KDFs.",
+      "ja": "3. インポートされたPSKは、2つの異なるKDFのIKMとして使用されません。"
+    },
+    {
+      "indent": 3,
+      "text": "4. Imported PSKs do not collide with future protocol versions and KDFs.",
+      "ja": "4. インポートされたPSKは、将来のプロトコルバージョンとKDFと衝突しません。"
+    },
+    {
+      "indent": 3,
+      "text": "There are no known related outputs or security issues caused from the process for computing imported PSKs from an external PSK and the processing of existing external PSKs used in (D)TLS 1.2 and below, as noted in Section 7. However, only limited analysis has been done, which is an additional reason why applications SHOULD provision separate PSKs for (D)TLS 1.3 and prior versions, even when the importer interface is used in (D)TLS 1.3.",
+      "ja": "セクション7に記載されているように、外部PSKからインポートされたPSKを計算するプロセスと（D）TLS 1.2以下で使用される既存の外部PSKの処理に起因する関連する出力またはセキュリティの問題はありません。これは、（d）TLS 1.3および以前のバージョンの個別のPSKを（D）TLS 1.3で使用している場合でも、アプリケーションが個別のPSKを（D）TLS 1.3および以前のバージョンに提供する必要がある追加の理由です。"
+    },
+    {
+      "indent": 3,
+      "text": "The PSK importer does not prevent applications from constructing non-importer PSK identities that collide with imported PSK identities.",
+      "ja": "PSK輸入業者は、アプリケーションがインポートされたPSKのアイデンティティと衝突する非吸気機PSKアイデンティティを構築することを妨げません。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Privacy Considerations",
+      "section_title": true,
+      "ja": "9. プライバシーに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "External PSK identities are commonly static by design so that endpoints may use them to look up keying material. As a result, for some systems and use cases, this identity may become a persistent tracking identifier.",
+      "ja": "外部PSKのアイデンティティは、一般に設計上静的であるため、エンドポイントがキーイン素材を検索するためにそれらを使用することができます。その結果、一部のシステムおよびユースケースでは、このIDは永続的な追跡識別子になる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note also that ImportedIdentity.context is visible in cleartext on the wire as part of the PSK identity. Unless otherwise protected by a mechanism such as TLS Encrypted ClientHello [ECH], applications SHOULD NOT put sensitive information in this field.",
+      "ja": "また、importedidentity.contextは、PSK IDの一部としてワイヤのクリアテキストで表示されることに注意してください。TLS暗号化されたClientHello [ECH]などのメカニズムによって特に保護されていない限り、アプリケーションはこの分野に機密情報を入力すべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "10. IANA Considerations",
+      "section_title": true,
+      "ja": "10. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created the \"TLS KDF Identifiers\" registry under the existing \"Transport Layer Security (TLS) Parameters\" registry.",
+      "ja": "IANAは、既存の「TLS KDF識別子」レジストリを作成しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The entries in the registry are as follows:",
+      "ja": "レジストリのエントリは次のとおりです。"
+    },
+    {
+      "indent": 17,
+      "text": "+========+=================+===========+\n| Value  | KDF Description | Reference |\n+========+=================+===========+\n| 0x0000 | Reserved        | RFC 9258  |\n+--------+-----------------+-----------+\n| 0x0001 | HKDF_SHA256     | [RFC5869] |\n+--------+-----------------+-----------+\n| 0x0002 | HKDF_SHA384     | [RFC5869] |\n+--------+-----------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Table 1: TLS KDF Identifiers Registry",
+      "ja": "表1：TLS KDF識別子レジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "New target KDF values are allocated according to the following process:",
+      "ja": "新しいターゲットKDF値は、次のプロセスに従って割り当てられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Values in the range 0x0000-0xfeff are assigned via Specification Required [RFC8126].",
+      "ja": "* 範囲0x0000-0xfeffの値は、必要な仕様[RFC8126]を介して割り当てられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Values in the range 0xff00-0xffff are reserved for Private Use [RFC8126].",
+      "ja": "* 範囲0xff00-0xffffの値は、私的使用のために予約されています[RFC8126]。"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures for requesting values in the Specification Required space are specified in Section 17 of [RFC8447].",
+      "ja": "必要なスペースで値を要求する手順は、[RFC8447]のセクション17で指定されています。"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5056] Williams, N., \"On the Use of Channel Bindings to Secure Channels\", RFC 5056, DOI 10.17487/RFC5056, November 2007, <https://www.rfc-editor.org/info/rfc5056>.",
+      "ja": "[RFC5056]ウィリアムズ、N。、「チャネルバインディングの使用に関するチャネルの使用について」、RFC 5056、DOI 10.17487/RFC5056、2007年11月、<https://www.rfc-editor.org/info/rfc5056>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5869] Krawczyk, H. and P. Eronen, \"HMAC-based Extract-and-Expand Key Derivation Function (HKDF)\", RFC 5869, DOI 10.17487/RFC5869, May 2010, <https://www.rfc-editor.org/info/rfc5869>.",
+      "ja": "[RFC5869] Krawczyk、H。およびP. Eronen、「HMACベースの抽出および拡張キー誘導関数（HKDF）」、RFC 5869、DOI 10.17487/RFC5869、2010年5月、<https：//ww.rfc-editor.org/info/rfc5869>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：// wwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8446] Rescorla, E., \"The Transport Layer Security (TLS) Protocol Version 1.3\", RFC 8446, DOI 10.17487/RFC8446, August 2018, <https://www.rfc-editor.org/info/rfc8446>.",
+      "ja": "[RFC8446] Rescorla、E。、「輸送層セキュリティ（TLS）プロトコルバージョン1.3」、RFC 8446、DOI 10.17487/RFC8446、2018年8月、<https://www.rfc-editor.org/info/rfc846>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8447] Salowey, J. and S. Turner, \"IANA Registry Updates for TLS and DTLS\", RFC 8447, DOI 10.17487/RFC8447, August 2018, <https://www.rfc-editor.org/info/rfc8447>.",
+      "ja": "[RFC8447] Salowey、J。およびS. Turner、「TLSおよびDTLSのIANAレジストリの更新」、RFC 8447、DOI 10.17487/RFC8447、2018年8月、<https://www.rfc-editor.org/info/rfc8447>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9147] Rescorla, E., Tschofenig, H., and N. Modadugu, \"The Datagram Transport Layer Security (DTLS) Protocol Version 1.3\", RFC 9147, DOI 10.17487/RFC9147, April 2022, <https://www.rfc-editor.org/info/rfc9147>.",
+      "ja": "[RFC9147] Rescorla、E.、Tschofenig、H。、およびN. Modadugu、「データグラム輸送層セキュリティ（DTLS）プロトコルバージョン1.3」、RFC 9147、DOI 10.17487/RFC9147、2022年4月、<https：// www。rfc-editor.org/info/rfc9147>。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[BAA15] Bhargavan, K., Delignat-Lavaud, A., and A. Pironti, \"Verified Contributive Channel Bindings for Compound Authentication\", Proceedings 2015 Network and Distributed System Security, DOI 10.14722/ndss.2015.23277, February 2015, <https://doi.org/10.14722/ndss.2015.23277>.",
+      "ja": "[Baa15] Bhargavan、K.、Delignat-Lavaud、A。、およびA. Pironti、「化合物認証のための検証された貢献チャネルバインディング」、Proceedings 2015 Network and Distributed System Security、DOI 10.14722/ndss.2015.23277、2015年2月、<https：//doi.org/10.14722/ndss.2015.23277>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ECH] Rescorla, E., Oku, K., Sullivan, N., and C. A. Wood, \"TLS Encrypted Client Hello\", Work in Progress, Internet-Draft, draft-ietf-tls-esni-14, 13 February 2022, <https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-14>.",
+      "ja": "[ECH] Rescorla、E.、Oku、K.、Sullivan、N。、およびC. A. Wood、「TLS暗号化されたクライアントHello」、Work in Progress、ITERTF-TLS-ESNI-14、2022年2月13日、<https://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-14>。"
+    },
+    {
+      "indent": 3,
+      "text": "[Kraw10] Krawczyk, H., \"Cryptographic Extraction and Key Derivation: The HKDF Scheme\", Proceedings of Crypto 2010, May 2010, <https://eprint.iacr.org/2010/264>.",
+      "ja": "[Kraw10] Krawczyk、H。、「暗号化抽出とキー導出：HKDFスキーム」、Crypto 2010、2010年5月の議事録、<https://eprint.iacr.org/2010/264>。"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[Quic] Iyengar、J.、ed。and M. Thomson、ed。、「Quic：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487/RFC9000、2021年5月、<https://www.rfc-editor.org/info/rfc9000>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5246] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.2\", RFC 5246, DOI 10.17487/RFC5246, August 2008, <https://www.rfc-editor.org/info/rfc5246>.",
+      "ja": "[RFC5246] Dierks、T。およびE. Rescorla、「The Transport Layer Security（TLS）Protocolバージョン1.2」、RFC 5246、DOI 10.17487/RFC5246、2008年8月、<https://www.rfc-editor.org/info/RFC5246>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7301] Friedl, S., Popov, A., Langley, A., and E. Stephan, \"Transport Layer Security (TLS) Application-Layer Protocol Negotiation Extension\", RFC 7301, DOI 10.17487/RFC7301, July 2014, <https://www.rfc-editor.org/info/rfc7301>.",
+      "ja": "[RFC7301] Friedl、S.、Popov、A.、Langley、A。、およびE. Stephan、「輸送層セキュリティ（TLS）アプリケーション層プロトコル交渉拡張」、RFC 7301、DOI 10.17487/RFC7301、2014年7月、<https://www.rfc-editor.org/info/rfc7301>。"
+    },
+    {
+      "indent": 3,
+      "text": "[Selfie] Drucker, N. and S. Gueron, \"Selfie: reflections on TLS 1.3 with PSK\", DOI 10.1007/s00145-021-09387-y, May 2021, <https://eprint.iacr.org/2019/347.pdf>.",
+      "ja": "[Selfie] Drucker、N。and S. Gueron、「Selfie：Reflections on TLS 1.3 with PSK」、DOI 10.1007/S00145-021-09387-Y、2021年5月、<https://eprint.iacr.org/2019/347.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SHA2] National Institute of Standards and Technology, \"Secure Hash Standard (SHS)\", FIPS PUB 180-4, DOI 10.6028/NIST.FIPS.180-4, August 2015, <https://doi.org/10.6028/NIST.FIPS.180-4>.",
+      "ja": "[SHA2]国立標準技術研究所、「Secure Hash Standard（SHS）」、Fips Pub 180-4、doi 10.6028/nist.fips.180-4、2015年8月、<https://doi.org/10.6028/nist.fips.180-4>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Addressing Selfie",
+      "section_title": true,
+      "ja": "付録A.セルフィーへの対処"
+    },
+    {
+      "indent": 3,
+      "text": "The Selfie attack [Selfie] relies on a misuse of the PSK interface. The PSK interface makes the implicit assumption that each PSK is known only to one client and one server. If multiple clients or multiple servers with distinct roles share a PSK, TLS only authenticates the entire group. A node successfully authenticates its peer as being in the group whether the peer is another node or itself. Note that this case can also occur when there are two nodes sharing a PSK without predetermined roles.",
+      "ja": "セルフィー攻撃[セルフィー]は、PSKインターフェイスの誤用に依存しています。PSKインターフェイスは、各PSKが1つのクライアントと1つのサーバーに対してのみ知られているという暗黙の仮定を作成します。異なる役割を持つ複数のクライアントまたは複数のサーバーがPSKを共有する場合、TLSはグループ全体のみを認証します。ノードは、ピアが別のノードであろうとそれ自体であろうと、ピアがグループ内にいるとしてピアを正常に認証します。このケースは、所定の役割なしでPSKを共有する2つのノードがある場合にも発生する可能性があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that require authenticating finer-grained roles while still configuring a single shared PSK across all nodes can resolve this mismatch either by exchanging roles over the TLS connection after the handshake or by incorporating the roles of both the client and the server into the IPSK context string. For instance, if an application identifies each node by the Media Access Control (MAC) address, it could use the following context string.",
+      "ja": "すべてのノードで単一の共有PSKを構成しながらより細かい粒度の役割を認証する必要があるアプリケーションは、ハンドシェイク後にTLS接続を介して役割を交換するか、クライアントとサーバーの両方の役割をipskコンテキスト文字列に組み込むことにより、この不一致を解決できます。。たとえば、アプリケーションがメディアアクセス制御（MAC）アドレスで各ノードを識別する場合、次のコンテキスト文字列を使用できます。"
+    },
+    {
+      "indent": 5,
+      "text": "struct {\n  opaque client_mac<0..2^8-1>;\n  opaque server_mac<0..2^8-1>;\n} Context;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "If an attacker then redirects a ClientHello intended for one node to a different node, including the node that generated the ClientHello, the receiver will compute a different context string and the handshake will not complete.",
+      "ja": "攻撃者が、クライアントヘロを生成したノードを含む1つのノードを目的としたクライアントヘロを異なるノードにリダイレクトする場合、レシーバーは異なるコンテキスト文字列を計算し、ハンドシェイクは完了しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that, in this scenario, there is still a single shared PSK across all nodes, so each node must be trusted not to impersonate another node's role.",
+      "ja": "このシナリオでは、すべてのノードに単一の共有PSKがまだあるため、各ノードは別のノードの役割になりすましてはならないと信頼する必要があることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors thank Eric Rescorla and Martin Thomson for discussions that led to the production of this document, as well as Christian Huitema for input regarding privacy considerations of external PSKs. John Preuß Mattsson provided input regarding PSK importer deployment considerations. Hugo Krawczyk provided guidance for the security considerations. Martin Thomson, Jonathan Hoyland, Scott Hollenbeck, Benjamin Kaduk, and others all provided reviews, feedback, and suggestions for improving the document.",
+      "ja": "著者は、エリック・レスコルラとマーティン・トムソンに、この文書の制作につながった議論と、外部PSKのプライバシーに関する考慮事項に関する入力についてのクリスチャン・フイテマに感謝します。JohnPreußMattssonは、PSKインポーターの展開に関する考慮事項に関する入力を提供しました。Hugo Krawczykは、セキュリティ上の考慮事項のガイダンスを提供しました。Martin Thomson、Jonathan Hoyland、Scott Hollenbeck、Benjamin Kadukなどはすべて、ドキュメントを改善するためのレビュー、フィードバック、および提案を提供しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "David Benjamin Google, LLC. Email: davidben@google.com",
+      "ja": "David Benjamin Google、LLC。メール：Davidben@google.com"
+    },
+    {
+      "indent": 3,
+      "text": "Christopher A. Wood Cloudflare Email: caw@heapingbits.net",
+      "ja": "Christopher A. Wood Cloudflareメール：caw@heapingbits.net"
+    }
+  ]
+}

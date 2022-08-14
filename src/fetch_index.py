@@ -1,18 +1,16 @@
 
 from lxml import html  # pip install lxml
 import requests
-
 import os
 import re
 import glob
 import json
-
 from pprint import pprint
 
 OUTPUT_DIR  = "html"
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "obsoletes.json")
 
-def fetch_remote_index():
+def fetch_remote_index() -> list[int]:
     # 発行されているRFCの番号の一覧をページから取得する
 
     url = 'https://www.ietf.org/download/rfc-index.txt'
@@ -74,7 +72,7 @@ def fetch_remote_index():
 
     return rfc_numbers
 
-def fetch_local_index():
+def fetch_local_index() -> list[int]:
     # 作成したRFCに対応するHTMLの番号の一覧をローカルディスクから取得する。
 
     pathname = 'html/rfc*.html'
@@ -86,7 +84,7 @@ def fetch_local_index():
 
     return rfc_numbers
 
-def diff_remote_and_local_index():
+def diff_remote_and_local_index() -> list[int]:
     # RFC Indexとローカルのhtml/のRFCの差分を作成する。
     # 返り値は、RFC番号の一覧
     remote_index = fetch_remote_index()
@@ -94,7 +92,7 @@ def diff_remote_and_local_index():
     diff_index = set(remote_index) - set(local_index)
     return diff_index
 
-def get_rfc_number(string):
+def get_rfc_number(string: str) -> str:
     return string.strip().replace("RFC", "")
 
 

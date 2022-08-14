@@ -3,35 +3,37 @@ import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
-from src.make_index import make_index
+from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.make_json_from_html import make_json_from_html
+from src.fetch_index_wg import fetch_index_wg
 
-def main(rfc_number):
-    print('RFC %d:' % rfc_number)
+def main(rfc_number: int | str) -> None:
+    print('[+] RFC %s:' % rfc_number)
 
     try:
         fetch_rfc(rfc_number)
     except RFCNotFound as e:
         print('Exception: RFCNotFound!')
-        filename = "html/rfc%d-not-found.html" % rfc_number
+        filename = "html/rfc%s-not-found.html" % rfc_number
         with open(filename, "w") as f:
             f.write('')
         return
     except Exception as e:
         print(e)
-        filename = "html/rfc%d-error.html" % rfc_number
+        filename = "html/rfc%s-error.html" % rfc_number
         with open(filename, "w") as f:
             f.write('')
         return
 
-    # res = trans_rfc(rfc_number, transmode)
     res = trans_rfc(rfc_number)
     if res is False: return False
     make_html(rfc_number)
 
 def continuous_main(begin=None, end=None, only_first=False):
-    numbers = list(diff_remote_and_local_index())
+    numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
+    # print('[+] diff_remote_and_local:')
+    # print(numbers)
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
     elif begin:  # 開始のみ設定
@@ -41,7 +43,6 @@ def continuous_main(begin=None, end=None, only_first=False):
         numbers = numbers[0:1]
 
     for rfc_number in numbers:
-        # res = main(rfc_number, transmode)
         res = main(rfc_number)
         if res is False:
             break
@@ -61,21 +62,34 @@ if __name__ == '__main__':
     parser.add_argument('--transtest', action='store_true')
     parser.add_argument('--force', '-f', action='store_true')
     parser.add_argument('--only-first', action='store_true')
+    parser.add_argument('--draft', type=str, help='RFC draft (ex. draft-ietf-tls-esni-14)')
+    parser.add_argument('--fetch-index-wg', action='store_true')
+    parser.add_argument('--make-index-draft', action='store_true')
     args = parser.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）
     RFCs = None
     if args.rfc:
         RFCs = [int(rfc_number) for rfc_number in args.rfc.split(",")]
+    elif args.draft:
+        RFCs = [args.draft]
 
     if args.make_index:
         # トップページ(index.html)の作成
         print("[+] index.htmlの作成")
         make_index()
+    elif args.make_index_draft:
+        # トップページ(draft/index.html)の作成
+        print("[+] draft/index.htmlの作成")
+        make_index_draft()
+    elif args.fetch_index_wg:
+        # WorkingGroupのRFCとドラフト一覧の作成
+        print("[+] WorkingGroupのRFCとDraft一覧収集")
+        fetch_index_wg()
     elif args.transtest:
         # 翻訳のテスト
         from src.trans_rfc import trans_test
-        # res = trans_test(transmode)
+        res = trans_test()
         print('Translate test result:', res)
     elif args.fetch and args.begin and args.end:
         # 範囲指定でRFCの取得
@@ -87,13 +101,12 @@ if __name__ == '__main__':
     elif args.fetch and RFCs:
         # 指定したRFCの取得
         for rfc in RFCs:
-            print("[+] RFC %d を取得" % rfc)
+            print("[+] RFC %s を取得" % rfc)
             fetch_rfc(rfc, args.force)
     elif args.trans and RFCs:
         # RFCの翻訳
         for rfc in RFCs:
-            print("[+] RFC %d を翻訳" % rfc)
-            #trans_rfc(rfc, transmode)
+            print("[+] RFC %s を翻訳" % rfc)
             trans_rfc(rfc)
     elif args.make and args.begin and args.end:
         # 範囲指定でRFCのHTML(rfcXXXX.html)を作成
@@ -112,9 +125,10 @@ if __name__ == '__main__':
     elif RFCs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
-            #main(rfc, transmode)
             main(rfc)
-    else:
+    elif args.begin or args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
         continuous_main(begin=args.begin, end=args.end, 
                         only_first=args.only_first)
+    else:
+        parser.print_help()

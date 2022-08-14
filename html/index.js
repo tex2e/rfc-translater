@@ -5,8 +5,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // rfcXXXX.html
   // ---------------------------------------------------------------------------
 
+  var rfc_draft = document.getElementById('rfc_draft');
+
   var footer = document.getElementById('rfc_footer');
-  if (footer) {
+  if (!rfc_draft && footer) {
     // 編集ページ表示方法
     var rfc_number = parseInt(document.getElementById('rfc_number').innerText);
     window.addEventListener('click', function (evt) {
@@ -20,7 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   var rfc_alert = document.getElementById('rfc_alert');
-  if (rfc_alert) {
+  if (!rfc_draft && rfc_alert) {
     // 対象RFCが廃止されたか確認し、廃止なら修正版RFCへのリンクを表示する。
     var httpRequest = new XMLHttpRequest();
     httpRequest.onreadystatechange = function () {
@@ -53,7 +55,35 @@ document.addEventListener('DOMContentLoaded', function () {
     httpRequest.send();
   }
 
-  // add theme toggle button to page
+  var rfc_wg = document.getElementById('rfc_wg');
+  if (!rfc_draft && rfc_wg) { // 標準RFC
+    // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
+    var httpRequest = new XMLHttpRequest();
+    httpRequest.onreadystatechange = function () {
+      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
+        var rfc_number = parseInt(document.getElementById('rfc_number').innerText);
+        var data = JSON.parse(httpRequest.responseText);
+        var wg = data[rfc_number];
+        if (wg) {
+          rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/wg/' + wg + '/documents/" class="badge badge-primary">' + wg + '</a>';
+        }
+      }
+    };
+    httpRequest.open('GET', 'group-rfcs.json');
+    httpRequest.send();
+  }
+  if (rfc_draft && rfc_wg) { // Draft版のRFC
+    var rfc_draft_name = document.getElementById('rfc_number').innerText;
+    var regex = /^draft-[^-]+-(?<wg_name>[^-]+)/;
+    var m = regex.exec(rfc_draft_name);
+    // console.log(m);
+    if (m) {
+      var wg = m.groups['wg_name'];
+      rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/wg/' + wg + '/documents/" class="badge badge-primary">' + wg + '</a>';
+    }
+  }
+
+  // Add theme toggle button to page
   const themeToggleButton = document.createElement('button');
   const buttonToOriginalContainer = document.getElementsByClassName('jump-to-original-rfc-container')[0];
   const buttonToOriginal = buttonToOriginalContainer.childNodes[0];
@@ -63,10 +93,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   themeToggleButton.addEventListener('click', function () {
     if (darkMode) {
-      themeToggleButton.innerHTML = 'Dark'
+      themeToggleButton.innerHTML = 'Dark';
       darkMode = false;
     } else {
-      themeToggleButton.innerHTML = 'Light'
+      themeToggleButton.innerHTML = 'Light';
       darkMode = true;
     }
     document.body.classList.toggle('dark-theme');

@@ -13,18 +13,23 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 import platform
 
-# ルールは必ず小文字で登録すること
+# 変換元は必ず小文字で記載すること
 trans_rules = {
     'abstract': '概要',
     'introduction': 'はじめに',
     'acknowledgement': '謝辞',
     'acknowledgements': '謝辞',
+    'acknowledgments': '謝辞',
     'status of this memo': '本文書の位置付け', #'本文書の状態',
     'copyright notice': '著作権表示',
     'table of contents': '目次',
+    "author's address": '著者の連絡先',
     'conventions': '規約',
     'terminology': '用語',
+    'background': '背景',
     'discussion': '考察',
+    'security considerations': 'セキュリティに関する考慮事項',
+    'iana considerations': 'IANAの考慮事項',
     'references': '参考文献',
     'normative references': '引用文献',
     'informative references': '参考引用',
@@ -87,7 +92,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser.implicitly_wait(3)
         self._browser = browser
 
-    def translate(self, text, dest='ja'):
+    def translate(self, text: str, dest='ja') -> str:
         if len(text) == 0:
             return ""
         # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
@@ -105,18 +110,20 @@ class TranslatorSeleniumGoogletrans(Translator):
         # 翻訳したい文をURLに埋め込んでからアクセスする
         text_for_url = urllib.parse.quote_plus(text, safe='')
         url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
+        # print('[+] url:', url)
         browser.get(url)
         # 数秒待機する
         wait_time = 3 + len(text) / 1000
         time.sleep(wait_time)
         # 翻訳結果を抽出する
         elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
-        ja = "".join(elem.text for elem in elems)
+        ja = "\n".join(elem.text for elem in elems)
+        ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
         # プログレスバーに詳細情報を追加
         self.output_progress(len=len(text), wait_time=wait_time)
         return ja
 
-    def translate_texts(self, texts, dest='ja'):
+    def translate_texts(self, texts: list[str], dest='ja') -> list[str]:
         res = []
         for text in texts:
             ja = self.translate(text)
@@ -130,16 +137,30 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def chunks(l, n):
+def chunks(l: list, n: int) -> list:
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def trans_rfc(number):
+def trans_rfc(rfc_number: int | str) -> bool:
 
-    input_dir = 'data/%04d' % (number//1000%10*1000)
-    input_file = '%s/rfc%d.json' % (input_dir, number)
-    output_file = '%s/rfc%d-trans.json' % (input_dir, number)
-    midway_file = '%s/rfc%d-midway.json' % (input_dir, number)
+    # 整数はRFC、文字列はDraft
+    if type(rfc_number) is int:
+        is_draft = False
+        input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
+        input_file = f'{input_dir}/rfc{rfc_number}.json'
+        output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
+        midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
+        is_draft = True
+        organization   = m['org']
+        working_group  = m['wg']
+        rfc_draft_name = m['name']
+        input_dir = f'data/draft/{working_group}'
+        input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
+        output_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
+        midway_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-midway.json'
+    else:
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
         with open(midway_file, 'r', encoding="utf-8") as f:
@@ -148,7 +169,7 @@ def trans_rfc(number):
         with open(input_file, 'r', encoding="utf-8") as f:
             obj = json.load(f)
 
-    desc = 'RFC %d' % number
+    desc = 'RFC %s' % rfc_number
     translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
     is_canceled = False
 
@@ -157,11 +178,11 @@ def trans_rfc(number):
         if not obj['title'].get('ja'):  # 既に翻訳済みの段落はスキップする
             titles = obj['title']['text'].split(' - ', 1)  # "RFC XXXX - Title"
             if len(titles) <= 1:
-                obj['title']['ja'] = "RFC %d" % number
+                obj['title']['ja'] = "RFC %s" % rfc_number
             else:
                 text = titles[1]
                 ja = translator.translate(text)
-                obj['title']['ja'] = "RFC %d - %s" % (number, ja)
+                obj['title']['ja'] = "RFC %s - %s" % (rfc_number, ja)
 
         # 段落の翻訳
         #   複数の段落をまとめて翻訳する
@@ -184,9 +205,11 @@ def trans_rfc(number):
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
                 # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
                 pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
-                m = re.match(pattern, text)
-                if m:
+                if m := re.match(pattern, text):
                     pre_texts.append(m[1])
+                    texts.append(m[2])
+                elif m := re.match(r'^Appendix ([A-Z])\. (.*)$', text):
+                    pre_texts.append(f'付録{m[1]}. ')
                     texts.append(m[2])
                 else:
                     pre_texts.append('')
@@ -201,10 +224,10 @@ def trans_rfc(number):
 
         print("", flush=True)
 
-    except json.decoder.JSONDecodeError as e:
-        print('[-] googletrans is blocked by Google :(')
-        print('[-]', datetime.now(JST))
-        is_canceled = True
+    # except json.decoder.JSONDecodeError as e:
+    #     print('[-] googletrans is blocked by Google :(')
+    #     print('[-]', datetime.now(JST))
+    #     is_canceled = True
     except NoSuchElementException as e:
         print('[-] Google Translate is blocked by Google :(')
         print('[-]', datetime.now(JST))
@@ -230,8 +253,10 @@ def trans_rfc(number):
         return False
 
 
-def trans_test():
+def trans_test() -> bool:
     translator = TranslatorSeleniumGoogletrans(total=1)
-    ja = translator.translate('test', dest='ja')
+    ja = translator.translate('test sample.', dest='ja')
     print('result:', ja)
-    return ja in ('テスト', 'しけん')
+
+if __name__ == '__main__':
+    trans_test()

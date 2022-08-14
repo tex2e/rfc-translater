@@ -1,14 +1,30 @@
 
 import os
+import re
 import json
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
-def make_html(rfc_number):
-    input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
-    input_file = '%s/rfc%d-trans.json' % (input_dir, rfc_number)
-    output_dir = 'html'
-    output_file = '%s/rfc%d.html' % (output_dir, rfc_number)
+def make_html(rfc_number: int | str) -> None:
+
+    # 整数はRFC、文字列はDraft
+    if type(rfc_number) is int:
+        is_draft = False
+        input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
+        input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
+        output_dir = f'html'
+        output_file = f'{output_dir}/rfc{rfc_number}.html'
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
+        is_draft = True
+        organization   = m['org']
+        working_group  = m['wg']
+        rfc_draft_name = m['name']
+        input_dir = f'data/draft/{working_group}'
+        input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
+        output_dir = f'html/draft'
+        output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.html'
+    else:
+        raise RuntimeError(f"make_html: Unknown format number={rfc_number}")
 
     input_file = os.path.normpath(input_file)
     output_file = os.path.normpath(output_file)
@@ -26,7 +42,7 @@ def make_html(rfc_number):
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template('templates/rfc.html')
-    output = mytemplate.render_unicode(ctx=obj)
+    output = mytemplate.render_unicode(ctx=obj, is_draft=is_draft)
 
     # 出力ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)

@@ -1,0 +1,893 @@
+{
+  "title": {
+    "text": "RFC 9261 - Exported Authenticators in TLS (RFC 9261)",
+    "ja": "RFC 9261 - TLSのエクスポートされた認証者（RFC 9261）"
+  },
+  "number": 9261,
+  "created_at": "2022-07-18 07:55:10.872160+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       N. Sullivan\nRequest for Comments: 9261                               Cloudflare Inc.\nCategory: Standards Track                                      July 2022\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Exported Authenticators in TLS",
+      "ja": "TLSでエクスポートされた認証器"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a mechanism that builds on Transport Layer Security (TLS) or Datagram Transport Layer Security (DTLS) and enables peers to provide proof of ownership of an identity, such as an X.509 certificate. This proof can be exported by one peer, transmitted out of band to the other peer, and verified by the receiving peer.",
+      "ja": "このドキュメントでは、輸送層のセキュリティ（TLS）またはデータグラムトランスポートレイヤーセキュリティ（DTLS）に基づいて構築され、ピアがX.509証明書などのアイデンティティの所有権の証明を提供できるようにします。この証明は、1つのピアによってエクスポートされ、バンドから他のピアに送信され、受信ピアによって検証されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9261.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9261で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Terminology\n3.  Message Sequences\n4.  Authenticator Request\n5.  Authenticator\n  5.1.  Authenticator Keys\n  5.2.  Authenticator Construction\n    5.2.1.  Certificate\n    5.2.2.  CertificateVerify\n    5.2.3.  Finished\n    5.2.4.  Authenticator Creation\n6.  Empty Authenticator\n7.  API Considerations\n  7.1.  The \"request\" API\n  7.2.  The \"get context\" API\n  7.3.  The \"authenticate\" API\n  7.4.  The \"validate\" API\n8.  IANA Considerations\n  8.1.  Update of the TLS ExtensionType Registry\n  8.2.  Update of the TLS Exporter Labels Registry\n  8.3.  Update of the TLS HandshakeType Registry\n9.  Security Considerations\n10. References\n  10.1.  Normative References\n  10.2.  Informative References\nAcknowledgements\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This document provides a way to authenticate one party of a Transport Layer Security (TLS) or Datagram Transport Layer Security (DTLS) connection to its peer using authentication messages created after the session has been established. This allows both the client and server to prove ownership of additional identities at any time after the handshake has completed. This proof of authentication can be exported and transmitted out of band from one party to be validated by its peer.",
+      "ja": "このドキュメントは、セッションが確立された後に作成された認証メッセージを使用して、トランスポートレイヤーセキュリティ（TLS）またはDatagram Transport Layer Security（DTLS）接続をピアに認証する方法を提供します。これにより、クライアントとサーバーの両方が、握手が完了した後、いつでも追加のアイデンティティの所有権を証明することができます。この認証の証明は、1つの当事者からバンドから送信して、そのピアによって検証されることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This mechanism provides two advantages over the authentication that TLS and DTLS natively provide:",
+      "ja": "このメカニズムは、TLSとDTLSがネイティブに提供する認証よりも2つの利点を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "multiple identities: Endpoints that are authoritative for multiple identities, but that do not have a single certificate that includes all of the identities, can authenticate additional identities over a single connection.",
+      "ja": "複数のアイデンティティ：複数のアイデンティティに対して権威あるエンドポイントですが、すべてのIDを含む単一の証明書を持っていないため、単一の接続で追加のIDを認証できます。"
+    },
+    {
+      "indent": 3,
+      "text": "spontaneous authentication: After a connection is established, endpoints can authenticate in response to events in a higher-layer protocol; they can also integrate more context (such as context from the application).",
+      "ja": "自発認証：接続が確立された後、エンドポイントは、高層プロトコルのイベントに応じて認証できます。また、より多くのコンテキスト（アプリケーションからのコンテキストなど）を統合することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Versions of TLS prior to TLS 1.3 used renegotiation as a way to enable post-handshake client authentication given an existing TLS connection. The mechanism described in this document may be used to replace the post-handshake authentication functionality provided by renegotiation. Unlike renegotiation, Exported Authenticator-based post-handshake authentication does not require any changes at the TLS layer.",
+      "ja": "TLS 1.3の前のTLSのバージョンは、既存のTLS接続を考慮して、ポストハンドシェイククライアント認証を有効にする方法として再交渉を使用しました。このドキュメントで説明されているメカニズムは、再交渉によって提供されるポストハンドシェイク認証機能を置き換えるために使用できます。再交渉とは異なり、エクスポートされた認証機ベースのポストハンドシェイク認証は、TLSレイヤーで変更を必要としません。"
+    },
+    {
+      "indent": 3,
+      "text": "Post-handshake authentication is defined in TLS 1.3 Section 4.6.2 of [RFC8446], but it has the disadvantage of requiring additional state to be stored as part of the TLS state machine. Furthermore, the authentication boundaries of TLS 1.3 post-handshake authentication align with TLS record boundaries, which are often not aligned with the authentication boundaries of the higher-layer protocol. For example, multiplexed connection protocols like HTTP/2 [RFC9113] do not have a notion of which TLS record a given message is a part of.",
+      "ja": "ポストハンドシェイク認証は、[RFC8446]のTLS 1.3セクション4.6.2で定義されていますが、TLS状態マシンの一部として追加の状態を保存する必要があるという不利な点があります。さらに、TLS 1.3ポストハンドシェイク認証の認証境界は、TLSの記録境界に沿っています。たとえば、HTTP/2 [RFC9113]のような多重化接続プロトコルには、特定のメッセージが一部であるTLSを記録する概念はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Exported Authenticators are meant to be used as a building block for application protocols. Mechanisms such as those required to advertise support and handle authentication errors are not handled by TLS (or DTLS).",
+      "ja": "エクスポートされた認証機は、アプリケーションプロトコルのビルディングブロックとして使用することを目的としています。サポートを宣伝して認証エラーを処理するために必要なメカニズムは、TLS（またはDTL）によって処理されません。"
+    },
+    {
+      "indent": 3,
+      "text": "The minimum version of TLS and DTLS required to implement the mechanisms described in this document are TLS 1.2 [RFC5246] and DTLS 1.2 [RFC6347]. (These were obsoleted by TLS 1.3 [RFC8446] and DTLS 1.3 [RFC9147].)",
+      "ja": "このドキュメントで説明されているメカニズムを実装するために必要なTLSおよびDTLの最小バージョンは、TLS 1.2 [RFC5246]およびDTLS 1.2 [RFC6347]です。（これらはTLS 1.3 [RFC8446]およびDTLS 1.3 [RFC9147]によって廃止されました。）"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Terminology",
+      "section_title": true,
+      "ja": "2. 慣習と用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses terminology such as client, server, connection, handshake, endpoint, and peer that are defined in Section 1.1 of [RFC8446]. The term \"initial connection\" refers to the (D)TLS connection from which the Exported Authenticator messages are derived.",
+      "ja": "このドキュメントでは、[RFC8446]のセクション1.1で定義されているクライアント、サーバー、接続、ハンドシェイク、エンドポイント、ピアなどの用語を使用します。「初期接続」という用語は、エクスポートされた認証装置メッセージが導出される（d）TLS接続を指します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Message Sequences",
+      "section_title": true,
+      "ja": "3. メッセージシーケンス"
+    },
+    {
+      "indent": 3,
+      "text": "There are two types of messages defined in this document: authenticator requests and authenticators. These can be combined in the following three sequences:",
+      "ja": "このドキュメントには、Authenticator RequestsとAuthenticatorsの2種類のメッセージが定義されています。これらは、次の3つのシーケンスで組み合わせることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Client Authentication",
+      "ja": "クライアント認証"
+    },
+    {
+      "indent": 3,
+      "text": "* Server generates authenticator request",
+      "ja": "* サーバーは認証機リクエストを生成します"
+    },
+    {
+      "indent": 3,
+      "text": "* Client generates Authenticator from Server's authenticator request",
+      "ja": "* クライアントは、ServerのAuthenticatorリクエストからAuthenticatorを生成します"
+    },
+    {
+      "indent": 3,
+      "text": "* Server validates Client's authenticator",
+      "ja": "* サーバーはクライアントの認証器を検証します"
+    },
+    {
+      "indent": 3,
+      "text": "Server Authentication",
+      "ja": "サーバー認証"
+    },
+    {
+      "indent": 3,
+      "text": "* Client generates authenticator request",
+      "ja": "* クライアントは認証機リクエストを生成します"
+    },
+    {
+      "indent": 3,
+      "text": "* Server generates authenticator from Client's authenticator request",
+      "ja": "* サーバーは、クライアントのAuthenticatorリクエストから認証器を生成します"
+    },
+    {
+      "indent": 3,
+      "text": "* Client validates Server's authenticator",
+      "ja": "* クライアントはサーバーの認証器を検証します"
+    },
+    {
+      "indent": 3,
+      "text": "Spontaneous Server Authentication",
+      "ja": "自発的なサーバー認証"
+    },
+    {
+      "indent": 3,
+      "text": "* Server generates authenticator",
+      "ja": "* サーバーは認証器を生成します"
+    },
+    {
+      "indent": 3,
+      "text": "* Client validates Server's authenticator",
+      "ja": "* クライアントはサーバーの認証器を検証します"
+    },
+    {
+      "indent": 0,
+      "text": "4. Authenticator Request",
+      "section_title": true,
+      "ja": "4. Authenticatorリクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "The authenticator request is a structured message that can be created by either party of a (D)TLS connection using data exported from that connection. It can be transmitted to the other party of the (D)TLS connection at the application layer. The application-layer protocol used to send the authenticator request SHOULD use a secure transport channel with equivalent security to TLS, such as QUIC [RFC9001], as its underlying transport to keep the request confidential. The application MAY use the existing (D)TLS connection to transport the authenticator.",
+      "ja": "Authenticatorリクエストは、その接続からエクスポートされたデータを使用して（d）TLS接続のいずれかのパーティによって作成できる構造化されたメッセージです。アプリケーションレイヤーで（d）TLS接続の相手に送信できます。Authenticator Requestの送信に使用されるアプリケーション層プロトコルは、リクエストを機密保持するための基礎となるトランスポートとして、QUIC [RFC9001]などのTLSに同等のセキュリティを備えた安全なトランスポートチャネルを使用する必要があります。アプリケーションは、既存の（d）TLS接続を使用して、認証器を輸送できます。"
+    },
+    {
+      "indent": 3,
+      "text": "An authenticator request message can be constructed by either the client or the server. Server-generated authenticator requests use the CertificateRequest message from Section 4.3.2 of [RFC8446]. Client-generated authenticator requests use a new message, called the \"ClientCertificateRequest\", that uses the same structure as CertificateRequest. (Note that the latter is not a request for a client certificate, but rather a certificate request generated by the client.) These message structures are used even if the connection protocol is TLS 1.2 or DTLS 1.2.",
+      "ja": "認証者要求メッセージは、クライアントまたはサーバーのいずれかによって作成できます。サーバーで生成された認証機リクエスト[RFC8446]のセクション4.3.2からのCertificateRequestメッセージを使用します。クライアントで生成されたAuthenticatorリクエストは、cirtimateRequestと同じ構造を使用する「clientCertificAterequest」と呼ばれる新しいメッセージを使用します。（後者はクライアント証明書のリクエストではなく、クライアントによって生成された証明書要求であることに注意してください。）これらのメッセージ構造は、接続プロトコルがTLS 1.2またはDTLS 1.2である場合でも使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The CertificateRequest and ClientCertificateRequest messages are used to define the parameters in a request for an authenticator. These are encoded as TLS handshake messages, including length and type fields. They do not include any TLS record-layer framing and are not encrypted with a handshake or application-data key.",
+      "ja": "cirtimaterateRequestおよびclientCertificateRequestメッセージは、認証者のリクエストでパラメーターを定義するために使用されます。これらは、長さや型フィールドを含むTLSハンドシェイクメッセージとしてエンコードされます。TLSレコードレイヤーフレーミングは含まれておらず、握手またはアプリケーションデータキーで暗号化されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The structures are defined to be:",
+      "ja": "構造は次のように定義されています。"
+    },
+    {
+      "indent": 6,
+      "text": "struct {\n   opaque certificate_request_context<0..2^8-1>;\n   Extension extensions<2..2^16-1>;\n} ClientCertificateRequest;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 6,
+      "text": "struct {\n   opaque certificate_request_context<0..2^8-1>;\n   Extension extensions<2..2^16-1>;\n} CertificateRequest;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "certificate_request_context: An opaque string that identifies the authenticator request and that will be echoed in the authenticator message. A certificate_request_context value MUST be unique for each authenticator request within the scope of a connection (preventing replay and context confusion). The certificate_request_context SHOULD be chosen to be unpredictable to the peer (e.g., by randomly generating it) in order to prevent an attacker who has temporary access to the peer's private key from precomputing valid authenticators. For example, the application may choose this value to correspond to a value used in an existing data structure in the software to simplify implementation.",
+      "ja": "certificate_request_context：Authenticatorリクエストを識別し、Authenticatorメッセージにエコーされる不透明な文字列。Certificate_Request_Context値は、接続の範囲内で認証機リクエストごとに一意でなければなりません（リプレイとコンテキストの混乱の防止）。証明書_REQUEST_CONTEXTは、ピアが有効な認証を事前に計算することからピアの秘密鍵に一時的にアクセスできる攻撃者を防ぐために、ピアにとって予測不可能（ランダムにそれを生成することによって）を選択する必要があります。たとえば、アプリケーションは、ソフトウェアの既存のデータ構造で使用される値に対応するようにこの値を選択して、実装を簡素化する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "extensions: The set of extensions allowed in the structures of CertificateRequest and ClientCertificateRequest is comprised of those defined in the \"TLS ExtensionType Values\" IANA registry containing CR in the \"TLS 1.3\" column (see [IANA-TLS] and [RFC8447]). In addition, the set of extensions in the ClientCertificateRequest structure MAY include the server_name extension [RFC6066].",
+      "ja": "エクステンション：証明書およびClientCertificaterequestの構造で許可される拡張機能のセットは、「TLS 1.3」列にCRを含む「TLS拡張タイプ値」で定義されたもので構成されています（[IANA-TLS]および[RFC8447]を参照）。さらに、ClientCertificAtereQuest構造の拡張セットには、Server_Name拡張子[RFC6066]が含まれる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The uniqueness requirements of the certificate_request_context apply across CertificateRequest and ClientCertificateRequest messages that are used as part of authenticator requests. A certificate_request_context value used in a ClientCertificateRequest cannot be used in an authenticator CertificateRequest on the same connection, and vice versa. There is no impact if the value of a certificate_request_context used in an authenticator request matches the value of a certificate_request_context in the handshake or in a post-handshake message.",
+      "ja": "certificate_request_contextの一意性要件は、Authenticatorリクエストの一部として使用されるCertificateRecerequestおよびclientCertificateRequestメッセージに適用されます。Client CertificAterequestで使用される証明書_Request_Context値は、同じ接続のAuthenticator ErcidenterateRequestで使用することはできません。その逆も同様です。Authenticatorリクエストで使用されている証明書_REQUEST_CONTEXTの値が、ハンドシェイクまたはポストハンドシェイクメッセージの証明書_REQUEST_CONTEXTの値と一致する場合に影響はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Authenticator",
+      "section_title": true,
+      "ja": "5. 認証者"
+    },
+    {
+      "indent": 3,
+      "text": "The authenticator is a structured message that can be exported from either party of a (D)TLS connection. It can be transmitted to the other party of the (D)TLS connection at the application layer. The application-layer protocol used to send the authenticator SHOULD use a secure transport channel with equivalent security to TLS, such as QUIC [RFC9001], as its underlying transport to keep the authenticator confidential. The application MAY use the existing (D)TLS connection to transport the authenticator.",
+      "ja": "Authenticatorは、（d）TLS接続のいずれかの当事者からエクスポートできる構造化されたメッセージです。アプリケーションレイヤーで（d）TLS接続の相手に送信できます。Authenticatorの送信に使用されるアプリケーション層プロトコルは、Authenticatorの機密を維持するための基礎となるトランスポートとして、QUIC [RFC9001]などのTLSに同等のセキュリティを備えた安全な輸送チャネルを使用する必要があります。アプリケーションは、既存の（d）TLS接続を使用して、認証器を輸送できます。"
+    },
+    {
+      "indent": 3,
+      "text": "An authenticator message can be constructed by either the client or the server given an established (D)TLS connection; an identity, such as an X.509 certificate; and a corresponding private key. Clients MUST NOT send an authenticator without a preceding authenticator request; for servers, an authenticator request is optional. For authenticators that do not correspond to authenticator requests, the certificate_request_context is chosen by the server.",
+      "ja": "確立された（d）TLS接続が与えられたクライアントまたはサーバーのいずれかによって認証器メッセージを構築できます。X.509証明書などのID。対応する秘密鍵。クライアントは、先行認証要求なしで認証機を送信してはなりません。サーバーの場合、Authenticatorリクエストはオプションです。Authenticatorリクエストに対応しない認証機の場合、certificate_request_contextがサーバーによって選択されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Authenticator Keys",
+      "section_title": true,
+      "ja": "5.1. 認証キー"
+    },
+    {
+      "indent": 3,
+      "text": "Each authenticator is computed using a Handshake Context and Finished MAC (Message Authentication Code) Key derived from the (D)TLS connection. These values are derived using an exporter as described in Section 4 of [RFC5705] (for (D)TLS 1.2) or Section 7.5 of [RFC8446] (for (D)TLS 1.3). For (D)TLS 1.3, the exporter_master_secret MUST be used, not the early_exporter_master_secret. These values use different labels depending on the role of the sender:",
+      "ja": "各認証機は、（d）TLS接続から派生した握手コンテキストと完成したMac（メッセージ認証コード）キーを使用して計算されます。これらの値は、[RFC5705]のセクション4（（d）TLS 1.2の場合）または[RFC8446]のセクション7.5（（d）TLS 1.3）のセクション7.5で説明されているように輸出者を使用して導出されます。（d）1.3の場合、exporter_master_secretを使用する必要があります。これらの値は、送信者の役割に応じて異なるラベルを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "* The Handshake Context is an exporter value that is derived using the label \"EXPORTER-client authenticator handshake context\" or \"EXPORTER-server authenticator handshake context\" for authenticators sent by the client or server, respectively.",
+      "ja": "* ハンドシェイクコンテキストは、クライアントまたはサーバーがそれぞれ送信した認証機の「Exporter-Client Authenticator Handshake Context」または「Exporter-Server Authentacator Handshake Context」というラベル「Exporter Client Authenticator Context」または「Exporter-Server Authentacator Context」を使用して導出される輸出者値です。"
+    },
+    {
+      "indent": 3,
+      "text": "* The Finished MAC Key is an exporter value derived using the label \"EXPORTER-client authenticator finished key\" or \"EXPORTER-server authenticator finished key\" for authenticators sent by the client or server, respectively.",
+      "ja": "* 完成したMACキーは、クライアントまたはサーバーがそれぞれ送信した認証機の「Exporter-Client Authenticator Finisht Key」または「Exporter-Server Autherver Autherver Autherver Finisht Key」を使用して導出された輸出者値です。"
+    },
+    {
+      "indent": 3,
+      "text": "The context_value used for the exporter is empty (zero length) for all four values. There is no need to include additional context information at this stage because the application-supplied context is included in the authenticator itself. The length of the exported value is equal to the length of the output of the hash function associated with the selected ciphersuite (for TLS 1.3) or the hash function used for the pseudorandom function (PRF) (for (D)TLS 1.2). Exported Authenticators cannot be used with (D)TLS 1.2 ciphersuites that do not use the TLS PRF and with TLS 1.3 ciphersuites that do not have an associated hash function. This hash is referred to as the \"authenticator hash\".",
+      "ja": "Exporterに使用されるContext_Valueは、4つの値すべてに対して空（ゼロの長さ）です。アプリケーションサプライコンテキストが認証器自体に含まれているため、この段階で追加のコンテキスト情報を含める必要はありません。エクスポートされた値の長さは、選択された暗号化（TLS 1.3の場合）に関連付けられたハッシュ関数の出力の長さまたは擬似ランダム関数（PRF）に使用されるハッシュ関数（（d）TLS 1.2）に等しくなります。エクスポートされた認証器は、（d）TLS PRFを使用していないTLS 1.2シファースーツと、関連するハッシュ関数を持たないTLS 1.3 cipherSuitesで使用することはできません。このハッシュは「認証機ハッシュ」と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid key synchronization attacks, Exported Authenticators MUST NOT be generated or accepted on (D)TLS 1.2 connections that did not negotiate the extended master secret extension [RFC7627].",
+      "ja": "主要な同期攻撃を回避するには、エクスポートされた認証器を（d）拡張マスターシークレットエクステンション[RFC7627]を交渉しなかった（d）TLS 1.2接続で生成または受け入れてはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Authenticator Construction",
+      "section_title": true,
+      "ja": "5.2. 認証機の構造"
+    },
+    {
+      "indent": 3,
+      "text": "An authenticator is formed from the concatenation of TLS 1.3 Certificate, CertificateVerify, and Finished messages [RFC8446]. These messages are encoded as TLS handshake messages, including length and type fields. They do not include any TLS record-layer framing and are not encrypted with a handshake or application-data key.",
+      "ja": "Authenticatorは、TLS 1.3証明書、CertificateVerify、および完成したメッセージ[RFC8446]の連結から形成されます。これらのメッセージは、長さや型フィールドを含むTLSハンドシェイクメッセージとしてエンコードされます。TLSレコードレイヤーフレーミングは含まれておらず、握手またはアプリケーションデータキーで暗号化されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "If the peer populating the certificate_request_context field in an authenticator's Certificate message has already created or correctly validated an authenticator with the same value, then no authenticator should be constructed. If there is no authenticator request, the extensions are chosen from those presented in the (D)TLS handshake's ClientHello. Only servers can provide an authenticator without a corresponding request.",
+      "ja": "Authenticatorの証明書メッセージでcertificate_Request_Contextフィールドを入力しているピアが、同じ値で認証器をすでに作成または正しく検証している場合、認証機を構築する必要はありません。Authenticatorリクエストがない場合、拡張機能は（d）TLSハンドシェイクのclienthelloで提示されたものから選択されます。対応するリクエストなしで認証器を提供できるサーバーのみが可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "ClientHello extensions are used to determine permissible extensions in the server's unsolicited Certificate message in order to follow the general model for extensions in (D)TLS in which extensions can only be included as part of a Certificate message if they were previously sent as part of a CertificateRequest message or ClientHello message. This ensures that the recipient will be able to process such extensions.",
+      "ja": "clienthello拡張機能は、（d）TLSの拡張機能の一般的なモデルに従うために、サーバーの未承諾の証明書メッセージの許容拡張機能を決定するために使用されます。certificaterequestメッセージまたはclienthelloメッセージ。これにより、受信者がそのような拡張機能を処理できるようになります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.1. Certificate",
+      "section_title": true,
+      "ja": "5.2.1. 証明書"
+    },
+    {
+      "indent": 3,
+      "text": "The Certificate message contains the identity to be used for authentication, such as the end-entity certificate and any supporting certificates in the chain. This structure is defined in Section 4.4.2 of [RFC8446].",
+      "ja": "証明書メッセージには、エンドエンティティ証明書やチェーン内のサポート証明書など、認証に使用されるIDが含まれています。この構造は、[RFC8446]のセクション4.4.2で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The Certificate message contains an opaque string called \"certificate_request_context\", which is extracted from the authenticator request, if present. If no authenticator request is provided, the certificate_request_context can be chosen arbitrarily; however, it MUST be unique within the scope of the connection and be unpredictable to the peer.",
+      "ja": "証明書メッセージには、「certificate_request_context」と呼ばれる不透明な文字列が含まれています。Authenticatorリクエストが提供されていない場合、certificate_request_contextを任意に選択できます。ただし、接続の範囲内で一意であり、ピアにとって予測不可能でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Certificates chosen in the Certificate message MUST conform to the requirements of a Certificate message in the negotiated version of (D)TLS. In particular, the entries of certificate_list MUST be valid for the signature algorithms indicated by the peer in the \"signature_algorithms\" and \"signature_algorithms_cert\" extensions, as described in Section 4.2.3 of [RFC8446] for (D)TLS 1.3 or in Sections 7.4.2 and 7.4.6 of [RFC5246] for (D)TLS 1.2.",
+      "ja": "証明書メッセージで選択された証明書は、（d）TLSのネゴシエートバージョンの証明書メッセージの要件に準拠する必要があります。特に、certificate_listのエントリは、「signature_algorithms」および「signature_algorithms_cert」拡張機能のピアによって示される署名アルゴリズムに対して有効でなければなりません。（d）TLS 1.2の[RFC5246]の.2および7.4.6。"
+    },
+    {
+      "indent": 3,
+      "text": "In addition to \"signature_algorithms\" and \"signature_algorithms_cert\", the \"server_name\" [RFC6066], \"certificate_authorities\" (Section 4.2.4 of [RFC8446]), and \"oid_filters\" (Section 4.2.5 of [RFC8446]) extensions are used to guide certificate selection.",
+      "ja": "「signature_algorithms」および「signature_algorithms_cert」、「server_name」[rfc6066]、「certificate_authorities」（[rfc8446]のセクション4.2.4）、および「oid_filters」（rfc846]のセクション4.2.5）に加えて、拡張は使用されます。証明書の選択をガイドする。"
+    },
+    {
+      "indent": 3,
+      "text": "Only the X.509 certificate type defined in [RFC8446] is supported. Alternative certificate formats such as Raw Public Keys as described in [RFC7250] are not supported in this version of the specification and their use in this context has not yet been analyzed.",
+      "ja": "[RFC8446]で定義されたX.509証明書タイプのみがサポートされています。[RFC7250]で説明されている生の公開キーなどの代替証明書形式は、このバージョンの仕様ではサポートされておらず、このコンテキストでの使用はまだ分析されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "If an authenticator request was provided, the Certificate message MUST contain only extensions present in the authenticator request. Otherwise, the Certificate message MUST contain only extensions present in the (D)TLS ClientHello. Unrecognized extensions in the authenticator request MUST be ignored.",
+      "ja": "Authenticatorリクエストが提供された場合、証明書メッセージには、Authenticatorリクエストに存在する拡張機能のみを含める必要があります。それ以外の場合、証明書メッセージには（d）TLS clienthelloに存在する拡張機能のみを含める必要があります。認証機リクエストの認識されていない拡張機能は無視する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.2. CertificateVerify",
+      "section_title": true,
+      "ja": "5.2.2. cermostverify"
+    },
+    {
+      "indent": 3,
+      "text": "This message is used to provide explicit proof that an endpoint possesses the private key corresponding to its identity. The format of this message is taken from TLS 1.3:",
+      "ja": "このメッセージは、エンドポイントがそのアイデンティティに対応する秘密鍵を持っていることを明示的に証明するために使用されます。このメッセージの形式は、TLS 1.3から取得されます。"
+    },
+    {
+      "indent": 6,
+      "text": "struct {\n   SignatureScheme algorithm;\n   opaque signature<0..2^16-1>;\n} CertificateVerify;",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm field specifies the signature algorithm used (see Section 4.2.3 of [RFC8446] for the definition of this field). The signature is a digital signature using that algorithm.",
+      "ja": "アルゴリズムフィールドは、使用される署名アルゴリズムを指定します（このフィールドの定義については、[RFC8446]のセクション4.2.3を参照）。署名は、そのアルゴリズムを使用したデジタル署名です。"
+    },
+    {
+      "indent": 3,
+      "text": "The signature scheme MUST be a valid signature scheme for TLS 1.3. This excludes all RSASSA-PKCS1-v1_5 algorithms and combinations of Elliptic Curve Digital Signature Algorithm (ECDSA) and hash algorithms that are not supported in TLS 1.3.",
+      "ja": "署名スキームは、TLS 1.3の有効な署名スキームでなければなりません。これは、TLS 1.3でサポートされていない楕円曲線デジタル署名アルゴリズム（ECDSA）およびハッシュアルゴリズムのすべてのRSASSA-PKCS1-V1_5アルゴリズムと組み合わせを除外します。"
+    },
+    {
+      "indent": 3,
+      "text": "If an authenticator request is present, the signature algorithm MUST be chosen from one of the signature schemes present in the \"signature_algorithms\" extension of the authenticator request. Otherwise, with spontaneous server authentication, the signature algorithm used MUST be chosen from the \"signature_algorithms\" sent by the peer in the ClientHello of the (D)TLS handshake. If there are no available signature algorithms, then no authenticator should be constructed.",
+      "ja": "Authenticatorリクエストが存在する場合、署名アルゴリズムは、Authenticatorリクエストの「signature_algorithms」拡張に存在する署名スキームの1つから選択する必要があります。それ以外の場合、自発的なサーバー認証を使用して、使用される署名アルゴリズムは、（d）TLSハンドシェイクのクライアントヘロでピアが送信した「signature_algorithms」から選択する必要があります。利用可能な署名アルゴリズムがない場合は、認証器を構築する必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The signature is computed using the chosen signature scheme over the concatenation of:",
+      "ja": "署名は、以下の連結に関する選択された署名スキームを使用して計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* a string that consists of octet 32 (0x20) repeated 64 times,",
+      "ja": "* 64回繰り返されるオクテット32（0x20）で構成される文字列、"
+    },
+    {
+      "indent": 3,
+      "text": "* the context string \"Exported Authenticator\" (which is not NUL-terminated),",
+      "ja": "* コンテキスト文字列「Export Authenticator」（Null-Terminatedではありません）、"
+    },
+    {
+      "indent": 3,
+      "text": "* a single 0 octet that serves as the separator, and",
+      "ja": "* セパレーターとして機能する単一の0オクテット、そして"
+    },
+    {
+      "indent": 3,
+      "text": "* the hashed authenticator transcript.",
+      "ja": "* ハッシュされた認証因子トランスクリプト。"
+    },
+    {
+      "indent": 3,
+      "text": "The authenticator transcript is the hash of the concatenated Handshake Context, authenticator request (if present), and Certificate message:",
+      "ja": "認証器のトランスクリプトは、連結された握手コンテキスト、認証機リクエスト（存在する場合）、および証明書メッセージのハッシュです。"
+    },
+    {
+      "indent": 3,
+      "text": "Hash(Handshake Context || authenticator request || Certificate)",
+      "ja": "ハッシュ（ハンドシェイクコンテキスト||認証者リクエスト||証明書）"
+    },
+    {
+      "indent": 3,
+      "text": "Where Hash is the authenticator hash defined in Section 5.1. If the authenticator request is not present, it is omitted from this construction, i.e., it is zero-length.",
+      "ja": "ここで、ハッシュはセクション5.1で定義されている認証機ハッシュです。Authenticatorリクエストが存在しない場合、この構造から省略されます。つまり、ゼロ長です。"
+    },
+    {
+      "indent": 3,
+      "text": "If the party that generates the authenticator does so with a different connection than the party that is validating it, then the Handshake Context will not match, resulting in a CertificateVerify message that does not validate. This includes situations in which the application data is sent via TLS-terminating proxy. Given a failed CertificateVerify validation, it may be helpful for the application to confirm that both peers share the same connection using a value derived from the connection secrets (such as the Handshake Context) before taking a user-visible action.",
+      "ja": "認証者を生成する当事者がそれを検証している当事者とは異なる接続でそうする場合、握手のコンテキストは一致しないため、検証されていないCertimateVerifyメッセージが生じます。これには、アプリケーションデータがTLS終了プロキシを介して送信される状況が含まれます。失敗したCertifativeVerify検証があれば、ユーザーに可視アクションを実行する前に、接続シークレット（ハンドシェイクコンテキストなど）から派生した値を使用して両方のピアが同じ接続を共有していることをアプリケーションが確認することが役立つ場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.3. Finished",
+      "section_title": true,
+      "ja": "5.2.3. 終了した"
+    },
+    {
+      "indent": 3,
+      "text": "An HMAC [HMAC] over the hashed authenticator transcript is the concatenation of the Handshake Context, authenticator request (if present), Certificate, and CertificateVerify. The HMAC is computed using the authenticator hash, using the Finished MAC Key as a key.",
+      "ja": "ハッシュされた認証因子トランスクリプトを介したHMAC [HMAC]は、ハンドシェイクコンテキスト、認証因子要求（存在する場合）、証明書、および証明書の連結です。HMACは、完成したMacキーをキーとして使用して、Authenticator Hashを使用して計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Finished = HMAC(Finished MAC Key, Hash(Handshake Context || authenticator request || Certificate || CertificateVerify))",
+      "ja": "finited = hmac（完成MACキー、ハッシュ（ハンドシェイクコンテキスト||認証者リクエスト||証明書||証明書verify））"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.4. Authenticator Creation",
+      "section_title": true,
+      "ja": "5.2.4. 認証機の作成"
+    },
+    {
+      "indent": 3,
+      "text": "An endpoint constructs an authenticator by serializing the Certificate, CertificateVerify, and Finished as TLS handshake messages and concatenating the octets:",
+      "ja": "エンドポイントは、証明書をシリアル化し、証明書verifyを作成し、TLSハンドシェイクメッセージとして完成し、オクテットを連結することにより認証器を構築します。"
+    },
+    {
+      "indent": 3,
+      "text": "Certificate || CertificateVerify || Finished",
+      "ja": "証明書||CertimationVerify ||終了した"
+    },
+    {
+      "indent": 3,
+      "text": "An authenticator is valid if the CertificateVerify message is correctly constructed given the authenticator request (if used) and the Finished message matches the expected value. When validating an authenticator, constant-time comparisons SHOULD be used for signature and MAC validation.",
+      "ja": "Authenticatorリクエスト（使用されている場合）を考慮して、CertimateVerifyメッセージが正しく構築され、完成したメッセージが期待値と一致する場合、Authenticatorは有効です。認証器を検証する場合、署名とMACの検証には一定の時間比較を使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Empty Authenticator",
+      "section_title": true,
+      "ja": "6. 空の認証器"
+    },
+    {
+      "indent": 3,
+      "text": "If, given an authenticator request, the endpoint does not have an appropriate identity or does not want to return one, it constructs an authenticated refusal called an \"empty authenticator\". This is a Finished message sent without a Certificate or CertificateVerify. This message is an HMAC over the hashed authenticator transcript with a Certificate message containing no CertificateEntries and the CertificateVerify message omitted. The HMAC is computed using the authenticator hash, using the Finished MAC Key as a key. This message is encoded as a TLS handshake message, including length and type field. It does not include TLS record-layer framing and is not encrypted with a handshake or application-data key.",
+      "ja": "認証機のリクエストが与えられた場合、エンドポイントに適切なアイデンティティがないか、それを返したくない場合、「空の認証者」と呼ばれる認証された拒否を構築します。これは、証明書またはcortermyverifyなしで送信された完成したメッセージです。このメッセージは、証明書が省略されていない証明書メッセージを含む証明書メッセージを備えたハッシュされた認証因子トランスクリプトを介したHMACです。HMACは、完成したMacキーをキーとして使用して、Authenticator Hashを使用して計算されます。このメッセージは、長さと型フィールドを含むTLSハンドシェイクメッセージとしてエンコードされています。TLSレコード層フレーミングは含まれておらず、握手またはアプリケーションデータキーで暗号化されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Finished = HMAC(Finished MAC Key, Hash(Handshake Context || authenticator request || Certificate))",
+      "ja": "finited = hmac（完成MACキー、ハッシュ（ハンドシェイクコンテキスト||認証要求||証明書））"
+    },
+    {
+      "indent": 0,
+      "text": "7. API Considerations",
+      "section_title": true,
+      "ja": "7. APIの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The creation and validation of both authenticator requests and authenticators SHOULD be implemented inside the (D)TLS library even if it is possible to implement it at the application layer. (D)TLS implementations supporting the use of Exported Authenticators SHOULD provide application programming interfaces by which clients and servers may request and verify Exported Authenticator messages.",
+      "ja": "Authenticator RequestsとAuthenticatorの両方の作成と検証は、アプリケーションレイヤーに実装できる場合でも、（d）TLSライブラリ内に実装する必要があります。（d）エクスポートされた認証機の使用をサポートするTLS実装では、クライアントとサーバーがエクスポートされた認証装置メッセージを要求および検証できるアプリケーションプログラミングインターフェイスを提供する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Notwithstanding the success conditions described below, all APIs MUST fail if:",
+      "ja": "以下で説明する成功条件にもかかわらず、すべてのAPIが失敗する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* the connection uses a (D)TLS version of 1.1 or earlier, or",
+      "ja": "* 接続は、1.1以前の（d）TLSバージョンを使用するか、"
+    },
+    {
+      "indent": 3,
+      "text": "* the connection is (D)TLS 1.2 and the extended master secret extension [RFC7627] was not negotiated",
+      "ja": "* 接続は（d）TLS 1.2であり、拡張マスターシークレットエクステンション[RFC7627]は交渉されませんでした"
+    },
+    {
+      "indent": 3,
+      "text": "The following sections describe APIs that are considered necessary to implement Exported Authenticators. These are informative only.",
+      "ja": "次のセクションでは、エクスポートされた認証器を実装するために必要と思われるAPIについて説明します。これらは有益です。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. The \"request\" API",
+      "section_title": true,
+      "ja": "7.1. 「リクエスト」API"
+    },
+    {
+      "indent": 3,
+      "text": "The \"request\" API takes as input:",
+      "ja": "「リクエスト」APIは入力として取得します："
+    },
+    {
+      "indent": 3,
+      "text": "* certificate_request_context (from 0 to 255 octets)",
+      "ja": "* certificate_request_context（0〜255オクテット）"
+    },
+    {
+      "indent": 3,
+      "text": "* the set of extensions to include (this MUST include signature_algorithms) and the contents thereof",
+      "ja": "* 拡張機能のセットを含む（これにはsignature_algorithmsを含める必要があります）とその内容"
+    },
+    {
+      "indent": 3,
+      "text": "It returns an authenticator request, which is a sequence of octets that comprises a CertificateRequest or ClientCertificateRequest message.",
+      "ja": "Authenticatorリクエストを返します。これは、CertificateRequestまたはClientCertificAterequestメッセージを含むOctetsのシーケンスです。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. The \"get context\" API",
+      "section_title": true,
+      "ja": "7.2. 「コンテキストを取得」API"
+    },
+    {
+      "indent": 3,
+      "text": "The \"get context\" API takes as input:",
+      "ja": "「get context」APIは入力として取得します。"
+    },
+    {
+      "indent": 3,
+      "text": "* authenticator or authenticator request",
+      "ja": "* AuthenticatorまたはAuthenticatorリクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "It returns the certificate_request_context.",
+      "ja": "certificate_request_contextを返します。"
+    },
+    {
+      "indent": 0,
+      "text": "7.3. The \"authenticate\" API",
+      "section_title": true,
+      "ja": "7.3. 「認証」API"
+    },
+    {
+      "indent": 3,
+      "text": "The \"authenticate\" API takes as input:",
+      "ja": "「認証」APIは入力として取得されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* a reference to the initial connection",
+      "ja": "* 初期接続への参照"
+    },
+    {
+      "indent": 3,
+      "text": "* an identity, such as a set of certificate chains and associated extensions (OCSP [RFC6960], SCT [RFC6962] (obsoleted by [RFC9162]), etc.)",
+      "ja": "* 証明書チェーンのセットや関連する拡張（OCSP [RFC6960]、SCT [RFC6962]（[RFC9162]で廃止）などのアイデンティティ。"
+    },
+    {
+      "indent": 3,
+      "text": "* a signer (either the private key associated with the identity or the interface to perform private key operations) for each chain",
+      "ja": "* 各チェーンの署名者（IDに関連付けられている秘密鍵または秘密鍵操作を実行するためのインターフェイスのいずれか）"
+    },
+    {
+      "indent": 3,
+      "text": "* an authenticator request or certificate_request_context (from 0 to 255 octets)",
+      "ja": "* Authenticator Requestまたはcertifartion_request_context（0〜255オクテット）"
+    },
+    {
+      "indent": 3,
+      "text": "It returns either the authenticator or an empty authenticator as a sequence of octets. It is RECOMMENDED that the logic for selecting the certificates and extensions to include in the exporter be implemented in the TLS library. Implementing this in the TLS library lets the implementer take advantage of existing extension and certificate selection logic, and the implementer can more easily remember which extensions were sent in the ClientHello.",
+      "ja": "オクテットのシーケンスとして、認証器または空の認証器のいずれかを返します。Exporterに含める証明書と拡張機能を選択するためのロジックをTLSライブラリに実装することをお勧めします。TLSライブラリでこれを実装することにより、実装者は既存の拡張機能と証明書の選択ロジックを利用でき、実装者はclienthelloでどの拡張機能が送信されたかをより簡単に覚えることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "It is also possible to implement this API outside of the TLS library using TLS exporters. This may be preferable in cases where the application does not have access to a TLS library with these APIs or when TLS is handled independently of the application-layer protocol.",
+      "ja": "TLS輸出業者を使用してTLSライブラリの外にこのAPIを実装することもできます。これは、アプリケーションがこれらのAPIを使用してTLSライブラリにアクセスできない場合、またはアプリケーション層プロトコルとは独立してTLSが処理される場合に望ましい場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.4. The \"validate\" API",
+      "section_title": true,
+      "ja": "7.4. 「検証」API"
+    },
+    {
+      "indent": 3,
+      "text": "The \"validate\" API takes as input:",
+      "ja": "「検証」APIは入力として取得します。"
+    },
+    {
+      "indent": 3,
+      "text": "* a reference to the initial connection",
+      "ja": "* 初期接続への参照"
+    },
+    {
+      "indent": 3,
+      "text": "* an optional authenticator request",
+      "ja": "* オプションの認証要求リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "* an authenticator",
+      "ja": "* 認証者"
+    },
+    {
+      "indent": 3,
+      "text": "* a function for validating a certificate chain",
+      "ja": "* 証明書チェーンを検証するための関数"
+    },
+    {
+      "indent": 3,
+      "text": "It returns a status to indicate whether or not the authenticator is valid after applying the function for validating the certificate chain to the chain contained in the authenticator. If validation is successful, it also returns the identity, such as the certificate chain and its extensions.",
+      "ja": "ステータスを返して、認証チェーンを検証するための機能を適用した後に認証器が有効であるかどうかを示します。検証が成功した場合、証明書チェーンやその拡張などのアイデンティティも返します。"
+    },
+    {
+      "indent": 3,
+      "text": "The API should return a failure if the certificate_request_context of the authenticator was used in a different authenticator that was previously validated. Well-formed empty authenticators are returned as invalid.",
+      "ja": "APIは、以前に検証された別の認証機で使用されているcertificate_request_contextが使用された場合、障害を返す必要があります。整形式の空の認証器は無効として返されます。"
+    },
+    {
+      "indent": 3,
+      "text": "When validating an authenticator, constant-time comparison should be used.",
+      "ja": "認証器を検証する場合は、一定の時間比較を使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Update of the TLS ExtensionType Registry",
+      "section_title": true,
+      "ja": "8.1. TLS ExtensionTypeレジストリの更新"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has updated the entry for server_name(0) in the \"TLS ExtensionType Values\" registry [IANA-TLS] (defined in [RFC8446]) by replacing the value in the \"TLS 1.3\" column with the value \"CH, EE, CR\" and listing this document in the \"Reference\" column.",
+      "ja": "IANAは、「TLS ExtensionType値」レジストリ[IANA-TLS]（[RFC8446]で定義）のserver_name（0）のエントリを更新しました。「このドキュメントを「参照」列にリストします。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has also added the following note to the registry:",
+      "ja": "IANAはまた、次のメモをレジストリに追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "|  The addition of the \"CR\" to the \"TLS 1.3\" column for the\n|  server_name(0) extension only marks the extension as valid in a\n|  ClientCertificateRequest created as part of client-generated\n|  authenticator requests.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Update of the TLS Exporter Labels Registry",
+      "section_title": true,
+      "ja": "8.2. TLS Exporter Labelsレジストリの更新"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following entries to the \"TLS Exporter Labels\" registry [IANA-EXPORT] (defined in [RFC5705]): \"EXPORTER-client authenticator handshake context\", \"EXPORTER-server authenticator handshake context\", \"EXPORTER-client authenticator finished key\" and \"EXPORTER-server authenticator finished key\" with \"DTLS-OK\" and \"Recommended\" set to \"Y\" and this document listed as the reference.",
+      "ja": "IANAは、「TLS輸出業者ラベル」レジストリ[IANA-Export]（[RFC5705]で定義）に次のエントリを追加しました。「dtls-ok」と「推奨」セットを「y」に設定し、このドキュメントが参照としてリストされている「dtls-ok」と「推奨」を備えた「exporter-server Autherver Authenticator finite key」が完成しました。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Update of the TLS HandshakeType Registry",
+      "section_title": true,
+      "ja": "8.3. TLS HandShakeTypeレジストリの更新"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following entry to the \"TLS HandshakeType\" registry [IANA-HANDSHAKE] (defined in [RFC8446]): \"client_certificate_request\" (17) with \"DTLS-OK\" set to \"Y\" and this document listed as the reference. In addition, the following appears in the \"Comment\" column:",
+      "ja": "IANAは、「TLS HandShakeType」レジストリ[IANAハンドシェイク]（[RFC8446]で定義）に次のエントリを追加しました：「client_certificate_request」（17）が「y」に設定されており、このドキュメントは参照としてリストされています。さらに、「コメント」列に次のように表示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "| Used in TLS versions prior to 1.3.",
+      "ja": "|1.3より前のTLSバージョンで使用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9. セキュリティ上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The Certificate/Verify/Finished pattern intentionally looks like the TLS 1.3 pattern that now has been analyzed several times. For example, [SIGMAC] presents a relevant framework for analysis, and Appendix E.1.6 of [RFC8446] contains a comprehensive set of references.",
+      "ja": "証明書/検証/完成パターンは、意図的に数回分析されているTLS 1.3パターンのように見えます。たとえば、[Sigmac]は分析に関連するフレームワークを提示し、[RFC8446]の付録E.1.6には包括的な参照セットが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Authenticators are independent and unidirectional. There is no explicit state change inside TLS when an authenticator is either created or validated. The application in possession of a validated authenticator can rely on any semantics associated with data in the certificate_request_context.",
+      "ja": "認証者は独立しており、一方向です。Authenticatorが作成または検証されている場合、TLS内に明示的な状態変更はありません。検証済みの認証装置を所有するアプリケーションは、certificate_request_contextのデータに関連付けられたセマンティクスに依存できます。"
+    },
+    {
+      "indent": 3,
+      "text": "* This property makes it difficult to formally prove that a server is jointly authoritative over multiple identities, rather than individually authoritative over each.",
+      "ja": "* このプロパティにより、サーバーは、それぞれよりも個別に権威あるものではなく、複数のアイデンティティに対して共同で権威あることを正式に証明することが困難です。"
+    },
+    {
+      "indent": 3,
+      "text": "* There is no indication in (D)TLS about which point in time an authenticator was computed. Any feedback about the time of creation or validation of the authenticator should be tracked as part of the application-layer semantics if required.",
+      "ja": "* （d）TLSには、認証器が計算された時点についての兆候はありません。認証器の作成または検証の時間に関するフィードバックは、必要に応じてアプリケーション層セマンティクスの一部として追跡する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The signatures generated with this API cover the context string \"Exported Authenticator\"; therefore, they cannot be transplanted into other protocols.",
+      "ja": "このAPIで生成された署名は、コンテキスト文字列「エクスポートされたAuthenticator」をカバーします。したがって、他のプロトコルに移植することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "In TLS 1.3, the client cannot explicitly learn from the TLS layer whether its Finished message was accepted. Because the application traffic keys are not dependent on the client's final flight, receiving messages from the server does not prove that the server received the client's Finished message. To avoid disagreement between the client and server on the authentication status of Exported Authenticators, servers MUST verify the client Finished message before sending an EA or processing a received Exported Authenticator.",
+      "ja": "TLS 1.3では、クライアントは、完成したメッセージが受け入れられたかどうかをTLSレイヤーから明示的に学習できません。アプリケーショントラフィックキーはクライアントの最終フライトに依存していないため、サーバーからメッセージを受信しても、サーバーがクライアントの完成したメッセージを受信したことは証明されません。エクスポートされた認証機の認証ステータスに関するクライアントとサーバー間の意見の不一致を回避するには、サーバーはEAを送信する前にクライアントの完成メッセージを確認するか、受信したエクスポート認証器を処理する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[HMAC] Krawczyk, H., Bellare, M., and R. Canetti, \"HMAC: Keyed-Hashing for Message Authentication\", RFC 2104, DOI 10.17487/RFC2104, February 1997, <https://www.rfc-editor.org/info/rfc2104>.",
+      "ja": "[HMAC] Krawczyk、H.、Bellare、M。、およびR. Canetti、「HMAC：メッセージ認証のためのキー付きハッシング」、RFC 2104、DOI 10.17487/RFC2104、1997年2月、<https：//www.rfc-editor.org/info/rfc2104>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5246] Dierks, T. and E. Rescorla, \"The Transport Layer Security (TLS) Protocol Version 1.2\", RFC 5246, DOI 10.17487/RFC5246, August 2008, <https://www.rfc-editor.org/info/rfc5246>.",
+      "ja": "[RFC5246] Dierks、T。およびE. Rescorla、「The Transport Layer Security（TLS）Protocolバージョン1.2」、RFC 5246、DOI 10.17487/RFC5246、2008年8月、<https://www.rfc-editor.org/info/RFC5246>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5705] Rescorla, E., \"Keying Material Exporters for Transport Layer Security (TLS)\", RFC 5705, DOI 10.17487/RFC5705, March 2010, <https://www.rfc-editor.org/info/rfc5705>.",
+      "ja": "[RFC5705] Rescorla、E。、「輸送層のセキュリティ（TLS）のためのキーキーリングマテリアル輸出業者」、RFC 5705、DOI 10.17487/RFC5705、2010年3月、<https://www.rfc-editor.org/info/rfc5705>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6066] Eastlake 3rd, D., \"Transport Layer Security (TLS) Extensions: Extension Definitions\", RFC 6066, DOI 10.17487/RFC6066, January 2011, <https://www.rfc-editor.org/info/rfc6066>.",
+      "ja": "[RFC6066] EastLake 3rd、D。、「輸送層セキュリティ（TLS）拡張：拡張定義」、RFC 6066、DOI 10.17487/RFC6066、2011年1月、<https://www.rfc-editor.org/info/RFC6066>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6347] Rescorla, E. and N. Modadugu, \"Datagram Transport Layer Security Version 1.2\", RFC 6347, DOI 10.17487/RFC6347, January 2012, <https://www.rfc-editor.org/info/rfc6347>.",
+      "ja": "[RFC6347] Rescorla、E。およびN. Modadugu、「データグラムトランスポートレイヤーセキュリティバージョン1.2」、RFC 6347、DOI 10.17487/RFC6347、2012年1月、<https://www.rfc-editor.org/info/rfc6347>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7627] Bhargavan, K., Ed., Delignat-Lavaud, A., Pironti, A., Langley, A., and M. Ray, \"Transport Layer Security (TLS) Session Hash and Extended Master Secret Extension\", RFC 7627, DOI 10.17487/RFC7627, September 2015, <https://www.rfc-editor.org/info/rfc7627>.",
+      "ja": "[RFC7627] Bhargavan、K.、Ed。、Delignat-Lavaud、A.、Pironti、A.、Langley、A.、およびM. Ray、「Transport Layer Security（TLS）セッションハッシュおよび拡張マスターシークレットエクステンション」、RFC7627、doi 10.17487/rfc7627、2015年9月、<https://www.rfc-editor.org/info/rfc7627>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8446] Rescorla, E., \"The Transport Layer Security (TLS) Protocol Version 1.3\", RFC 8446, DOI 10.17487/RFC8446, August 2018, <https://www.rfc-editor.org/info/rfc8446>.",
+      "ja": "[RFC8446] Rescorla、E。、「輸送層セキュリティ（TLS）プロトコルバージョン1.3」、RFC 8446、DOI 10.17487/RFC8446、2018年8月、<https://www.rfc-editor.org/info/rfc846>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8447] Salowey, J. and S. Turner, \"IANA Registry Updates for TLS and DTLS\", RFC 8447, DOI 10.17487/RFC8447, August 2018, <https://www.rfc-editor.org/info/rfc8447>.",
+      "ja": "[RFC8447] Salowey、J。およびS. Turner、「TLSおよびDTLSのIANAレジストリの更新」、RFC 8447、DOI 10.17487/RFC8447、2018年8月、<https://www.rfc-editor.org/info/rfc8447>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9147] Rescorla, E., Tschofenig, H., and N. Modadugu, \"The Datagram Transport Layer Security (DTLS) Protocol Version 1.3\", RFC 9147, DOI 10.17487/RFC9147, April 2022, <https://www.rfc-editor.org/info/rfc9147>.",
+      "ja": "[RFC9147] Rescorla、E.、Tschofenig、H。、およびN. Modadugu、「データグラム輸送層セキュリティ（DTLS）プロトコルバージョン1.3」、RFC 9147、DOI 10.17487/RFC9147、2022年4月、<https：// www。rfc-editor.org/info/rfc9147>。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA-EXPORT] IANA, \"TLS Exporter Labels\", <https://www.iana.org/assignments/tls-parameters/>.",
+      "ja": "[IANA-Export] IANA、「TLS Exporter Labels」、<https://www.iana.org/assignments/tls-parameters/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA-HANDSHAKE] IANA, \"TLS HandshakeType\", <https://www.iana.org/assignments/tls-parameters/>.",
+      "ja": "[Iana Handshake] iana、 \"tls handshaketype\"、<https://www.iana.org/assignments/tls-parameters/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA-TLS] IANA, \"TLS ExtensionType Values\", <https://www.iana.org/assignments/tls-extensiontype-values/>.",
+      "ja": "[iana-tls] iana、 \"tls extensionType値\"、<https://www.iana.org/assignments/tls-extiontype-values/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6960] Santesson, S., Myers, M., Ankney, R., Malpani, A., Galperin, S., and C. Adams, \"X.509 Internet Public Key Infrastructure Online Certificate Status Protocol - OCSP\", RFC 6960, DOI 10.17487/RFC6960, June 2013, <https://www.rfc-editor.org/info/rfc6960>.",
+      "ja": "[RFC6960] Santesson、S.、Myers、M.、Ankney、R.、Malpani、A.、Galperin、S.、およびC. Adams、 \"x.509インターネット公開キーインフラオンライン証明書ステータスプロトコル-OCSP\"、RFC6960、doi 10.17487/rfc6960、2013年6月、<https://www.rfc-editor.org/info/rfc6960>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6962] Laurie, B., Langley, A., and E. Kasper, \"Certificate Transparency\", RFC 6962, DOI 10.17487/RFC6962, June 2013, <https://www.rfc-editor.org/info/rfc6962>.",
+      "ja": "[RFC6962] Laurie、B.、Langley、A。、およびE. Kasper、「証明書の透明性」、RFC 6962、DOI 10.17487/RFC6962、2013年6月、<https://www.rfc-editor.org/info/RFC69622>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7250] Wouters, P., Ed., Tschofenig, H., Ed., Gilmore, J., Weiler, S., and T. Kivinen, \"Using Raw Public Keys in Transport Layer Security (TLS) and Datagram Transport Layer Security (DTLS)\", RFC 7250, DOI 10.17487/RFC7250, June 2014, <https://www.rfc-editor.org/info/rfc7250>.",
+      "ja": "[RFC7250] Wouters、P.、ed。、Tschofenig、H.、Ed。、Gilmore、J.、Weiler、S。、およびT. Kivinen、「TLAPERIER LAYER SECURET（TLS）およびDatagram Transport Layerの生の公共キーを使用するSecurity（DTLS） \"、RFC 7250、DOI 10.17487/RFC7250、2014年6月、<https://www.rfc-editor.org/info/rfc7250>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9001] Thomson, M., Ed. and S. Turner, Ed., \"Using TLS to Secure QUIC\", RFC 9001, DOI 10.17487/RFC9001, May 2021, <https://www.rfc-editor.org/info/rfc9001>.",
+      "ja": "[RFC9001] Thomson、M.、ed。and S. Turner、ed。、「TLSを使用してQUICを確保する」、RFC 9001、DOI 10.17487/RFC9001、2021年5月、<https://www.rfc-editor.org/info/rfc9001>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9113] Thomson, M., Ed. and C. Benfield, Ed., \"HTTP/2\", RFC 9113, DOI 10.17487/RFC9113, June 2022, <https://www.rfc-editor.org/info/rfc9113>.",
+      "ja": "[RFC9113] Thomson、M.、ed。and C. Benfield、ed。、「HTTP/2」、RFC 9113、DOI 10.17487/RFC9113、2022年6月、<https://www.rfc-editor.org/info/rfc9113>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9162] Laurie, B., Messeri, E., and R. Stradling, \"Certificate Transparency Version 2.0\", RFC 9162, DOI 10.17487/RFC9162, December 2021, <https://www.rfc-editor.org/info/rfc9162>.",
+      "ja": "[RFC9162] Laurie、B.、Messeri、E。、およびR. Stradling、「証明書透明性バージョン2.0」、RFC 9162、DOI 10.17487/RFC9162、2021年12月、<https://www.rfc-editor.org/info/rfc9162>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SIGMAC] Krawczyk, H., \"A Unilateral-to-Mutual Authentication Compiler for Key Exchange (with Applications to Client Authentication in TLS 1.3)\", Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communications Security, DOI 10.1145/2976749.2978325, August 2016, <https://eprint.iacr.org/2016/711.pdf>.",
+      "ja": "[Sigmac] Krawczyk、H。、「キー交換用の一方的な認証コンパイラ（TLS 1.3でのクライアント認証へのアプリケーションを使用）」、2016 ACM SIGSAC Conference on Computer and Communications Security、DOI 10.1145/2976749.298325、2016年8月、<https://eprint.iacr.org/2016/711.pdf>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Comments on this proposal were provided by Martin Thomson. Suggestions for Section 9 were provided by Karthikeyan Bhargavan.",
+      "ja": "この提案に関するコメントは、マーティン・トムソンによって提供されました。セクション9の提案は、Karthikeyan Bhargavanによって提供されました。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Nick Sullivan Cloudflare Inc. Email: nick@cloudflare.com",
+      "ja": "Nick Sullivan Cloudflare Inc.メール：nick@cloudflare.com"
+    }
+  ]
+}

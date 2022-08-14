@@ -8,7 +8,7 @@ rules = {
     "Status of This Memo": "本文書の状態",
 }
 
-def trans_replace():
+def trans_replace() -> None:
     for filename in glob.glob('data/*/rfc*-trans.json'):
         # print(filename)
 
