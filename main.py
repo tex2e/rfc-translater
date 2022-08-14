@@ -32,8 +32,8 @@ def main(rfc_number: int | str) -> None:
 
 def continuous_main(begin=None, end=None, only_first=False):
     numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
-    print('[+] diff_remote_and_local:')
-    print(numbers)
+    # print('[+] diff_remote_and_local:')
+    # print(numbers)
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
     elif begin:  # 開始のみ設定
