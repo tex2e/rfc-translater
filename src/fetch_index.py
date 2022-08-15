@@ -45,22 +45,41 @@ def fetch_remote_index() -> list[int]:
             content = m["content"]
 
             obj = {}
-            m = re.search(r'\(Obsoletes (?P<obsoletes>[^)]+)\)', content)
-            if m:
+            if m := re.search(r'\(Obsoletes (?P<obsoletes>[^)]+)\)', content):
                 obsoletes = list(map(get_rfc_number, m["obsoletes"].split(", ")))
                 obj["obsoletes"] = obsoletes
-            m = re.search(r'\(Obsoleted by (?P<obsoleted_by>[^)]+)\)', content)
-            if m:
+            if m := re.search(r'\(Obsoleted by (?P<obsoleted_by>[^)]+)\)', content):
                 obsoleted_by = list(map(get_rfc_number, m["obsoleted_by"].split(", ")))
                 obj["obsoleted_by"] = obsoleted_by
-            m = re.search(r'\(Updates (?P<updates>[^)]+)\)', content)
-            if m:
+            if m := re.search(r'\(Updates (?P<updates>[^)]+)\)', content):
                 updates = list(map(get_rfc_number, m["updates"].split(", ")))
                 obj["updates"] = updates
-            m = re.search(r'\(Updated by (?P<updated_by>[^)]+)\)', content)
-            if m:
+            if m := re.search(r'\(Updated by (?P<updated_by>[^)]+)\)', content):
                 updated_by = list(map(get_rfc_number, m["updated_by"].split(", ")))
                 obj["updated_by"] = updated_by
+            if m := re.search(re.compile(r'\(Status: (?P<status>[^)]+)\)'), content):
+                status = m['status']
+                status = re.sub(r'\s+', ' ', status)
+                if status == 'UNKNOWN':
+                    obj["status"] = 'Unknown'
+                if status == 'DRAFT':
+                    obj["status"] = 'Draft'
+                if status == 'INFORMATIONAL':
+                    obj["status"] = 'Informational'
+                if status == 'EXPERIMENTAL':
+                    obj["status"] = 'Experimental'
+                if status == 'BEST CURRENT PRACTICE':
+                    obj["status"] = 'Best Common Practice'
+                if status == 'PROPOSED STANDARD':
+                    obj["status"] = 'Proposed Standard'
+                if status == 'DRAFT STANDARD':
+                    obj["status"] = 'Draft Standard'
+                if status == 'INTERNET STANDARD':
+                    obj["status"] = 'Internet Standard'
+                if status == 'HISTORIC':
+                    obj["status"] = 'Historic'
+                if status == 'OBSOLETE':
+                    obj["status"] = 'Obsolete'
 
             # print(obj)
             data[rfc_number] = obj
