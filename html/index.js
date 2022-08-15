@@ -90,7 +90,10 @@ document.addEventListener('DOMContentLoaded', function () {
         let data = JSON.parse(httpRequest.responseText);
         let wg = data[rfc_number];
         if (wg) {
-          rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/wg/' + wg + '/documents/" class="badge badge-primary">' + wg + '</a>';
+          let tmp = wg.split('/'); // "wg/tls"
+          if (tmp.length >= 2) {
+            rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
+          }
         }
       }
     };
@@ -104,7 +107,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // console.log(m);
     if (m) {
       let wg = m.groups['wg_name'];
-      rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/wg/' + wg + '/documents/" class="badge badge-primary">' + wg + '</a>';
+      let tmp = wg.split('/'); // "wg/tls"
+      if (tmp.length >= 2) {
+        rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
+      }
     }
   }
 
