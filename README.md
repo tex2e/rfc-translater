@@ -102,12 +102,12 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 ### 動作環境
 Python3 + Selenium (FireFox) on Windows / MacOS / Ubuntu (headless)
 
-以下のライブラリがPythonでの実行に必要です。Windowsの場合は、py -m pip に読み替えてください。
+requests, lxml, beautifulsoup4, Mako, tqdm, seleniumなどのライブラリが実行に必要のためインストールしてください。Windowsの場合は、py -m pip に読み替えてください。
 ```
-pip3 install requests lxml beautifulsoup4 Mako tqdm selenium beautifulsoup4
+pip3 install -r requirements.txt
 ```
 
-さらに、以下のツールが実行に必要です。
+加えてSeleniumを動かすために以下のツールが実行に必要です。
 - **Windows**: FireFox のサイトから geckodriver.exe をダウンロードし、src/trans_rfc.py から呼び出せるように環境変数 WEBDRIVER_EXE_PATH に exe のパスを設定ください。
 - **Linux (Ubuntu)** の場合は、以下のパッケージをインストールください。
     ```
@@ -123,14 +123,14 @@ pip3 install requests lxml beautifulsoup4 Mako tqdm selenium beautifulsoup4
 #### 取得・翻訳・生成
 
 ```bash
-python3 main.py --rfc 1234         # RFC1234を翻訳する（取得+翻訳+HTML生成）
-python3 main.py --rfc 1234 --fetch # RFCの取得だけ
-python3 main.py --rfc 1234 --trans # RFCの翻訳だけ
-python3 main.py --rfc 1234 --make  # HTMLの生成だけ
-python3 main.py --begin 2220 --end 10000        # RFC2220〜10000を翻訳する
-python3 main.py --make --begin 2220 --end 10000 # RFC2220〜10000のHTMLを生成する
-python3 main.py                           # 未翻訳RFCを順番に翻訳する
-python3 main.py --begin 8000 --only-first # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
+python3 main.py --rfc 1234          # RFC1234を翻訳する（取得+翻訳+HTML生成）
+python3 main.py --rfc 1234 --fetch  # RFCの取得だけ
+python3 main.py --rfc 1234 --trans  # RFCの翻訳だけ
+python3 main.py --rfc 1234 --make   # HTMLの生成だけ
+python3 main.py --begin 2220 --end 10000         # RFC2220〜10000を翻訳する
+python3 main.py --make --begin 2220 --end 10000  # RFC2220〜10000のHTMLを生成する
+python3 main.py                            # 未翻訳RFCを順番に翻訳する
+python3 main.py --begin 8000 --only-first  # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
 ```
 
 生成物：
@@ -146,7 +146,7 @@ python3 main.py --begin 8000 --only-first # RFC8000以降の未翻訳RFCを1つ�
 #### トップページの生成
 
 ```bash
-python3 main.py --make-index # インデックスページの作成
+python3 main.py --make-index  # インデックスページの作成
 ```
 
 生成物：
@@ -161,6 +161,13 @@ python3 main.py --make-index # インデックスページの作成
 ```bash
 python3 -m http.server
 # localhost:8000/htmlにアクセス
+```
+
+### RFC Draft
+RFCドラフトを翻訳することもできます。
+```
+python3 main.py --draft draft-ietf-quic-v2-04  # 指定したRFCドラフトの翻訳
+python3 main.py --make-index-draft  # Draft版のインデックスページの作成
 ```
 
 ### その他
