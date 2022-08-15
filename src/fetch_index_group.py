@@ -7,45 +7,44 @@ import glob
 import json
 from pprint import pprint
 
-# ドラフトの一覧の保存先
-OUTPUT_DIR1  = "data/draft"
-OUTPUT_PATH1 = os.path.join(OUTPUT_DIR1, "drafts.json")
+# # ドラフトの一覧の保存先
+# OUTPUT_DIR1  = "data/draft"
+# OUTPUT_PATH1 = os.path.join(OUTPUT_DIR1, "drafts.json")
 
 # WorkingGroupのRFCの一覧の保存先
 OUTPUT_DIR2  = "html"
 OUTPUT_PATH2 = os.path.join(OUTPUT_DIR2, "group-rfcs.json")
 
-def fetch_index_wg() -> None:
+def fetch_index_group() -> None:
 
-    data_drafts = {}
+    # data_drafts = {}
     data_wg_rfcs = {}
 
     # Working Groupの一覧を取得
-    url = 'https://datatracker.ietf.org/wg/'
-    headers = {'User-agent': ''}
-    page = requests.get(url, headers, timeout=(36.2, 180))
-    ietf_wg = page.content.decode('utf-8')
-    working_groups = re.findall(r'<a href="/wg/([^/]+)/">', ietf_wg)
-    # pprint(working_groups)
+    working_group_list = []
+    working_group_list.append(('wg', get_working_groups(group='wg'))) # Working Groups
+    working_group_list.append(('rg', get_working_groups(group='rg'))) # Research Groups
+    print(working_group_list)
 
-    for working_group in working_groups:
-        draft_pathes, rfcs = get_draft_documents(working_group)
+    for group_name, working_groups in working_group_list:
+        for working_group in working_groups:
+            draft_pathes, rfcs = get_draft_documents(working_group, group=group_name)
 
-        # data/draft/drafts.json
-        data_drafts[working_group] = {}
-        data_drafts[working_group]['drafts'] = []
-        for draft in draft_pathes:
-            detail = get_draft_detail(draft)
-            data_drafts[working_group]['drafts'].append(detail)
+            # # data/draft/drafts.json
+            # data_drafts[working_group] = {}
+            # data_drafts[working_group]['drafts'] = []
+            # for draft in draft_pathes:
+            #     detail = get_draft_detail(draft)
+            #     data_drafts[working_group]['drafts'].append(detail)
 
-        # html/group-rfcs.json
-        for rfc in rfcs:
-            data_wg_rfcs[rfc] = working_group
+            # html/group-rfcs.json
+            for rfc in rfcs:
+                data_wg_rfcs[rfc] = f'{group_name}/{working_group}'
 
     # pprint(data_drafts)
 
-    with open(OUTPUT_PATH1, 'w', encoding="utf-8", newline="\n") as f:
-        json.dump(data_drafts, f, ensure_ascii=False, indent=2)
+    # with open(OUTPUT_PATH1, 'w', encoding="utf-8", newline="\n") as f:
+    #     json.dump(data_drafts, f, ensure_ascii=False, indent=2)
 
     with open(OUTPUT_PATH2, 'w', encoding="utf-8", newline="\n") as f:
         json.dump(data_wg_rfcs, f, ensure_ascii=False, indent=2)
@@ -53,10 +52,20 @@ def fetch_index_wg() -> None:
     return
 
 
+# Working Groupの一覧を取得
+def get_working_groups(group='wg') -> list[str]:
+    url = f'https://datatracker.ietf.org/{group}/'
+    headers = {'User-agent': ''}
+    page = requests.get(url, headers, timeout=(36.2, 180))
+    content = page.content.decode('utf-8')
+    working_groups = re.findall(rf'<a href="/{group}/([^/]+)/">', content)
+    return working_groups
+
 # WorkingGroupのDraftの一覧とRFCの一覧を取得
 # ex. https://datatracker.ietf.org/wg/tls/documents/
-def get_draft_documents(wg_name: str) -> (list[str], list[str]):
-    url = f'https://datatracker.ietf.org/wg/{wg_name}/documents/'
+# ex. https://datatracker.ietf.org/rg/cfrg/documents/
+def get_draft_documents(wg_name: str, group='wg') -> (list[str], list[str]):
+    url = f'https://datatracker.ietf.org/{group}/{wg_name}/documents/'
     print('[+] WorkingGroup:', wg_name)
     print('[+] url:', url)
     headers = {'User-agent': ''}
@@ -149,7 +158,12 @@ def diff_remote_and_local_index() -> list[int]:
 
 
 if __name__ == '__main__':
-    # print(fetch_index_wg())
+    # print(fetch_index_group())
+
+    # https://datatracker.ietf.org/rg/
+    res = get_working_groups(group='rg')
+    print(res)
+    assert 'cfrg' in res
 
     # https://datatracker.ietf.org/doc/draft-ietf-tls-hybrid-design/
     res = get_draft_detail('draft-ietf-tls-hybrid-design')
@@ -160,12 +174,19 @@ if __name__ == '__main__':
         'is_expired': True,
         'latest_version': '04'
     }
-    pprint(res)
+    print(res)
     assert res == exp
 
     # https://datatracker.ietf.org/wg/tls/documents/
     drafts, rfcs = get_draft_documents('tls')
-    pprint(drafts)
-    pprint(rfcs)
+    print(drafts)
+    print(rfcs)
     assert 'draft-ietf-tls-56-bit-ciphersuites' in drafts
     assert '2246' in rfcs
+
+    # https://datatracker.ietf.org/rg/cfrg/documents/
+    drafts, rfcs = get_draft_documents('cfrg', group='rg')
+    print(drafts)
+    print(rfcs)
+    assert 'draft-irtf-cfrg-rsa-blind-signatures' in drafts
+    assert '7539' in rfcs
