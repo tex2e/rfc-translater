@@ -1,5 +1,4 @@
 
-import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
@@ -13,7 +12,7 @@ def main(rfc_number: int | str) -> None:
 
     try:
         fetch_rfc(rfc_number)
-    except RFCNotFound as e:
+    except RFCNotFound:
         print('Exception: RFCNotFound!')
         filename = "html/rfc%s-not-found.html" % rfc_number
         with open(filename, "w") as f:
@@ -27,7 +26,8 @@ def main(rfc_number: int | str) -> None:
         return
 
     res = trans_rfc(rfc_number)
-    if res is False: return False
+    if res is False:
+        return False
     make_html(rfc_number)
 
 def continuous_main(begin=None, end=None, only_first=False):
@@ -46,6 +46,7 @@ def continuous_main(begin=None, end=None, only_first=False):
         res = main(rfc_number)
         if res is False:
             break
+
 
 if __name__ == '__main__':
     import argparse
@@ -128,7 +129,6 @@ if __name__ == '__main__':
             main(rfc)
     elif args.begin or args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
-        continuous_main(begin=args.begin, end=args.end, 
-                        only_first=args.only_first)
+        continuous_main(begin=args.begin, end=args.end, only_first=args.only_first)
     else:
         parser.print_help()

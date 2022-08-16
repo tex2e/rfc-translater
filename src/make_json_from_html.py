@@ -2,12 +2,11 @@
 import sys
 import re
 import json
-import codecs
-from datetime import datetime, timedelta, timezone
-JST = timezone(timedelta(hours=+9), 'JST')
 import textwrap
 from bs4 import BeautifulSoup
-from pprint import pprint
+# from pprint import pprint
+from datetime import datetime, timedelta, timezone
+JST = timezone(timedelta(hours=+9), 'JST')
 
 def make_json_from_html(rfc_number: int) -> None:
 
@@ -59,7 +58,6 @@ def make_json_from_html(rfc_number: int) -> None:
 
         # 文章のとき、indent-N というクラス名から、インデントレベル N を取得する
         if tag_name == 'p':
-            indent = 0
             for class_ in texts[0].attrs.get('class'):
                 if class_.startswith('indent-'):
                     row_data['indent'] = int(class_.replace('indent-', ''))

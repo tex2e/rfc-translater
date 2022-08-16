@@ -1,10 +1,8 @@
 
-# python src/make_index.py
-
 import os
 import re
 import glob
-from mako.template import Template
+# from mako.template import Template
 from mako.lookup import TemplateLookup
 
 def make_index() -> None:
@@ -23,7 +21,7 @@ def make_index() -> None:
         m = re.match(r'rfc(\d+).html', rfcfile)
         if m:
             filenum = int(m[1])
-            if filenum < 2220: # RFC 2220 以降を対象とする
+            if filenum < 2220:  # RFC 2220 以降を対象とする
                 continue
             files.append((filenum, rfcfile, title))
 

@@ -1,11 +1,11 @@
 
-from lxml import etree  # pip install lxml
+# from lxml import etree  # pip install lxml
 import requests
 import os
 import re
 import glob
 import json
-from pprint import pprint
+# from pprint import pprint
 
 # # ドラフトの一覧の保存先
 # OUTPUT_DIR1  = "data/draft"
@@ -22,8 +22,8 @@ def fetch_index_group() -> None:
 
     # Working Groupの一覧を取得
     working_group_list = []
-    working_group_list.append(('wg', get_working_groups(group='wg'))) # Working Groups
-    working_group_list.append(('rg', get_working_groups(group='rg'))) # Research Groups
+    working_group_list.append(('wg', get_working_groups(group='wg')))  # Working Groups
+    working_group_list.append(('rg', get_working_groups(group='rg')))  # Research Groups
     print(working_group_list)
 
     for group_name, working_groups in working_group_list:
@@ -151,8 +151,8 @@ def fetch_remote_draft_index() -> list[str]:
 def diff_remote_and_local_index() -> list[int]:
     # RFC Indexとローカルのhtml/のRFCの差分を作成する。
     # 返り値は、RFC番号の一覧
-    remote_index = fetch_remote_index()
-    local_index  = fetch_local_index()
+    remote_index = fetch_remote_draft_index()
+    local_index  = fetch_local_draft_index()
     diff_index = set(remote_index) - set(local_index)
     return diff_index
 
