@@ -1,11 +1,10 @@
 
-from lxml import html  # pip install lxml
 import requests
 import os
 import re
 import glob
 import json
-from pprint import pprint
+# from pprint import pprint
 
 OUTPUT_DIR  = "html"
 OUTPUT_PATH = os.path.join(OUTPUT_DIR, "obsoletes.json")
@@ -14,7 +13,7 @@ def fetch_remote_index() -> list[int]:
     # 発行されているRFCの番号の一覧をページから取得する
 
     url = 'https://www.ietf.org/download/rfc-index.txt'
-    headers = { 'User-agent': '', 'referer': url }
+    headers = {'User-agent': '', 'referer': url}
     page = requests.get(url, headers, timeout=(36.2, 180))
 
     # RFC INDEX の内容を抽出
@@ -35,8 +34,8 @@ def fetch_remote_index() -> list[int]:
 
     # pprint(rfcs)
 
-    rfc_numbers = [] # rfcの番号一覧
-    data = {} # 廃止・更新情報一覧
+    rfc_numbers = []  # rfcの番号一覧
+    data = {}  # 廃止・更新情報一覧
     for rfc in rfcs:
         m = re.match(r'^(?P<rfc>\d+) (?P<content>.+)$', rfc)
         if m:

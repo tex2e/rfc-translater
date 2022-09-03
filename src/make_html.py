@@ -2,7 +2,7 @@
 import os
 import re
 import json
-from mako.template import Template
+# from mako.template import Template
 from mako.lookup import TemplateLookup
 
 def make_html(rfc_number: int | str) -> None:
@@ -10,9 +10,9 @@ def make_html(rfc_number: int | str) -> None:
     # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
         is_draft = False
-        input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
+        input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
         input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
-        output_dir = f'html'
+        output_dir = 'html'
         output_file = f'{output_dir}/rfc{rfc_number}.html'
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
         is_draft = True
@@ -21,7 +21,7 @@ def make_html(rfc_number: int | str) -> None:
         rfc_draft_name = m['name']
         input_dir = f'data/draft/{working_group}'
         input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
-        output_dir = f'html/draft'
+        output_dir = 'html/draft'
         output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.html'
     else:
         raise RuntimeError(f"make_html: Unknown format number={rfc_number}")

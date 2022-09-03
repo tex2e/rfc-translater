@@ -5,10 +5,9 @@ import json
 import textwrap
 import requests
 from lxml import html
+# from pprint import pprint
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
-
-from pprint import pprint
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\n\x07\n'
@@ -38,9 +37,9 @@ class Paragraph:
         # コード・図表の判定
         self.is_code = is_code
         if not self.is_code:
-            self.is_code = (
-                not self._find_list_pattern(self.text)
-                and self._find_code_pattern(self.text))
+            self.is_code = \
+                not self._find_list_pattern(self.text) \
+                and self._find_code_pattern(self.text)
         # 箇条書き（複数行）の判定
         is_ul_li = False
         if not self.is_code:
@@ -49,16 +48,16 @@ class Paragraph:
                 # pprint(self.text)
 
         # 見出しの判定
-        self.is_section_title = (
-            self.indent <= 2 and
-            self._find_section_title_pattern(self.text))
+        self.is_section_title = \
+            self.indent <= 2 and \
+            self._find_section_title_pattern(self.text)
         # 目次の判定
         self.is_toc = self._find_toc_pattern(self.text)
         # 引用・注釈の判定
         if self._find_note(self.text):
             self.is_code = False  # 本文と見なす
             self.indent += 15  # 引用だとわかるように字下げする
-            self.text = self._convert_note_from_figure_to_text(self.text)  #「|  」の除去
+            self.text = self._convert_note_from_figure_to_text(self.text)  # 「|  」の除去
 
         # 複数に分類された時の優先順位: 目次 > セクション > 図やコード
         if self.is_toc:
@@ -101,10 +100,12 @@ class Paragraph:
 
     # 目次の判定
     def _find_toc_pattern(self, text: str) -> bool:
-        return (re.search(r'\.{6}|(?:\. ){6}', text) or
-               # 1. Introduction から始まって Authors' Addresses で終わるとき
-               (re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and
-                re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)))
+        cond1 = re.search(r'\.{6}|(?:\. ){6}', text)
+        # 1. Introduction から始まって Authors' Addresses で終わるとき
+        cond2 = \
+            re.search(r'\A\s*1\. +(?:Introduction|Overview)', text, re.MULTILINE) and \
+            re.search(r'Author(?:s\'|\'s) Address(?:es)?\s*\Z', text, re.MULTILINE)
+        return (cond1 or cond2)
 
     # 箇条書きなどの判定（1行）
     def _find_list_pattern(self, text: str) -> bool:
@@ -137,39 +138,42 @@ class Paragraph:
         if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
             return False
 
-        if (re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text)  # fig
-                or re.search(r'\.{4}|(?:\. ){4}', text)  # TOC
-                or text.find('+--') >= 0  # directory tree
-                or re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text)  # src
-                or re.search(r'(?:enum|struct) \{', text)  # tls
-                or re.search(r'\s::=\s', text)  # syntax
-                or re.search(r'": (?:[\[\{\"\']|true,|false,)', text)  # json
-                or re.search(r'= +[\[\(\{<*%#&]', text) # src, syntax
-                or len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2  # src
-                or len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2  # xml
-                or re.search(r'[/|\\] +[/|\\]', text)  # figure
-                or len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3  # table
-                or len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3  # table
-                or len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3  # syntax
-                or len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3  # syntax
-                or len(re.compile(r'^\s*\[', re.MULTILINE).findall(text)) >= 3  # syntax
-                or len(re.compile(r'\]\s*$', re.MULTILINE).findall(text)) >= 3  # syntax
-                or len(re.compile(r'^\s*:', re.MULTILINE).findall(text)) >= 3  # src
-                or len(re.compile(r'^\s*o ', re.MULTILINE).findall(text)) >= 4  # list
-                or re.match(r'^E[Mm]ail: ', text)  # Authors' Addresses
-                or re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text)  # hexdump
-                or re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text)  # hexdump
-                or re.search(r'[0-9a-zA-Z]{32,}$', text)  # hex
-                or re.search(r'" [\|/] "', text)  # BNF syntax
-                or re.match(r'^\s*[-\w\d]+\s+=\s+[-\w\d /]{1,40}$', text) # syntax
-                or re.match(r'^\s*[-\w\d]+\s+=\s+"[-\w\d ]{1,20}"$', text) # syntax
-                or re.search(r'^\s*[-\w\d]+\s+=\s+1\*.', text) # syntax
-                or len(re.compile(r'^\s*Content-Type:\s+[a-z]+/[a-z]+\s*$', re.MULTILINE).findall(text)) >= 1 # HTML
-                or len(re.compile(r'^\s*[SC]: ', re.MULTILINE).findall(text)) >= 2 # server-client
-                or len(re.compile(r'^\s*-- ', re.MULTILINE).findall(text)) >= 2 # syntax
-                or len(re.compile(r'^\s*[0-9a-f]0: ', re.MULTILINE).findall(text)) >= 3 # hexdump
-                or len(re.compile(r'^\s*(?:IN   |OUT  ).', re.MULTILINE).findall(text)) >= 2 # SNMP Dispatcher
-                ):
+        conds = []
+        conds.append(re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text))  # fig
+        conds.append(re.search(r'\.{4}|(?:\. ){4}', text))  # TOC
+        conds.append(text.find('+--') >= 0)  # directory tree
+        conds.append(re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text))  # src
+        conds.append(re.search(r'(?:enum|struct|object) \{', text))  # tls
+        conds.append(re.search(r'(?:HEADERS)\n\s*:[a-z]+ = ', text))  # http/2
+        conds.append(re.search(r'\s::=\s', text))  # syntax
+        conds.append(re.search(r'": (?:[\[\{\"\']|true,|false,)', text))  # json
+        conds.append(re.search(r'= +[\[\(\{<*%#&]', text))  # src, syntax
+        conds.append(len(re.compile(r'[{}]$', re.MULTILINE).findall(text)) >= 2)  # src
+        conds.append(len(re.compile(r'[;]$', re.MULTILINE).findall(text)) >= 3)  # src
+        conds.append(len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2)  # xml
+        conds.append(re.search(r'[/|\\] +[/|\\]', text))  # figure
+        conds.append(len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3)  # table
+        conds.append(len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3)  # table
+        conds.append(len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3)  # syntax
+        conds.append(len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3)  # syntax
+        conds.append(len(re.compile(r'^\s*\[', re.MULTILINE).findall(text)) >= 3)  # syntax
+        conds.append(len(re.compile(r'\]\s*$', re.MULTILINE).findall(text)) >= 3)  # syntax
+        conds.append(len(re.compile(r'^\s*:', re.MULTILINE).findall(text)) >= 3)  # src
+        conds.append(len(re.compile(r'^\s*o ', re.MULTILINE).findall(text)) >= 4)  # list
+        conds.append(re.match(r'^E[Mm]ail: ', text))  # Authors' Addresses
+        conds.append(re.search(r'(?:[0-9A-F]{2} ){8} (?:[0-9A-F]{2} ){7}[0-9A-F]{2}', text))  # hexdump
+        conds.append(re.search(r'000 {2,}(?:[0-9a-f]{2} ){16} ', text))  # hexdump
+        conds.append(re.search(r'[0-9a-zA-Z]{32,}$', text))  # hex
+        conds.append(re.search(r'" [\|/] "', text))  # BNF syntax
+        conds.append(re.match(r'^\s*[-\w\d]+\s+=\s+[-\w\d /]{1,40}$', text))  # syntax
+        conds.append(re.match(r'^\s*[-\w\d]+\s+=\s+"[-\w\d ]{1,20}"$', text))  # syntax
+        conds.append(re.search(r'^\s*[-\w\d]+\s+=\s+1\*.', text))  # syntax
+        conds.append(len(re.compile(r'^\s*Content-Type:\s+[a-z]+/[a-z]+\s*$', re.MULTILINE).findall(text)) >= 1)  # HTML
+        conds.append(len(re.compile(r'^\s*[SC]: ', re.MULTILINE).findall(text)) >= 2)  # server-client
+        conds.append(len(re.compile(r'^\s*-- ', re.MULTILINE).findall(text)) >= 2)  # syntax
+        conds.append(len(re.compile(r'^\s*[0-9a-f]0: ', re.MULTILINE).findall(text)) >= 3)  # hexdump
+        conds.append(len(re.compile(r'^\s*(?:IN   |OUT  ).', re.MULTILINE).findall(text)) >= 2)  # SNMP Dispatcher
+        if any(conds):
             return True
 
         # 数式やプログラムを検出する
@@ -178,9 +182,8 @@ class Paragraph:
         # (ただし、マイナスは直前に空白があることが条件)
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
-        if (len(re.findall(r'[~+*/=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold
-                and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)) # 文末が「.,:」ではない
-                ):
+        if len(re.findall(r'[~+*/=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold \
+                and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)):  # 文末が「.,:」ではない
             return True
         return False
 
@@ -202,6 +205,7 @@ class Paragraph:
     # 引用・注釈の正規表現
     REGEX_PATTERN_NOTE1 = r'\A(?:   ){0,3}\|  _?(?=[a-zA-Z0-9"\'\[\(])'     # 1行目〜L-1行目
     REGEX_PATTERN_NOTE2 = r'\A(?:   ){0,3}\|  (?=[a-zA-Z0-9"\'\[\(]).*\.$'  # L行目
+
     # 引用・注釈の判定
     def _find_note(self, text: str) -> bool:
         # 段落全体が | から始まる場合は引用・注釈と見なす。最後の行は必ず「.」で終わっていることが条件。
@@ -210,7 +214,7 @@ class Paragraph:
             if not re.search(self.__class__.REGEX_PATTERN_NOTE1, line):
                 return False
         for line in lines[-1:]:
-            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line): # 追加で行末が「.」かどうか確認する
+            if not re.search(self.__class__.REGEX_PATTERN_NOTE2, line):  # 追加で行末が「.」かどうか確認する
                 return False
         return True
 
@@ -288,7 +292,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
     if type(number) is int:
         is_draft = False
         url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
-        output_dir = 'data/%04d' % (number//1000%10*1000)
+        output_dir = 'data/%04d' % (number // 1000 % 10 * 1000)
         output_file = f'{output_dir}/rfc{number}.json'
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):
         is_draft = True
@@ -350,27 +354,27 @@ def fetch_rfc(number: int | str, force=False) -> None:
     contents_len = len(contents)
     for i, content in enumerate(contents):
         # ページ区切りのとき
-        if (isinstance(content, html.HtmlElement) and
-                content.get('class') == 'invisible'):
+        if isinstance(content, html.HtmlElement) \
+                and content.get('class') == 'invisible':
 
-            contents[i-1] = contents[i-1].rstrip() # 前ページの末尾の空白を除去
-            contents[i+0] = '' # ページ区切りの除去
+            contents[i - 1] = contents[i - 1].rstrip()  # 前ページの末尾の空白を除去
+            contents[i + 0] = ''  # ページ区切りの除去
             if i + 1 >= contents_len:
                 continue
-            contents[i+1] = '' # 余分な改行の除去
+            contents[i + 1] = ''  # 余分な改行の除去
             if i + 2 >= contents_len:
                 continue
-            contents[i+2] = '' # 余分な空白の除去
+            contents[i + 2] = ''  # 余分な空白の除去
             if i + 3 >= contents_len:
                 continue
-            if not isinstance(contents[i+3], str):
+            if not isinstance(contents[i + 3], str):
                 continue
-            contents[i+3] = contents[i+3].lstrip('\n') # 次ページの先頭の改行を除去
+            contents[i + 3] = contents[i + 3].lstrip('\n')  # 次ページの先頭の改行を除去
 
             # ページをまたぐ文章に対応する処理
             first, last = 0, -1
-            prev_last_line = contents[i-1].split('\n')[last]    # 前ページの最後の行
-            next_first_line = contents[i+3].split('\n')[first]  # 次ページの最初の行
+            prev_last_line = contents[i - 1].split('\n')[last]    # 前ページの最後の行
+            next_first_line = contents[i + 3].split('\n')[first]  # 次ページの最初の行
             indent1 = _get_indent(prev_last_line)
             indent2 = _get_indent(next_first_line)
             # print('newpage:', i)
@@ -380,16 +384,16 @@ def fetch_rfc(number: int | str, force=False) -> None:
             # 以下の条件のとき、段落がページをまたいでいると判断する
             #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
             #   2) 前ページの最後の段落が、文終端の「.」や「;」ではないとき
-            if (not prev_last_line.endswith('.') and
-                not prev_last_line.endswith(';') and
-                    re.match(r'^ *[a-zA-Z0-9(]', next_first_line) and
-                    indent1 == indent2):
+            if not prev_last_line.endswith('.') \
+                    and not prev_last_line.endswith(';') \
+                    and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \
+                    and indent1 == indent2:
                 # 内容がページをまたぐ場合、BREAKを挿入する
                 # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
-                contents[i+3] = BREAK + contents[i+3]
+                contents[i + 3] = BREAK + contents[i + 3]
             else:
                 # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
-                contents[i+0] = '\n\n'
+                contents[i + 0] = '\n\n'
 
     # ページ番号を非表示にする
     contents[-1] = re.sub(r'.*\[Page \d+\]$', '', contents[-1].rstrip()).rstrip()

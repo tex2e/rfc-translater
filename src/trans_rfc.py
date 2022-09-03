@@ -3,15 +3,15 @@ import os
 import re
 import json
 import time
-from tqdm import tqdm # pip install tqdm
-from datetime import datetime, timedelta, timezone
-JST = timezone(timedelta(hours=+9), 'JST')
+from tqdm import tqdm  # pip install tqdm
 import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 import platform
+from datetime import datetime, timedelta, timezone
+JST = timezone(timedelta(hours=+9), 'JST')
 
 # 変換元は必ず小文字で記載すること
 trans_rules = {
@@ -20,7 +20,7 @@ trans_rules = {
     'acknowledgement': '謝辞',
     'acknowledgements': '謝辞',
     'acknowledgments': '謝辞',
-    'status of this memo': '本文書の位置付け', #'本文書の状態',
+    'status of this memo': '本文書の位置付け',  # '本文書の状態',
     'copyright notice': '著作権表示',
     'table of contents': '目次',
     "author's address": '著者の連絡先',
@@ -34,14 +34,16 @@ trans_rules = {
     'normative references': '引用文献',
     'informative references': '参考引用',
     'contributors': '貢献者',
+    'uses': '用途',
+    'specification': '仕様',
     'where': 'ただし',
     'where:': 'ただし：',
     'assume:': '前提：',
-    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in rfc 2119 [rfc2119].": 
+    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in rfc 2119 [rfc2119].":
         "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はRFC 2119 [RFC2119]で説明されているように解釈されます。",
-    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"not recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in bcp 14 [rfc2119] [rfc8174] when, and only when, they appear in all capitals, as shown here.": 
+    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"not recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in bcp 14 [rfc2119] [rfc8174] when, and only when, they appear in all capitals, as shown here.":
         "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。",
-    "this document is subject to bcp 78 and the ietf trust's legal provisions relating to ietf documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. please review these documents carefully, as they describe your rights and restrictions with respect to this document. code components extracted from this document must include simplified bsd license text as described in section 4.e of the trust legal provisions and are provided without warranty as described in the simplified bsd license.": 
+    "this document is subject to bcp 78 and the ietf trust's legal provisions relating to ietf documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. please review these documents carefully, as they describe your rights and restrictions with respect to this document. code components extracted from this document must include simplified bsd license text as described in section 4.e of the trust legal provisions and are provided without warranty as described in the simplified bsd license.":
         "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。",
 }
 
@@ -80,8 +82,8 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser = None
         if platform.system() == 'Windows':
             # Windows:
-            WEBDRIVER_EXE_PATH = os.getenv('WEBDRIVER_EXE_PATH',
-                default='C:\Apps\webdriver\geckodriver.exe')
+            path = os.path.join('C:', 'Apps', 'webdriver', 'geckodriver.exe')
+            WEBDRIVER_EXE_PATH = os.getenv('WEBDRIVER_EXE_PATH', default=path)
             browser = webdriver.Firefox(executable_path=WEBDRIVER_EXE_PATH, options=options)
         else:
             # Ubuntu:
@@ -137,21 +139,21 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def chunks(l: list, n: int) -> list:
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
+def chunks(alist: list, n: int) -> list:
+    for i in range(0, len(alist), n):
+        yield alist[i:i + n]
 
 def trans_rfc(rfc_number: int | str) -> bool:
 
     # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
-        is_draft = False
-        input_dir = 'data/%04d' % (rfc_number//1000%10*1000)
+        # is_draft = False
+        input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
         input_file = f'{input_dir}/rfc{rfc_number}.json'
         output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
         midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
-        is_draft = True
+        # is_draft = True
         organization   = m['org']
         working_group  = m['wg']
         rfc_draft_name = m['name']
@@ -189,13 +191,13 @@ def trans_rfc(rfc_number: int | str) -> bool:
         CHUNK_NUM = 15
         for obj_contents in chunks(list(enumerate(obj['contents'])), CHUNK_NUM):
 
-            texts = []     # 原文
-            pre_texts = [] # 原文の前文字 (箇条書きの記号など)
+            texts = []      # 原文
+            pre_texts = []  # 原文の前文字 (箇条書きの記号など)
 
             for i, obj_contents_i in obj_contents:
 
                 # 既に翻訳済みの段落 や 図表 は翻訳しないでスキップする
-                if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') == True)):
+                if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') is True)):
                     texts.append('')
                     pre_texts.append('')
                     continue
@@ -224,15 +226,11 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         print("", flush=True)
 
-    # except json.decoder.JSONDecodeError as e:
-    #     print('[-] googletrans is blocked by Google :(')
-    #     print('[-]', datetime.now(JST))
-    #     is_canceled = True
-    except NoSuchElementException as e:
+    except NoSuchElementException:
         print('[-] Google Translate is blocked by Google :(')
         print('[-]', datetime.now(JST))
         is_canceled = True
-    except KeyboardInterrupt as e:
+    except KeyboardInterrupt:
         print('Interrupted!')
         is_canceled = True
     finally:
@@ -257,6 +255,7 @@ def trans_test() -> bool:
     translator = TranslatorSeleniumGoogletrans(total=1)
     ja = translator.translate('test sample.', dest='ja')
     print('result:', ja)
+
 
 if __name__ == '__main__':
     trans_test()
