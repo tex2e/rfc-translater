@@ -143,11 +143,13 @@ class Paragraph:
         conds.append(re.search(r'\.{4}|(?:\. ){4}', text))  # TOC
         conds.append(text.find('+--') >= 0)  # directory tree
         conds.append(re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text))  # src
-        conds.append(re.search(r'(?:enum|struct) \{', text))  # tls
+        conds.append(re.search(r'(?:enum|struct|object) \{', text))  # tls
+        conds.append(re.search(r'(?:HEADERS)\n\s*:[a-z]+ = ', text))  # http/2
         conds.append(re.search(r'\s::=\s', text))  # syntax
         conds.append(re.search(r'": (?:[\[\{\"\']|true,|false,)', text))  # json
         conds.append(re.search(r'= +[\[\(\{<*%#&]', text))  # src, syntax
-        conds.append(len(re.compile(r'[;{}]$', re.MULTILINE).findall(text)) >= 2)  # src
+        conds.append(len(re.compile(r'[{}]$', re.MULTILINE).findall(text)) >= 2)  # src
+        conds.append(len(re.compile(r'[;]$', re.MULTILINE).findall(text)) >= 3)  # src
         conds.append(len(re.compile(r'^</', re.MULTILINE).findall(text)) >= 2)  # xml
         conds.append(re.search(r'[/|\\] +[/|\\]', text))  # figure
         conds.append(len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3)  # table

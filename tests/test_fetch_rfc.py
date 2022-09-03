@@ -1,8 +1,12 @@
 
+# python3 -m unittest discover -s tests -p "test_*.py"
+
 import unittest
 import difflib
 from src.fetch_rfc import Paragraph
 
+
+# --- Section Title ------------------------------------------------------------
 
 class TestFetchRfcSectionTitle(unittest.TestCase):
 
@@ -36,6 +40,21 @@ class TestFetchRfcSentence(unittest.TestCase):
         p = Paragraph("""
         The character set used for commands and responses is US-ASCII; see
         [RFC0020].
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
+    def test_semicolon2(self): # RFC 9298
+        p = Paragraph("""
+        The lifetime of the socket is tied to the request stream.  The UDP
+        proxy MUST keep the socket open while the request stream is open.  If
+        a UDP proxy is notified by its operating system that its socket is no
+        longer usable, it MUST close the request stream.  For example, this
+        can happen when an ICMP Destination Unreachable message is received;
+        see Section 3.1 of [ICMP6].  UDP proxies MAY choose to close sockets
+        due to a period of inactivity, but they MUST close the request stream
+        when closing the socket.  UDP proxies that close sockets after a
+        period of inactivity SHOULD NOT use a period lower than two minutes;
+        see Section 4.3 of [BEHAVE].
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
@@ -198,6 +217,15 @@ class TestFetchRfcCode(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
+    def test_struct2(self): # RFC 9298
+        p = Paragraph("""
+        UDP Proxying HTTP Datagram Payload {
+          Context ID (i),
+          UDP Proxying Payload (..),
+        }
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
     def test_http(self): # RFC 9230
         p = Paragraph("""
         :method = POST
@@ -224,6 +252,35 @@ class TestFetchRfcCode(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
+    def test_http2_header(self): # RFC 9298
+        p = Paragraph("""
+        HEADERS
+        :status = 200
+        capsule-protocol = ?1
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_http2_long_header(self): # RFC 9298
+        p = Paragraph("""
+        HEADERS
+        :method = CONNECT
+        :protocol = connect-udp
+        :scheme = https
+        :path = /.well-known/masque/udp/192.0.2.6/443/
+        :authority = example.org
+        capsule-protocol = ?1
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_BNF(self): # RFC 9298
+        p = Paragraph("""
+        target_host = IPv6address / IPv4address / reg-name
+        target_port = port
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+
+# --- Table of Content ---------------------------------------------------------
 
 class TestFetchRfcToc(unittest.TestCase):
 
