@@ -1,0 +1,887 @@
+{
+  "title": {
+    "text": "RFC 9298 - Proxying UDP in HTTP",
+    "ja": "RFC 9298 - HTTPでUDPをプロキシする"
+  },
+  "number": 9298,
+  "created_at": "2022-09-03 15:45:21.895824+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       D. Schinazi\nRequest for Comments: 9298                                    Google LLC\nCategory: Standards Track                                    August 2022\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 26,
+      "text": "Proxying UDP in HTTP",
+      "ja": "HTTPでUDPをプロキシする"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how to proxy UDP in HTTP, similar to how the HTTP CONNECT method allows proxying TCP in HTTP. More specifically, this document defines a protocol that allows an HTTP client to create a tunnel for UDP communications through an HTTP server that acts as a proxy.",
+      "ja": "このドキュメントでは、HTTP ConnectメソッドがHTTPでTCPをプロキシできる方法と同様に、HTTPでUDPをプロキシする方法について説明します。より具体的には、このドキュメントは、HTTPクライアントがプロキシとして機能するHTTPサーバーを介してUDP通信用のトンネルを作成できるプロトコルを定義します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9298.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9298で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2022 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2022 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供される修正されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Conventions and Definitions\n2.  Client Configuration\n3.  Tunneling UDP over HTTP\n  3.1.  UDP Proxy Handling\n  3.2.  HTTP/1.1 Request\n  3.3.  HTTP/1.1 Response\n  3.4.  HTTP/2 and HTTP/3 Requests\n  3.5.  HTTP/2 and HTTP/3 Responses\n4.  Context Identifiers\n5.  HTTP Datagram Payload Format\n6.  Performance Considerations\n  6.1.  MTU Considerations\n  6.2.  Tunneling of ECN Marks\n7.  Security Considerations\n8.  IANA Considerations\n  8.1.  HTTP Upgrade Token\n  8.2.  Well-Known URI\n9.  References\n  9.1.  Normative References\n  9.2.  Informative References\nAcknowledgments\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "While HTTP provides the CONNECT method (see Section 9.3.6 of [HTTP]) for creating a TCP [TCP] tunnel to a proxy, it lacked a method for doing so for UDP [UDP] traffic prior to this specification.",
+      "ja": "HTTPは、TCP [TCP]トンネルをプロキシに作成するための接続方法（[http]のセクション9.3.6を参照）を提供しますが、この仕様の前にUDP [UDP]トラフィックのためにそうする方法がありませんでした。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a protocol for tunneling UDP to a server acting as a UDP-specific proxy over HTTP. UDP tunnels are commonly used to create an end-to-end virtual connection, which can then be secured using QUIC [QUIC] or another protocol running over UDP. Unlike the HTTP CONNECT method, the UDP proxy itself is identified with an absolute URL containing the traffic's destination. Clients generate those URLs using a URI Template [TEMPLATE], as described in Section 2.",
+      "ja": "このドキュメントでは、HTTPを介したUDP固有のプロキシとして機能するサーバーにUDPをトンネリングするためのプロトコルについて説明します。UDPトンネルは、一般的にエンドツーエンドの仮想接続を作成するために使用され、QUIC [QUIC]またはUDPを実行している別のプロトコルを使用して保護できます。HTTP Connectメソッドとは異なり、UDPプロキシ自体は、トラフィックの宛先を含む絶対URLで識別されます。セクション2で説明されているように、クライアントはURIテンプレート[テンプレート]を使用してこれらのURLを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol supports all existing versions of HTTP by using HTTP Datagrams [HTTP-DGRAM]. When using HTTP/2 [HTTP/2] or HTTP/3 [HTTP/3], it uses HTTP Extended CONNECT as described in [EXT-CONNECT2] and [EXT-CONNECT3]. When using HTTP/1.x [HTTP/1.1], it uses HTTP Upgrade as defined in Section 7.8 of [HTTP].",
+      "ja": "このプロトコルは、HTTPデータグラム[HTTP-DGRAM]を使用して、HTTPのすべての既存のバージョンをサポートします。HTTP/2 [HTTP/2]またはHTTP/3 [HTTP/3]を使用する場合、[ext-Connect2]および[ext-Connect3]で説明されているようにHTTP拡張接続を使用します。HTTP/1.x [HTTP/1.1]を使用する場合、[HTTP]のセクション7.8で定義されているようにHTTPアップグレードを使用します。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Conventions and Definitions",
+      "section_title": true,
+      "ja": "1.1. 慣習と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, we use the term \"UDP proxy\" to refer to the HTTP server that acts upon the client's UDP tunneling request to open a UDP socket to a target server and that generates the response to this request. If there are HTTP intermediaries (as defined in Section 3.7 of [HTTP]) between the client and the UDP proxy, those are referred to as \"intermediaries\" in this document.",
+      "ja": "このドキュメントでは、「UDPプロキシ」という用語を使用して、クライアントのUDPトンネルリクエストに作用するHTTPサーバーを参照して、ターゲットサーバーにUDPソケットを開き、このリクエストに対する応答を生成します。クライアントとUDPプロキシの間にHTTP仲介者（[HTTP]のセクション3.7で定義されている）がある場合、それらはこのドキュメントに「仲介者」と呼ばれます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that, when the HTTP version in use does not support multiplexing streams (such as HTTP/1.1), any reference to \"stream\" in this document represents the entire connection.",
+      "ja": "使用中のHTTPバージョンがマルチプレックスストリーム（HTTP/1.1など）をサポートしていない場合、このドキュメントの「ストリーミング」への参照は、接続全体を表します。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Client Configuration",
+      "section_title": true,
+      "ja": "2. クライアント構成"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP clients are configured to use a UDP proxy with a URI Template [TEMPLATE] that has the variables \"target_host\" and \"target_port\". Examples are shown below:",
+      "ja": "HTTPクライアントは、変数「Target_Host」と「Target_Port」を持つURIテンプレート[テンプレート]を使用してURIテンプレート[テンプレート]を使用してUDPプロキシを使用するように構成されています。例を以下に示します。"
+    },
+    {
+      "indent": 1,
+      "text": "https://example.org/.well-known/masque/udp/{target_host}/{target_port}/\nhttps://proxy.example.org:4443/masque?h={target_host}&p={target_port}\nhttps://proxy.example.org:4443/masque{?target_host,target_port}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 1: URI Template Examples",
+      "ja": "図1：URIテンプレートの例"
+    },
+    {
+      "indent": 3,
+      "text": "The following requirements apply to the URI Template:",
+      "ja": "URIテンプレートには、次の要件が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST be a level 3 template or lower.",
+      "ja": "* URIテンプレートは、レベル3テンプレート以下である必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST be in absolute form and MUST include non-empty scheme, authority, and path components.",
+      "ja": "* URIテンプレートは絶対的な形式でなければならず、空でないスキーム、権限、およびパスコンポーネントを含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The path component of the URI Template MUST start with a slash (\"/\").",
+      "ja": "* URIテンプレートのパスコンポーネントは、スラッシュ（ \"/\"）で開始する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* All template variables MUST be within the path or query components of the URI.",
+      "ja": "* すべてのテンプレート変数は、URIのパスまたはクエリコンポーネント内にある必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST contain the two variables \"target_host\" and \"target_port\" and MAY contain other variables.",
+      "ja": "* URIテンプレートには、2つの変数「Target_Host」と「Target_Port」が含まれている必要があり、他の変数が含まれている場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST NOT contain any non-ASCII Unicode characters and MUST only contain ASCII characters in the range 0x21-0x7E inclusive (note that percent-encoding is allowed; see Section 2.1 of [URI]).",
+      "ja": "* URIテンプレートには、ASCII以外のユニコード文字を含めてはならず、範囲0x21-0x7Eを含む範囲のASCII文字のみを含める必要があります（パーセントエンコードが許可されていることに注意してください。[URI]のセクション2.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST NOT use Reserved Expansion (\"+\" operator), Fragment Expansion (\"#\" operator), Label Expansion with Dot-Prefix, Path Segment Expansion with Slash-Prefix, nor Path-Style Parameter Expansion with Semicolon-Prefix.",
+      "ja": "* URIテンプレートは、予約済み拡張（ \"\"オペレーター）、フラグメント拡張（ \"＃\"オペレーター）、ドットペルフィックスを使用したラベル拡張、スラッシュプレフィックスによるパスセグメント拡張、Semicolon-Prefixによるパススタイルのパラメーター拡張を使用してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD validate the requirements above; however, clients MAY use a general-purpose URI Template implementation that lacks this specific validation. If a client detects that any of the requirements above are not met by a URI Template, the client MUST reject its configuration and abort the request without sending it to the UDP proxy.",
+      "ja": "クライアントは上記の要件を検証する必要があります。ただし、クライアントは、この特定の検証がない汎用URIテンプレートの実装を使用する場合があります。クライアントが上記の要件のいずれかがURIテンプレートで満たされていないことを検出した場合、クライアントはその構成を拒否し、リクエストをUDPプロキシに送信せずに中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The original HTTP CONNECT method allowed for the conveyance of the target host and port, but not the scheme, proxy authority, path, or query. Thus, clients with proxy configuration interfaces that only allow the user to configure the proxy host and the proxy port exist. Client implementations of this specification that are constrained by such limitations MAY attempt to access UDP proxying capabilities using the default template, which is defined as \"https://$PROXY_HOST:$PROXY_PORT/.well-known/masque/ udp/{target_host}/{target_port}/\", where $PROXY_HOST and $PROXY_PORT are the configured host and port of the UDP proxy, respectively. UDP proxy deployments SHOULD offer service at this location if they need to interoperate with such clients.",
+      "ja": "元のHTTP Connectメソッドは、ターゲットホストとポートの伝達を可能にしましたが、スキーム、代理権限、パス、またはクエリではありませんでした。したがって、ユーザーがプロキシホストとプロキシポートのみを構成できるようにするプロキシ構成インターフェイスを持つクライアント。このような制限によって制約されているこの仕様のクライアント実装は、デフォルトのテンプレートを使用してUDPプロキシ機能にアクセスしようとする場合があります。これは、「https：// $ proxy_host：$ proxy_port/.well-nown/masque/udp/{target_host}」と定義されています。/{TARGET_PORT}/\"、$ proxy_hostと$ proxy_portは、それぞれUDPプロキシの構成ホストとポートです。UDPプロキシの展開は、そのようなクライアントと相互運用する必要がある場合、この場所でサービスを提供する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Tunneling UDP over HTTP",
+      "section_title": true,
+      "ja": "3. HTTPを介したUDPのトンネル"
+    },
+    {
+      "indent": 3,
+      "text": "To allow negotiation of a tunnel for UDP over HTTP, this document defines the \"connect-udp\" HTTP upgrade token. The resulting UDP tunnels use the Capsule Protocol (see Section 3.2 of [HTTP-DGRAM]) with HTTP Datagrams in the format defined in Section 5.",
+      "ja": "HTTPを介したUDPのトンネルの交渉を許可するために、このドキュメントでは「Connect-UUDP」HTTPアップグレードトークンを定義します。結果のUDPトンネルは、セクション5で定義された形式のHTTPデータグラムを使用して、カプセルプロトコル（[http-dgram]のセクション3.2を参照）を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "To initiate a UDP tunnel associated with a single HTTP stream, a client issues a request containing the \"connect-udp\" upgrade token. The target of the tunnel is indicated by the client to the UDP proxy via the \"target_host\" and \"target_port\" variables of the URI Template; see Section 2.",
+      "ja": "単一のHTTPストリームに関連付けられたUDPトンネルを開始するために、クライアントは「Connect-UUDP」アップグレードトークンを含むリクエストを発行します。トンネルのターゲットは、URIテンプレートの「Target_Host」および「Target_Port」変数を介してUDPプロキシにクライアントによって示されます。セクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "\"target_host\" supports using DNS names, IPv6 literals and IPv4 literals. Note that IPv6 scoped addressing zone identifiers are not supported. Using the terms IPv6address, IPv4address, reg-name, and port from [URI], the \"target_host\" and \"target_port\" variables MUST adhere to the format in Figure 2, using notation from [ABNF]. Additionally:",
+      "ja": "「Target_Host」は、DNS名、IPv6リテラル、IPv4リテラルを使用してサポートしています。IPv6スコープアドレス指定ゾーン識別子はサポートされていないことに注意してください。[URI]のIPv6Address、IPv4Address、Reg-Name、およびPortという用語を使用して、[abnf]の表記を使用して、図2の形式に「ターゲット_host」と「ターゲット_port」変数を付着する必要があります。さらに："
+    },
+    {
+      "indent": 3,
+      "text": "* both the \"target_host\" and \"target_port\" variables MUST NOT be empty.",
+      "ja": "* 「Target_Host」と「Target_Port」変数の両方が空である必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "* if \"target_host\" contains an IPv6 literal, the colons (\":\") MUST be percent-encoded. For example, if the target host is \"2001:db8::42\", it will be encoded in the URI as \"2001%3Adb8%3A%3A42\".",
+      "ja": "* 「Target_Host」にIPv6リテラルが含まれている場合、コロン（ \"：\"）はパーセントエンコードされている必要があります。たとえば、ターゲットホストが「2001：DB8 :: 42」の場合、URIで「2001％3ADB8％3A％3A42」としてエンコードされます。"
+    },
+    {
+      "indent": 3,
+      "text": "* \"target_port\" MUST represent an integer between 1 and 65535 inclusive.",
+      "ja": "* 「Target_Port」は、1〜65535の整数を包括的に表す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "target_host = IPv6address / IPv4address / reg-name\ntarget_port = port",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 2: URI Template Variable Format",
+      "ja": "図2：URIテンプレート変数形式"
+    },
+    {
+      "indent": 3,
+      "text": "When sending its UDP proxying request, the client SHALL perform URI Template expansion to determine the path and query of its request.",
+      "ja": "UDPプロキシリクエストを送信するとき、クライアントはURIテンプレート拡張を実行して、リクエストのパスとクエリを決定するものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "If the request is successful, the UDP proxy commits to converting received HTTP Datagrams into UDP packets, and vice versa, until the tunnel is closed.",
+      "ja": "リクエストが成功した場合、UDPプロキシは、トンネルが閉じるまで、受信したHTTPデータグラムをUDPパケットに変換することを約束します。"
+    },
+    {
+      "indent": 3,
+      "text": "By virtue of the definition of the Capsule Protocol (see Section 3.2 of [HTTP-DGRAM]), UDP proxying requests do not carry any message content. Similarly, successful UDP proxying responses also do not carry any message content.",
+      "ja": "カプセルプロトコルの定義により（[http-dgram]のセクション3.2を参照）、UDPプロキシリクエストにはメッセージコンテンツが含まれていません。同様に、UDPのプロキシ応答が成功しても、メッセージコンテンツも含まれていません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. UDP Proxy Handling",
+      "section_title": true,
+      "ja": "3.1. UDPプロキシ処理"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving a UDP proxying request:",
+      "ja": "UDPのプロキシリクエストを受け取ったら："
+    },
+    {
+      "indent": 3,
+      "text": "* if the recipient is configured to use another HTTP proxy, it will act as an intermediary by forwarding the request to another HTTP server. Note that such intermediaries may need to re-encode the request if they forward it using a version of HTTP that is different from the one used to receive it, as the request encoding differs by version (see below).",
+      "ja": "* 受信者が別のHTTPプロキシを使用するように構成されている場合、リクエストを別のHTTPサーバーに転送することにより、仲介者として機能します。そのような仲介業者は、リクエストがバージョンによって異なるため、それを受け取るために使用されるものとは異なるHTTPのバージョンを使用して転送する場合、リクエストを再エンコードする必要がある場合があることに注意してください（以下を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "* otherwise, the recipient will act as a UDP proxy. It extracts the \"target_host\" and \"target_port\" variables from the URI it has reconstructed from the request headers, decodes their percent-encoding, and establishes a tunnel by directly opening a UDP socket to the requested target.",
+      "ja": "* それ以外の場合、受信者はUDPプロキシとして機能します。リクエストヘッダーから再構築されたURIから「Target_Host」および「Target_Port」変数を抽出し、パーセントエンコードをデコードし、UDPソケットを要求されたターゲットに直接開くことでトンネルを確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "Unlike TCP, UDP is connectionless. The UDP proxy that opens the UDP socket has no way of knowing whether the destination is reachable. Therefore, it needs to respond to the request without waiting for a packet from the target. However, if the \"target_host\" is a DNS name, the UDP proxy MUST perform DNS resolution before replying to the HTTP request. If errors occur during this process, the UDP proxy MUST reject the request and SHOULD send details using an appropriate Proxy-Status header field [PROXY-STATUS]. For example, if DNS resolution returns an error, the proxy can use the dns_error Proxy Error Type from Section 2.3.2 of [PROXY-STATUS].",
+      "ja": "TCPとは異なり、UDPはコネクションレスです。UDPソケットを開くUDPプロキシは、宛先に到達可能かどうかを知る方法がありません。したがって、ターゲットからパケットを待たずにリクエストに応答する必要があります。ただし、「Target_Host」がDNS名の場合、UDPプロキシはHTTPリクエストに返信する前にDNS解像度を実行する必要があります。このプロセス中にエラーが発生した場合、UDPプロキシはリクエストを拒否する必要があり、適切なプロキシステータスヘッダーフィールド[Proxy-Status]を使用して詳細を送信する必要があります。たとえば、DNS解像度がエラーを返す場合、プロキシは[プロキシ-Status]のセクション2.3.2からDNS_ERRORプロキシエラータイプを使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "UDP proxies can use connected UDP sockets if their operating system supports them, as that allows the UDP proxy to rely on the kernel to only send it UDP packets that match the correct 5-tuple. If the UDP proxy uses a non-connected socket, it MUST validate the IP source address and UDP source port on received packets to ensure they match the client's request. Packets that do not match MUST be discarded by the UDP proxy.",
+      "ja": "UDPプロキシは、オペレーティングシステムがサポートする場合、接続されたUDPソケットを使用できます。これにより、UDPプロキシはカーネルに依存して、正しい5タプルと一致するUDPパケットのみを送信できます。UDPプロキシが接続されていないソケットを使用している場合、受信したパケットのIPソースアドレスとUDPソースポートを検証して、クライアントの要求と一致するようにする必要があります。一致しないパケットは、UDPプロキシによって破棄する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The lifetime of the socket is tied to the request stream. The UDP proxy MUST keep the socket open while the request stream is open. If a UDP proxy is notified by its operating system that its socket is no longer usable, it MUST close the request stream. For example, this can happen when an ICMP Destination Unreachable message is received; see Section 3.1 of [ICMP6]. UDP proxies MAY choose to close sockets due to a period of inactivity, but they MUST close the request stream when closing the socket. UDP proxies that close sockets after a period of inactivity SHOULD NOT use a period lower than two minutes; see Section 4.3 of [BEHAVE].",
+      "ja": "ソケットの寿命はリクエストストリームに関連付けられています。UDPプロキシは、リクエストストリームが開いている間、ソケットを開いたままにしておく必要があります。UDPプロキシがオペレーティングシステムによって通知された場合、ソケットが使用できなくなった場合、リクエストストリームを閉じる必要があります。たとえば、これは、ICMP宛先の到達不可能なメッセージを受信したときに発生する可能性があります。[ICMP6]のセクション3.1を参照してください。UDPプロキシは、不活動期間のためにソケットを閉じることを選択する場合がありますが、ソケットを閉じるときはリクエストストリームを閉じる必要があります。UDPは、無効の期間後にソケットを閉じることで、2分以内の期間を使用しないでください。[beave]のセクション4.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A successful response (as defined in Sections 3.3 and 3.5) indicates that the UDP proxy has opened a socket to the requested target and is willing to proxy UDP payloads. Any response other than a successful response indicates that the request has failed; thus, the client MUST abort the request.",
+      "ja": "成功した応答（セクション3.3および3.5で定義されている）は、UDPプロキシが要求されたターゲットにソケットを開いており、UDPペイロードをプロキシを喜んで進めていることを示しています。応答が成功したこと以外の応答は、リクエストが失敗したことを示しています。したがって、クライアントはリクエストを中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "UDP proxies MUST NOT introduce fragmentation at the IP layer when forwarding HTTP Datagrams onto a UDP socket; overly large datagrams are silently dropped. In IPv4, the Don't Fragment (DF) bit MUST be set, if possible, to prevent fragmentation on the path. Future extensions MAY remove these requirements.",
+      "ja": "UDPプロキシは、HTTPデータグラムをUDPソケットに転送する際に、IPレイヤーにフラグメンテーションを導入してはなりません。過度に大きなデータグラムが静かに削除されます。IPv4では、パスでの断片化を防ぐために、可能であれば断片（DF）ビットを設定する必要があります。将来の拡張機能は、これらの要件を削除する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers of UDP proxies will benefit from reading the guidance in [UDP-USAGE].",
+      "ja": "UDPプロキシの実装者は、[UDP-Usage]のガイダンスを読むことから利益を得ます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. HTTP/1.1 Request",
+      "section_title": true,
+      "ja": "3.2. HTTP/1.1リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/1.1 [HTTP/1.1], a UDP proxying request will meet the following requirements:",
+      "ja": "HTTP/1.1 [HTTP/1.1]を使用する場合、UDPプロキシリクエストは次の要件を満たします。"
+    },
+    {
+      "indent": 3,
+      "text": "* the method SHALL be \"GET\".",
+      "ja": "* 方法は「取得」するものとする。"
+    },
+    {
+      "indent": 3,
+      "text": "* the request SHALL include a single Host header field containing the origin of the UDP proxy.",
+      "ja": "* リクエストには、UDPプロキシの原点を含む単一のホストヘッダーフィールドを含めるものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "* the request SHALL include a Connection header field with value \"Upgrade\" (note that this requirement is case-insensitive as per Section 7.6.1 of [HTTP]).",
+      "ja": "* リクエストには、値「アップグレード」を持つ接続ヘッダーフィールドが含まれます（[HTTP]のセクション7.6.1に従って、この要件はケース非感受性であることに注意してください）。"
+    },
+    {
+      "indent": 3,
+      "text": "* the request SHALL include an Upgrade header field with value \"connect-udp\".",
+      "ja": "* リクエストには、値「connect-udp」のアップグレードヘッダーフィールドが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "A UDP proxying request that does not conform to these restrictions is malformed. The recipient of such a malformed request MUST respond with an error and SHOULD use the 400 (Bad Request) status code.",
+      "ja": "これらの制限に準拠していないUDPプロキシリクエストは奇形です。このような奇形の要求の受信者は、エラーで応答する必要があり、400（悪い要求）ステータスコードを使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the client is configured with URI Template \"https://example.org/.well-known/masque/ udp/{target_host}/{target_port}/\" and wishes to open a UDP proxying tunnel to target 192.0.2.6:443, it could send the following request:",
+      "ja": "たとえば、クライアントがURIテンプレート \"https://example.org/.well-kond/masque/ udp/{target_host}/{target_port}/\"で構成されている場合、ターゲット192.0にUDPプロキシトンネルを開きたい場合。2.6：443、次のリクエストを送信できます。"
+    },
+    {
+      "indent": 2,
+      "text": "GET https://example.org/.well-known/masque/udp/192.0.2.6/443/ HTTP/1.1\nHost: example.org\nConnection: Upgrade\nUpgrade: connect-udp\nCapsule-Protocol: ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 3: Example HTTP/1.1 Request",
+      "ja": "図3：HTTP/1.1リクエストの例"
+    },
+    {
+      "indent": 3,
+      "text": "In HTTP/1.1, this protocol uses the GET method to mimic the design of the WebSocket Protocol [WEBSOCKET].",
+      "ja": "HTTP/1.1では、このプロトコルはGETメソッドを使用して、WebSocketプロトコル[WebSocket]の設計を模倣しています。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. HTTP/1.1 Response",
+      "section_title": true,
+      "ja": "3.3. HTTP/1.1応答"
+    },
+    {
+      "indent": 3,
+      "text": "The UDP proxy SHALL indicate a successful response by replying with the following requirements:",
+      "ja": "UDPプロキシは、次の要件を返信することにより、応答が成功することを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "* the HTTP status code on the response SHALL be 101 (Switching Protocols).",
+      "ja": "* 応答のHTTPステータスコードは101（スイッチングプロトコル）でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* the response SHALL include a Connection header field with value \"Upgrade\" (note that this requirement is case-insensitive as per Section 7.6.1 of [HTTP]).",
+      "ja": "* 応答には、値「アップグレード」を持つ接続ヘッダーフィールドが含まれます（[HTTP]のセクション7.6.1に従って、この要件はケース非感受性であることに注意してください）。"
+    },
+    {
+      "indent": 3,
+      "text": "* the response SHALL include a single Upgrade header field with value \"connect-udp\".",
+      "ja": "* 応答には、値「connect-udp」を備えた単一のアップグレードヘッダーフィールドが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "* the response SHALL meet the requirements of HTTP responses that start the Capsule Protocol; see Section 3.2 of [HTTP-DGRAM].",
+      "ja": "* 応答は、カプセルプロトコルを開始するHTTP応答の要件を満たすものとします。[http-dgram]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of these requirements are not met, the client MUST treat this proxying attempt as failed and abort the connection.",
+      "ja": "これらの要件のいずれかが満たされていない場合、クライアントはこのプロキシの試みを失敗したように扱い、接続を中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the UDP proxy could respond with:",
+      "ja": "たとえば、UDPプロキシは以下で応答できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/1.1 101 Switching Protocols Connection: Upgrade Upgrade: connect-udp Capsule-Protocol: ?1",
+      "ja": "HTTP/1.1 101スイッチングプロトコル接続：アップグレードアップグレード：CONNECT-UUDP CAPSULE-PROTOCOL：？1"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 4: Example HTTP/1.1 Response",
+      "ja": "図4：例HTTP/1.1応答の例"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. HTTP/2 and HTTP/3 Requests",
+      "section_title": true,
+      "ja": "3.4. HTTP/2およびHTTP/3リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/2 [HTTP/2] or HTTP/3 [HTTP/3], UDP proxying requests use HTTP Extended CONNECT. This requires that servers send an HTTP Setting as specified in [EXT-CONNECT2] and [EXT-CONNECT3] and that requests use HTTP pseudo-header fields with the following requirements:",
+      "ja": "HTTP/2 [HTTP/2]またはHTTP/3 [HTTP/3]を使用する場合、UDPプロキシリクエストはHTTP拡張接続を使用します。これには、サーバーが[ext-connect2]および[ext-connect3]で指定されているようにHTTP設定を送信する必要があり、それは次の要件でhttp pseudo-headerフィールドを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :method pseudo-header field SHALL be \"CONNECT\".",
+      "ja": "* The：Method Pseudo-Headerフィールドは「接続」しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :protocol pseudo-header field SHALL be \"connect-udp\".",
+      "ja": "* ：プロトコル疑似ヘッダーフィールドは「接続UUDP」でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :authority pseudo-header field SHALL contain the authority of the UDP proxy.",
+      "ja": "* THE：権限の疑似ヘッダー分野には、UDPプロキシの権限が含まれているものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :path and :scheme pseudo-header fields SHALL NOT be empty. Their values SHALL contain the scheme and path from the URI Template after the URI Template expansion process has been completed.",
+      "ja": "* ：パスと：スキームの擬似ヘッダーフィールドは空にしてはなりません。それらの値には、URIテンプレート拡張プロセスが完了した後、URIテンプレートからのスキームとパスが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "A UDP proxying request that does not conform to these restrictions is malformed (see Section 8.1.1 of [HTTP/2] and Section 4.1.2 of [HTTP/3]).",
+      "ja": "これらの制限に準拠していないUDPプロキシリクエストは奇形です（[http/2]のセクション8.1.1および[http/3]のセクション4.1.2を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the client is configured with URI Template \"https://example.org/.well-known/masque/ udp/{target_host}/{target_port}/\" and wishes to open a UDP proxying tunnel to target 192.0.2.6:443, it could send the following request:",
+      "ja": "たとえば、クライアントがURIテンプレート \"https://example.org/.well-kond/masque/ udp/{target_host}/{target_port}/\"で構成されている場合、ターゲット192.0にUDPプロキシトンネルを開きたい場合。2.6：443、次のリクエストを送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS\n:method = CONNECT\n:protocol = connect-udp\n:scheme = https\n:path = /.well-known/masque/udp/192.0.2.6/443/\n:authority = example.org\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 22,
+      "text": "Figure 5: Example HTTP/2 Request",
+      "ja": "図5：HTTP/2リクエストの例"
+    },
+    {
+      "indent": 0,
+      "text": "3.5. HTTP/2 and HTTP/3 Responses",
+      "section_title": true,
+      "ja": "3.5. HTTP/2およびHTTP/3応答"
+    },
+    {
+      "indent": 3,
+      "text": "The UDP proxy SHALL indicate a successful response by replying with the following requirements:",
+      "ja": "UDPプロキシは、次の要件を返信することにより、応答が成功することを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "* the HTTP status code on the response SHALL be in the 2xx (Successful) range.",
+      "ja": "* 応答のHTTPステータスコードは、2xx（成功）範囲でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* the response SHALL meet the requirements of HTTP responses that start the Capsule Protocol; see Section 3.2 of [HTTP-DGRAM].",
+      "ja": "* 応答は、カプセルプロトコルを開始するHTTP応答の要件を満たすものとします。[http-dgram]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of these requirements are not met, the client MUST treat this proxying attempt as failed and abort the request.",
+      "ja": "これらの要件のいずれかが満たされていない場合、クライアントはこのプロキシの試みを失敗したように扱い、要求を中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the UDP proxy could respond with:",
+      "ja": "たとえば、UDPプロキシは以下で応答できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 6: Example HTTP/2 Response",
+      "ja": "図6：HTTP/2応答の例"
+    },
+    {
+      "indent": 0,
+      "text": "4. Context Identifiers",
+      "section_title": true,
+      "ja": "4. コンテキスト識別子"
+    },
+    {
+      "indent": 3,
+      "text": "The mechanism for proxying UDP in HTTP defined in this document allows future extensions to exchange HTTP Datagrams that carry different semantics from UDP payloads. Some of these extensions can augment UDP payloads with additional data, while others can exchange data that is completely separate from UDP payloads. In order to accomplish this, all HTTP Datagrams associated with UDP Proxying request streams start with a Context ID field; see Section 5.",
+      "ja": "このドキュメントで定義されているHTTPでUDPをプロキシングするメカニズムにより、将来の拡張機能がUDPペイロードとは異なるセマンティクスを運ぶHTTPデータグラムを交換できます。これらの拡張機能の中には、追加データを使用してUDPペイロードを補強するものもあれば、UDPペイロードとは完全に分離されたデータを交換できるものもあります。これを達成するために、UDPに関連付けられたすべてのHTTPデータグラムは、リクエストストリームをコンテキストIDフィールドから開始します。セクション5を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Context IDs are 62-bit integers (0 to 2^62-1). Context IDs are encoded as variable-length integers; see Section 16 of [QUIC]. The Context ID value of 0 is reserved for UDP payloads, while non-zero values are dynamically allocated. Non-zero even-numbered Context IDs are client-allocated, and odd-numbered Context IDs are proxy-allocated. The Context ID namespace is tied to a given HTTP request; it is possible for a Context ID with the same numeric value to be simultaneously allocated in distinct requests, potentially with different semantics. Context IDs MUST NOT be re-allocated within a given HTTP namespace but MAY be allocated in any order. The Context ID allocation restrictions to the use of even-numbered and odd-numbered Context IDs exist in order to avoid the need for synchronization between endpoints. However, once a Context ID has been allocated, those restrictions do not apply to the use of the Context ID; it can be used by any client or UDP proxy, independent of which endpoint initially allocated it.",
+      "ja": "コンテキストIDは62ビット整数（0〜2^62-1）です。コンテキストIDは、可変長整数としてエンコードされます。 [quic]のセクション16を参照してください。 0のコンテキストID値はUDPペイロード用に予約されていますが、非ゼロ値は動的に割り当てられます。ゼロ以外の均等なコンテキストIDはクライアントに割り当てられ、奇数番号のコンテキストIDはプロキシアロークされます。コンテキストID名空間は、特定のHTTP要求に関連付けられています。同じ数値を持つコンテキストIDを、異なるセマンティクスで潜在的に異なる要求で同時に割り当てることができます。コンテキストIDは、特定のHTTPネームスペース内で再割り当てされてはなりませんが、任意の順序で割り当てられる場合があります。エンドポイント間の同期の必要性を回避するために、コンテキストIDの割り当て制限制限偶数および奇数番号のコンテキストIDが存在します。ただし、コンテキストIDが割り当てられると、これらの制限はコンテキストIDの使用には適用されません。クライアントまたはUDPプロキシが使用できます。これは、エンドポイントが最初に割り当てられたこととは無関係です。"
+    },
+    {
+      "indent": 3,
+      "text": "Registration is the action by which an endpoint informs its peer of the semantics and format of a given Context ID. This document does not define how registration occurs. Future extensions MAY use HTTP header fields or capsules to register Context IDs. Depending on the method being used, it is possible for datagrams to be received with Context IDs that have not yet been registered. For instance, this can be due to reordering of the packet containing the datagram and the packet containing the registration message during transmission.",
+      "ja": "登録とは、エンドポイントが特定のコンテキストIDのセマンティクスと形式をピアに通知するアクションです。このドキュメントでは、登録がどのように発生するかを定義しません。将来の拡張機能は、HTTPヘッダーフィールドまたはカプセルを使用してコンテキストIDを登録する場合があります。使用されているメソッドに応じて、まだ登録されていないコンテキストIDでデータグラムを受信する可能性があります。たとえば、これは、データグラムと送信中の登録メッセージを含むパケットを含むパケットの並べ替えによるものです。"
+    },
+    {
+      "indent": 0,
+      "text": "5. HTTP Datagram Payload Format",
+      "section_title": true,
+      "ja": "5. HTTPデータグラムペイロード形式"
+    },
+    {
+      "indent": 3,
+      "text": "When HTTP Datagrams (see Section 2 of [HTTP-DGRAM]) are associated with UDP Proxying request streams, the HTTP Datagram Payload field has the format defined in Figure 7, using notation from Section 1.3 of [QUIC]. Note that when HTTP Datagrams are encoded using QUIC DATAGRAM frames [QUIC-DGRAM], the Context ID field defined below directly follows the Quarter Stream ID field, which is at the start of the QUIC DATAGRAM frame payload; see Section 2.1 of [HTTP-DGRAM].",
+      "ja": "HTTPデータグラム（[http-dgram]のセクション2を参照）がUDPプロキシリクエストストリームに関連付けられている場合、httpデータグラムペイロードフィールドは、[quic]のセクション1.3の表記を使用して、図7で定義された形式を持っています。httpデータグラムがquicデータグラムフレーム[quic-dgram]を使用してエンコードされている場合、以下に定義されたコンテキストIDフィールドは、quic datagramフレームペイロードの開始時にある四半期ストリームIDフィールドに直接従うことに注意してください。[http-dgram]のセクション2.1を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "UDP Proxying HTTP Datagram Payload {\n  Context ID (i),\n  UDP Proxying Payload (..),\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 16,
+      "text": "Figure 7: UDP Proxying HTTP Datagram Format",
+      "ja": "図7：UDPプロキシHTTPデータグラム形式"
+    },
+    {
+      "indent": 3,
+      "text": "Context ID: A variable-length integer (see Section 16 of [QUIC]) that contains the value of the Context ID. If an HTTP/3 Datagram that carries an unknown Context ID is received, the receiver SHALL either drop that datagram silently or buffer it temporarily (on the order of a round trip) while awaiting the registration of the corresponding Context ID. UDP Proxying Payload: The payload of the datagram, whose semantics depend on the value of the previous field. Note that this field can be empty.",
+      "ja": "コンテキストID：コンテキストIDの値を含む可変長整数（[QUIC]のセクション16を参照）。未知のコンテキストIDを搭載したHTTP/3データグラムが受信された場合、受信者は、対応するコンテキストIDの登録を待っている間に、そのデータグラムを静かにドロップするか（往復の順序で）バッファする（往復の順序で）UDPプロキシペイロード：データグラムのペイロード。そのセマンティクスは前のフィールドの値に依存します。このフィールドは空になる可能性があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "UDP packets are encoded using HTTP Datagrams with the Context ID field set to zero. When the Context ID field is set to zero, the UDP Proxying Payload field contains the unmodified payload of a UDP packet (referred to as data octets in [UDP]).",
+      "ja": "UDPパケットは、コンテキストIDフィールドがゼロに設定されたHTTPデータグラムを使用してエンコードされます。コンテキストIDフィールドがゼロに設定されている場合、UDPプロキシペイロードフィールドには、UDPパケットの未修正ペイロード（[UDP]のデータオクテットと呼ばれます）が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "By virtue of the definition of the UDP header [UDP], it is not possible to encode UDP payloads longer than 65527 bytes. Therefore, endpoints MUST NOT send HTTP Datagrams with a UDP Proxying Payload field longer than 65527 using Context ID zero. An endpoint that receives an HTTP Datagram using Context ID zero whose UDP Proxying Payload field is longer than 65527 MUST abort the corresponding stream. If a UDP proxy knows it can only send out UDP packets of a certain length due to its underlying link MTU, it has no choice but to discard incoming HTTP Datagrams using Context ID zero whose UDP Proxying Payload field is longer than that limit. If the discarded HTTP Datagram was transported by a DATAGRAM capsule, the receiver SHOULD discard that capsule without buffering the capsule contents.",
+      "ja": "UDPヘッダー[UDP]の定義により、65527バイトを超えるUDPペイロードをエンコードすることはできません。したがって、エンドポイントは、コンテキストIDゼロを使用して65527より長いUDPをプロキシペイロードフィールドでHTTPデータグラムを送信してはなりません。UDPプロキシペイロードフィールドが65527より長いコンテキストIDゼロを使用してHTTPデータグラムを受信するエンドポイントは、対応するストリームを中止する必要があります。UDPプロキシが、基礎となるリンクMTUのために特定の長さのUDPパケットを送信できることを知っている場合、UDPプロキシペイロードフィールドがその制限よりも長いコンテキストIDゼロを使用して、着信HTTPデータグラムを破棄する以外に選択肢はありません。廃棄されたHTTPデータグラムがデータグラムカプセルによって輸送された場合、レシーバーはカプセルの内容をバッファリングせずにそのカプセルを破棄する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP proxy receives an HTTP Datagram before it has received the corresponding request, it SHALL either drop that HTTP Datagram silently or buffer it temporarily (on the order of a round trip) while awaiting the corresponding request.",
+      "ja": "UDPプロキシが対応するリクエストを受信する前にHTTPデータグラムを受信した場合、対応するリクエストを待っている間、HTTPデータグラムを静かにドロップするか、一時的に（往復の順序で）バッファリングするものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that buffering datagrams (either because the request was not yet received or because the Context ID is not yet known) consumes resources. Receivers that buffer datagrams SHOULD apply buffering limits in order to reduce the risk of resource exhaustion occurring. For example, receivers can limit the total number of buffered datagrams or the cumulative size of buffered datagrams on a per-stream, per-context, or per-connection basis.",
+      "ja": "バッファリングデータグラム（要求がまだ受信されていないため、またはコンテキストIDがまだわかっていないため）がリソースを消費することに注意してください。バッファデータグラムを受信者は、リソースの疲労が発生するリスクを減らすために、バッファリング制限を適用する必要があります。たとえば、受信機は、バッファリングされたデータグラムの総数または、ストリームあたり、コンテキストごと、または接続ごとのベースでバッファリングされたデータグラムの累積サイズを制限できます。"
+    },
+    {
+      "indent": 3,
+      "text": "A client MAY optimistically start sending UDP packets in HTTP Datagrams before receiving the response to its UDP proxying request. However, implementers should note that such proxied packets may not be processed by the UDP proxy if it responds to the request with a failure or if the proxied packets are received by the UDP proxy before the request and the UDP proxy chooses to not buffer them.",
+      "ja": "クライアントは、UDPプロキシリクエストへの応答を受信する前に、HTTPデータグラムでUDPパケットの送信を楽観的に開始する場合があります。ただし、実装者は、そのようなプロキシされたパケットが、障害がある場合にリクエストに応答した場合、またはリクエストの前にuDPプロキシによってproxiedパケットが受信され、UDPプロキシがバッファーしないことを選択した場合、UDPプロキシによって処理されない場合があることに注意する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Performance Considerations",
+      "section_title": true,
+      "ja": "6. パフォーマンスに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Bursty traffic can often lead to temporally correlated packet losses; in turn, this can lead to suboptimal responses from congestion controllers in protocols running over UDP. To avoid this, UDP proxies SHOULD strive to avoid increasing burstiness of UDP traffic; they SHOULD NOT queue packets in order to increase batching.",
+      "ja": "破裂したトラフィックは、しばしば一時的に相関するパケット損失につながる可能性があります。次に、これにより、UDPを介して実行されているプロトコルの混雑コントローラーからの最適ではない応答につながる可能性があります。これを回避するために、UDPプロキシはUDPトラフィックの乱れを避けるために努力する必要があります。バッチを増やすためにパケットをキューにするべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When the protocol running over UDP that is being proxied uses congestion control (e.g., [QUIC]), the proxied traffic will incur at least two nested congestion controllers. The underlying HTTP connection MUST NOT disable congestion control unless it has an out-of-band way of knowing with absolute certainty that the inner traffic is congestion-controlled.",
+      "ja": "プロキシングされているUDPを介して実行されているプロトコルが混雑制御を使用すると（[QUIC]）、プロキシされたトラフィックには少なくとも2つのネストされた混雑コントローラーが発生します。基礎となるHTTP接続は、内部のトラフィックが混雑制御されていることを絶対に確実に知る帯域外の方法がない限り、混雑制御を無効にしてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "If a client or UDP proxy with a connection containing a UDP Proxying request stream disables congestion control, it MUST NOT signal Explicit Congestion Notification (ECN) [ECN] support on that connection. That is, it MUST mark all IP headers with the Not-ECT codepoint. It MAY continue to report ECN feedback via QUIC ACK_ECN frames or the TCP ECE bit, as the peer may not have disabled congestion control.",
+      "ja": "UDPプロキシリクエストストリームを含む接続を備えたクライアントまたはUDPプロキシが混雑制御を無効にする場合、その接続で明示的な混雑通知（ECN）[ECN]サポートを信号してはなりません。つまり、すべてのIPヘッダーを非ectコードポイントでマークする必要があります。ピアが混雑制御を無効にしていない可能性があるため、QUIC ACK_ECNフレームまたはTCP ECEビットを介してECNフィードバックを報告し続ける可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the protocol running over UDP that is being proxied uses loss recovery (e.g., [QUIC]), and the underlying HTTP connection runs over TCP, the proxied traffic will incur at least two nested loss recovery mechanisms. This can reduce performance as both can sometimes independently retransmit the same data. To avoid this, UDP proxying SHOULD be performed over HTTP/3 to allow leveraging the QUIC DATAGRAM frame.",
+      "ja": "プロキシングされているUDPを介して実行されるプロトコルが損失回復を使用し（[QUIC]）、TCPを介して基礎となるHTTP接続が実行されると、プロキシされたトラフィックは少なくとも2つのネストされた損失回復メカニズムが発生します。これにより、両方が同じデータを独立して再送信できる場合があるため、パフォーマンスを減らすことができます。これを回避するには、QUICデータグラムフレームを活用できるように、HTTP/3でUDPプロキシを実行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. MTU Considerations",
+      "section_title": true,
+      "ja": "6.1. MTUの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/3 with the QUIC Datagram extension [QUIC-DGRAM], UDP payloads are transmitted in QUIC DATAGRAM frames. Since those cannot be fragmented, they can only carry payloads up to a given length determined by the QUIC connection configuration and the Path MTU (PMTU). If a UDP proxy is using QUIC DATAGRAM frames and it receives a UDP payload from the target that will not fit inside a QUIC DATAGRAM frame, the UDP proxy SHOULD NOT send the UDP payload in a DATAGRAM capsule, as that defeats the end-to-end unreliability characteristic that methods such as Datagram Packetization Layer PMTU Discovery (DPLPMTUD) depend on [DPLPMTUD]. In this scenario, the UDP proxy SHOULD drop the UDP payload and send an ICMP Packet Too Big message to the target; see Section 3.2 of [ICMP6].",
+      "ja": "QUIC Datagram拡張子[Quic-Dgram]を使用してHTTP/3を使用する場合、UDPペイロードはQUICデータグラムフレームで送信されます。それらは断片化できないため、QUIC接続構成とPATH MTU（PMTU）によって決定される特定の長さまでペイロードを運ぶことができます。UDPプロキシがQUICデータグラムフレームを使用していて、QUICデータグラムフレーム内に収まらないターゲットからUDPペイロードを受信している場合、UDPプロキシは、最終的なものを倒すため、UDPペイロードをデータグラムカプセルに送信してはなりません。Datagramパケット化レイヤーPMTU発見（DPLPMTUD）などのメソッドが[DPLPMTUD]に依存するという信頼性の特性を終了します。このシナリオでは、UDPプロキシはUDPペイロードをドロップし、ICMPパケットをターゲットに大きすぎるメッセージを送信する必要があります。[ICMP6]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Tunneling of ECN Marks",
+      "section_title": true,
+      "ja": "6.2. ECNマークのトンネル"
+    },
+    {
+      "indent": 3,
+      "text": "UDP proxying does not create an IP-in-IP tunnel, so the guidance in [ECN-TUNNEL] about transferring ECN marks between inner and outer IP headers does not apply. There is no inner IP header in UDP proxying tunnels.",
+      "ja": "UDPプロキシはIP-in-IPトンネルを作成しないため、内側と外側のIPヘッダー間のECNマークの転送に関する[ECNトンネル]のガイダンスは適用されません。UDPプロキシトンネルには内部IPヘッダーはありません。"
+    },
+    {
+      "indent": 3,
+      "text": "In this specification, note that UDP proxying clients do not have the ability to control the ECN codepoints on UDP packets the UDP proxy sends to the target, nor can UDP proxies communicate the markings of each UDP packet from target to UDP proxy.",
+      "ja": "この仕様では、UDPプロキシクライアントには、UDPプロキシがターゲットに送信するUDPパケットのECNコードポイントを制御する機能がないことに注意してください。また、UDPプロキシは、各UDPパケットのマークをターゲットからUDPプロキシに伝えることもできません。"
+    },
+    {
+      "indent": 3,
+      "text": "A UDP proxy MUST ignore ECN bits in the IP header of UDP packets received from the target, and it MUST set the ECN bits to Not-ECT on UDP packets it sends to the target. These do not relate to the ECN markings of packets sent between client and UDP proxy in any way.",
+      "ja": "UDPプロキシは、ターゲットから受信したUDPパケットのIPヘッダーのECNビットを無視する必要があり、ターゲットに送信されるUDPパケットでECNビットを設定する必要があります。これらは、クライアントとUDPプロキシの間で送信されたパケットのECNマークに関連していません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "There are significant risks in allowing arbitrary clients to establish a tunnel to arbitrary targets, as that could allow bad actors to send traffic and have it attributed to the UDP proxy. HTTP servers that support UDP proxying ought to restrict its use to authenticated users.",
+      "ja": "arbitrary意的なクライアントが任意のターゲットへのトンネルを確立できるようにすることには重大なリスクがあります。これにより、悪いアクターがトラフィックを送信し、UDPプロキシに起因する可能性があるためです。UDPのプロキシをサポートするHTTPサーバーは、その使用を認証されたユーザーに制限する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "There exist software and network deployments that perform access control checks based on the source IP address of incoming requests. For example, some software allows unauthenticated configuration changes if they originated from 127.0.0.1. Such software could be running on the same host as the UDP proxy or in the same broadcast domain. Proxied UDP traffic would then be received with a source IP address belonging to the UDP proxy. If this source address is used for access control, UDP proxying clients could use the UDP proxy to escalate their access privileges beyond those they might otherwise have. This could lead to unauthorized access by UDP proxying clients unless the UDP proxy disallows UDP proxying requests to vulnerable targets, such as the UDP proxy's own addresses and localhost, link-local, multicast, and broadcast addresses. UDP proxies can use the destination_ip_prohibited Proxy Error Type from Section 2.3.5 of [PROXY-STATUS] when rejecting such requests.",
+      "ja": "着信要求のソースIPアドレスに基づいてアクセス制御チェックを実行するソフトウェアとネットワークの展開が存在します。たとえば、一部のソフトウェアにより、127.0.0.1から発信された場合、未認定の構成変更が可能になります。このようなソフトウェアは、UDPプロキシと同じホストまたは同じブロードキャストドメインで実行される可能性があります。その後、Proxied UDPトラフィックは、UDPプロキシに属するソースIPアドレスで受信されます。このソースアドレスがアクセス制御に使用されている場合、UDPプロキシクライアントはUDPプロキシを使用して、他の方法ではアクセス権限を超えてアクセス権限をエスカレートできます。これにより、UDPプロキシがUDPプロキシ独自のアドレスやLocalHost、Link-Local、Multicast、およびBroadcastアドレスなどの脆弱なターゲットにUDPプロキシリクエストを拒否しない限り、UDPのプロキシクライアントによる不正アクセスにつながる可能性があります。UDPプロキシは、そのようなリクエストを拒否する際に、[プロキシ-status]のセクション2.3.5からDestination_IP_PROBITITEDプロキシエラータイプを使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "UDP proxies share many similarities with TCP CONNECT proxies when considering them as infrastructure for abuse to enable denial-of-service (DoS) attacks. Both can obfuscate the attacker's source address from the attack target. In the case of a stateless volumetric attack (e.g., a TCP SYN flood or a UDP flood), both types of proxies pass the traffic to the target host. With stateful volumetric attacks (e.g., HTTP flooding) being sent over a TCP CONNECT proxy, the proxy will only send data if the target has indicated its willingness to accept data by responding with a TCP SYN-ACK. Once the path to the target is flooded, the TCP CONNECT proxy will no longer receive replies from the target and will stop sending data. Since UDP does not establish shared state between the UDP proxy and the target, the UDP proxy could continue sending data to the target in such a situation. While a UDP proxy could potentially limit the number of UDP packets it is willing to forward until it has observed a response from the target, that provides limited protection against DoS attacks when attacks target open UDP ports where the protocol running over UDP would respond and that would be interpreted as willingness to accept UDP by the UDP proxy. Such a packet limit could also cause issues for valid traffic.",
+      "ja": "UDPプロキシは、虐待のインフラストラクチャと考えると、サービス拒否（DOS）攻撃を可能にするためのインフラストラクチャと見なす際に、TCP Connectプロキシと多くの類似点を共有します。どちらも攻撃者のソースアドレスを攻撃ターゲットから難読化できます。無国籍の体積攻撃（たとえば、TCP Syn洪水やUDP洪水など）の場合、両方のタイプのプロキシがターゲットホストにトラフィックを渡します。 TCP Connect Proxyを介してPertive Bolumetric Attack（HTTP洪水など）が送信されると、TCP Syn-ackで応答することによりデータを受け入れる意欲がターゲットが示す場合のみ、プロキシはデータを送信します。ターゲットへのパスが浸水すると、TCP Connectプロキシはターゲットから返信を受信せず、データの送信を停止します。 UDPはUDPプロキシとターゲットの間に共有状態を確立していないため、UDPプロキシはそのような状況でターゲットにデータを送信し続けることができます。 UDPプロキシは、UDPパケットの数を潜在的に制限する可能性がありますが、ターゲットからの応答が観察されるまで転送することをいとわない。 UDPプロキシによってUDPを受け入れる意欲があると解釈されます。このようなパケット制限は、有効なトラフィックの問題を引き起こす可能性もあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The security considerations described in Section 4 of [HTTP-DGRAM] also apply here. Since it is possible to tunnel IP packets over UDP, the guidance in [TUNNEL-SECURITY] can apply.",
+      "ja": "[http-dgram]のセクション4で説明されているセキュリティ上の考慮事項もここに適用されます。UDPでIPパケットをトンネルすることが可能であるため、[トンネルセキュリティ]のガイダンスが適用できます。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. HTTP Upgrade Token",
+      "section_title": true,
+      "ja": "8.1. HTTPアップグレードトークン"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has registered \"connect-udp\" in the \"HTTP Upgrade Tokens\" registry maintained at <https://www.iana.org/assignments/http-upgrade-tokens>.",
+      "ja": "IANAは、<https://www.iana.org/assignments/http-upgrade-tokens>に維持されている「httpアップグレードトークントークン」レジストリに「connect-udp」を登録しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Value: connect-udp Description: Proxying of UDP Payloads Expected Version Tokens: None Reference: RFC 9298",
+      "ja": "値：Connect-UUDP説明：UDPペイロードのプロキシ予想バージョントークン：なしリファレンス：RFC 9298"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Well-Known URI",
+      "section_title": true,
+      "ja": "8.2. よく知られているウリ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has registered \"masque\" in the \"Well-Known URIs\" registry maintained at <https://www.iana.org/assignments/well-known-uris>.",
+      "ja": "IANAは、<https://www.iana.org/assignments/well-known-uris>に維持されている「有名なURIS」レジストリに「マスク」を登録しました。"
+    },
+    {
+      "indent": 3,
+      "text": "URI Suffix:  masque\nChange Controller:  IETF\nReference:  RFC 9298\nStatus:  permanent\nRelated Information:  Includes all resources identified with the path\n   prefix \"/.well-known/masque/udp/\"",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ABNF] Crocker, D., Ed. and P. Overell, \"Augmented BNF for Syntax Specifications: ABNF\", RFC 2234, DOI 10.17487/RFC2234, November 1997, <https://www.rfc-editor.org/info/rfc2234>.",
+      "ja": "[ABNF] Crocker、D.、ed。およびP. Overell、「構文仕様のためのBNFの増強：ABNF：ABNF」、RFC 2234、DOI 10.17487/RFC2234、1997年11月、<https://www.rfc-editor.org/info/rfc2234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ECN] Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition of Explicit Congestion Notification (ECN) to IP\", RFC 3168, DOI 10.17487/RFC3168, September 2001, <https://www.rfc-editor.org/info/rfc3168>.",
+      "ja": "[ECN] Ramakrishnan、K.、Floyd、S。、およびD. Black、「IPへの明示的な混雑通知（ECN）の追加」、RFC 3168、DOI 10.17487/RFC3168、2001年9月、<https：// www。rfc-editor.org/info/rfc3168>。"
+    },
+    {
+      "indent": 3,
+      "text": "[EXT-CONNECT2] McManus, P., \"Bootstrapping WebSockets with HTTP/2\", RFC 8441, DOI 10.17487/RFC8441, September 2018, <https://www.rfc-editor.org/info/rfc8441>.",
+      "ja": "[ext-connect2] McManus、P。、 \"HTTP/2でWebStrappetsをブートストラップするWebStest、RFC 8441、DOI 10.17487/RFC8441、2018年9月、<https://www.rfc-editor.org/info/rfc841>。"
+    },
+    {
+      "indent": 3,
+      "text": "[EXT-CONNECT3] Hamilton, R., \"Bootstrapping WebSockets with HTTP/3\", RFC 9220, DOI 10.17487/RFC9220, June 2022, <https://www.rfc-editor.org/info/rfc9220>.",
+      "ja": "[ext-connect3] Hamilton、R。、「HTTP/3でWebStrappetsをブートストラップするWebStest、RFC 9220、DOI 10.17487/RFC9220、2022年6月、<https://www.rfc-editor.org/info/rfc9220>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP Semantics\", STD 97, RFC 9110, DOI 10.17487/RFC9110, June 2022, <https://www.rfc-editor.org/info/rfc9110>.",
+      "ja": "[HTTP] Fielding、R.、Ed。、Nottingham、M.、Ed。、およびJ. Reschke、ed。、 \"HTTP Semantics\"、Std 97、RFC 9110、DOI 10.17487/RFC9110、2022年6月、<https：//www.rfc-editor.org/info/rfc9110>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP-DGRAM] Schinazi, D. and L. Pardue, \"HTTP Datagrams and the Capsule Protocol\", RFC 9297, DOI 10.17487/RFC9297, August 2022, <https://www.rfc-editor.org/info/rfc9297>.",
+      "ja": "[HTTP-DGRAM] Schinazi、D。およびL. Pardue、「HTTPデータグラムとカプセルプロトコル」、RFC 9297、DOI 10.17487/RFC9297、2022年8月、<https://www.rfc-editor.org/info/rfc9297>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/1.1] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP/1.1\", STD 99, RFC 9112, DOI 10.17487/RFC9112, June 2022, <https://www.rfc-editor.org/info/rfc9112>.",
+      "ja": "[HTTP/1.1] Fielding、R.、ed。、Nottingham、M.、ed。、およびJ. Reschke、ed。、 \"Http/1.1\"、Std 99、RFC 9112、DOI 10.17487/RFC9112、2022年6月、<<https://www.rfc-editor.org/info/rfc9112>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/2] Thomson, M., Ed. and C. Benfield, Ed., \"HTTP/2\", RFC 9113, DOI 10.17487/RFC9113, June 2022, <https://www.rfc-editor.org/info/rfc9113>.",
+      "ja": "[HTTP/2] Thomson、M.、ed。and C. Benfield、ed。、「HTTP/2」、RFC 9113、DOI 10.17487/RFC9113、2022年6月、<https://www.rfc-editor.org/info/rfc9113>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/3] Bishop, M., Ed., \"HTTP/3\", RFC 9114, DOI 10.17487/RFC9114, June 2022, <https://www.rfc-editor.org/info/rfc9114>.",
+      "ja": "[HTTP/3] Bishop、M.、ed。、 \"HTTP/3\"、RFC 9114、DOI 10.17487/RFC9114、2022年6月、<https://www.rfc-editor.org/info/rfc9114>。"
+    },
+    {
+      "indent": 3,
+      "text": "[PROXY-STATUS] Nottingham, M. and P. Sikora, \"The Proxy-Status HTTP Response Header Field\", RFC 9209, DOI 10.17487/RFC9209, June 2022, <https://www.rfc-editor.org/info/rfc9209>.",
+      "ja": "[Proxy-Status] Nottingham、M。and P. Sikora、「プロキシステータスHTTP応答ヘッダーフィールド」、RFC 9209、DOI 10.17487/RFC9209、2022年6月、<https://www.rfc-editor.org/info/rfc9209>。"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[Quic] Iyengar、J.、ed。and M. Thomson、ed。、「Quic：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487/RFC9000、2021年5月、<https://www.rfc-editor.org/info/rfc9000>"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC-DGRAM] Pauly, T., Kinnear, E., and D. Schinazi, \"An Unreliable Datagram Extension to QUIC\", RFC 9221, DOI 10.17487/RFC9221, March 2022, <https://www.rfc-editor.org/info/rfc9221>.",
+      "ja": "[Quic-Dgram] Pauly、T.、Kinnear、E。、およびD. Schinazi、「QUICへの信頼性の低いデータグラム拡張」、RFC 9221、DOI 10.17487/RFC9221、2022年3月、<https：//www.rfc-editor.org/info/rfc9221>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字のあいまいさ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TCP] Eddy, W., Ed., \"Transmission Control Protocol (TCP)\", STD 7, RFC 9293, DOI 10.17487/RFC9293, August 2022, <https://www.rfc-editor.org/info/rfc9293>.",
+      "ja": "[TCP] Eddy、W.、ed。、「Transmission Control Protocol（TCP）」、STD 7、RFC 9293、DOI 10.17487/RFC9293、2022年8月、<https://www.rfc-editor.org/info/RFC92933>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TEMPLATE] Gregorio, J., Fielding, R., Hadley, M., Nottingham, M., and D. Orchard, \"URI Template\", RFC 6570, DOI 10.17487/RFC6570, March 2012, <https://www.rfc-editor.org/info/rfc6570>.",
+      "ja": "[テンプレート]グレゴリオ、J。、フィールディング、R。、ハドリー、M。、ノッティンガム、M。、およびD.オーチャード、「URIテンプレート」、RFC 6570、DOI 10.17487/RFC6570、2012年3月、<https：// wwww.rfc-editor.org/info/rfc6570>。"
+    },
+    {
+      "indent": 3,
+      "text": "[UDP] Postel, J., \"User Datagram Protocol\", STD 6, RFC 768, DOI 10.17487/RFC0768, August 1980, <https://www.rfc-editor.org/info/rfc768>.",
+      "ja": "[UDP] Postel、J。、「ユーザーデータグラムプロトコル」、STD 6、RFC 768、DOI 10.17487/RFC0768、1980年8月、<https://www.rfc-editor.org/info/rfc768>"
+    },
+    {
+      "indent": 3,
+      "text": "[URI] Berners-Lee, T., Fielding, R., and L. Masinter, \"Uniform Resource Identifier (URI): Generic Syntax\", STD 66, RFC 3986, DOI 10.17487/RFC3986, January 2005, <https://www.rfc-editor.org/info/rfc3986>.",
+      "ja": "[URI] Berners-Lee、T.、Fielding、R。、およびL. Masinter、「Uniform Resource Identifier（URI）：Generic Syntax」、Std 66、RFC 3986、DOI 10.17487/RFC3986、2005年1月、<https：//www.rfc-editor.org/info/rfc3986>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[BEHAVE] Audet, F., Ed. and C. Jennings, \"Network Address Translation (NAT) Behavioral Requirements for Unicast UDP\", BCP 127, RFC 4787, DOI 10.17487/RFC4787, January 2007, <https://www.rfc-editor.org/info/rfc4787>.",
+      "ja": "[行動]オーデット、F。、編およびC.ジェニングス、「ユニキャストUDPのネットワークアドレス変換（NAT）の行動要件」、BCP 127、RFC 4787、DOI 10.17487/RFC4787、2007年1月、<https://www.rfc-editor.org/info/rfc4787>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DPLPMTUD] Fairhurst, G., Jones, T., Tüxen, M., Rüngeler, I., and T. Völker, \"Packetization Layer Path MTU Discovery for Datagram Transports\", RFC 8899, DOI 10.17487/RFC8899, September 2020, <https://www.rfc-editor.org/info/rfc8899>.",
+      "ja": "[dplpmtud] Fairhurst、G.、Jones、T.、Tüxen、M.、Rüngeler、I。、およびT.Völker、「データグラムトランスポートのパケット化レイヤーパスMTUディスカバリー」、RFC 8899、DOI 10.17487/RFC8899、2020年9月、<https://www.rfc-editor.org/info/rfc8899>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ECN-TUNNEL] Briscoe, B., \"Tunnelling of Explicit Congestion Notification\", RFC 6040, DOI 10.17487/RFC6040, November 2010, <https://www.rfc-editor.org/info/rfc6040>.",
+      "ja": "[ECN-Tunnel] Briscoe、B。、「明示的な混雑通知のトンネル」、RFC 6040、DOI 10.17487/RFC6040、2010年11月、<https://www.rfc-editor.org/info/rfc6040>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HELIUM] Schwartz, B. M., \"Hybrid Encapsulation Layer for IP and UDP Messages (HELIUM)\", Work in Progress, Internet-Draft, draft-schwartz-httpbis-helium-00, 25 June 2018, <https://datatracker.ietf.org/doc/html/draft-schwartz-httpbis-helium-00>.",
+      "ja": "[Helium] Schwartz、B。M.、「IPおよびUDPメッセージのハイブリッドカプセル化レイヤー（Helium）」、Progress、Internet-Draft、Draft-Schwartz-Httpbis-Helium-00、2018年6月25日、<https：// datatracker。ietf.org/doc/html/draft-schwartz-httpbis-helium-00>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HiNT] Pardue, L., \"HTTP-initiated Network Tunnelling (HiNT)\", Work in Progress, Internet-Draft, draft-pardue-httpbis-http-network-tunnelling-00, 2 July 2018, <https://datatracker.ietf.org/doc/html/draft-pardue-httpbis-http-network-tunnelling-00>.",
+      "ja": "[ヒント] Pardue、L。、「HTTP開始ネットワークトンネル（ヒント）」、Work in Progress、Internet-Draft、Draft-Pardue-Httpbis-Http-Network-Tunnelling-00、2018年7月2日、<https：//datatracker.ietf.org/doc/html/draft-pardue-httpbis-http-network-tunnelling-00>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ICMP6] Conta, A., Deering, S., and M. Gupta, Ed., \"Internet Control Message Protocol (ICMPv6) for the Internet Protocol Version 6 (IPv6) Specification\", STD 89, RFC 4443, DOI 10.17487/RFC4443, March 2006, <https://www.rfc-editor.org/info/rfc4443>.",
+      "ja": "[ICMP6] Conta、A.、Deering、S。、およびM. Gupta、ed。、「インターネットプロトコルバージョン6（IPv6）仕様のインターネット制御メッセージプロトコル（ICMPV6）、STD 89、RFC 4443、DOI 10.17487/RFC4443、2006年3月、<https://www.rfc-editor.org/info/rfc4443>。"
+    },
+    {
+      "indent": 3,
+      "text": "[MASQUE-ORIGINAL] Schinazi, D., \"The MASQUE Protocol\", Work in Progress, Internet-Draft, draft-schinazi-masque-00, 28 February 2019, <https://datatracker.ietf.org/doc/html/draft-schinazi-masque-00>.",
+      "ja": "[Masque-Original] Schinazi、D。、「The Masque Protocol」、Work in Progress、Internet-Draft、Draft-Schinazi-Masque-00、2019年2月28日、<https://datatracker.ietf.org/doc/html/ドラフトシナジマスク-00>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TUNNEL-SECURITY] Krishnan, S., Thaler, D., and J. Hoagland, \"Security Concerns with IP Tunneling\", RFC 6169, DOI 10.17487/RFC6169, April 2011, <https://www.rfc-editor.org/info/rfc6169>.",
+      "ja": "[トンネルセキュリティ]クリシュナン、S。、タラー、D。、およびJ.ホーグランド、「IPトンネリングに関するセキュリティ上の懸念」、RFC 6169、DOI 10.17487/RFC6169、2011年4月、<https：//www.rfc-editor。org/info/rfc6169>。"
+    },
+    {
+      "indent": 3,
+      "text": "[UDP-USAGE] Eggert, L., Fairhurst, G., and G. Shepherd, \"UDP Usage Guidelines\", BCP 145, RFC 8085, DOI 10.17487/RFC8085, March 2017, <https://www.rfc-editor.org/info/rfc8085>.",
+      "ja": "[UDP-USAGE] Eggert、L.、Fairhurst、G.、およびG. Shepherd、「UDP使用ガイドライン」、BCP 145、RFC 8085、DOI 10.17487/RFC8085、2017年3月、<https：//www.rfc-editor.org/info/rfc8085>。"
+    },
+    {
+      "indent": 3,
+      "text": "[WEBSOCKET] Fette, I. and A. Melnikov, \"The WebSocket Protocol\", RFC 6455, DOI 10.17487/RFC6455, December 2011, <https://www.rfc-editor.org/info/rfc6455>.",
+      "ja": "[WebSocket] Fette、I。およびA. Melnikov、「The Websocket Protocol」、RFC 6455、DOI 10.17487/RFC6455、<https://www.rfc-editor.org/info/rfc655>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the MASQUE Working Group, and the author thanks all MASQUE enthusiasts for their contributions. This proposal was inspired directly or indirectly by prior work from many people, in particular [HELIUM] by Ben Schwartz, [HiNT] by Lucas Pardue, and the original MASQUE Protocol [MASQUE-ORIGINAL] by the author of this document.",
+      "ja": "このドキュメントはマスクワーキンググループの製品であり、著者はすべてのマスク愛好家の貢献に感謝します。この提案は、多くの人々からの以前の研究、特にベン・シュワルツによる[ヘリウム]、[ヒント]、ルーカス・パルドによる[ヒント]、およびこの文書の著者による元のマスクプロトコル[マスクオリジナル]によって直接または間接的に触発されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The author would like to thank Eric Rescorla for suggesting the use of an HTTP method to proxy UDP. The author is indebted to Mark Nottingham and Lucas Pardue for the many improvements they contributed to this document. The extensibility design in this document came out of the HTTP Datagrams Design Team, whose members were Alan Frindell, Alex Chernyakhovsky, Ben Schwartz, Eric Rescorla, Lucas Pardue, Marcus Ihlar, Martin Thomson, Mike Bishop, Tommy Pauly, Victor Vasiliev, and the author of this document.",
+      "ja": "著者は、UDPにHTTPメソッドの使用を提案してくれたEric Rescorlaに感謝したいと思います。著者は、彼らがこの文書に貢献した多くの改善について、ノッティンガムとルーカス・パルデューをマークすることに感謝しています。このドキュメントの拡張性設計は、HTTP Datagrams Designチームから出てきました。そのメンバーは、Alan Frindell、Alex Chernyakhovsky、Ben Schwartz、Eric Rescorla、Lucas Pardue、Marcus Ihlar、Martin Thomson、Mike Bishop、Tommy Vasiliev、およびVictor Vasiliev、このドキュメントの著者。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の連絡先"
+    },
+    {
+      "indent": 3,
+      "text": "David Schinazi Google LLC 1600 Amphitheatre Parkway Mountain View, CA 94043 United States of America Email: dschinazi.ietf@gmail.com",
+      "ja": "David Schinazi Google LLC 1600 Amphitheater Parkway Mountain View、CA 94043アメリカ合衆国電子メール：dschinazi.ietf@gmail.com"
+    }
+  ]
+}
