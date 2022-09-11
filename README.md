@@ -156,6 +156,20 @@ python3 main.py --make-index  # インデックスページの作成
 | html/index.html | トップページ| make_index (生成)
 
 
+#### WGの一覧作成
+RFCの対訳ページにどのWGが作成したのかを表示するために、WGの一覧を取得してJSONに保存するためのコマンドです。
+実行頻度は、週1ペース程度で十分です。
+```bash
+python3 main.py --fetch-group
+```
+
+#### RFC Draftの翻訳
+例えば、TLS Encrypted Client Hello (Draft版) である https://datatracker.ietf.org/doc/draft-ietf-tls-esni/ を翻訳したい場合は、以下のコマンドを実行します。
+```bash
+python3 main.py --draft draft-ietf-tls-esni-14
+python3 main.py --make-index-draft  # インデックスページの作成
+```
+
 ### 翻訳結果確認
 ローカルで成果物の確認：
 ```bash
