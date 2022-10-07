@@ -111,7 +111,7 @@ pip3 install -r requirements.txt
 - **Windows**: FireFox のサイトから geckodriver.exe をダウンロードし、src/trans_rfc.py から呼び出せるように環境変数 WEBDRIVER_EXE_PATH に exe のパスを設定ください。
 - **Linux (Ubuntu)** の場合は、以下のパッケージをインストールください。
     ```
-    sudo apt install python3-pip firefox
+    sudo apt install python3-pip firefox xdg-utils
     sudo pip install selenium
     ```
 
