@@ -156,7 +156,7 @@ class Paragraph:
         conds.append(len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3)  # table
         conds.append(len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3)  # syntax
-        conds.append(len(re.compile(r'^\s*\[', re.MULTILINE).findall(text)) >= 3)  # syntax
+        conds.append(len(re.compile(r'^\s*\[(?![A-Z])', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'\]\s*$', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*:', re.MULTILINE).findall(text)) >= 3)  # src
         conds.append(len(re.compile(r'^\s*o ', re.MULTILINE).findall(text)) >= 4)  # list

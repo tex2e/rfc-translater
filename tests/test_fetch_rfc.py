@@ -58,6 +58,21 @@ class TestFetchRfcSentence(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_square_brackets(self): # RFC 9307
+        p = Paragraph("""
+        There is a wide range of tools to analyze this data produced by IETF
+        participants or researchers interested in the work of the IETF.  Two
+        projects that presented their work at the workshop were BigBang
+        [BigBang] and Sodestream's IETFdata [ietfdata] library.  The RFC
+        Prolog Database was described in a submitted paper; see
+        [Prolog-Database].  These projects could provide additional insight
+        into existing IETF statistics [ArkkoStats] and datatracker statistics
+        [DatatrackerStats], e.g., gender-related information.  Privacy issues
+        and the implications of making such data publicly available were
+        discussed as well.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_hypens_underscore(self): # RFC 9271
         p = Paragraph("""
         Although "_", "-", "__--" are valid entity domain types, it is
