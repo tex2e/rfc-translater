@@ -177,6 +177,11 @@ python3 -m http.server
 # localhost:8000/htmlにアクセス
 ```
 
+### 単体テスト
+```
+python3 -m unittest discover -s tests -p "test_*.py"
+```
+
 ### RFC Draft
 RFCドラフトを翻訳することもできます。
 ```
