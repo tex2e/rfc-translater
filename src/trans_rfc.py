@@ -89,7 +89,7 @@ class TranslatorSeleniumGoogletrans(Translator):
             # Ubuntu:
             # sudo apt install python3-pip firefox
             # sudo pip3 install selenium
-            options.binary_location = '/usr/bin/firefox'
+            #options.binary_location = '/usr/bin/firefox'
             browser = webdriver.Firefox(options=options)
         browser.implicitly_wait(3)
         self._browser = browser
