@@ -120,55 +120,58 @@ pip3 install -r requirements.txt
 **注意：翻訳処理は非常に時間がかかります。1個のRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
 開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいしていました。
 
-#### 取得・翻訳・生成
+- **取得・翻訳・生成**
 
-```bash
-python3 main.py --rfc 1234          # RFC1234を翻訳する（取得+翻訳+HTML生成）
-python3 main.py --rfc 1234 --fetch  # RFCの取得だけ
-python3 main.py --rfc 1234 --trans  # RFCの翻訳だけ
-python3 main.py --rfc 1234 --make   # HTMLの生成だけ
-python3 main.py --begin 2220 --end 10000         # RFC2220〜10000を翻訳する
-python3 main.py --make --begin 2220 --end 10000  # RFC2220〜10000のHTMLを生成する
-python3 main.py                            # 未翻訳RFCを順番に翻訳する
-python3 main.py --begin 8000 --only-first  # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
-```
+    ```bash
+    python3 main.py --rfc 1234          # RFC1234を翻訳する（取得+翻訳+HTML生成）
+    python3 main.py --rfc 1234 --fetch  # RFCの取得だけ
+    python3 main.py --rfc 1234 --trans  # RFCの翻訳だけ
+    python3 main.py --rfc 1234 --make   # HTMLの生成だけ
+    python3 main.py --begin 2220 --end 10000         # RFC2220〜10000を翻訳する
+    python3 main.py --make --begin 2220 --end 10000  # RFC2220〜10000のHTMLを生成する
+    python3 main.py                            # 未翻訳RFCを順番に翻訳する
+    python3 main.py --begin 8000 --only-first  # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
+    ```
+
+- **トップページの生成**
+
+    htmlフォルダ内に存在するRFCファイルの一覧から、トップページを作成します。
+    ```bash
+    python3 main.py --make-index  # インデックス（目次）ページの作成
+    ```
+
+- **WGの一覧作成**
+
+    RFCの対訳ページにどのWGが作成したのかを表示するために、WGの一覧を取得してJSONに保存するためのコマンドです。
+    実行頻度は1回/週で十分だと思います。
+
+    ```bash
+    python3 main.py --fetch-group
+    ```
+
+- **RFC Draftの翻訳**
+
+    例えば、TLS Encrypted Client Hello (Draft版) である https://datatracker.ietf.org/doc/draft-ietf-tls-esni/ を翻訳したい場合は、以下のコマンドを実行します。
+    ```bash
+    python3 main.py --draft draft-ietf-tls-esni-14
+    python3 main.py --make-index-draft  # インデックスページの作成
+    ```
 
 生成物：
 
 | ファイルパス | 説明 | 生成元プログラム |
 |-----------|-----|--------------|
-| html/obsoletes.json | 廃止RFCの一覧 | fetch_index (取得)
-| data/A000/rfcABCD.json | 段落区切りで文章化した情報 | fetch_rfc（取得）
-| data/A000/rfcABCD-trans.json | 各文章の翻訳を付与した情報 | trans_rfc（翻訳）
-| html/rfcABCD.html | 原文と翻訳を並べて表示するHTML | make_html（生成）
+| html/obsoletes.json | 廃止RFCの一覧 | fetch_index.py (取得)
+| data/A000/rfcABCD.json | 段落区切りの文書 | fetch_rfc.py（取得）
+| data/A000/rfcABCD-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
+| html/rfcABCD.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）
+| html/index.html | トップページの生成 | make_index.py (生成)
+| html/group-rfcs.json | WGの一覧の取得・生成 | fetch_index_group.py (取得・生成)
+| data/draft/WG/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
+| data/draft/WG/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
+| html/draft/index.html | RFCドラフト一覧のトップページHTML | make_html.py（生成）
+| html/draft/draft-*.html | RFCドラフトの原文と翻訳を並べて表示するHTML | make_html.py（生成）
 
-
-#### トップページの生成
-
-```bash
-python3 main.py --make-index  # インデックスページの作成
-```
-
-生成物：
-
-| ファイルパス | 説明 | 生成元プログラム |
-|-----------|-----|--------------|
-| html/index.html | トップページ| make_index (生成)
-
-
-#### WGの一覧作成
-RFCの対訳ページにどのWGが作成したのかを表示するために、WGの一覧を取得してJSONに保存するためのコマンドです。
-実行頻度は、週1ペース程度で十分です。
-```bash
-python3 main.py --fetch-group
-```
-
-#### RFC Draftの翻訳
-例えば、TLS Encrypted Client Hello (Draft版) である https://datatracker.ietf.org/doc/draft-ietf-tls-esni/ を翻訳したい場合は、以下のコマンドを実行します。
-```bash
-python3 main.py --draft draft-ietf-tls-esni-14
-python3 main.py --make-index-draft  # インデックスページの作成
-```
 
 ### 翻訳結果確認
 ローカルで成果物の確認：
@@ -178,15 +181,8 @@ python3 -m http.server
 ```
 
 ### 単体テスト
-```
+```bash
 python3 -m unittest discover -s tests -p "test_*.py"
-```
-
-### RFC Draft
-RFCドラフトを翻訳することもできます。
-```
-python3 main.py --draft draft-ietf-quic-v2-04  # 指定したRFCドラフトの翻訳
-python3 main.py --make-index-draft  # Draft版のインデックスページの作成
 ```
 
 ### その他
