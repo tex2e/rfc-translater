@@ -146,6 +146,7 @@ class Paragraph:
         conds.append(re.search(r'(?:enum|struct|object) \{', text))  # tls
         conds.append(re.search(r'(?:HEADERS)\n\s*:[a-z]+ = ', text))  # http/2
         conds.append(re.search(r'\s::=\s', text))  # syntax
+        conds.append(re.search(r'\s\*\("', text))  # syntax
         conds.append(re.search(r'": (?:[\[\{\"\']|true,|false,)', text))  # json
         conds.append(re.search(r'= +[\[\(\{<*%#&]', text))  # src, syntax
         conds.append(len(re.compile(r'[{}]$', re.MULTILINE).findall(text)) >= 2)  # src
@@ -154,6 +155,7 @@ class Paragraph:
         conds.append(re.search(r'[/|\\] +[/|\\]', text))  # figure
         conds.append(len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3)  # table
         conds.append(len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3)  # table
+        conds.append(len(re.compile(r'[0-9a-zA-Z]\s{10,}[0-9a-zA-Z]', re.MULTILINE).findall(text)) >= 2)  # table
         conds.append(len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*\[(?![A-Z])', re.MULTILINE).findall(text)) >= 3)  # syntax

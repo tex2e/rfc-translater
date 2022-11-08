@@ -267,6 +267,20 @@ class TestFetchRfcCode(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
+    def test_table_without_lines(self): # RFC 6495
+        p = Paragraph("""
+           Name Type      Description
+            0              Reserved
+            3              SHA-1 Subject Key Identifier (SKI)
+            4              SHA-224 Subject Key Identifier (SKI)
+            5              SHA-256 Subject Key Identifier (SKI)
+            6              SHA-384 Subject Key Identifier (SKI)
+            7              SHA-512 Subject Key Identifier (SKI)
+            253-254        Experimental
+            255            Reserved
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
     def test_http2_header(self): # RFC 9298
         p = Paragraph("""
         HEADERS
@@ -291,6 +305,15 @@ class TestFetchRfcCode(unittest.TestCase):
         p = Paragraph("""
         target_host = IPv6address / IPv4address / reg-name
         target_port = port
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_BNF_2(self): # RFC 6497
+        p = Paragraph("""
+        lang      = language                 ; BCP 47, with restrictions
+                  ["-" script]
+                  ["-" region]
+                  *("-" variant)
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
