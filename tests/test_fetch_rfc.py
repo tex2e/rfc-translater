@@ -107,6 +107,22 @@ class TestFetchRfcSentence(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_copyright(self):
+        p = Paragraph("""
+        This document is subject to BCP 78 and the IETF Trust's Legal
+        Provisions Relating to IETF Documents
+        (http://trustee.ietf.org/license-info) in effect on the date of
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
+    def test_reference(self):
+        p = Paragraph("""
+        [TA-MGMT]  Reynolds, M. and S. Kent, "Local Trust Anchor Management
+                   for the Resource Public Key Infrastructure", Work in
+                   Progress, December 2011.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_note_online(self): # RFC 9271
         p = Paragraph("""
         |  Note: Historically, the Primary was known as the "Master".
@@ -267,6 +283,20 @@ class TestFetchRfcCode(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
+    def test_table_without_lines(self): # RFC 6495
+        p = Paragraph("""
+           Name Type      Description
+            0              Reserved
+            3              SHA-1 Subject Key Identifier (SKI)
+            4              SHA-224 Subject Key Identifier (SKI)
+            5              SHA-256 Subject Key Identifier (SKI)
+            6              SHA-384 Subject Key Identifier (SKI)
+            7              SHA-512 Subject Key Identifier (SKI)
+            253-254        Experimental
+            255            Reserved
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
     def test_http2_header(self): # RFC 9298
         p = Paragraph("""
         HEADERS
@@ -291,6 +321,15 @@ class TestFetchRfcCode(unittest.TestCase):
         p = Paragraph("""
         target_host = IPv6address / IPv4address / reg-name
         target_port = port
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_BNF_2(self): # RFC 6497
+        p = Paragraph("""
+        lang      = language                 ; BCP 47, with restrictions
+                  ["-" script]
+                  ["-" region]
+                  *("-" variant)
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
