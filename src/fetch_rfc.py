@@ -155,7 +155,7 @@ class Paragraph:
         conds.append(re.search(r'[/|\\] +[/|\\]', text))  # figure
         conds.append(len(re.compile(r'^\s*\|', re.MULTILINE).findall(text)) >= 3)  # table
         conds.append(len(re.compile(r'\*\s*$', re.MULTILINE).findall(text)) >= 3)  # table
-        conds.append(len(re.compile(r'[0-9a-zA-Z]\s{10,}[0-9a-zA-Z]', re.MULTILINE).findall(text)) >= 2)  # table
+        conds.append(len(re.compile(r'[0-9a-zA-Z] {10,}[0-9a-zA-Z]', re.MULTILINE).findall(text)) >= 2)  # table
         conds.append(len(re.compile(r'^\s*/', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*;', re.MULTILINE).findall(text)) >= 3)  # syntax
         conds.append(len(re.compile(r'^\s*\[(?![A-Z])', re.MULTILINE).findall(text)) >= 3)  # syntax

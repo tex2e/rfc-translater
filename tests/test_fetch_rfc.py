@@ -107,6 +107,14 @@ class TestFetchRfcSentence(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_reference(self):
+        p = Paragraph("""
+        [TA-MGMT]  Reynolds, M. and S. Kent, "Local Trust Anchor Management
+                   for the Resource Public Key Infrastructure", Work in
+                   Progress, December 2011.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_note_online(self): # RFC 9271
         p = Paragraph("""
         |  Note: Historically, the Primary was known as the "Master".
