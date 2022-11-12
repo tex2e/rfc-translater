@@ -179,12 +179,14 @@ class Paragraph:
             return True
 
         # 数式やプログラムを検出する
-        # 記号が(3 + 行数-1)文字以上のとき
-        # (ただし、丸括弧は直前には空白がないことが条件)
-        # (ただし、マイナスは直前に空白があることが条件)
+        # 以下のパターンが (3 + 行数-1) 個出現した場合、数式やプログラムと判断する：
+        #   * 記号「~+*=!#<>{}^@:;」が含まれること
+        #   * 丸括弧「(」の場合、直前には空白がないこと
+        #   * マイナス「-」やスラッシュ「/」の場合、直前に空白があること
+        #   * HTTPのContent-Typeのパターンがある場合
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
-        if len(re.findall(r'[~+*=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold \
+        if len(re.findall(r'[~+*=!#<>{}^@:;]|[^ ]\(| [-/]|(?:application|text)/', text)) >= threshold \
                 and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)):  # 文末が「.,:」ではない
             return True
         return False
