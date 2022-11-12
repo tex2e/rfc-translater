@@ -184,7 +184,7 @@ class Paragraph:
         # (ただし、マイナスは直前に空白があることが条件)
         lines_num = len(text.split("\n"))
         threshold = 3 + (lines_num - 1) * 1
-        if len(re.findall(r'[~+*/=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold \
+        if len(re.findall(r'[~+*=!#<>{}^@:;]|[^ ]\(| -', text)) >= threshold \
                 and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)):  # 文末が「.,:」ではない
             return True
         return False

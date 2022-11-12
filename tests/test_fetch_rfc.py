@@ -107,6 +107,14 @@ class TestFetchRfcSentence(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_copyright(self):
+        p = Paragraph("""
+        This document is subject to BCP 78 and the IETF Trust's Legal
+        Provisions Relating to IETF Documents
+        (http://trustee.ietf.org/license-info) in effect on the date of
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_reference(self):
         p = Paragraph("""
         [TA-MGMT]  Reynolds, M. and S. Kent, "Local Trust Anchor Management
