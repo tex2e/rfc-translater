@@ -358,6 +358,18 @@ class TestFetchRfcToc(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_TOC)
 
+    def test_toc_RFC9293(self): # RFC9293
+        p = Paragraph("""
+           1.  Purpose and Scope
+           2.  Introduction
+             2.1.  Requirements Language
+             2.2.  Key TCP Concepts
+           Appendix B.  TCP Requirement Summary
+           Acknowledgments
+           Author's Address
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_TOC)
+
 
 if __name__ == '__main__':
     unittest.main()
