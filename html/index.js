@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (parseInt(p1) < 2220) {
         return "[RFC" + p1 + "]"
       }
-      return '<a href="./rfc"' + p1 + '".html">[RFC' + p1 + ']</a>'
+      return '<a href="./rfc' + p1 + '.html">[RFC' + p1 + ']</a>'
     });
   })
 
