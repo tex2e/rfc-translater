@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   let rfc_draft = document.getElementById('rfc_draft');
 
+  // 編集ページの設定
   let footer = document.getElementById('rfc_footer');
   if (!rfc_draft && footer) {
     // 編集ページ表示方法
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // 廃止RFCの表示
   let rfc_alert = document.getElementById('rfc_alert');
   if (!rfc_draft && rfc_alert) {
     // 対象RFCが廃止されたか確認し、廃止なら修正版RFCへのリンクを表示する。
@@ -72,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function () {
           let badge_class = status_color_mapper[status];
           // console.log(badge_class);
 
-          rfc_status.innerHTML = '、ST：<a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-' + badge_class + '">' + status + '</a>';
+          rfc_status.innerHTML = ', ST: <a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-' + badge_class + '">' + status + '</a>';
         }
       }
     };
@@ -80,6 +82,7 @@ document.addEventListener('DOMContentLoaded', function () {
     httpRequest.send();
   }
 
+  // RFCの発行WG（ワーキンググループ）の表示
   let rfc_wg = document.getElementById('rfc_wg');
   if (!rfc_draft && rfc_wg) { // 標準RFC
     // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
@@ -92,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (wg) {
           let tmp = wg.split('/'); // "wg/tls"
           if (tmp.length >= 2) {
-            rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
+            rfc_wg.innerHTML = ', WG: <a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
           }
         }
       }
@@ -109,29 +112,49 @@ document.addEventListener('DOMContentLoaded', function () {
       let wg = m.groups['wg_name'];
       let tmp = wg.split('/'); // "wg/tls"
       if (tmp.length >= 2) {
-        rfc_wg.innerHTML = '、WG：<a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
+        rfc_wg.innerHTML = ', WG: <a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
       }
     }
   }
 
-  // Add theme toggle button to page
+  // ダークモードへの切り替えボタンの表示
   const themeToggleButton = document.createElement('button');
   const buttonToOriginalContainer = document.getElementsByClassName('jump-to-original-rfc-container')[0];
   const buttonToOriginal = buttonToOriginalContainer.childNodes[0];
   let darkMode = false;
-  themeToggleButton.innerHTML = 'Dark';
+  themeToggleButton.innerText = 'Dark';
   themeToggleButton.classList.add('btn', 'btn-light', 'btn-sm');
-
   themeToggleButton.addEventListener('click', function () {
-    if (darkMode) {
-      themeToggleButton.innerHTML = 'Dark';
-      darkMode = false;
-    } else {
-      themeToggleButton.innerHTML = 'Light';
-      darkMode = true;
-    }
+    themeToggleButton.innerText = (darkMode) ? 'Dark': 'Light';
+    darkMode = !darkMode;
     document.body.classList.toggle('dark-theme');
   });
-
   buttonToOriginalContainer.insertBefore(themeToggleButton, buttonToOriginal);
+
+  // 文書内のRFCリンク化
+  document.querySelectorAll('.row .text').forEach(function (el) {
+    // "[RFC5280]" から "<a href="./rfc5280.html">[RFC5280]</a>" へ変換
+    el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, '<a href="./rfc$1.html">[RFC$1]</a>');
+  })
+
+  // 文書内の目次リンク化
+  //   セクション番号とIDの連想配列の作成
+  let section_dict = {}
+  document.querySelectorAll(".row h5.text[id]").forEach(function (el) {
+    // "6-1-6--Outputs" から "6.1.6." を連想配列のキーとして作成
+    // "Appendix-C--Examples" から "Appendix C." を連想配列のキーとして作成
+    const h5_id_value = el.attributes['id'].value;
+    const h5_id_key = h5_id_value.replace(/--+.+$/, '-').replace(/-/g, '.').replace(/^(Appendix)\./, '$1 ');
+    section_dict[h5_id_key] = h5_id_value;
+  })
+  //   目次判定された文章に対してリンクを貼る
+  document.querySelectorAll('.row .text.toc').forEach(function (el) {
+    // "1.2.3." から "<a href="#1-2-3--Section-Title">1.2.3.</a>" へ変換
+    el.innerHTML = el.innerHTML.replace(/(?<= )((?:[A-Z]\.)?(?:\d+\.)+|Appendix [A-Z]\.)(?= )/g, function(match, p1) {
+      if (p1 in section_dict) {
+        return '<a href="#' + section_dict[p1] + '">' + p1 + '</a>';
+      }
+      return p1;
+    });
+  })
 });
