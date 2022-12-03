@@ -134,7 +134,13 @@ document.addEventListener('DOMContentLoaded', function () {
   // 文書内のRFCリンク化
   document.querySelectorAll('.row .text').forEach(function (el) {
     // "[RFC5280]" から "<a href="./rfc5280.html">[RFC5280]</a>" へ変換
-    el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, '<a href="./rfc$1.html">[RFC$1]</a>');
+    // ただし、RFC2220未満は自サイト内に存在しないため変換なし
+    el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, function (match, p1) {
+      if (parseInt(p1) < 2220) {
+        return "[RFC" + p1 + "]"
+      }
+      return '<a href="./rfc"' + p1 + '".html">[RFC' + p1 + ']</a>'
+    });
   })
 
   // 文書内の目次リンク化
