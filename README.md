@@ -204,6 +204,10 @@ python3 -m http.server
 ```bash
 python3 -m unittest discover -s tests -p "test_*.py"
 ```
+特定のテストのみ実施したい場合
+```
+python3 -m unittest tests.test_fetch_rfc.TestFetchRfcSectionTitle.test_section_title
+```
 
 ### その他
 

@@ -194,9 +194,15 @@ class Paragraph:
     # 見出しの判定
     def _find_section_title_pattern(self, text: str) -> bool:
         # "N." が現れたときは見出しとして検出する
-        if len(text.split('\n')) >= 2:
+        if len(text.split('\n')) > 2:  # 3行以上の場合は除外
             return False
-        if text.endswith('.'):
+        if len(text.split('\n')) == 2:  # 2行の場合、1行目が「〜.」の形式かつ2行目の開始位置が1行目と揃っていないとき除外
+            split_text = text.split('\n')
+            if m := re.match(r'^((?:[^ ]+\.)+[ ]+)', split_text[0]):
+                first_line_start_pos = len(m[1])
+                if not re.match(r'[ ]{%d}\b' % first_line_start_pos, split_text[1]):
+                    return False
+        if text.endswith('.'):  # 末尾が「.」で終了
             return False
         if text.endswith(':'):
             return False
