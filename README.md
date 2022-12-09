@@ -36,7 +36,7 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
       ```html
       <div class="row">
         <div class="col-sm-12 col-md-6">
-          <h5 class="text mt-2">
+          <h5 class="text mt-2" id="1--Introduction">
       1.  Introduction
           </h5>
         </div>
@@ -110,10 +110,9 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
   - 表題（1.2.～ など）は見出しとして文字を大きくすること
   - 目次から各セクションへのリンクを貼る
   - 本文中の[RFCxxxx]から別RFCへのリンクを貼る
-- 画面右上
+- ヘッダー
   - 原本（英語RFC）へのリンクを配置し、スクロールしても常に表示すること
   - モード切り替えのボタンを配置し、ダークモードへ切り替えられること
-- ヘッダー
   - 廃止されたRFCの場合、廃止されたことと修正版RFCへのリンクを表示すること (例：RFC2246, RFC2616)
   - RFCのステータス（Proposed Standard / Internet Standard など）を表示すること
   - RFCを発行したWG（ワーキンググループ）を表示すること
