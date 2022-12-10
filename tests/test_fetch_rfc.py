@@ -10,6 +10,18 @@ from src.fetch_rfc import Paragraph
 
 class TestFetchRfcSectionTitle(unittest.TestCase):
 
+    def test_section_title(self):
+        p = Paragraph("1. Introduction")
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
+    def test_not_section_title_endswith_dot(self):
+        p = Paragraph("1. Introduction.")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
+    def test_not_section_title_endswith_semicolon(self):
+        p = Paragraph("1. Introduction:")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
     def test_A_3(self): # RFC 9271
         p = Paragraph("A.3. Typical UPS Instant Commands")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
@@ -22,11 +34,37 @@ class TestFetchRfcSectionTitle(unittest.TestCase):
         p = Paragraph("4.7. Defining Information Resources for Resource-Specific Property Values")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
 
+    def test_section_title_2lines(self): # RFC 9313 (3.2.)
+        p = Paragraph("3.2.  Network Address Translation among the Different IPv4aaS\n      Technologies")
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
+    def test_not_section_title_2lines(self): # RFC 9313 (3.2.)
+        p = Paragraph("3.2.  Network Address Translation among the Different IPv4aaS\n     Technologies")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+        p = Paragraph("3.2.  Network Address Translation among the Different IPv4aaS\n       Technologies")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
+    def test_not_section_title_2lines_endswith_dot(self):
+        p = Paragraph("3.2.  Network Address Translation among the Different IPv4aaS\n      Technologies.")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
+    def test_not_section_title_3lines(self):
+        p = Paragraph("3.2.  Network Address Translation among the Different\n      IPv4aaS\n      Technologies")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
 
 # --- Sentence -----------------------------------------------------------------
 
 class TestFetchRfcSentence(unittest.TestCase):
     maxDiff = None
+
+    def test_sentence_hello(self):
+        p = Paragraph("hello world.")
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
+    def test_sentence_with_newline(self):
+        p = Paragraph("hello\nworld.")
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
     def test_colon_end(self):
         p = Paragraph("Response:")

@@ -194,9 +194,15 @@ class Paragraph:
     # 見出しの判定
     def _find_section_title_pattern(self, text: str) -> bool:
         # "N." が現れたときは見出しとして検出する
-        if len(text.split('\n')) >= 2:
+        if len(text.split('\n')) > 2:  # 3行以上の場合は除外
             return False
-        if text.endswith('.'):
+        if len(text.split('\n')) == 2:  # 2行の場合、1行目が「〜.」の形式かつ2行目の開始位置が1行目と揃っていないとき除外
+            split_text = text.split('\n')
+            if m := re.match(r'^((?:[^ ]+\.)+[ ]+)', split_text[0]):
+                first_line_start_pos = len(m[1])
+                if not re.match(r'[ ]{%d}\b' % first_line_start_pos, split_text[1]):
+                    return False
+        if text.endswith('.'):  # 末尾が「.」で終了
             return False
         if text.endswith(':'):
             return False
@@ -321,26 +327,24 @@ def fetch_rfc(number: int | str, force=False) -> None:
     page = requests.get(url, headers, timeout=(36.2, 180))
     tree = html.fromstring(_cleanhtml(page.content))
 
-    # タイトルの取得（RFC有無確認用）
+    # タイトル取得
     title = tree.xpath('//title/text()')
+    # タイトル取得（RFC有無確認用）
     if len(title) == 0:
         raise RFCNotFound
 
-    if not force:
-        # タイトルの取得
-        # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
-        # <meta name="description" content="タイトル (RFC)">
-        content_description = tree.xpath('//meta[@name="description"]/@content')
-        if len(content_description) > 0:
-            tmp = content_description[0]
-            tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
-            tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
-            title = "RFC %s - %s" % (number, tmp)
-        else:
-            raise Exception("Cannot extract RFC Title!")
+    title = title[0].strip()
+
+    # タイトルの取得（パターンマッチ）
+    if re.match(r'RFC [^ ]+ - .*$', title):
+        tmp = title
+        tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
+        tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
+        # title = "RFC %s - %s" % (number, tmp)
+        title = tmp
     else:
-        # forceオプションありのときは、タイトルが存在しなくても実行
-        title = "RFC %s" % number
+        # タイトルがRFC形式と一致しない場合
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
 
     # DOMツリーから文章を取得
     # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
