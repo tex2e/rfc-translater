@@ -1,4 +1,7 @@
 
+# 誤翻訳などを一括で置換するためのプログラム
+# python3 trans_replace.py で実行する。RFC Transからは独立している。
+
 # import re
 import glob
 import json

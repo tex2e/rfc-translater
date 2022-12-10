@@ -1,4 +1,6 @@
 
+# RFCの文章を翻訳するプログラム
+
 import os
 import re
 import json

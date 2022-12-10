@@ -1,4 +1,7 @@
 
+# 全体共通（各機能の呼び出し専用）プログラム
+#   * CLIからの入力受付
+
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
@@ -51,21 +54,21 @@ def continuous_main(begin=None, end=None, only_first=False):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--rfc', type=str, help='RFC number')
-    parser.add_argument('--fetch', action='store_true', help='only fetch RFC')
-    parser.add_argument('--trans', action='store_true', help='only translate')
-    parser.add_argument('--make', action='store_true', help='only make HTML')
-    parser.add_argument('--make-json', action='store_true', help='make JSON from HTML')
-    parser.add_argument('--begin', type=int, help='begin rfc number')
-    parser.add_argument('--end', type=int, help='end rfc number')
-    parser.add_argument('--make-index', dest='make_index',
-                        action='store_true', help='make index.html')
-    parser.add_argument('--transtest', action='store_true')
-    parser.add_argument('--force', '-f', action='store_true')
-    parser.add_argument('--only-first', action='store_true')
-    parser.add_argument('--draft', type=str, help='RFC draft (ex. draft-ietf-tls-esni-14)')
-    parser.add_argument('--fetch-group', action='store_true')
-    parser.add_argument('--make-index-draft', action='store_true')
+    parser.add_argument('--rfc',         type=str,            help='RFC number            (ex. --rfc 8446)')
+    parser.add_argument('--fetch',       action='store_true', help='only fetch RFC        (ex. --rfc 8446 --fetch)')
+    parser.add_argument('--trans',       action='store_true', help='only translate        (ex. --rfc 8446 --trans)')
+    parser.add_argument('--make',        action='store_true', help='only make HTML        (ex. --rfc 8446 --fetch)')
+    parser.add_argument('--make-json',   action='store_true', help='make JSON from HTML   (ex. --make-json --rfc 8446)')
+    parser.add_argument('--begin',       type=int,            help='begin rfc number      (ex. --begin 8000)')
+    parser.add_argument('--end',         type=int,            help='end rfc number        (ex. --begin 8000 --end 9000)')
+    parser.add_argument('--make-index',  action='store_true', help='make html/index.html  (ex. --make-index)')
+    parser.add_argument('--force', '-f', action='store_true', help='ignore cache          (ex. --rfc 8446 --fetch --force)')
+    parser.add_argument('--only-first',  action='store_true', help='take only first RFC   (ex. --begin 8000 --only-first)')
+    parser.add_argument('--draft',       type=str,            help='take RFC draft        (ex. --draft draft-ietf-tls-esni-14)')
+    parser.add_argument('--fetch-group', action='store_true', help='fetch WG list         (ex. --fetch-group)')
+    parser.add_argument('--make-index-draft',
+                                         action='store_true', help='make draft/index.html (ex. --make-index-draft)')
+    parser.add_argument('--transtest',   action='store_true')
     args = parser.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）

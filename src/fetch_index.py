@@ -1,4 +1,6 @@
 
+# IETFのWebサイトからRFC一覧を取得するプログラム
+
 import requests
 import os
 import re
