@@ -18,12 +18,12 @@ def main(rfc_number: int | str) -> None:
         with open(filename, "w") as f:
             f.write('')
         return
-    except Exception as e:
-        print(e)
-        filename = "html/rfc%s-error.html" % rfc_number
-        with open(filename, "w") as f:
-            f.write('')
-        return
+    # except Exception as e:
+    #     print(e)
+    #     filename = "html/rfc%s-error.html" % rfc_number
+    #     with open(filename, "w") as f:
+    #         f.write('')
+    #     return
 
     res = trans_rfc(rfc_number)
     if res is False:

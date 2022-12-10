@@ -327,26 +327,24 @@ def fetch_rfc(number: int | str, force=False) -> None:
     page = requests.get(url, headers, timeout=(36.2, 180))
     tree = html.fromstring(_cleanhtml(page.content))
 
-    # タイトルの取得（RFC有無確認用）
+    # タイトル取得
     title = tree.xpath('//title/text()')
+    # タイトル取得（RFC有無確認用）
     if len(title) == 0:
         raise RFCNotFound
 
-    if not force:
-        # タイトルの取得
-        # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
-        # <meta name="description" content="タイトル (RFC)">
-        content_description = tree.xpath('//meta[@name="description"]/@content')
-        if len(content_description) > 0:
-            tmp = content_description[0]
-            tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
-            tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
-            title = "RFC %s - %s" % (number, tmp)
-        else:
-            raise Exception("Cannot extract RFC Title!")
+    title = title[0].strip()
+
+    # タイトルの取得（パターンマッチ）
+    if re.match(r'RFC [^ ]+ - .*$', title):
+        tmp = title
+        tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
+        tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
+        # title = "RFC %s - %s" % (number, tmp)
+        title = tmp
     else:
-        # forceオプションありのときは、タイトルが存在しなくても実行
-        title = "RFC %s" % number
+        # タイトルがRFC形式と一致しない場合
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
 
     # DOMツリーから文章を取得
     # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
