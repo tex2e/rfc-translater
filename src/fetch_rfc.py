@@ -345,6 +345,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
         tmp = title
         tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
         tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
+        tmp = re.sub(r'^RFC (\d+) -', f'RFC {number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
         # title = "RFC %s - %s" % (number, tmp)
         title = tmp
     elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
