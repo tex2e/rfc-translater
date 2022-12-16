@@ -1,4 +1,6 @@
 
+# PullReqで修正されたHTMLをJSONに反映するためのプログラム
+
 import sys
 import re
 import json

@@ -1,10 +1,13 @@
 
+# トップページを作成するためのプログラム
+
 import os
 import re
 import glob
 # from mako.template import Template
 from mako.lookup import TemplateLookup
 
+# トップページ作成
 def make_index() -> None:
     output_file = os.path.normpath('html/index.html')
 
@@ -37,6 +40,7 @@ def make_index() -> None:
         f.write(output)
 
 
+# Draft版のトップページ作成
 def make_index_draft() -> None:
     output_file = os.path.normpath('html/draft/index.html')
     is_draft = True

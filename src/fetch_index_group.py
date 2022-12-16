@@ -1,4 +1,6 @@
 
+# IETFのWebサイトからWGの一覧を取得するプログラム
+
 # from lxml import etree  # pip install lxml
 import requests
 import os

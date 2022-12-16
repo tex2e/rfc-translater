@@ -1,4 +1,6 @@
 
+# 翻訳済みJSONからHTMLを生成するためのプログラム
+
 import os
 import re
 import json
@@ -7,14 +9,14 @@ from mako.lookup import TemplateLookup
 
 def make_html(rfc_number: int | str) -> None:
 
-    # 整数はRFC、文字列はDraft
-    if type(rfc_number) is int:
+    # 変数の初期化
+    if type(rfc_number) is int:  # RFCは整数
         is_draft = False
         input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
         input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
         output_dir = 'html'
         output_file = f'{output_dir}/rfc{rfc_number}.html'
-    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):  # Draftは文字列
         is_draft = True
         organization   = m['org']
         working_group  = m['wg']

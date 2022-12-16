@@ -1,4 +1,6 @@
 
+# IETFのWebサイトからRFCを取得し、文章・図・表・コードの判定をするためのプログラム
+
 import os
 import re
 import json
@@ -10,9 +12,9 @@ from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
 # 段落がページをまたぐことを表す文字
-BREAK = '\n\x07\n'
+BREAK = '\x07\x07\x07'
 # 箇条書き（複数行）で改行を表す文字列
-BREAK_INSERT = '\x06'
+BREAK_INSERT = '\x06\x06\x06'
 
 class Paragraph:
     # 段落情報を持つクラス。コードや図表かの判定はここで行う。
@@ -175,6 +177,7 @@ class Paragraph:
         conds.append(len(re.compile(r'^\s*-- ', re.MULTILINE).findall(text)) >= 2)  # syntax
         conds.append(len(re.compile(r'^\s*[0-9a-f]0: ', re.MULTILINE).findall(text)) >= 3)  # hexdump
         conds.append(len(re.compile(r'^\s*(?:IN   |OUT  ).', re.MULTILINE).findall(text)) >= 2)  # SNMP Dispatcher
+        conds.append(re.search(r' {2,}---> {2,}', text))  # fig
         if any(conds):
             return True
 
@@ -298,18 +301,20 @@ def _cleanhtml(raw_html: bytes) -> bytes:
 # RFCの取得処理
 def fetch_rfc(number: int | str, force=False) -> None:
 
-    # 整数はRFC、文字列はDraft
-    if type(number) is int:
+    # 変数の初期化
+    if type(number) is int:  # RFCは整数
         is_draft = False
         url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
+        url_txt = 'https://www.rfc-editor.org/rfc/rfc%d.txt' % number
         output_dir = 'data/%04d' % (number // 1000 % 10 * 1000)
         output_file = f'{output_dir}/rfc{number}.json'
-    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):
+    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):  # Draftは文字列
         is_draft = True
         organization   = m['org']
         working_group  = m['wg']
         rfc_draft_name = m['name']
         url = f'https://datatracker.ietf.org/doc/html/draft-{organization}-{working_group}-{rfc_draft_name}'
+        url_txt = f'https://www.ietf.org/archive/id/draft-{organization}-{working_group}-{rfc_draft_name}.txt'
         output_dir = f'data/draft/{working_group}'
         output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
     else:
@@ -336,53 +341,111 @@ def fetch_rfc(number: int | str, force=False) -> None:
     title = title[0].strip()
 
     # タイトルの取得（パターンマッチ）
-    if re.match(r'RFC [^ ]+ - .*$', title):
+    if re.match(r'RFC [^ ]+ - .*$', title):  # RFC
         tmp = title
         tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
         tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
+        tmp = re.sub(r'^RFC (\d+) -', f'RFC {number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
         # title = "RFC %s - %s" % (number, tmp)
         title = tmp
+    elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
+        title = title
     else:
         # タイトルがRFC形式と一致しない場合
         raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
 
-    # DOMツリーから文章を取得
-    # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
-    contents = tree.xpath(
-        '//pre[not(contains(@class,"meta-info"))]/text() | '    # 本文（ただし文書冒頭のメタ情報は除く）
-        '//pre[not(contains(@class,"meta-info"))]/a/text() | '  # 本文中のリンク
-        # セクションのタイトル
-        '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
-                   '@class="h4" or @class="h5" or @class="h6"]//text() |'
-        '//pre/span/a[@class="selflink"]/text() |'  # セクションの番号
-        '//a[@class="invisible"]'  # ページの区切り
-    )
+    # # DOMツリーから文章を取得
+    # # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
+    # contents = tree.xpath(
+    #     '//pre[not(contains(@class,"meta-info"))]/text() | '    # 本文（ただし文書冒頭のメタ情報は除く）
+    #     '//pre[not(contains(@class,"meta-info"))]/a/text() | '  # 本文中のリンク
+    #     # セクションのタイトル
+    #     '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
+    #             '@class="h4" or @class="h5" or @class="h6"]//text() |'
+    #     '//pre/span/a[@class="selflink"]/text() |'  # セクションの番号
+    #     '//a[@class="invisible"]'  # ページの区切り
+    # )
+    #
+    # # ページ区切りで段落がページをまたぐ場合の処理（RFC8650～はページ区切りが無くなったので関係ない）
+    # contents_len = len(contents)
+    # for i, content in enumerate(contents):
+    #     # ページ区切りのとき
+    #     if isinstance(content, html.HtmlElement) \
+    #             and content.get('class') == 'invisible':
+    #
+    #         contents[i - 1] = contents[i - 1].rstrip()  # 前ページの末尾の空白を除去
+    #         contents[i + 0] = ''  # ページ区切りの除去
+    #         if i + 1 >= contents_len:
+    #             continue
+    #         contents[i + 1] = ''  # 余分な改行の除去
+    #         if i + 2 >= contents_len:
+    #             continue
+    #         contents[i + 2] = ''  # 余分な空白の除去
+    #         if i + 3 >= contents_len:
+    #             continue
+    #         if not isinstance(contents[i + 3], str):
+    #             continue
+    #         contents[i + 3] = contents[i + 3].lstrip('\n')  # 次ページの先頭の改行を除去
+    #
+    #         # ページをまたぐ文章に対応する処理
+    #         first, last = 0, -1
+    #         prev_last_line = contents[i - 1].split('\n')[last]    # 前ページの最後の行
+    #         next_first_line = contents[i + 3].split('\n')[first]  # 次ページの最初の行
+    #         indent1 = _get_indent(prev_last_line)
+    #         indent2 = _get_indent(next_first_line)
+    #         # print('newpage:', i)
+    #         # print('  ', indent1, prev_last_line)
+    #         # print('  ', indent2, next_first_line)
+    #
+    #         # 以下の条件のとき、段落がページをまたいでいると判断する
+    #         #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
+    #         #   2) 前ページの最後の段落が、文終端の「.」や「;」ではないとき
+    #         if not prev_last_line.endswith('.') \
+    #                 and not prev_last_line.endswith(';') \
+    #                 and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \
+    #                 and indent1 == indent2:
+    #             # 内容がページをまたぐ場合、BREAKを挿入する
+    #             # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
+    #             contents[i + 3] = BREAK + contents[i + 3]
+    #         else:
+    #             # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
+    #             contents[i + 0] = '\n\n'
+    #
+    # # ページ番号を非表示にする
+    # contents[-1] = re.sub(r'.*\[Page \d+\]$', '', contents[-1].rstrip()).rstrip()
+    # # 全ての段落を結合する（段落の区切りは\n\n）
+    # text = ''.join(contents).strip()
 
-    # ページ区切りで段落がページをまたぐ場合の処理（RFC8650～はページ区切りが無くなったので関係ない）
+    # RFCページのTXT形式の取得
+    headers = {'User-agent': '', 'referer': url_txt}
+    page = requests.get(url_txt, headers, timeout=(36.2, 180))
+
+    text = page.content.decode('ascii', errors='ignore')
+
+    # ページ区切りの削除＋前後段落の結合（例：RFC 3830）
+    contents = text.split("\n\n")
+    contents = [con for con in contents if len(con) > 0]
     contents_len = len(contents)
     for i, content in enumerate(contents):
-        # ページ区切りのとき
-        if isinstance(content, html.HtmlElement) \
-                and content.get('class') == 'invisible':
+        # pprint(content)
 
-            contents[i - 1] = contents[i - 1].rstrip()  # 前ページの末尾の空白を除去
+        # ページ区切りのとき
+        if re.search(r'\x0c', content):  # ASCIIのETX(テキスト終了)が存在する場合はページ区切りと判断
+
+            # -1: For efficiency reasons, one SHOULD also avoid a
+            #  0: Arkko, et al.     Standards Track      [Page 65]
+            #     RFC 3830             MIKEY           August 2004   ←ページ区切り
+            # +1: security overkill, e.g., by not using a public key...
+
             contents[i + 0] = ''  # ページ区切りの除去
             if i + 1 >= contents_len:
                 continue
-            contents[i + 1] = ''  # 余分な改行の除去
-            if i + 2 >= contents_len:
-                continue
-            contents[i + 2] = ''  # 余分な空白の除去
-            if i + 3 >= contents_len:
-                continue
-            if not isinstance(contents[i + 3], str):
-                continue
-            contents[i + 3] = contents[i + 3].lstrip('\n')  # 次ページの先頭の改行を除去
 
             # ページをまたぐ文章に対応する処理
-            first, last = 0, -1
-            prev_last_line = contents[i - 1].split('\n')[last]    # 前ページの最後の行
-            next_first_line = contents[i + 3].split('\n')[first]  # 次ページの最初の行
+            first_index = 0
+            last_index = -1
+            prev_last_line = contents[i - 1].rstrip('\n').split('\n')[last_index]    # 前ページの最後の行
+            next_first_line = contents[i + 1].lstrip('\n').split('\n')[first_index]  # 次ページの最初の行
             indent1 = _get_indent(prev_last_line)
             indent2 = _get_indent(next_first_line)
             # print('newpage:', i)
@@ -398,15 +461,11 @@ def fetch_rfc(number: int | str, force=False) -> None:
                     and indent1 == indent2:
                 # 内容がページをまたぐ場合、BREAKを挿入する
                 # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
-                contents[i + 3] = BREAK + contents[i + 3]
-            else:
-                # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
-                contents[i + 0] = '\n\n'
+                contents[i + 1] = contents[i - 1].rstrip('\n') + BREAK + contents[i + 1].lstrip('\n')
+                contents[i - 1] = ''
 
-    # ページ番号を非表示にする
-    contents[-1] = re.sub(r'.*\[Page \d+\]$', '', contents[-1].rstrip()).rstrip()
     # 全ての段落を結合する（段落の区切りは\n\n）
-    text = ''.join(contents).strip()
+    text = '\n\n'.join(contents).strip()
 
     # 文字列を段落の配列に変換する
     paragraphs = Paragraphs(text)
