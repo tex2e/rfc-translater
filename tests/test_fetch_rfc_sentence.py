@@ -98,6 +98,12 @@ class TestFetchRfcSentence(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_quote_colon_quote_equal(self): # RFC 2622
+        p = Paragraph("""
+        integers seperated by \":\" to partition the community number space so that a provider can use its AS number as the first two bytes, and assigns a semantics of its choice to the last two bytes.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_copyright(self):
         p = Paragraph("""
         This document is subject to BCP 78 and the IETF Trust's Legal
