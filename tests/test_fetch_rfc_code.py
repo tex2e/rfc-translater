@@ -154,6 +154,25 @@ class TestFetchRfcCode(unittest.TestCase):
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
 
+    def test_BNF_3(self): # RFC 6203
+        p = Paragraph("""
+        capability         =/ "SEARCH=FUZZY"
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_BNF_4(self): # RFC 6193
+        p = Paragraph("""
+        attribute                 =/ psk-fingerprint-attribute
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
+    def test_BNF_5(self): # RFC 6193
+        p = Paragraph("""
+        psk-fingerprint-attribute = "psk-fingerprint" ":" hash-func SP
+                                    psk-fingerprint
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_CODE)
+
 
 if __name__ == '__main__':
     unittest.main()

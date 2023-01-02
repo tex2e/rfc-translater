@@ -19,6 +19,14 @@ class TestFetchRfcSentence(unittest.TestCase):
         p = Paragraph("hello\nworld.")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_url(self):
+        p = Paragraph("""
+        Information about the current status of this document, any errata,
+        and how to provide feedback on it may be obtained at
+        http://www.rfc-editor.org/info/rfc6181.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_colon_end(self):
         p = Paragraph("Response:")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
@@ -95,6 +103,12 @@ class TestFetchRfcSentence(unittest.TestCase):
         Each entity domain is identified by a unique entity domain name.
         Borrowing the symbol "::=" from the Backus-Naur Form notation
         [RFC5511], the format of an entity domain name is defined as follows:
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
+    def test_quote_colon_quote_equal(self): # RFC 2622
+        p = Paragraph("""
+        integers seperated by \":\" to partition the community number space so that a provider can use its AS number as the first two bytes, and assigns a semantics of its choice to the last two bytes.
         """)
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 

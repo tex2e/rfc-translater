@@ -178,6 +178,9 @@ class Paragraph:
         conds.append(len(re.compile(r'^\s*[0-9a-f]0: ', re.MULTILINE).findall(text)) >= 3)  # hexdump
         conds.append(len(re.compile(r'^\s*(?:IN   |OUT  ).', re.MULTILINE).findall(text)) >= 2)  # SNMP Dispatcher
         conds.append(re.search(r' {2,}---> {2,}', text))  # fig
+        conds.append(re.search(r' =/ "', text))  # syntax
+        conds.append(re.search(r'   =/ ', text))  # syntax
+        conds.append(re.search(r'" ":" ', text))  # syntax
         if any(conds):
             return True
 
