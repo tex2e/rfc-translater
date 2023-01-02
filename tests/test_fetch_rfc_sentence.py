@@ -19,6 +19,14 @@ class TestFetchRfcSentence(unittest.TestCase):
         p = Paragraph("hello\nworld.")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
 
+    def test_url(self):
+        p = Paragraph("""
+        Information about the current status of this document, any errata,
+        and how to provide feedback on it may be obtained at
+        http://www.rfc-editor.org/info/rfc6181.
+        """)
+        self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
+
     def test_colon_end(self):
         p = Paragraph("Response:")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
