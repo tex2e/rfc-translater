@@ -357,68 +357,6 @@ def fetch_rfc(number: int | str, force=False) -> None:
         # タイトルがRFC形式と一致しない場合
         raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
 
-    # # DOMツリーから文章を取得
-    # # MEMO: RFCのHTMLの構造が変化した場合はXPATHで対応すること
-    # contents = tree.xpath(
-    #     '//pre[not(contains(@class,"meta-info"))]/text() | '    # 本文（ただし文書冒頭のメタ情報は除く）
-    #     '//pre[not(contains(@class,"meta-info"))]/a/text() | '  # 本文中のリンク
-    #     # セクションのタイトル
-    #     '//pre/span[@class="h1" or @class="h2" or @class="h3" or '
-    #             '@class="h4" or @class="h5" or @class="h6"]//text() |'
-    #     '//pre/span/a[@class="selflink"]/text() |'  # セクションの番号
-    #     '//a[@class="invisible"]'  # ページの区切り
-    # )
-    #
-    # # ページ区切りで段落がページをまたぐ場合の処理（RFC8650～はページ区切りが無くなったので関係ない）
-    # contents_len = len(contents)
-    # for i, content in enumerate(contents):
-    #     # ページ区切りのとき
-    #     if isinstance(content, html.HtmlElement) \
-    #             and content.get('class') == 'invisible':
-    #
-    #         contents[i - 1] = contents[i - 1].rstrip()  # 前ページの末尾の空白を除去
-    #         contents[i + 0] = ''  # ページ区切りの除去
-    #         if i + 1 >= contents_len:
-    #             continue
-    #         contents[i + 1] = ''  # 余分な改行の除去
-    #         if i + 2 >= contents_len:
-    #             continue
-    #         contents[i + 2] = ''  # 余分な空白の除去
-    #         if i + 3 >= contents_len:
-    #             continue
-    #         if not isinstance(contents[i + 3], str):
-    #             continue
-    #         contents[i + 3] = contents[i + 3].lstrip('\n')  # 次ページの先頭の改行を除去
-    #
-    #         # ページをまたぐ文章に対応する処理
-    #         first, last = 0, -1
-    #         prev_last_line = contents[i - 1].split('\n')[last]    # 前ページの最後の行
-    #         next_first_line = contents[i + 3].split('\n')[first]  # 次ページの最初の行
-    #         indent1 = _get_indent(prev_last_line)
-    #         indent2 = _get_indent(next_first_line)
-    #         # print('newpage:', i)
-    #         # print('  ', indent1, prev_last_line)
-    #         # print('  ', indent2, next_first_line)
-    #
-    #         # 以下の条件のとき、段落がページをまたいでいると判断する
-    #         #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
-    #         #   2) 前ページの最後の段落が、文終端の「.」や「;」ではないとき
-    #         if not prev_last_line.endswith('.') \
-    #                 and not prev_last_line.endswith(';') \
-    #                 and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \
-    #                 and indent1 == indent2:
-    #             # 内容がページをまたぐ場合、BREAKを挿入する
-    #             # BREAK は文章のときは空白に置き換えて、コードのときは改行の置き換える。
-    #             contents[i + 3] = BREAK + contents[i + 3]
-    #         else:
-    #             # 内容がページをまたがない場合、段落区切り(改行2つ)を挿入する
-    #             contents[i + 0] = '\n\n'
-    #
-    # # ページ番号を非表示にする
-    # contents[-1] = re.sub(r'.*\[Page \d+\]$', '', contents[-1].rstrip()).rstrip()
-    # # 全ての段落を結合する（段落の区切りは\n\n）
-    # text = ''.join(contents).strip()
-
     # RFCページのTXT形式の取得
     headers = {'User-agent': '', 'referer': url_txt}
     page = requests.get(url_txt, headers, timeout=(36.2, 180))
@@ -426,6 +364,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
     text = page.content.decode('ascii', errors='ignore')
 
     # ページ区切りの削除＋前後段落の結合（例：RFC 3830）
+    # （RFC8650以降はページ区切りが無くなりました）
     contents = text.split("\n\n")
     contents = [con for con in contents if len(con) > 0]
     contents_len = len(contents)
@@ -457,9 +396,9 @@ def fetch_rfc(number: int | str, force=False) -> None:
 
             # 以下の条件のとき、段落がページをまたいでいると判断する
             #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
-            #   2) 前ページの最後の段落が、文終端の「.」や「;」ではないとき
+            #   2) 前ページの最後の段落が、文終端の「.」や「;」や「|」ではないとき
             if not prev_last_line.endswith('.') \
-                    and not prev_last_line.endswith(';') \
+                    and not re.search(r'[;|]$', prev_last_line) \
                     and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \
                     and indent1 == indent2:
                 # 内容がページをまたぐ場合、BREAKを挿入する
