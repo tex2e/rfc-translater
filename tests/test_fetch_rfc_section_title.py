@@ -52,6 +52,10 @@ class TestFetchRfcSectionTitle(unittest.TestCase):
         p = Paragraph("3.2.  Network Address Translation among the Different\n      IPv4aaS\n      Technologies")
         self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
 
+    def test_sharp(self):  # RFC 8018
+        p = Paragraph("Appendix D. Revision History of PKCS #5")
+        self.assertNotEqual(p.get_text_type(), Paragraph.TYPE_SECTIOIN_TITLE)
+
 
 if __name__ == '__main__':
     unittest.main()
