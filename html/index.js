@@ -147,8 +147,11 @@ document.addEventListener('DOMContentLoaded', function () {
     el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, function (match, p1) {
       if (parseInt(p1) < 2220) {
         return `<a href="https://datatracker.ietf.org/doc/html/rfc${p1}">[RFC${p1}]</a>`
+      } else if (rfc_draft) {
+        return `<a href="../rfc${p1}.html">[RFC${p1}]</a>`
+      } else {
+        return `<a href="./rfc${p1}.html">[RFC${p1}]</a>`
       }
-      return `<a href="./rfc${p1}.html">[RFC${p1}]</a>`
     });
   })
 
