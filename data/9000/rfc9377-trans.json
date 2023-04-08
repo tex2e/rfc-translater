@@ -1,0 +1,971 @@
+{
+  "title": {
+    "text": "RFC 9377 - IS-IS Flood Reflection",
+    "ja": "RFC 9377 - IS-IS洪水の反射"
+  },
+  "number": 9377,
+  "created_at": "2023-04-06 02:47:59.937376+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                T. Przygienda, Ed.\nRequest for Comments: 9377                                       Juniper\nCategory: Experimental                                         C. Bowers\nISSN: 2070-1721                                               Individual\n                                                                  Y. Lee\n                                                                 Comcast\n                                                               A. Sharma\n                                                              Individual\n                                                                R. White\n                                                                  Akamai\n                                                              April 2023",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 25,
+      "text": "IS-IS Flood Reflection",
+      "ja": "IS-IS洪水の反射"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a backward-compatible, optional IS-IS extension that allows the creation of IS-IS flood reflection topologies. Flood reflection permits topologies in which IS-IS Level 1 (L1) areas provide transit-forwarding for IS-IS Level 2 (L2) areas using all available L1 nodes internally. It accomplishes this by creating L2 flood reflection adjacencies within each L1 area. Those adjacencies are used to flood L2 Link State Protocol Data Units (LSPs) and are used in the L2 Shortest Path First (SPF) computation. However, they are not ordinarily utilized for forwarding within the flood reflection cluster. This arrangement gives the L2 topology significantly better scaling properties than prevalently used flat designs. As an additional benefit, only those routers directly participating in flood reflection are required to support the feature. This allows for incremental deployment of scalable L1 transit areas in an existing, previously flat network design, without the necessity of upgrading all routers in the network.",
+      "ja": "このドキュメントでは、IS-I-ISの洪水反射トポロジの作成を可能にする、後方互換のオプションのIS-IS拡張機能について説明します。洪水の反射は、IS-ISレベル1（L1）領域が、利用可能なすべてのL1ノードを内部で使用してIS-ISレベル2（L2）領域のトランジットフォワードを提供するトポロジを許可します。各L1領域内にL2フラッドリフレクションの隣接を作成することにより、これを達成します。これらの隣接は、L2リンク状態プロトコルデータユニット（LSP）をflood濫させるために使用され、L2最短パス（SPF）計算で使用されます。ただし、通常、洪水反射クラスター内の転送に使用されていません。この配置により、L2トポロジは、一般的に使用されるフラットデザインよりも大幅に優れたスケーリング特性を提供します。追加の利点として、機能をサポートするには、洪水反射に直接参加するルーターのみが必要です。これにより、ネットワーク内のすべてのルーターをアップグレードする必要がなく、既存の以前はフラットなネットワーク設計でスケーラブルなL1トランジットエリアを増分することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for examination, experimental implementation, and evaluation.",
+      "ja": "このドキュメントは、インターネット標準の追跡仕様ではありません。試験、実験的実装、および評価のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an Experimental Protocol for the Internet community. This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "このドキュメントでは、インターネットコミュニティ向けの実験プロトコルを定義しています。このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。IESGによって承認されたすべてのドキュメントが、インターネット標準のあらゆるレベルの候補者であるわけではありません。RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9377.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9377で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2023 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions Used in This Document\n  2.1.  Terminology\n  2.2.  Requirements Language\n3.  Further Details\n4.  Encodings\n  4.1.  Flood Reflection TLV\n  4.2.  Flood Reflection Discovery Sub-TLV\n  4.3.  Flood Reflection Discovery Tunnel Type Sub-Sub-TLV\n  4.4.  Flood Reflection Adjacency Sub-TLV\n  4.5.  Flood Reflection Discovery\n  4.6.  Flood Reflection Adjacency Formation\n5.  Route Computation\n  5.1.  Tunnel-Based Deployment\n  5.2.  No-Tunnel Deployment\n6.  Redistribution of Prefixes\n7.  Special Considerations\n8.  IANA Considerations\n  8.1.  New IS-IS TLV Codepoint\n  8.2.  Sub-TLVs for IS-IS Router CAPABILITY TLV\n  8.3.  Sub-Sub-TLVs for Flood Reflection Discovery Sub-TLV\n  8.4.  Sub-TLVs for TLVs Advertising Neighbor Information\n9.  Security Considerations\n10. References\n  10.1.  Normative References\n  10.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This section introduces the problem space and outlines the solution. Some of the terms may be unfamiliar to readers without extensive IS-IS background; for such readers, the terminology is provided in Section 2.1.",
+      "ja": "このセクションでは、問題のスペースを紹介し、ソリューションの概要を説明します。いくつかの用語は、IS-ISの広範な背景がない読者にはなじみのないものである可能性があります。このような読者の場合、用語はセクション2.1に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Due to the inherent properties of link-state protocols, the number of IS-IS routers within a flooding domain is limited by processing and flooding overhead on each node. While that number can be maximized by well-written implementations and techniques such as exponential backoffs, IS-IS will still reach a saturation point where no further routers can be added to a single flooding domain. In some L2 backbone deployment scenarios, this limit presents a significant challenge.",
+      "ja": "リンク状態プロトコルの固有の特性により、各ノードのオーバーヘッドを処理および洪水することにより、フラッディングドメイン内のIS-ISルーターの数が制限されます。その数は、指数関数的なバックオフなどのよく書かれた実装と手法によって最大化できますが、IS-ISは、単一のフラッディングドメインにそれ以上のルーターを追加できない飽和点に到達します。一部のL2バックボーン展開シナリオでは、この制限は重要な課題です。"
+    },
+    {
+      "indent": 3,
+      "text": "The standard approach to increasing the scale of an IS-IS deployment is to break it up into multiple L1 flooding domains and a single L2 backbone. This works well for designs where an L2 backbone connects L1 access topologies, but it is limiting where a single, flat L2 domain is supposed to span large number of routers. In such scenarios, an alternative approach could be to consider multiple L2 flooding domains that are connected together via L1 flooding domains. In other words, L2 flooding domains are connected by \"L1/L2 lanes\" through the L1 areas to form a single L2 backbone again. Unfortunately, in its simplest implementation, this requires the inclusion of most, or all, of the transit L1 routers as L1/L2 to allow traffic to flow along optimal paths through those transit areas. Consequently, such an approach fails to reduce the number of L2 routers involved and, with that, fails to increase the scalability of the L2 backbone as well.",
+      "ja": "IS-IS展開のスケールを増やす標準的なアプローチは、複数のL1フラッディングドメインと単一のL2バックボーンに分割することです。これは、L2バックボーンがL1アクセストポロジを接続するデザインに適していますが、単一のフラットL2ドメインが多数のルーターに及ぶと想定されている場所を制限しています。このようなシナリオでは、別のアプローチは、L1フラッディングドメインを介して接続されている複数のL2フラッドドメインを考慮することです。言い換えれば、L2洪水ドメインは「L1/L2レーン」によってL1領域を介して接続され、単一のL2バックボーンを再び形成します。残念ながら、最も単純な実装では、これには、L1/L2としてのトランジットL1ルーターのほとんどまたはすべてが、これらの輸送エリアを通る最適なパスに沿ってトラフィックが流れるようにする必要があります。その結果、このようなアプローチは、関与するL2ルーターの数を減らすことができず、それに伴い、L2骨格のスケーラビリティも向上できません。"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 1 is an example of a network where a topologically rich L1 area is used to provide transit between six different L2-only routers (R1-R6). Note that the six L2-only routers do not have connectivity to one another over L2 links. To take advantage of the abundance of paths in the L1 transit area, all the intermediate systems could be placed into both L1 and L2, but this essentially combines the separate L2 flooding domains into a single one, again triggering the maximum L2 scale limitation we were trying to address in first place.",
+      "ja": "図1は、トポロジカルリッチL1領域を使用して、6つの異なるL2のみのルーター（R1-R6）間の輸送を提供するネットワークの例です。6つのL2のみのルーターには、L2リンクを介して互いに接続されていないことに注意してください。L1トランジットエリアの豊富なパスを活用するために、すべての中間システムをL1とL2の両方に配置できますが、これにより、個別のL2フラッドドメインを1つに組み合わせて、最大L2スケールの制限をトリガーすることができます。最初に対処しようとしています。"
+    },
+    {
+      "indent": 1,
+      "text": "+====+  +=======+             +=======+               +======-+  +====+\nI R1 I  I  R10  +-------------+  R20  +---------------+  R30  I  I R4 I\nI L2 +--+ L1/L2 I             I  L1   I               I L1/L2 +--+ L2 I\nI    I  I       +          +--+       I  +------------+       I  I    I\n+====+  ++====+=+          |  +===+===+  |            +=+==+=++  +====+\n         |    |            |      |      |              |    |\n         |    |            |      |      |  +-----------+    |\n         |    +-------+    |      |      |  |                |\n         |            |    |      |      |  |                |\n         |            |    |      |      |  |                |\n         |            |    |      |      |  |                |\n+====+  ++=====-+     |    |  +===+===+--+  |         +======++  +====+\nI R2 I  I  R11  I     |    |  I  R21  I     |         I  R31  I  I R5 I\nI L2 +--+ L1/L2 +-------------+  L1   +---------------+ L1/L2 +--+ L2 I\nI    I  I       I     |    |  I       I     | +-------+       I  I    I\n+====+  ++=====-+     |    |  ++==+==++     | |       +======++  +====+\n         |            |    |   |  |  |      | |              |\n         | +---------------+   |  |  |      | |              |\n         | |          |        |  |  |      | |              |\n         | |  +----------------+  |  +-----------------+     |\n         | |  |       |           |         | |        |     |\n+====+  ++=+==+=+     +-------+===+===+-----+ |       ++=====++  +====+\nI R3 I  I  R12  I             I  R22  I       |       +  R32  I  I R6 I\nI L2 +--+ L1/L2 I             I  L1   +-------+       I L1/L2 +--+ L2 I\nI    I  I       +-------------+       +---------------+       I  I    I\n+====+  +=======+             +=======+               +=======+  +====+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Figure 1: Example Topology of L1 with L2 Borders",
+      "ja": "図1：L2の境界を備えたL1のトポロジの例"
+    },
+    {
+      "indent": 3,
+      "text": "A more effective solution would allow the reduction of the number of links and routers exposed in L2, while still utilizing the full L1 topology when forwarding through the network.",
+      "ja": "より効果的なソリューションは、ネットワークを転送する際に完全なL1トポロジを利用しながら、L2で露出するリンクとルーターの数を減らすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8099] describes Topology Transparent Zones (TTZ) for OSPF. The TTZ mechanism represents a group of OSPF routers as a full mesh of adjacencies between the routers at the edge of the group. A similar mechanism could be applied to IS-IS as well. However, a full mesh of adjacencies between edge routers (or L1/L2 nodes) significantly limits the practically achievable scale of the resulting topology. The topology in Figure 1 has six L1/L2 nodes. Figure 2 illustrates a full mesh of L2 adjacencies between the six L1/L2 nodes, resulting in (5 * 6)/2 = 15 L2 adjacencies. In a somewhat larger topology containing 20 L1/L2 nodes, the number of L2 adjacencies in a full mesh rises to 190.",
+      "ja": "[RFC8099]は、OSPFのトポロジー透明ゾーン（TTZ）を説明しています。TTZメカニズムは、グループの端にあるルーター間の隣接の完全なメッシュとしてのOSPFルーターのグループを表しています。同様のメカニズムもIS-ISに適用できます。ただし、エッジルーター（またはL1/L2ノード）間の隣接の完全なメッシュは、結果として得られるトポロジの実質的に達成可能なスケールを大幅に制限します。図1のトポロジには、6つのL1/L2ノードがあります。図2は、6つのL1/L2ノード間のL2隣接の完全なメッシュを示しており、（5 * 6）/2 = 15 L2隣接をもたらします。20のL1/L2ノードを含むやや大きいトポロジでは、フルメッシュのL2隣接の数は190に上昇します。"
+    },
+    {
+      "indent": 2,
+      "text": "+----+  +-------+    +-------------------------------+-------+  +----+\n| R1 |  |  R10  |    |                               |  R30  |  | R4 |\n| L2 +--+ L1/L2 +------------------------------------+ L1/L2 +--+ L2 |\n|    |  |       |    |                               |       |  |    |\n+----+  ++-+-+--+-+  |                             +-+--+---++  +----+\n         | | |    |  |                             |    |   |\n         | +----------------------------------------------+ |\n         |   |    |  |                             |    | | |\n         |   +-----------------------------------+ |    | | |\n         |        |  |                           | |    | | |\n         |     +----------------------------------------+ | |\n         |     |  |  |                           | |      | |\n+----+  ++-----+- |  |                           | | -----+-++  +----+\n| R2 |  |  R11  | |  |                           | | |  R31  |  | R5 |\n| L2 +--+ L1/L2 +------------------------------------+ L1/L2 +--+ L2 |\n|    |  |       | |  |                           | | |       |  |    |\n+----+  ++------+------------------------------+ | | +----+-++  +----+\n         |        |  |                         | | |      | |\n         |        |  |                         | | |      | |\n         |    +-------------------------------------------+ |\n         |    |   |  |                         | | |        |\n         |    |   |  |                         +----------+ |\n         |    |   |  |                           | |      | |\n         |    |   |  |                           +-----+  | |\n         |    |   |  |                             |   |  | |\n+----+  ++----+-+-+  |                             +-+-+--+-++  +----+\n| R3 |  |  R12  |    |      L2 adjacency             |  R32  |  | R6 |\n| L2 +--+ L1/L2 +------------------------------------+ L1/L2 +--+ L2 |\n|    |  |       |    |                               |       |  |    |\n+----+  +-------+----+                               +-------+  +----+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "Figure 2: Example Topology Represented in L2 with a Full Mesh of L2 Adjacencies between L1/L2 Nodes",
+      "ja": "図2：L1/L2ノード間のL2隣接の完全なメッシュでL2に表されるトポロジの例"
+    },
+    {
+      "indent": 3,
+      "text": "BGP, as specified in [RFC4271], faced a similar scaling problem, which has been solved in many networks by deploying BGP route reflectors [RFC4456]. We note that BGP route reflectors do not necessarily have to be in the forwarding path of the traffic. This non-congruity of forwarding and control path for BGP route reflectors allows the control plane to scale independently of the forwarding plane and represents an interesting degree of freedom in network architecture.",
+      "ja": "[RFC4271]で指定されているBGPは、同様のスケーリング問題に直面しました。これは、BGPルートリフレクター[RFC4456]を展開することにより多くのネットワークで解決されました。BGPルートリフレクターは、必ずしもトラフィックの転送経路にある必要はないことに注意してください。BGPルートリフレクターの転送および制御パスのこの非条件により、制御面は転送面とは独立してスケーリングでき、ネットワークアーキテクチャの興味深い自由度を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "We propose in this document a similar solution for IS-IS and call it \"flood reflection\" in a fashion analogous to \"route reflection\". A simple example of what a flood reflector control plane approach would look like is shown in Figure 3, where router R21 plays the role of a flood reflector. Each L1/L2 ingress/egress router builds a tunnel to the flood reflector, and an L2 adjacency is built over each tunnel. In this solution, we need only six L2 adjacencies, instead of the 15 needed for a full mesh. In a somewhat larger topology containing 20 L1/L2 nodes, this solution requires only 20 L2 adjacencies, instead of the 190 needed for a full mesh. Multiple flood reflectors can be used, allowing the network operator to balance between resilience, path utilization, and state in the control plane. The resulting L2 adjacency scale is R*n, where R is the number of flood reflectors used and n is the number of L1/L2 nodes. This compares quite favorably with n*(n-1)/2 L2 adjacencies required in a topologically fully meshed L2 solution.",
+      "ja": "このドキュメントでは、IS-ISの同様のソリューションを提案し、「ルートリフレクション」に類似したファッションで「洪水反射」と呼びます。ルーターR21が洪水リフレクターの役割を果たしている図3に示されている洪水リフレクター制御プレーンのアプローチがどのように見えるかの簡単な例が示されています。各L1/L2イングレス/出口ルーターは、洪水リフレクターへのトンネルを構築し、各トンネルの上にL2隣接を構築します。このソリューションでは、フルメッシュに必要な15の代わりに、6つのL2隣接するだけが必要です。20のL1/L2ノードを含むやや大きいトポロジでは、このソリューションでは、フルメッシュに必要な190の代わりに、20のL2隣接のみが必要です。複数の洪水リフレクターを使用することができ、ネットワークオペレーターは、制御プレーンのレジリエンス、パス利用、状態のバランスをとることができます。結果のL2隣接尺度はR*Nで、Rは使用される洪水反射剤の数、NはL1/L2ノードの数です。これは、トポロジカルに完全にメッシュ化されたL2溶液で必要なN*（N-1）/2 L2隣接と非常に好意的に比較されます。"
+    },
+    {
+      "indent": 2,
+      "text": "+----+  +-------+                                    +-------+  +----+\n| R1 |  |  R10  |                                    |  R30  |  | R4 |\n| L2 +--+ L1/L2 +--------------+   +-----------------+ L1/L2 +--+ L2 |\n|    |  |       |  L2 adj      |   |      L2 adj     |       |  |    |\n+----+  +-------+  over        |   |      over       +-------+  +----+\n                   tunnel      |   |      tunnel\n+----+  +-------+           +--+---+--+              +-------+  +----+\n| R2 |  |  R11  |           |   R21   |              |  R31  |  | R5 |\n| L2 +--+ L1/L2 +-----------+  L1/L2  +--------------+ L1/L2 +--+ L2 |\n|    |  |       |  L2 adj   |  flood  |   L2 adj     |       |  |    |\n+----+  +-------+  over     |reflector|   over       +-------+  +----+\n                   tunnel   +--+---+--+   tunnel\n+----+  +-------+              |   |                 +-------+  +----+\n| R3 |  |  R12  +--------------+   +-----------------+  R32  |  | R6 |\n| L2 +--+ L1/L2 |  L2 adj                 L2 adj     | L1/L2 +--+ L2 |\n|    |  |       |  over                   over       |       |  |    |\n+----+  +-------+  tunnel                 tunnel     +-------+  +----+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "Figure 3: Example Topology Represented in L2 with L2 Adjacencies from Each L1/ L2 Node to a Single Flood Reflector",
+      "ja": "図3：各L1/ L2ノードから単一の洪水リフレクターへのL2隣接を持つL2で表されるトポロジの例"
+    },
+    {
+      "indent": 3,
+      "text": "As illustrated in Figure 3, when R21 plays the role of flood reflector, it provides L2 connectivity among all of the previously disconnected L2 islands by reflooding all L2 Link State Protocol Data Unit (LSPs). At the same time, R20 and R22 in Figure 1 remain L1-only routers. L1-only routers and L1-only links are not visible in L2. In this manner, the flood reflector allows us to provide L2 control plane connectivity in a manner more scalable than a flat L2 domain.",
+      "ja": "図3に示すように、R21が洪水リフレクターの役割を果たしている場合、すべてのL2リンク状態プロトコルデータユニット（LSP）を反射することにより、以前に切断されたすべてのL2島の間でL2接続を提供します。同時に、図1のR20とR22はL1のみのルーターのままです。L1のみのルーターとL1のみのリンクは、L2では見えません。このようにして、洪水リフレクターにより、フラットL2ドメインよりもスケーラブルな方法でL2コントロールプレーンの接続を提供できます。"
+    },
+    {
+      "indent": 3,
+      "text": "As described so far, the solution illustrated in Figure 3 relies only on currently standardized IS-IS functionality. Without new functionality, however, the data traffic will traverse only R21. This will unnecessarily create a bottleneck at R21 since there is still available capacity in the paths crossing the L1-only routers R20 and R22 in Figure 1.",
+      "ja": "これまでに説明したように、図3に示すソリューションは、現在標準化されているIS-IS機能にのみ依存しています。ただし、新しい機能がなければ、データトラフィックはR21のみを横断します。図1のL1のみのルーターR20とR22を横切るパスにまだ利用可能な容量があるため、これによりR21でボトルネックが不必要に作成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Hence, additional functionality is compulsory to allow the L1/L2 edge nodes (R10-12 and R30-32 in Figure 3) to recognize that the L2 adjacency to R21 should not be used for forwarding. The L1/L2 edge nodes should forward traffic that would normally be forwarded over the L2 adjacency to R21 over L1 links instead. This would allow the forwarding within the L1 area to use the L1-only nodes and links shown in Figure 1 as well. It allows networks that use the entire forwarding capacity of the L1 areas to be built, while at the same time it introduces control plane scaling benefits that are provided by L2 flood reflectors.",
+      "ja": "したがって、追加の機能は、L1/L2エッジノード（図3のR10-12およびR30-32）がR21へのL2隣接を転送に使用しないことを認識できるようにするために義務付けられています。L1/L2エッジノードは、通常、L1リンクを介してR21へのL2隣接を介して転送されるトラフィックを転送する必要があります。これにより、L1領域内の転送により、図1に示すL1のみのノードとリンクも使用できます。これにより、L1エリアの転送容量全体を使用するネットワークを構築できますが、同時にL2洪水リフレクターによって提供されるコントロールプレーンスケーリングの利点を導入します。"
+    },
+    {
+      "indent": 3,
+      "text": "It is expected that deployment at scale, and suitable time in operation, will provide sufficient evidence to either put this extension into a Standards Track document or suggest necessary modifications to accomplish that.",
+      "ja": "大規模な展開、および適切な操作時間が、この拡張機能を標準トラックドキュメントに入れるか、それを達成するために必要な変更を提案するのに十分な証拠を提供することが期待されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The remainder of this document defines the remaining extensions necessary for a complete flood reflection solution:",
+      "ja": "このドキュメントの残りの部分は、完全な洪水反射ソリューションに必要な残りの拡張機能を定義しています。"
+    },
+    {
+      "indent": 3,
+      "text": "* It defines a special \"flood reflector adjacency\" built for the purpose of reflecting flooding information. These adjacencies allow \"flood reflectors\" to participate in the IS-IS control plane without necessarily being used in the forwarding plane. Maintenance of such adjacencies is a purely local operation on the L1/L2 ingress and flood reflectors; it does not require replacing or modifying any routers not involved in the reflection process. In practical deployments, it is far less tricky to just upgrade the routers involved in flood reflection rather than have a flag day for the whole IS-IS domain.",
+      "ja": "* それは、洪水情報を反映する目的で構築された特別な「洪水反省隣接」を定義します。これらの隣接により、「洪水リフレクター」は、必ずしもフォワーディングプレーンで使用されることなく、IS-ISコントロールプレーンに参加することができます。このような隣接のメンテナンスは、L1/L2イングレスおよび洪水リフレクターの純粋にローカルな操作です。反射プロセスに関与していないルーターを交換または変更する必要はありません。実際の展開では、IS-ISドメイン全体のフラグデーを持つのではなく、洪水反射に関与するルーターをアップグレードするだけでは厄介ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "* It specifies an (optional) full mesh of tunnels between the L1/L2 ingress routers, ideally load-balancing across all available L1 links. This harnesses all forwarding paths between the L1/L2 edge nodes without injecting unneeded state into the L2 flooding domain or creating \"choke points\" at the \"flood reflectors\" themselves. The specification is agnostic as to the tunneling technology used but provides enough information for automatic establishment of such tunnels if desired. The discussion of IS-IS adjacency formation and/or liveness discovery on such tunnels is outside the scope of this specification and is largely a choice of the underlying implementation. A solution without tunnels is also possible by introducing the correct scoping of reachability information between the levels. This is described in more detail later.",
+      "ja": "* L1/L2イングレスルーター間の（オプションの）トンネルの完全なメッシュを指定します。これにより、不要な状態をL2フラッディングドメインに注入することも、「洪水反射者」に「チョークポイント」を作成することなく、L1/L2エッジノード間のすべての転送パスを利用します。仕様は、使用されるトンネル技術に関する不可知論者ですが、必要に応じてそのようなトンネルを自動的に確立するのに十分な情報を提供します。そのようなトンネルでのIS-ISの隣接型形成および/または活気の発見の議論は、この仕様の範囲外であり、主に基礎となる実装の選択です。トンネルのないソリューションも、レベル間に到達可能な情報の正しいスコーピングを導入することで可能です。これについては、後で詳しく説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "* Finally, this document defines support of reflector redundancy and an (optional) way to auto-discover and annotate flood reflector adjacencies on advertisements. Such additional information in link advertisements allows L2 nodes outside the L1 area to recognize a flood reflection cluster and its adjacencies.",
+      "ja": "* 最後に、このドキュメントでは、リフレクターの冗長性のサポートと、広告の洪水リフレクターの隣接を自動化および注釈するための（オプションの）方法を定義します。リンク広告のこのような追加情報により、L1領域の外側のL2ノードは、洪水反射クラスターとその隣接を認識できます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions Used in This Document",
+      "section_title": true,
+      "ja": "2. このドキュメントで使用されている規則"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Terminology",
+      "section_title": true,
+      "ja": "2.1. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The following terms are used in this document.",
+      "ja": "このドキュメントでは、次の用語が使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "IS-IS Level 1 and Level 2 areas (mostly abbreviated as L1 and L2): IS-IS concepts where a routing domain has two \"levels\" with a single L2 area being the \"backbone\" that connects multiple L1 areas for scaling and reliability purposes. IS-IS architecture prescribes a routing domain with two \"levels\" where a single L2 area functions as the \"backbone\" that connects multiple L1 areas amongst themselves for scaling and reliability purposes. In such architecture, L2 can be used as transit for traffic carried from one L1 area to another, but L1 areas themselves cannot be used for that purpose because the L2 level must be a single \"connected\" entity, and all traffic exiting an L1 area flows along L2 routers until the traffic arrives at the destination L1 area itself.",
+      "ja": "IS-ISレベル1およびレベル2の領域（ほとんどがL1およびL2と略されます）：ルーティングドメインに2つの「レベル」があり、単一のL2領域がスケーリングと信頼性のための複数のL1領域を接続する「バックボーン」であるIS-IS概念目的。IS-ISアーキテクチャは、単一のL2領域がスケーリングと信頼性の目的で複数のL1領域を接続する「バックボーン」として機能する2つの「レベル」を持つルーティングドメインを規定しています。このようなアーキテクチャでは、L2は1つのL1エリアから別の領域に運ばれる交通のトランジットとして使用できますが、L2レベルは単一の「接続」エンティティでなければならず、L1エリアを出るすべてのトラフィックが必要なため、L1エリア自体をその目的に使用することはできません。トラフィックが宛先L1エリア自体に到着するまで、L2ルーターに沿って流れます。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflector: Node configured to connect in L2 only to flood reflector clients and to reflect (reflood) IS-IS L2 LSPs amongst them.",
+      "ja": "Flood Reflector：L2で接続するように構成されたノードFlood Reflectorクライアントと反射（Reflood）IS-IS L2 LSPの中でIS-IS L2 LSP。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflector Client: Node configured to build Flood Reflector Adjacencies to Flood Reflectors and to build normal adjacencies to other clients and L2 nodes not participating in flood reflection.",
+      "ja": "フラッドリフレクタークライアント：洪水リフレクターへの洪水リフレクターの隣接を構築し、他のクライアントと洪水リフレクションに参加していないL2ノードへの通常の隣接を構築するように構成されたノード。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflector Adjacency: IS-IS L2 adjacency where one end is a Flood Reflector Client, and the other, a Flood Reflector. Both have the same Flood Reflector Cluster ID.",
+      "ja": "Flood Reflectorの隣接：IS-IS L2隣接は、一方の端が洪水リフレクターのクライアントであり、もう一方は洪水リフレクターです。どちらも同じ洪水リフレクタークラスターIDを持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflector Cluster: Collection of clients and flood reflectors configured with the same cluster identifier.",
+      "ja": "洪水リフレクタークラスター：同じクラスター識別子で構成されたクライアントと洪水リフレクターのコレクション。"
+    },
+    {
+      "indent": 3,
+      "text": "Tunnel-Based Deployment: Deployment where Flood Reflector Clients build a partial or full mesh of tunnels in L1 to \"shortcut\" forwarding of L2 traffic through the cluster.",
+      "ja": "トンネルベースの展開：展開フラッドリフレクターのクライアントがL1でトンネルの部分的または完全なメッシュを構築して、クラスターを通るL2トラフィックの「ショートカット」転送を構築します。"
+    },
+    {
+      "indent": 3,
+      "text": "No-Tunnel Deployment: Deployment where Flood Reflector Clients redistribute L2 reachability into L1 to allow forwarding through the cluster without underlying tunnels.",
+      "ja": "ノートゥンネルの展開：展開フラッドリフレクターのクライアントがL2の到達可能性をL1に再配分して、基礎となるトンネルなしでクラスターを転送できるようにします。"
+    },
+    {
+      "indent": 3,
+      "text": "Tunnel Endpoint: An endpoint that allows the establishment of a bidirectional tunnel carrying IS-IS control traffic or, alternately, serves as the origin of such a tunnel.",
+      "ja": "トンネルのエンドポイント：IS-ISコントロールトラフィックを運ぶ双方向トンネルの確立を可能にするエンドポイント、またはそのようなトンネルの起源として機能します。"
+    },
+    {
+      "indent": 3,
+      "text": "L1 shortcut: A tunnel established between two clients that is visible in L1 only and is used as a next hop, i.e., to carry data traffic in tunnel-based deployment mode.",
+      "ja": "L1ショートカット：L1のみで表示され、次のホップとして使用される2つのクライアントの間に確立されたトンネル、つまり、トンネルベースの展開モードでデータトラフィックを運ぶために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Hot-Potato Routing: In the context of this document, a routing paradigm where L2->L1 routes are less preferred than L2 routes [RFC5302].",
+      "ja": "Hot-Potatoルーティング：このドキュメントのコンテキストでは、L2-> L1ルートがL2ルートよりも優先度が低いルーティングパラダイム[RFC5302]。"
+    },
+    {
+      "indent": 0,
+      "text": "2.2. Requirements Language",
+      "section_title": true,
+      "ja": "2.2. 要件言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Further Details",
+      "section_title": true,
+      "ja": "3. 詳細"
+    },
+    {
+      "indent": 3,
+      "text": "Several considerations should be noted in relation to such a flood reflection mechanism.",
+      "ja": "このような洪水反射メカニズムに関連して、いくつかの考慮事項に注意する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "First, the flood reflection mechanism allows multi-area IS-IS deployments to scale without any major modifications in the IS-IS implementation on most of the nodes deployed in the network. Unmodified (standard) L2 routers will compute reachability across the transit L1 area using the flood reflector adjacencies. (In this document, the term \"standard\" refers to IS-IS as specified in [ISO10589].)",
+      "ja": "まず、洪水反射メカニズムにより、ネットワークに展開されているほとんどのノードでのIS-Iの実装を大幅に変更することなく、マルチエリアIS-IS展開がスケーリングできます。未修飾（標準）L2ルーターは、洪水リフレクターの隣接を使用して、トランジットL1エリア全体で到達可能性を計算します。（このドキュメントでは、「標準」という用語は、[ISO10589]で指定されているIS-ISを指します。）"
+    },
+    {
+      "indent": 3,
+      "text": "Second, the flood reflectors are not required to participate in forwarding traffic through the L1 transit area. These flood reflectors can be hosted on virtual devices outside the forwarding topology.",
+      "ja": "第二に、洪水リフレクターは、L1トランジットエリアを通るトラフィックの転送に参加する必要はありません。これらの洪水リフレクターは、転送トポロジ外の仮想デバイスでホストできます。"
+    },
+    {
+      "indent": 3,
+      "text": "Third, astute readers will realize that flooding reflection may cause the use of suboptimal paths. This is similar to the BGP route reflection suboptimal routing problem described in [RFC9107]. The L2 computation determines the egress L1/L2 and, with that, can create illusions of ECMP where there is none; and in certain scenarios, the L2 computation can lead to an L1/L2 egress that is not globally optimal. This represents a straightforward instance of the trade-off between the amount of control plane state and the optimal use of paths through the network that are often encountered when aggregating routing information.",
+      "ja": "第三に、鋭い読者は、洪水の反射が最適ではない経路の使用を引き起こす可能性があることを認識するでしょう。これは、[RFC9107]で説明されているBGPルートリフレクションの準最適ルーティング問題に似ています。L2計算により、出力L1/L2が決定され、それとともに、存在しないECMPの幻想を作成できます。また、特定のシナリオでは、L2計算がグローバルに最適ではないL1/L2出力につながる可能性があります。これは、ルーティング情報を集約するときにしばしば遭遇するネットワークを通してパスの最適な使用との間のトレードオフの簡単なインスタンスを表します。"
+    },
+    {
+      "indent": 3,
+      "text": "One possible solution to this problem is to expose additional topology information into the L2 flooding domains. In the example network given, links from router R10 to router R11 can be exposed into L2 even when R10 and R11 are participating in flood reflection. This information would allow the L2 nodes to build \"shortcuts\" when the L2 flood-reflected part of the topology looks more expensive to cross distance-wise.",
+      "ja": "この問題の可能な解決策の1つは、追加のトポロジー情報をL2洪水ドメインに公開することです。与えられたネットワークの例では、ROUTER R10からRouter R11へのリンクは、R10とR11が洪水反射に参加している場合でもL2に公開できます。この情報により、トポロジーのL2洪水反射部分が距離を超えてより高価に見える場合、L2ノードが「ショートカット」を構築できるようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "Another possible variation is for an implementation to use the tunnel cost to approximate the cost of the underlying topology.",
+      "ja": "別の可能なバリエーションは、実装がトンネルコストを使用して、基礎となるトポロジのコストを近似することです。"
+    },
+    {
+      "indent": 3,
+      "text": "Redundancy can be achieved by configuring multiple flood reflectors in an L1 area. Multiple flood reflectors do not need any synchronization mechanisms amongst themselves, except standard IS-IS flooding and database maintenance procedures.",
+      "ja": "L1エリアで複数の洪水リフレクターを構成することにより、冗長性を実現できます。複数の洪水リフレクターでは、標準のIS洪水およびデータベースメンテナンス手順を除き、それ自体の間で同期メカニズムは必要ありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Encodings",
+      "section_title": true,
+      "ja": "4. エンコーディング"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Flood Reflection TLV",
+      "section_title": true,
+      "ja": "4.1. 洪水反射TLV"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection TLV is a top-level TLV that MUST appear in L2 IIHs (IS-IS Hello) on all Flood Reflection Adjacencies. The Flood Reflection TLV indicates the flood reflector cluster (based on Flood Reflection Cluster ID) that a given router is configured to participate in. It also indicates whether the router is configured to play the role of either flood reflector or flood reflector client. The Flood Reflection Cluster ID and flood reflector roles advertised in the IIHs are used to ensure that flood reflector adjacencies are only formed between a flood reflector and flood reflector client and that the Flood Reflection Cluster IDs match. The Flood Reflection TLV has the following format:",
+      "ja": "Flood Reflection TLVは、すべての洪水反射隣接にL2 IIHS（IS-IS Hello）に表示されなければならないトップレベルのTLVです。洪水反射TLVは、特定のルーターが参加するように構成されている洪水反射クラスター（洪水反射クラスターIDに基づく）を示します。また、ルーターが洪水リフレクターまたはフラッドリフレクタークライアントの役割を演じるように構成されているかどうかを示します。IIHSで宣伝されている洪水反射クラスターIDと洪水反射障害の役割は、洪水リフレクターの隣接が洪水リフレクターと洪水リフレクターのクライアントの間にのみ形成され、洪水反射クラスターIDが一致することを保証するために使用されます。洪水反射TLVには次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |    Length     |C|  Reserved   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Flood Reflection Cluster ID                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|   Sub-TLVs ...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Type: 161",
+      "ja": "タイプ：161"
+    },
+    {
+      "indent": 3,
+      "text": "Length: The length, in octets, of the following fields.",
+      "ja": "長さ：次のフィールドの長さ、オクテットの長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "C (Client): This bit is set to indicate that the router acts as a flood reflector client. When this bit is NOT set, the router acts as a flood reflector. On a given router, the same value of the C-bit MUST be advertised across all interfaces advertising the Flood Reflection TLV in IIHs.",
+      "ja": "C（クライアント）：このビットは、ルーターが洪水リフレクターのクライアントとして機能することを示すように設定されています。このビットが設定されていない場合、ルーターは洪水リフレクターとして機能します。特定のルーターでは、IIHSの洪水反射TLVを宣伝するすべてのインターフェイスでCビットの同じ値を宣伝する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved: This field is reserved for future use. It MUST be set to 0 when sent and MUST be ignored when received.",
+      "ja": "予約済み：このフィールドは、将来の使用のために予約されています。送信中は0に設定する必要があり、受け取ったときに無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflection Cluster ID: The same arbitrary 32-bit value MUST be assigned to all of the flood reflectors and flood reflector clients in the same L1 area. The value MUST be unique across different L1 areas within the IGP domain. In case of violation of those rules, multiple L1 areas may become a single cluster, or a single area may split in flood reflection sense, and several mechanisms, such as auto-discovery of tunnels, may not work correctly. On a given router, the same value of the Flood Reflection Cluster ID MUST be advertised across all interfaces advertising the Flood Reflection TLV in IIHs. When a router discovers that a node is using more than a single Cluster IDs based on its advertised TLVs and IIHs, the node MAY log such violations subject to rate-limiting. This implies that a flood reflector MUST NOT participate in more than a single L1 area. In case of Cluster ID value of 0, the TLV containing it MUST be ignored.",
+      "ja": "Flood Reflection Cluster ID：同じ任意の32ビット値を、同じL1領域のすべての洪水反射器と洪水リフレクタークライアントに割り当てる必要があります。値は、IGPドメイン内の異なるL1領域にわたって一意でなければなりません。これらの規則に違反した場合、複数のL1エリアが単一のクラスターになる場合があるか、単一の領域が洪水反射の意味で分割される場合があり、トンネルの自動ディスコービングなどのいくつかのメカニズムは正しく機能しない場合があります。特定のルーターでは、IIHSの洪水反射TLVを宣伝するすべてのインターフェイスで、洪水反射クラスターIDの同じ値を宣伝する必要があります。ルーターが、宣伝されているTLVとIIHSに基づいてノードが単一のクラスターIDを使用していることを発見すると、ノードはそのような違反をレート制限の対象とする可能性があります。これは、洪水リフレクターが単一のL1エリアに参加してはならないことを意味します。クラスターID値0の場合、それを含むTLVは無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Sub-TLVs (Optional Sub-TLVs): For future extensibility, the format of the Flood Reflection TLV allows for the possibility of including optional sub-TLVs. No sub-TLVs of the Flood Reflection TLV are defined in this document.",
+      "ja": "Sub-TLV（オプションのサブTLV）：将来の拡張性のために、洪水反射TLVの形式により、オプションのサブTLVを含めることができます。このドキュメントでは、洪水反射TLVのサブTLVは定義されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection TLV SHOULD NOT appear more than once in an IIH. A router receiving one or more Flood Reflection TLVs in the same IIH MUST use the values in the first TLV, and it SHOULD log such violations subject to rate-limiting.",
+      "ja": "洪水反射TLVは、IIHに1回以上表示されるべきではありません。同じIIHで1つ以上の洪水反射TLVを受信するルーターは、最初のTLVで値を使用する必要があり、料金制限の対象となるそのような違反を記録する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Flood Reflection Discovery Sub-TLV",
+      "section_title": true,
+      "ja": "4.2. Flood Reflection Discovery Sub-TLV"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection Discovery sub-TLV is advertised as a sub-TLV of the IS-IS Router Capability TLV 242, defined in [RFC7981]. The Flood Reflection Discovery sub-TLV is advertised in L1 and L2 LSPs with area flooding scope in order to enable the auto-discovery of flood reflection capabilities. The Flood Reflection Discovery sub-TLV has the following format:",
+      "ja": "Flood Reflection Discovery Sub-TLVは、[RFC7981]で定義されているIS-ISルーター機能TLV 242のサブTLVとして宣伝されています。Flood Reflection Discovery Sub-TLVは、洪水反射能力の自動発見を可能にするために、面積洪水範囲を備えたL1およびL2 LSPで宣伝されています。Flood Reflection Discovery Sub-TLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |    Length     |C|  Reserved   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Flood Reflection Cluster ID                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Type: 161",
+      "ja": "タイプ：161"
+    },
+    {
+      "indent": 3,
+      "text": "Length: The length, in octets, of the following fields.",
+      "ja": "長さ：次のフィールドの長さ、オクテットの長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "C (Client): This bit is set to indicate that the router acts as a flood reflector client. When this bit is NOT set, the router acts as a flood reflector.",
+      "ja": "C（クライアント）：このビットは、ルーターが洪水リフレクターのクライアントとして機能することを示すように設定されています。このビットが設定されていない場合、ルーターは洪水リフレクターとして機能します。"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved: This field is reserved for future use. It MUST be set to 0 when sent and MUST be ignored when received.",
+      "ja": "予約済み：このフィールドは、将来の使用のために予約されています。送信中は0に設定する必要があり、受け取ったときに無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflection Cluster ID: The Flood Reflection Cluster Identifier is the same as that defined in the Flood Reflection TLV in Section 4.1 and obeys the same rules.",
+      "ja": "洪水反射クラスターID：洪水反射クラスター識別子は、セクション4.1の洪水反射TLVで定義されているものと同じであり、同じルールに従います。"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection Discovery sub-TLV SHOULD NOT appear more than once in TLV 242. A router receiving one or more Flood Reflection Discovery sub-TLVs in TLV 242 MUST use the values in the first sub-TLV of the lowest numbered fragment, and it SHOULD log such violations subject to rate-limiting.",
+      "ja": "Flood Reflection Discovery Sub-TLVは、TLV 242に1回以上表示されないはずです。TLV242で1つまたは複数の洪水反射ディスカバリーサブTLVを受信するルーターは、最低番号のフラグメントの最初のサブTLVの値を使用する必要があります。そのような違反をレート制限の対象とする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Flood Reflection Discovery Tunnel Type Sub-Sub-TLV",
+      "section_title": true,
+      "ja": "4.3. 洪水リフレクションディスカバリートンネルタイプサブサブ-TLV"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflection Discovery Tunnel Type sub-sub-TLV is advertised optionally as a sub-sub-TLV of the Flood Reflection Discovery Sub-TLV, defined in Section 4.2. It allows the automatic creation of L2 tunnels to be used as flood reflector adjacencies and L1 shortcut tunnels. The Flood Reflection Tunnel Type sub-sub-TLV has the following format:",
+      "ja": "Flood Reflection Discovery Tunnel Type Sub-Sub-TLVは、セクション4.2で定義されている洪水反射ディスカバリーSub-TLVのサブサブTLVとしてオプションで宣伝されています。これにより、L2トンネルの自動作成を洪水リフレクターの隣接およびL1ショートカットトンネルとして使用できます。洪水反射トンネルタイプのサブサブ-TLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-------------+-+\n|     Type      |    Length     | Reserved    |F|\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                Tunnel Encapsulation Attribute                 |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Type: 161",
+      "ja": "タイプ：161"
+    },
+    {
+      "indent": 3,
+      "text": "Length: The length, in octets, of zero or more of the following fields.",
+      "ja": "長さ：オクテットの長さ、次のフィールドのゼロ以上の長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved: SHOULD be 0 on transmission and MUST be ignored on reception.",
+      "ja": "予約済み：送信時に0である必要があり、レセプションで無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "F Flag: When set, indicates flood reflection tunnel endpoint. When clear, indicates possible L1 shortcut tunnel endpoint.",
+      "ja": "Fフラグ：設定すると、洪水反射トンネルエンドポイントを示します。明確な場合は、可能なL1ショートカットトンネルエンドポイントを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Tunnel Encapsulation Attribute: Carries encapsulation type and further attributes necessary for tunnel establishment as defined in [RFC9012]. In context of this attribute, the protocol Type sub-TLV as defined in [RFC9012] MAY be included to ensure proper encapsulation of IS-IS frames. In case such a sub-TLV is included and the F flag is set (i.e., the resulting tunnel is a flood reflector adjacency), this sub-TLV MUST include a type that allows to carry encapsulated IS-IS frames. Furthermore, such tunnel type MUST be able to transport IS-IS frames of size up to \"originatingL2LSPBufferSize\".",
+      "ja": "トンネルカプセル化属性：[RFC9012]で定義されているように、トンネルの確立に必要なカプセル化タイプとさらなる属性を伝達します。この属性のコンテキストでは、[RFC9012]で定義されているプロトコル型Sub-TLVを含めて、ISフレームの適切なカプセル化を確保することができます。このようなサブTLVが含まれており、Fフラグが設定されている場合（つまり、結果のトンネルは洪水反射剤です）、このサブTLVには、カプセル化されたISフレームを運ぶことができるタイプを含める必要があります。さらに、このようなトンネルタイプは、「由来するl2lspbufferize」までのサイズのISフレームを輸送できる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A flood reflector receiving Flood Reflection Discovery Tunnel Type sub-sub-TLVs in Flood Reflection Discovery sub-TLV with F flag set (i.e., the resulting tunnel is a flood reflector adjacency) SHOULD use one or more of the specified tunnel endpoints to automatically establish one or more tunnels that will serve as a flood reflection adjacency and/or adjacencies to the clients advertising the endpoints.",
+      "ja": "洪水反射発見トンネルタイプの洪水リフレクションディスカバリーサブTLVを受信している洪水リフレクターがFフラグセットを備えたサブサブTLV（つまり、結果として得られるトンネルは洪水リフレクターの隣接）を使用する必要があります。エンドポイントを宣伝するクライアントへの洪水の反射として機能する1つ以上のトンネル。"
+    },
+    {
+      "indent": 3,
+      "text": "A flood reflection client receiving one or more Flood Reflection Discovery Tunnel Type sub-sub-TLVs in Flood Reflection Discovery sub-TLV with F flag clear (i.e., the resulting tunnel is used to support tunnel-based mode) from other leaves MAY use one or more of the specified tunnel endpoints to automatically establish one or more tunnels that will serve as L1 tunnel shortcuts to the clients advertising the endpoints.",
+      "ja": "他の葉から1つを使用する場合があります（つまり、結果のトンネルがトンネルベースのモードをサポートするために使用される）FLAG（つまり、結果のトンネルが使用されます）を使用して、1つまたは複数の洪水反射ディスカバリートンネルタイプサブサブTLVを受け取る洪水リフレクションクライアントが洪水リフレクションディスカバリーサブTLVを使用します。指定されたトンネルエンドポイントの多くは、エンドポイントを宣伝するクライアントにL1トンネルショートカットとして機能する1つ以上のトンネルを自動的に確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "In case of automatic flood reflection adjacency tunnels and in case IS-IS adjacencies are being formed across L1 shortcuts, all the aforementioned rules in Section 4.5 apply as well.",
+      "ja": "自動洪水反射隣接トンネルの場合、およびIS-IS隣接がL1ショートカット全体で形成されている場合、セクション4.5の前述のすべてのルールも適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Optional address validation procedures as defined in [RFC9012] MUST be disregarded.",
+      "ja": "[RFC9012]で定義されているオプションのアドレス検証手順は無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "It remains to be observed that automatic tunnel discovery is an optional part of the specification and can be replaced or mixed with statically configured tunnels for flood reflector adjacencies and tunnel-based shortcuts. Specific implementation details how both mechanisms interact are specific to an implementation and mode of operation and are outside the scope of this document.",
+      "ja": "自動トンネルの発見は仕様のオプションの部分であり、洪水リフレクターの隣接およびトンネルベースのショートカットのために静的に構成されたトンネルと交換または混合できることが観察されていません。具体的な実装の詳細の両方のメカニズムがどのように相互作用するかは、実装と動作モードに固有であり、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood reflector adjacencies rely on IS-IS L2 liveliness procedures. In case of L1 shortcuts, the mechanism used to ensure liveliness and tunnel integrity are outside the scope of this document.",
+      "ja": "Flood Reflectorの隣接は、IS-IS L2の活気の手順に依存しています。L1ショートカットの場合、活気とトンネルの完全性を確保するために使用されるメカニズムは、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Flood Reflection Adjacency Sub-TLV",
+      "section_title": true,
+      "ja": "4.4. 洪水反射隣接サブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection Adjacency sub-TLV is advertised as a sub-TLV of TLVs 22, 23, 25, 141, 222, and 223 (the \"TLVs Advertising Neighbor Information\"). Its presence indicates that a given adjacency is a flood reflector adjacency. It is included in L2 area scope flooded LSPs. The Flood Reflection Adjacency sub-TLV has the following format:",
+      "ja": "洪水反射隣接サブTLVは、TLVS 22、23、25、141、222、および223のサブTLVとして宣伝されています（「TLVS Advertising Neighbor Information」）。その存在は、特定の隣接が洪水反省隣接であることを示しています。L2エリアスコープ浸水LSPに含まれています。洪水反射隣接サブTLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |    Length     |C|  Reserved   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Flood Reflection Cluster ID                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Type: 161",
+      "ja": "タイプ：161"
+    },
+    {
+      "indent": 3,
+      "text": "Length: The length, in octets, of the following fields.",
+      "ja": "長さ：次のフィールドの長さ、オクテットの長さ。"
+    },
+    {
+      "indent": 3,
+      "text": "C (Client): This bit is set to indicate that the router advertising this adjacency is a flood reflector client. When this bit is NOT set, the router advertising this adjacency is a flood reflector.",
+      "ja": "c（クライアント）：このビットは、この隣接を宣伝するルーターが洪水リフレクターのクライアントであることを示すように設定されています。このビットが設定されていない場合、この隣接を宣伝するルーターは洪水リフレクターです。"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved: This field is reserved for future use. It MUST be set to 0 when sent and MUST be ignored when received.",
+      "ja": "予約済み：このフィールドは、将来の使用のために予約されています。送信中は0に設定する必要があり、受け取ったときに無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood Reflection Cluster ID: The Flood Reflection Cluster Identifier is the same as that defined in the Flood Reflection TLV in Section 4.1 and obeys the same rules.",
+      "ja": "洪水反射クラスターID：洪水反射クラスター識別子は、セクション4.1の洪水反射TLVで定義されているものと同じであり、同じルールに従います。"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflection Adjacency sub-TLV SHOULD NOT appear more than once in a given TLV. A router receiving one or more Flood Reflection Adjacency sub-TLVs in a TLV MUST use the values in the first sub-TLV of the lowest numbered fragment, and it SHOULD log such violations subject to rate-limiting.",
+      "ja": "洪水の反射隣接サブTLVは、特定のTLVに複数回表示されるべきではありません。TLVで1つまたは複数の洪水反射隣接サブTLVを受信するルーターは、最も低い番号付きフラグメントの最初のサブTLVの値を使用する必要があり、料金制限の対象となる違反を記録する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Flood Reflection Discovery",
+      "section_title": true,
+      "ja": "4.5. 洪水反省の発見"
+    },
+    {
+      "indent": 3,
+      "text": "A router participating in flood reflection as client or reflector MUST be configured as an L1/L2 router. It MAY originate the Flood Reflection Discovery sub-TLV with area flooding scope in L1 and L2. Normally, all routers on the edge of the L1 area (those having standard L2 adjacencies) will advertise themselves as flood reflector clients. Therefore, a flood reflector client will have both standard L2 adjacencies and flood reflector L2 adjacencies.",
+      "ja": "クライアントまたはリフレクターとして洪水反射に参加するルーターは、L1/L2ルーターとして構成する必要があります。L1およびL2の面積洪水範囲を備えた洪水反射発見サブTLVを発生する可能性があります。通常、L1領域の端にあるすべてのルーター（標準L2隣接を持っているルーター）は、洪水リフレクターのクライアントとして自分自身を宣伝します。したがって、洪水リフレクターのクライアントは、標準のL2隣接と洪水リフレクターL2の隣接の両方を備えています。"
+    },
+    {
+      "indent": 3,
+      "text": "A router acting as a flood reflector MUST NOT form any standard L2 adjacencies except with flood reflector clients. It will be an L1/L2 router only by virtue of having flood reflector L2 adjacencies. A router desiring to act as a flood reflector MAY advertise itself as such using the Flood Reflection Discovery sub-TLV in L1 and L2.",
+      "ja": "洪水リフレクターとして機能するルーターは、洪水リフレクターのクライアントを除き、標準のL2隣接を形成してはなりません。L1/L2ルーターは、洪水リフレクターL2の隣接を備えているためにのみです。洪水リフレクターとして機能することを望むルーターは、L1およびL2の洪水反射発見サブTLVを使用して、そのように自分自身を宣伝するかもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "A given flood reflector or flood reflector client can only participate in a single cluster, as determined by the value of its Flood Reflection Cluster ID and should disregard other routers' TLVs for flood reflection purposes if the cluster ID is not matching.",
+      "ja": "特定の洪水リフレクターまたは洪水リフレクターのクライアントは、フラッドリフレクションクラスターIDの値によって決定されるように、単一のクラスターにのみ参加でき、クラスターIDが一致していない場合、洪水反射目的で他のルーターのTLVを無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon reception of Flood Reflection Discovery sub-TLVs, a router acting as flood reflector SHOULD initiate a tunnel towards each flood reflector client with which it shares a Flood Reflection Cluster ID, using one or more of the tunnel encapsulations provided with F flag is set. The L2 adjacencies formed over such tunnels MUST be marked as flood reflector adjacencies. If the client or reflector has a direct L2 adjacency with the according remote side, it SHOULD use it instead of instantiating a tunnel.",
+      "ja": "Flood Reflection Discovery Sub-TLVを受信すると、洪水リフレクターとして機能するルーターは、Fフラグで提供されるトンネルカプセルの1つ以上を使用して、洪水反射クラスターIDを共有する各洪水リフレクタークライアントに向かってトンネルを開始する必要があります。このようなトンネルに形成されたL2の隣接は、洪水リフレクターの隣接としてマークする必要があります。クライアントまたはリフレクターがリモート側に直接L2隣接を持っている場合、トンネルをインスタンス化する代わりに使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In case the optional auto-discovery mechanism is not implemented or enabled, a deployment MAY use statically configured tunnels to create flood reflection adjacencies.",
+      "ja": "オプションの自動配記メカニズムが実装または有効になっていない場合、展開は静的に構成されたトンネルを使用して、洪水反射隣接を作成する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS metrics for all flood reflection adjacencies in a cluster SHOULD be identical.",
+      "ja": "クラスター内のすべての洪水反射隣接のIS-ISメトリックは同一である必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon reception of Flood Reflection Discovery TLVs, a router acting as a flood reflector client MAY initiate tunnels with L1-only adjacencies towards any of the other flood reflector clients with lower router IDs in its cluster using encapsulations with F flag clear. These tunnels MAY be used for forwarding to improve the load-balancing characteristics of the L1 area. If the clients have a direct L2 adjacency, they SHOULD use it instead of instantiating a new tunnel.",
+      "ja": "Flood Reflection Discovery TLVを受信すると、洪水リフレクターのクライアントとして機能するルーターは、Fフラグがクリアされたカプセルを使用して、クラスター内のルーターIDが低い他の洪水リフレクタークライアントのいずれかに向けてL1のみの隣接を持つトンネルを開始する場合があります。これらのトンネルは、L1領域の負荷分散特性を改善するために転送に使用できます。クライアントが直接L2隣接を持っている場合、新しいトンネルをインスタンス化する代わりに使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Flood Reflection Adjacency Formation",
+      "section_title": true,
+      "ja": "4.6. 洪水の反射隣接形成"
+    },
+    {
+      "indent": 3,
+      "text": "In order to simplify implementation complexity, this document does not allow the formation of complex hierarchies of flood reflectors and clients or allow multiple clusters in a single L1 area. Consequently, all flood reflectors and flood reflector clients in the same L1 area MUST share the same Flood Reflector Cluster ID. Deployment of multiple cluster IDs in the same L1 area are outside the scope of this document.",
+      "ja": "実装の複雑さを簡素化するために、このドキュメントでは、洪水リフレクターとクライアントの複雑な階層の形成を許可したり、単一のL1領域で複数のクラスターを許可したりしません。その結果、同じL1エリアのすべての洪水リフレクターと洪水リフレクターのクライアントは、同じ洪水リフレクタークラスターIDを共有する必要があります。同じL1領域での複数のクラスターIDの展開は、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "A flood reflector MUST NOT form flood reflection adjacencies with flood reflector clients with a different Cluster ID. A flood reflector MUST NOT form any standard L2 adjacencies.",
+      "ja": "洪水リフレクターは、異なるクラスターIDを持つ洪水リフレクターのクライアントを持つ洪水反射隣接を形成してはなりません。洪水リフレクターは、標準のL2隣接を形成してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood reflector clients MUST NOT form flood reflection adjacencies with flood reflectors with a different Cluster ID.",
+      "ja": "洪水リフレクターのクライアントは、異なるクラスターIDを持つ洪水リフレクターを備えた洪水反射隣接を形成してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Flood reflector clients MAY form standard L2 adjacencies with flood reflector clients or nodes not participating in flood reflection. When two flood reflector clients form a standard L2 adjacency, the Cluster IDs are disregarded.",
+      "ja": "洪水リフレクターのクライアントは、洪水リフレクターのクライアントまたは洪水反射に参加していないノードを備えた標準のL2隣接を形成する場合があります。2つの洪水リフレクタークライアントが標準のL2隣接を形成すると、クラスターIDは無視されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The Flood Reflector Cluster ID and flood reflector roles advertised in the Flood Reflection TLVs in IIHs are used to ensure that flood reflection adjacencies that are established meet the above criteria.",
+      "ja": "IIHSの洪水反射TLVで宣伝されているフラッドリフレクタークラスターIDおよび洪水リフレクターの役割は、確立された洪水反射の隣接が上記の基準を満たすことを保証するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "On change in either flood reflection role or cluster ID on IIH on the local or remote side, the adjacency has to be reset. It is then re-established if possible.",
+      "ja": "ローカルまたはリモート側のIIH上の洪水反射の役割またはクラスターIDの変更については、隣接をリセットする必要があります。その後、可能であれば再確立されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Once a flood reflection adjacency is established, the flood reflector and the flood reflector client MUST advertise the adjacency by including the Flood Reflection Adjacency Sub-TLV in the Extended IS reachability TLV or Multi-Topology Intermediate System Neighbor (MT-ISN) TLV.",
+      "ja": "洪水の反射隣接が確立されると、洪水反射とフラッドリフレクターのクライアントは、拡張された拡張性TLVまたはマルチトポロジー中間システムネイバー（MT-ISN）TLVに洪水反射隣接サブTLVを含めることにより、隣接を宣伝する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Route Computation",
+      "section_title": true,
+      "ja": "5. ルート計算"
+    },
+    {
+      "indent": 3,
+      "text": "To ensure loop-free routing, the flood reflection client MUST follow the normal L2 computation to determine L2 routes. This is because nodes outside the L1 area will generally not be aware that flood reflection is being performed. The flood reflection clients need to produce the same result for the L2 route computation as a router not participating in flood reflection.",
+      "ja": "ループフリーのルーティングを確保するために、洪水反射クライアントは通常のL2計算に従ってL2ルートを決定する必要があります。これは、L1エリアの外側のノードが一般に洪水の反射が実行されていることを認識していないためです。洪水反射クライアントは、洪水反射に参加していないルーターと同じL2ルート計算に対して同じ結果を生成する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Tunnel-Based Deployment",
+      "section_title": true,
+      "ja": "5.1. トンネルベースの展開"
+    },
+    {
+      "indent": 3,
+      "text": "In the tunnel-based option, the reflection client, after L2 and L1 computation, MUST examine all L2 routes with flood reflector next-hop adjacencies. Such next hops must be replaced by the corresponding tunnel next hops to the correct egress nodes of the flood reflection cluster.",
+      "ja": "トンネルベースのオプションでは、L2およびL1計算後の反射クライアントは、Flood Reflector Next-Hopの隣接を備えたすべてのL2ルートを調べる必要があります。このような次のホップは、洪水反射クラスターの正しい出力ノードに対応するトンネル次のホップに置き換える必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. No-Tunnel Deployment",
+      "section_title": true,
+      "ja": "5.2. ノータンネルの展開"
+    },
+    {
+      "indent": 3,
+      "text": "In case of deployment without underlying tunnels, the necessary L2 routes are distributed into the area, normally as L2->L1 routes. Due to the rules in Section 4.6, the computation in the resulting topology is relatively simple: the L2 SPF from a flood reflector client is guaranteed to reach the Flood Reflector within a single hop, and in the following hop, it is guaranteed to reach the L2 egress to which it has a forwarding tunnel. All the flood reflector tunnel next hops in the according L2 route can hence be removed, and if the L2 route has no other ECMP L2 next hops, the L2 route MUST be suppressed in the RIB by some means to allow the less preferred L2->L1 route to be used to forward traffic towards the advertising egress.",
+      "ja": "基礎となるトンネルのない展開の場合、必要なL2ルートは、通常L2-> L1ルートとしてエリアに分散されます。セクション4.6のルールにより、結果のトポロジの計算は比較的単純です。フラッドリフレクタークライアントからのL2 SPFは、1回のホップ内で洪水リフレクターに到達することが保証されており、次のホップでは、転送トンネルがあるL2出力。したがって、L2ルートの次のすべての洪水リフレクタートンネルは、L2ルートを削除できます。L2ルートに他のECMP L2の次のホップがない場合、L2ルートをリブで抑制する必要があります。L1ルートは、広告の出口にトラフィックを転送するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the particular case the client has L2 routes which are not flood reflected, those will be naturally preferred (such routes normally \"hot-potato\" packets out of the L1 area). However, in the case the L2 route through the flood reflector egress is \"shorter\" than such present L2 routes that are not flood reflected, the node SHOULD ensure that such routes are suppressed so the L2->L1 towards the egress still takes preference. Observe that operationally this can be resolved in a relatively simple way by configuring flood reflector adjacencies to have a high metric, i.e., the flood reflector topology becomes \"last resort,\" and the leaves will try to \"hot-potato\" out the area as fast as possible, which is normally the desirable behavior.",
+      "ja": "特定のケースでは、クライアントには洪水が反映されていないL2ルートがあり、それらは自然に好まれます（このようなルートは通常、L1エリアから「ホットポテト」パケットを出します）。ただし、洪水リフレクターの出口を通るL2ルートは、洪水が反射されないこのような現在のL2ルートよりも「短い」場合、ノードはそのようなルートが抑制されるようにして、出口に向かうL2-> L1がまだ好みを取る必要があります。洪水のリフレクターの隣接を高いメトリックに構成することにより、これは比較的簡単な方法でこれを解決できることを観察してください。できるだけ早く、これは通常望ましい動作です。"
+    },
+    {
+      "indent": 3,
+      "text": "In no-tunnel deployment, all L1/L2 edge nodes MUST be flood reflection clients.",
+      "ja": "ノータンネルの展開では、すべてのL1/L2エッジノードが洪水反射クライアントでなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Redistribution of Prefixes",
+      "section_title": true,
+      "ja": "6. 接頭辞の再配布"
+    },
+    {
+      "indent": 3,
+      "text": "In case of no-tunnel deployment per Section 5.2, a client that does not have any L2 flood reflector adjacencies MUST NOT redistribute L2 routes into the cluster.",
+      "ja": "セクション5.2ごとにタンネルの展開がない場合、L2洪水リフレクターの隣接がないクライアントは、L2ルートをクラスターに再配布してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The L2 prefix advertisements redistributed into an L1 that contains flood reflectors SHOULD be normally limited to L2 intra-area routes (as defined in [RFC7775]) if the information exists to distinguish them from other L2 prefix advertisements.",
+      "ja": "洪水リフレクターを含むL1に再配布されたL2プレフィックス広告は、通常、他のL2プレフィックス広告と区別するために情報が存在する場合、L2エリア内ルート（[RFC7775]で定義されている）に限定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, in topologies that make use of flood reflection to hide the structure of L1 areas while still providing transit-forwarding across them using tunnels, we generally do not need to redistribute L1 prefix advertisements into L2.",
+      "ja": "一方、洪水反射を利用してL1領域の構造を隠しながら、トンネルを使用してトランジットフォワードを提供するトポロジーでは、通常、L1プレフィックス広告をL2に再分配する必要はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Special Considerations",
+      "section_title": true,
+      "ja": "7. 特別な考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "In pathological cases, setting the overload bit in L1 (but not in L2) can partition L1 forwarding, while allowing L2 reachability through flood reflector adjacencies to exist. In such a case, a node cannot replace a route through a flood reflector adjacency with an L1 shortcut, and the client MAY use the L2 tunnel to the flood reflector for forwarding. In all those cases, the node MUST initiate an alarm and declare misconfiguration.",
+      "ja": "病理学的な場合、L1に過負荷ビットを設定することは（L2ではそうではありません）、L1の転送を分割することができますが、Flood Reflectorの隣接を介したL2の到達可能性が存在します。そのような場合、ノードは、洪水反射器を介したルートをL1ショートカットに置き換えることができず、クライアントはL2トンネルをフォワードのために洪水リフレクターに使用することができます。これらのすべての場合、ノードはアラームを開始し、誤った設定を宣言する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A flood reflector with directly L2 attached prefixes should advertise those in L1 as well since, based on preference of L1 routes, the clients will not try to use the L2 flood reflector adjacency to route the packet towards them. A very unlikely corner case can occur when the flood reflector is reachable via L2 flood reflector adjacency (due to underlying L1 partition) exclusively. In this instance, the client can use the L2 tunnel to the flood reflector for forwarding towards those prefixes while it MUST initiate an alarm and declare misconfiguration.",
+      "ja": "L1ルートの好みに基づいて、クライアントはL2フラッドリフレクターの隣接を使用してパケットをそれらに向かってルーティングしようとしないため、L2の直接接続のプレフィックスを備えた洪水リフレクターはL1のプレフィックスを宣伝する必要があります。Flood ReflectorがL2洪水リフレクターの隣接を介して（基礎となるL1パーティションのため）介して独占的に到達できる場合、非常にありそうもないコーナーケースが発生する可能性があります。この例では、クライアントはL2トンネルを洪水リフレクターに使用して、アラームを開始し、誤解を宣言する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A flood reflector MUST NOT set the attached bit on its LSPs.",
+      "ja": "洪水リフレクターは、LSPに付属ビットを設定してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In certain cases where reflectors are attached to the same broadcast medium, and where some other L2 router that is neither a flood reflector nor a flood reflector client (a \"non-FR router\", i.e., a router not participating in flood reflection) attaches to the same broadcast medium, flooding between the reflectors in question might not succeed, potentially partitioning the flood reflection domain. This could happen specifically in the event that the non-FR router is chosen as the Designated Intermediate System (DIS) -- the designated router. Since, per Section 4.6, a flood reflector MUST NOT form an adjacency with a non-FR router, the flood reflector(s) will not be represented in the pseudo-node.",
+      "ja": "リフレクターが同じブロードキャスト媒体に取り付けられている場合、および洪水リフレクターでも洪水リフレクターのクライアントでもない他のL2ルーター（「非FRルーター」、つまり、洪水反射に参加しないルーター）が付着する場合があります。同じブロードキャスト媒体に対して、問題の反射剤間の洪水は成功しない可能性があり、潜在的に洪水反射ドメインを分割する可能性があります。これは、非FRルーターが指定された中間システム（DIS） - 指定されたルーターとして選択された場合に特に発生する可能性があります。セクション4.6によると、洪水反射器は非FRルーターを使用して隣接を形成してはなりませんが、洪水反射器は擬似ノードで表されません。"
+    },
+    {
+      "indent": 3,
+      "text": "To avoid this situation, it is RECOMMENDED that flood reflectors not be deployed on the same broadcast medium as non-FR routers.",
+      "ja": "この状況を回避するには、洪水反射剤を非FRルーターと同じブロードキャスト媒体に展開しないことをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "A router discovering such condition MUST initiate an alarm and declare misconfiguration.",
+      "ja": "そのような状態を発見するルーターは、アラームを開始し、誤解を宣言する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has assigned the following IS-IS TLVs and sub-TLVs and has created a new registry.",
+      "ja": "IANAは、次のIS-IS TLVとSub-TLVを割り当て、新しいレジストリを作成しました。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. New IS-IS TLV Codepoint",
+      "section_title": true,
+      "ja": "8.1. 新しいis-is tlv codepoint"
+    },
+    {
+      "indent": 3,
+      "text": "The following IS-IS TLV has been registered in the \"IS-IS Top-Level TLV Codepoints\" registry:",
+      "ja": "以下のIS-IS TLVは、「IS-ISトップレベルのTLVコードポイント」レジストリに登録されています。"
+    },
+    {
+      "indent": 10,
+      "text": "+=======+==================+=====+=====+=====+=======+\n| Value | Name             | IIH | LSP | SNP | Purge |\n+=======+==================+=====+=====+=====+=======+\n| 161   | Flood Reflection | y   | n   | n   | n     |\n+-------+------------------+-----+-----+-----+-------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "Table 1: Flood Reflection IS-IS TLV Codepoint",
+      "ja": "表1：Flood Reflection IS-IS TLV CodePoint"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Sub-TLVs for IS-IS Router CAPABILITY TLV",
+      "section_title": true,
+      "ja": "8.2. IS-ISルーター機能TLVのサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The following has been registered in the \"IS-IS Sub-TLVs for IS-IS Router CAPABILITY TLV\" registry:",
+      "ja": "以下は、「IS-ISルーター機能TLVのIS-ISサブTLV」レジストリに登録されています。"
+    },
+    {
+      "indent": 19,
+      "text": "+======+============================+\n| Type | Description                |\n+======+============================+\n| 161  | Flood Reflection Discovery |\n+------+----------------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Table 2: IS-IS Router CAPABILITY TLV",
+      "ja": "表2：IS-ISルーター機能TLV"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Sub-Sub-TLVs for Flood Reflection Discovery Sub-TLV",
+      "section_title": true,
+      "ja": "8.3. 洪水反射ディスカバリーサブTLVのためのサブサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created a new registry named \"IS-IS Sub-Sub-TLVs for Flood Reflection Discovery Sub-TLV\" under the \"IS-IS TLV Codepoints\" grouping. The registration procedure for this registry is Expert Review [RFC8126], following the common expert review guidance given for the grouping.",
+      "ja": "IANAは、「IS-IS TLV CodePoints」グループ化の下にある「IS-IS Sub-Sub-TLVS for Flood Reflection Discovery Sub-TLV」という名前の新しいレジストリを作成しました。このレジストリの登録手順は、グループに与えられた一般的な専門家レビューガイダンスに従って、専門家レビュー[RFC8126]です。"
+    },
+    {
+      "indent": 3,
+      "text": "The range of values in this registry is 0-255. The registry contains the following initial registration:",
+      "ja": "このレジストリの値の範囲は0-255です。レジストリには、次の最初の登録が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "+======+===========================================================+\n| Type | Description                                               |\n+======+===========================================================+\n| 161  | Flood Reflection Discovery Tunnel Encapsulation Attribute |\n+------+-----------------------------------------------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 4,
+      "text": "Table 3: IS-IS Sub-Sub-TLVs for Flood Reflection Discovery Sub-TLV",
+      "ja": "表3：IS-ISサブサブTLVの洪水反射発見サブTLVのためのIS"
+    },
+    {
+      "indent": 0,
+      "text": "8.4. Sub-TLVs for TLVs Advertising Neighbor Information",
+      "section_title": true,
+      "ja": "8.4. 近隣情報を広告するTLVSのサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The following has been registered in the \"IS-IS Sub-TLVs for TLVs Advertising Neighbor Information\" registry;",
+      "ja": "以下は、「TLVS Advertising Neighbor Information」レジストリの「IS-ISサブTLV」に登録されています。"
+    },
+    {
+      "indent": 3,
+      "text": "+======+===========================+====+====+====+=====+=====+=====+\n| Type | Description               | 22 | 23 | 25 | 141 | 222 | 223 |\n+======+===========================+====+====+====+=====+=====+=====+\n| 161  | Flood Reflector           | y  | y  | n  | y   | y   | y   |\n|      | Adjacency                 |    |    |    |     |     |     |\n+------+---------------------------+----+----+----+-----+-----+-----+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 5,
+      "text": "Table 4: IS-IS Sub-TLVs for TLVs Advertising Neighbor Information",
+      "ja": "表4：IS-ISサブTLVはTLVS広告を広告します。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses flood reflection tunnels to carry IS-IS control traffic. If an attacker can inject traffic into such a tunnel, the consequences could be (in the most extreme case) the complete subversion of the IS-IS Level 2 information. Therefore, a mechanism inherent to the tunnel technology should be used to prevent such injection. Since the available security procedures will vary by deployment and tunnel type, the details of securing tunnels are beyond the scope of this document.",
+      "ja": "このドキュメントでは、洪水反射トンネルを使用してIS-ISコントロールトラフィックを運びます。攻撃者がそのようなトンネルにトラフィックを注入できる場合、結果は（最も極端な場合）IS-ISレベル2の情報の完全な転覆になる可能性があります。したがって、このような注射を防ぐために、トンネル技術に固有のメカニズムを使用する必要があります。利用可能なセキュリティ手順は展開とトンネルの種類によって異なるため、トンネルの固定の詳細はこのドキュメントの範囲を超えています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies information used to form dynamically discovered shortcut tunnels. If an attacker were able to hijack the endpoint of such a tunnel and form an adjacency, it could divert shortcut traffic to itself, placing itself on-path and facilitating on-path attacks, or it could even completely subvert the IS-IS Level 2 routing. Therefore, steps should be taken to prevent such capture by using mechanism inherent to the tunnel type used. Since the available security procedures will vary by deployment and tunnel type, the details of securing tunnels are beyond the scope of this document.",
+      "ja": "このドキュメントは、動的に発見されたショートカットトンネルを形成するために使用される情報を指定します。攻撃者がそのようなトンネルのエンドポイントをハイジャックして隣接を形成することができた場合、それはショートカットのトラフィックを迂回させ、パス上に置き、パス上の攻撃を促進するか、ISレベル2を完全に破壊する可能性がありますルーティング。したがって、使用されるトンネルタイプに固有のメカニズムを使用して、そのようなキャプチャを防ぐための手順を実行する必要があります。利用可能なセキュリティ手順は展開とトンネルの種類によって異なるため、トンネルの固定の詳細はこのドキュメントの範囲を超えています。"
+    },
+    {
+      "indent": 3,
+      "text": "Additionally, the usual IS-IS security mechanisms [RFC5304] SHOULD be deployed to prevent misrepresentation of routing information by an attacker in case a tunnel is compromised and the tunnel itself does not provide mechanisms strong enough to guarantee the integrity of the messages exchanged.",
+      "ja": "さらに、トンネルが侵害され、トンネル自体が交換されたメッセージの完全性を保証するほど強力なメカニズムを提供しない場合、通常のISセキュリティメカニズム[RFC5304]を攻撃者によるルーティング情報の不実表示を防ぐために展開する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ISO10589] ISO, \"Information technology - Telecommunications and information exchange between systems - Intermediate System to Intermediate System intra-domain routeing information exchange protocol for use in conjunction with the protocol for providing the connectionless-mode network service (ISO 8473)\", Second Edition, ISO/IEC 10589:2002, November 2002.",
+      "ja": "[ISO10589] ISO、「情報技術 - システム間の電気通信と情報交換 - 中間システムから中間システムからドメイン内のルーティング情報交換プロトコルは、コネクショニングモードネットワークサービス（ISO 8473）を提供するためのプロトコルと組み合わせて使用するための情報交換プロトコル、 \"、2番目Edition、ISO/IEC 10589：2002、2002年11月。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5302] Li, T., Smit, H., and T. Przygienda, \"Domain-Wide Prefix Distribution with Two-Level IS-IS\", RFC 5302, DOI 10.17487/RFC5302, October 2008, <https://www.rfc-editor.org/info/rfc5302>.",
+      "ja": "[RFC5302] Li、T.、Smit、H。、およびT. Przygienda、「2レベルのIS-ISを備えたドメイン全体の接頭分布」、RFC 5302、DOI 10.17487/RFC5302、2008年10月、<https：// wwwwwwwwwwwww.rfc-editor.org/info/rfc5302>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5304] Li, T. and R. Atkinson, \"IS-IS Cryptographic Authentication\", RFC 5304, DOI 10.17487/RFC5304, October 2008, <https://www.rfc-editor.org/info/rfc5304>.",
+      "ja": "[RFC5304] Li、T。およびR.アトキンソン、「IS-IS暗号認証」、RFC 5304、DOI 10.17487/RFC5304、2008年10月、<https://www.rfc-editor.org/info/rfc5304>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7775] Ginsberg, L., Litkowski, S., and S. Previdi, \"IS-IS Route Preference for Extended IP and IPv6 Reachability\", RFC 7775, DOI 10.17487/RFC7775, February 2016, <https://www.rfc-editor.org/info/rfc7775>.",
+      "ja": "[RFC7775] Ginsberg、L.、Litkowski、S。、およびS. Previdi、「拡張IPおよびIPv6の到達可能性に対するIS-ISルート優先」、RFC 7775、DOI 10.17487/RFC7775、2016年2月、<https：// www。rfc-editor.org/info/rfc7775>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7981] Ginsberg, L., Previdi, S., and M. Chen, \"IS-IS Extensions for Advertising Router Information\", RFC 7981, DOI 10.17487/RFC7981, October 2016, <https://www.rfc-editor.org/info/rfc7981>.",
+      "ja": "[RFC7981] Ginsberg、L.、Previdi、S。、およびM. Chen、「広告ルーター情報のためのIS-IS拡張機能」、RFC 7981、DOI 10.17487/RFC7981、2016年10月、<https：//www.rfc-editor.org/info/rfc7981>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：// wwwwwwwwwwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9012] Patel, K., Van de Velde, G., Sangli, S., and J. Scudder, \"The BGP Tunnel Encapsulation Attribute\", RFC 9012, DOI 10.17487/RFC9012, April 2021, <https://www.rfc-editor.org/info/rfc9012>.",
+      "ja": "[RFC9012] Patel、K.、Van de Velde、G.、Sangli、S。、およびJ. Scudder、「BGPトンネルカプセル化属性」、RFC 9012、DOI 10.17487/RFC9012、4月2021年、<https：// Wwwwwwwwwwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc9012>。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4271] Rekhter, Y., Ed., Li, T., Ed., and S. Hares, Ed., \"A Border Gateway Protocol 4 (BGP-4)\", RFC 4271, DOI 10.17487/RFC4271, January 2006, <https://www.rfc-editor.org/info/rfc4271>.",
+      "ja": "[RFC4271] Rekhter、Y.、ed。、Li、T.、ed。、およびS. Hares、ed。、「A Border Gateway Protocol 4（BGP-4）」、RFC 4271、DOI 10.17487/RFC4271、2006年1月、<https://www.rfc-editor.org/info/rfc4271>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4456] Bates, T., Chen, E., and R. Chandra, \"BGP Route Reflection: An Alternative to Full Mesh Internal BGP (IBGP)\", RFC 4456, DOI 10.17487/RFC4456, April 2006, <https://www.rfc-editor.org/info/rfc4456>.",
+      "ja": "[RFC4456] Bates、T.、Chen、E。、およびR. Chandra、「BGPルートリフレクション：フルメッシュ内部BGP（IBGP）の代替」、RFC 4456、DOI 10.17487/RFC4456、2006年4月、<https：//www.rfc-editor.org/info/rfc4456>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8099] Chen, H., Li, R., Retana, A., Yang, Y., and Z. Liu, \"OSPF Topology-Transparent Zone\", RFC 8099, DOI 10.17487/RFC8099, February 2017, <https://www.rfc-editor.org/info/rfc8099>.",
+      "ja": "[RFC8099] Chen、H.、Li、R.、Retana、A.、Yang、Y.、およびZ. Liu、「OSPFトポロジー透過ゾーン」、RFC 8099、DOI 10.17487/RFC8099、2017年2月、<https：//www.rfc-editor.org/info/rfc8099>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9107] Raszuk, R., Ed., Decraene, B., Ed., Cassar, C., man, E., and K. Wang, \"BGP Optimal Route Reflection (BGP ORR)\", RFC 9107, DOI 10.17487/RFC9107, August 2021, <https://www.rfc-editor.org/info/rfc9107>.",
+      "ja": "[RFC9107] Raszuk、R.、ed。、ed。、Decraene、B.、ed。、Cassar、C.、Man、E.、and K. Wang、「BGP最適ルートリフレクション（BGP ORR）、RFC 9107、DOI 10.17487/RFC9107、2021年8月、<https://www.rfc-editor.org/info/rfc9107>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors thank Shraddha Hegde, Peter Psenak, Acee Lindem, Robert Raszuk, and Les Ginsberg for their thorough review and detailed discussions. Thanks are also extended to Michael Richardson for an excellent routing directorate review. John Scudder ultimately spent significant time helping to make the document more comprehensible and coherent.",
+      "ja": "著者は、Shraddha Hegde、Peter Psenak、Acee Lindem、Robert Raszuk、およびLes Ginsbergに、徹底的なレビューと詳細な議論をしてくれたことに感謝します。優れたルーティングディレクターレビューをしてくれたマイケルリチャードソンにも感謝します。ジョン・スカダーは最終的に、文書をより理解しやすく、一貫性のあるものにするのに役立つかなりの時間を費やしました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tony Przygienda (editor) Juniper 1137 Innovation Way Sunnyvale, CA United States of America Email: prz@juniper.net",
+      "ja": "Tony Przygienda（編集者）Juniper 1137 Innovation Way Sunnyvale、CA Inited States of America Email：prz@juniper.net"
+    },
+    {
+      "indent": 3,
+      "text": "Chris Bowers Individual Email: chrisbowers.ietf@gmail.com",
+      "ja": "Chris Bowers個人メール：chrisbowers.ietf@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Yiu Lee Comcast 1800 Bishops Gate Blvd Mount Laurel, NJ 08054 United States of America Email: Yiu_Lee@comcast.com",
+      "ja": "Yiu Lee Comcast 1800 Bishops Gate Blvd Mount Laurel、NJ 08054アメリカ合衆国電子メール：yiu_lee@comcast.com"
+    },
+    {
+      "indent": 3,
+      "text": "Alankar Sharma Individual Email: as3957@gmail.com",
+      "ja": "Alankar Sharma個人メール：as3957@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Russ White Akamai Email: russ@riw.us",
+      "ja": "ラスホワイトアカマイメール：russ@riw.us"
+    }
+  ]
+}
