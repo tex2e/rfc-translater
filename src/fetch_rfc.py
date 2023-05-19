@@ -142,6 +142,7 @@ class Paragraph:
 
         conds = []
         conds.append(re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text))  # fig
+        conds.append(re.search(r'   -{1,3}>|<-{1,3}   ', text))  # fig
         conds.append(re.search(r'\.{4}|(?:\. ){4}', text))  # TOC
         conds.append(text.find('+--') >= 0)  # directory tree
         conds.append(re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text))  # src
