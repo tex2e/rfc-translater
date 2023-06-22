@@ -1,10 +1,10 @@
-
+# ------------------------------------------------------------------------------
 # 翻訳済みJSONからHTMLを生成するためのプログラム
+# ------------------------------------------------------------------------------
 
 import os
 import re
 import json
-# from mako.template import Template
 from mako.lookup import TemplateLookup
 
 def make_html(rfc_number: int | str) -> None:

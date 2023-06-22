@@ -1,10 +1,10 @@
-
+# ------------------------------------------------------------------------------
 # トップページを作成するためのプログラム
+# ------------------------------------------------------------------------------
 
 import os
 import re
 import glob
-# from mako.template import Template
 from mako.lookup import TemplateLookup
 
 # トップページ作成
