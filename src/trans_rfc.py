@@ -1,5 +1,6 @@
-
+# ------------------------------------------------------------------------------
 # RFCの文章を翻訳するプログラム
+# ------------------------------------------------------------------------------
 
 import os
 import re
@@ -9,7 +10,7 @@ from tqdm import tqdm  # pip install tqdm
 import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 import platform
 from datetime import datetime, timedelta, timezone
@@ -228,9 +229,15 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         print("", flush=True)
 
-    except NoSuchElementException:
+    except NoSuchElementException as e:
         print('[-] Google Translate is blocked by Google :(')
         print('[-]', datetime.now(JST))
+        print(e)
+        is_canceled = True
+    except TimeoutException as e:
+        print('[-] Selenium Timeout!')
+        print('[-]', datetime.now(JST))
+        print(e)
         is_canceled = True
     except KeyboardInterrupt:
         print('Interrupted!')
