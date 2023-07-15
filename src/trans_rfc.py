@@ -111,21 +111,29 @@ class TranslatorSeleniumGoogletrans(Translator):
         # 「/」をURLエンコードする
         text = text.replace('/', '%2F')
 
-        browser = self._browser
-        # 翻訳したい文をURLに埋め込んでからアクセスする
-        text_for_url = urllib.parse.quote_plus(text, safe='')
-        url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
-        # print('[+] url:', url)
-        browser.get(url)
-        # 数秒待機する
-        wait_time = 3 + len(text) / 1000
-        time.sleep(wait_time)
-        # 翻訳結果を抽出する
-        elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
-        ja = "\n".join(elem.text for elem in elems)
-        ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
-        # プログレスバーに詳細情報を追加
-        self.output_progress(len=len(text), wait_time=wait_time)
+        for i in range(0, 3):
+            browser = self._browser
+            # 翻訳したい文をURLに埋め込んでからアクセスする
+            text_for_url = urllib.parse.quote_plus(text, safe='')
+            url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
+            # print('[+] url:', url)
+            browser.get(url)
+            # 数秒待機する
+            wait_time = 3 + len(text) / 1000
+            self.output_progress(len=len(text), wait_time=wait_time)  # プログレスバーに詳細情報を追加
+            time.sleep(wait_time)
+            # 翻訳結果を抽出する
+            elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
+            ja = "\n".join(elem.text for elem in elems)
+            ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
+
+            # 翻訳結果が空文字のときはリトライする（最大3回）
+            if re.match(r'^\s*$', ja):
+                time.sleep(30)
+                continue
+
+            return ja
+
         return ja
 
     def translate_texts(self, texts: list[str], dest='ja') -> list[str]:
