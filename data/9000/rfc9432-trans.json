@@ -1,0 +1,920 @@
+{
+  "title": {
+    "text": "RFC 9432 - DNS Catalog Zones",
+    "ja": "RFC 9432 - DNSカタログゾーン"
+  },
+  "number": 9432,
+  "created_at": "2023-07-09 02:57:31.065498+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       P. van Dijk\nRequest for Comments: 9432                                      PowerDNS\nCategory: Standards Track                                      L. Peltan\nISSN: 2070-1721                                                   CZ.NIC\n                                                                 O. Sury\n                                             Internet Systems Consortium\n                                                               W. Toorop\n                                                              NLnet Labs\n                                                         C.R. Monshouwer\n\n                                                            P. Thomassen\n                                 deSEC, SSE - Secure Systems Engineering\n                                                             A. Sargsyan\n                                             Internet Systems Consortium\n                                                               July 2023",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 27,
+      "text": "DNS Catalog Zones",
+      "ja": "DNSカタログゾーン"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a method for automatic DNS zone provisioning among DNS primary and secondary name servers by storing and transferring the catalog of zones to be provisioned as one or more regular DNS zones.",
+      "ja": "このドキュメントでは、1つ以上の通常のDNSゾーンとしてプロビジョニングされるゾーンのカタログを保存および転送することにより、DNSプライマリおよびセカンダリネームサーバー間の自動DNSゾーンプロビジョニングの方法について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9432.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9432で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2023 IETF Trustおよび文書著者として特定された人。全著作権所有。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、修正されたBSDライセンスで説明されているように保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Terminology\n3.  Description\n4.  Catalog Zone Structure\n  4.1.  Member Zones\n  4.2.  Properties\n    4.2.1.  Schema Version (version property)\n  4.3.  Member Zone Properties\n    4.3.1.  Change of Ownership (coo property)\n    4.3.2.  Groups (group property)\n  4.4.  Custom Properties (*.ext properties)\n5.  Name Server Behavior\n  5.1.  General Requirements\n  5.2.  Member Zone Name Clash\n  5.3.  Member Zone Removal\n  5.4.  Member Node Name Change\n  5.5.  Migrating Member Zones between Catalogs\n  5.6.  Zone-Associated State Reset\n6.  Implementation and Operational Notes\n7.  Security Considerations\n8.  IANA Considerations\n9.  References\n  9.1.  Normative References\n  9.2.  Informative References\nAppendix A.  Catalog Zone Example\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The content of a DNS zone is synchronized among its primary and secondary name servers using Authoritative Transfer (AXFR) and Incremental Zone Transfer (IXFR). However, the list of zones served by the primary (called a \"catalog\" in [RFC1035]) is not automatically synchronized with the secondaries. To add or remove a zone, the administrator of a DNS name server farm has to not only add or remove the zone from the primary but must also add or remove configuration for the zone from all secondaries. This can be both inconvenient and error-prone. In addition, the steps required are dependent on the name server implementation.",
+      "ja": "DNSゾーンの内容は、権威ある転送（AXFR）および増分ゾーン転送（IXFR）を使用して、そのプライマリおよびセカンダリネームサーバー間で同期されます。ただし、プライマリが提供するゾーンのリスト（[RFC1035]の「カタログ」と呼ばれる）は、セカンテリと自動的に同期されていません。ゾーンを追加または削除するには、DNS Name Server Farmの管理者は、プライマリからゾーンを追加または削除するだけでなく、すべてのセカンドからゾーンの構成を追加または削除する必要があります。これは不便でエラーが発生しやすい場合があります。さらに、必要な手順は、名前サーバーの実装に依存します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a method in which the list of zones is represented as a regular DNS zone (called a \"catalog zone\" here) and transferred using DNS zone transfers. When entries are added to or removed from the catalog zone, it is distributed to the secondary name servers just like any other zone. Secondary name servers can then add, remove, or modify the zones they serve in accordance with the changes to the catalog zone. Other use cases of name server remote configuration by catalog zones are possible where the catalog consumer might not be a secondary.",
+      "ja": "このドキュメントでは、ゾーンのリストが通常のDNSゾーン（ここでは「カタログゾーン」と呼ばれる）として表され、DNSゾーン転送を使用して転送される方法について説明します。エントリがカタログゾーンに追加または削除されると、他のゾーンと同様にセカンダリネームサーバーに配布されます。セカンダリネームサーバーは、カタログゾーンの変更に従って提供するゾーンを追加、削除、または変更できます。カタログ消費者がセカンダリではない可能性がある場合、カタログゾーンによる名前サーバーリモート構成のその他のユースケースが可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog zone: A DNS zone containing a DNS catalog, which is a list of DNS zones and associated properties.",
+      "ja": "カタログゾーン：DNSカタログを含むDNSゾーン。これは、DNSゾーンと関連するプロパティのリストです。"
+    },
+    {
+      "indent": 3,
+      "text": "Member zone: A DNS zone whose configuration is published inside a catalog zone.",
+      "ja": "メンバーゾーン：カタログゾーン内で構成が公開されているDNSゾーン。"
+    },
+    {
+      "indent": 3,
+      "text": "Member node: A DNS name in the catalog zone representing a member zone.",
+      "ja": "メンバーノード：メンバーゾーンを表すカタログゾーンのDNS名。"
+    },
+    {
+      "indent": 3,
+      "text": "$CATZ: Used in examples as a placeholder to represent the domain name of the catalog zone itself. $OLDCATZ and $NEWCATZ are used to discuss migration of a member zone from one catalog zone ($OLDCATZ) to another catalog zone ($NEWCATZ).",
+      "ja": "$ CATZ：カタログゾーン自体のドメイン名を表すために、例ではプレースホルダーとして使用されます。$ oldcatzと$ newcatzは、あるカタログゾーン（$ oldcatz）から別のカタログゾーン（$ newcatz）へのメンバーゾーンの移行について議論するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog producer: An entity that generates and is responsible for the contents of the catalog zone.",
+      "ja": "カタログプロデューサー：カタログゾーンの内容を生成し、責任を負うエンティティ。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog consumer: An entity that extracts information from the catalog zone (such as a DNS server that configures itself according to the catalog zone's contents).",
+      "ja": "カタログ消費者：カタログゾーンから情報を抽出するエンティティ（カタログゾーンのコンテンツに従って設定するDNSサーバーなど）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document makes use of terminology for transfer mechanisms (AXFR and IXFR), record types (SOA, NS, and PTR), and other technical terms (such as RDATA) that are specific to the DNS. Since these terms have specific meanings in the DNS, they are not expanded upon first use in this document. For definitions of these and other terms, see [RFC8499].",
+      "ja": "このドキュメントでは、DNSに固有のその他の技術用語（RDATAなど）の転送メカニズム（AXFRおよびIXFR）、レコードタイプ（SOA、NS、PTR）、およびその他の技術用語（RDATAなど）を使用しています。これらの用語はDNSに特定の意味を持っているため、このドキュメントで最初に使用すると拡張されていません。これらおよびその他の用語の定義については、[RFC8499]を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Description",
+      "section_title": true,
+      "ja": "3. 説明"
+    },
+    {
+      "indent": 3,
+      "text": "A catalog zone is a DNS zone whose contents are specially crafted. Its resource records (RRs) primarily constitute a list of PTR records referencing other DNS zones (so-called \"member zones\"). The catalog zone may contain other records indicating additional metadata (so-called \"properties\") associated with these member zones.",
+      "ja": "カタログゾーンは、内容が特別に作成されたDNSゾーンです。そのリソースレコード（RRS）は、主に他のDNSゾーン（いわゆる「メンバーゾーン」）を参照するPTRレコードのリストを構成します。カタログゾーンには、これらのメンバーゾーンに関連付けられた追加のメタデータ（いわゆる「プロパティ」）を示す他のレコードが含まれている場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog consumers MUST ignore any RRs in the catalog zone for which no processing is specified or which are otherwise not supported by the implementation.",
+      "ja": "カタログ消費者は、処理が指定されていない、または実装によってサポートされていないカタログゾーン内のRRを無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Authoritative servers may be pre-configured with multiple catalog zones, each associated with a different set of configurations.",
+      "ja": "権威あるサーバーには、複数のカタログゾーンが事前に構成されている場合があり、それぞれが異なる構成セットに関連付けられています。"
+    },
+    {
+      "indent": 3,
+      "text": "Although the contents of a catalog zone are interpreted and acted upon by name servers, a catalog zone is a regular DNS zone and must adhere to the standards for DNS zones.",
+      "ja": "カタログゾーンの内容は名前サーバーによって解釈および行動されますが、カタログゾーンは通常のDNSゾーンであり、DNSゾーンの標準を遵守する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A catalog zone is primarily intended for the management of a farm of authoritative name servers and should not be expected to be accessible from any recursive name server.",
+      "ja": "カタログゾーンは、主に権威ある名前サーバーの農場の管理を目的としており、再帰的な名前サーバーからアクセスできるとは期待してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Catalog Zone Structure",
+      "section_title": true,
+      "ja": "4. カタログゾーン構造"
+    },
+    {
+      "indent": 3,
+      "text": "A catalog zone MUST follow the usual rules for DNS zones. In particular, SOA and NS record sets MUST be present and adhere to standard requirements (such as [RFC1982]).",
+      "ja": "カタログゾーンは、DNSゾーンの通常のルールに従う必要があります。特に、SOAおよびNSレコードセットが存在し、標準要件（[RFC1982]など）に付着する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Although catalog zones are not intended to be queried via recursive resolution (see Section 7), at least one NS RR is still required so that a catalog zone is a syntactically correct DNS zone. A single NS RR with a NSDNAME field containing the absolute name \"invalid.\" is RECOMMENDED [RFC2606] [RFC6761].",
+      "ja": "カタログゾーンは再帰解像度を介して照会されることを意図していませんが（セクション7を参照）、カタログゾーンが構文的に正しいDNSゾーンであるように、少なくとも1つのNS RRが必要です。絶対名「無効」を含むNSDNAMEフィールドを備えた単一のNS RR。推奨されます[RFC2606] [RFC6761]。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Member Zones",
+      "section_title": true,
+      "ja": "4.1. メンバーゾーン"
+    },
+    {
+      "indent": 3,
+      "text": "The list of member zones is specified as a collection of member nodes represented by domain names under the owner name \"zones\" where \"zones\" is a direct child domain of the catalog zone.",
+      "ja": "メンバーゾーンのリストは、所有者名「ゾーン」の下にあるドメイン名で表されるメンバーノードのコレクションとして指定されています。ここで、「ゾーン」はカタログゾーンの直接子ドメインです。"
+    },
+    {
+      "indent": 3,
+      "text": "The names of member zones are represented on the RDATA side of a PTR record (instead of being represented as a part of owner names) so that all valid domain names may be represented regardless of their length [RFC1035]. This PTR record MUST be the only record in the PTR RRset with the same name. The presence of more than one record in the RRset indicates a broken catalog zone that MUST NOT be processed (see Section 5.1).",
+      "ja": "メンバーゾーンの名前は、すべての有効なドメイン名が長さに関係なく表現できるように、PTRレコードのRDATA側で（所有者名の一部として表される代わりに）表されます[RFC1035]。このPTRレコードは、同じ名前のPTR RRSetの唯一のレコードでなければなりません。RRSetに複数のレコードが存在することは、処理してはならないカタログゾーンが壊れていることを示しています（セクション5.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if a catalog zone lists three zones (\"example.com.\", \"example.net.\", and \"example.org.\"), the member node RRs would appear as follows:",
+      "ja": "たとえば、カタログゾーンに3つのゾーン（ \"Example.com。\"、 \"emple.net。\"、および \"emple.org。\"）がリストされている場合、メンバーノードrrsは次のように表示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "<unique-1>.zones.$CATZ 0 IN PTR example.com. <unique-2>.zones.$CATZ 0 IN PTR example.net. <unique-3>.zones.$CATZ 0 IN PTR example.org.",
+      "ja": "<sique-1> .zones。$ catz 0 in ptr example.com。<sique-2> .zones。$ catz 0 in ptr.net。<ユニーク-3> .zones。$ catz 0 in ptr.org。"
+    },
+    {
+      "indent": 3,
+      "text": "where <unique-N> is a label that tags each record in the collection and has a unique value. When different <unique-N> labels hold the same PTR value (i.e., point to the same member zone), the catalog zone is broken and MUST NOT be processed (see Section 5.1).",
+      "ja": "ここで、<sique-n>はコレクション内の各レコードをタグ付けし、一意の価値を持っているラベルです。異なる<ユニーク-N>ラベルが同じPTR値（つまり、同じメンバーゾーンを指す）を保持している場合、カタログゾーンが壊れていないため、処理してはなりません（セクション5.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Member node labels carry no informational meaning beyond labeling member zones. A changed label may indicate that the state for a zone needs to be reset (see Section 5.6).",
+      "ja": "メンバーノードラベルには、メンバーゾーンにラベルを付ける以外に情報の意味がありません。変更されたラベルは、ゾーンの状態をリセットする必要があることを示している可能性があります（セクション5.6を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Having the zones uniquely tagged with the <unique-N> label ensures that additional RRs can be added below the member node (see Section 4.2).",
+      "ja": "ゾーンを<ユニーク-N>ラベルで一意にタグ付けすると、メンバーノードの下に追加のRRSを追加できるようになります（セクション4.2を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "The CLASS field of every RR in a catalog zone MUST be IN (1). The TTL field's value has no meaning in this context and SHOULD be ignored.",
+      "ja": "カタログゾーン内のすべてのRRのクラスフィールドは（1）にある必要があります。TTLフィールドの値は、この文脈では意味がなく、無視する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Properties",
+      "section_title": true,
+      "ja": "4.2. プロパティ"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog zone information is stored in the form of \"properties\".",
+      "ja": "カタログゾーン情報は、「プロパティ」の形式で保存されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Properties are identified by their name, which is used as an owner name prefix for one or more record sets underneath a member node (or underneath the catalog zone apex), with RR type(s) as appropriate for the respective property.",
+      "ja": "プロパティは、メンバーノードの下（またはカタログゾーン頂点の下）の1つ以上のレコードセットの所有者名のプレフィックスとして使用され、それぞれのプロパティに適したRRタイプを使用して、その名前で識別されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Known properties that have the correct RR type but are for some reason invalid (for example, because of an impossible value or because of an illegal number of RRs in the RRset) denote a broken catalog zone, which MUST NOT be processed (see Section 5.1).",
+      "ja": "正しいRRタイプを持っているが、何らかの理由で無効な既知のプロパティ（たとえば、不可能な価値があるため、またはRRSETのRRの違法な数のため）は、処理してはならないカタログゾーンの壊れたゾーンを示しています（セクション5.1を参照してください。）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document includes a set of initial properties that can be extended via the IANA registry defined and created in Section 8. Some properties are defined at the global level; others are scoped to apply only to a specific member zone. This document defines a mandatory global property in Section 4.2.1. The \"zones\" label from Section 4.1 can also be seen as a global property and is listed as such in the IANA registry in Section 8. Member-specific properties are described in Section 4.3.",
+      "ja": "このドキュメントには、セクション8で定義および作成されたIANAレジストリを介して拡張できる一連の初期プロパティが含まれています。一部のプロパティは、グローバルレベルで定義されています。その他は、特定のメンバーゾーンにのみ適用されるようにスコープされています。このドキュメントは、セクション4.2.1の強制的なグローバルプロパティを定義しています。セクション4.1の「ゾーン」ラベルは、グローバルプロパティと見なすこともでき、セクション8のIANAレジストリに記載されています。メンバー固有のプロパティについては、セクション4.3で説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers may store additional information in the catalog zone with custom properties; see Section 4.4. The meaning of such custom properties is determined by the implementation in question.",
+      "ja": "実装者は、カスタムプロパティを使用してカタログゾーンに追加情報を保存できます。セクション4.4を参照してください。このようなカスタムプロパティの意味は、問題の実装によって決定されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. Schema Version (version property)",
+      "section_title": true,
+      "ja": "4.2.1. スキーマバージョン（バージョンプロパティ）"
+    },
+    {
+      "indent": 3,
+      "text": "The catalog zone schema version is specified by an integer value embedded in a TXT RR named version.$CATZ. All catalog zones MUST have a TXT RRset named version.$CATZ with exactly one RR.",
+      "ja": "カタログゾーンスキーマバージョンは、TXT RRという名前のバージョンに埋め込まれた整数値によって指定されています。$ CATZ。すべてのカタログゾーンには、ちょうど1つのRRを持つ$ catzという名前のtxt rrsetという名前のtxt rrsetが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog consumers MUST NOT apply catalog zone processing to:",
+      "ja": "カタログ消費者は、カタログゾーン処理を以下に適用してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* zones without the version property",
+      "ja": "* バージョンプロパティのないゾーン"
+    },
+    {
+      "indent": 3,
+      "text": "* zones with a version property with more than one RR in the RRset",
+      "ja": "* RRSetに複数のRRを持つバージョンプロパティを備えたゾーン"
+    },
+    {
+      "indent": 3,
+      "text": "* zones with a version property without an expected value in the version.$CATZ TXT RR",
+      "ja": "* バージョンに期待値のないバージョンプロパティを持つゾーン。$ catztxt rr"
+    },
+    {
+      "indent": 3,
+      "text": "* zones with a version property with a schema version value that is not implemented by the consumer (e.g., version \"1\")",
+      "ja": "* 消費者によって実装されていないスキーマバージョン値を持つバージョンプロパティを備えたゾーン（例：バージョン \"1\"）"
+    },
+    {
+      "indent": 3,
+      "text": "These conditions signify a broken catalog zone, which MUST NOT be processed (see Section 5.1).",
+      "ja": "これらの条件は、処理してはならない壊れたカタログゾーンを意味します（セクション5.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "For this memo, the value of the version.$CATZ TXT RR MUST be set to \"2\"; that is:",
+      "ja": "このメモでは、バージョンの値。$ catz txt rrを「2」に設定する必要があります。あれは："
+    },
+    {
+      "indent": 3,
+      "text": "version.$CATZ 0 IN TXT \"2\"",
+      "ja": "バージョン。$ catz 0 in txt \"2\""
+    },
+    {
+      "indent": 3,
+      "text": "Note that Version 1 was used in an earlier draft version of this memo and reflected the implementation first found in BIND 9.11.",
+      "ja": "バージョン1は、このメモの以前のドラフトバージョンで使用され、Bind 9.11で最初に見つかった実装を反映していることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Member Zone Properties",
+      "section_title": true,
+      "ja": "4.3. メンバーゾーンプロパティ"
+    },
+    {
+      "indent": 3,
+      "text": "Each member zone MAY have one or more additional properties that are described in this section. The member properties described in this document are all optional, and implementations MAY choose to implement all, some, or none of them. Member zone properties are represented by RRsets below the corresponding member node.",
+      "ja": "各メンバーゾーンには、このセクションで説明されている1つ以上の追加プロパティがあります。このドキュメントで説明されているメンバープロパティはすべてオプションであり、実装はすべて、一部、またはそれらのいずれかを実装することを選択できます。メンバーゾーンプロパティは、対応するメンバーノードの下のrrsetsで表されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.1. Change of Ownership (coo property)",
+      "section_title": true,
+      "ja": "4.3.1. 所有権の変更（COOプロパティ）"
+    },
+    {
+      "indent": 3,
+      "text": "The coo property facilitates controlled migration of a member zone from one catalog to another.",
+      "ja": "COOプロパティは、あるカタログから別のカタログへのメンバーゾーンの制御された移行を容易にします。"
+    },
+    {
+      "indent": 3,
+      "text": "A Change Of Ownership is signaled by the coo property in the catalog zone currently \"owning\" the zone. The name of the new catalog is the value of a PTR record in the relevant coo property in the old catalog. For example, if member \"example.com.\" migrates from catalog zone $OLDCATZ to catalog zone $NEWCATZ, this will appear in the $OLDCATZ catalog zone as follows:",
+      "ja": "所有権の変更は、現在ゾーンを「所有」しているカタログゾーンのCOOプロパティによって合図されます。新しいカタログの名前は、古いカタログの関連するCOOプロパティのPTRレコードの値です。たとえば、メンバー「Example.com」の場合。カタログゾーン$ oldcatzからカタログゾーン$ newcatzに移行します。これは、次のように$ oldcatzカタログゾーンに表示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "<unique-N>.zones.$OLDCATZ 0 IN PTR example.com.\ncoo.<unique-N>.zones.$OLDCATZ 0 IN PTR $NEWCATZ",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The PTR RRset MUST consist of a single PTR record. The presence of more than one record in the RRset indicates a broken catalog zone, which MUST NOT be processed (see Section 5.1).",
+      "ja": "PTR RRSTは、単一のPTRレコードで構成する必要があります。RRSetに複数のレコードが存在することは、カタログゾーンが壊れていないことを示しています。これは、処理してはなりません（セクション5.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "When a consumer of a catalog zone $OLDCATZ receives an update that adds or changes a coo property for a member zone in $OLDCATZ, it does _not_ migrate the member zone immediately. The migration has to wait for an update of $NEWCATZ in which the member zone is present. Before the actual migration, the consumer MUST verify that the coo property pointing to $NEWCATZ is still present in $OLDCATZ.",
+      "ja": "カタログゾーンの消費者$ OldCatzが$ OldCatzのメンバーゾーンのCOOプロパティを追加または変更するアップデートを受信すると、_NOT_はすぐにメンバーゾーンを移行します。移行は、メンバーゾーンが存在する$ newCatzの更新を待つ必要があります。実際の移行の前に、消費者は$ NewCatzを指すCOOプロパティがまだ$ OldCatzに存在していることを確認する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Unless the member node label (i.e., <unique-N>) for the member is the same in $NEWCATZ, all its associated state for a just migrated zone MUST be reset (see Section 5.6). Note that the owner of $OLDCATZ allows for the zone-associated state to be taken over by the owner of $NEWCATZ by default. To prevent the takeover of the zone-associated state, the owner of $OLDCATZ must remove this state by updating the associated properties or by performing a zone state reset (see Section 5.6) before or simultaneous with adding the coo property (see Section 7).",
+      "ja": "メンバーのメンバーノードラベル（つまり、<ユニーク-N>）が$ newCatzで同じでない限り、移行したばかりのゾーンのすべての関連状態をリセットする必要があります（セクション5.6を参照）。$ oldcatzの所有者は、ゾーン関連状態をデフォルトで$ NewCatzの所有者に引き継ぐことを許可することに注意してください。ゾーン関連状態の買収を防ぐために、$ oldcatzの所有者は、関連するプロパティを更新するか、COOプロパティの追加と同時にゾーン状態リセット（セクション5.6を参照）を実行することにより、この状態を削除する必要があります（セクション7を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "The old owner may remove the member zone containing the coo property from $OLDCATZ once it has been established that all its consumers have processed the Change of Ownership.",
+      "ja": "古い所有者は、すべての消費者が所有権の変更を処理したことが確立されたら、$ OldCatzからCOOプロパティを含むメンバーゾーンを削除することができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2. Groups (group property)",
+      "section_title": true,
+      "ja": "4.3.2. グループ（グループプロパティ）"
+    },
+    {
+      "indent": 3,
+      "text": "With a group property, a consumer(s) can be signaled to treat some member zones within the catalog zone differently.",
+      "ja": "グループプロパティを使用すると、消費者を合図して、カタログゾーン内の一部のメンバーゾーンを異なる方法で処理できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The consumer MAY apply different configuration options when processing member zones, based on the value of the group property. A group property value is stored as the entire RDATA of a TXT record directly below the member node. The exact handling of the group property value is left to the consumer's implementation and configuration.",
+      "ja": "消費者は、グループプロパティの値に基づいて、メンバーゾーンを処理するときに異なる構成オプションを適用できます。グループプロパティ値は、メンバーノードの真下にTXTレコードのRDATA全体として保存されます。グループプロパティ値の正確な処理は、消費者の実装と構成に任されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The producer MAY assign a group property to all, some, or none of the member zones within a catalog zone. The producer MAY assign more than one group property to one member zone. This will make it possible to transfer group information for different consumer operators in a single catalog zone. Implementations MAY facilitate mapping of a specific group value to a specific configuration configurable _on a per catalog zone basis_ to allow for producers that publish their catalog zone at multiple consumer operators. Consumer operators SHOULD namespace their group values to reduce the risk of having to resolve clashes.",
+      "ja": "プロデューサーは、カタログゾーン内のすべての、一部、またはメンバーゾーンにグループプロパティを割り当てることはできません。プロデューサーは、複数のグループプロパティを1つのメンバーゾーンに割り当てることができます。これにより、単一のカタログゾーンでさまざまな消費者オペレーターのグループ情報を転送できます。実装により、特定のグループ値を特定の構成構成可能な_ AN CATALOG ZONE BASIT_にマッピングすることで、複数の消費者オペレーターでカタログゾーンを公開するプロデューサーが可能になります。消費者オペレーターは、衝突を解決しなければならないリスクを減らすために、グループの値を名前を掲載する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The consumer MUST ignore group values it does not understand. When a consumer encounters multiple group values for a single member zone, it MAY choose to process all, some, or none of them. This is left to the implementation.",
+      "ja": "消費者は、理解できないグループの価値を無視する必要があります。消費者が単一のメンバーゾーンの複数のグループ値に遭遇すると、すべて、一部、またはそれらのいずれかを処理することを選択できます。これは実装に任されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3.2.1. Example",
+      "section_title": true,
+      "ja": "4.3.2.1. 例"
+    },
+    {
+      "indent": 3,
+      "text": "group properties are represented by TXT RRs. The record content has no pre-defined meaning. Their interpretation is purely a matter of agreement between the producer and the consumer(s) of the catalog.",
+      "ja": "グループプロパティは、TXT RRSで表されます。レコードコンテンツには、事前に定義された意味がありません。彼らの解釈は、純粋にカタログの生産者と消費者との間の合意の問題です。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the \"foo\" group could be agreed to indicate that a zone not be signed with DNSSEC. Conversely, an agreement could define that group names starting with \"operator-\" indicate in which way a given DNS operator should set up certain aspects of the member zone's DNSSEC configuration.",
+      "ja": "たとえば、「Foo」グループは、ゾーンがDNSSECと署名されていないことを示すことに同意する可能性があります。逆に、合意は、「オペレーター」から始まるグループ名を定義することができます。特定のDNSオペレーターがメンバーゾーンのDNSSEC構成の特定の側面を設定する方法を示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Assuming that the catalog producer and consumer(s) have established such agreements, consider the following catalog zone (snippet) that signals to a consumer(s) how to treat DNSSEC for the zones \"example.net.\" and \"example.com.\":",
+      "ja": "カタログプロデューサーと消費者がそのような契約を確立したと仮定すると、消費者にゾーン「Example.net」のDNSSECを扱う方法を示すカタログゾーン（スニペット）を考慮してください。および「Example.com」。"
+    },
+    {
+      "indent": 3,
+      "text": "<unique-1>.zones.$CATZ        0 IN PTR    example.com.\ngroup.<unique-1>.zones.$CATZ  0 IN TXT    \"foo\"\n<unique-2>.zones.$CATZ        0 IN PTR    example.net.\ngroup.<unique-2>.zones.$CATZ  0 IN TXT    \"operator-x-foo\"\ngroup.<unique-2>.zones.$CATZ  0 IN TXT    \"operator-y\" \"bar\"",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "In this scenario, a consumer(s) shall, by agreement, not sign the member zone \"example.com.\" with DNSSEC. For \"example.net.\", the consumers, at two different operators, will configure the member zone to be signed with a specific combination of settings. The group value designated to indicate this combination of settings is prearranged with each operator (\"operator-x-foo\" vs. \"operator-y\" \"bar\").",
+      "ja": "このシナリオでは、消費者は合意により、メンバーゾーン「Example.com」に署名しないものとします。DNSSECで。「embler.net。」の場合、消費者は2つの異なるオペレーターで、設定の特定の組み合わせで署名されるメンバーゾーンを構成します。この設定の組み合わせを示すように指定されたグループ値は、各オペレーター（「オペレーター-X-Foo」対「オペレーターY」「「バー」）と事前に表現されています。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Custom Properties (*.ext properties)",
+      "section_title": true,
+      "ja": "4.4. カスタムプロパティ（*.extプロパティ）"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations and operators of catalog zones may choose to provide their own properties. Custom properties can occur globally or for a specific member zone. To prevent a name clash with future properties, such properties MUST be represented below the label \"ext\".",
+      "ja": "カタログゾーンの実装とオペレーターは、独自のプロパティを提供することを選択できます。カスタムプロパティは、グローバルに、または特定のメンバーゾーンで発生する可能性があります。名前が将来のプロパティと衝突するのを防ぐには、そのようなプロパティをラベル「ext」の下に表す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "\"ext\" is not a placeholder. A custom property is named as follows:",
+      "ja": "「ext」はプレースホルダーではありません。カスタムプロパティの名前は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "; a global custom property:\n<property-prefix>.ext.$CATZ",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "; a member zone custom property:\n<property-prefix>.ext.<unique-N>.zones.$CATZ",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "<property-prefix> may consist of one or more labels.",
+      "ja": "<Property-Prefix>は、1つ以上のラベルで構成されている場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations SHOULD namespace their custom properties to limit risk of clashes with other implementations of catalog zones. This can be achieved by using two labels as the <property-prefix> so that the name of the implementation is included in the prefix: <some-setting>.<implementation-name>.ext.$CATZ.",
+      "ja": "実装は、カタログゾーンの他の実装との衝突のリスクを制限するために、カスタムプロパティを名前を掲載する必要があります。これは、2つのラベルを<property-prefix>として使用することで実現できます。これにより、実装の名前がプレフィックスに含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY use such properties on the member zone level to store additional information about member zones (e.g., to flag them for specific treatment).",
+      "ja": "実装は、メンバーゾーンレベルでそのようなプロパティを使用して、メンバーゾーンに関する追加情報を保存することができます（たとえば、特定の治療のためにそれらにフラグを立てる）。"
+    },
+    {
+      "indent": 3,
+      "text": "Further, implementations MAY use custom properties on the global level to store additional information about the catalog zone itself. While there may be many use cases for this, a plausible one is to store default values for custom properties on the global level, then override them using a property of the same name on the member level (= under the ext label of the member node) if so desired. A property agreement between producer and consumer should clearly define what semantics apply and whether a property is global, member, or both.",
+      "ja": "さらに、実装は、グローバルレベルでカスタムプロパティを使用して、カタログゾーン自体に関する追加情報を保存する場合があります。これには多くのユースケースがあるかもしれませんが、もっともらしいものは、カスタムプロパティのデフォルト値をグローバルレベルに保存し、メンバーレベルの同じ名前のプロパティを使用してそれらをオーバーライドすることです（=メンバーノードのextラベルの下）そのような望ましい場合。生産者と消費者の間の不動産契約は、セマンティクスが適用されるものと、プロパティがグローバル、メンバー、またはその両方であるかどうかを明確に定義する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The meaning of the custom properties described in this section is determined by the implementation alone without expectation of interoperability.",
+      "ja": "このセクションで説明したカスタムプロパティの意味は、相互運用性を期待することなく実装のみによって決定されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Name Server Behavior",
+      "section_title": true,
+      "ja": "5. 名前サーバーの動作"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. General Requirements",
+      "section_title": true,
+      "ja": "5.1. 一般的な要件"
+    },
+    {
+      "indent": 3,
+      "text": "As it is a regular DNS zone, a catalog zone can be transferred using DNS zone transfers among name servers.",
+      "ja": "通常のDNSゾーンであるため、名前サーバー間のDNSゾーン転送を使用してカタログゾーンを転送できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog updates should be automatic; i.e., when a name server that supports catalog zones completes a zone transfer for a catalog zone, it SHOULD apply changes to the catalog within the running name server automatically without any manual intervention.",
+      "ja": "カタログの更新は自動でなければなりません。つまり、カタログゾーンをサポートする名前サーバーがカタログゾーンのゾーン転送を完了すると、手動介入なしに実行中の名前サーバー内のカタログに変更を適用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Name servers MAY allow loading and transfer of broken zones with incorrect catalog zone syntax (as they are treated as regular zones). The reason a catalog zone is considered broken SHOULD be communicated clearly to the operator (e.g., through a log message).",
+      "ja": "名前サーバーは、誤ったカタログゾーンの構文を備えた壊れたゾーンの読み込みと転送を可能にする場合があります（通常のゾーンとして扱われているため）。カタログゾーンが壊れていると見なされる理由は、オペレーターに明確に伝えられるべきです（例：ログメッセージを介して）。"
+    },
+    {
+      "indent": 3,
+      "text": "When a previously correct catalog zone becomes a broken catalog zone, it loses its catalog meaning because of an update through an incremental transfer or otherwise. No special processing occurs. Member zones previously configured by this catalog MUST NOT be removed or reconfigured in any way.",
+      "ja": "以前に正しいカタログゾーンが壊れたカタログゾーンになると、インクリメンタル転送またはその他の更新により、カタログの意味が失われます。特別な処理はありません。このカタログで以前に構成されたメンバーゾーンは、いかなる方法でも削除または再構成してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "If a name server restarts with a broken catalog zone, the broken catalog SHOULD NOT prevent the name server from starting up and serving the member zones in the last valid version of the catalog zone.",
+      "ja": "名前サーバーが壊れたカタログゾーンで再起動した場合、壊れたカタログは、カタログゾーンの最後の有効なバージョンでメンバーゾーンを起動してメンバーゾーンを提供することを防ぐべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Processing of a broken catalog SHALL start (or resume) when the catalog turns into a correct catalog zone, e.g., by an additional update (through zone transfer or updates) fixing the catalog zone.",
+      "ja": "壊れたカタログの処理は、カタログがカタログゾーンを修正する追加の更新（ゾーン転送または更新を介して）により、カタログが正しいカタログゾーンに変わるときに開始（または再開）しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, when a catalog zone expires, it loses its catalog meaning and MUST no longer be processed as such. No special processing occurs until the zone becomes fresh again.",
+      "ja": "同様に、カタログゾーンの有効期限が切れると、カタログの意味を失い、そのように処理する必要はなくなりました。ゾーンが再び新鮮になるまで特別な処理は発生しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Member Zone Name Clash",
+      "section_title": true,
+      "ja": "5.2. メンバーゾーン名の衝突"
+    },
+    {
+      "indent": 3,
+      "text": "If there is a clash between an existing zone's name (from either an existing member zone or an otherwise configured zone) and an incoming member zone's name (via transfer or update), the new instance of the zone MUST be ignored and an error SHOULD be logged.",
+      "ja": "既存のゾーンの名前（既存のメンバーゾーンまたはそれ以外の構成されたゾーンのいずれかから）と着信メンバーゾーンの名前（転送または更新経由）との間に衝突がある場合、ゾーンの新しいインスタンスは無視する必要があり、エラーはログ。"
+    },
+    {
+      "indent": 3,
+      "text": "A clash between an existing member zone's name and an incoming member zone's name (via transfer or update) may be an attempt to migrate a zone to a different catalog, but it should not be treated as one except as described in Section 4.3.1.",
+      "ja": "既存のメンバーゾーンの名前と着信メンバーゾーンの名前（転送または更新経由）の間の衝突は、ゾーンを別のカタログに移行する試みである可能性がありますが、セクション4.3.1で説明する場合を除き、ゾーンとして扱うべきではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Member Zone Removal",
+      "section_title": true,
+      "ja": "5.3. メンバーゾーンの削除"
+    },
+    {
+      "indent": 3,
+      "text": "When a member zone is removed from a specific catalog zone, a consumer MUST NOT remove the zone and associated state data if the zone was not configured from that specific catalog zone. The zone and associated state (such as zone data and DNSSEC keys) MUST be removed from the consumer when and only when the zone was configured initially from the same catalog. Consumer operators may consider temporarily archiving associated state to facilitate mistake recovery.",
+      "ja": "特定のカタログゾーンからメンバーゾーンが削除された場合、ゾーンがその特定のカタログゾーンから構成されていない場合、消費者はゾーンと関連する状態データを削除してはなりません。ゾーンと関連状態（ゾーンデータやDNSSECキーなど）は、ゾーンが最初に同じカタログから構成された場合にのみ、消費者から削除する必要があります。消費者オペレーターは、間違いの回復を促進するために、関連状態を一時的にアーカイブすることを検討する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Member Node Name Change",
+      "section_title": true,
+      "ja": "5.4. メンバーノード名の変更"
+    },
+    {
+      "indent": 3,
+      "text": "When the member node's label value (<unique-N>) changes via a single update or transfer, catalog consumers MUST process this as a member zone removal, including the removal of all the zone's associated state (as described in Section 5.3), and then immediately process the member as a newly added zone to be configured in the same catalog.",
+      "ja": "メンバーのノードのラベル値（<unique-n>）が単一の更新または転送によって変更される場合、カタログ消費者はこれをメンバーゾーンの削除として処理する必要があります。次に、同じカタログで構成される新しく追加されたゾーンとしてメンバーをすぐに処理します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5. Migrating Member Zones between Catalogs",
+      "section_title": true,
+      "ja": "5.5. カタログ間でメンバーゾーンを移行します"
+    },
+    {
+      "indent": 3,
+      "text": "If all consumers of the catalog zones involved support the coo property, it is RECOMMENDED to perform migration of a member zone by following the procedure described in Section 4.3.1. Otherwise, the migration of a member zone from a catalog zone $OLDCATZ to a catalog zone $NEWCATZ has to be done by first removing the member zone from $OLDCATZ and then adding the member zone to $NEWCATZ.",
+      "ja": "関連するカタログゾーンのすべての消費者がCOOプロパティをサポートする場合、セクション4.3.1で説明した手順に従ってメンバーゾーンの移行を実行することをお勧めします。それ以外の場合、カタログゾーン$ oldcatzからカタログゾーンへのメンバーゾーンの移行は、最初に$ oldcatzからメンバーゾーンを削除し、次にメンバーゾーンを$ newcatzに追加することで実行する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If in the process of a migration some consumers of the involved catalog zones did not catch the removal of the member zone from $OLDCATZ yet (because of a lost packet or downtime or otherwise) but already saw the update of $NEWCATZ containing the addition of that member zone, they may consider this update to be a name clash (see Section 5.2) and, as a consequence, the member is not migrated to $NEWCATZ. This possibility needs to be anticipated with a member zone migration. Recovery from such a situation is out of the scope of this document. For example, it may entail a manually forced retransfer of $NEWCATZ to consumers after they have been detected to have received and processed the removal of the member zone from $OLDCATZ.",
+      "ja": "移行の過程で、関与するカタログゾーンの一部の消費者は、$ Oldcatzからまだメンバーゾーンの除去をキャッチしなかった場合（パケットが失われたり、ダウンタイムが失われたりなどのため）、すでに$ NewCatzの更新が追加されているのはすでに見られていません。そのメンバーゾーンでは、この更新は名前の衝突と見なされ（セクション5.2を参照）、結果として、メンバーは$ NewCatzに移行されません。この可能性は、メンバーゾーンの移行で予想する必要があります。このような状況からの回復は、このドキュメントの範囲外です。たとえば、消費者が$ oldcatzからメンバーゾーンの除去を受け取って処理したことが検出された後、消費者への手動で強制的に強制的に$ newcatzの再送信を必要とする場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.6. Zone-Associated State Reset",
+      "section_title": true,
+      "ja": "5.6. ゾーン関連状態リセット"
+    },
+    {
+      "indent": 3,
+      "text": "It may be desirable to reset state (such as zone data and DNSSEC keys) associated with a member zone.",
+      "ja": "メンバーゾーンに関連付けられた状態（ゾーンデータやDNSSECキーなど）をリセットすることが望ましい場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A zone state reset may be performed by a change of the member node's name (see Section 5.4).",
+      "ja": "ゾーン状態のリセットは、メンバーノードの名前の変更によって実行される場合があります（セクション5.4を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Implementation and Operational Notes",
+      "section_title": true,
+      "ja": "6. 実装および運用ノート"
+    },
+    {
+      "indent": 3,
+      "text": "Although any valid domain name can be used for the catalog name $CATZ, a catalog producer MUST NOT use names that are not under the control of the catalog producer (with the exception of reserved names). It is RECOMMENDED to use either a domain name owned by the catalog producer or a domain name under a suitable name such as \"invalid.\" [RFC6761].",
+      "ja": "有効なドメイン名はカタログ名$ catzに使用できますが、カタログプロデューサーは、カタログプロデューサーの制御下にない名前（予約済み名を除く）を使用してはなりません。「Invalid」などの適切な名前で、カタログプロデューサーが所有するドメイン名またはドメイン名のいずれかを使用することをお勧めします。[RFC6761]。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog zones on secondary name servers would have to be set up manually, perhaps as static configuration, similar to how ordinary DNS zones are configured when catalog zones or another automatic configuration mechanism are not in place. Additionally, the secondary needs to be configured as a catalog consumer for the catalog zone to enable processing of the member zones in the catalog, such as automatic synchronization of the member zones for secondary service.",
+      "ja": "セカンダリネームサーバーのカタログゾーンは、カタログゾーンまたは別の自動構成メカニズムが整っていないときに通常のDNSゾーンがどのように構成されているかと同様に、おそらく静的構成として手動でセットアップする必要があります。さらに、セカンダリは、カタログゾーンのカタログ消費者として構成する必要があります。これは、セカンダリサービス用のメンバーゾーンの自動同期など、カタログ内のメンバーゾーンの処理を可能にします。"
+    },
+    {
+      "indent": 3,
+      "text": "Operators of catalog consumers should note that secondary name servers may receive DNS NOTIFY messages [RFC1996] for zones before they are seen as newly added member zones to the catalog from which that secondary is provisioned.",
+      "ja": "カタログ消費者のオペレーターは、セカンダリネームサーバーがゾーンのDNS通知[RFC1996]を受信してから、そのセカンダリがプロビジョニングされているカタログに新しく追加されたメンバーゾーンと見なされる前に、ゾーンを受信する場合があることに注意する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Although they are regular DNS zones, catalog zones only contain information for the management of a set of authoritative name servers. To prevent unintended exposure to other parties, operators SHOULD limit the systems able to query these zones.",
+      "ja": "それらは通常のDNSゾーンですが、カタログゾーンには、権威ある名前サーバーのセットの管理のための情報のみが含まれています。他の関係者への意図しない暴露を防ぐために、オペレーターはこれらのゾーンを照会できるシステムを制限する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Querying/serving catalog zone contents may be inconvenient via DNS due to the nature of their representation. Therefore, an administrator may want to use a different method for looking at data inside the catalog zone. Typical queries might include dumping the list of member zones, dumping a member zone's effective configuration, querying a specific property value of a member zone, etc. Because of the structure of catalog zones, it may not be possible to perform these queries intuitively, or in some cases at all, using DNS QUERY. For example, it is not possible to enumerate the contents of a multivalued property (such as the list of member zones) with a single QUERY. Implementations are therefore advised to provide a tool that uses either the output of AXFR or an out-of-band method to perform queries on catalog zones.",
+      "ja": "カタログゾーンの内容のクエリ/サービングは、その表現の性質により、DNSを介して不便になる場合があります。したがって、管理者は、カタログゾーン内のデータを調べるために別の方法を使用したい場合があります。一般的なクエリには、メンバーゾーンのリストのダンプ、メンバーゾーンの効果的な構成のダンプ、メンバーゾーンの特定のプロパティ値のクエリなどが含まれます。カタログゾーンの構造のため、これらのクエリを直感的に実行することはできない場合があります。場合によっては、DNSクエリを使用しています。たとえば、単一のクエリを使用して、多面的なプロパティ（メンバーゾーンのリストなど）の内容を列挙することはできません。したがって、実装は、AXFRの出力またはバンド外の方法のいずれかを使用して、カタログゾーンでクエリを実行するツールを提供することをお勧めします。"
+    },
+    {
+      "indent": 3,
+      "text": "Great power comes with great responsibility. Catalog zones simplify zone provisioning by orchestrating zones on secondary name servers from a single data source: the catalog. Hence, the catalog producer has great power and changes must be treated carefully. For example, if the catalog is generated by some script and this script generates an empty catalog, millions of member zones may get deleted from their secondaries within seconds, and all the affected domains may be offline in a blink of an eye.",
+      "ja": "大きな力には大きな責任があります。カタログゾーンは、単一のデータソース：カタログからセカンダリネームサーバーにゾーンを調整することにより、ゾーンプロビジョニングを簡素化します。したがって、カタログプロデューサーには大きな力があり、変更は慎重に扱わなければなりません。たとえば、カタログがいくつかのスクリプトによって生成され、このスクリプトが空のカタログを生成すると、数百万のメンバーゾーンが数秒以内にセカンダリから削除される可能性があり、すべての影響を受けるドメインは瞬く間にオフラインになる場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Security Considerations",
+      "section_title": true,
+      "ja": "7. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "As catalog zones are transmitted using DNS zone transfers, it is RECOMMENDED that catalog zone transfers be protected from unexpected modifications by way of authentication, e.g., by using a Transaction Signature (TSIG) [RFC8945] or Strict or Mutual TLS authentication with DNS zone transfer over TLS or QUIC [RFC9103].",
+      "ja": "カタログゾーンはDNSゾーン転送を使用して送信されるため、トランザクション署名（TSIG）[RFC8945]またはDNSゾーン転送を使用した厳格または相互TLS認証を使用して、認証を使用して、予期しない変更からカタログゾーン転送を保護することをお勧めします。TLSまたはQUIC [RFC9103]。"
+    },
+    {
+      "indent": 3,
+      "text": "Use of DNS UPDATE [RFC2136] to modify the content of catalog zones SHOULD similarly be authenticated.",
+      "ja": "DNSアップデート[RFC2136]を使用してカタログゾーンのコンテンツを変更することも同様に認証する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Zone transfers of member zones SHOULD similarly be authenticated. TSIG shared secrets used for member zones SHOULD NOT be mentioned in the catalog zone data. However, key identifiers may be shared within catalog zones.",
+      "ja": "メンバーゾーンのゾーン転送も同様に認証する必要があります。メンバーゾーンに使用されるTSIG共有秘密は、カタログゾーンのデータに記載されてはいけません。ただし、主要な識別子はカタログゾーン内で共有される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog zones reveal the zones served by their consumers, including their properties. To prevent unintentional exposure of catalog zone contents, it is RECOMMENDED to limit the systems able to query them and to conduct catalog zone transfers confidentially [RFC9103].",
+      "ja": "カタログゾーンは、そのプロパティを含む消費者が提供するゾーンを明らかにしています。カタログゾーンの内容の意図しない露出を防ぐために、それらをクエリすることができるシステムを制限し、カタログゾーン転送を秘密に実行することをお勧めします[RFC9103]。"
+    },
+    {
+      "indent": 3,
+      "text": "As with regular zones, primary and secondary name servers for a catalog zone may be operated by different administrators. The secondary name servers may be configured as a catalog consumer to synchronize catalog zones from the primary, but the primary's administrators may not have any administrative access to the secondaries.",
+      "ja": "通常のゾーンと同様に、カタログゾーン用のプライマリおよびセカンダリネームサーバーは、さまざまな管理者によって操作される場合があります。セカンダリネームサーバーは、プライマリからカタログゾーンを同期するようにカタログコンシューマーとして構成できますが、プライマリの管理者は、第二に管理者にアクセスできない場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Administrative control over what zones are served from the configured name servers shifts completely from the server operator (consumer) to the \"owner\" (producer) of the catalog zone content. To prevent unintended provisioning of zones, a consumer(s) SHOULD scope the set of admissible member zones by any means deemed suitable (such as statically via regular expressions, or dynamically by verifying against another database before accepting a member zone).",
+      "ja": "構成された名前サーバーから提供されるゾーンの管理制御は、サーバーオペレーター（コンシューマー）からカタログゾーンコンテンツの「所有者」（プロデューサー）に完全にシフトします。ゾーンの意図しないプロビジョニングを防ぐために、消費者は、適切とみなされる手段（正規表現を介して静的に、またはメンバーゾーンを受け入れる前に別のデータベースに対して検証することにより動的に）で許容可能なメンバーゾーンのセットを範囲する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "With migration of member zones between catalogs using the coo property, it is possible for the owner of the target catalog (i.e., $NEWCATZ) to take over all its associated state with the zone from the original owner (i.e., $OLDCATZ) by maintaining the same member node label (i.e., <unique-N>). To prevent the takeover of the zone-associated state, the original owner has to enforce a zone state reset by changing the member node label (see Section 5.6) before or simultaneously with adding the coo property.",
+      "ja": "COOプロパティを使用してカタログ間のメンバーゾーンの移行により、ターゲットカタログの所有者（すなわち、$ NewCatz）が、関連するすべての状態を元の所有者（つまり、$ oldcatz）からゾーンとともに引き継ぐことができます。同じメンバーノードラベル（つまり、<ユニーク-N>）。ゾーン関連状態の買収を防ぐために、元の所有者は、COOプロパティを追加する前または同時に、メンバーノードラベル（セクション5.6を参照）を変更することにより、ゾーン状態のリセットを実施する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "8. IANA Considerations",
+      "section_title": true,
+      "ja": "8. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created the \"DNS Catalog Zones Properties\" registry under the \"Domain Name System (DNS) Parameters\" registry as follows:",
+      "ja": "IANAは、「ドメイン名システム（DNS）パラメーター」レジストリの下に「DNSカタログゾーンプロパティ」レジストリを作成しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Registry Name: DNS Catalog Zones Properties",
+      "ja": "レジストリ名：DNSカタログゾーンのプロパティ"
+    },
+    {
+      "indent": 3,
+      "text": "Assignment Policy: Expert Review, except for property prefixes ending in the label \"ext\", which are for Private Use [RFC8126].",
+      "ja": "割り当てポリシー：専門家のレビュー。プライベート使用用[RFC8126]であるラベル「ext」で終わるプロパティプレフィックスを除く。"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: RFC 9432",
+      "ja": "参照：RFC 9432"
+    },
+    {
+      "indent": 3,
+      "text": "Note: This registry applies to Catalog Zones schema version \"2\" as specified in RFC 9432.",
+      "ja": "注：このレジストリは、RFC 9432で指定されているカタログゾーンスキーマバージョン「2」に適用されます。"
+    },
+    {
+      "indent": 4,
+      "text": "+=================+======================+===========+===========+\n| Property Prefix | Description          | Status    | Reference |\n+=================+======================+===========+===========+\n| zones           | List of member zones | Standards | RFC 9432  |\n|                 |                      | Track     |           |\n+-----------------+----------------------+-----------+-----------+\n| version         | Schema version       | Standards | RFC 9432  |\n|                 |                      | Track     |           |\n+-----------------+----------------------+-----------+-----------+\n| coo             | Change of Ownership  | Standards | RFC 9432  |\n|                 |                      | Track     |           |\n+-----------------+----------------------+-----------+-----------+\n| group           | Group                | Standards | RFC 9432  |\n|                 |                      | Track     |           |\n+-----------------+----------------------+-----------+-----------+\n| *.ext           | Custom properties    | Private   | RFC 9432  |\n|                 |                      | Use       |           |\n+-----------------+----------------------+-----------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 14,
+      "text": "Table 1: DNS Catalog Zones Properties Registry",
+      "ja": "表1：DNSカタログゾーンプロパティレジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "The meanings of the fields are as follows:",
+      "ja": "フィールドの意味は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "Property prefix: One or more domain name labels.",
+      "ja": "プロパティプレフィックス：1つ以上のドメイン名ラベル。"
+    },
+    {
+      "indent": 3,
+      "text": "Description: A human-readable short description or name for the property.",
+      "ja": "説明：プロパティの人間が読みやすい短い説明または名前。"
+    },
+    {
+      "indent": 3,
+      "text": "Status: IETF Stream RFC status or \"External\" if not documented in an IETF Stream RFC.",
+      "ja": "ステータス：IETFストリームRFCステータスまたはIETFストリームRFCで文書化されていない場合は、「外部」。"
+    },
+    {
+      "indent": 3,
+      "text": "Reference: A stable reference to the document in which this property is defined.",
+      "ja": "参照：このプロパティが定義されているドキュメントへの安定した参照。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035] Mockapetris, P., \"Domain names - implementation and specification\", STD 13, RFC 1035, DOI 10.17487/RFC1035, November 1987, <https://www.rfc-editor.org/info/rfc1035>.",
+      "ja": "[RFC1035] Mockapetris、P。、「ドメイン名 - 実装と仕様」、STD 13、RFC 1035、DOI 10.17487/RFC1035、1987年11月、<https://www.rfc-editor.org/info/rfc1035>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1982] Elz, R. and R. Bush, \"Serial Number Arithmetic\", RFC 1982, DOI 10.17487/RFC1982, August 1996, <https://www.rfc-editor.org/info/rfc1982>.",
+      "ja": "[RFC1982] Elz、R。およびR. Bush、「シリアル番号算術」、RFC 1982、DOI 10.17487/RFC1982、1996年8月、<https://www.rfc-editor.org/info/rfc1982>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1996] Vixie, P., \"A Mechanism for Prompt Notification of Zone Changes (DNS NOTIFY)\", RFC 1996, DOI 10.17487/RFC1996, August 1996, <https://www.rfc-editor.org/info/rfc1996>.",
+      "ja": "[RFC1996] Vixie、P。、「ゾーンの変更の迅速な通知のメカニズム（DNS通知）」、RFC 1996、DOI 10.17487/RFC1996、1996年8月、<https://www.rfc-editor.org/info/rfc1996>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2136] Vixie, P., Ed., Thomson, S., Rekhter, Y., and J. Bound, \"Dynamic Updates in the Domain Name System (DNS UPDATE)\", RFC 2136, DOI 10.17487/RFC2136, April 1997, <https://www.rfc-editor.org/info/rfc2136>.",
+      "ja": "[RFC2136] Vixie、P.、Ed。、Thomson、S.、Rekhter、Y.、およびJ. Bound、「ドメイン名システム（DNSアップデート）の動的更新」、RFC 2136、DOI 10.17487/RFC2136、1997年4月、<https://www.rfc-editor.org/info/rfc2136>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2606] Eastlake 3rd, D. and A. Panitz, \"Reserved Top Level DNS Names\", BCP 32, RFC 2606, DOI 10.17487/RFC2606, June 1999, <https://www.rfc-editor.org/info/rfc2606>.",
+      "ja": "[RFC2606] Eastlake 3rd、D。and A. Panitz、「予約済みのトップレベルDNS名」、BCP 32、RFC 2606、DOI 10.17487/RFC2606、1999年6月、<https://www.rfc-editor.org/info/RFC2606>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6761] Cheshire, S. and M. Krochmal, \"Special-Use Domain Names\", RFC 6761, DOI 10.17487/RFC6761, February 2013, <https://www.rfc-editor.org/info/rfc6761>.",
+      "ja": "[RFC6761] Cheshire、S。およびM. Krochmal、「Special-Use Domain Names」、RFC 6761、DOI 10.17487/RFC6761、2013年2月、<https://www.rfc-editor.org/info/rfc6761>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8499] Hoffman, P., Sullivan, A., and K. Fujiwara, \"DNS Terminology\", BCP 219, RFC 8499, DOI 10.17487/RFC8499, January 2019, <https://www.rfc-editor.org/info/rfc8499>.",
+      "ja": "[RFC8499] Hoffman、P.、Sullivan、A。、およびK. Fujiwara、「DNS用語」、BCP 219、RFC 8499、DOI 10.17487/RFC8499、2019年1月、<https://www.rfc-editor.org/情報/RFC8499>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8945] Dupont, F., Morris, S., Vixie, P., Eastlake 3rd, D., Gudmundsson, O., and B. Wellington, \"Secret Key Transaction Authentication for DNS (TSIG)\", STD 93, RFC 8945, DOI 10.17487/RFC8945, November 2020, <https://www.rfc-editor.org/info/rfc8945>.",
+      "ja": "[RFC8945] Dupont、F.、Morris、S.、Vixie、P.、Eastlake 3rd、D.、Gudmundsson、O.、およびB. Wellington、「DNSのシークレットキートランザクション認証」、STD 93、RFC8945、doi 10.17487/rfc8945、2020年11月、<https://www.rfc-editor.org/info/rfc8945>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9103] Toorop, W., Dickinson, S., Sahib, S., Aras, P., and A. Mankin, \"DNS Zone Transfer over TLS\", RFC 9103, DOI 10.17487/RFC9103, August 2021, <https://www.rfc-editor.org/info/rfc9103>.",
+      "ja": "[RFC9103] Toorop、W.、Dickinson、S.、Sahib、S.、Aras、P。、およびA. Mankin、「DNS Zone Transfer over TLS」、RFC 9103、DOI 10.17487/RFC9103、2021年8月、<https：//www.rfc-editor.org/info/rfc9103>。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[FOSDEM20] Vandewoestijne, L., \"Extending Catalog zones - another approach in automating maintenance\", February 2020, <https://archive.fosdem.org/2020/schedule/event/ dns_catz/>.",
+      "ja": "[Fosdem20] Vandewoestijne、L。、「カタログゾーンの拡張 - メンテナンスの自動化における別のアプローチ」、2020年2月、<https://archive.fosdem.org/2020/schedule/event/ dns_catz/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[Metazones] Vixie, P., \"Federated Domain Name Service Using DNS Metazones\", DOI 10.1093/ietcom/e89-b.4.1144, April 2006, <https://www.semanticscholar.org/paper/Federated-Domain-Name-Service-Using-DNS-Metazones-Vixie/ dc12b0116332f5c236b05c71bbe20499f3c6c4b6>.",
+      "ja": "[Metazones] Vixie、P。、「DNSメタゾンを使用したフェデレーションドメイン名サービス」、DOI 10.1093/IETCOM/E89-B.4.1144、2006年4月、<https://www.semanticscholar.org/paper/federated-main-main-Service-Using-DNS-Metazones-Vixie/ DC12B0116332F5C236B05C71BBE20499F3C6C4B6>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[RFC8126] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：// wwwwwwwwwwwwwwwwwwwwwwwwwwww.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Catalog Zone Example",
+      "section_title": true,
+      "ja": "付録A. カタログゾーンの例"
+    },
+    {
+      "indent": 3,
+      "text": "The following is a full example of a catalog zone containing three member zones with various properties:",
+      "ja": "以下は、さまざまなプロパティを持つ3つのメンバーゾーンを含むカタログゾーンの完全な例です。"
+    },
+    {
+      "indent": 3,
+      "text": "catalog.invalid. 0 SOA invalid. ( invalid. 1625079950 3600 600 2147483646 0 ) catalog.invalid. 0 NS invalid. example.vendor.ext.catalog.invalid. 0 CNAME example.net. version.catalog.invalid. 0 TXT \"2\" nj2xg5b.zones.catalog.invalid. 0 PTR example.com. nvxxezj.zones.catalog.invalid. 0 PTR example.net. group.nvxxezj.zones.catalog.invalid. 0 TXT ( \"operator-x-foo\" ) nfwxa33.zones.catalog.invalid. 0 PTR example.org. coo.nfwxa33.zones.catalog.invalid. 0 PTR ( newcatz.invalid. ) group.nfwxa33.zones.catalog.invalid. 0 TXT ( \"operator-y-bar\" ) metrics.vendor.ext.nfwxa33.zones.catalog.invalid. 0 CNAME ( collector.example.net. )",
+      "ja": "catalog.invalid。0 SOA無効。（Invalid。16250799503600 600 2147483646 0）catalog.invalid。0 NS無効。example.vendor.ext.catalog.invalid。0 cname emple.net。version.catalog.invalid。0 txt \"2\" NJ2xg5b.zones.catalog.invalid。0 ptr example.com。nvxxezj.zones.catalog.invalid。0 ptr emple.net。group.nvxxezj.zones.catalog.invalid。0 txt（ \"operator-x-foo\"）nfwxa33.zones.catalog.invalid。0 ptr emple.org。coo.nfwxa33.zones.catalog.invalid。0 ptr（newcatz.invalid。）group.nfwxa33.zones.catalog.invalid。0 txt（ \"operator-y-bar\"）metrics.vendor.ext.nfwxa33.zones.catalog.invalid。0 cname（collector.example.net。）"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Our deepest thanks and appreciation go to Stephen Morris, Ray Bellis, and Witold Krecicki who initiated this document and did the bulk of the work.",
+      "ja": "私たちの深い感謝と感謝は、この文書を開始し、作品の大部分を行ったStephen Morris、Ray Bellis、およびWitold Krecickiに贈られます。"
+    },
+    {
+      "indent": 3,
+      "text": "Catalog zones originated as the chosen method among various proposals that were evaluated at Internet Systems Consortium (ISC) for easy zone management. The chosen method of storing the catalog as a regular DNS zone was proposed by Stephen Morris.",
+      "ja": "カタログゾーンは、簡単なゾーン管理のためにインターネットシステムコンソーシアム（ISC）で評価されたさまざまな提案の中から選択された方法として発信されました。カタログを通常のDNSゾーンとして保存する選択された方法は、Stephen Morrisによって提案されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The initial authors discovered that Paul Vixie's earlier [Metazones] proposal implemented a similar approach, and they reviewed it. Catalog zones borrow some syntax ideas from [Metazones], as both share this scheme of representing the catalog as a regular DNS zone.",
+      "ja": "最初の著者は、Paul Vixieの以前の[Metazones]提案が同様のアプローチを実施し、それをレビューしたことを発見しました。カタログゾーンは、[Metazones]からいくつかの構文のアイデアを借ります。どちらも、カタログを通常のDNSゾーンとして表現するこのスキームを共有しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Leo Vandewoestijne. Leo's presentation in the DNS devroom at FOSDEM'20 [FOSDEM20] was one of the motivations to take up and continue the effort of standardizing catalog zones.",
+      "ja": "Leo Vandewoestijneに感謝します。Fosdem'20 [Fosdem20]のDNS Devroomでのレオのプレゼンテーションは、カタログゾーンの標準化の努力を取り上げて継続する動機の1つでした。"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to Joe Abley, David Blacka, Brian Conry, Klaus Darilion, Brian Dickson, Tony Finch, Evan Hunt, Shane Kerr, Warren Kumari, Patrik Lundin, Matthijs Mekking, Victoria Risk, Josh Soref, Petr Spacek, Michael StJohns, Carsten Strotmann, and Tim Wicinski for reviewing earlier draft versions and offering comments and suggestions.",
+      "ja": "ジョー・アベリー、デビッド・ブラッカ、ブライアン・コンリー、クラウス・ダリリオン、ブライアン・ディクソン、トニー・フィンチ、エヴァン・ハント、シェーン・カー、ウォーレン・クマリ、パトリック・ランディン、マティジス・メッキング、ビクトリア・リスク、ジョシュ・ソレフ、ペトル・スペース、マイケル・セントジョン、カルステン・ストロットマンン以前のドラフトバージョンをレビューし、コメントや提案を提供してくれたTim Wicinski。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Peter van Dijk PowerDNS Den Haag Netherlands Email: peter.van.dijk@powerdns.com",
+      "ja": "Peter Van Dijk Powerdns den haag notherlandsメール：peter.van.dijk@powerdns.com"
+    },
+    {
+      "indent": 3,
+      "text": "Libor Peltan CZ.NIC Czech Republic Email: libor.peltan@nic.cz",
+      "ja": "Libor Peltan CZ.nic Czech Republic Email：libor.peltan@nic.cz"
+    },
+    {
+      "indent": 3,
+      "text": "Ondrej Sury Internet Systems Consortium Czech Republic Email: ondrej@isc.org",
+      "ja": "Ondrej Sury Internet Systems Consortium Czech Republic Email：ondrej@isc.org"
+    },
+    {
+      "indent": 3,
+      "text": "Willem Toorop NLnet Labs Science Park 400 1098 XH Amsterdam Netherlands Email: willem@nlnetlabs.nl",
+      "ja": "Willem Toorop NLNET Labs Science Park 400 1098 XH AMSTERDAMオランダメール：wellem@nlnetlabs.nl"
+    },
+    {
+      "indent": 3,
+      "text": "Kees Monshouwer Netherlands Email: mind@monshouwer.eu",
+      "ja": "Kees Monshouwer Netherlandsメール：Mind@monshouwer.eu"
+    },
+    {
+      "indent": 3,
+      "text": "Peter Thomassen deSEC, SSE - Secure Systems Engineering Berlin Germany Email: peter@desec.io",
+      "ja": "Peter Thomassen Desec、SSE -Secure Systems Engineering Berlin Germanyメール：peter@desec.io"
+    },
+    {
+      "indent": 3,
+      "text": "Aram Sargsyan Internet Systems Consortium Email: aram@isc.org",
+      "ja": "Aram Sargsyan Internet Systems Consortiumメール：aram@isc.org"
+    }
+  ]
+}
