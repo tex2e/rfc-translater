@@ -1,0 +1,1546 @@
+{
+  "title": {
+    "text": "RFC 9438 - CUBIC for Fast and Long-Distance Networks",
+    "ja": "RFC 9438 - 高速および長距離ネットワーク用の立方体"
+  },
+  "number": 9438,
+  "created_at": "2023-08-16 23:47:06.670089+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                             L. Xu\nRequest for Comments: 9438                                           UNL\nObsoletes: 8312                                                    S. Ha\nUpdates: 5681                                                   Colorado\nCategory: Standards Track                                        I. Rhee\nISSN: 2070-1721                                                   Bowery\n                                                                 V. Goel\n                                                              Apple Inc.\n                                                          L. Eggert, Ed.\n                                                                  NetApp\n                                                             August 2023",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 15,
+      "text": "CUBIC for Fast and Long-Distance Networks",
+      "ja": "高速および長距離ネットワーク用の立方体"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC is a standard TCP congestion control algorithm that uses a cubic function instead of a linear congestion window increase function to improve scalability and stability over fast and long-distance networks. CUBIC has been adopted as the default TCP congestion control algorithm by the Linux, Windows, and Apple stacks.",
+      "ja": "Cubicは、線形輻輳ウィンドウの増加関数の代わりに立方機能を使用して、高速および長距離ネットワーク上のスケーラビリティと安定性を改善する標準のTCP混雑制御アルゴリズムです。Cubicは、Linux、Windows、およびAppleスタックによってデフォルトのTCP輻輳制御アルゴリズムとして採用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document updates the specification of CUBIC to include algorithmic improvements based on these implementations and recent academic work. Based on the extensive deployment experience with CUBIC, this document also moves the specification to the Standards Track and obsoletes RFC 8312. This document also updates RFC 5681, to allow for CUBIC's occasionally more aggressive sending behavior.",
+      "ja": "このドキュメントでは、これらの実装と最近の学術作業に基づいてアルゴリズムの改善を含めるように、立方体の仕様を更新します。Cubicでの広範な展開エクスペリエンスに基づいて、このドキュメントは仕様を標準トラックおよび廃止RFC 8312に移動します。このドキュメントは、RFC 5681を更新して、Cubicのより積極的な送信動作を可能にします。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9438.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9438で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2023 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions\n3.  Design Principles of CUBIC\n  3.1.  Principle 1 for the CUBIC Increase Function\n  3.2.  Principle 2 for Reno-Friendliness\n  3.3.  Principle 3 for RTT-Fairness\n  3.4.  Principle 4 for the CUBIC Decrease Factor\n4.  CUBIC Congestion Control\n  4.1.  Definitions\n    4.1.1.  Constants of Interest\n    4.1.2.  Variables of Interest\n  4.2.  Window Increase Function\n  4.3.  Reno-Friendly Region\n  4.4.  Concave Region\n  4.5.  Convex Region\n  4.6.  Multiplicative Decrease\n  4.7.  Fast Convergence\n  4.8.  Timeout\n  4.9.  Spurious Congestion Events\n    4.9.1.  Spurious Timeouts\n    4.9.2.  Spurious Fast Retransmits\n  4.10. Slow Start\n5.  Discussion\n  5.1.  Fairness to Reno\n  5.2.  Using Spare Capacity\n  5.3.  Difficult Environments\n  5.4.  Investigating a Range of Environments\n  5.5.  Protection against Congestion Collapse\n  5.6.  Fairness within the Alternative Congestion Control\n         Algorithm\n  5.7.  Performance with Misbehaving Nodes and Outside Attackers\n  5.8.  Behavior for Application-Limited Flows\n  5.9.  Responses to Sudden or Transient Events\n  5.10. Incremental Deployment\n6.  Security Considerations\n7.  IANA Considerations\n8.  References\n  8.1.  Normative References\n  8.2.  Informative References\nAppendix A.  Evolution of CUBIC since the Original Paper\nAppendix B.  Proof of the Average CUBIC Window Size\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC has been adopted as the default TCP congestion control algorithm in the Linux, Windows, and Apple stacks, and has been used and deployed globally. Extensive, decade-long deployment experience in vastly different Internet scenarios has convincingly demonstrated that CUBIC is safe for deployment on the global Internet and delivers substantial benefits over classical Reno congestion control [RFC5681]. It is therefore to be regarded as the currently most widely deployed standard for TCP congestion control. CUBIC can also be used for other transport protocols such as QUIC [RFC9000] and the Stream Control Transmission Protocol (SCTP) [RFC9260] as a default congestion controller.",
+      "ja": "Cubicは、Linux、Windows、およびAppleスタックのデフォルトのTCP輻輳制御アルゴリズムとして採用されており、グローバルに使用および展開されています。非常に異なるインターネットシナリオでの広範な10年にわたる展開の経験は、Cubicがグローバルなインターネット上の展開に安全であり、古典的なリノ輻輳制御に大きな利益をもたらすことを説得力を持って実証しました[RFC5681]。したがって、現在最も広く展開されているTCP輻輳制御の基準と見なされるべきです。Cubicは、QUIC [RFC9000]やストリームコントロール伝送プロトコル（SCTP）[RFC9260]などの他の輸送プロトコルにデフォルトの混雑コントローラーとして使用することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "The design of CUBIC was motivated by the well-documented problem classical Reno TCP has with low utilization over fast and long-distance networks [K03] [RFC3649]. This problem arises from a slow increase of the congestion window (cwnd) following a congestion event in a network with a large bandwidth-delay product (BDP). [HLRX07] indicates that this problem is frequently observed even in the range of congestion window sizes over several hundreds of packets. This problem is equally applicable to all Reno-style standards and their variants, including TCP-Reno [RFC5681], TCP-NewReno [RFC6582] [RFC6675], SCTP [RFC9260], TCP Friendly Rate Control (TFRC) [RFC5348], and QUIC congestion control [RFC9002], which use the same linear increase function for window growth. All Reno-style standards and their variants are collectively referred to as \"Reno\" in this document.",
+      "ja": "Cubicの設計は、高速および長距離ネットワークよりも使用されているクラシックリノTCPが十分に文書化された問題に動機付けられました[K03] [RFC3649]。この問題は、大きな帯域幅遅延製品（BDP）を備えたネットワークでの輻輳イベントに続いて、混雑ウィンドウ（CWND）のゆっくりとした増加から生じます。[HLRX07]は、この問題が数百のパケットにわたって輻輳ウィンドウサイズの範囲でさえ頻繁に観察されることを示しています。この問題は、TCP-RENO [RFC5681]、TCP-Newreno [RFC6582] [RFC6675]、SCTP [RFC9260]、TCPフレンドリーレートコントロール（TFRC）[RFC5348]、および[RFC5348]、など、すべてのリノスタイルの標準とそのバリエーションに等しく当てはまります。QUIC混雑制御[RFC9002]。これは、ウィンドウの成長に同じ線形増加関数を使用します。すべてのリノスタイルの標準とそのバリアントは、このドキュメントの「リノ」と総称されます。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC, originally proposed in [HRX08], is a modification to the congestion control algorithm of classical Reno to remedy this problem. Specifically, CUBIC uses a cubic function instead of the linear window increase function of Reno to improve scalability and stability under fast and long-distance networks.",
+      "ja": "もともと[HRX08]で提案されていたCubicは、この問題を改善するための古典的なRENOの輻輳制御アルゴリズムの変更です。具体的には、CubicはRENOの線形ウィンドウ増加関数の代わりに立方機能を使用して、高速および長距離ネットワークの下でのスケーラビリティと安定性を改善します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document updates the specification of CUBIC to include algorithmic improvements based on the Linux, Windows, and Apple implementations and recent academic work. Based on the extensive deployment experience with CUBIC, it also moves the specification to the Standards Track, obsoleting [RFC8312]. This requires an update to Section 3 of [RFC5681], which limits the aggressiveness of Reno TCP implementations. Since CUBIC is occasionally more aggressive than the algorithms defined in [RFC5681], this document updates the first paragraph of Section 3 of [RFC5681], replacing it with a normative reference to guideline (1) in Section 3 of [RFC5033], which allows for CUBIC's behavior as defined in this document.",
+      "ja": "このドキュメントは、Linux、Windows、およびAppleの実装と最近の学術作業に基づいたアルゴリズムの改善を含めるように、Cubicの仕様を更新します。Cubicでの広範な展開エクスペリエンスに基づいて、仕様を標準トラック、廃止[RFC8312]に移動します。これには、[RFC5681]のセクション3の更新が必要であり、Reno TCP実装の攻撃性を制限します。Cubicは[RFC5681]で定義されているアルゴリズムよりも攻撃的であることがあるため、このドキュメントは[RFC5681]のセクション3の最初の段落を更新し、[RFC5033]のセクション3のガイドライン（1）への規範的参照に置き換えます。このドキュメントで定義されているCubicの動作について。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, CUBIC may increase the congestion window more aggressively than Reno during the congestion avoidance phase. According to [RFC5681], during congestion avoidance, the sender must not increment cwnd by more than Sender Maximum Segment Size (SMSS) bytes once per round-trip time (RTT), whereas CUBIC may increase cwnd much more aggressively. Additionally, CUBIC recommends the HyStart++ algorithm [RFC9406] for slow start, which allows for cwnd increases of more than SMSS bytes for incoming acknowledgments during slow start, while this behavior is not allowed as part of the standard behavior prescribed by [RFC5681].",
+      "ja": "具体的には、CUBICは、混雑回避段階で、RENOよりも誤って輻輳窓を増やす可能性があります。[RFC5681]によれば、輻輳回避中に、送信者は、往復時間（RTT）に1回送信者の最大セグメントサイズ（SMS）バイト以上のCWNDを増加させてはなりませんが、CUBICはCWNDをはるかに攻撃的に増加させる可能性があります。さらに、Cubicは、スロースタートのためにHystartアルゴリズム[RFC9406]を推奨します。これにより、スロースタート中に着信するためにSMSSを超えるCWNDの増加が可能になりますが、この動作は[RFC5681]によって規定されている標準的な動作の一部として許可されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Binary Increase Congestion Control (BIC-TCP) [XHR04], a predecessor of CUBIC, was selected as the default TCP congestion control algorithm by Linux in the year 2005 and had been used for several years by the Internet community at large.",
+      "ja": "Cubicの前身であるBINARY増加渋滞制御（BIC-TCP）[XHR04]は、2005年にLinuxによってデフォルトのTCP混雑制御アルゴリズムとして選択され、インターネットコミュニティ全体で数年間使用されていました。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC uses a window increase function similar to BIC-TCP and is designed to be less aggressive and fairer to Reno in bandwidth usage than BIC-TCP while maintaining the strengths of BIC-TCP such as stability, window scalability, and RTT-fairness.",
+      "ja": "Cubicは、BIC-TCPと同様のウィンドウ増加関数を使用し、安定性、窓のスケーラビリティ、RTTフェアネスなどのBIC-TCPの強度を維持しながら、BIC-TCPよりも帯域幅の使用において積極的で公平ではないように設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5033] documents the IETF's best current practices for specifying new congestion control algorithms, specifically those that differ from the general congestion control principles outlined in [RFC2914]. It describes what type of evaluation is expected by the IETF to understand the suitability of a new congestion control algorithm and the process of enabling a specification to be approved for widespread deployment in the global Internet.",
+      "ja": "[RFC5033]は、[RFC2914]で概説されている一般的な輻輳制御原則とは異なる新しい混雑制御アルゴリズムを指定するためのIETFの最良の現在のプラクティスを文書化しています。これは、新しい輻輳制御アルゴリズムの適合性と、グローバルなインターネットでの広範な展開の仕様を承認できるようにするプロセスを理解するために、IETFがどのようなタイプの評価が予想されるかを説明しています。"
+    },
+    {
+      "indent": 3,
+      "text": "There are areas in which CUBIC differs from the congestion control algorithms previously published in Standards Track RFCs; those changes are specified in this document. However, it is not obvious that these changes go beyond the general congestion control principles outlined in [RFC2914], so the process documented in [RFC5033] may not apply.",
+      "ja": "Standards Track RFCSで以前に公開されていた輻輳制御アルゴリズムと立方体が異なる領域があります。これらの変更は、このドキュメントで指定されています。ただし、これらの変更が[RFC2914]で概説されている一般的な渋滞制御原則を超えていることは明らかではないため、[RFC5033]で文書化されたプロセスは適用されない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Also, the wide deployment of CUBIC on the Internet was driven by direct adoption in most of the popular operating systems and did not follow the practices documented in [RFC5033]. However, due to the resulting Internet-scale deployment experience over a long period of time, the IETF determined that CUBIC could be published as a Standards Track specification. This decision by the IETF does not alter the general guidance provided in [RFC2914].",
+      "ja": "また、インターネット上のCubicの幅広い展開は、ほとんどの人気のあるオペレーティングシステムでの直接採用によって推進され、[RFC5033]で文書化された慣行に従いませんでした。ただし、結果として生じるインターネットスケールの展開エクスペリエンスが長期間にわたって展開されているため、IETFは、Cubicを標準の追跡仕様として公開できると判断しました。IETFによるこの決定は、[RFC2914]で提供される一般的なガイダンスを変更しません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following sections",
+      "ja": "次のセクション"
+    },
+    {
+      "indent": 3,
+      "text": "1. briefly explain the design principles of CUBIC,",
+      "ja": "1. 立方体のデザイン原則を簡単に説明してください。"
+    },
+    {
+      "indent": 3,
+      "text": "2. provide the exact specification of CUBIC, and",
+      "ja": "2. 立方体の正確な仕様を提供します"
+    },
+    {
+      "indent": 3,
+      "text": "3. discuss the safety features of CUBIC, following the guidelines specified in [RFC5033].",
+      "ja": "3. [RFC5033]で指定されたガイドラインに従って、立方体の安全性について話し合います。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions",
+      "section_title": true,
+      "ja": "2. 規約"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Design Principles of CUBIC",
+      "section_title": true,
+      "ja": "3. 立方体のデザイン原則"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC is designed according to the following design principles:",
+      "ja": "Cubicは、次の設計原則に従って設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Principle 1: For better network utilization and stability, CUBIC uses both the concave and convex profiles of a cubic function to increase the congestion window size, instead of using just a convex function.",
+      "ja": "原則1：ネットワークの利用と安定性を向上させるために、Cubicは、凸関数のみを使用するのではなく、Cubic関数の凹面プロファイルと凸プロファイルの両方を使用して、うっ血ウィンドウサイズを増やします。"
+    },
+    {
+      "indent": 3,
+      "text": "Principle 2: To be Reno-friendly, CUBIC is designed to behave like Reno in networks with short RTTs and small bandwidth where Reno performs well.",
+      "ja": "原則2：リノにやさしいため、Cubicは、短いRTTとリノがうまく機能する小さな帯域幅を備えたネットワークでリノのように振る舞うように設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Principle 3: For RTT-fairness, CUBIC is designed to achieve linear bandwidth sharing among flows with different RTTs.",
+      "ja": "原則3：RTT-Fairnessの場合、Cubicは、異なるRTTを使用したフロー間の線形帯域幅共有を実現するように設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Principle 4: CUBIC appropriately sets its multiplicative window decrease factor in order to achieve a balance between scalability and convergence speed.",
+      "ja": "原則4：Cubicは、スケーラビリティと収束速度のバランスをとるために、乗算ウィンドウの減少係数を適切に設定します。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Principle 1 for the CUBIC Increase Function",
+      "section_title": true,
+      "ja": "3.1. キュービック増加関数の原則1"
+    },
+    {
+      "indent": 3,
+      "text": "For better network utilization and stability, CUBIC [HRX08] uses a cubic window increase function in terms of the elapsed time from the last congestion event. While most congestion control algorithms that provide alternatives to Reno increase the congestion window using convex functions, CUBIC uses both the concave and convex profiles of a cubic function for window growth.",
+      "ja": "ネットワークの利用と安定性を向上させるために、Cubic [HRX08]は、最後の輻輳イベントからの経過時間の観点から、立方窓増加関数を使用します。RENOの代替を提供するほとんどの輻輳制御アルゴリズムは、凸関数を使用して輻輳ウィンドウを増加させますが、Cubicは、窓の成長のために立方機能の凹面および凸プロファイルの両方を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "After a window reduction in response to a congestion event detected by duplicate acknowledgments (ACKs), Explicit Congestion Notification-Echo (ECN-Echo (ECE)) ACKs [RFC3168], RACK-TLP for TCP [RFC8985], or QUIC loss detection [RFC9002], CUBIC remembers the congestion window size at which it received the congestion event and performs a multiplicative decrease of the congestion window. When CUBIC enters into congestion avoidance, it starts to increase the congestion window using the concave profile of the cubic function. The cubic function is set to have its plateau at the remembered congestion window size, so that the concave window increase continues until then. After that, the cubic function turns into a convex profile and the convex window increase begins.",
+      "ja": "重複謝辞（ACK）、明示的な混雑通知-エコー（ECN-エコー（ECE））ACKS [RFC3168]、TCP [RFC8985]のRACK-TLP、またはQUIC損失の検出によって検出された鬱血イベントに応答したウィンドウが減少した後、RFC9002]、Cubicは、混雑イベントを受け取った混雑ウィンドウサイズを覚えており、混雑ウィンドウの多重な減少を実行します。キュービックが混雑の回避に入ると、立方機能の凹面プロファイルを使用してうっ血ウィンドウを増やし始めます。立方体関数は、記憶されている混雑ウィンドウサイズにプラトーを置くように設定されているため、凹面の窓の増加はそれまで続きます。その後、立方体関数が凸のプロファイルに変わり、凸面のウィンドウの増加が始まります。"
+    },
+    {
+      "indent": 3,
+      "text": "This style of window adjustment (concave and then convex) improves algorithm stability while maintaining high network utilization [CEHRX09]. This is because the window size remains almost constant, forming a plateau around the remembered congestion window size of the last congestion event, where network utilization is deemed highest. Under steady state, most window size samples of CUBIC are close to that remembered congestion window size, thus promoting high network utilization and stability.",
+      "ja": "このスタイルのウィンドウ調整（凹面と凸）は、高いネットワーク利用を維持しながらアルゴリズムの安定性を向上させます[CEHRX09]。これは、ウィンドウサイズがほぼ一定のままであり、ネットワークの利用が最も高く見なされる最後の渋滞イベントの記憶されている輻輳ウィンドウサイズの周りにプラトーを形成するためです。定常状態では、Cubicのほとんどのウィンドウサイズのサンプルは、記憶されている混雑ウィンドウサイズに近いため、高いネットワークの利用と安定性を促進します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that congestion control algorithms that only use convex functions to increase the congestion window size have their maximum increments around the remembered congestion window size of the last congestion event and thus introduce many packet bursts around the saturation point of the network, likely causing frequent global loss synchronizations.",
+      "ja": "凸型関数のみを使用して渋滞ウィンドウサイズを増やすための渋滞制御アルゴリズムは、最後の輻輳イベントの記憶されている混雑ウィンドウサイズの周りに最大増加し、したがってネットワークの飽和点の周りに多くのパケットバーストを導入し、おそらく世界的な損失を引き起こす可能性が高いことに注意してください。同期。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Principle 2 for Reno-Friendliness",
+      "section_title": true,
+      "ja": "3.2. リノフレンドリーの原則2"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC promotes per-flow fairness to Reno. Note that Reno performs well over paths with small BDPs and only experiences problems when attempting to increase bandwidth utilization on paths with large BDPs.",
+      "ja": "Cubicは、フローごとの公平性をリノに促進します。Renoは、小さなBDPでパスでよく実行され、大きなBDPのパスで帯域幅の利用を増やそうとする場合にのみ問題が発生していることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "A congestion control algorithm designed to be friendly to Reno on a per-flow basis must increase its congestion window less aggressively in small-BDP networks than in large-BDP networks.",
+      "ja": "フローごとにリノに友好的になるように設計された輻輳制御アルゴリズムは、大型BDPネットワークよりも小型BDPネットワークで積極的に誤って増加する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The aggressiveness of CUBIC mainly depends on the maximum window size before a window reduction, which is smaller in small-BDP networks than in large-BDP networks. Thus, CUBIC increases its congestion window less aggressively in small-BDP networks than in large-BDP networks.",
+      "ja": "キュービックの攻撃性は、主にウィンドウ削減前の最大ウィンドウサイズに依存します。これは、大型BDPネットワークよりも小型ネットワークでは小さくなります。したがって、Cubicは、大型BDPネットワークよりも、小型BDPネットワークで誤って誤って増加します。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, in cases when the cubic function of CUBIC would increase the congestion window less aggressively than Reno, CUBIC simply follows the window size of Reno to ensure that CUBIC achieves at least the same throughput as Reno in small-BDP networks. The region where CUBIC behaves like Reno is called the \"Reno-friendly region\".",
+      "ja": "さらに、キュービックの立方機能がリノよりも積極的に誤った窓を増やす場合、キュービックは単にリノのウィンドウサイズに従い、キュービックが小型bdpネットワークでリノと少なくとも同じスループットを達成することを保証します。キュービックがリノのように振る舞う地域は、「リノに優しい地域」と呼ばれます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Principle 3 for RTT-Fairness",
+      "section_title": true,
+      "ja": "3.3. RTT-Fairnessの原則3"
+    },
+    {
+      "indent": 3,
+      "text": "Two CUBIC flows with different RTTs have a throughput ratio that is linearly proportional to the inverse of their RTT ratio, where the throughput of a flow is approximately the size of its congestion window divided by its RTT.",
+      "ja": "異なるRTTを持つ2つのキュービックフローには、RTT比の逆に直線的に比例するスループット比があり、流れのスループットは渋滞ウィンドウのサイズをRTTで割ったものです。"
+    },
+    {
+      "indent": 3,
+      "text": "Specifically, CUBIC maintains a window increase rate that is independent of RTTs outside the Reno-friendly region, and thus flows with different RTTs have similar congestion window sizes under steady state when they operate outside the Reno-friendly region.",
+      "ja": "具体的には、Cubicは、リノフレンドリーな地域以外のRTTとは独立したウィンドウの増加率を維持しているため、異なるRTTの流れは、リノに優しい地域の外側で動作する場合、定常状態の下で同様のうっ血窓サイズを持っています。"
+    },
+    {
+      "indent": 3,
+      "text": "This notion of a linear throughput ratio is similar to that of Reno under an asynchronous loss model, where flows with different RTTs have the same packet loss rate but experience loss events at different times. However, under a synchronous loss model, where flows with different RTTs experience loss events at the same time but have different packet loss rates, the throughput ratio of Reno flows with different RTTs is quadratically proportional to the inverse of their RTT ratio [XHR04].",
+      "ja": "この線形スループット比のこの概念は、異なるRTTを持つフローが同じパケット損失率を持っているが、異なる時期に発生した経験を持つ非同期損失モデルの下でのRenoの概念と類似しています。ただし、異なるRTTSを持つフローが同時に損失イベントを経験するが、パケット損失率が異なる同期損失モデルでは、RENOフローのスループット比は異なるRTTSのスループット比がRTT比の逆に2次的に比例します[XHR04]。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC always ensures a linear throughput ratio that is independent of the loss environment. This is an improvement over Reno. While there is no consensus on the optimal throughput ratio for different RTT flows, over wired Internet paths, use of a linear throughput ratio seems more reasonable than equal throughputs (i.e., the same throughput for flows with different RTTs) or a higher-order throughput ratio (e.g., a quadratic throughput ratio of Reno in synchronous loss environments).",
+      "ja": "Cubicは、常に損失環境とは無関係の線形スループット比を保証します。これはリノの改善です。さまざまなRTTフローの最適なスループット比にコンセンサスはありませんが、有線インターネットパスでは、線形スループット比の使用が等しいスループット（つまり、異なるRTTのフローの場合と同じスループット）または高次のスループットのスループットよりも合理的であると思われます。比率（例えば、同期損失環境におけるリノの二次スループット比）。"
+    },
+    {
+      "indent": 0,
+      "text": "3.4. Principle 4 for the CUBIC Decrease Factor",
+      "section_title": true,
+      "ja": "3.4. キュービック減少係数の原則4"
+    },
+    {
+      "indent": 3,
+      "text": "To achieve a balance between scalability and convergence speed, CUBIC sets the multiplicative window decrease factor to 0.7, whereas Reno uses 0.5.",
+      "ja": "スケーラビリティと収束速度のバランスをとるために、Cubicは乗算ウィンドウの減少係数を0.7に設定しますが、Renoは0.5を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "While this improves the scalability of CUBIC, a side effect of this decision is slower convergence, especially under low statistical multiplexing. This design choice is following the observation that HighSpeed TCP (HSTCP) [RFC3649] and other approaches (e.g., [GV02]) made: the current Internet becomes more asynchronous with less frequent loss synchronizations under high statistical multiplexing.",
+      "ja": "これによりキュービックのスケーラビリティが向上しますが、この決定の副作用は、特に低い統計的多重化の下での収束が遅いことです。この設計の選択は、高速TCP（HSTCP）[RFC3649]およびその他のアプローチ（例えば[GV02]）が作成したという観察に続いています。"
+    },
+    {
+      "indent": 3,
+      "text": "In such environments, even strict Multiplicative-Increase Multiplicative-Decrease (MIMD) can converge. CUBIC flows with the same RTT always converge to the same throughput independently of statistical multiplexing, thus achieving intra-algorithm fairness. In environments with sufficient statistical multiplexing, the convergence speed of CUBIC is reasonable.",
+      "ja": "そのような環境では、厳密な乗算増れた乗算 - 抑制（MIMD）でさえ収束することができます。同じRTTを備えた立方体の流れは、常に統計的多重化とは無関係に同じスループットに収束し、したがって、アルゴリズム内の公平性を達成します。十分な統計的多重化を伴う環境では、Cubicの収束速度が合理的です。"
+    },
+    {
+      "indent": 0,
+      "text": "4. CUBIC Congestion Control",
+      "section_title": true,
+      "ja": "4. 立方輻輳制御"
+    },
+    {
+      "indent": 3,
+      "text": "This section discusses how the congestion window is updated during the different stages of the CUBIC congestion controller.",
+      "ja": "このセクションでは、立方輻輳コントローラーのさまざまな段階で輻輳ウィンドウがどのように更新されるかについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Definitions",
+      "section_title": true,
+      "ja": "4.1. 定義"
+    },
+    {
+      "indent": 3,
+      "text": "The unit of all window sizes in this document is segments of the SMSS, and the unit of all times is seconds. Implementations can use bytes to express window sizes, which would require factoring in the SMSS wherever necessary and replacing _segments_acked_ (Figure 4) with the number of acknowledged bytes.",
+      "ja": "このドキュメントのすべてのウィンドウサイズのユニットは、SMSSのセグメントであり、史上最高のユニットは秒です。実装では、バイトを使用してウィンドウサイズを表現できます。これにより、必要に応じてSMSSで因数分解し、_segments_acked_（図4）を認められたバイトの数に置き換える必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.1. Constants of Interest",
+      "section_title": true,
+      "ja": "4.1.1. 関心のある定数"
+    },
+    {
+      "indent": 3,
+      "text": "* __cubic_: CUBIC multiplicative decrease factor as described in Section 4.6.",
+      "ja": "* __CUBIC_：セクション4.6で説明されている立方体倍数減少係数。"
+    },
+    {
+      "indent": 3,
+      "text": "* __cubic_: CUBIC additive increase factor used in the Reno-friendly region as described in Section 4.3.",
+      "ja": "* __CUBIC_：セクション4.3で説明されているように、リノに優しい地域で使用される立方添加剤増加係数。"
+    },
+    {
+      "indent": 3,
+      "text": "* _C_: Constant that determines the aggressiveness of CUBIC in competing with other congestion control algorithms in high-BDP networks. Please see Section 5 for more explanation on how it is set. The unit for _C_ is",
+      "ja": "* _C_：高BDPネットワークで他の輻輳制御アルゴリズムと競合する際にキュービックの攻撃性を決定する定数。設定方法の詳細については、セクション5を参照してください。_c_のユニットはです"
+    },
+    {
+      "indent": 34,
+      "text": "segment 3 second",
+      "ja": "セグメント3秒"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.2. Variables of Interest",
+      "section_title": true,
+      "ja": "4.1.2. 関心のある変数"
+    },
+    {
+      "indent": 3,
+      "text": "This section defines the variables required to implement CUBIC:",
+      "ja": "このセクションでは、Cubicを実装するために必要な変数を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "* _RTT_: Smoothed round-trip time in seconds, calculated as described in [RFC6298].",
+      "ja": "* _RTT_：[RFC6298]で説明されているように計算された秒単位で滑らかな往復時間。"
+    },
+    {
+      "indent": 3,
+      "text": "* _cwnd_: Current congestion window in segments.",
+      "ja": "* _CWND_：セグメントの現在の混雑ウィンドウ。"
+    },
+    {
+      "indent": 3,
+      "text": "* _ssthresh_: Current slow start threshold in segments.",
+      "ja": "* _SSTHRESH _：セグメントの現在のスロースタートしきい値。"
+    },
+    {
+      "indent": 3,
+      "text": "* _cwnd_prior_: Size of _cwnd_ in segments at the time of setting _ssthresh_ most recently, either upon exiting the first slow start or just before _cwnd_ was reduced in the last congestion event.",
+      "ja": "* _CWND_PRIOR_：最初のスロースタートを終了したときに_SSTHRESH_設定時のセグメントの_CWND_のサイズ、または_CWND_が最後の渋滞イベントで削減された直前。"
+    },
+    {
+      "indent": 3,
+      "text": "* _W_max_: Size of _cwnd_ in segments just before _cwnd_ was reduced in the last congestion event when fast convergence is disabled (same as _cwnd_prior_ on a congestion event). However, if fast convergence is enabled, _W_max_ may be further reduced based on the current saturation point.",
+      "ja": "* _W_MAX_：_CWND_の直前のセグメントの_CWND_のサイズは、速い収束が無効になっている前回の混雑イベントで削減されました（渋滞イベントで_CWND_PRIOR_と同じ）。ただし、高速収束が有効になっている場合、_W_MAX_は現在の飽和点に基づいてさらに削減される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* _K_: The time period in seconds it takes to increase the congestion window size at the beginning of the current congestion avoidance stage to _W_max_.",
+      "ja": "* _K_：現在の輻輳回避段階の開始時に_W_MAX_に浸漬ウィンドウサイズを増やすのにかかる秒の期間。"
+    },
+    {
+      "indent": 3,
+      "text": "* _t_current_: Current time of the system in seconds.",
+      "ja": "* _T_CURRENT_：システムの現在の時間。"
+    },
+    {
+      "indent": 3,
+      "text": "* _t_epoch_: The time in seconds at which the current congestion avoidance stage started.",
+      "ja": "* _T_EPOCH_：現在の混雑回避段階が始まる秒単位の時間。"
+    },
+    {
+      "indent": 3,
+      "text": "* _cwnd_epoch_: The _cwnd_ at the beginning of the current congestion avoidance stage, i.e., at time _t_epoch_.",
+      "ja": "* _CWND_EPOCH_：現在の混雑回避段階の開始時の_CWND_、つまり時間_T_EPOCH_"
+    },
+    {
+      "indent": 3,
+      "text": "* W_cubic(_t_): The congestion window in segments at time _t_ in seconds based on the cubic increase function, as described in Section 4.2.",
+      "ja": "* W_CUBIC（_T_）：セクション4.2で説明されているように、立方体増加関数に基づいて、秒単位のセグメントの輻輳ウィンドウ。"
+    },
+    {
+      "indent": 3,
+      "text": "* _target_: Target value of the congestion window in segments after the next RTT -- that is, W_cubic(_t_ + _RTT_), as described in Section 4.2.",
+      "ja": "* _target_：セクション4.2で説明されているように、次のRTT、つまりw_cubic（_t_ _rtt_）後のセグメントの輻輳ウィンドウのターゲット値。"
+    },
+    {
+      "indent": 3,
+      "text": "* _W_est_: An estimate for the congestion window in segments in the Reno-friendly region -- that is, an estimate for the congestion window of Reno.",
+      "ja": "* _W_est_：リノに優しい地域のセグメントの輻輳ウィンドウの推定値 - つまり、リノの輻輳窓の推定。"
+    },
+    {
+      "indent": 3,
+      "text": "* _segments_acked_: Number of SMSS-sized segments acked when a \"new ACK\" is received, i.e., an ACK that cumulatively acknowledges the delivery of previously unacknowledged data. This number will be a decimal value when a new ACK acknowledges an amount of data that is not SMSS-sized. Specifically, it can be less than 1 when a new ACK acknowledges a segment smaller than the SMSS.",
+      "ja": "* _SEGMENTS_ACKED_：「新しいACK」を受信したときにSMSSサイズのセグメントの数がアクセスしました。つまり、以前に未把握されていないデータの提供を累積的に認識しているACK。この数値は、新しいACKがSMSSサイズではないデータの量を確認する場合、小数値になります。具体的には、新しいACKがSMSSよりも小さいセグメントを認めている場合、1未満になる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Window Increase Function",
+      "section_title": true,
+      "ja": "4.2. ウィンドウの増加関数"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC maintains the ACK clocking of Reno by increasing the congestion window only at the reception of a new ACK. It does not make any changes to the TCP Fast Recovery and Fast Retransmit algorithms [RFC6582] [RFC6675].",
+      "ja": "Cubicは、新しいACKの受信時にのみ混雑ウィンドウを増やすことにより、RenoのACKクロッキングを維持します。TCP高速回復と高速再送信アルゴリズム[RFC6582] [RFC6675]に変更はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "During congestion avoidance, after a congestion event is detected as described in Section 3.1, CUBIC uses a window increase function different from Reno.",
+      "ja": "輻輳回避の間、セクション3.1で説明されているように混雑イベントが検出された後、CubicはRENOとは異なるウィンドウ増加関数を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC uses the following window increase function:",
+      "ja": "Cubicは、次のウィンドウ増加関数を使用します。"
+    },
+    {
+      "indent": 22,
+      "text": " 3 W (t) = C * (t - K) + W cubic max",
+      "ja": "3 w（t）= c *（t -k）wキュービックマックス"
+    },
+    {
+      "indent": 34,
+      "text": "Figure 1",
+      "ja": "図1"
+    },
+    {
+      "indent": 3,
+      "text": "where _t_ is the elapsed time in seconds from the beginning of the current congestion avoidance stage -- that is,",
+      "ja": "ここで、_t_は現在の輻輳回避段階の最初から数秒で経過時間です - つまり、"
+    },
+    {
+      "indent": 27,
+      "text": "t = t - t current epoch",
+      "ja": "t = t -t電流時代"
+    },
+    {
+      "indent": 3,
+      "text": "and where _t_epoch_ is the time at which the current congestion avoidance stage starts. _K_ is the time period that the above function takes to increase the congestion window size at the beginning of the current congestion avoidance stage to _W_max_ if there are no further congestion events. _K_ is calculated using the following equation:",
+      "ja": "そして、_t_epoch_は、現在の混雑回避段階が始まる時期です。_K_は、これ以上の混雑イベントがない場合、現在の輻輳回避段階の開始時に輻輳ウィンドウサイズを_W_MAX_に増やすために上記の関数がかかる期間です。_K_は、次の方程式を使用して計算されます。"
+    },
+    {
+      "indent": 32,
+      "text": " 3 W - cwnd max epoch K = C",
+      "ja": "3 W -CWND MAX EPOCH K = C"
+    },
+    {
+      "indent": 34,
+      "text": "Figure 2",
+      "ja": "図2"
+    },
+    {
+      "indent": 3,
+      "text": "where _cwnd_epoch_ is the congestion window at the beginning of the current congestion avoidance stage.",
+      "ja": "ここで、_CWND_EPOCH_は、現在の混雑回避段階の開始時の混雑ウィンドウです。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving a new ACK during congestion avoidance, CUBIC computes the _target_ congestion window size after the next _RTT_ using Figure 1 as follows, where _RTT_ is the smoothed round-trip time. The lower and upper bounds below ensure that CUBIC's congestion window increase rate is non-decreasing and is less than the increase rate of slow start [SXEZ19].",
+      "ja": "混雑回避中に新しいACKを受信すると、Cubicは、次のように図1を使用して、次の_RTT_の後に_target_うっ血ウィンドウサイズを計算します。以下の下限と上限により、Cubicの混雑ウィンドウの増加率は非断片的であり、スロースタートの増加率よりも低いことを確認します[SXEZ19]。"
+    },
+    {
+      "indent": 17,
+      "text": " cwnd if W (t + RTT) < cwnd cubic 1.5 * cwnd if W (t + RTT) > 1.5 * cwnd target = cubic W (t + RTT) otherwise cubic",
+      "ja": "cwnd if w（t rtt）<cwnd cubic 1.5 * cwnd if w（t rtt）> 1.5 * cwnd target = cubic w（t rtt）"
+    },
+    {
+      "indent": 3,
+      "text": "The elapsed time _t_ in Figure 1 MUST NOT include periods during which _cwnd_ has not been updated due to application-limited behavior (see Section 5.8).",
+      "ja": "図1の経過時間_T_には、アプリケーションが制限された動作のために_CWND_が更新されていない期間を含めてはなりません（セクション5.8を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "Depending on the value of the current congestion window size _cwnd_, CUBIC runs in three different regions:",
+      "ja": "現在の輻輳ウィンドウサイズ_cwnd_の値に応じて、3つの異なる領域での立方体は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "1. The Reno-friendly region, which ensures that CUBIC achieves at least the same throughput as Reno.",
+      "ja": "1. キュービックがリノと少なくとも同じスループットを達成することを保証するリノに優しい地域。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The concave region, if CUBIC is not in the Reno-friendly region and _cwnd_ is less than _W_max_.",
+      "ja": "2. Cubicがリノフレンドリーな領域になく、_CWND_が_W_MAX_よりも少ない場合、凹の領域。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The convex region, if CUBIC is not in the Reno-friendly region and _cwnd_ is greater than _W_max_.",
+      "ja": "3. 凸領域は、キュービックがリノフレンドリーな領域になく、_CWND_が_W_MAX_よりも大きい場合。"
+    },
+    {
+      "indent": 3,
+      "text": "To summarize, CUBIC computes both W_cubic(_t_) and _W_est_ (see Section 4.3) on receiving a new ACK in congestion avoidance and chooses the larger of the two values.",
+      "ja": "要約すると、Cubicはw_cubic（_t_）と_w_est_（セクション4.3を参照）の両方を計算し、輻輳回避で新しいACKを受信し、2つの値のうち大きいものを選択します。"
+    },
+    {
+      "indent": 3,
+      "text": "The next sections describe the exact actions taken by CUBIC in each region.",
+      "ja": "次のセクションでは、各地域でCubicが取った正確なアクションについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Reno-Friendly Region",
+      "section_title": true,
+      "ja": "4.3. リノにやさしい地域"
+    },
+    {
+      "indent": 3,
+      "text": "Reno performs well in certain types of networks -- for example, under short RTTs and small bandwidths (or small BDPs). In these networks, CUBIC remains in the Reno-friendly region to achieve at least the same throughput as Reno.",
+      "ja": "RENOは、特定のタイプのネットワークでうまく機能します。たとえば、短いRTTや小さな帯域幅（または小さなBDP）の下で。これらのネットワークでは、キュービックはリノに優しい地域に残って、リノと少なくとも同じスループットを達成しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The Reno-friendly region is designed according to the analysis discussed in [FHP00], which studies the performance of an AIMD algorithm with an additive factor of (segments per _RTT_) and a multiplicative factor of , denoted by AIMD(, ). _p_ is the packet loss rate. Specifically, the average congestion window size of AIMD(, ) can be calculated using Figure 3.",
+      "ja": "リノフレンドリーな領域は、[FHP00]で説明されている分析に従って設計されています。これは、AIMDアルゴリズムのパフォーマンスを、（_RTT_ごとのセグメント）とAIMD（、）で示された増殖因子のパフォーマンスを研究しています。_P_はパケット損失率です。具体的には、AIMD（、）の平均輻輳ウィンドウサイズは、図3を使用して計算できます。"
+    },
+    {
+      "indent": 38,
+      "text": "\n                      * (1 + )\nAVG_AIMD(, ) =  \n                  2 * (1 - ) * p",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 34,
+      "text": "Figure 3",
+      "ja": "図3"
+    },
+    {
+      "indent": 3,
+      "text": "By the same analysis, to achieve an average window size similar to Reno that uses AIMD(1, 0.5), must be equal to",
+      "ja": "同じ分析により、AIMD（1、0.5）を使用するRENOと同様の平均ウィンドウサイズを達成するには、"
+    },
+    {
+      "indent": 33,
+      "text": " 1 - 3 * 1 +",
+      "ja": "1-3 * 1"
+    },
+    {
+      "indent": 3,
+      "text": "Thus, CUBIC uses Figure 4 to estimate the window size _W_est_ in the Reno-friendly region with",
+      "ja": "したがって、Cubicは図4を使用して、リノフレンドリーな地域のウィンドウサイズ_W_est_を推定します"
+    },
+    {
+      "indent": 27,
+      "text": " 1 - cubic = 3 * cubic 1 + cubic",
+      "ja": "1 -Cubic = 3 * Cubic 1 Cubic"
+    },
+    {
+      "indent": 3,
+      "text": "which achieves approximately the same average window size as Reno in many cases. The model used to calculate __cubic_ is not absolutely precise, but analysis and simulation as discussed in [AIMD-friendliness], as well as over a decade of experience with CUBIC in the public Internet, show that this approach produces acceptable levels of rate fairness between CUBIC and Reno flows. Also, no significant drawbacks of the model have been reported. However, continued detailed analysis of this approach would be beneficial. When receiving a new ACK in congestion avoidance (where _cwnd_ could be greater than or less than _W_max_), CUBIC checks whether W_cubic(_t_) is less than _W_est_. If so, CUBIC is in the Reno-friendly region and _cwnd_ SHOULD be set to _W_est_ at each reception of a new ACK.",
+      "ja": "多くの場合、RENOとほぼ同じ平均ウィンドウサイズを達成します。__CUBIC_を計算するために使用されるモデルは絶対に正確ではありませんが、[AIMD-フレンドリー]で説明されているように分析とシミュレーション、およびパブリックインターネットでのCubicでの10年以上の経験を示しています。立方体とリノの流れ。また、モデルの重要な欠点は報告されていません。ただし、このアプローチの継続的な詳細な分析は有益です。混雑回避で新しいACKを受信する場合（_CWND_は_W_MAX_よりも大きくなるか、それとも大きくなる可能性があります）、CubicはW_CUBIC（_T_）が_W_EST_より少ないかどうかを確認します。その場合、Cubicはリノフレンドリーな地域にあり、_CWND_は新しいACKの受信ごとに_W_est_に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "_W_est_ is set equal to _cwnd_epoch_ at the start of the congestion avoidance stage. After that, on every new ACK, _W_est_ is updated using Figure 4. Note that this equation uses _segments_acked_ and _cwnd_ is measured in segments. An implementation that measures _cwnd_ in bytes should adjust the equation accordingly using the number of acknowledged bytes and the SMSS. Also note that this equation works for connections with enabled or disabled delayed ACKs [RFC5681], as _segments_acked_ will be different based on the segments actually acknowledged by a new ACK.",
+      "ja": "_W_est_は、うっ血回避段階の開始時に_cwnd_epoch_に等しく設定されます。その後、すべての新しいACKで、_W_est_は図4を使用して更新されます。この方程式は_segments_acked_および_cwnd_を使用してセグメントで測定されます。バイトで_CWND_を測定する実装は、それに応じて式を調整して、確認されたバイトとSMSの数を使用して調整する必要があります。また、_segments_acked_は新しいACKによって実際に認められているセグメントに基づいて_segments_acked_が異なるため、この方程式は有効または無効な遅延ACK [RFC5681]との接続に対して機能することに注意してください。"
+    },
+    {
+      "indent": 19,
+      "text": " segments_acked W = W + * est est cubic cwnd",
+      "ja": "segments_acked w = w * est est cubic cwnd"
+    },
+    {
+      "indent": 34,
+      "text": "Figure 4",
+      "ja": "図4"
+    },
+    {
+      "indent": 3,
+      "text": "Once _W_est_ has grown to reach the _cwnd_ at the time of most recently setting _ssthresh_ -- that is, _W_est_ >= _cwnd_prior_ -- the sender SHOULD set __cubic_ to 1 to ensure that it can achieve the same congestion window increment rate as Reno, which uses AIMD(1, 0.5).",
+      "ja": "_W_est_が最近設定された時点で_cwnd_に到達するように成長したら、_ssthresh_を設定します。AIMD（1、0.5）を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "The next two sections assume that CUBIC is not in the Reno-friendly region and uses the window increase function described in Section 4.2. Although _cwnd_ is incremented in the same way for both concave and convex regions, they are discussed separately to analyze and understand the difference between the two regions.",
+      "ja": "次の2つのセクションでは、Cubicはリノフレンドリーな地域にないと想定しており、セクション4.2で説明されているウィンドウ増加関数を使用しています。_CWND_は凹状領域と凸領域の両方で同じ方法で増加しますが、2つの領域の違いを分析および理解するために個別に議論されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Concave Region",
+      "section_title": true,
+      "ja": "4.4. 凹の領域"
+    },
+    {
+      "indent": 3,
+      "text": "When receiving a new ACK in congestion avoidance, if CUBIC is not in the Reno-friendly region and _cwnd_ is less than _W_max_, then CUBIC is in the concave region. In this region, _cwnd_ MUST be incremented by",
+      "ja": "混雑回避で新しいACKを受け取ると、キュービックがリノフレンドリーな地域にいない場合、_CWND_が_W_MAX_未満である場合、Cubicは凹の領域にあります。この地域では、_CWND_を増やす必要があります"
+    },
+    {
+      "indent": 31,
+      "text": "target - cwnd cwnd",
+      "ja": "ターゲット-CWND CWND"
+    },
+    {
+      "indent": 3,
+      "text": "for each received new ACK, where _target_ is calculated as described in Section 4.2.",
+      "ja": "セクション4.2で説明されているように、_target_が計算される新しいACKを受信した各ACKについて。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Convex Region",
+      "section_title": true,
+      "ja": "4.5. 凸領域"
+    },
+    {
+      "indent": 3,
+      "text": "When receiving a new ACK in congestion avoidance, if CUBIC is not in the Reno-friendly region and _cwnd_ is larger than or equal to _W_max_, then CUBIC is in the convex region.",
+      "ja": "混雑回避で新しいACKを受け取ると、キュービックがリノフレンドリーな地域にいない場合、_CWND_が_W_MAX_以上である場合、Cubicは凸領域にあります。"
+    },
+    {
+      "indent": 3,
+      "text": "The convex region indicates that the network conditions might have changed since the last congestion event, possibly implying more available bandwidth after some flow departures. Since the Internet is highly asynchronous, some amount of perturbation is always possible without causing a major change in available bandwidth.",
+      "ja": "凸領域は、いくつかの流れの出発後、より利用可能な帯域幅を意味する可能性があることを意味する可能性があることを意味します。インターネットは非常に非同期であるため、利用可能な帯域幅に大きな変化をもたらすことなく、ある程度の摂動が常に可能です。"
+    },
+    {
+      "indent": 3,
+      "text": "Unless the cwnd is overridden by the AIMD window increase, CUBIC will behave cautiously when operating in this region. The convex profile aims to increase the window very slowly at the beginning when _cwnd_ is around _W_max_ and then gradually increases its rate of increase. This region is also called the \"maximum probing phase\", since CUBIC is searching for a new _W_max_. In this region, _cwnd_ MUST be incremented by",
+      "ja": "CWNDがAIMDウィンドウの増加によってオーバーライドされない限り、この地域で動作するときにCubicは慎重に振る舞います。凸プロファイルは、_CWND_が_W_MAX_の周りにあるときに最初にウィンドウを非常にゆっくりと増加させ、その後徐々に増加率を増加させることを目的としています。Cubicが新しい_W_Max_を検索しているため、この領域は「最大プロービングフェーズ」とも呼ばれます。この地域では、_CWND_を増やす必要があります"
+    },
+    {
+      "indent": 31,
+      "text": "target - cwnd cwnd",
+      "ja": "ターゲット-CWND CWND"
+    },
+    {
+      "indent": 3,
+      "text": "for each received new ACK, where _target_ is calculated as described in Section 4.2.",
+      "ja": "セクション4.2で説明されているように、_target_が計算される新しいACKを受信した各ACKについて。"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Multiplicative Decrease",
+      "section_title": true,
+      "ja": "4.6. 乗法減少"
+    },
+    {
+      "indent": 3,
+      "text": "When a congestion event is detected by the mechanisms described in Section 3.1, CUBIC updates _W_max_ and reduces _cwnd_ and _ssthresh_ immediately, as described below. In the case of packet loss, the sender MUST reduce _cwnd_ and _ssthresh_ immediately upon entering loss recovery, similar to [RFC5681] (and [RFC6675]). Note that other mechanisms, such as Proportional Rate Reduction [RFC6937], can be used to reduce the sending rate during loss recovery more gradually. The parameter __cubic_ SHOULD be set to 0.7, which is different from the multiplicative decrease factor used in [RFC5681] (and [RFC6675]) during fast recovery.",
+      "ja": "セクション3.1で説明されているメカニズムによって輻輳イベントが検出されると、Cubicの更新は_W_MAX_を更新し、_CWND_および_SSTHRESH_をすぐに削減します。パケット損失の場合、送信者は、[RFC5681]（および[RFC6675]）と同様に、損失回復をすぐに_CWND_および_SSTHRESH_を減らす必要があります。比例速度の低下[RFC6937]などの他のメカニズムを使用して、損失回復中の送信速度を徐々に減らすことができることに注意してください。パラメーター__CUBIC_は0.7に設定する必要があります。これは、速い回復中に[RFC5681]（および[RFC6675]）で使用される乗法減少係数とは異なります。"
+    },
+    {
+      "indent": 3,
+      "text": "In Figure 5, _flight_size_ is the amount of outstanding (unacknowledged) data in the network, as defined in [RFC5681]. Note that a rate-limited application with idle periods or periods when unable to send at the full rate permitted by _cwnd_ could easily encounter notable variations in the volume of data sent from one RTT to another, resulting in _flight_size_ that is significantly less than _cwnd_ when there is a congestion event. The congestion response would therefore decrease _cwnd_ to a much lower value than necessary. To avoid such suboptimal performance, the mechanisms described in [RFC7661] can be used. [RFC7661] describes how to manage and use _cwnd_ and _ssthresh_ during a rate-limited interval, and how to update _cwnd_ and _ssthresh_ after congestion has been detected. The mechanisms defined in [RFC7661] are safe to use even when _cwnd_ is greater than the receive window, because they validate _cwnd_ based on the amount of data acknowledged by the network in an RTT, which implicitly accounts for the allowed receive window.",
+      "ja": "図5では、_Flight_size_は[RFC5681]で定義されているように、ネットワーク内の未解決の（未把持）データの量です。_cwnd_によって許可されている完全なレートで送信できない場合のアイドル期間または期間を備えたレート制限アプリケーションは、あるRTTから別のRTTに送信されるデータの量の顕著なバリエーションに簡単に遭遇し、_Flight_size_が_cwnd_よりも大幅に少ない_Flight_size_に遭遇する可能性があることに注意してください。混雑イベントがあります。したがって、輻輳応答は、_cwnd_を必要以上に低い値に減少させます。このような最適ではないパフォーマンスを回避するために、[RFC7661]で説明されているメカニズムを使用できます。[RFC7661]は、レート制限間隔で_CWND_および_SSTHRESH_を管理および使用する方法と、輻輳が検出された後の_CWND_および_SSTHRESH_を更新する方法について説明します。[RFC7661]で定義されているメカニズムは、_CWND_が受信ウィンドウよりも大きい場合でも使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Some implementations of CUBIC currently use _cwnd_ instead of _flight_size_ when calculating a new _ssthresh_. Implementations that use _cwnd_ MUST use other measures to prevent _cwnd_ from growing when the volume of bytes in flight is smaller than _cwnd_. This also effectively prevents _cwnd_ from growing beyond the receive window. Such measures are important for preventing a CUBIC sender from using an arbitrarily high cwnd _value_ when calculating new values for _ssthresh_ and _cwnd_ when congestion is detected. This might not be as robust as the mechanisms described in [RFC7661].",
+      "ja": "Cubicのいくつかの実装は、新しい_SSTHRESH_を計算するときに_Flight_Size_の代わりに_CWND_を使用しています。_CWND_を使用する実装は、飛行中のバイトの量が_CWND_よりも小さいときに_CWND_の成長を防ぐために他のメジャーを使用する必要があります。これにより、_CWND_が受信ウィンドウを超えて成長することも事実上防止されます。このような措置は、輻輳が検出されたときに_SSTHRESH_および_CWND_の新しい値を計算するときに、立方センダーが任意の高いCWND _Value_を使用することを防ぐために重要です。これは、[RFC7661]で説明されているメカニズムほど堅牢ではない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A QUIC sender that uses a _cwnd_ _value_ to calculate new values for _cwnd_ and _ssthresh_ after detecting a congestion event is REQUIRED to apply similar mechanisms [RFC9002].",
+      "ja": "_cwnd_ _value_を使用して、come索イベントを検出した後、_cwnd_および_ssthresh_の新しい値を計算するquic送信者は、同様のメカニズムを適用するために必要です[RFC9002]。"
+    },
+    {
+      "indent": 4,
+      "text": "ssthresh =  flight_size *       new  ssthresh\n                           cubic\ncwnd      = cwnd                 save  cwnd\n    prior\n            max(ssthresh, 2)    reduction on loss, cwnd >= 2 SMSS\ncwnd =      max(ssthresh, 1)    reduction on ECE, cwnd >= 1 SMSS\n\nssthresh =  max(ssthresh, 2)     ssthresh >= 2 SMSS",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 34,
+      "text": "Figure 5",
+      "ja": "図5"
+    },
+    {
+      "indent": 3,
+      "text": "A side effect of setting __cubic_ to a value bigger than 0.5 is that packet loss can happen for more than one RTT in certain cases, but it can work efficiently in other cases -- for example, when HyStart++ [RFC9406] is used along with CUBIC or when the sending rate is limited by the application. While a more adaptive setting of __cubic_ could help limit packet loss to a single round, it would require detailed analyses and large-scale evaluations to validate such algorithms.",
+      "ja": "__cubic_を0.5より大きな値に設定する副作用は、特定の場合に複数のRTTでパケットの損失が発生する可能性があることですが、他の場合には効率的に動作する可能性があります。または、送信率がアプリケーションによって制限されている場合。__CUBIC_のより適応的な設定は、パケットの損失を1つのラウンドに制限するのに役立ちますが、そのようなアルゴリズムを検証するには、詳細な分析と大規模な評価が必要になります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that CUBIC MUST continue to reduce _cwnd_ in response to congestion events detected by ECN-Echo ACKs until it reaches a value of 1 SMSS. If congestion events indicated by ECN-Echo ACKs persist, a sender with a _cwnd_ of 1 SMSS MUST reduce its sending rate even further. This can be achieved by using a retransmission timer with exponential backoff, as described in [RFC3168].",
+      "ja": "Cubicは、ECNエコーACKによって検出された輻輳イベントに応じて、1つのSMSSの値に達するまで_CWND_を引き続き減らす必要があることに注意してください。ECNエコーAcksが示す混雑イベントが持続する場合、1つのSMSSの_CWND_を持つ送信者は、送信率をさらに低下させる必要があります。これは、[RFC3168]で説明されているように、指数関数的なバックオフを備えた再送信タイマーを使用することで実現できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7. Fast Convergence",
+      "section_title": true,
+      "ja": "4.7. 高速収束"
+    },
+    {
+      "indent": 3,
+      "text": "To improve convergence speed, CUBIC uses a heuristic. When a new flow joins the network, existing flows need to give up some of their bandwidth to allow the new flow some room for growth if the existing flows have been using all the network bandwidth. To speed up this bandwidth release by existing flows, the following fast convergence mechanism SHOULD be implemented.",
+      "ja": "収束速度を改善するために、Cubicはヒューリスティックを使用します。新しいフローがネットワークに結合する場合、既存のフローがすべてのネットワーク帯域幅を使用している場合、既存のフローは帯域幅の一部を放棄する必要があります。既存のフローによるこの帯域幅リリースをスピードアップするには、次の高速収束メカニズムを実装する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "With fast convergence, when a congestion event occurs, _W_max_ is updated as follows, before the window reduction described in Section 4.6.",
+      "ja": "迅速な収束を使用すると、輻輳イベントが発生すると、セクション4.6で説明されているウィンドウの削減の前に、_W_MAX_が次のように更新されます。"
+    },
+    {
+      "indent": 0,
+      "text": "              1 + \n                   cubic\n       cwnd *  if  cwnd < W     and fast convergence enabled,\nW    =            2                  max\n max                     further reduce  W\n                                          max\n       cwnd             otherwise, remember cwnd before reduction",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "During a congestion event, if the current _cwnd_ is less than _W_max_, this indicates that the saturation point experienced by this flow is getting reduced because of a change in available bandwidth. This flow can then release more bandwidth by reducing _W_max_ further. This action effectively lengthens the time for this flow to increase its congestion window, because the reduced _W_max_ forces the flow to plateau earlier. This allows more time for the new flow to catch up to its congestion window size.",
+      "ja": "輻輳イベント中に、現在の_CWND_が_W_MAX_未満の場合、これは、利用可能な帯域幅の変化のためにこの流れが経験する飽和点が減少していることを示しています。このフローは、_W_MAX_をさらに減らすことにより、より多くの帯域幅を放出できます。このアクションは、この流れが輻輳窓を増やすための時間を効果的に長くします。これは、_W_MAX_がより早くプラトーに流れを強制するためです。これにより、新しいフローが混雑のウィンドウサイズに追いつく時間が増えます。"
+    },
+    {
+      "indent": 3,
+      "text": "Fast convergence is designed for network environments with multiple CUBIC flows. In network environments with only a single CUBIC flow and without any other traffic, fast convergence SHOULD be disabled.",
+      "ja": "高速収束は、複数の立方体フローを備えたネットワーク環境向けに設計されています。単一の立方体の流れしかなく、他のトラフィックがないネットワーク環境では、高速収束を無効にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8. Timeout",
+      "section_title": true,
+      "ja": "4.8. タイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of a timeout, CUBIC follows Reno to reduce _cwnd_ [RFC5681] but sets _ssthresh_ using __cubic_ (same as in Section 4.6) in a way that is different from Reno TCP [RFC5681].",
+      "ja": "タイムアウトの場合、CubicはRENOに従って_CWND_ [RFC5681]を減らしますが、__CUBIC_（セクション4.6と同じ）を使用して_sSthresh_をリノTCP [RFC5681]とは異なる方法で設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "During the first congestion avoidance stage after a timeout, CUBIC increases its congestion window size using Figure 1, where _t_ is the elapsed time since the beginning of the current congestion avoidance stage, _K_ is set to 0, and _W_max_ is set to the congestion window size at the beginning of the current congestion avoidance stage. In addition, for the Reno-friendly region, _W_est_ SHOULD be set to the congestion window size at the beginning of the current congestion avoidance stage.",
+      "ja": "タイムアウト後の最初の混雑回避段階では、Cubicは図1を使用して混雑のウィンドウサイズを増やします。ここで、_T_は現在の混雑回避段階の開始から経過時間です。現在の混雑回避段階の先頭にあるサイズ。さらに、リノフレンドリーな地域の場合、_W_est_は、現在の輻輳回避段階の開始時に渋滞ウィンドウサイズに設定する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.9. Spurious Congestion Events",
+      "section_title": true,
+      "ja": "4.9. 偽りの混雑イベント"
+    },
+    {
+      "indent": 3,
+      "text": "In cases where CUBIC reduces its congestion window in response to having detected packet loss via duplicate ACKs or timeouts, it is possible that the missing ACK could arrive after the congestion window reduction and a corresponding packet retransmission. For example, packet reordering could trigger this behavior. A high degree of packet reordering could cause multiple congestion window reduction events, where spurious losses are incorrectly interpreted as congestion signals, thus degrading CUBIC's performance significantly.",
+      "ja": "Cubicが重複ACKまたはタイムアウトを介してパケット損失を検出したことに応じて混雑ウィンドウを減らす場合、輻輳ウィンドウの削減と対応するパケットの再送信後に欠けているACKが到着する可能性があります。たとえば、パケットの並べ替えはこの動作をトリガーする可能性があります。高度なパケットの並べ替えにより、複数の混雑の窓削減イベントが発生する可能性があります。このイベントでは、偽の損失が渋滞信号として誤って解釈されるため、Cubicのパフォーマンスを大幅に低下させます。"
+    },
+    {
+      "indent": 3,
+      "text": "For TCP, there are two types of spurious events: spurious timeouts and spurious fast retransmits. In the case of QUIC, there are no spurious timeouts, as the loss is only detected after receiving an ACK.",
+      "ja": "TCPの場合、偽のタイムアウトと偽の速い再送信の2つのタイプがあります。QUICの場合、ACKを受け取った後にのみ損失が検出されるため、偽のタイムアウトはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.9.1. Spurious Timeouts",
+      "section_title": true,
+      "ja": "4.9.1. 偽りのタイムアウト"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation MAY detect spurious timeouts based on the mechanisms described in Forward RTO-Recovery [RFC5682]. Experimental alternatives include the Eifel detection algorithm [RFC3522]. When a spurious timeout is detected, a TCP implementation MAY follow the response algorithm described in [RFC4015] to restore the congestion control state and adapt the retransmission timer to avoid further spurious timeouts.",
+      "ja": "実装は、Forward RTO-Recovery [RFC5682]に記載されているメカニズムに基づいて、偽のタイムアウトを検出する場合があります。実験的な代替品には、EIFEL検出アルゴリズム[RFC3522]が含まれます。スプリアスタイムアウトが検出されると、TCP実装は[RFC4015]で説明されている応答アルゴリズムに従って、混雑コントロール状態を回復し、再送信タイマーを適応させて、さらなる偽りのタイムアウトを避けることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.9.2. Spurious Fast Retransmits",
+      "section_title": true,
+      "ja": "4.9.2. 偽りの速い再送信"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving an ACK, a TCP implementation MAY detect spurious fast retransmits either using TCP Timestamps or via D-SACK [RFC2883]. As noted above, experimental alternatives include the Eifel detection algorithm [RFC3522], which uses TCP Timestamps; and DSACK-based detection [RFC3708], which uses DSACK information. A QUIC implementation can easily determine a spurious fast retransmit if a QUIC packet is acknowledged after it has been marked as lost and the original data has been retransmitted with a new QUIC packet.",
+      "ja": "ACKを受信すると、TCP実装は、TCPタイムスタンプを使用してD-Sack [RFC2883]を使用して、偽の高速再送信を検出する場合があります。上記のように、実験的な代替品には、TCPタイムスタンプを使用するEIFEL検出アルゴリズム[RFC3522]が含まれます。DSACKベースの検出[RFC3708]は、DSACK情報を使用します。QUICの実装は、QUICパケットが失われたとマークされ、元のデータが新しいQUICパケットで再送信された後に認識された場合、偽の高速再送信を簡単に決定できます。"
+    },
+    {
+      "indent": 3,
+      "text": "This section specifies a simple response algorithm when a spurious fast retransmit is detected by acknowledgments. Implementations would need to carefully evaluate the impact of using this algorithm in different environments that may experience a sudden change in available capacity (e.g., due to variable radio capacity, a routing change, or a mobility event).",
+      "ja": "このセクションでは、偽の高速再送信が謝辞によって検出されたときの単純な応答アルゴリズムを指定します。実装は、利用可能な容量が突然変化する可能性のあるさまざまな環境でこのアルゴリズムを使用することの影響を慎重に評価する必要があります（たとえば、可変無線容量、ルーティングの変更、またはモビリティイベントなど）。"
+    },
+    {
+      "indent": 3,
+      "text": "When packet loss is detected via acknowledgments, a CUBIC implementation MAY save the current value of the following variables before the congestion window is reduced.",
+      "ja": "謝辞を介してパケットの損失が検出されると、渋滞ウィンドウが削減される前に、次の変数の現在の値を節約することができます。"
+    },
+    {
+      "indent": 24,
+      "text": "undo_cwnd = cwnd undo_cwnd = cwnd prior prior undo_ssthresh = ssthresh undo_W = W max max undo_K = K undo_t = t epoch epoch undo_W = W est est",
+      "ja": "undo_cwnd = cwnd undo_cwnd = cwnd prior priut prior undo_sshresh = ssthresh undo_w = w max max undo_k = k undo_t = t epoch epoch undo_w = w est est"
+    },
+    {
+      "indent": 3,
+      "text": "Once the previously declared packet loss is confirmed to be spurious, CUBIC MAY restore the original values of the above-mentioned variables as follows if the current _cwnd_ is lower than _cwnd_prior_. Restoring the original values ensures that CUBIC's performance is similar to what it would be without spurious losses.",
+      "ja": "以前に宣言されたパケット損失が偽物であることが確認されると、Cubicは、現在の_CWND_が_CWND_PRIOR_よりも低い場合、上記の変数の元の値を次のように復元する場合があります。元の値を復元することで、Cubicのパフォーマンスが偽りの損失なしにそれがそうなるものと似ていることが保証されます。"
+    },
+    {
+      "indent": 14,
+      "text": "cwnd =      undo_cwnd      \ncwnd      = undo_cwnd      \n    prior            prior \nssthresh =  undo_ssthresh  \nW    =      undo_W         \n max              max      if cwnd < cwnd\nK =         undo_K                       prior\nt      =    undo_t         \n epoch            epoch    \nW    =      undo_W         \n est              est",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "In rare cases, when the detection happens long after a spurious fast retransmit event and the current _cwnd_ is already higher than _cwnd_prior_, CUBIC SHOULD continue to use the current and the most recent values of these variables.",
+      "ja": "まれに、偽の高速再送信イベントの長い間、現在の_CWND_が_CWND_PRIOR_よりも高い後に検出が行われる場合、Cubicはこれらの変数の現在と最新の値を引き続き使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.10. Slow Start",
+      "section_title": true,
+      "ja": "4.10. スロースタート"
+    },
+    {
+      "indent": 3,
+      "text": "When _cwnd_ is no more than _ssthresh_, CUBIC MUST employ a slow start algorithm. In general, CUBIC SHOULD use the HyStart++ slow start algorithm [RFC9406] or MAY use the Reno TCP slow start algorithm [RFC5681] in the rare cases when HyStart++ is not suitable. Experimental alternatives include hybrid slow start [HR11], a predecessor to HyStart++ that some CUBIC implementations have used as the default for the last decade, and limited slow start [RFC3742]. Whichever startup algorithm is used, work might be needed to ensure that the end of slow start and the first multiplicative decrease of congestion avoidance work well together.",
+      "ja": "_CWND_が_SSTHRESH_以下の場合、Cubicはスロースタートアルゴリズムを使用する必要があります。一般に、CubicはHystart Slow Start Algorithm [RFC9406]を使用するか、Hystartが適切でない場合にReno TCPスロースタートアルゴリズム[RFC5681]を使用する必要があります。実験的な代替品には、ハイブリッドスロースタート[HR11]が含まれます。これは、過去10年間のデフォルトとしていくつかの立方体の実装が使用されているハイスタートの前身であり、制限されたスロースタート[RFC3742]が含まれます。どちらのスタートアップアルゴリズムが使用されても、スロースタートの終了と輻輳回避の最初の乗法減少がうまく機能するようにするために作業が必要になる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When CUBIC uses HyStart++ [RFC9406], it may exit the first slow start without incurring any packet loss and thus _W_max_ is undefined. In this special case, CUBIC sets _cwnd_prior = cwnd_ and switches to congestion avoidance. It then increases its congestion window size using Figure 1, where _t_ is the elapsed time since the beginning of the current congestion avoidance stage, _K_ is set to 0, and _W_max_ is set to the congestion window size at the beginning of the current congestion avoidance stage.",
+      "ja": "CubicがHystart [RFC9406]を使用すると、パケット損失を負担せずに最初のスロースタートを終了する可能性があるため、_W_MAX_は定義されていません。この特別な場合、Cubicは_cwnd_prior = cwnd_を設定し、混雑回避に切り替えます。次に、図1を使用して混雑のウィンドウサイズを増やします。ここで、_T_は現在の混雑回避段階の開始から経過時間、_K_は0に設定され、_W_MAX_は現在のうっ血回避の開始時に渋滞ウィンドウサイズに設定されます。ステージ。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Discussion",
+      "section_title": true,
+      "ja": "5. 考察"
+    },
+    {
+      "indent": 3,
+      "text": "This section further discusses the safety features of CUBIC, following the guidelines specified in [RFC5033].",
+      "ja": "このセクションでは、[RFC5033]で指定されたガイドラインに従って、立方体の安全機能についてさらに説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "With a deterministic loss model where the number of packets between two successive packet losses is always _1/p_, CUBIC always operates with the concave window profile, which greatly simplifies the performance analysis of CUBIC. The average window size of CUBIC (see Appendix B) can be obtained via the following function:",
+      "ja": "2つの連続したパケット損失の間のパケットの数が常に_1/P_である決定論的損失モデルでは、Cubicは常にConcaveウィンドウプロファイルで動作し、Cubicのパフォーマンス分析を大幅に簡素化します。Cubicの平均ウィンドウサイズ（付録Bを参照）は、次の関数を介して取得できます。"
+    },
+    {
+      "indent": 15,
+      "text": "                   4 \n                C * (3 +      )        3\n             4            cubic      RTT\nAVG_W      =     * \n     cubic     4 * (1 -      )     4 \n                         cubic        3\n                                       p",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 34,
+      "text": "Figure 6",
+      "ja": "図6"
+    },
+    {
+      "indent": 3,
+      "text": "With __cubic_ set to 0.7, the above formula reduces to",
+      "ja": "__cubic_を0.7に設定すると、上記の式が減少します"
+    },
+    {
+      "indent": 20,
+      "text": "                           4 \n                      3\n             4 C * 3.7     RTT\nAVG_W      =    * \n     cubic      1.2       4 \n                              3\n                             p",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 34,
+      "text": "Figure 7",
+      "ja": "図7"
+    },
+    {
+      "indent": 3,
+      "text": "The following subsection will determine the value of _C_ using Figure 7.",
+      "ja": "次のサブセクションでは、図7を使用して_C_の値を決定します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Fairness to Reno",
+      "section_title": true,
+      "ja": "5.1. リノへの公平性"
+    },
+    {
+      "indent": 3,
+      "text": "In environments where Reno is able to make reasonable use of the available bandwidth, CUBIC does not significantly change this state.",
+      "ja": "Renoが利用可能な帯域幅を合理的に使用できる環境では、Cubicはこの状態を大幅に変更しません。"
+    },
+    {
+      "indent": 3,
+      "text": "Reno performs well in the following two types of networks:",
+      "ja": "RENOは、次の2つのタイプのネットワークでうまく機能します。"
+    },
+    {
+      "indent": 3,
+      "text": "1. networks with a small bandwidth-delay product (BDP)",
+      "ja": "1. 小さな帯域幅遅延製品を備えたネットワーク（BDP）"
+    },
+    {
+      "indent": 3,
+      "text": "2. networks with short RTTs, but not necessarily a small BDP",
+      "ja": "2. 短いRTTを持つネットワークですが、必ずしも小さなBDPではありません"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC is designed to behave very similarly to Reno in the above two types of networks. The following two tables show the average window sizes of Reno TCP, HSTCP, and CUBIC TCP. The average window sizes of Reno TCP and HSTCP are from [RFC3649]. The average window size of CUBIC is calculated using Figure 7 and the CUBIC Reno-friendly region for three different values of _C_.",
+      "ja": "Cubicは、上記の2種類のネットワークでRenoと非常に同様に振る舞うように設計されています。次の2つのテーブルは、リノTCP、HSTCP、および立方TCPの平均ウィンドウサイズを示しています。リノTCPとHSTCPの平均ウィンドウサイズは[RFC3649]からのものです。Cubicの平均ウィンドウサイズは、_C_の3つの異なる値の図7とCubic Renoに優しい領域を使用して計算されます。"
+    },
+    {
+      "indent": 3,
+      "text": "+=============+=======+========+================+=========+========+\n| Loss Rate P |  Reno |  HSTCP | CUBIC (C=0.04) |   CUBIC |  CUBIC |\n|             |       |        |                | (C=0.4) |  (C=4) |\n+=============+=======+========+================+=========+========+\n|     1.0e-02 |    12 |     12 |             12 |      12 |     12 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-03 |    38 |     38 |             38 |      38 |     59 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-04 |   120 |    263 |            120 |     187 |    333 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-05 |   379 |   1795 |            593 |    1054 |   1874 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-06 |  1200 |  12280 |           3332 |    5926 |  10538 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-07 |  3795 |  83981 |          18740 |   33325 |  59261 |\n+-------------+-------+--------+----------------+---------+--------+\n|     1.0e-08 | 12000 | 574356 |         105383 |  187400 | 333250 |\n+-------------+-------+--------+----------------+---------+--------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 8,
+      "text": "Table 1: Reno TCP, HSTCP, and CUBIC with RTT = 0.1 Seconds",
+      "ja": "表1：RTT = 0.1秒でRENO TCP、HSTCP、およびCUBIC"
+    },
+    {
+      "indent": 3,
+      "text": "Table 1 describes the response function of Reno TCP, HSTCP, and CUBIC in networks with _RTT_ = 0.1 seconds. The average window size is in SMSS-sized segments.",
+      "ja": "表1に、_RTT_ = 0.1秒のネットワークでのRENO TCP、HSTCP、およびCUBICの応答関数を示しています。平均ウィンドウサイズは、SMSSサイズのセグメントです。"
+    },
+    {
+      "indent": 4,
+      "text": "+=============+=======+========+================+=========+=======+\n| Loss Rate P |  Reno |  HSTCP | CUBIC (C=0.04) |   CUBIC | CUBIC |\n|             |       |        |                | (C=0.4) | (C=4) |\n+=============+=======+========+================+=========+=======+\n|     1.0e-02 |    12 |     12 |             12 |      12 |    12 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-03 |    38 |     38 |             38 |      38 |    38 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-04 |   120 |    263 |            120 |     120 |   120 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-05 |   379 |   1795 |            379 |     379 |   379 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-06 |  1200 |  12280 |           1200 |    1200 |  1874 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-07 |  3795 |  83981 |           3795 |    5926 | 10538 |\n+-------------+-------+--------+----------------+---------+-------+\n|     1.0e-08 | 12000 | 574356 |          18740 |   33325 | 59261 |\n+-------------+-------+--------+----------------+---------+-------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 8,
+      "text": "Table 2: Reno TCP, HSTCP, and CUBIC with RTT = 0.01 Seconds",
+      "ja": "表2：RTT = 0.01秒でRENO TCP、HSTCP、およびCUBIC"
+    },
+    {
+      "indent": 3,
+      "text": "Table 2 describes the response function of Reno TCP, HSTCP, and CUBIC in networks with _RTT_ = 0.01 seconds. The average window size is in SMSS-sized segments.",
+      "ja": "表2に、_RTT_ = 0.01秒のネットワークでのRENO TCP、HSTCP、およびCubicの応答関数を示しています。平均ウィンドウサイズは、SMSSサイズのセグメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "Both tables show that CUBIC with any of these three _C_ values is more friendly to Reno TCP than HSTCP, especially in networks with a short _RTT_ where Reno TCP performs reasonably well. For example, in a network with _RTT_ = 0.01 seconds and p=10^-6, Reno TCP has an average window of 1200 packets. If the packet size is 1500 bytes, then Reno TCP can achieve an average rate of 1.44 Gbps. In this case, CUBIC with _C_=0.04 or _C_=0.4 achieves exactly the same rate as Reno TCP, whereas HSTCP is about ten times more aggressive than Reno TCP.",
+      "ja": "どちらの表も、これらの3つの_C_値のいずれかを持つCubicが、HSTCPよりもReno TCPよりも優しいことを示しています。たとえば、_rtt_ = 0.01秒とp = 10^-6のネットワークでは、Reno TCPの平均ウィンドウは1200パケットです。パケットサイズが1500バイトの場合、Reno TCPは1.44 Gbpsの平均レートを達成できます。この場合、_c_ = 0.04または_c_ = 0.4の立方体は、reno TCPとまったく同じレートを達成しますが、HSTCPはReno TCPの約10倍の攻撃的です。"
+    },
+    {
+      "indent": 3,
+      "text": "_C_ determines the aggressiveness of CUBIC in competing with other congestion control algorithms for bandwidth. CUBIC is more friendly to Reno TCP if the value of _C_ is lower. However, it is NOT RECOMMENDED to set _C_ to a very low value like 0.04, since CUBIC with a low _C_ cannot efficiently use the bandwidth in fast and long-distance networks. Based on these observations and extensive deployment experience, _C_=0.4 seems to provide a good balance between Reno-friendliness and aggressiveness of window increase. Therefore, _C_ SHOULD be set to 0.4. With _C_ set to 0.4, Figure 7 is reduced to",
+      "ja": "_C_は、帯域幅の他の輻輳制御アルゴリズムと競合する際にキュービックの攻撃性を決定します。_C_の値が低い場合、CubicはReno TCPにより優れています。ただし、低い_C_を持つCubicが高速および長距離ネットワークで帯域幅を効率的に使用できないため、_C_を0.04のような非常に低い値に設定することはお勧めしません。これらの観察と広範な展開体験に基づいて、_C_ = 0.4は、リノフレンドリーとウィンドウの増加の攻撃性のバランスをとるのが良いようです。したがって、_C_は0.4に設定する必要があります。_C_が0.4に設定されていると、図7はに縮小されます"
+    },
+    {
+      "indent": 23,
+      "text": " 4 3 RTT AVG_W = 1.054 * cubic 4 3 p",
+      "ja": "4 3 rtt avg_w = 1.054 *立方4 3 p"
+    },
+    {
+      "indent": 34,
+      "text": "Figure 8",
+      "ja": "図8"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 8 is then used in the next subsection to show the scalability of CUBIC.",
+      "ja": "次に、次のサブセクションで図8を使用して、Cubicのスケーラビリティを示します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Using Spare Capacity",
+      "section_title": true,
+      "ja": "5.2. 予備容量を使用します"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC uses a more aggressive window increase function than Reno for fast and long-distance networks.",
+      "ja": "Cubicは、高速および長距離ネットワークのために、RENOよりも積極的なウィンドウ増加関数を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Table 3 shows that to achieve the 10 Gbps rate, Reno TCP requires a packet loss rate of 2.0e-10, while CUBIC TCP requires a packet loss rate of 2.9e-8.",
+      "ja": "表3は、10 Gbpsレートを達成するために、Reno TCPのパケット損失率が2.0E-10を必要とするのに対し、Cubic TCPには2.9E-8のパケット損失率が必要であることを示しています。"
+    },
+    {
+      "indent": 6,
+      "text": "+===================+===========+=========+=========+=========+\n| Throughput (Mbps) | Average W |  Reno P | HSTCP P | CUBIC P |\n+===================+===========+=========+=========+=========+\n|                 1 |       8.3 |  2.0e-2 |  2.0e-2 |  2.0e-2 |\n+-------------------+-----------+---------+---------+---------+\n|                10 |      83.3 |  2.0e-4 |  3.9e-4 |  2.9e-4 |\n+-------------------+-----------+---------+---------+---------+\n|               100 |     833.3 |  2.0e-6 |  2.5e-5 |  1.4e-5 |\n+-------------------+-----------+---------+---------+---------+\n|              1000 |    8333.3 |  2.0e-8 |  1.5e-6 |  6.3e-7 |\n+-------------------+-----------+---------+---------+---------+\n|             10000 |   83333.3 | 2.0e-10 |  1.0e-7 |  2.9e-8 |\n+-------------------+-----------+---------+---------+---------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 8,
+      "text": "Table 3: Required Packet Loss Rate for Reno TCP, HSTCP, and CUBIC to Achieve a Certain Throughput",
+      "ja": "表3：特定のスループットを実現するために、リノTCP、HSTCP、およびCubicに必要なパケット損失率"
+    },
+    {
+      "indent": 3,
+      "text": "Table 3 describes the required packet loss rate for Reno TCP, HSTCP, and CUBIC to achieve a certain throughput, with 1500-byte packets and an _RTT_ of 0.1 seconds.",
+      "ja": "表3は、1500バイトのパケットと0.1秒の_RTT_を使用して、特定のスループットを実現するために、RENO TCP、HSTCP、およびCubicに必要なパケット損失率を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "The test results provided in [HLRX07] indicate that, in typical cases with a degree of background traffic, CUBIC uses the spare bandwidth left unused by existing Reno TCP flows in the same bottleneck link without taking away much bandwidth from the existing flows.",
+      "ja": "[HLRX07]で提供されているテスト結果は、典型的なバックグラウンドトラフィックを持つ典型的な場合、Cubicは、既存のフローから多くの帯域幅を奪うことなく、同じボトルネックリンクの既存のReno TCPフローによって使用されない予備の帯域幅を使用することを示しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Difficult Environments",
+      "section_title": true,
+      "ja": "5.3. 難しい環境"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC is designed to remedy the poor performance of Reno in fast and long-distance networks.",
+      "ja": "Cubicは、高速および長距離ネットワークでのリノのパフォーマンスの低下を改善するように設計されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Investigating a Range of Environments",
+      "section_title": true,
+      "ja": "5.4. さまざまな環境の調査"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC has been extensively studied using simulations, testbed emulations, Internet experiments, and Internet measurements, covering a wide range of network environments [HLRX07] [H16] [CEHRX09] [HR11] [BSCLU13] [LBEWK16]. They have convincingly demonstrated that CUBIC delivers substantial benefits over classical Reno congestion control [RFC5681].",
+      "ja": "Cubicは、シミュレーション、テストベッドエミュレーション、インターネット実験、およびインターネット測定を使用して広範囲に研究されており、幅広いネットワーク環境[HLRX07] [H16] [CEHRX09] [HR11] [BSCLU13] [LBEWK16]をカバーしています。彼らは、Cubicが古典的なリノ輻輳制御に大きな利益をもたらすことを説得力を持って実証しました[RFC5681]。"
+    },
+    {
+      "indent": 3,
+      "text": "Same as Reno, CUBIC is a loss-based congestion control algorithm. Because CUBIC is designed to be more aggressive (due to a faster window increase function and bigger multiplicative decrease factor) than Reno in fast and long-distance networks, it can fill large drop-tail buffers more quickly than Reno and increases the risk of a standing queue [RFC8511]. In this case, proper queue sizing and management [RFC7567] could be used to mitigate the risk to some extent and reduce the packet queuing delay. Also, in large-BDP networks after a congestion event, CUBIC, due to its cubic window increase function, recovers quickly to the highest link utilization point. This means that link utilization is less sensitive to an active queue management (AQM) target that is lower than the amplitude of the whole sawtooth.",
+      "ja": "Renoと同じように、Cubicは損失ベースの混雑制御アルゴリズムです。Cubicは、高速および長距離ネットワークのRENOよりも、より速いウィンドウ増加関数と多重乗数の減少係数のために）より攻撃的になるように設計されているため、RENOよりも迅速に大きなドロップテールバッファーを埋め、Aのリスクを高めることができますスタンディングキュー[RFC8511]。この場合、適切なキューのサイジングと管理[RFC7567]を使用して、リスクをある程度緩和し、パケットキューイングの遅延を減らすことができます。また、輻輳イベントの後の大型BDPネットワークでは、Cubicの増加関数により、最高のリンク利用点に迅速に回復します。これは、リンクの使用率が、ノコギリ全体の振幅よりも低いアクティブキュー管理（AQM）ターゲットに敏感ではないことを意味します。"
+    },
+    {
+      "indent": 3,
+      "text": "Similar to Reno, the performance of CUBIC as a loss-based congestion control algorithm suffers in networks where packet loss is not a good indication of bandwidth utilization, such as wireless or mobile networks [LIU16].",
+      "ja": "Renoと同様に、損失ベースの輻輳制御アルゴリズムとしてのCubicのパフォーマンスは、パケット損失がワイヤレスネットワークやモバイルネットワークなどの帯域幅の利用の適切な兆候ではないネットワークに陥ります[Liu16]。"
+    },
+    {
+      "indent": 0,
+      "text": "5.5. Protection against Congestion Collapse",
+      "section_title": true,
+      "ja": "5.5. 混雑崩壊に対する保護"
+    },
+    {
+      "indent": 3,
+      "text": "With regard to the potential of causing congestion collapse, CUBIC behaves like Reno, since CUBIC modifies only the window adjustment algorithm of Reno. Thus, it does not modify the ACK clocking and timeout behaviors of Reno.",
+      "ja": "CubicはRenoのウィンドウ調整アルゴリズムのみを修正するため、混雑崩壊を引き起こす可能性に関して、キュービックはリノのように動作します。したがって、RENOのACKクロッキングとタイムアウトの動作は変更されません。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC also satisfies the \"full backoff\" requirement as described in [RFC5033]. After reducing the sending rate to one packet per RTT in response to congestion events detected by ECN-Echo ACKs, CUBIC then exponentially increases the transmission timer for each packet retransmission while congestion persists.",
+      "ja": "Cubicは、[RFC5033]に記載されているように、「完全なバックオフ」要件も満たしています。ECNエコーAcksによって検出された輻輳イベントに応じて送信率をRTTごとに1つのパケットに引き下げた後、Cubicは、混雑が続く間、各パケットの再送信ごとに送信タイマーを指数関数的に増加させます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.6. Fairness within the Alternative Congestion Control Algorithm",
+      "section_title": true,
+      "ja": "5.6. 代替輻輳制御アルゴリズム内の公平性"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC ensures convergence of competing CUBIC flows with the same RTT in the same bottleneck links to an equal throughput. When competing flows have different RTT values, their throughput ratio is linearly proportional to the inverse of their RTT ratios. This is true and is independent of the level of statistical multiplexing on the link. The convergence time depends on the network environments (e.g., bandwidth, RTT) and the level of statistical multiplexing, as mentioned in Section 3.4.",
+      "ja": "Cubicは、同じBottleneckリンクで同じRTTを使用して競合するCubicフローの収束を等しいスループットに保証します。競合するフローのRTT値は異なる場合、スループット比はRTT比の逆に直線的に比例します。これは真実であり、リンク上の統計的多重化のレベルとは無関係です。収束時間は、セクション3.4で述べたように、ネットワーク環境（帯域幅、RTTなど）と統計的多重化のレベルに依存します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.7. Performance with Misbehaving Nodes and Outside Attackers",
+      "section_title": true,
+      "ja": "5.7. 誤動作ノードと外部攻撃者によるパフォーマンス"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC does not introduce new entities or signals, so its vulnerability to misbehaving nodes or attackers is unchanged from Reno.",
+      "ja": "Cubicは新しいエンティティやシグナルを導入していないため、ノードや攻撃者の誤動作に対する脆弱性は、Renoから変化しません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.8. Behavior for Application-Limited Flows",
+      "section_title": true,
+      "ja": "5.8. アプリケーション制限フローの動作"
+    },
+    {
+      "indent": 3,
+      "text": "A flow is application limited if it is currently sending less than what is allowed by the congestion window. This can happen if the flow is limited by either the sender application or the receiver application (via the receiver's advertised window) and thus sends less data than what is allowed by the sender's congestion window.",
+      "ja": "現在、輻輳ウィンドウで許可されているものよりも少ない送信している場合、フローはアプリケーションに制限されています。これは、フローが送信者アプリケーションまたはレシーバーアプリケーション（レシーバーの宣伝されたウィンドウを介して）によって制限され、送信者の混雑ウィンドウで許可されているものよりも少ないデータを送信する場合に発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC does not increase its congestion window if a flow is application limited. Per Section 4.2, it is required that _t_ in Figure 1 not include application-limited periods, such as idle periods; otherwise, W_cubic(_t_) might be very high after restarting from these periods.",
+      "ja": "Flowがアプリケーションに制限されている場合、Cubicは混雑ウィンドウを増やしません。セクション4.2に従って、図1の_T_には、アイドル期間などのアプリケーション制限期間が含まれないことが必要です。それ以外の場合、これらの期間から再起動した後、W_CUBIC（_T_）が非常に高くなる可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.9. Responses to Sudden or Transient Events",
+      "section_title": true,
+      "ja": "5.9. 突然または一時的なイベントへの応答"
+    },
+    {
+      "indent": 3,
+      "text": "If there is a sudden increase in capacity, e.g., due to variable radio capacity, a routing change, or a mobility event, CUBIC is designed to utilize the newly available capacity more quickly than Reno.",
+      "ja": "容量が突然増加している場合、たとえば、無線容量が可変、ルーティングの変更、モビリティイベントのために、CubicはRENOよりも新しく利用可能な容量をより迅速に利用するように設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "On the other hand, if there is a sudden decrease in capacity, CUBIC reduces more slowly than Reno. This remains true regardless of whether CUBIC is in Reno-friendly mode and regardless of whether fast convergence is enabled.",
+      "ja": "一方、容量が突然減少した場合、立方体はリノよりもゆっくりと減少します。これは、Cubicがリノフレンドリーモードであるかどうか、高速収束が有効になっているかどうかに関係なく、真実のままです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.10. Incremental Deployment",
+      "section_title": true,
+      "ja": "5.10. 増分展開"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC requires only changes to congestion control at the sender, and it does not require any changes at receivers. That is, a CUBIC sender works correctly with Reno receivers. In addition, CUBIC does not require any changes to routers and does not require any assistance from routers.",
+      "ja": "Cubicは送信者での混雑制御の変更のみを必要とし、受信機での変更は必要ありません。つまり、立方センダーはリノレシーバーで正しく機能します。さらに、Cubicはルーターの変更を必要とせず、ルーターからの支援を必要としません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC makes no changes to the underlying security of a transport protocol and inherits the general security concerns described in [RFC5681]. Specifically, changing the window computation on the sender may allow an attacker, through dropping or injecting ACKs (as described in [RFC5681]), to either force the CUBIC implementation to reduce its bandwidth or convince it that there is no congestion when congestion does exist, and to use the CUBIC implementation as an attack vector against other hosts. These attacks are not new to CUBIC and are inherently part of any transport protocol like TCP.",
+      "ja": "Cubicは、輸送プロトコルの根本的なセキュリティに変更を加えず、[RFC5681]に記載されている一般的なセキュリティ上の懸念を継承します。具体的には、送信者のウィンドウ計算を変更すると、ACKをドロップまたは注入することで攻撃者が（[RFC5681]で説明されているように）攻撃者が帯域幅を減らすように強制するか、混雑が存在しない場合は混雑がないことを納得させることができます。、そして、立方体の実装を他のホストに対する攻撃ベクトルとして使用します。これらの攻撃はCubicにとって新しいものではなく、本質的にTCPのような輸送プロトコルの一部です。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IANA Considerations",
+      "section_title": true,
+      "ja": "7. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not require any IANA actions.",
+      "ja": "このドキュメントでは、IANAアクションは必要ありません。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2883] Floyd, S., Mahdavi, J., Mathis, M., and M. Podolsky, \"An Extension to the Selective Acknowledgement (SACK) Option for TCP\", RFC 2883, DOI 10.17487/RFC2883, July 2000, <https://www.rfc-editor.org/info/rfc2883>.",
+      "ja": "[RFC2883] Floyd、S.、Mahdavi、J.、Mathis、M。、およびM. Podolsky、「TCPの選択的承認（SACK）オプションの拡張」、RFC 2883、DOI 10.17487/RFC2883、2000年7月、<<https://www.rfc-editor.org/info/rfc2883>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2914] Floyd, S., \"Congestion Control Principles\", BCP 41, RFC 2914, DOI 10.17487/RFC2914, September 2000, <https://www.rfc-editor.org/info/rfc2914>.",
+      "ja": "[RFC2914]フロイド、S。、「混雑制御原則」、BCP 41、RFC 2914、DOI 10.17487/RFC2914、2000年9月、<https://www.rfc-editor.org/info/rfc2914>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3168] Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition of Explicit Congestion Notification (ECN) to IP\", RFC 3168, DOI 10.17487/RFC3168, September 2001, <https://www.rfc-editor.org/info/rfc3168>.",
+      "ja": "[RFC3168]ラマクリシュナン、K。、フロイド、S。、およびD.ブラック、「IPへの明示的な混雑通知（ECN）の追加」、RFC 3168、DOI 10.17487/RFC3168、2001年9月、<https：// www。rfc-editor.org/info/rfc3168>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4015] Ludwig, R. and A. Gurtov, \"The Eifel Response Algorithm for TCP\", RFC 4015, DOI 10.17487/RFC4015, February 2005, <https://www.rfc-editor.org/info/rfc4015>.",
+      "ja": "[RFC4015] Ludwig、R。およびA. Gurtov、「TCPのEIFEL応答アルゴリズム」、RFC 4015、DOI 10.17487/RFC4015、2005年2月、<https://www.rfc-editor.org/info/rfc4015>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5033] Floyd, S. and M. Allman, \"Specifying New Congestion Control Algorithms\", BCP 133, RFC 5033, DOI 10.17487/RFC5033, August 2007, <https://www.rfc-editor.org/info/rfc5033>.",
+      "ja": "[RFC5033] Floyd、S。およびM. Allman、「新しい混雑制御アルゴリズムの指定」、BCP 133、RFC 5033、DOI 10.17487/RFC5033、2007年8月、<https://www.rfc-editor.org/info/rfc50333333333333333333333333>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5348] Floyd, S., Handley, M., Padhye, J., and J. Widmer, \"TCP Friendly Rate Control (TFRC): Protocol Specification\", RFC 5348, DOI 10.17487/RFC5348, September 2008, <https://www.rfc-editor.org/info/rfc5348>.",
+      "ja": "[RFC5348] Floyd、S.、Handley、M.、Padhye、J。、およびJ. Widmer、「TCP Friendly Rate Control（TFRC）：プロトコル仕様」、RFC 5348、DOI 10.17487/RFC5348、2008年9月、<https：//www.rfc-editor.org/info/rfc5348>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5681] Allman, M., Paxson, V., and E. Blanton, \"TCP Congestion Control\", RFC 5681, DOI 10.17487/RFC5681, September 2009, <https://www.rfc-editor.org/info/rfc5681>.",
+      "ja": "[RFC5681] Allman、M.、Paxson、V.、およびE. Blanton、「TCP混雑制御」、RFC 5681、DOI 10.17487/RFC5681、2009年9月、<https://www.rfc-editor.org/info/RFC5681>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5682] Sarolahti, P., Kojo, M., Yamamoto, K., and M. Hata, \"Forward RTO-Recovery (F-RTO): An Algorithm for Detecting Spurious Retransmission Timeouts with TCP\", RFC 5682, DOI 10.17487/RFC5682, September 2009, <https://www.rfc-editor.org/info/rfc5682>.",
+      "ja": "[RFC5682] Sarolahti、P.、Kojo、M.、Yamamoto、K。、およびM. Hata、「Forward RTO-Recovery（F-RTO）：TCPで偽の再送信タイムアウトを検出するためのアルゴリズム」、RFC 5682、DOI 10.17487777487748774877487748774877487/RFC5682、2009年9月、<https://www.rfc-editor.org/info/rfc5682>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6298] Paxson, V., Allman, M., Chu, J., and M. Sargent, \"Computing TCP's Retransmission Timer\", RFC 6298, DOI 10.17487/RFC6298, June 2011, <https://www.rfc-editor.org/info/rfc6298>.",
+      "ja": "[RFC6298] Paxson、V.、Allman、M.、Chu、J。、およびM. Sargent、「コンピューティングTCPの再送信タイマー」、RFC 6298、DOI 10.17487/RFC6298、2011年6月、<https：//www.rfc-editor.org/info/rfc6298>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6582] Henderson, T., Floyd, S., Gurtov, A., and Y. Nishida, \"The NewReno Modification to TCP's Fast Recovery Algorithm\", RFC 6582, DOI 10.17487/RFC6582, April 2012, <https://www.rfc-editor.org/info/rfc6582>.",
+      "ja": "[RFC6582] Henderson、T.、Floyd、S.、Gurtov、A。、およびY. Nishida、「TCPの高速回復アルゴリズムへのNewreno修正」、RFC 6582、DOI 10.17487/RFC6582、2012年4月、<https：//www.rfc-editor.org/info/rfc6582>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6675] Blanton, E., Allman, M., Wang, L., Jarvinen, I., Kojo, M., and Y. Nishida, \"A Conservative Loss Recovery Algorithm Based on Selective Acknowledgment (SACK) for TCP\", RFC 6675, DOI 10.17487/RFC6675, August 2012, <https://www.rfc-editor.org/info/rfc6675>.",
+      "ja": "[RFC6675] Blanton、E.、Allman、M.、Wang、L.、Jarvinen、I.、Kojo、M.、Y。nishida、「TCPの選択的承認（SACK）に基づく保守的な損失回復アルゴリズム」、RFC 6675、DOI 10.17487/RFC6675、2012年8月、<https://www.rfc-editor.org/info/rfc6675>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7567] Baker, F., Ed. and G. Fairhurst, Ed., \"IETF Recommendations Regarding Active Queue Management\", BCP 197, RFC 7567, DOI 10.17487/RFC7567, July 2015, <https://www.rfc-editor.org/info/rfc7567>.",
+      "ja": "[RFC7567]ベイカー、F。、編and G. Fairhurst、ed。、「アクティブキュー管理に関するIETF推奨」、BCP 197、RFC 7567、DOI 10.17487/RFC7567、2015年7月、<https://www.rfc-editor.org/info/rfc7567>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの小文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8985] Cheng, Y., Cardwell, N., Dukkipati, N., and P. Jha, \"The RACK-TLP Loss Detection Algorithm for TCP\", RFC 8985, DOI 10.17487/RFC8985, February 2021, <https://www.rfc-editor.org/info/rfc8985>.",
+      "ja": "[RFC8985] Cheng、Y.、Cardwell、N.、Dukkipati、N.、およびP. Jha、「TCPのRack-TLP損失検出アルゴリズム」、RFC 8985、DOI 10.17487/RFC8985、2月2021年、<https：/<https：/<https：//www.rfc-editor.org/info/rfc8985>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9002] Iyengar, J., Ed. and I. Swett, Ed., \"QUIC Loss Detection and Congestion Control\", RFC 9002, DOI 10.17487/RFC9002, May 2021, <https://www.rfc-editor.org/info/rfc9002>.",
+      "ja": "[RFC9002] Iyengar、J.、ed。and I. Swett、ed。、「QUIC損失検出と輻輳制御」、RFC 9002、DOI 10.17487/RFC9002、2021年5月、<https://www.rfc-editor.org/info/rfc9002>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9406] Balasubramanian, P., Huang, Y., and M. Olson, \"HyStart++: Modified Slow Start for TCP\", RFC 9406, DOI 10.17487/RFC9406, May 2023, <https://www.rfc-editor.org/info/rfc9406>.",
+      "ja": "[RFC9406] Balasubramanian、P.、Huang、Y.、およびM. Olson、「Hystart：TCPの修正スロースタート」、RFC 9406、DOI 10.17487/RFC9406、2023年5月、<https：//www.rfc-editor。org/info/rfc9406>。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[AIMD-friendliness] Briscoe, B. and O. Albisser, \"Friendliness between AIMD Algorithms\", DOI 10.48550/arXiv.2305.10581, May 2023, <https://arxiv.org/abs/2305.10581>.",
+      "ja": "[Aimd-frendliesly] Briscoe、B。and O. Albisser、「Aimd Algorithms間の親しみやすさ」、DOI 10.48550/arxiv.2305.10581、2023年5月、<https://arxiv.org/abs/2305.10581>。"
+    },
+    {
+      "indent": 3,
+      "text": "[BSCLU13] Belhareth, S., Sassatelli, L., Collange, D., Lopez-Pacheco, D., and G. Urvoy-Keller, \"Understanding TCP cubic performance in the cloud: A mean-field approach\", 2013 IEEE 2nd International Conference on Cloud Networking (CloudNet), DOI 10.1109/cloudnet.2013.6710576, November 2013, <https://doi.org/10.1109/cloudnet.2013.6710576>.",
+      "ja": "[BSCLU13] Belhareth、S.、Sassatelli、L.、Collange、D.、Lopez-Pacheco、D.、およびG. Urvoy-Keller、「クラウドでのTCPキュービックパフォーマンス：平均フィールドアプローチ」、2013 IEEEE第2回クラウドネットワーキングに関する国際会議（CloudNet）、DOI 10.1109/CloudNet.2013.6710576、2013年11月、<https://doi.org/10.1109/cloudnet.2013.6710576>。"
+    },
+    {
+      "indent": 3,
+      "text": "[CEHRX09] Cai, H., Eun, D., Ha, S., Rhee, I., and L. Xu, \"Stochastic convex ordering for multiplicative decrease internet congestion control\", Computer Networks, vol. 53, no. 3, pp. 365-381, DOI 10.1016/j.comnet.2008.10.012, February 2009, <https://doi.org/10.1016/j.comnet.2008.10.012>.",
+      "ja": "[Cehrx09] Cai、H.、Eun、D.、Ha、S.、Rhee、I。、およびL. Xu、「多重化のための確率的凸順序インターネット輻輳制御」、Computer Networks、vol。53、いいえ。3、pp。365-381、doi 10.1016/j.comnet.2008.10.012、2009年2月、<https://doi.org/10.1016/j.comnet.2008.10.012>。"
+    },
+    {
+      "indent": 3,
+      "text": "[FHP00] Floyd, S., Handley, M., and J. Padhye, \"A Comparison of Equation-Based and AIMD Congestion Control\", May 2000, <https://www.icir.org/tfrc/aimd.pdf>.",
+      "ja": "[FHP00] Floyd、S.、Handley、M。、およびJ. Padhye、「方程式ベースとAIMDの混雑制御の比較」、2000年5月<https://www.icir.org/tfrc/aimd.pdf>。"
+    },
+    {
+      "indent": 3,
+      "text": "[GV02] Gorinsky, S. and H. Vin, \"Extended Analysis of Binary Adjustment Algorithms\", Technical Report TR2002-39, Department of Computer Sciences, The University of Texas at Austin, August 2002, <https://citeseerx.ist.psu.edu/doc ument?repid=rep1&type=pdf&doi=1828bdcef118b02d3996b8e00b8a aa92b50abb0f>.",
+      "ja": "[GV02] Gorinsky、S。およびH. Vin、「バイナリ調整アルゴリズムの拡張分析」、テクニカルレポートTR2002-39、2002年8月、オースティンのテキサス大学コンピューターサイエンス学科、<https://citeseerx.istist.psu.edu/doc ument？repid = rep1＆type = pdf＆doi = 1828bdcef118b02d3996b8e00b8a aa92bb50abb0f>。"
+    },
+    {
+      "indent": 3,
+      "text": "[H16] Ha, S., \"Deployment, Testbed, and Simulation Results for CUBIC\", Wayback Machine archive, 3 November 2016, <https://web.archive.org/web/20161118125842/ http://netsrv.csc.ncsu.edu/wiki/index.php/TCP_Testing>.",
+      "ja": "[H16] HA、S。、「キュービックの展開、テストベッド、およびシミュレーション結果」、Wayback Machine Archive、2016年11月3日、<https://web.archive.org/web/201611118125842/ http：//netsrv.cscs.ncsu.edu/wiki/index.php/tcp_testing>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HLRX07] Ha, S., Le, L., Rhee, I., and L. Xu, \"Impact of background traffic on performance of high-speed TCP variant protocols\", Computer Networks, vol. 51, no. 7, pp. 1748-1762, DOI 10.1016/j.comnet.2006.11.005, May 2007, <https://doi.org/10.1016/j.comnet.2006.11.005>.",
+      "ja": "[HLRX07] Ha、S.、Le、L.、Rhee、I。、およびL. Xu、「高速TCPバリアントプロトコルのパフォーマンスに対するバックグラウンドトラフィックの影響」、コンピューターネットワーク、Vol。51、いいえ。7、pp。1748-1762、doi 10.1016/j.comnet.2006.11.005、2007年5月、<https://doi.org/10.1016/j.comnet.2006.11.005>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HR11] Ha, S. and I. Rhee, \"Taming the elephants: New TCP slow start\", Computer Networks, vol. 55, no. 9, pp. 2092-2110, DOI 10.1016/j.comnet.2011.01.014, June 2011, <https://doi.org/10.1016/j.comnet.2011.01.014>.",
+      "ja": "[HR11] HA、S。およびI. Rhee、「象の飼いならされた：新しいTCPスロースタート」、コンピューターネットワーク、Vol。55、いいえ。9、pp。2092-2110、doi 10.1016/j.comnet.2011.01.014、2011年6月、<https://doi.org/10.1016/j.comnet.2011.01.014>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HRX08] Ha, S., Rhee, I., and L. Xu, \"CUBIC: a new TCP-friendly high-speed TCP variant\", ACM SIGOPS Operating Systems Review, vol. 42, no. 5, pp. 64-74, DOI 10.1145/1400097.1400105, July 2008, <https://doi.org/10.1145/1400097.1400105>.",
+      "ja": "[HRX08] Ha、S.、Rhee、I。、およびL. Xu、「Cubic：A New TCPに優しい高速TCPバリアント」、ACM Sigopsオペレーティングシステムレビュー、Vol。42、いいえ。5、pp。64-74、DOI 10.1145/1400097.1400105、2008年7月、<https://doi.org/10.1145/1400097.1400105>。"
+    },
+    {
+      "indent": 3,
+      "text": "[K03] Kelly, T., \"Scalable TCP: improving performance in highspeed wide area networks\", ACM SIGCOMM Computer Communication Review, vol. 33, no. 2, pp. 83-91, DOI 10.1145/956981.956989, April 2003, <https://doi.org/10.1145/956981.956989>.",
+      "ja": "[K03] Kelly、T。、「スケーラブルTCP：高速幅の広いエリアネットワークのパフォーマンスの向上」、ACM Sigcomm Computer Communication Review、Vol。33、いいえ。2、pp。83-91、DOI 10.1145/956981.956989、2003年4月、<https://doi.org/10.1145/956981.956989>。"
+    },
+    {
+      "indent": 3,
+      "text": "[LBEWK16] Lukaseder, T., Bradatsch, L., Erb, B., Van Der Heijden, R., and F. Kargl, \"A Comparison of TCP Congestion Control Algorithms in 10G Networks\", 2016 IEEE 41st Conference on Local Computer Networks (LCN), DOI 10.1109/lcn.2016.121, November 2016, <https://doi.org/10.1109/lcn.2016.121>.",
+      "ja": "[LBEWK16] Lukaseder、T.、Bradatsch、L.、Erb、B.、van der Heijden、R。、およびF. Kargl、「10GネットワークにおけるTCP輻輳制御アルゴリズムの比較」、2016 IEEE 41st Conference on Local Computerネットワーク（LCN）、DOI 10.1109/LCN.2016.121、2016年11月、<https://doi.org/10.1109/lcn.2016.121>。"
+    },
+    {
+      "indent": 3,
+      "text": "[LIU16] Liu, K. and J. Lee, \"On Improving TCP Performance over Mobile Data Networks\", IEEE Transactions on Mobile Computing, vol. 15, no. 10, pp. 2522-2536, DOI 10.1109/tmc.2015.2500227, October 2016, <https://doi.org/10.1109/tmc.2015.2500227>.",
+      "ja": "[Liu16] Liu、K。およびJ. Lee、「モバイルデータネットワーク上のTCPパフォーマンスの改善」、IEEEトランザクションに関するモバイルコンピューティング、Vol。15、いいえ。10、pp。2522-2536、doi 10.1109/tmc.2015.2500227、2016年10月、<https://doi.org/10.1109/tmc.2015.2500227>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3522] Ludwig, R. and M. Meyer, \"The Eifel Detection Algorithm for TCP\", RFC 3522, DOI 10.17487/RFC3522, April 2003, <https://www.rfc-editor.org/info/rfc3522>.",
+      "ja": "[RFC3522] Ludwig、R。およびM. Meyer、「TCPのEIFEL検出アルゴリズム」、RFC 3522、DOI 10.17487/RFC3522、2003年4月、<https://www.rfc-editor.org/info/rfc3522>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3649] Floyd, S., \"HighSpeed TCP for Large Congestion Windows\", RFC 3649, DOI 10.17487/RFC3649, December 2003, <https://www.rfc-editor.org/info/rfc3649>.",
+      "ja": "[RFC3649] Floyd、S。、「大鬱血窓用の高速TCP」、RFC 3649、DOI 10.17487/RFC3649、2003年12月、<https://www.rfc-editor.org/info/rfc369>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3708] Blanton, E. and M. Allman, \"Using TCP Duplicate Selective Acknowledgement (DSACKs) and Stream Control Transmission Protocol (SCTP) Duplicate Transmission Sequence Numbers (TSNs) to Detect Spurious Retransmissions\", RFC 3708, DOI 10.17487/RFC3708, February 2004, <https://www.rfc-editor.org/info/rfc3708>.",
+      "ja": "[RFC3708] Blanton、E。およびM. Allman、「TCPを使用して、TCPを複製する選択的承認（DSACK）およびストリーム制御伝送プロトコル（SCTP）重複透過シーケンス番号（TSN）を使用して、偽りの再送信を検出します」、RFC 3708、DOI 10.17487/RFC3708、2004年2月、<https://www.rfc-editor.org/info/rfc3708>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3742] Floyd, S., \"Limited Slow-Start for TCP with Large Congestion Windows\", RFC 3742, DOI 10.17487/RFC3742, March 2004, <https://www.rfc-editor.org/info/rfc3742>.",
+      "ja": "[RFC3742] Floyd、S。、「大鬱血窓を備えたTCPの限定スロースタート」、RFC 3742、DOI 10.17487/RFC3742、2004年3月、<https://www.rfc-editor.org/info/rfc3742>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6937] Mathis, M., Dukkipati, N., and Y. Cheng, \"Proportional Rate Reduction for TCP\", RFC 6937, DOI 10.17487/RFC6937, May 2013, <https://www.rfc-editor.org/info/rfc6937>.",
+      "ja": "[RFC6937] Mathis、M.、Dukkipati、N。、およびY. Cheng、「TCPの比例速度削減」、RFC 6937、DOI 10.17487/RFC6937、2013年5月、<https://www.rfc-editor.org/情報/RFC6937>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7661] Fairhurst, G., Sathiaseelan, A., and R. Secchi, \"Updating TCP to Support Rate-Limited Traffic\", RFC 7661, DOI 10.17487/RFC7661, October 2015, <https://www.rfc-editor.org/info/rfc7661>.",
+      "ja": "[RFC7661] Fairhurst、G.、Sathiaseelan、A。、およびR. Secchi、「TCPを更新するためのレート制限トラフィックをサポートする」、RFC 7661、DOI 10.17487/RFC7661、2015年10月、<https：//www.rfc-editor.org/info/rfc7661>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8312] Rhee, I., Xu, L., Ha, S., Zimmermann, A., Eggert, L., and R. Scheffenegger, \"CUBIC for Fast Long-Distance Networks\", RFC 8312, DOI 10.17487/RFC8312, February 2018, <https://www.rfc-editor.org/info/rfc8312>.",
+      "ja": "[RFC8312] Rhee、I.、Xu、L.、Ha、S.、Zimmermann、A.、Eggert、L。、およびR. Scheffenegger、「高速距離ネットワークのための立方」、RFC 8312、DOI 10.17487/RFC83122、2018年2月、<https://www.rfc-editor.org/info/rfc8312>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8511] Khademi, N., Welzl, M., Armitage, G., and G. Fairhurst, \"TCP Alternative Backoff with ECN (ABE)\", RFC 8511, DOI 10.17487/RFC8511, December 2018, <https://www.rfc-editor.org/info/rfc8511>.",
+      "ja": "[RFC8511] Khademi、N.、Welzl、M.、Armitage、G。、およびG. Fairhurst、「ECN（ABE）とのTCP代替バックオフ」、RFC 8511、DOI 10.17487/RFC8511、2018年12月、<https：//www.rfc-editor.org/info/rfc8511>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9000] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[RFC9000] Iyengar、J.、ed。and M. Thomson、ed。、「Quic：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487/RFC9000、2021年5月、<https://www.rfc-editor.org/info/rfc9000>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9260] Stewart, R., Txen, M., and K. Nielsen, \"Stream Control Transmission Protocol\", RFC 9260, DOI 10.17487/RFC9260, June 2022, <https://www.rfc-editor.org/info/rfc9260>.",
+      "ja": "[RFC9260] Stewart、R.、Txen、M。、およびK. Nielsen、「Stream Control Transmission Protocol」、RFC 9260、DOI 10.17487/RFC9260、2022年6月、<https://www.rfc-editor.org/info/RFC9260>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SXEZ19] Sun, W., Xu, L., Elbaum, S., and D. Zhao, \"Model-Agnostic and Efficient Exploration of Numerical Congestion Control State Space of Real-World TCP Implementations\", IEEE/ACM Transactions on Networking, vol. 29, no. 5, pp. 1990-2004, DOI 10.1109/tnet.2021.3078161, October 2021, <https://doi.org/10.1109/tnet.2021.3078161>.",
+      "ja": "[Sxez19] Sun、W.、Xu、L.、Elbaum、S。、およびD. Zhao、「現実世界のTCP実装の数値輻輳制御状態空間のモデルに依存して効率的な調査」、ネットワーク上のIEEE/ACMトランザクション、Vol。29、いいえ。5、pp。1990-2004、doi 10.1109/tnet.2021.3078161、2021年10月、<https://doi.org/10.1109/tnet.2021.3078161>。"
+    },
+    {
+      "indent": 3,
+      "text": "[XHR04] Xu, L., Harfoush, K., and I. Rhee, \"Binary increase congestion control (BIC) for fast long-distance networks\", IEEE INFOCOM 2004, DOI 10.1109/infcom.2004.1354672, March 2004, <https://doi.org/10.1109/infcom.2004.1354672>.",
+      "ja": "[Xhr04] Xu、L.、Harfoush、K。、およびI. Rhee、「高速距離ネットワークのバイナリ増加渋滞制御（BIC）」、IEEE InfoCom 2004、DOI 10.1109/INFCOM.2004.1354672、2004年3月、<httpsps：//doi.org/10.1109/infcom.2004.1354672>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Evolution of CUBIC since the Original Paper",
+      "section_title": true,
+      "ja": "付録A. 元の論文以来のキュービックの進化"
+    },
+    {
+      "indent": 3,
+      "text": "CUBIC has gone through a few changes since the initial release [HRX08] of its algorithm and implementation. This appendix highlights the differences between the original paper and [RFC8312].",
+      "ja": "Cubicは、アルゴリズムと実装の最初のリリース[HRX08]以来、いくつかの変更を行ってきました。この付録は、元の論文と[RFC8312]の違いを強調しています。"
+    },
+    {
+      "indent": 3,
+      "text": "* The original paper [HRX08] includes the pseudocode of CUBIC implementation using Linux's pluggable congestion control framework, which excludes system-specific optimizations. The simplified pseudocode might be a good starting point for learning about CUBIC.",
+      "ja": "* 元の論文[HRX08]には、システム固有の最適化を除外するLinuxのプラグ可能な渋滞制御フレームワークを使用した立方体実装の擬似コードが含まれています。単純化された擬似コードは、Cubicについて学ぶための良い出発点かもしれません。"
+    },
+    {
+      "indent": 3,
+      "text": "* [HRX08] also includes experimental results showing its performance and fairness.",
+      "ja": "* [HRX08]には、そのパフォーマンスと公平性を示す実験結果も含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "* The definition of the __cubic_ constant was changed in [RFC8312]. For example, __cubic_ in the original paper was referred to as the window decrease constant, while [RFC8312] changed it to \"CUBIC multiplicative decrease factor\". With this change, the current congestion window size after a congestion event as listed in [RFC8312] was __cubic_ * _W_max_, while it was (1-__cubic_) * _W_max_ in the original paper.",
+      "ja": "* __CUBIC_定数の定義は[RFC8312]で変更されました。たとえば、元の論文の__CUBIC_は、ウィンドウの減少定数と呼ばれ、[RFC8312]は「Cubic Multiplicative Declase係数」に変更されました。この変更により、[RFC8312]にリストされている輻輳イベントの後の現在の混雑ウィンドウサイズは、__cubic_ * _w_max_でしたが、元の論文の（1 -__ cubic_） * _w_max_でした。"
+    },
+    {
+      "indent": 3,
+      "text": "* Its pseudocode used _W_(last_max)_, while [RFC8312] used _W_max_.",
+      "ja": "* その擬似コードは_W_（last_max）_を使用し、[rfc8312]は_w_max_を使用しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Its AIMD-friendly window was _W_tcp_, while [RFC8312] used _W_est_.",
+      "ja": "* AIMDに優しいウィンドウは_W_TCP_でしたが、[RFC8312]は_W_est_を使用しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Proof of the Average CUBIC Window Size",
+      "section_title": true,
+      "ja": "付録B. 平均立方窓サイズの証明"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix contains a proof for the average CUBIC window size _AVG_W_cubic_ in Figure 6.",
+      "ja": "この付録には、図6の平均立方ウィンドウサイズ_AVG_W_CUBIC_の証拠が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "We find _AVG_W_cubic_ under a deterministic loss model, where the number of packets between two successive packet losses is 1/_p_. With this model, CUBIC always operates with the concave window profile and the time period between two successive packet losses is _K_.",
+      "ja": "2つの連続したパケット損失の間のパケットの数は1/_P_である決定論的損失モデルの下で_AVG_W_CUBIC_を見つけます。このモデルでは、Cubicは常に凹面のウィンドウプロファイルで動作し、2つの連続したパケット損失の間の期間は_K_です。"
+    },
+    {
+      "indent": 3,
+      "text": "The average window size _AVG_W_cubic_ is defined as follows, where the numerator 1/_p_ is the total number of packets between two successive packet losses and the denominator _K_/_RTT_ is the total number of RTTs between two successive packet losses.",
+      "ja": "平均ウィンドウサイズ_AVG_W_CUBIC_は次のように定義されます。ここで、分子1/_P_は2つの連続したパケット損失と分母_K _/_ RTT_の間のパケットの総数です。"
+    },
+    {
+      "indent": 29,
+      "text": " 1 p AVG_W = cubic K RTT",
+      "ja": "1 P avg_w = cubic k rtt"
+    },
+    {
+      "indent": 34,
+      "text": "Figure 9",
+      "ja": "図9"
+    },
+    {
+      "indent": 3,
+      "text": "Below, we find _K_ as a function of CUBIC parameters __cubic_ and _C_, and network parameters _p_ and _RTT_. According to the definition of _K_ in Figure 2, we have",
+      "ja": "以下に、_K_は立方パラメーター__CUBIC_および_C_、およびネットワークパラメーター_P_および_RTT_の関数として見つかります。図2の_K_の定義によれば、"
+    },
+    {
+      "indent": 30,
+      "text": " 3 W - W * max max cubic K = C",
+      "ja": "3 w -w * max max max cubic k = c"
+    },
+    {
+      "indent": 33,
+      "text": "Figure 10",
+      "ja": "図10"
+    },
+    {
+      "indent": 3,
+      "text": "The total number of packets between two successive packet losses can also be obtained as follows, using the window increase function in Figure 1. Specifically, the window size in the first RTT (i.e., _n_=1, or equivalently, _t_=0) is _C_(-_K_)^3+_W_max_ and the window size in the last RTT (i.e., _n_=_K_/_RTT_, or equivalently, _t_=_K_- _RTT_) is _C_(-_RTT_)^3+_W_max_.",
+      "ja": "図1のウィンドウ増加関数を使用して、2つの連続したパケット損失の間のパケットの総数も次のように取得できます。具体的には、最初のRTTのウィンドウサイズ（つまり、_n_ = 1、または同等に、_t_ = 0）はです。_c _（-_ k _）^3 _w_max_および最後のRTTのウィンドウサイズ（つまり、_n _ = _ k _/_ rtt_、または同等に、_t _ = _ k_-_rtt_）は_c _（-_ rtt _）^3 _w_max_。"
+    },
+    {
+      "indent": 18,
+      "text": "     K\n\n    RTT\n\n1                     3       \n =   C((n-1) * RTT-K)  + W   \np                         max\n    n=1\n     K\n\n    RTT\n\n             3    3       \n  =   C * RTT (-n)  + W   \n                      max\n    n=1\n                 K\n\n                RTT\n\n            3       3           K\n  = -C * RTT  *    n  + W    * \n                        max   RTT\n                n=1\n                        4\n            3   1   K             K\n   -C * RTT  *  *  + W    * \n                4  RTT     max   RTT\n               4\n         1    K            K\n  = -C *  *  + W    * \n         4   RTT    max   RTT",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Figure 11",
+      "ja": "図11"
+    },
+    {
+      "indent": 3,
+      "text": "After solving the equations in Figures 10 and 11 for _K_ and _W_max_, we have",
+      "ja": "_k_および_w_max_の図10および11の方程式を解くと、私たちは持っています"
+    },
+    {
+      "indent": 29,
+      "text": "\n        4 * 1-     \n    4          cubic    RTT\nK =    * \n      C * 3 +          p\n               cubic",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Figure 12",
+      "ja": "図12"
+    },
+    {
+      "indent": 3,
+      "text": "The average CUBIC window size _AVG_W_cubic_ can be obtained by substituting _K_ from Figure 12 in Figure 9.",
+      "ja": "図9の図12から_K_を置換することにより、平均立方ウィンドウサイズ_AVG_W_CUBIC_を取得できます。"
+    },
+    {
+      "indent": 14,
+      "text": "              1       \n                     C * 3 +            3\n              p    4           cubic   RTT\nAVG_W      =  =    * \n     cubic    K       4 * 1-           3\n                          cubic     p\n             RTT",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Richard Scheffenegger and Alexander Zimmermann originally coauthored [RFC8312].",
+      "ja": "リチャード・シェフェンガーとアレクサンダー・ジマーマンは元々共著[RFC8312]。"
+    },
+    {
+      "indent": 3,
+      "text": "These individuals suggested improvements to this document:",
+      "ja": "これらの個人は、このドキュメントの改善を提案しました。"
+    },
+    {
+      "indent": 3,
+      "text": "* Bob Briscoe\n\n* Christian Huitema\n\n* Gorry Fairhurst\n\n* Jonathan Morton\n\n* Juhamatti Kuusisaari\n\n* Junho Choi\n\n* Markku Kojo\n\n* Martin Duke\n\n* Martin Thomson\n\n* Matt Mathis\n\n* Matt Olson\n\n* Michael Welzl\n\n* Mirja Khlewind\n\n* Mohit P. Tahiliani\n\n* Neal Cardwell\n\n* Praveen Balasubramanian\n\n* Randall Stewart\n\n* Richard Scheffenegger\n\n* Rod Grimes\n\n* Spencer Dawkins\n\n* Tom Henderson\n\n* Tom Petch\n\n* Wesley Rosenblum\n\n* Yoav Nir\n\n* Yoshifumi Nishida\n\n* Yuchung Cheng",
+      "ja": "*ボブ・ブリスコ\n\n*クリスチャンフイテマ\n\n* Gorry Fairhurst\n\n*ジョナサンモートン\n\n* Juhamatti Kuusisaari\n\n* Junho Choi\n\n* Markku Kojo\n\n*マーティンデューク\n\n*マーティン・トムソン\n\n*マット・マティス\n\n*マット・オルソン\n\n*マイケル・ウェルツル\n\n* Mirja Khlewind\n\n* Mohit P. Tahiliani\n\n*ニール・カードウェル\n\n* Praveen Balasubramanian\n\n*ランドール・スチュワート\n\n*リチャード・シェフェンガー\n\n*ロッドグライム\n\n*スペンサードーキンス\n\n*トム・ヘンダーソン\n\n*トム・ペッチ\n\n* Wesley Rosenblum\n\n* yoav nir\n\n*ヨシフミ西田\n\n* Yuchung Cheng"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Lisong Xu University of Nebraska-Lincoln Department of Computer Science and Engineering Lincoln, NE 68588-0115 United States of America Email: xu@unl.edu URI: https://cse.unl.edu/~xu/",
+      "ja": "リソングXUネブラスカ大学リンカーン大学コンピュータサイエンスエンジニアリング局リンカーン、NE 68588-0115アメリカ合衆国電子メール：xu@unl.edu URI：https：//cse.unl.edu/~xu/"
+    },
+    {
+      "indent": 3,
+      "text": "Sangtae Ha University of Colorado at Boulder Department of Computer Science Boulder, CO 80309-0430 United States of America Email: sangtae.ha@colorado.edu URI: https://netstech.org/sangtaeha/",
+      "ja": "コロラド州サンタエ校ボルダー校コンピュータサイエンス科、コロラド州80309-0430アメリカ合衆国電子メール：sangtae.ha@colorado.edu uri：https：//netstech.org/sangtaeha/"
+    },
+    {
+      "indent": 3,
+      "text": "Injong Rhee Bowery Farming 151 W 26th Street, 12th Floor New York, NY 10001 United States of America Email: injongrhee@gmail.com",
+      "ja": "Injong Rhee Bowery Farming 151 W 26th Street、12階ニューヨーク、ニューヨーク10001アメリカ合衆国電子メール：injongrhee@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Vidhi Goel Apple Inc. One Apple Park Way Cupertino, CA 95014 United States of America Email: vidhi_goel@apple.com",
+      "ja": "Vidhi Goel Apple Inc. One Apple Park Way Cupertino、CA 95014アメリカ合衆国電子メール：vidhi_goel@apple.com"
+    },
+    {
+      "indent": 3,
+      "text": "Lars Eggert (editor) NetApp Stenbergintie 12 B FI-02700 Kauniainen Finland Email: lars@eggert.org URI: https://eggert.org/",
+      "ja": "Lars Eggert（編集者）NetApp Stenbergintie 12 B FI-02700 Kauniainen Finland Email：lars@eggert.org Uri：https：//eggert.org/"
+    }
+  ]
+}
