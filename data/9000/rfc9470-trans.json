@@ -1,0 +1,679 @@
+{
+  "title": {
+    "text": "RFC 9470 - OAuth 2.0 Step Up Authentication Challenge Protocol",
+    "ja": "RFC 9470 - OAUTH 2.0ステップアップ認証チャレンジプロトコル"
+  },
+  "number": 9470,
+  "created_at": "2023-09-09 23:47:45.580658+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       V. Bertocci\nRequest for Comments: 9470                                    Auth0/Okta\nCategory: Standards Track                                    B. Campbell\nISSN: 2070-1721                                            Ping Identity\n                                                          September 2023",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 10,
+      "text": "OAuth 2.0 Step Up Authentication Challenge Protocol",
+      "ja": "OAUTH 2.0ステップアップ認証チャレンジプロトコル"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "It is not uncommon for resource servers to require different authentication strengths or recentness according to the characteristics of a request. This document introduces a mechanism that resource servers can use to signal to a client that the authentication event associated with the access token of the current request does not meet its authentication requirements and, further, how to meet them. This document also codifies a mechanism for a client to request that an authorization server achieve a specific authentication strength or recentness when processing an authorization request.",
+      "ja": "リソースサーバーがリクエストの特性に応じて、異なる認証強度または最新性を必要とすることは珍しくありません。このドキュメントでは、リソースサーバーが現在の要求のアクセスに関連する認証イベントが認証要件を満たしていないこと、さらにそれらを満たす方法をクライアントに信号するために使用できるメカニズムを紹介します。また、このドキュメントは、クライアントが認証リクエストを処理する際に特定の認証強度または最新性を達成することをクライアントが要求するメカニズムを成文化します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9470.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9470で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2023 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Conventions and Terminology\n2.  Protocol Overview\n3.  Authentication Requirements Challenge\n4.  Authorization Request\n5.  Authorization Response\n6.  Authentication Information Conveyed via Access Token\n  6.1.  JWT Access Tokens\n  6.2.  OAuth 2.0 Token Introspection\n7.  Authorization Server Metadata\n8.  Deployment Considerations\n9.  Security Considerations\n10. IANA Considerations\n  10.1.  OAuth Extensions Error Registration\n  10.2.  OAuth Token Introspection Response Registration\n11. References\n  11.1.  Normative References\n  11.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "In simple API authorization scenarios, an authorization server will determine what authentication technique to use to handle a given request on the basis of aspects such as the scopes requested, the resource, the identity of the client, and other characteristics known at provisioning time. Although that approach is viable in many situations, it falls short in several important circumstances. Consider, for instance, an eCommerce API requiring different authentication strengths depending on whether the item being purchased exceeds a certain threshold, dynamically estimated by the API itself using a logic that is opaque to the authorization server. An API might also determine that a more recent user authentication is required based on its own risk evaluation of the API request.",
+      "ja": "単純なAPI認証シナリオでは、承認サーバーは、要求されたスコープ、リソース、クライアントのID、およびプロビジョニング時に知られているその他の特性などの側面に基づいて、特定の要求を処理するために使用する認証手法を決定します。そのアプローチは多くの状況で実行可能ですが、いくつかの重要な状況では不足しています。たとえば、購入されているアイテムが特定のしきい値を超えるかどうかに応じて異なる認証強度を必要とするeコマースAPIを考慮してください。API自体によって動的に推定され、認証サーバーに不透明なロジックを使用してAPI自体によって推定されます。また、APIは、API要求の独自のリスク評価に基づいて、より最近のユーザー認証が必要であると判断する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document extends the collection of error codes defined by [RFC6750] with a new value, insufficient_user_authentication, which can be used by resource servers to signal to the client that the authentication event associated with the access token presented with the request does not meet the authentication requirements of the resource server. This document also introduces acr_values and max_age parameters for the Bearer authentication scheme challenge defined by [RFC6750]. The resource server can use these parameters to explicitly communicate to the client the required authentication strength or recentness.",
+      "ja": "このドキュメントは、[RFC6750]によって定義されたエラーコードの収集を新しい値、不十分な_USER_Authenticationで拡張します。これは、リソースサーバーがクライアントに使用して、リクエストに提示されたアクセストークンに関連付けられた認証イベントが認証を満たしていないことをクライアントに通知することができます。リソースサーバーの要件。このドキュメントでは、[RFC6750]で定義されたBearer認証スキームチャレンジのACR_VALUESとMAX_AGEパラメーターも紹介します。リソースサーバーは、これらのパラメーターを使用して、必要な認証強度または最新性をクライアントに明示的に通信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The client can use that information to reach back to the authorization server with an authorization request that specifies the authentication requirements indicated by the protected resource. This is accomplished by including the acr_values or max_age authorization request parameters as defined in [OIDC].",
+      "ja": "クライアントは、その情報を使用して、保護されたリソースで示された認証要件を指定する承認要求を使用して、承認サーバーに戻ることができます。これは、[OIDC]で定義されているように、ACR_VALUESまたはMAX_AGE Authorization要求パラメーターを含めることによって達成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Those extensions will make it possible to implement interoperable step up authentication with minimal work from resource servers, clients, and authorization servers.",
+      "ja": "これらの拡張機能により、リソースサーバー、クライアント、および承認サーバーからの最小限の作業を使用して、相互運用可能なステップアップ認証を実装できます。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Conventions and Terminology",
+      "section_title": true,
+      "ja": "1.1. 慣習と用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification uses the terms \"access token\", \"authorization server\", \"authorization endpoint\", \"authorization request\", \"client\", \"protected resource\", and \"resource server\" defined by \"The OAuth 2.0 Authorization Framework\" [RFC6749].",
+      "ja": "この仕様では、「アクセストークン」、「承認サーバー」、「認証エンドポイント」、「認証要求」、「クライアント」、「保護されたリソース」、および「OAUTH 2.0認証フレームワーク」[RFC6749で定義された「リソースサーバー」という用語を使用します。]。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Protocol Overview",
+      "section_title": true,
+      "ja": "2. プロトコルの概要"
+    },
+    {
+      "indent": 3,
+      "text": "The following is an end-to-end sequence of a typical step up authentication scenario implemented according to this specification. The scenario assumes that, before the sequence described below takes place, the client already obtained an access token for the protected resource.",
+      "ja": "以下は、この仕様に従って実装された典型的なステップアップ認証シナリオのエンドツーエンドシーケンスです。シナリオでは、以下に説明するシーケンスが行われる前に、クライアントはすでに保護されたリソースのアクセストークンを取得していることを前提としています。"
+    },
+    {
+      "indent": 2,
+      "text": "+----------+                                          +--------------+\n|          |                                          |              |\n|          |-----------(1) request ------------------>|              |\n|          |                                          |              |\n|          |<---------(2) challenge ------------------|   Resource   |\n|          |                                          |    Server    |\n|  Client  |                                          |              |\n|          |-----------(5) request ------------------>|              |\n|          |                                          |              |\n|          |<-----(6) protected resource -------------|              |\n|          |                                          +--------------+\n|          |\n|          |\n|          |  +-------+                              +---------------+\n|          |->|       |                              |               |\n|          |  |       |--(3) authorization request-->|               |\n|          |  | User  |                              |               |\n|          |  | Agent |<-----------[...]------------>| Authorization |\n|          |  |       |                              |     Server    |\n|          |<-|       |                              |               |\n|          |  +-------+                              |               |\n|          |                                         |               |\n|          |<-------- (4) access token --------------|               |\n|          |                                         |               |\n+----------+                                         +---------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 1: Abstract Protocol Flow",
+      "ja": "図1：要約プロトコルフロー"
+    },
+    {
+      "indent": 3,
+      "text": "1. The client requests a protected resource, presenting an access token.",
+      "ja": "1. クライアントは保護されたリソースを要求し、アクセストークンを提示します。"
+    },
+    {
+      "indent": 3,
+      "text": "2. The resource server determines that the circumstances in which the presented access token was obtained offer insufficient authentication strength and/or recentness; hence, it denies the request and returns a challenge describing (using a combination of acr_values and max_age) what authentication requirements must be met for the resource server to authorize a request.",
+      "ja": "2. リソースサーバーは、提示されたアクセストークンが得られた状況が、認証強度や最近の不十分なものを提供すると判断します。したがって、リクエストを拒否し、（ACR_VALUESとMAX_AGEの組み合わせを使用して）説明する課題を返します。リクエストを承認するためにリソースサーバーにどのような認証要件を満たす必要がありますか。"
+    },
+    {
+      "indent": 3,
+      "text": "3. The client directs the user agent to the authorization server with an authorization request that includes the acr_values and/or max_age indicated by the resource server in the previous step.",
+      "ja": "3. クライアントは、前のステップでリソースサーバーが示すACR_VALUESおよび/またはMAX_AGEを含む認証要求を使用して、ユーザーエージェントを承認サーバーに指示します。"
+    },
+    {
+      "indent": 3,
+      "text": "4. Whatever sequence required by the grant of choice plays out; this will include the necessary steps to authenticate the user in accordance with the acr_values and/or max_age values of the authorization request. Then, the authorization server returns a new access token to the client. The new access token contains or references information about the authentication event.",
+      "ja": "4. 選択の付与が必要とするシーケンスは何でも繰り広げられます。これには、承認要求のACR_VALUESおよび/またはMAX_AGE値に従ってユーザーを認証するための必要な手順が含まれます。次に、Authorization Serverは、新しいアクセストークンをクライアントに返します。新しいアクセストークンには、認証イベントに関する情報が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "5. The client repeats the request from step 1, presenting the newly obtained access token.",
+      "ja": "5. クライアントはステップ1からリクエストを繰り返し、新しく取得したアクセストークンを提示します。"
+    },
+    {
+      "indent": 3,
+      "text": "6. The resource server finds that the user authentication performed during the acquisition of the new access token complies with its requirements and returns the representation of the requested protected resource.",
+      "ja": "6. リソースサーバーは、新しいアクセストークンの取得中に実行されたユーザー認証がその要件に準拠し、要求された保護されたリソースの表現を返すことを発見しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The validation operations mentioned in steps 2 and 6 imply that the resource server has a way of evaluating the authentication that occurred during the process by which the access token was obtained. In the context of this document, the assessment by the resource server of the specific authentication method used to obtain a token for the requested resource is called an \"authentication level\". This document will describe how the resource server can perform this assessment of an authentication level when the access token is a JSON Web Token (JWT) [RFC9068] or is validated via introspection [RFC7662]. Other methods of determining the authentication level by which the access token was obtained are possible, per agreement by the authorization server and the protected resource, but they are beyond the scope of this specification. Given an authentication level of a token, the resource server determines whether it meets the security criteria for the requested resource.",
+      "ja": "ステップ2および6で述べた検証操作は、リソースサーバーには、アクセストークンが取得されたプロセス中に発生した認証を評価する方法があることを意味します。このドキュメントのコンテキストでは、要求されたリソースのトークンを取得するために使用される特定の認証方法のリソースサーバーによる評価は、「認証レベル」と呼ばれます。このドキュメントでは、アクセストークンがJSON Webトークン（JWT）[RFC9068]である場合、または内省[RFC7662]を介して検証されている場合、リソースサーバーが認証レベルのこの評価を実行する方法について説明します。Access Tokenが取得された認証レベルを決定する他の方法は、認証サーバーと保護されたリソースによる合意に応じて可能ですが、それらはこの仕様の範囲を超えています。トークンの認証レベルを考えると、リソースサーバーは、要求されたリソースのセキュリティ基準を満たしているかどうかを決定します。"
+    },
+    {
+      "indent": 3,
+      "text": "The terms \"authentication level\" and \"step up\" are metaphors in this specification. These metaphors do not suggest that there is an absolute hierarchy of authentication methods expressed in interoperable fashion. The notion of a level emerges from the fact that the resource server may only want to accept certain authentication methods. When presented with a token derived from a particular authentication method (i.e., a given authentication level) that it does not want to accept (i.e., below the threshold or level it will accept), the resource server seeks to step up (i.e., renegotiate) from the current authentication level to one that it may accept. The \"step up\" metaphor is intended to convey a shift from the original authentication level to one that is acceptable to the resource server.",
+      "ja": "「認証レベル」と「ステップアップ」という用語は、この仕様のメタファーです。これらの比phorは、相互運用可能な方法で表現される認証方法の絶対的な階層があることを示唆していません。レベルの概念は、リソースサーバーが特定の認証方法のみを受け入れたいという事実から生まれます。特定の認証方法（つまり、特定の認証レベル）から派生したトークンが表示されない場合（つまり、受け入れるしきい値またはレベルの下）、リソースサーバーはステップアップしようとします（つまり、再gotiate）現在の認証レベルから受け入れる可能性のある認証レベルまで。「ステップアップ」メタファーは、元の認証レベルからリソースサーバーに受け入れられるものへのシフトを伝えることを目的としています。"
+    },
+    {
+      "indent": 3,
+      "text": "Although the case in which the new access token supersedes old tokens by virtue of a higher authentication level is common, in line with the connotation of the term \"step up authentication\", it is important to keep in mind that this might not necessarily hold true in the general case. For example, for a particular request, a resource server might require a higher authentication level and a shorter validity, resulting in a token suitable for one-off calls but leading to frequent prompts: hence, offering a suboptimal user experience if the token is reused for routine operations. In such a scenario, the client would be better served by keeping both the old tokens, which are associated with a lower authentication level, and the new one: selecting the appropriate token for each API call. This is not a new requirement for clients, as incremental consent and least-privilege principles will require similar heuristics for managing access tokens associated with different scopes and permission levels. This document does not recommend any specific token-caching strategy: that choice will be dependent on the characteristics of every particular scenario and remains application-dependent as in the core OAuth cases. Also recall that OAuth 2.0 [RFC6749] assumes access tokens are treated as opaque by clients. The token format might be unreadable to the client or might change at any time to become unreadable. So, during the course of any token-caching strategy, a client must not attempt to inspect the content of the access token to determine the associated authentication information or other details (see Section 6 of [RFC9068] for a more detailed discussion).",
+      "ja": "新しいアクセストークンがより高い認証レベルによって古いトークンに取って代わる場合、「ステップアップ認証」という用語の意味合いに沿って一般的ですが、これは必ずしも真実ではない可能性があることを覚えておくことが重要です一般的な場合。たとえば、特定のリクエストの場合、リソースサーバーはより高い認証レベルと妥当性の短縮を必要とする場合があり、1回限りの呼び出しに適したトークンになりますが、頻繁なプロンプトにつながります。ルーチン操作用。このようなシナリオでは、クライアントは、認証レベルの低いレベルに関連付けられている古いトークンと、API通話ごとに適切なトークンを選択する新しいトークンの両方を維持することにより、より良いサービスを提供します。これはクライアントにとって新たな要件ではありません。漸進的な同意と最小主要な原則は、異なるスコープと許可レベルに関連するアクセストークンを管理するために同様のヒューリスティックを必要とするためです。このドキュメントでは、特定のトークンキャッシング戦略を推奨していません。その選択は、すべての特定のシナリオの特性に依存し、コアOAuthの場合のようにアプリケーション依存のままです。また、OAUTH 2.0 [RFC6749]は、アクセストークンがクライアントによって不透明として扱われることを想定していることを思い出してください。トークン形式は、クライアントが読み取れない場合や、いつでも変更できない場合があります。したがって、トークンキャッシング戦略の過程で、クライアントは、より詳細な議論のために、関連する認証情報またはその他の詳細を決定するために、アクセストークンのコンテンツを検査しようとしてはなりません（[RFC9068]のセクション6を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Authentication Requirements Challenge",
+      "section_title": true,
+      "ja": "3. 認証要件の課題"
+    },
+    {
+      "indent": 3,
+      "text": "This specification introduces a new error code value for the challenge of the Bearer authentication scheme's error parameter (from [RFC6750]) and other OAuth authentication schemes, such as those seen in [RFC9449], which use the same error parameter:",
+      "ja": "この仕様では、Bearer認証スキームのエラーパラメーター（[RFC6750]から）の課題と、[RFC9449]で見られるような他のOAuth認証スキームの新しいエラーコード値を導入します。"
+    },
+    {
+      "indent": 3,
+      "text": "insufficient_user_authentication: The authentication event associated with the access token presented with the request does not meet the authentication requirements of the protected resource.",
+      "ja": "不十分な_user_authentication：リクエストに提示されたアクセストークンに関連付けられた認証イベントは、保護されたリソースの認証要件を満たしていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note: the logic through which the resource server determines that the current request does not meet the authentication requirements of the protected resource, and associated functionality (such as expressing, deploying and publishing such requirements), is out of scope for this document.",
+      "ja": "注：リソースサーバーが現在の要求が保護されたリソースの認証要件を満たしていないことを決定するロジック、および関連する機能（そのような要件の表現、展開、公開など）は、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "Furthermore, this specification defines the following WWW-Authenticate auth-param values for those OAuth authentication schemes to convey the authentication requirements back to the client.",
+      "ja": "さらに、この仕様では、認証要件をクライアントに伝えるために、これらのOAuth認証スキームの次のwww-authenticate auth-param値を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "acr_values: A space-separated string listing the authentication context class reference values in order of preference. The protected resource requires one of these values for the authentication event associated with the access token. As defined in Section 1.2 of [OIDC], the authentication context conveys information about how authentication takes place (e.g., what authentication method(s) or assurance level to meet).",
+      "ja": "ACR_VALUES：認証コンテキストクラスの参照値を優先順にリストするスペース分離文字列。保護されたリソースには、アクセストークンに関連付けられた認証イベントにこれらの値の1つが必要です。[OIDC]のセクション1.2で定義されているように、認証コンテキストでは、認証がどのように行われるかについての情報（例：認証方法または保証レベル）を伝えます。"
+    },
+    {
+      "indent": 3,
+      "text": "max_age: This value indicates the allowable elapsed time in seconds since the last active authentication event associated with the access token. An active authentication event entails a user interacting with the authorization server in response to an authentication prompt. Note that, while the auth-param value can be conveyed as a token or quoted-string (see Section 11.2 of [RFC9110]), it has to represent a non-negative integer.",
+      "ja": "max_age：この値は、アクセストークンに関連付けられた最後のアクティブ認証イベント以来、数秒で許容される経過時間を示します。アクティブ認証イベントは、認証プロンプトに応じて認証サーバーと対話するユーザーを伴います。Auth-Paramの値はトークンまたは引用された弦（[RFC9110]のセクション11.2を参照）として伝達できるが、非陰性整数を表す必要があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Figure 2 is an example of a Bearer authentication scheme challenge with the WWW-Authenticate header using:",
+      "ja": "図2は、以下を使用してwww-authenticateヘッダーを使用したBearer認証スキームチャレンジの例です。"
+    },
+    {
+      "indent": 3,
+      "text": "* the insufficient_user_authentication error code value to inform the client that the access token presented is not sufficient to gain access to the protected resource, and",
+      "ja": "* 不十分な_user_authenticationエラーコード値は、提示されたアクセストークンが保護されたリソースへのアクセスを得るには十分ではないことをクライアントに通知し、"
+    },
+    {
+      "indent": 3,
+      "text": "* the acr_values parameter to let the client know that the expected authentication level corresponds to the authentication context class reference identified by myACR.",
+      "ja": "* ACR_VALUESパラメーターでは、予想される認証レベルがMYACRによって識別された認証コンテキストクラス参照に対応することをクライアントに知らせます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that while this specification only defines usage of the above auth-params with the insufficient_user_authentication error code, it does not preclude future specifications or profiles from defining their usage with other error codes.",
+      "ja": "この仕様では、上記のAuth-Paramsの使用が不十分であることを不十分な_USER_AUTHENTICATIONエラーコードのみを定義しますが、将来の仕様やプロファイルが他のエラーコードで使用を定義することを妨げないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/1.1 401 Unauthorized WWW-Authenticate: Bearer error=\"insufficient_user_authentication\", error_description=\"A different authentication level is required\", acr_values=\"myACR\"",
+      "ja": "http/1.1 401不正www-authenticate：bearer error = \"ofconstiveer_user_authentication\"、error_description = \"別の認証レベルが必要です\"、acr_values = \"myacr\""
+    },
+    {
+      "indent": 3,
+      "text": "Figure 2: Authentication Requirements Challenge Indicating acr_values",
+      "ja": "図2：ACR_VALUESを示す認証要件の課題"
+    },
+    {
+      "indent": 3,
+      "text": "The example in Figure 3 shows a challenge informing the client that the last active authentication event associated with the presented access token is too old and a more recent authentication is needed.",
+      "ja": "図3の例は、提示されたアクセストークンに関連付けられた最後のアクティブ認証イベントが古すぎて、最近の認証が必要であることをクライアントに通知する課題を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/1.1 401 Unauthorized WWW-Authenticate: Bearer error=\"insufficient_user_authentication\", error_description=\"More recent authentication is required\", max_age=\"5\"",
+      "ja": "http/1.1 401不正www-authenticate：bearer error = \"ofcondiveer_user_authentication\"、error_description = \"より最近の認証が必要です\"、max_age = \"5\""
+    },
+    {
+      "indent": 5,
+      "text": "Figure 3: Authentication Requirements Challenge Indicating max_age",
+      "ja": "図3：MAX_AGEを示す認証要件の課題"
+    },
+    {
+      "indent": 3,
+      "text": "The auth-params max_age and acr_values MAY both occur in the same challenge if the resource server needs to express requirements about both recency and authentication level. If the resource server determines that the request is also lacking the scopes required by the requested resource, it MAY include the scope attribute with the value necessary to access the protected resource, as described in Section 3.1 of [RFC6750].",
+      "ja": "Auth-Params Max_ageとACR_Valuesは、リソースサーバーがRemencyと認証レベルの両方に関する要件を表現する必要がある場合、同じ課題で両方とも発生する可能性があります。リソースサーバーが、要求されたリソースに必要なスコープも不足していると判断した場合、[RFC6750]のセクション3.1で説明されているように、保護されたリソースにアクセスするために必要な値のスコープ属性を含めることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Authorization Request",
+      "section_title": true,
+      "ja": "4. 承認リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "A client receiving a challenge from the resource server carrying the insufficient_user_authentication error code SHOULD parse the WWW-Authenticate header for acr_values and max_age and use them, if present, in constructing an authorization request. This request is then conveyed to the authorization server's authorization endpoint via the user agent in order to obtain a new access token complying with the corresponding requirements. The acr_values and max_age authorization request parameters are both OPTIONAL parameters defined in Section 3.1.2.1. of [OIDC]. This document does not introduce any changes in the authorization server behavior defined in [OIDC] for processing those parameters; hence, any authorization server implementing OpenID Connect will be able to participate in the flow described here with little or no changes. See Section 5 for more details.",
+      "ja": "不十分な_user_authenticationエラーコードを運ぶリソースサーバーからチャレンジを受信したクライアントは、www-authenticateヘッダーをACR_VALUESおよびMAX_AGEのヘッダーを解析し、存在する場合は許可リクエストを作成する際にそれらを使用する必要があります。この要求は、対応する要件に準拠した新しいアクセストークンを取得するために、ユーザーエージェントを介して承認サーバーの承認エンドポイントに伝えられます。ACR_VALUESおよびMAX_AGE Authorizationリクエストパラメーターは、両方ともセクション3.1.2.1で定義されているオプションのパラメーターです。[oidc]。このドキュメントでは、これらのパラメーターを処理するために[OIDC]で定義されている承認サーバーの動作に変更が導入されません。したがって、OpenID Connectを実装する承認サーバーは、ここで説明されているフローにほとんどまたはまったく変更なしで参加できます。詳細については、セクション5を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "The example authorization request URI below, which might be used after receiving the challenge in Figure 2, indicates to the authorization server that the client would like the authentication to occur according to the authentication context class reference identified by myACR.",
+      "ja": "図2の課題を受け取った後に使用される可能性のある承認要求の例は、MYACRによって識別された認証コンテキストクラス参照に従って認証を希望することを認証サーバーに示します。"
+    },
+    {
+      "indent": 3,
+      "text": "https://as.example.net/authorize?client_id=s6BhdRkqt3\n&response_type=code&scope=purchase&acr_values=myACR",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 11,
+      "text": "Figure 4: Authorization Request Indicating acr_values",
+      "ja": "図4：ACR_VALUESを示す承認要求"
+    },
+    {
+      "indent": 3,
+      "text": "After the challenge in Figure 3, a client might direct the user agent to the following example authorization request URI where the max_age parameter indicates to the authorization server that the user-authentication event needs to have occurred no more than five seconds prior.",
+      "ja": "図3の課題の後、クライアントはユーザーエージェントに次の例の承認要求URIに指示する場合があります。ここでは、MAX_AGEパラメーターが認証サーバーに、ユーザー認証イベントが5秒前に発生する必要があることを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "https://as.example.net/authorize?client_id=s6BhdRkqt3\n&response_type=code&scope=purchase&max_age=5",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 13,
+      "text": "Figure 5: Authorization Request Indicating max_age",
+      "ja": "図5：max_ageを示す承認要求"
+    },
+    {
+      "indent": 0,
+      "text": "5. Authorization Response",
+      "section_title": true,
+      "ja": "5. 承認応答"
+    },
+    {
+      "indent": 3,
+      "text": "Section 5.5.1.1 of [OIDC] establishes that an authorization server receiving a request containing the acr_values parameter MAY attempt to authenticate the user in a manner that satisfies the requested authentication context class reference and include the corresponding value in the acr claim in the resulting ID Token. The same section also establishes that, in case the desired authentication level cannot be met, the authorization server SHOULD include a value reflecting the authentication level of the current session (if any) in the acr claim. Furthermore, Section 3.1.2.1 [OIDC] states that if a request includes the max_age parameter, the authorization server MUST include the auth_time claim in the issued ID Token. An authorization server complying with this specification will react to the presence of the acr_values and max_age parameters by including acr and auth_time in the access token (see Section 6 for details). Although [OIDC] leaves the authorization server free to decide how to handle the inclusion of acr in the ID Token when requested via acr_values, when it comes to access tokens in this specification, the authorization server SHOULD consider the requested acr value as necessary for successfully fulfilling the request. That is, the requested acr value is included in the access token if the authentication operation successfully met its requirements; otherwise, the authorization request fails and returns an unmet_authentication_requirements error as defined in [OIDCUAR]. The recommended behavior will help prevent clients getting stuck in a loop where the authorization server keeps returning tokens that the resource server already identified as not meeting its requirements.",
+      "ja": "[OIDC]のセクション5.5.1.1は、ACR_VALUESパラメーターを含むリクエストを受信する認証サーバーが、要求された認証コンテキストクラス参照を満たし、結果のIDのACR請求に対応する値を含める方法でユーザーを認証しようとすることを確立しています。トークン。同じセクションでは、目的の認証レベルを満たすことができない場合、ACR請求の現在のセッション（ある場合）の認証レベルを反映する値を承認サーバーに含める必要があることも確立しています。さらに、セクション3.1.2.1 [OIDC]は、リクエストにMAX_AGEパラメーターが含まれている場合、承認サーバーに発行されたIDトークンにauth_timeクレームを含める必要があると述べています。この仕様に準拠した承認サーバーは、アクセストークンにACRとAUTH_TIMEを含めることにより、ACR_VALUESとMAX_AGEパラメーターの存在に反応します（詳細についてはセクション6を参照）。[OIDC]は、ACR_VALUESを介して要求されたときにIDトークンにACRを包含する方法を処理する方法を自由に決定することができますが、この仕様のトークンにアクセスする場合、承認サーバーは、正常に正常に必要に応じて要求されたACR値を考慮する必要があります。リクエストを満たす。つまり、認証操作が要件を正常に満たした場合、要求されたACR値はアクセストークンに含まれます。それ以外の場合、[oidcuar]で定義されているように、承認要求が失敗し、unmet_authentication_requirementsエラーを返します。推奨される動作は、クライアントがループで立ち往生するのを防ぐのに役立ちます。そこでは、認証サーバーが要件を満たしていないと既に識別されているトークンを返し続けます。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Authentication Information Conveyed via Access Token",
+      "section_title": true,
+      "ja": "6. アクセストークンを介して伝達される認証情報"
+    },
+    {
+      "indent": 3,
+      "text": "To evaluate whether an access token meets the protected resource's requirements, the resource server needs a way of accessing information about the authentication event by which that access token was obtained. This specification provides guidance on how to convey that information in conjunction with two common access-token-validation methods:",
+      "ja": "アクセストークンが保護されたリソースの要件を満たしているかどうかを評価するために、リソースサーバーは、そのアクセストークンが取得された認証イベントに関する情報にアクセスする方法を必要とします。この仕様は、2つの一般的なアクセストークン検証方法と組み合わせてその情報を伝える方法に関するガイダンスを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "* the one described in [RFC9068], where the access token is encoded in JWT format and verified via a set of validation rules, and",
+      "ja": "* [RFC9068]で説明されているもので、アクセストークンはJWT形式でエンコードされ、一連の検証ルールを介して検証され、"
+    },
+    {
+      "indent": 3,
+      "text": "* the one described in [RFC7662], where the token is validated and decoded by sending it to an introspection endpoint.",
+      "ja": "* [RFC7662]で説明されているもので、トークンは内省エンドポイントに送信することにより検証およびデコードされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Authorization servers and resource servers MAY elect to use other encoding and validation methods; however, those are out of scope for this document.",
+      "ja": "承認サーバーおよびリソースサーバーは、他のエンコードおよび検証方法を使用することを選択できます。ただし、これらはこのドキュメントの範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. JWT Access Tokens",
+      "section_title": true,
+      "ja": "6.1. JWTアクセストークン"
+    },
+    {
+      "indent": 3,
+      "text": "When access tokens are represented as JSON Web Tokens (JWTs) [RFC7519], the auth_time and acr claims (per Section 2.2.1 of [RFC9068]) are used to convey the time and context of the user-authentication event that the authentication server performed during the course of obtaining the access token. It is useful to bear in mind that the values of those two parameters are established at user-authentication time and will not change in the event of access token renewals. See the aforementioned Section 2.2.1 of [RFC9068] for details. The following is a conceptual example showing the decoded content of such a JWT access token.",
+      "ja": "アクセストークンがJSON Webトークン（JWTS）[RFC7519]として表される場合、認証サーバーがユーザー免除イベントの時間とコンテキストの時間とコンテキストを伝えるために、AUTH_TIMEおよびACRクレームを使用して使用されます。アクセストークンの取得中に実行されます。これらの2つのパラメーターの値は、ユーザー認証時に確立され、アクセストークンの更新が発生した場合には変更されないことを念頭に置くと便利です。詳細については、[RFC9068]の前述のセクション2.2.1を参照してください。以下は、このようなJWTアクセストークンのデコードされたコンテンツを示す概念的な例です。"
+    },
+    {
+      "indent": 3,
+      "text": "Header:",
+      "ja": "ヘッダ："
+    },
+    {
+      "indent": 3,
+      "text": "{\"typ\":\"at+JWT\",\"alg\":\"ES256\",\"kid\":\"LTacESbw\"}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Claims:",
+      "ja": "請求："
+    },
+    {
+      "indent": 3,
+      "text": "{\n \"iss\": \"https://as.example.net\",\n \"sub\": \"someone@example.net\",\n \"aud\": \"https://rs.example.com\",\n \"exp\": 1646343000,\n \"iat\": 1646340200,\n \"jti\" : \"e1j3V_bKic8-LAEB_lccD0G\",\n \"client_id\": \"s6BhdRkqt3\",\n \"scope\": \"purchase\",\n \"auth_time\": 1646340198,\n \"acr\": \"myACR\"\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 6: Decoded JWT Access Token",
+      "ja": "図6：デコードされたJWTアクセストークン"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. OAuth 2.0 Token Introspection",
+      "section_title": true,
+      "ja": "6.2. OAUTH 2.0トークン内省"
+    },
+    {
+      "indent": 3,
+      "text": "\"OAuth 2.0 Token Introspection\" [RFC7662] defines a method for a protected resource to query an authorization server about the active state of an access token as well as to determine metainformation about the token. The following two top-level introspection response members are defined to convey information about the user-authentication event that the authentication server performed during the course of obtaining the access token.",
+      "ja": "「OAUTH 2.0トークン内省」[RFC7662]は、保護されたリソースがアクセストークンのアクティブな状態について承認サーバーを照会し、トークンに関するメテン形成を決定する方法を定義します。次の2つのトップレベルの内省応答メンバーは、アクセストークンの取得中に認証サーバーが実行されたユーザー認証イベントに関する情報を伝えるために定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "acr: String specifying an authentication context class reference value that identifies the authentication context class that was satisfied by the user-authentication event performed.",
+      "ja": "ACR：文字列認証コンテキストの指定クラスの参照値は、実行されたユーザー認証イベントによって満たされた認証コンテキストクラスを識別します。"
+    },
+    {
+      "indent": 3,
+      "text": "auth_time: Time when the user authentication occurred. A JSON numeric value representing the number of seconds from 1970-01-01T00:00:00Z UTC until the date/time of the authentication event.",
+      "ja": "auth_time：ユーザー認証が発生した時間。1970-01-01T00：00：00Z UTCから認証イベントの日時まで秒数を表すJSON数値。"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows an introspection response with information about the user-authentication event by which the access token was obtained.",
+      "ja": "次の例は、アクセストークンが取得されたユーザー認証イベントに関する情報を含む内省応答を示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/1.1 200 OK\nContent-Type: application/json",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "{\n  \"active\": true,\n  \"client_id\": \"s6BhdRkqt3\",\n  \"scope\": \"purchase\",\n  \"sub\": \"someone@example.net\",\n  \"aud\": \"https://rs.example.com\",\n  \"iss\": \"https://as.example.net\",\n  \"exp\": 1639528912,\n  \"iat\": 1618354090,\n  \"auth_time\": 1646340198,\n  \"acr\": \"myACR\"\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 22,
+      "text": "Figure 7: Introspection Response",
+      "ja": "図7：内省的応答"
+    },
+    {
+      "indent": 0,
+      "text": "7. Authorization Server Metadata",
+      "section_title": true,
+      "ja": "7. 承認サーバーメタデータ"
+    },
+    {
+      "indent": 3,
+      "text": "Authorization servers can advertise their support of this specification by including in their metadata document, as defined in [RFC8414], the value acr_values_supported, as defined in Section 3 of [OIDCDISC]. The presence of acr_values_supported in the authorization server metadata document signals that the authorization server will understand and honor the acr_values and max_age parameters in incoming authorization requests.",
+      "ja": "[RFC8414]で定義されているように、[OIDCDISC]のセクション3で定義されているように、[RFC8414]で定義されているメタデータドキュメントに含めることにより、この仕様のサポートを宣伝できます。認証サーバーのメタデータドキュメントでACR_VALUES_SUPPORTEDの存在は、承認サーバーが着信承認要求においてACR_VALUESおよびMAX_AGEパラメーターを理解し、尊重することを信号します。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Deployment Considerations",
+      "section_title": true,
+      "ja": "8. 展開の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This specification facilitates the communication of requirements from a resource server to a client, which, in turn, can enable a smooth step up authentication experience. However, it is important to realize that the user experience achievable in every specific deployment is a function of the policies each resource server and authorization server pair establishes. Imposing constraints on those policies is out of scope for this specification; hence, it is perfectly possible for resource servers and authorization servers to impose requirements that are impossible for users to comply with or that lead to an undesirable user-experience outcome. The authentication prompts presented by the authorization server as a result of the method of propagating authentication requirements described here might require the user to perform some specific actions such as using multiple devices, having access to devices complying with specific security requirements, and so on. Those extra requirements, that are more concerned with how to comply with a particular requirement rather than indicating the identifier of the requirement itself, are out of scope for this specification.",
+      "ja": "この仕様により、リソースサーバーからクライアントへの要件の通信が容易になり、次にスムーズなステップアップ認証エクスペリエンスが可能になります。ただし、すべての特定の展開で達成可能なユーザーエクスペリエンスは、各リソースサーバーと承認サーバーペアが確立するポリシーの関数であることを認識することが重要です。これらのポリシーに制約を課すことは、この仕様の範囲外です。したがって、リソースサーバーと承認サーバーが、ユーザーが従うことができない、または望ましくないユーザー経験の結果につながる要件を課すことが完全に可能です。ここで説明する認証要件を伝播する方法の結果として認証サーバーによって提示された認証プロンプトは、ユーザーが複数のデバイスの使用、特定のセキュリティ要件に準拠したデバイスにアクセスできるような特定のアクションを実行する必要がある場合があります。要件自体の識別子を示すのではなく、特定の要件に準拠する方法にもっと関心があるこれらの追加の要件は、この仕様の範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This specification adds to previously defined OAuth mechanisms. Their respective security considerations apply:",
+      "ja": "この仕様は、以前に定義されたOAUTHメカニズムに追加されます。それぞれのセキュリティ上の考慮事項が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* OAuth 2.0 [RFC6749],",
+      "ja": "* OAuth 2.0 [RFC6749]、"
+    },
+    {
+      "indent": 3,
+      "text": "* JWT access tokens [RFC9068],",
+      "ja": "* JWTアクセストークン[RFC9068]、"
+    },
+    {
+      "indent": 3,
+      "text": "* Bearer WWW-Authenticate [RFC6750],",
+      "ja": "* BEARER www-authenticate [rfc6750]、"
+    },
+    {
+      "indent": 3,
+      "text": "* token introspection [RFC7662], and",
+      "ja": "* トークン内省[RFC7662]、および"
+    },
+    {
+      "indent": 3,
+      "text": "* authorization server metadata [RFC8414].",
+      "ja": "* 認証サーバーメタデータ[RFC8414]。"
+    },
+    {
+      "indent": 3,
+      "text": "This document MUST NOT be used to position OAuth as an authentication protocol. For the purposes of this specification, the way in which a user authenticated with the authorization server to obtain an access token is salient information, as a resource server might decide whether to grant access on the basis of how that authentication operation was performed. Nonetheless, this specification does not attempt to define the mechanics by which authentication takes place, relying on a separate authentication layer to take care of the details. In line with other specifications of the OAuth family, this document assumes the existence of a session without going into the details of how it is established or maintained, what protocols are used to implement that layer (e.g., OpenID Connect), and so forth. Depending on the policies adopted by the resource server, the acr_values parameter introduced in Section 3 might unintentionally disclose information about the authenticated user, the resource itself, the authorization server, and any other context-specific data that an attacker might use to gain knowledge about their target. For example, a resource server requesting an acr value corresponding to a high level of assurance for some users but not others might identify possible high-privilege users to target with spearhead phishing attacks. Implementers should use care in determining what to disclose in the challenge and in what circumstances. The logic examining the incoming access token to determine whether or not a challenge should be returned can be executed either before or after the conventional token-validation logic, be it based on JWT validation, introspection, or any other method. The resource server MAY return a challenge without verifying the client presented a valid token. However, this approach will leak the required properties of an authorization token to an actor who has not proven they can obtain a token for this resource server.",
+      "ja": "このドキュメントは、OAUTHを認証プロトコルとして配置するために使用してはなりません。この仕様の目的のために、リソースサーバーがその認証操作の実行方法に基づいてアクセスを付与するかどうかを決定する可能性があるため、アクセストークンを取得するために認証サーバーで認証されたユーザーが顕著な情報です。それにもかかわらず、この仕様は、個別の認証レイヤーに依存して詳細を処理するために、認証が行われるメカニズムを定義しようとはしません。OAuthファミリーの他の仕様に沿って、このドキュメントでは、そのレイヤー（OpenID Connectなど）などの実装に使用されるプロトコルがどのように確立または維持されているかの詳細を説明することなく、セッションの存在を想定しています。リソースサーバーが採用したポリシーに応じて、セクション3で導入されたACR_Valuesパラメーターは、認証されたユーザー、リソース自体、認証サーバー、および攻撃者が知識を得るために使用する可能性のある他のコンテキスト固有のデータに関する情報を意図せずに開示する可能性があります。彼らのターゲット。たとえば、一部のユーザーの高いレベルの保証に対応するACR値を要求するリソースサーバーは、他のユーザーではありません。実装者は、課題とどのような状況で開示するかを決定する際にケアを使用する必要があります。着信アクセストークンを調べるロジックは、JWT検証、内省、またはその他の方法に基づいて、従来のトークン検証ロジックの前または後にチャレンジを返すべきかどうかを判断することができます。リソースサーバーは、クライアントが有効なトークンを提示したことを確認せずにチャレンジを返す場合があります。ただし、このアプローチは、このリソースサーバーのトークンを取得できることを証明していないアクターに、承認トークンに必要なプロパティを漏らします。"
+    },
+    {
+      "indent": 3,
+      "text": "As this specification provides a mechanism for the resource server to trigger user interaction, it's important for the authorization server and clients to consider that a malicious resource server might abuse that feature.",
+      "ja": "この仕様は、リソースサーバーがユーザーインタラクションをトリガーするメカニズムを提供するため、認証サーバーとクライアントが悪意のあるリソースサーバーがその機能を悪用する可能性があると考えることが重要です。"
+    },
+    {
+      "indent": 0,
+      "text": "10. IANA Considerations",
+      "section_title": true,
+      "ja": "10. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. OAuth Extensions Error Registration",
+      "section_title": true,
+      "ja": "10.1. OAUTH拡張エラー登録"
+    },
+    {
+      "indent": 3,
+      "text": "This specification registers the following error value in the \"OAuth Extensions Error Registry\" [IANA.OAuth.Params] established by [RFC6749].",
+      "ja": "この仕様は、[RFC6749]によって確立された「OAUTH拡張エラーレジストリ」[IANA.OAUTH.PARAMS]で次のエラー値を登録します。"
+    },
+    {
+      "indent": 3,
+      "text": "Name: insufficient_user_authentication Usage Location: resource access error response Protocol Extension: OAuth 2.0 Step Up Authentication Challenge Protocol Change controller: IETF Specification document(s): Section 3 of RFC 9470",
+      "ja": "名前：不十分な_user_authenticationの使用場所：リソースアクセスエラー応答プロトコル拡張：OAUTH 2.0ステップアップ認証チャレンジプロトコル変更コントローラー：IETF仕様ドキュメント：RFC 9470のセクション3"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. OAuth Token Introspection Response Registration",
+      "section_title": true,
+      "ja": "10.2. OAUTHトークン内注文応答登録"
+    },
+    {
+      "indent": 3,
+      "text": "This specification registers the following values in the \"OAuth Token Introspection Response\" registry [IANA.OAuth.Params] established by [RFC7662].",
+      "ja": "この仕様は、[RFC7662]によって確立された「OAuthトークン内注文応答」レジストリ[IANA.OAUTH.PARAMS]に次の値を登録します。"
+    },
+    {
+      "indent": 3,
+      "text": "Authentication Context Class Reference:",
+      "ja": "認証コンテキストクラスリファレンス："
+    },
+    {
+      "indent": 3,
+      "text": "Name: acr Description: Authentication Context Class Reference Change Controller: IETF Specification Document(s): Section 6.2 of RFC 9470",
+      "ja": "名前：ACR説明：認証コンテキストクラス参照変更コントローラー：IETF仕様ドキュメント：RFC 9470のセクション6.2"
+    },
+    {
+      "indent": 3,
+      "text": "Authentication Time:",
+      "ja": "認証時間："
+    },
+    {
+      "indent": 3,
+      "text": "Name: auth_time Description: Time when the user authentication occurred Change Controller: IETF Specification Document(s): Section 6.2 of RFC 9470",
+      "ja": "名前：auth_time説明：ユーザー認証が発生した時間変更コントローラー：IETF仕様文書：RFC 9470のセクション6.2"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6749] Hardt, D., Ed., \"The OAuth 2.0 Authorization Framework\", RFC 6749, DOI 10.17487/RFC6749, October 2012, <https://www.rfc-editor.org/info/rfc6749>.",
+      "ja": "[RFC6749] Hardt、D.、ed。、「The Oauth 2.0 Authorization Framework」、RFC 6749、DOI 10.17487/RFC6749、2012年10月、<https://www.rfc-editor.org/info/rfc6749>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6750] Jones, M. and D. Hardt, \"The OAuth 2.0 Authorization Framework: Bearer Token Usage\", RFC 6750, DOI 10.17487/RFC6750, October 2012, <https://www.rfc-editor.org/info/rfc6750>.",
+      "ja": "[RFC6750]ジョーンズ、M。およびD.ハード、「OAUTH 2.0認証フレームワーク：ベアラートークンの使用」、RFC 6750、DOI 10.17487/RFC6750、2012年10月、<https://www.rfc-editor.org/info/RFC6750>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの小文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA.OAuth.Params] IANA, \"OAuth Parameters\", <https://www.iana.org/assignments/oauth-parameters>.",
+      "ja": "[iana.oauth.params] iana、 \"oauth parameters\"、<https://www.iana.org/assignments/oauth-parameters>。"
+    },
+    {
+      "indent": 3,
+      "text": "[OIDC] Sakimura, N., Bradley, J., Jones, M., de Medeiros, B., and C. Mortimore, \"OpenID Connect Core 1.0 incorporating errata set 1\", 8 November 2014, <https://openid.net/specs/openid-connect-core-1_0.html>.",
+      "ja": "[OIDC] Sakimura、N.、Bradley、J.、Jones、M.、De Medeiros、B。、およびC. Mortimore、「Openid Connect Core 1.0 Errata Set 1を組み込む」、2014年11月8日、<https：// openid.net/specs/openid-connect-core-1_0.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[OIDCDISC] Sakimura, N., Bradley, J., Jones, M., and E. Jay, \"OpenID Connect Discovery 1.0 incorporating errata set 1\", 8 November 2014, <https://openid.net/specs/openid-connect-discovery-1_0.html>.",
+      "ja": "[Oidcdisc] Sakimura、N.、Bradley、J.、Jones、M。、およびE. Jay、「Openid Connect Discovery 1.0 Incorporating errata set 1」、2014年11月8日、<https://openid.net/specs/openidid-connect-discovery-1_0.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[OIDCUAR] Lodderstedt, T., \"OpenID Connect Core Error Code unmet_authentication_requirements\", 8 May 2019, <https://openid.net/specs/openid-connect-unmet-authentication-requirements-1_0.html>.",
+      "ja": "[oidcuar] lodderstedt、T。、 \"Openid Connect Connect CoreエラーコードUNMET_AUTHENTICATION_REQUIREMENTS\"、2019年5月8日、<https://openid.net/specs/openid-connect-uuthentication-requirements-10.html>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7519] Jones, M., Bradley, J., and N. Sakimura, \"JSON Web Token (JWT)\", RFC 7519, DOI 10.17487/RFC7519, May 2015, <https://www.rfc-editor.org/info/rfc7519>.",
+      "ja": "[RFC7519] Jones、M.、Bradley、J。、およびN. Sakimura、「JSON Web Token（JWT）」、RFC 7519、DOI 10.17487/RFC7519、2015年5月、<https://www.rfc-editor.org/info/rfc7519>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7662] Richer, J., Ed., \"OAuth 2.0 Token Introspection\", RFC 7662, DOI 10.17487/RFC7662, October 2015, <https://www.rfc-editor.org/info/rfc7662>.",
+      "ja": "[RFC7662] Richer、J.、ed。、「Oauth 2.0トークン内注文」、RFC 7662、DOI 10.17487/RFC7662、2015年10月、<https://www.rfc-editor.org/info/rfc762>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8414] Jones, M., Sakimura, N., and J. Bradley, \"OAuth 2.0 Authorization Server Metadata\", RFC 8414, DOI 10.17487/RFC8414, June 2018, <https://www.rfc-editor.org/info/rfc8414>.",
+      "ja": "[RFC8414] Jones、M.、Sakimura、N。、およびJ. Bradley、 \"Oauth 2.0 Authorization Server Metadata\"、RFC 8414、DOI 10.17487/RFC8414、2018年6月、<https：//www.rfc-editor.org/情報/RFC8414>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9068] Bertocci, V., \"JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens\", RFC 9068, DOI 10.17487/RFC9068, October 2021, <https://www.rfc-editor.org/info/rfc9068>.",
+      "ja": "[RFC9068] Bertocci、V。、「Json Web Token（JWT）OAUTH 2.0アクセストークンのプロファイル」、RFC 9068、DOI 10.17487/RFC9068、2021年10月、<https：//www.rfc-editor.org/FO/RFC90688>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9110] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP Semantics\", STD 97, RFC 9110, DOI 10.17487/RFC9110, June 2022, <https://www.rfc-editor.org/info/rfc9110>.",
+      "ja": "[RFC9110] Fielding、R.、ed。、Nottingham、M.、ed。、およびJ. Reschke、ed。、 \"HTTP Semantics\"、Std 97、RFC 9110、DOI 10.17487/RFC9110、2022年6月、<https：//www.rfc-editor.org/info/rfc9110>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9449] Fett, D., Campbell, B., Bradley, J., Lodderstedt, T., Jones, M., and D. Waite, \"OAuth 2.0 Demonstrating Proof of Possession (DPoP)\", RFC 9449, DOI 10.17487/RFC9449, September 2023, <https://www.rfc-editor.org/info/rfc9449>.",
+      "ja": "[RFC9449] Fett、D.、Campbell、B.、Bradley、J.、Lodderstedt、T.、Jones、M。、およびD. Waite、 \"Oauth 2.0所有証明（DPOP）の実証\"、RFC 9449、DOI 10.17487/RFC9449、2023年9月、<https://www.rfc-editor.org/info/rfc9449>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "I wanted to thank the Academy, the viewers at home, the shampoo manufacturers, etc.",
+      "ja": "アカデミー、自宅の視聴者、シャンプーメーカーなどに感謝したかった。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification was developed within the OAuth Working Group under the chairpersonship of Rifaat Shekh-Yusef and Hannes Tschofenig with Paul Wouters and Roman Danyliw serving as Security Area Directors. Additionally, the following individuals contributed ideas, feedback, corrections, and wording that helped shape this specification: Caleb Baker, Ivan Kanakarakis, Pieter Kasselman, Aaron Parecki, Denis Pinkas, Dima Postnikov, and Filip Skokan.",
+      "ja": "この仕様は、Rifaat Shekh-YusefとHannes Tschofenigの議長の下でOAuthワーキンググループ内で開発され、Paul WoutersとRoman Danyliwがセキュリティエリアディレクターを務めました。さらに、次の個人が、この仕様を形作るのに役立つアイデア、フィードバック、修正、文言を提供しました：カレブ・ベイカー、イヴァン・カナカラキス、ピーター・カッセルマン、アーロン・パレッキ、デニス・ピンカス、ディマ・ポストニコフ、フィリップ・スコカン。"
+    },
+    {
+      "indent": 3,
+      "text": "Some early discussion of the motivations and concepts that precipitated the initial draft version of this document occurred at the 2021 OAuth Security Workshop. The authors thank the organizers of the workshop (Guido Schmitz, Steinar Noem, and Daniel Fett) for hosting an event that is conducive to collaboration and community input.",
+      "ja": "このドキュメントの最初のドラフトバージョンを引き起こした動機と概念についてのいくつかの初期の議論は、2021 OAUTHセキュリティワークショップで発生しました。著者は、ワークショップの主催者（Guido Schmitz、Steinar Noem、およびDaniel Fett）の主催者に、コラボレーションとコミュニティの入力に役立つイベントを開催してくれたことに感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Vittorio Bertocci Auth0/Okta Email: vittorio@auth0.com",
+      "ja": "vittorio bertocci auth0/oktaメール：vittorio@auth0.com"
+    },
+    {
+      "indent": 3,
+      "text": "Brian Campbell Ping Identity Email: bcampbell@pingidentity.com",
+      "ja": "ブライアンキャンベルピンアイデンティティメール：bcampbell@pingidentity.com"
+    }
+  ]
+}
