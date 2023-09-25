@@ -1,6 +1,6 @@
-
-# 全体共通（各機能の呼び出し専用）プログラム
-#   * CLIからの入力受付
+# ------------------------------------------------------------------------------
+# RFC翻訳 各機能の呼び出しメインプログラム
+# ------------------------------------------------------------------------------
 
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
@@ -11,7 +11,7 @@ from src.make_json_from_html import make_json_from_html
 from src.fetch_index_group import fetch_index_group
 
 def main(rfc_number: int | str) -> None:
-    print('[+] RFC %s:' % rfc_number)
+    print('[*] RFC %s:' % rfc_number)
 
     try:
         fetch_rfc(rfc_number)
@@ -21,12 +21,6 @@ def main(rfc_number: int | str) -> None:
         with open(filename, "w") as f:
             f.write('')
         return
-    # except Exception as e:
-    #     print(e)
-    #     filename = "html/rfc%s-error.html" % rfc_number
-    #     with open(filename, "w") as f:
-    #         f.write('')
-    #     return
 
     res = trans_rfc(rfc_number)
     if res is False:
@@ -35,7 +29,7 @@ def main(rfc_number: int | str) -> None:
 
 def continuous_main(begin=None, end=None, only_first=False):
     numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
-    # print('[+] diff_remote_and_local:')
+    # print('[*] diff_remote_and_local:')
     # print(numbers)
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
@@ -80,15 +74,15 @@ if __name__ == '__main__':
 
     if args.make_index:
         # トップページ(index.html)の作成
-        print("[+] index.htmlの作成")
+        print("[*] index.htmlの作成")
         make_index()
     elif args.make_index_draft:
         # トップページ(draft/index.html)の作成
-        print("[+] draft/index.htmlの作成")
+        print("[*] draft/index.htmlの作成")
         make_index_draft()
     elif args.fetch_group:
         # WorkingGroupのRFCとドラフト一覧の作成
-        print("[+] WorkingGroupのRFCとDraft一覧収集")
+        print("[*] WorkingGroupのRFCとDraft一覧収集")
         fetch_index_group()
     elif args.transtest:
         # 翻訳のテスト
@@ -97,7 +91,7 @@ if __name__ == '__main__':
         print('Translate test result:', res)
     elif args.fetch and args.begin and args.end:
         # 範囲指定でRFCの取得
-        print("[+] RFC %d - %d のRFCを取得" % (args.begin, args.end))
+        print("[*] RFC %d - %d のRFCを取得" % (args.begin, args.end))
         numbers = list(diff_remote_and_local_index())
         numbers = [x for x in numbers if args.begin <= x <= args.end]
         for rfc_number in numbers:
@@ -105,16 +99,16 @@ if __name__ == '__main__':
     elif args.fetch and RFCs:
         # 指定したRFCの取得
         for rfc in RFCs:
-            print("[+] RFC %s を取得" % rfc)
+            print("[*] RFC %s を取得" % rfc)
             fetch_rfc(rfc, args.force)
     elif args.trans and RFCs:
         # RFCの翻訳
         for rfc in RFCs:
-            print("[+] RFC %s を翻訳" % rfc)
+            print("[*] RFC %s を翻訳" % rfc)
             trans_rfc(rfc)
     elif args.make and args.begin and args.end:
         # 範囲指定でRFCのHTML(rfcXXXX.html)を作成
-        print("[+] RFC %d - %d のHTMLを生成" % (args.begin, args.end))
+        print("[*] RFC %d - %d のHTMLを生成" % (args.begin, args.end))
         for rfc_number in range(args.begin, args.end):
             make_html(rfc_number)
     elif args.make and RFCs:
