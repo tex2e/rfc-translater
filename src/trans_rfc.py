@@ -51,6 +51,11 @@ trans_rules = {
 }
 
 
+# 翻訳処理例外
+class MyTranslateException(Exception):
+    pass
+
+
 # 翻訳抽象クラス
 class Translator:
 
@@ -61,7 +66,7 @@ class Translator:
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
         self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
 
-    def increment_count(self, incr=1):
+    def increment_progress(self, incr=1):
         # プログレスバー用の出力
         self.count += incr
         self.bar.update(incr)
@@ -104,12 +109,11 @@ class TranslatorSeleniumGoogletrans(Translator):
         ja = trans_rules.get(text.lower())
         if ja:
             return ja
-        # 「%」をURLエンコードする
-        text = text.replace('%', '%25')
-        # 「|」をURLエンコードする
-        text = text.replace('|', '%7C')
-        # 「/」をURLエンコードする
-        text = text.replace('/', '%2F')
+
+        # URLエンコード
+        text = text.replace('%', '%25')  # 「%」をURLエンコードする
+        text = text.replace('|', '%7C')  # 「|」をURLエンコードする
+        text = text.replace('/', '%2F')  # 「/」をURLエンコードする
 
         for i in range(0, 3):
             browser = self._browser
@@ -126,6 +130,11 @@ class TranslatorSeleniumGoogletrans(Translator):
             elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
             ja = "\n".join(elem.text for elem in elems)
             ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
+            # 翻訳結果が空文字のときは別のCSSセレクタでリトライする（例：224.0.0.18を翻訳するとURLになって構造が変わるため）
+            if re.match(r'^\s*$', ja):
+                elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='jqKxS']")
+                ja = "\n".join(elem.text for elem in elems)
+                ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
 
             # 翻訳結果が空文字のときはリトライする（最大3回）
             if re.match(r'^\s*$', ja):
@@ -134,15 +143,8 @@ class TranslatorSeleniumGoogletrans(Translator):
 
             return ja
 
-        return ja
-
-    def translate_texts(self, texts: list[str], dest='ja') -> list[str]:
-        res = []
-        for text in texts:
-            ja = self.translate(text)
-            res.append(ja)
-            self.increment_count()
-        return res
+        # リトライしても翻訳結果が空文字のときは例外とする
+        raise MyTranslateException(f"Translated text is empty string! input text: {text}")
 
     def close(self):
         if self._browser is None:
@@ -158,13 +160,13 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
     # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
-        # is_draft = False
+        # 通常のRFCのとき
         input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
         input_file = f'{input_dir}/rfc{rfc_number}.json'
         output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
         midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
-        # is_draft = True
+        # ドラフト版のRFCのとき
         organization   = m['org']
         working_group  = m['wg']
         rfc_draft_name = m['name']
@@ -182,13 +184,14 @@ def trans_rfc(rfc_number: int | str) -> bool:
         with open(input_file, 'r', encoding="utf-8") as f:
             obj = json.load(f)
 
-    desc = 'RFC %s' % rfc_number
-    translator = TranslatorSeleniumGoogletrans(total=len(obj['contents']), desc=desc)
+    translator = TranslatorSeleniumGoogletrans(
+        total=len(obj['contents']),
+        desc='RFC %s' % rfc_number)
     is_canceled = False
 
     try:
         # タイトルの翻訳
-        if not obj['title'].get('ja'):  # 既に翻訳済みの段落はスキップする
+        if not obj['title'].get('ja'):
             titles = obj['title']['text'].split(' - ', 1)  # "RFC XXXX - Title"
             if len(titles) <= 1:
                 obj['title']['ja'] = "RFC %s" % rfc_number
@@ -198,73 +201,80 @@ def trans_rfc(rfc_number: int | str) -> bool:
                 obj['title']['ja'] = "RFC %s - %s" % (rfc_number, ja)
 
         # 段落の翻訳
-        #   複数の段落をまとめて翻訳する
-        CHUNK_NUM = 15
-        for obj_contents in chunks(list(enumerate(obj['contents'])), CHUNK_NUM):
+        for i, obj_contents_i in enumerate(obj['contents']):
 
-            texts = []      # 原文
-            pre_texts = []  # 原文の前文字 (箇条書きの記号など)
+            # 既に翻訳済みの段落はスキップする
+            if obj_contents_i.get('ja'):
+                translator.increment_progress()  # 進捗+1
+                continue
 
-            for i, obj_contents_i in obj_contents:
+            # 英語原文
+            text = obj_contents_i['text']
+            # 英語原文の前文字（箇条書きの記号などを翻訳しないようにするため）
+            pre_text = ""
+            # 日本語翻訳文
+            text_ja = ""
 
-                # 既に翻訳済みの段落 や 図表 は翻訳しないでスキップする
-                if (obj_contents_i.get('ja') or (obj_contents_i.get('raw') is True)):
-                    texts.append('')
-                    pre_texts.append('')
-                    continue
+            # 箇条書きのパターン
+            # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
+            pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
 
-                text = obj_contents_i['text']
-
+            if obj_contents_i.get('raw') is True:
+                # 図表は翻訳しない
+                pre_text, text = ('', '')
+            elif m := re.match(pattern, text):
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
-                # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
-                pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
-                if m := re.match(pattern, text):
-                    pre_texts.append(m[1])
-                    texts.append(m[2])
-                elif m := re.match(r'^Appendix ([A-Z])\. (.*)$', text):
-                    pre_texts.append(f'付録{m[1]}. ')
-                    texts.append(m[2])
-                else:
-                    pre_texts.append('')
-                    texts.append(text)
+                pre_text, text = m[1], m[2]
+            elif m := re.match(r'^Appendix ([A-Z])\. (.*)$', text):
+                # 原文がセクション付録の場合
+                pre_text, text = (f'付録{m[1]}. ', m[2])
+            else:
+                # 通常の本文
+                pre_text, text = ('', text)
 
-            texts_ja = translator.translate_texts(texts)
+            # 翻訳の実行
+            text_ja = translator.translate(text)
 
             # 翻訳結果を格納
-            for (i, obj_contents_i), pre_text, text_ja in \
-                    zip(obj_contents, pre_texts, texts_ja):
-                obj['contents'][i]['ja'] = pre_text + text_ja
+            obj['contents'][i]['ja'] = pre_text + text_ja
+
+            translator.increment_progress()  # 進捗+1
 
         print("", flush=True)
 
-    except NoSuchElementException as e:
-        print('[-] Google Translate is blocked by Google :(')
-        print('[-]', datetime.now(JST))
-        print(e)
-        is_canceled = True
-    except TimeoutException as e:
-        print('[-] Selenium Timeout!')
-        print('[-]', datetime.now(JST))
+    except (NoSuchElementException, TimeoutException, MyTranslateException) as e:
+        # NoSuchElementException: Google翻訳で別のページが返ってきたときに発生する例外
+        # TimeoutException: ネットワークなどの問題で発生する例外
+        print(f'[-] Translator Error! ({datetime.now(JST)})')
         print(e)
         is_canceled = True
     except KeyboardInterrupt:
+        # ユーザが意図的に処理を停止したときに発生する例外
         print('Interrupted!')
         is_canceled = True
     finally:
         translator.close()
 
     if not is_canceled:
+        # 正常終了した時
+        # 翻訳成果物をファイルに出力する
         with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
-        # 不要になったファイルの削除
+            print(f"[+] Save file: {output_file}")
+        # 不要な入力ファイルの削除
         os.remove(input_file)
+        print(f"[+] Delete file: {input_file}")
+        # 不要な中間ファイルの削除
         if os.path.isfile(midway_file):
             os.remove(midway_file)
+            print(f"[+] Delete file: {midway_file}")
         return True
     else:
+        # 異常終了した時
+        # 途中まで翻訳済みのファイルを生成する
         with open(midway_file, 'w', encoding="utf-8", newline="\n") as f:
-            # 途中まで翻訳済みのファイルを生成する
             json.dump(obj, f, indent=2, ensure_ascii=False)
+            print(f"[-] Save file: {midway_file}")
         return False
 
 
