@@ -1,0 +1,1893 @@
+{
+  "title": {
+    "text": "RFC 9484 - Proxying IP in HTTP",
+    "ja": "RFC 9484 - httpでIPをプロキシする"
+  },
+  "number": 9484,
+  "created_at": "2023-10-20 23:47:43.418003+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     T. Pauly, Ed.\nRequest for Comments: 9484                                    Apple Inc.\nUpdates: 9298                                                D. Schinazi\nCategory: Standards Track                              A. Chernyakhovsky\nISSN: 2070-1721                                               Google LLC\n                                                            M. Khlewind\n                                                           M. Westerlund\n                                                                Ericsson\n                                                            October 2023",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 26,
+      "text": "Proxying IP in HTTP",
+      "ja": "httpでIPをプロキシする"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes how to proxy IP packets in HTTP. This protocol is similar to UDP proxying in HTTP but allows transmitting arbitrary IP packets. More specifically, this document defines a protocol that allows an HTTP client to create an IP tunnel through an HTTP server that acts as an IP proxy. This document updates RFC 9298.",
+      "ja": "このドキュメントでは、httpでIPパケットをプロキシする方法について説明します。このプロトコルは、HTTPでのプロキシのUDPに似ていますが、任意のIPパケットを送信できます。より具体的には、このドキュメントでは、HTTPクライアントがIPプロキシとして機能するHTTPサーバーを介してIPトンネルを作成できるプロトコルを定義します。このドキュメントは、RFC 9298を更新します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9484.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9484で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2023 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  Configuration of Clients\n4.  Tunnelling IP over HTTP\n  4.1.  IP Proxy Handling\n  4.2.  HTTP/1.1 Request\n  4.3.  HTTP/1.1 Response\n  4.4.  HTTP/2 and HTTP/3 Requests\n  4.5.  HTTP/2 and HTTP/3 Responses\n  4.6.  Limiting Request Scope\n  4.7.  Capsules\n    4.7.1.  ADDRESS_ASSIGN Capsule\n    4.7.2.  ADDRESS_REQUEST Capsule\n    4.7.3.  ROUTE_ADVERTISEMENT Capsule\n  4.8.  IPv6 Extension Headers\n5.  Context Identifiers\n6.  HTTP Datagram Payload Format\n7.  IP Packet Handling\n  7.1.  Link Operation\n  7.2.  Routing Operation\n    7.2.1.  Error Signalling\n8.  Examples\n  8.1.  Remote Access VPN\n  8.2.  Site-to-Site VPN\n  8.3.  IP Flow Forwarding\n  8.4.  Proxied Connection Racing\n9.  Extensibility Considerations\n10. Performance Considerations\n  10.1.  MTU Considerations\n  10.2.  ECN Considerations\n  10.3.  Differentiated Services Considerations\n11. Security Considerations\n12. IANA Considerations\n  12.1.  HTTP Upgrade Token Registration\n  12.2.  MASQUE URI Suffixes Registry Creation\n  12.3.  Updates to masque Well-Known URI Registration\n  12.4.  HTTP Capsule Types Registrations\n13. References\n  13.1.  Normative References\n  13.2.  Informative References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP provides the CONNECT method (see Section 9.3.6 of [HTTP]) for creating a TCP [TCP] tunnel to a destination and a similar mechanism for UDP [CONNECT-UDP]. However, these mechanisms cannot tunnel other IP protocols [IANA-PN] nor convey fields of the IP header.",
+      "ja": "HTTPは、TCP [TCP]トンネルを宛先に作成し、UDP [Connect-UDP]の同様のメカニズムを作成するための接続方法（[HTTP]のセクション9.3.6を参照）を提供します。ただし、これらのメカニズムは、他のIPプロトコル[IANA-PN]をトンネルすることも、IPヘッダーのフィールドを伝達することもできません。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes a protocol for tunnelling IP through an HTTP server acting as an IP-specific proxy over HTTP. This can be used for various use cases, such as remote access VPN, site-to-site VPN, secure point-to-point communication, or general-purpose packet tunnelling.",
+      "ja": "このドキュメントでは、HTTPを介したIP固有のプロキシとして機能するHTTPサーバーを介してIPをトンネリングするためのプロトコルについて説明します。これは、リモートアクセスVPN、サイトツーサイトVPN、安全なポイントツーポイント通信、または汎用パケットトンネルなど、さまざまなユースケースに使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "IP proxying operates similarly to UDP proxying [CONNECT-UDP], whereby the proxy itself is identified with an absolute URL, optionally containing the traffic's destination. Clients generate these URLs using a URI Template [TEMPLATE], as described in Section 3.",
+      "ja": "IPプロキシは、UDPプロキシ[connect-udp]と同様に動作します。これにより、プロキシ自体は、オプションでトラフィックの宛先を含む絶対URLで識別されます。セクション3で説明されているように、クライアントはURIテンプレート[テンプレート]を使用してこれらのURLを生成します。"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol supports all existing versions of HTTP by using HTTP Datagrams [HTTP-DGRAM]. When using HTTP/2 [HTTP/2] or HTTP/3 [HTTP/3], it uses HTTP Extended CONNECT, as described in [EXT-CONNECT2] and [EXT-CONNECT3]. When using HTTP/1.x [HTTP/1.1], it uses HTTP Upgrade, as defined in Section 7.8 of [HTTP].",
+      "ja": "このプロトコルは、HTTPデータグラム[http-dgram]を使用して、既存のすべてのバージョンのHTTPをサポートします。HTTP/2 [HTTP/2]またはHTTP/3 [HTTP/3]を使用する場合、[ext-Connect2]および[ext-Connect3]で説明されているように、HTTP拡張接続を使用します。HTTP/1.x [HTTP/1.1]を使用する場合、[HTTP]のセクション7.8で定義されているように、HTTPアップグレードを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document updates [CONNECT-UDP] to change the \"masque\" well-known URI; see Section 12.3.",
+      "ja": "このドキュメントは[Connect-UDP]を更新して、「マスク」のよく知られているURIを変更します。セクション12.3を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 慣習と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In this document, we use the term \"IP proxy\" to refer to the HTTP server that responds to the IP proxying request. The term \"client\" is used in the HTTP sense; the client constructs the IP proxying request. If there are HTTP intermediaries (as defined in Section 3.7 of [HTTP]) between the client and the IP proxy, those are referred to as \"intermediaries\" in this document. The term \"IP proxying endpoints\" refers to both the client and the IP proxy.",
+      "ja": "このドキュメントでは、「IPプロキシ」という用語を使用して、IPプロキシリクエストに応答するHTTPサーバーを参照します。「クライアント」という用語は、HTTPの意味で使用されます。クライアントは、IPプロキシリクエストを構築します。クライアントとIPプロキシの間にHTTP仲介者（[HTTP]のセクション3.7で定義されている）がある場合、それらはこのドキュメントに「仲介者」と呼ばれます。「IPプロキシエンドポイント」という用語は、クライアントとIPプロキシの両方を指します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document uses terminology from [QUIC]. Where this document defines protocol types, the definition format uses the notation from Section 1.3 of [QUIC]. This specification uses the variable-length integer encoding from Section 16 of [QUIC]. Variable-length integer values do not need to be encoded in the minimum number of bytes necessary.",
+      "ja": "このドキュメントでは、[QUIC]の用語を使用しています。このドキュメントがプロトコルタイプを定義する場合、定義形式は[QUIC]のセクション1.3の表記を使用します。この仕様では、[QUIC]のセクション16からの可変長整数エンコードを使用します。可変長さの整数値は、必要な最小バイト数でエンコードする必要はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that, when the HTTP version in use does not support multiplexing streams (such as HTTP/1.1), any reference to \"stream\" in this document represents the entire connection.",
+      "ja": "使用中のHTTPバージョンが多重化ストリーム（HTTP/1.1など）をサポートしていない場合、このドキュメントの「ストリーミング」への参照は、接続全体を表します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Configuration of Clients",
+      "section_title": true,
+      "ja": "3. クライアントの構成"
+    },
+    {
+      "indent": 3,
+      "text": "Clients are configured to use IP proxying over HTTP via a URI Template [TEMPLATE]. The URI Template MAY contain two variables: \"target\" and \"ipproto\"; see Section 4.6. The optionality of the variables needs to be considered when defining the template so that the variable is either self-identifying or possible to exclude in the syntax.",
+      "ja": "クライアントは、URIテンプレート[テンプレート]を介してHTTPを介してProxyingを使用するように構成されています。URIテンプレートには、「ターゲット」と「Ipproto」の2つの変数が含まれている場合があります。セクション4.6を参照してください。変数を定義するときに変数のオプションを考慮する必要があり、変数が構文で自己識別または除外できるようにする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Examples are shown below:",
+      "ja": "例を以下に示します。"
+    },
+    {
+      "indent": 3,
+      "text": "https://example.org/.well-known/masque/ip/{target}/{ipproto}/\nhttps://proxy.example.org:4443/masque/ip?t={target}&i={ipproto}\nhttps://proxy.example.org:4443/masque/ip{?target,ipproto}\nhttps://masque.example.org/?user=bob",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 22,
+      "text": "Figure 1: URI Template Examples",
+      "ja": "図1：URIテンプレートの例"
+    },
+    {
+      "indent": 3,
+      "text": "The following requirements apply to the URI Template:",
+      "ja": "URIテンプレートには、次の要件が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST be a level 3 template or lower.",
+      "ja": "* URIテンプレートは、レベル3テンプレート以下でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST be in absolute form and MUST include non-empty scheme, authority, and path components.",
+      "ja": "* URIテンプレートは絶対的な形でなければならず、空でないスキーム、権限、およびパスコンポーネントを含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The path component of the URI Template MUST start with a slash \"/\".",
+      "ja": "* URIテンプレートのパスコンポーネントは、スラッシュ \"/\"で開始する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* All template variables MUST be within the path or query components of the URI.",
+      "ja": "* すべてのテンプレート変数は、URIのパスまたはクエリコンポーネント内にある必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MAY contain the two variables \"target\" and \"ipproto\" and MAY contain other variables. If the \"target\" or \"ipproto\" variables are included, their values MUST NOT be empty. Clients can instead use \"*\" to indicate wildcard or no-preference values; see Section 4.6.",
+      "ja": "* URIテンプレートには、2つの変数「ターゲット」と「Ipproto」が含まれ、他の変数が含まれる場合があります。「ターゲット」または「ipproto」変数が含まれている場合、その値は空ではないはずです。代わりに、クライアントは「*」を使用して、ワイルドカードまたはプレーファレンスなしの値を示すことができます。セクション4.6を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST NOT contain any non-ASCII Unicode characters and MUST only contain ASCII characters in the range 0x21-0x7E inclusive (note that percent-encoding is allowed; see Section 2.1 of [URI]).",
+      "ja": "* URIテンプレートには、非ASCIIユニコード文字を含める必要はなく、範囲0x21-0x7Eを含む範囲のASCII文字のみを含める必要があります（パーセントエンコードが許可されていることに注意してください。[URI]のセクション2.1を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The URI Template MUST NOT use Reserved Expansion (\"+\" operator), Fragment Expansion (\"#\" operator), Label Expansion with Dot-Prefix, Path Segment Expansion with Slash-Prefix, nor Path-Style Parameter Expansion with Semicolon-Prefix.",
+      "ja": "* URIテンプレートは、予約済み拡張（ \"\"オペレーター）、フラグメント拡張（ \"＃\"オペレーター）、ドットペルフィックスによるラベル拡張、スラッシュプレフィックスによるパスセグメント拡張、Semicolon-Prefixによるパススタイルのパラメーター拡張を使用してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD validate the requirements above; however, clients MAY use a general-purpose URI Template implementation that lacks this specific validation. If a client detects that any of the requirements above are not met by a URI Template, the client MUST reject its configuration and abort the request without sending it to the IP proxy.",
+      "ja": "クライアントは上記の要件を検証する必要があります。ただし、クライアントは、この特定の検証がない汎用URIテンプレートの実装を使用する場合があります。クライアントが上記の要件のいずれかがURIテンプレートで満たされていないことを検出した場合、クライアントはその構成を拒否し、IPプロキシに送信せずにリクエストを中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "As with UDP proxying, some client configurations for IP proxies will only allow the user to configure the proxy host and proxy port. Clients with such limitations MAY attempt to access IP proxying capabilities using the default template, which is defined as: \"https://$PROXY_HOST:$PROXY_PORT/.well-known/masque/ ip/{target}/{ipproto}/\", where $PROXY_HOST and $PROXY_PORT are the configured host and port of the IP proxy, respectively. IP proxy deployments SHOULD offer service at this location if they need to interoperate with such clients.",
+      "ja": "UDPプロキシと同様に、IPプロキシのクライアント構成の一部は、ユーザーがプロキシホストとプロキシポートを構成できるようにすることのみを可能にします。このような制限があるクライアントは、デフォルトのテンプレートを使用してIPプロキシ機能にアクセスしようとする場合があります。これは、「https：// $ proxy_host：$ proxy_port/.well- nubled/masque/ip/{target}/{ipproto}/\"、$ proxy_hostと$ proxy_portは、それぞれIPプロキシの構成ホストとポートです。IPプロキシの展開は、そのようなクライアントと相互運用する必要がある場合、この場所でサービスを提供する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Tunnelling IP over HTTP",
+      "section_title": true,
+      "ja": "4. HTTPを介したトンネルIP"
+    },
+    {
+      "indent": 3,
+      "text": "To allow negotiation of a tunnel for IP over HTTP, this document defines the \"connect-ip\" HTTP upgrade token. The resulting IP tunnels use the Capsule Protocol (see Section 3.2 of [HTTP-DGRAM]) with HTTP Datagrams in the format defined in Section 6.",
+      "ja": "HTTPを介したIPのトンネルの交渉を許可するために、このドキュメントは「Connect-IP」HTTPアップグレードトークンを定義します。結果のIPトンネルは、セクション6で定義された形式のHTTPデータグラムを使用して、カプセルプロトコル（[http-dgram]のセクション3.2を参照）を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "To initiate an IP tunnel associated with a single HTTP stream, a client issues a request containing the \"connect-ip\" upgrade token.",
+      "ja": "単一のHTTPストリームに関連付けられたIPトンネルを開始するために、クライアントは「Connect-IP」アップグレードトークンを含むリクエストを発行します。"
+    },
+    {
+      "indent": 3,
+      "text": "When sending its IP proxying request, the client SHALL perform URI Template expansion to determine the path and query of its request; see Section 3.",
+      "ja": "IPプロキシリクエストを送信する場合、クライアントはURIテンプレート拡張を実行して、リクエストのパスとクエリを決定するものとします。セクション3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "By virtue of the definition of the Capsule Protocol (see Section 3.2 of [HTTP-DGRAM]), IP proxying requests do not carry any message content. Similarly, successful IP proxying responses also do not carry any message content.",
+      "ja": "カプセルプロトコルの定義により（[http-dgram]のセクション3.2を参照）、IPプロキシリクエストはメッセージコンテンツを伝えません。同様に、成功したIPプロキシ応答もメッセージコンテンツを伝えません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP proxying over HTTP MUST be operated over TLS or QUIC encryption, or another equivalent encryption protocol, to provide confidentiality, integrity, and authentication.",
+      "ja": "HTTPを介してプロキシを作成することは、機密性、整合性、および認証を提供するために、TLSまたはQUIC暗号化、または別の同等の暗号化プロトコルを介して操作する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. IP Proxy Handling",
+      "section_title": true,
+      "ja": "4.1. IPプロキシ処理"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving an IP proxying request:",
+      "ja": "IPプロキシリクエストを受信したら："
+    },
+    {
+      "indent": 3,
+      "text": "* If the recipient is configured to use another HTTP server, it will act as an intermediary by forwarding the request to the other HTTP server. Note that such intermediaries may need to re-encode the request if they forward it using a version of HTTP that is different from the one used to receive it, as the request encoding differs by version (see below).",
+      "ja": "* 受信者が別のHTTPサーバーを使用するように構成されている場合、リクエストを他のHTTPサーバーに転送することにより、仲介者として機能します。そのような仲介業者は、リクエストがバージョンによって異なるため、それを受け取るために使用されるものとは異なるHTTPのバージョンを使用して転送する場合、リクエストを再エンコードする必要がある場合があることに注意してください（以下を参照）。"
+    },
+    {
+      "indent": 3,
+      "text": "* Otherwise, the recipient will act as an IP proxy. The IP proxy can choose to reject the IP proxying request. Otherwise, it extracts the optional \"target\" and \"ipproto\" variables from the URI it has reconstructed from the request headers, decodes their percent-encoding, and establishes an IP tunnel.",
+      "ja": "* それ以外の場合、受信者はIPプロキシとして機能します。IPプロキシは、IPプロキシリクエストを拒否することを選択できます。それ以外の場合は、リクエストヘッダーから再構築されたURIからオプションの「ターゲット」および「IPPROTO」変数を抽出し、パーセントエンコードをデコードし、IPトンネルを確立します。"
+    },
+    {
+      "indent": 3,
+      "text": "IP proxies MUST validate whether the decoded \"target\" and \"ipproto\" variables meet the requirements in Section 4.6. If they do not, the IP proxy MUST treat the request as malformed; see Section 8.1.1 of [HTTP/2] and Section 4.1.2 of [HTTP/3]. If the \"target\" variable is a DNS name, the IP proxy MUST perform DNS resolution (to obtain the corresponding IPv4 and/or IPv6 addresses via A and/or AAAA records) before replying to the HTTP request. If errors occur during this process, the IP proxy MUST reject the request and SHOULD send details using an appropriate Proxy-Status header field [PROXY-STATUS]. For example, if DNS resolution returns an error, the proxy can use the dns_error proxy error type from Section 2.3.2 of [PROXY-STATUS].",
+      "ja": "IPプロキシは、デコードされた「ターゲット」と「Ipproto」変数がセクション4.6の要件を満たしているかどうかを検証する必要があります。そうでない場合、IPプロキシは要求を奇形として扱う必要があります。[http/2]のセクション8.1.1および[http/3]のセクション4.1.2を参照してください。「ターゲット」変数がDNS名の場合、IPプロキシはDNS解像度を実行する必要があります（HTTPリクエストに返信する前に、DNS解像度を実行する必要があります（Aおよび/またはAAAAレコードを介して対応するIPv4アドレスを取得する）。このプロセス中にエラーが発生した場合、IPプロキシはリクエストを拒否する必要があり、適切なプロキシステータスヘッダーフィールド[Proxy-Status]を使用して詳細を送信する必要があります。たとえば、DNS解像度がエラーを返す場合、プロキシは[プロキシ-status]のセクション2.3.2からDNS_ERRORプロキシエラータイプを使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The lifetime of the IP forwarding tunnel is tied to the IP proxying request stream. The IP proxy MUST maintain all IP address and route assignments associated with the IP forwarding tunnel while the request stream is open. IP proxies MAY choose to tear down the tunnel due to a period of inactivity, but they MUST close the request stream when doing so.",
+      "ja": "IP転送トンネルの寿命は、IPプロキシリクエストストリームに結び付けられています。IPプロキシは、リクエストストリームが開いている間に、IP転送トンネルに関連付けられたすべてのIPアドレスおよびルート割り当てを維持する必要があります。IPプロキシは、不活動の期間のためにトンネルを取り壊すことを選択する場合がありますが、そうするときはリクエストストリームを閉じる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A successful IP proxying response (as defined in Sections 4.3 and 4.5) indicates that the IP proxy has established an IP tunnel and is willing to proxy IP payloads. Any response other than a successful IP proxying response indicates that the request has failed; thus, the client MUST abort the request.",
+      "ja": "成功したIPプロキシ応答（セクション4.3および4.5で定義されている）は、IPプロキシがIPトンネルを確立し、IPペイロードをプロキシを喜んで確立していることを示しています。成功したIPプロキシ応答以外の応答は、リクエストが失敗したことを示しています。したがって、クライアントはリクエストを中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Along with a successful IP proxying response, the IP proxy can send capsules to assign addresses and advertise routes to the client (Section 4.7). The client can also assign addresses and advertise routes to the IP proxy for network-to-network routing.",
+      "ja": "IPプロキシ応答の成功に加えて、IPプロキシはカプセルを送信してアドレスを割り当て、クライアントにルートを宣伝することができます（セクション4.7）。クライアントは、ネットワーク間ルーティングのアドレスをIPプロキシに宣伝し、宣伝することもできます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. HTTP/1.1 Request",
+      "section_title": true,
+      "ja": "4.2. HTTP/1.1リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/1.1 [HTTP/1.1], an IP proxying request will meet the following requirements:",
+      "ja": "HTTP/1.1 [HTTP/1.1]を使用する場合、IPプロキシリクエストは次の要件を満たします。"
+    },
+    {
+      "indent": 3,
+      "text": "* The method SHALL be \"GET\".",
+      "ja": "* この方法は「取得」するものとする。"
+    },
+    {
+      "indent": 3,
+      "text": "* The request SHALL include a single Host header field containing the host and optional port of the IP proxy.",
+      "ja": "* リクエストには、IPプロキシのホストとオプションのポートを含む単一のホストヘッダーフィールドを含めるものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "* The request SHALL include a Connection header field with value \"Upgrade\" (note that this requirement is case-insensitive, as per Section 7.6.1 of [HTTP]).",
+      "ja": "* リクエストには、値「アップグレード」を持つ接続ヘッダーフィールドが含まれます（[HTTP]のセクション7.6.1によると、この要件はケース非感受性であることに注意してください）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The request SHALL include an Upgrade header field with value \"connect-ip\".",
+      "ja": "* リクエストには、値「Connect-IP」のアップグレードヘッダーフィールドが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "An IP proxying request that does not conform to these restrictions is malformed. The recipient of such a malformed request MUST respond with an error and SHOULD use the 400 (Bad Request) status code.",
+      "ja": "これらの制限に準拠していないIPプロキシリクエストは奇形です。このような奇形の要求の受信者は、エラーで応答する必要があり、400（悪い要求）ステータスコードを使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the client is configured with URI Template \"https://example.org/.well-known/masque/ip/{target}/{ipproto}/\" and wishes to open an IP forwarding tunnel with no target or protocol limitations, it could send the following request:",
+      "ja": "たとえば、クライアントがURIテンプレート「https://example.org/.well-kond/masque/ip/ {Target }/ \"で構成されている場合、ターゲットなしでIP転送トンネルを開くことを望みます。プロトコルの制限、次のリクエストを送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "GET https://example.org/.well-known/masque/ip/*/*/ HTTP/1.1\nHost: example.org\nConnection: Upgrade\nUpgrade: connect-ip\nCapsule-Protocol: ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 2: Example HTTP/1.1 Request",
+      "ja": "図2：HTTP/1.1リクエストの例"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. HTTP/1.1 Response",
+      "section_title": true,
+      "ja": "4.3. HTTP/1.1応答"
+    },
+    {
+      "indent": 3,
+      "text": "The server indicates a successful IP proxying response by replying with the following requirements:",
+      "ja": "サーバーは、次の要件を返信することにより、IPのプロキシ応答が成功したことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "* The HTTP status code on the response SHALL be 101 (Switching Protocols).",
+      "ja": "* 応答のHTTPステータスコードは101（スイッチングプロトコル）でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The response SHALL include a Connection header field with value \"Upgrade\" (note that this requirement is case-insensitive, as per Section 7.6.1 of [HTTP]).",
+      "ja": "* 応答には、値「アップグレード」を持つ接続ヘッダーフィールドが含まれます（[HTTP]のセクション7.6.1によると、この要件はケース非感受性であることに注意してください）。"
+    },
+    {
+      "indent": 3,
+      "text": "* The response SHALL include a single Upgrade header field with value \"connect-ip\".",
+      "ja": "* 応答には、値「Connect-IP」を備えた単一のアップグレードヘッダーフィールドが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "* The response SHALL meet the requirements of HTTP responses that start the Capsule Protocol; see Section 3.2 of [HTTP-DGRAM].",
+      "ja": "* 応答は、カプセルプロトコルを開始するHTTP応答の要件を満たすものとします。[http-dgram]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of these requirements are not met, the client MUST treat this proxying attempt as failed and close the connection.",
+      "ja": "これらの要件のいずれかが満たされていない場合、クライアントはこのプロキシの試みを失敗したように扱い、接続を閉じる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the server could respond with:",
+      "ja": "たとえば、サーバーは以下で応答できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP/1.1 101 Switching Protocols Connection: Upgrade Upgrade: connect-ip Capsule-Protocol: ?1",
+      "ja": "HTTP/1.1 101スイッチングプロトコル接続：アップグレードアップグレード：Connect-IP Capsule-Protocol：？1"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 3: Example HTTP/1.1 Response",
+      "ja": "図3：例HTTP/1.1応答の例"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. HTTP/2 and HTTP/3 Requests",
+      "section_title": true,
+      "ja": "4.4. HTTP/2およびHTTP/3リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/2 [HTTP/2] or HTTP/3 [HTTP/3], IP proxying requests use HTTP Extended CONNECT. This requires that servers send an HTTP Setting, as specified in [EXT-CONNECT2] and [EXT-CONNECT3], and that requests use HTTP pseudo-header fields with the following requirements:",
+      "ja": "HTTP/2 [HTTP/2]またはHTTP/3 [HTTP/3]を使用する場合、IPプロキシリクエストはHTTP拡張接続を使用します。これには、[ext-connect2]および[ext-connect3]で指定されているように、サーバーがHTTP設定を送信する必要があり、それは次の要件でhttp pseudo-headerフィールドを使用する要求が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :method pseudo-header field SHALL be \"CONNECT\".",
+      "ja": "* ：Method Pseudo-Headerフィールドは「接続」しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :protocol pseudo-header field SHALL be \"connect-ip\".",
+      "ja": "* ：プロトコル疑似ヘッダーフィールドは「Connect-IP」でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :authority pseudo-header field SHALL contain the authority of the IP proxy.",
+      "ja": "* The：authority Pseudo-Headerフィールドには、IPプロキシの権限が含まれているものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "* The :path and :scheme pseudo-header fields SHALL NOT be empty. Their values SHALL contain the scheme and path from the URI Template after the URI Template expansion process has been completed; see Section 3. Variables in the URI Template can determine the scope of the request, such as requesting full-tunnel IP packet forwarding, or a specific proxied flow; see Section 4.6.",
+      "ja": "* ：パスと：スキームの擬似ヘッダーフィールドは空にしてはなりません。それらの値には、URIテンプレート拡張プロセスが完了した後、URIテンプレートからのスキームとパスが含まれます。セクション3を参照してください。URIテンプレートの変数は、フルトゥンネルIPパケット転送の要求、または特定のプロキシフローなど、リクエストの範囲を決定できます。セクション4.6を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "An IP proxying request that does not conform to these restrictions is malformed; see Section 8.1.1 of [HTTP/2] and Section 4.1.2 of [HTTP/3].",
+      "ja": "これらの制限に準拠していないIPプロキシリクエストは奇形です。[http/2]のセクション8.1.1および[http/3]のセクション4.1.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, if the client is configured with URI Template \"https://example.org/.well-known/masque/ip/{target}/{ipproto}/\" and wishes to open an IP forwarding tunnel with no target or protocol limitations, it could send the following request:",
+      "ja": "たとえば、クライアントがURIテンプレート「https://example.org/.well-kond/masque/ip/ {Target }/ \"で構成されている場合、ターゲットなしでIP転送トンネルを開くことを望みます。プロトコルの制限、次のリクエストを送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS\n:method = CONNECT\n:protocol = connect-ip\n:scheme = https\n:path = /.well-known/masque/ip/*/*/\n:authority = example.org\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 17,
+      "text": "Figure 4: Example HTTP/2 or HTTP/3 Request",
+      "ja": "図4：例HTTP/2またはHTTP/3リクエスト"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. HTTP/2 and HTTP/3 Responses",
+      "section_title": true,
+      "ja": "4.5. HTTP/2およびHTTP/3応答"
+    },
+    {
+      "indent": 3,
+      "text": "The server indicates a successful IP proxying response by replying with the following requirements:",
+      "ja": "サーバーは、次の要件を返信することにより、IPのプロキシ応答が成功したことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "* The HTTP status code on the response SHALL be in the 2xx (Successful) range.",
+      "ja": "* 応答のHTTPステータスコードは、2xx（成功）範囲になります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The response SHALL meet the requirements of HTTP responses that start the Capsule Protocol; see Section 3.2 of [HTTP-DGRAM].",
+      "ja": "* 応答は、カプセルプロトコルを開始するHTTP応答の要件を満たすものとします。[http-dgram]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of these requirements are not met, the client MUST treat this proxying attempt as failed and abort the request. As an example, any status code in the 3xx range will be treated as a failure and cause the client to abort the request.",
+      "ja": "これらの要件のいずれかが満たされていない場合、クライアントはこのプロキシの試みを失敗したように扱い、リクエストを中止する必要があります。例として、3XX範囲のステータスコードは失敗として扱われ、クライアントがリクエストを中止します。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the server could respond with:",
+      "ja": "たとえば、サーバーは以下で応答できます。"
+    },
+    {
+      "indent": 3,
+      "text": "HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 16,
+      "text": "Figure 5: Example HTTP/2 or HTTP/3 Response",
+      "ja": "図5：例HTTP/2またはHTTP/3応答の例"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Limiting Request Scope",
+      "section_title": true,
+      "ja": "4.6. リクエスト範囲を制限します"
+    },
+    {
+      "indent": 3,
+      "text": "Unlike UDP proxying requests, which require specifying a target host, IP proxying requests can allow endpoints to send arbitrary IP packets to any host. The client can choose to restrict a given request to a specific IP prefix or IP protocol by adding parameters to its request. When the IP proxy knows that a request is scoped to a target prefix or protocol, it can leverage this information to optimize its resource allocation; for example, the IP proxy can assign the same public IP address to two IP proxying requests that are scoped to different prefixes and/or different protocols.",
+      "ja": "ターゲットホストを指定する必要があるUDPのプロキシリクエストとは異なり、IPプロキシリクエストにより、エンドポイントが任意のホストに任意のIPパケットを送信できます。クライアントは、特定のリクエストを特定のIPプレフィックスまたはIPプロトコルに制限することを選択できます。IPプロキシが、要求がターゲットプレフィックスまたはプロトコルにスコープされていることを知っている場合、この情報を活用してリソース割り当てを最適化できます。たとえば、IPプロキシは、同じパブリックIPアドレスを、異なるプレフィックスおよび/または異なるプロトコルにスコープした2つのIPプロキシリクエストに割り当てることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The scope of the request is indicated by the client to the IP proxy via the \"target\" and \"ipproto\" variables of the URI Template; see Section 3. Both the \"target\" and \"ipproto\" variables are optional; if they are not included, they are considered to carry the wildcard value \"*\".",
+      "ja": "リクエストの範囲は、URIテンプレートの「ターゲット」および「IPPROTO」変数を介してIPプロキシにクライアントによって示されます。セクション3を参照してください。「ターゲット」と「Ipproto」変数の両方がオプションです。それらが含まれていない場合、それらはワイルドカード値「*」を運ぶと見なされます。"
+    },
+    {
+      "indent": 3,
+      "text": "target: The variable \"target\" contains a hostname or IP prefix of a specific host to which the client wants to proxy packets. If the \"target\" variable is not specified or its value is \"*\", the client is requesting to communicate with any allowable host. \"target\" supports using DNS names, IPv6 prefixes, and IPv4 prefixes. Note that IPv6 scoped addressing zone identifiers [IPv6-ZONE-ID] are not supported. If the target is an IP prefix (IP address optionally followed by a percent-encoded slash followed by the prefix length in bits), the request will only support a single IP version. If the target is a hostname, the IP proxy is expected to perform DNS resolution to determine which route(s) to advertise to the client. The IP proxy SHOULD send a ROUTE_ADVERTISEMENT capsule that includes routes for all addresses that were resolved for the requested hostname, that are accessible to the IP proxy, and belong to an address family for which the IP proxy also sends an Assigned Address.",
+      "ja": "ターゲット：変数「ターゲット」には、クライアントがパケットをプロキシしたい特定のホストのホスト名またはIPプレフィックスが含まれています。「ターゲット」変数が指定されていない場合、またはその値が「*」である場合、クライアントは許容ホストと通信することを要求しています。「ターゲット」は、DNS名、IPv6プレフィックス、およびIPv4プレフィックスを使用してサポートします。IPv6スコープアドレス指定ゾーン識別子[IPv6-Zone-ID]はサポートされていないことに注意してください。ターゲットがIPプレフィックス（IPアドレスがオプションでエンコードされたスラッシュに続いてビットのプレフィックスの長さが続く）である場合、リクエストは単一のIPバージョンのみをサポートします。ターゲットがホスト名の場合、IPプロキシはDNS解像度を実行してクライアントに宣伝するルートを決定することが期待されます。IPプロキシは、要求されたホスト名で解決されたすべてのアドレスのルートを含むroute_Advertisementカプセルを送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "ipproto: The variable \"ipproto\" contains an Internet Protocol Number; see the defined list in the \"Assigned Internet Protocol Numbers\" IANA registry [IANA-PN]. If present, it specifies that a client only wants to proxy a specific IP protocol for this request. If the value is \"*\", or the variable is not included, the client is requesting to use any IP protocol. The IP protocol indicated in the \"ipproto\" variable represents an allowable next header value carried in IP headers that are directly sent in HTTP Datagrams (the outermost IP headers). ICMP traffic is always allowed, regardless of the value of this field.",
+      "ja": "IPPROTO：変数「Ipproto」には、インターネットプロトコル番号が含まれています。「割り当てられたインターネットプロトコル番号」IANAレジストリ[IANA-PN]の定義されたリストを参照してください。存在する場合、クライアントはこのリクエストのために特定のIPプロトコルのみをプロキシしたいと指定しています。値が「*」の場合、または変数が含まれていない場合、クライアントはIPプロトコルの使用を要求しています。「IPProto」変数に示されているIPプロトコルは、HTTPデータグラム（最も外側のIPヘッダー）で直接送信されるIPヘッダーに掲載される許容可能な次のヘッダー値を表します。このフィールドの値に関係なく、ICMPトラフィックは常に許可されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Using the terms IPv6address, IPv4address, and reg-name from [URI], the \"target\" and \"ipproto\" variables MUST adhere to the format in Figure 6, using notation from [ABNF]. Additionally:",
+      "ja": "[uri]のIPv6Address、IPv4Address、およびreg-nameという用語を使用して、[abnf]の表記を使用して、「ターゲット」および「ipproto」変数を図6の形式に付着させる必要があります。さらに："
+    },
+    {
+      "indent": 3,
+      "text": "* If \"target\" contains an IPv6 literal or prefix, the colons (\":\") MUST be percent-encoded. For example, if the target host is \"2001:db8::42\", it will be encoded in the URI as \"2001%3Adb8%3A%3A42\".",
+      "ja": "* 「ターゲット」にIPv6リテラルまたはプレフィックスが含まれている場合、コロン（ \"：\"）はパーセントエンコードされている必要があります。たとえば、ターゲットホストが「2001：DB8 :: 42」の場合、URIで「2001％3ADB8％3A％3A42」としてエンコードされます。"
+    },
+    {
+      "indent": 3,
+      "text": "* If present, the IP prefix length in \"target\" SHALL be preceded by a percent-encoded slash (\"/\"): \"%2F\". The IP prefix length MUST represent a decimal integer between 0 and the length of the IP address in bits, inclusive.",
+      "ja": "* 存在する場合、「ターゲット」のIPプレフィックスの長さの前には、パーセントエンコードされたスラッシュ（ \"/\"）： \"％2f\"があります。IPプレフィックスの長さは、ビット内のIPアドレスの長さの間の小数整数を表す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* If \"target\" contains an IP prefix and the prefix length is strictly less than the length of the IP address in bits, the lower bits of the IP address that are not covered by the prefix length MUST all be set to 0.",
+      "ja": "* 「ターゲット」にIPプレフィックスが含まれ、プレフィックスの長さがビット内のIPアドレスの長さよりも厳密に少ない場合、プレフィックスの長さでカバーされていないIPアドレスの低いビットをすべて0に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* \"ipproto\" MUST represent a decimal integer between 0 and 255 inclusive or the wildcard value \"*\".",
+      "ja": "* 「Ipproto」は、0〜255の包括的またはワイルドカード値「*」の間の小数整数を表す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "target = IPv6prefix / IPv4prefix / reg-name / \"*\"\nIPv6prefix = IPv6address [\"%2F\" 1*3DIGIT]\nIPv4prefix = IPv4address [\"%2F\" 1*2DIGIT]\nipproto = 1*3DIGIT / \"*\"",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 6: URI Template Variable Format",
+      "ja": "図6：URIテンプレート変数形式"
+    },
+    {
+      "indent": 3,
+      "text": "IP proxies MAY perform access control using the scoping information provided by the client, i.e., if the client is not authorized to access any of the destinations included in the scope, then the IP proxy can immediately reject the request.",
+      "ja": "IPプロキシは、クライアントが提供するスコーピング情報を使用してアクセス制御を実行できます。つまり、クライアントがスコープに含まれる宛先のいずれかにアクセスすることを許可されていない場合、IPプロキシはすぐにリクエストを拒否できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7. Capsules",
+      "section_title": true,
+      "ja": "4.7. カプセル"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines multiple new capsule types that allow endpoints to exchange IP configuration information. Both endpoints MAY send any number of these new capsules.",
+      "ja": "このドキュメントでは、エンドポイントがIP構成情報を交換できるようにする複数の新しいカプセルタイプを定義します。両方のエンドポイントは、これらの新しいカプセルの任意の数を送信する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7.1. ADDRESS_ASSIGN Capsule",
+      "section_title": true,
+      "ja": "4.7.1. address_assignカプセル"
+    },
+    {
+      "indent": 3,
+      "text": "The ADDRESS_ASSIGN capsule (capsule type 0x01) allows an endpoint to assign its peer a list of IP addresses or prefixes. Every capsule contains the full list of IP prefixes currently assigned to the receiver. Any of these addresses can be used as the source address on IP packets originated by the receiver of this capsule.",
+      "ja": "address_Assignカプセル（カプセルタイプ0x01）により、エンドポイントはピアをピアにIPアドレスまたはプレフィックスのリストを割り当てることができます。すべてのカプセルには、現在受信機に割り当てられているIPプレフィックスの完全なリストが含まれています。これらのアドレスのいずれかは、このカプセルの受信機が発信するIPパケットのソースアドレスとして使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "ADDRESS_ASSIGN Capsule {\n  Type (i) = 0x01,\n  Length (i),\n  Assigned Address (..) ...,\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 7: ADDRESS_ASSIGN Capsule Format",
+      "ja": "図7：Address_Assignカプセル形式"
+    },
+    {
+      "indent": 3,
+      "text": "The ADDRESS_ASSIGN capsule contains a sequence of zero or more Assigned Addresses.",
+      "ja": "Address_Assignカプセルには、割り当てられたアドレス以上のシーケンスが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Assigned Address {\n  Request ID (i),\n  IP Version (8),\n  IP Address (32..128),\n  IP Prefix Length (8),\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 8: Assigned Address Format",
+      "ja": "図8：割り当てられたアドレス形式"
+    },
+    {
+      "indent": 3,
+      "text": "Each Assigned Address contains the following fields:",
+      "ja": "割り当てられた各アドレスには、次のフィールドが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Request ID: Request identifier, encoded as a variable-length integer. If this address assignment is in response to an Address Request (see Section 4.7.2), then this field SHALL contain the value of the corresponding field in the request. Otherwise, this field SHALL be zero.",
+      "ja": "リクエストID：可変長整数としてエンコードされた識別子を要求します。このアドレスの割り当てがアドレス要求に応じている場合（セクション4.7.2を参照）、このフィールドには、リクエストに対応するフィールドの値が含まれます。それ以外の場合、このフィールドはゼロでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Version: IP Version of this address assignment, encoded as an unsigned 8-bit integer. It MUST be either 4 or 6.",
+      "ja": "IPバージョン：署名されていない8ビット整数としてエンコードされたこのアドレス割り当てのIPバージョン。4または6のいずれかでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Address: Assigned IP address. If the IP Version field has value 4, the IP Address field SHALL have a length of 32 bits. If the IP Version field has value 6, the IP Address field SHALL have a length of 128 bits.",
+      "ja": "IPアドレス：割り当てられたIPアドレス。IPバージョンフィールドに値4がある場合、IPアドレスフィールドには32ビットの長さがあります。IPバージョンフィールドに値6がある場合、IPアドレスフィールドには128ビットの長さがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Prefix Length: The number of bits in the IP address that are used to define the prefix that is being assigned, encoded as an unsigned 8-bit integer. This MUST be less than or equal to the length of the IP Address field in bits. If the prefix length is equal to the length of the IP address, the receiver of this capsule is allowed to send packets from a single source address. If the prefix length is less than the length of the IP address, the receiver of this capsule is allowed to send packets from any source address that falls within the prefix. If the prefix length is strictly less than the length of the IP address in bits, the lower bits of the IP Address field that are not covered by the prefix length MUST all be set to 0.",
+      "ja": "IPプレフィックスの長さ：IPアドレスのビット数は、割り当てられているプレフィックスを定義するために使用され、署名されていない8ビット整数としてエンコードされています。これは、ビット内のIPアドレスフィールドの長さ以下でなければなりません。接頭辞の長さがIPアドレスの長さに等しい場合、このカプセルの受信機は単一のソースアドレスからパケットを送信できます。接頭辞の長さがIPアドレスの長さよりも少ない場合、このカプセルの受信機は、プレフィックス内にあるソースアドレスからパケットを送信できます。接頭辞の長さがビット内のIPアドレスの長さよりも厳密に少ない場合、プレフィックスの長さでカバーされていないIPアドレスフィールドの低いビットをすべて0に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of the capsule fields are malformed upon reception, the receiver of the capsule MUST follow the error-handling procedure defined in Section 3.3 of [HTTP-DGRAM].",
+      "ja": "カプセルフィールドのいずれかが受信時に奇形である場合、カプセルの受信機は[http-dgram]のセクション3.3で定義されているエラー処理手順に従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If an ADDRESS_ASSIGN capsule does not contain an address that was previously transmitted in another ADDRESS_ASSIGN capsule, it indicates that the address has been removed. An ADDRESS_ASSIGN capsule can also be empty, indicating that all addresses have been removed.",
+      "ja": "address_Assignカプセルに、以前に別のaddress_Assignカプセルに送信されたアドレスが含まれていない場合、アドレスが削除されたことを示します。Address_Assignカプセルも空にすることができ、すべてのアドレスが削除されたことを示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "In some deployments of IP proxying in HTTP, an endpoint needs to be assigned an address by its peer before it knows what source address to set on its own packets. For example, in the remote access VPN case (Section 8.1), the client cannot send IP packets until it knows what address to use. In these deployments, the endpoint that is expecting an address assignment MUST send an ADDRESS_REQUEST capsule. This isn't required if the endpoint does not need any address assignment, for example, when it is configured out-of-band with static addresses.",
+      "ja": "HTTPでのIPプロキシのいくつかの展開では、独自のパケットに設定するソースアドレスを知る前に、エンドポイントをピアによってアドレスを割り当てる必要があります。たとえば、リモートアクセスVPNケース（セクション8.1）では、クライアントはどのアドレスを使用するかがわかるまでIPパケットを送信できません。これらの展開では、アドレスの割り当てを期待しているエンドポイントは、address_requestカプセルを送信する必要があります。これは、エンドポイントがアドレス割り当てを必要としない場合、たとえば、静的アドレスで帯域外に構成されている場合、必要ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "While ADDRESS_ASSIGN capsules are commonly sent in response to ADDRESS_REQUEST capsules, endpoints MAY send ADDRESS_ASSIGN capsules unprompted.",
+      "ja": "address_assignカプセルは一般にaddress_requestカプセルに応じて送信されますが、エンドポイントはaddress_assignカプセルを採用せずに送信する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7.2. ADDRESS_REQUEST Capsule",
+      "section_title": true,
+      "ja": "4.7.2. address_requestカプセル"
+    },
+    {
+      "indent": 3,
+      "text": "The ADDRESS_REQUEST capsule (capsule type 0x02) allows an endpoint to request assignment of IP addresses from its peer. The capsule allows the endpoint to optionally indicate a preference for which address it would get assigned.",
+      "ja": "address_requestカプセル（カプセルタイプ0x02）により、エンドポイントはピアからIPアドレスの割り当てを要求できます。カプセルにより、エンドポイントはオプションで、どのアドレスが割り当てられるかを好むことを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "ADDRESS_REQUEST Capsule {\n  Type (i) = 0x02,\n  Length (i),\n  Requested Address (..) ...,\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 9: ADDRESS_REQUEST Capsule Format",
+      "ja": "図9：address_requestカプセル形式"
+    },
+    {
+      "indent": 3,
+      "text": "The ADDRESS_REQUEST capsule contains a sequence of one or more Requested Addresses.",
+      "ja": "address_requestカプセルには、1つ以上の要求されたアドレスのシーケンスが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Requested Address {\n  Request ID (i),\n  IP Version (8),\n  IP Address (32..128),\n  IP Prefix Length (8),\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 10: Requested Address Format",
+      "ja": "図10：要求されたアドレス形式"
+    },
+    {
+      "indent": 3,
+      "text": "Each Requested Address contains the following fields:",
+      "ja": "要求された各アドレスには、次のフィールドが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Request ID: Request identifier, encoded as a variable-length integer. This is the identifier of this specific address request. Each request from a given endpoint carries a different identifier. Request IDs MUST NOT be reused by an endpoint and MUST NOT be zero.",
+      "ja": "リクエストID：可変長整数としてエンコードされた識別子を要求します。これは、この特定のアドレスリクエストの識別子です。特定のエンドポイントからの各要求には、異なる識別子が含まれます。要求IDをエンドポイントで再利用してはならず、ゼロにしてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Version: IP Version of this address request, encoded as an unsigned 8-bit integer. It MUST be either 4 or 6.",
+      "ja": "IPバージョン：このアドレスリクエストのIPバージョンは、署名されていない8ビット整数としてエンコードされています。4または6のいずれかでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Address: Requested IP address. If the IP Version field has value 4, the IP Address field SHALL have a length of 32 bits. If the IP Version field has value 6, the IP Address field SHALL have a length of 128 bits.",
+      "ja": "IPアドレス：要求されたIPアドレス。IPバージョンフィールドに値4がある場合、IPアドレスフィールドには32ビットの長さがあります。IPバージョンフィールドに値6がある場合、IPアドレスフィールドには128ビットの長さがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Prefix Length: Length of the IP Prefix requested in bits, encoded as an unsigned 8-bit integer. It MUST be less than or equal to the length of the IP Address field in bits. If the prefix length is strictly less than the length of the IP address in bits, the lower bits of the IP Address field that are not covered by the prefix length MUST all be set to 0.",
+      "ja": "IPプレフィックスの長さ：符号なしの8ビット整数としてエンコードされたビットで要求されたIPプレフィックスの長さ。ビット内のIPアドレスフィールドの長さ以下でなければなりません。接頭辞の長さがビット内のIPアドレスの長さよりも厳密に少ない場合、プレフィックスの長さでカバーされていないIPアドレスフィールドの低いビットをすべて0に設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the IP address is all-zero (0.0.0.0 or ::), this indicates that the sender is requesting an address of that address family but does not have a preference for a specific address. In that scenario, the prefix length still indicates the sender's preference for the prefix length it is requesting.",
+      "ja": "IPアドレスが全ゼロ（0.0.0.0または：:)の場合、これは送信者がそのアドレスファミリのアドレスを要求しているが、特定のアドレスを好まないことを示します。そのシナリオでは、プレフィックスの長さは、要求しているプレフィックスの長さに対する送信者の好みを依然として示しています。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of the capsule fields are malformed upon reception, the receiver of the capsule MUST follow the error-handling procedure defined in Section 3.3 of [HTTP-DGRAM].",
+      "ja": "カプセルフィールドのいずれかが受信時に奇形である場合、カプセルの受信機は[http-dgram]のセクション3.3で定義されているエラー処理手順に従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving the ADDRESS_REQUEST capsule, an endpoint SHOULD assign one or more IP addresses to its peer and then respond with an ADDRESS_ASSIGN capsule to inform the peer of the assignment. For each Requested Address, the receiver of the ADDRESS_REQUEST capsule SHALL respond with an Assigned Address with a matching Request ID. If the requested address was assigned, the IP Address and IP Prefix Length fields in the Assigned Address response SHALL be set to the assigned values. If the requested address was not assigned, the IP address SHALL be all-zero, and the IP Prefix Length SHALL be the maximum length (0.0.0.0/32 or ::/128) to indicate that no address was assigned. These address rejections SHOULD NOT be included in subsequent ADDRESS_ASSIGN capsules. Note that other Assigned Address entries that do not correspond to any Request ID can also be contained in the same ADDRESS_ASSIGN response.",
+      "ja": "address_requestカプセルを受信すると、エンドポイントは1つ以上のIPアドレスをピアに割り当て、address_Assignカプセルで応答してピアに割り当てを通知する必要があります。要求されたアドレスごとに、address_requestカプセルの受信者は、一致するリクエストIDを持つ割り当てられたアドレスで応答するものとします。要求されたアドレスが割り当てられた場合、割り当てられたアドレス応答のIPアドレスとIPプレフィックスの長さフィールドを割り当てられた値に設定するものとします。要求されたアドレスが割り当てられていない場合、IPアドレスは全ゼロであり、IPプレフィックスの長さは最大長（0.0.0.0/32または::/128）でなければなりません。これらのアドレス拒否は、後続のaddress_Assignカプセルに含まれないでください。要求IDに対応しない他の割り当てられたアドレスエントリは、同じaddress_Assign応答にも含めることができることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If an endpoint receives an ADDRESS_REQUEST capsule that contains zero Requested Addresses, it MUST abort the IP proxying request stream.",
+      "ja": "エンドポイントが、要求されたアドレスがゼロを含むaddress_requestカプセルを受信した場合、IPプロキシリクエストストリームを中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that the ordering of Requested Addresses does not carry any semantics. Similarly, the Request ID is only meant as a unique identifier; it does not convey any priority or importance.",
+      "ja": "要求されたアドレスの順序付けにはセマンティクスが含まれていないことに注意してください。同様に、要求IDは一意の識別子としてのみ意味されます。優先事項や重要性は伝えません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.7.3. ROUTE_ADVERTISEMENT Capsule",
+      "section_title": true,
+      "ja": "4.7.3. route_advertisementカプセル"
+    },
+    {
+      "indent": 3,
+      "text": "The ROUTE_ADVERTISEMENT capsule (capsule type 0x03) allows an endpoint to communicate to its peer that it is willing to route traffic to a set of IP address ranges. This indicates that the sender has an existing route to each address range and notifies its peer that, if the receiver of the ROUTE_ADVERTISEMENT capsule sends IP packets for one of these ranges in HTTP Datagrams, the sender of the capsule will forward them along its preexisting route. Any address that is in one of the address ranges can be used as the destination address on IP packets originated by the receiver of this capsule.",
+      "ja": "Route_Advertisement Capsule（Capsule Type 0x03）により、エンドポイントは、IPアドレス範囲のセットにトラフィックを配線する意思があることをピアに通信できます。これは、送信者が各アドレス範囲への既存のルートを持っていることを示しており、route_advertisementカプセルの受信者がこれらの範囲のいずれかのIPパケットをHTTPデータグラムで送信した場合、カプセルの送信者がその前のルートに沿って転送することをピアに通知します。。アドレスの範囲の1つにあるアドレスは、このカプセルの受信機が発信するIPパケットの宛先アドレスとして使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "ROUTE_ADVERTISEMENT Capsule {\n  Type (i) = 0x03,\n  Length (i),\n  IP Address Range (..) ...,\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 15,
+      "text": "Figure 11: ROUTE_ADVERTISEMENT Capsule Format",
+      "ja": "図11：Route_Advertisement Capsule形式"
+    },
+    {
+      "indent": 3,
+      "text": "The ROUTE_ADVERTISEMENT capsule contains a sequence of zero or more IP Address Ranges.",
+      "ja": "Route_Advertisement Capsuleには、ゼロ以上のIPアドレス範囲のシーケンスが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Address Range {\n  IP Version (8),\n  Start IP Address (32..128),\n  End IP Address (32..128),\n  IP Protocol (8),\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 12: IP Address Range Format",
+      "ja": "図12：IPアドレス範囲形式"
+    },
+    {
+      "indent": 3,
+      "text": "Each IP Address Range contains the following fields:",
+      "ja": "各IPアドレス範囲には、次のフィールドが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Version: IP Version of this range, encoded as an unsigned 8-bit integer. It MUST be either 4 or 6.",
+      "ja": "IPバージョン：この範囲のIPバージョン。署名されていない8ビット整数としてエンコードされています。4または6のいずれかでなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Start IP Address and End IP Address: Inclusive start and end IP address of the advertised range. If the IP Version field has value 4, these fields SHALL have a length of 32 bits. If the IP Version field has value 6, these fields SHALL have a length of 128 bits. The Start IP Address MUST be less than or equal to the End IP Address.",
+      "ja": "IPアドレスを開始し、IPアドレスを終了します。広告範囲の包括的開始および終了IPアドレス。IPバージョンフィールドに値4がある場合、これらのフィールドには32ビットの長さがあります。IPバージョンフィールドに値6がある場合、これらのフィールドには128ビットの長さがあります。開始IPアドレスは、最終IPアドレス以下でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Protocol: The Internet Protocol Number for traffic that can be sent to this range, encoded as an unsigned 8-bit integer. If the value is 0, all protocols are allowed. If the value is not 0, it represents an allowable next header value carried in IP headers that are sent directly in HTTP Datagrams (the outermost IP headers). ICMP traffic is always allowed, regardless of the value of this field.",
+      "ja": "IPプロトコル：署名されていない8ビット整数としてエンコードされたこの範囲に送信できるトラフィックのインターネットプロトコル番号。値が0の場合、すべてのプロトコルが許可されます。値が0でない場合、HTTPデータグラム（最も外側のIPヘッダー）に直接送信されるIPヘッダーに掲載される許容次のヘッダー値を表します。このフィールドの値に関係なく、ICMPトラフィックは常に許可されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If any of the capsule fields are malformed upon reception, the receiver of the capsule MUST follow the error-handling procedure defined in Section 3.3 of [HTTP-DGRAM].",
+      "ja": "カプセルフィールドのいずれかが受信時に奇形である場合、カプセルの受信機は[http-dgram]のセクション3.3で定義されているエラー処理手順に従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving the ROUTE_ADVERTISEMENT capsule, an endpoint MAY update its local state regarding what its peer is willing to route (subject to local policy), such as by installing entries in a routing table.",
+      "ja": "Route_Advertisement Capsuleを受信すると、エンドポイントは、ルーティングテーブルにエントリをインストールするなど、ピアがルーティングする意思（ローカルポリシーの対象）についてローカル州を更新する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Each ROUTE_ADVERTISEMENT contains the full list of address ranges. If multiple ROUTE_ADVERTISEMENT capsules are sent in one direction, each ROUTE_ADVERTISEMENT capsule supersedes prior ones. In other words, if a given address range was present in a prior capsule but the most recently received ROUTE_ADVERTISEMENT capsule does not contain it, the receiver will consider that range withdrawn.",
+      "ja": "各route_advertisementには、アドレス範囲の完全なリストが含まれています。複数のRoute_Advertisement Capsulesが一方向に送信される場合、各route_advertisementカプセルは以前のroute_advertisementカプセルに取って代わります。言い換えれば、特定のアドレス範囲が以前のカプセルに存在していたが、最近受け取ったRoute_Advertisementカプセルにはそれが含まれていない場合、受信者はその範囲が引き出されることを検討します。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple ranges using the same IP protocol were to overlap, some routing table implementations might reject them. To prevent overlap, the ranges are ordered; this places the burden on the sender and makes verification by the receiver much simpler. If an IP Address Range A precedes an IP Address Range B in the same ROUTE_ADVERTISEMENT capsule, they MUST follow these requirements:",
+      "ja": "同じIPプロトコルを使用して複数の範囲が重複する場合、一部のルーティングテーブル実装はそれらを拒否する可能性があります。オーバーラップを防ぐために、範囲が順序付けられます。これにより、送信者に負担がかかり、受信者による確認がはるかに簡単になります。IPアドレスの範囲Aが同じroute_AdvertisementカプセルのIPアドレス範囲Bに先行する場合、これらの要件に従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* The IP Version of A MUST be less than or equal to the IP Version of B.",
+      "ja": "* AのIPバージョンは、BのIPバージョン以下である必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "* If the IP Version of A and B are equal, the IP Protocol of A MUST be less than or equal to the IP Protocol of B.",
+      "ja": "* AとBのIPバージョンが等しい場合、AのIPプロトコルはBのIPプロトコル以下でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "* If the IP Version and IP Protocol of A and B are both equal, the End IP Address of A MUST be strictly less than the Start IP Address of B.",
+      "ja": "* AとBのIPバージョンとIPプロトコルが両方とも等しい場合、Aの最終IPアドレスは、Bの開始IPアドレスより厳密に少ない必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If an endpoint receives a ROUTE_ADVERTISEMENT capsule that does not meet these requirements, it MUST abort the IP proxying request stream.",
+      "ja": "エンドポイントがこれらの要件を満たしていないRoute_Advertisement Capsuleを受信した場合、IPプロキシリクエストストリームを中止する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Since setting the IP protocol to zero indicates all protocols are allowed, the requirements above make it possible for two routes to overlap when one has its IP protocol set to zero and the other has it set to non-zero. Endpoints MUST NOT send a ROUTE_ADVERTISEMENT capsule with routes that overlap in such a way. Validating this requirement is OPTIONAL, but if an endpoint detects the violation, it MUST abort the IP proxying request stream.",
+      "ja": "IPプロトコルをゼロに設定するとすべてのプロトコルが許可されていることが示されるため、上記の要件により、1つがIPプロトコルがゼロに設定され、もう1つが非ゼロに設定されている場合、2つのルートがオーバーラップすることが可能になります。エンドポイントは、そのような方法で重複するルートを備えたRoute_Advertisement Capsuleを送信してはなりません。この要件の検証はオプションですが、エンドポイントが違反を検出した場合、IPプロキシリクエストストリームを中止する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.8. IPv6 Extension Headers",
+      "section_title": true,
+      "ja": "4.8. IPv6拡張ヘッダー"
+    },
+    {
+      "indent": 3,
+      "text": "Both request scoping (see Section 4.6) and the ROUTE_ADVERTISEMENT capsule (see Section 4.7.3) use Internet Protocol Numbers. These numbers represent both upper layers (as defined in Section 2 of [IPv6], with examples that include TCP and UDP) and IPv6 extension headers (as defined in Section 4 of [IPv6], with examples that include Fragment and Options headers). IP proxies MAY reject requests to scope to protocol numbers that are used for extension headers. Upon receiving packets, implementations that support scoping or routing by Internet Protocol Number MUST walk the chain of extensions to find the outermost non-extension Internet Protocol Number to match against the scoping rule. Note that the ROUTE_ADVERTISEMENT capsule uses Internet Protocol Number 0 to indicate that all protocols are allowed; it does not restrict the route to the IPv6 Hop-by-Hop Options header (Section 4.3 of [IPv6]).",
+      "ja": "どちらもスコープ（セクション4.6を参照）を要求し、Route_Advertisementカプセル（セクション4.7.3を参照）はインターネットプロトコル番号を使用します。これらの数値は、上層層（[IPv6]のセクション2で定義されているように、TCPとUDPを含む例を含む）とIPv6拡張ヘッダー（[IPv6]のセクション4で定義され、フラグメントとオプションヘッダーを含む例を含む）の両方を表します。IPプロキシは、拡張ヘッダーに使用されるプロトコル番号の範囲への要求を拒否する場合があります。パケットを受信すると、インターネットプロトコル番号によるスコーピングまたはルーティングをサポートする実装は、拡張機能のチェーンを歩いて、スコーピングルールと一致する最も外側の非拡張インターネットプロトコル番号を見つける必要があります。Route_Advertisement Capsuleは、インターネットプロトコル番号0を使用して、すべてのプロトコルが許可されていることを示すことに注意してください。IPv6ホップバイホップオプションヘッダー（[IPv6]のセクション4.3）へのルートは制限されません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Context Identifiers",
+      "section_title": true,
+      "ja": "5. コンテキスト識別子"
+    },
+    {
+      "indent": 3,
+      "text": "The mechanism for proxying IP in HTTP defined in this document allows future extensions to exchange HTTP Datagrams that carry different semantics from IP payloads. Some of these extensions can augment IP payloads with additional data or compress IP header fields, while others can exchange data that is completely separate from IP payloads. In order to accomplish this, all HTTP Datagrams associated with IP proxying request streams start with a Context ID field; see Section 6.",
+      "ja": "このドキュメントで定義されているHTTPでIPをプロキシ化するメカニズムにより、将来の拡張機能がIPペイロードから異なるセマンティクスを運ぶHTTPデータグラムを交換できます。これらの拡張機能の中には、追加のデータを使用してIPペイロードを増強したり、IPヘッダーフィールドを圧縮したりするものもあれば、IPペイロードとは完全に分離されたデータを交換できるものもあります。これを達成するために、IPに関連付けられたすべてのHTTPデータグラムは、リクエストストリームをコンテキストIDフィールドから開始します。セクション6を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Context IDs are 62-bit integers (0 to 2^62-1). Context IDs are encoded as variable-length integers; see Section 16 of [QUIC]. The Context ID value of 0 is reserved for IP payloads, while non-zero values are dynamically allocated. Non-zero even-numbered Context IDs are client-allocated, and odd-numbered Context IDs are proxy-allocated. The Context ID namespace is tied to a given HTTP request; it is possible for a Context ID with the same numeric value to be simultaneously allocated in distinct requests, potentially with different semantics. Context IDs MUST NOT be re-allocated within a given HTTP request but MAY be allocated in any order. The Context ID allocation restrictions to the use of even-numbered and odd-numbered Context IDs exist in order to avoid the need for synchronization between endpoints. However, once a Context ID has been allocated, those restrictions do not apply to the use of the Context ID; it can be used by either the client or the IP proxy, independent of which endpoint initially allocated it.",
+      "ja": "コンテキストIDは62ビット整数（0〜2^62-1）です。コンテキストIDは、可変長整数としてエンコードされます。[quic]のセクション16を参照してください。0のコンテキストID値はIPペイロード用に予約されていますが、非ゼロ値は動的に割り当てられます。ゼロ以外の均等なコンテキストIDはクライアントに割り当てられ、奇数番号のコンテキストIDがプロキシアロークされます。コンテキストID名空間は、特定のHTTP要求に関連付けられています。同じ数値値を持つコンテキストIDを、異なるセマンティクスで潜在的に異なる要求で同時に割り当てることができます。コンテキストIDは、特定のHTTPリクエスト内で再割り当てされてはなりませんが、任意の順序で割り当てられる場合があります。エンドポイント間の同期の必要性を回避するために、コンテキストIDの割り当て制限制限偶数および奇数番号のコンテキストIDが存在します。ただし、コンテキストIDが割り当てられると、これらの制限はコンテキストIDの使用には適用されません。クライアントまたはIPプロキシのいずれかで使用できますが、エンドポイントが最初に割り当てられたのとは無関係です。"
+    },
+    {
+      "indent": 3,
+      "text": "Registration is the action by which an endpoint informs its peer of the semantics and format of a given Context ID. This document does not define how registration occurs. Future extensions MAY use HTTP header fields or capsules to register Context IDs. Depending on the method being used, it is possible for datagrams to be received with Context IDs that have not yet been registered. For instance, this can be due to reordering of the packet containing the datagram and the packet containing the registration message during transmission.",
+      "ja": "登録とは、エンドポイントが特定のコンテキストIDのセマンティクスと形式をピアに通知するアクションです。このドキュメントでは、登録がどのように発生するかを定義しません。将来の拡張機能は、HTTPヘッダーフィールドまたはカプセルを使用して、コンテキストIDを登録する場合があります。使用されているメソッドに応じて、まだ登録されていないコンテキストIDでデータグラムを受信する可能性があります。たとえば、これは、データグラムと送信中の登録メッセージを含むパケットを含むパケットの並べ替えによるものです。"
+    },
+    {
+      "indent": 0,
+      "text": "6. HTTP Datagram Payload Format",
+      "section_title": true,
+      "ja": "6. HTTPデータグラムペイロード形式"
+    },
+    {
+      "indent": 3,
+      "text": "When associated with IP proxying request streams, the HTTP Datagram Payload field of HTTP Datagrams (see [HTTP-DGRAM]) has the format defined in Figure 13. Note that, when HTTP Datagrams are encoded using QUIC DATAGRAM frames, the Context ID field defined below directly follows the Quarter Stream ID field that is at the start of the QUIC DATAGRAM frame payload:",
+      "ja": "IPプロキシ要求ストリームに関連付けられている場合、HTTPデータグラムのHTTPデータグラムペイロードフィールド（[http-dgram]を参照）のフィールドには、図13に定義されています。以下は、QUICデータグラムフレームペイロードの開始時にあるクォーターストリームIDフィールドに直接従います。"
+    },
+    {
+      "indent": 3,
+      "text": "IP Proxying HTTP Datagram Payload {\n  Context ID (i),\n  Payload (..),\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 16,
+      "text": "Figure 13: IP Proxying HTTP Datagram Format",
+      "ja": "図13：IPプロキシHTTPデータグラム形式"
+    },
+    {
+      "indent": 3,
+      "text": "The IP Proxying HTTP Datagram Payload contains the following fields:",
+      "ja": "httpデータグラムペイロードをプロキシプロキシにして、次のフィールドが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Context ID: A variable-length integer that contains the value of the Context ID. If an HTTP/3 datagram that carries an unknown Context ID is received, the receiver SHALL either drop that datagram silently or buffer it temporarily (on the order of a round trip) while awaiting the registration of the corresponding Context ID.",
+      "ja": "コンテキストID：コンテキストIDの値を含む可変長整数。未知のコンテキストIDを搭載したHTTP/3データグラムが受信された場合、受信者は、対応するコンテキストIDの登録を待っている間、そのデータグラムを静かにドロップするか（往復の順序で）バッファする（往復の順序で）"
+    },
+    {
+      "indent": 3,
+      "text": "Payload: The payload of the datagram, whose semantics depend on value of the previous field. Note that this field can be empty.",
+      "ja": "ペイロード：データグラムのペイロード。そのセマンティクスは以前のフィールドの値に依存します。このフィールドは空になる可能性があることに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "IP packets are encoded using HTTP Datagrams with the Context ID set to zero. When the Context ID is set to zero, the Payload field contains a full IP packet (from the IP Version field until the last byte of the IP payload).",
+      "ja": "IPパケットは、コンテキストIDがゼロに設定されたHTTPデータグラムを使用してエンコードされます。コンテキストIDがゼロに設定されている場合、ペイロードフィールドには完全なIPパケットが含まれています（IPバージョンフィールドからIPペイロードの最後のバイトまで）。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IP Packet Handling",
+      "section_title": true,
+      "ja": "7. IPパケット処理"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines a tunneling mechanism that is conceptually an IP link. However, because links are attached to IP routers, implementations might need to handle some of the responsibilities of IP routers if they do not delegate them to another implementation, such as a kernel.",
+      "ja": "このドキュメントは、概念的にIPリンクであるトンネルメカニズムを定義します。ただし、リンクはIPルーターに添付されているため、実装は、カーネルなどの別の実装に委任しない場合、IPルーターの責任の一部を処理する必要がある場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Link Operation",
+      "section_title": true,
+      "ja": "7.1. リンク操作"
+    },
+    {
+      "indent": 3,
+      "text": "The IP forwarding tunnels described in this document are not fully featured \"interfaces\" in the IPv6 addressing architecture sense [IPv6-ADDR]. In particular, they do not necessarily have IPv6 link-local addresses. Additionally, IPv6 stateless autoconfiguration or router advertisement messages are not used in such interfaces, and neither is neighbor discovery.",
+      "ja": "このドキュメントに記載されているIP転送トンネルは、アーキテクチャの感覚にアドレス指定するIPv6で「インターフェイス」を完全には掲載されていません[IPv6-ADDR]。特に、それらは必ずしもIPv6リンクローカルアドレスを持っているわけではありません。さらに、IPv6 Stateless AutoconfigurationまたはRouter Advertisementメッセージは、このようなインターフェイスでは使用されておらず、近隣発見もありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/2 or HTTP/3, a client MAY optimistically start sending proxied IP packets before receiving the response to its IP proxying request, noting however that those may not be processed by the IP proxy if it responds to the request with a failure or if the datagrams are received by the IP proxy before the request. Since receiving addresses and routes is required in order to know that a packet can be sent through the tunnel, such optimistic packets might be dropped by the IP proxy if it chooses to provide different addressing or routing information than what the client assumed.",
+      "ja": "HTTP/2またはHTTP/3を使用する場合、クライアントは、IPプロキシリクエストへの応答を受信する前に、プロキシドIPパケットの送信を開始する場合がありますが、障害でリクエストに応答した場合、IPプロキシによって処理されない可能性があることに注意してください。または、データグラムがリクエスト前にIPプロキシによって受信された場合。トンネルを介してパケットを送信できることを知るために住所とルートを受信する必要があるため、クライアントが想定したものとは異なるアドレス指定情報またはルーティング情報を提供することを選択した場合、そのような楽観的なパケットはIPプロキシによって削除される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that it is possible for multiple proxied IP packets to be encapsulated in the same outer packet, for example, because a QUIC packet can carry more than one QUIC DATAGRAM frame. It is also possible for a proxied IP packet to span multiple outer packets, because a DATAGRAM capsule can be split across multiple QUIC or TCP packets.",
+      "ja": "たとえば、QUICパケットが複数のQUICデータグラムフレームを運ぶことができるため、複数のプロキシドIPパケットが同じ外側パケットにカプセル化される可能性があることに注意してください。また、データグラムカプセルを複数のQUICまたはTCPパケットに分割できるため、プロキシドIPパケットが複数の外側パケットに渡ることも可能です。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Routing Operation",
+      "section_title": true,
+      "ja": "7.2. ルーティング操作"
+    },
+    {
+      "indent": 3,
+      "text": "The requirements in this section are a repetition of requirements that apply to IP routers in general and might not apply to implementations of IP proxying that rely on external software for routing.",
+      "ja": "このセクションの要件は、一般にIPルーターに適用される要件の繰り返しであり、ルーティングのために外部ソフトウェアに依存するIPプロキシの実装には適用されない場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When an endpoint receives an HTTP Datagram containing an IP packet, it will parse the packet's IP header, perform any local policy checks (e.g., source address validation), check their routing table to pick an outbound interface, and then send the IP packet on that interface or pass it to a local application. The endpoint can also choose to drop any received packets instead of forwarding them. If a received IP packet fails any correctness or policy checks, that is a forwarding error, not a protocol violation, as far as IP proxying is concerned; see Section 7.2.1. IP proxying endpoints MAY implement additional filtering policies on the IP packets they forward.",
+      "ja": "エンドポイントがIPパケットを含むHTTPデータグラムを受信した場合、パケットのIPヘッダーを解析し、ローカルポリシーチェック（ソースアドレスの検証など）を実行し、ルーティングテーブルをチェックしてアウトバウンドインターフェイスを選択してから、IPパケットを送信します。そのインターフェイスまたはそれをローカルアプリケーションに渡します。エンドポイントは、それらを転送する代わりに、受信したパケットをドロップすることもできます。受信したIPパケットが正確性またはポリシーチェックに失敗した場合、IPプロキシに関する限り、プロトコル違反ではなく、転送エラーです。セクション7.2.1を参照してください。IPプロキシエンドポイントは、転送されるIPパケットに追加のフィルタリングポリシーを実装する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the other direction, when an endpoint receives an IP packet, it checks to see if the packet matches the routes mapped for an IP tunnel and performs the same forwarding checks as above before transmitting the packet over HTTP Datagrams.",
+      "ja": "他の方向では、エンドポイントがIPパケットを受信すると、パケットがIPトンネル用にマッピングされたルートと一致し、HTTPデータグラム上でパケットを送信する前に上記と同じ転送チェックを実行するかどうかを確認します。"
+    },
+    {
+      "indent": 3,
+      "text": "When IP proxying endpoints forward IP packets between different links, they will decrement the IP Hop Count (or TTL) upon encapsulation but not upon decapsulation. In other words, the Hop Count is decremented right before an IP packet is transmitted in an HTTP Datagram. This prevents infinite loops in the presence of routing loops and matches the choices in IPsec [IPSEC]. This does not apply to IP packets generated by the IP proxying endpoint itself.",
+      "ja": "IPがエンドポイントを異なるリンク間で転送するIPパケットをプロキシすると、カプセル化時にはIPホップカウント（またはTTL）を減少させますが、カプセル化時には減少します。言い換えれば、IPパケットがHTTPデータグラムで送信される直前に、ホップカウントが減少します。これにより、ルーティングループの存在下で無限ループを防ぎ、IPSEC [IPSEC]の選択肢に一致します。これは、エンドポイント自体をプロキシプロキシをプロキシで生成したIPパケットには適用されません。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers need to ensure that they do not forward any link-local traffic beyond the IP proxying interface that it was received on. IP proxying endpoints also need to properly reply to packets destined to link-local multicast addresses.",
+      "ja": "実装者は、受信したIPプロキシインターフェイスを超えてリンクローカルトラフィックを転送しないようにする必要があります。IPプロキシエンドポイントは、Link-Local Multicastアドレスに運命づけられているパケットに適切に返信する必要もあります。"
+    },
+    {
+      "indent": 3,
+      "text": "IPv6 requires that every link have an MTU of at least 1280 bytes [IPv6]. Since IP proxying in HTTP conveys IP packets in HTTP Datagrams and those can in turn be sent in QUIC DATAGRAM frames that cannot be fragmented [DGRAM], the MTU of an IP tunnel can be limited by the MTU of the QUIC connection that IP proxying is operating over. This can lead to situations where the IPv6 minimum link MTU is violated. IP proxying endpoints that operate as routers and support IPv6 MUST ensure that the IP tunnel link MTU is at least 1280 bytes (i.e., that they can send HTTP Datagrams with payloads of at least 1280 bytes). This can be accomplished using various techniques:",
+      "ja": "IPv6では、すべてのリンクには少なくとも1280バイトのMTUが必要です[IPv6]。HTTPでProxyingがHTTPデータグラムでIPパケットを伝え、それらを断片化できないQUICデータグラムフレームで送信できるため、IPトンネルのMTUは、IPプロキシであるQUIC接続のMTUによって制限できます。操作します。これにより、IPv6最小リンクMTUに違反する状況につながる可能性があります。ルーターとして動作し、IPv6をサポートするIPプロキシエンドポイントは、IPトンネルリンクMTUが少なくとも1280バイトであることを保証する必要があります（つまり、少なくとも1280バイトのペイロードでHTTPデータグラムを送信できること）。これは、さまざまな手法を使用して実現できます。"
+    },
+    {
+      "indent": 3,
+      "text": "* If both IP proxying endpoints know for certain that HTTP intermediaries are not in use, the endpoints can pad the QUIC INITIAL packets of the outer QUIC connection that IP proxying is running over. (Assuming QUIC version 1 is in use, the overhead is 1 byte for the type, 20 bytes for the maximal connection ID length, 4 bytes for the maximal packet number length, 1 byte for the DATAGRAM frame type, 8 bytes for the maximal Quarter Stream ID, 1 byte for the zero Context ID, and 16 bytes for the Authenticated Encryption with Associated Data (AEAD) authentication tag, for a total of 51 bytes of overhead, which corresponds to padding QUIC INITIAL packets to 1331 bytes or more.)",
+      "ja": "* 両方のIPプロキシエンドポイントが、HTTP仲介者が使用されていないことを確実に知っている場合、エンドポイントは、IPプロキシが実行されている外部QUIC接続のQUIC初期パケットをパッドすることができます。（QUICバージョン1が使用されていると仮定すると、オーバーヘッドはタイプの場合は1バイト、最大接続IDの長さは20バイト、最大パケット数の長さ4バイト、データグラムフレームタイプに1バイト、最大四半期の8バイトゼロコンテキストID用の1バイト、および関連データ（AEAD）認証タグを使用した認証された暗号化の16バイト、合計51バイトのオーバーヘッドで、これは1331バイト以上のパディングQUIC初期パケットに対応します。）"
+    },
+    {
+      "indent": 3,
+      "text": "* IP proxying endpoints can also send ICMPv6 echo requests with 1232 bytes of data to ascertain the link MTU and tear down the tunnel if they do not receive a response. Unless endpoints have an out-of-band means of guaranteeing that the previous techniques are sufficient, they MUST use this method. If an endpoint does not know an IPv6 address of its peer, it can send the ICMPv6 echo request to the link-local all nodes multicast address (ff02::1).",
+      "ja": "* IPプロキシエンドポイントは、1232バイトのデータを使用してICMPV6エコーリクエストを送信して、リンクMTUを確認し、応答を受け取らない場合はトンネルを取り壊すこともできます。エンドポイントには、以前の手法で十分であることを保証する帯域外の手段がない限り、この方法を使用する必要があります。エンドポイントがピアのIPv6アドレスを知らない場合、ICMPV6エコーリクエストをリンクローカルALL NODESマルチキャストアドレス（FF02 :: 1）に送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "If an endpoint is using QUIC DATAGRAM frames to convey IPv6 packets and it detects that the QUIC MTU is too low to allow sending 1280 bytes, it MUST abort the IP proxying request stream.",
+      "ja": "エンドポイントがQUICデータグラムフレームを使用してIPv6パケットを伝達し、QUIC MTUが低すぎて1280バイトの送信を許可できないことを検出する場合、IPプロキシリクエストストリームを中止する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2.1. Error Signalling",
+      "section_title": true,
+      "ja": "7.2.1. エラーシグナル伝達"
+    },
+    {
+      "indent": 3,
+      "text": "Since IP proxying endpoints often forward IP packets onwards to other network interfaces, they need to handle errors in the forwarding process. For example, forwarding can fail if the endpoint does not have a route for the destination address, if it is configured to reject a destination prefix by policy, or if the MTU of the outgoing link is lower than the size of the packet to be forwarded. In such scenarios, IP proxying endpoints SHOULD use ICMP [ICMP] [ICMPv6] to signal the forwarding error to its peer by generating ICMP packets and sending them using HTTP Datagrams.",
+      "ja": "IPのプロキシエンドポイントは、多くの場合、IPパケットを他のネットワークインターフェイスに転送することが多いため、転送プロセスでエラーを処理する必要があります。たとえば、エンドポイントに宛先アドレスのルートがない場合、ポリシーごとに宛先のプレフィックスを拒否するように構成されている場合、または発信リンクのMTUが転送するパケットのサイズよりも低い場合、転送が失敗する可能性があります。。このようなシナリオでは、IPのプロキシエンドポイントはICMP [ICMP] [ICMPv6]を使用して、ICMPパケットを生成し、HTTPデータグラムを使用して送信することにより、ピアへの転送エラーを信号する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Endpoints are free to select the most appropriate ICMP errors to send. Some examples that are relevant for IP proxying include the following:",
+      "ja": "エンドポイントは、送信する最も適切なICMPエラーを無料で選択できます。IPプロキシに関連するいくつかの例には、以下が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "* For invalid source addresses, send Destination Unreachable (Section 3.1 of [ICMPv6]) with code 5, \"Source address failed ingress/egress policy\".",
+      "ja": "* 無効なソースアドレスの場合、コード5を使用して、宛先の到達不能（[ICMPV6]のセクション3.1）を送信します。「ソースアドレスの失敗/出口ポリシー」。"
+    },
+    {
+      "indent": 3,
+      "text": "* For unroutable destination addresses, send Destination Unreachable (Section 3.1 of [ICMPv6]) with code 0, \"No route to destination\", or code 1, \"Communication with destination administratively prohibited\".",
+      "ja": "* 不可能な宛先アドレスの場合、コード0、「宛先へのルートなし」、またはコード1、「目的地との通信」を使用して、到達不能（[ICMPV6]のセクション3.1）を届かないように送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "* For packets that cannot fit within the MTU of the outgoing link, send Packet Too Big (Section 3.2 of [ICMPv6]).",
+      "ja": "* 発信リンクのMTU内に収まることができないパケットの場合、パケットを大きすぎる（[ICMPV6]のセクション3.2）を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "In order to receive these errors, endpoints need to be prepared to receive ICMP packets. If an endpoint does not send ROUTE_ADVERTISEMENT capsules, such as a client opening an IP flow through an IP proxy, it SHOULD process proxied ICMP packets from its peer in order to receive these errors. Note that ICMP messages can originate from a source address different from that of the IP proxying peer and also from outside the target if scoping is in use (see Section 4.6).",
+      "ja": "これらのエラーを受信するには、ICMPパケットを受信するためにエンドポイントを準備する必要があります。エンドポイントがIPプロキシを介してIPフローを開くクライアントなど、route_advertisementカプセルを送信しない場合、これらのエラーを受信するために、PEERからプロキシ化されたICMPパケットを処理する必要があります。ICMPメッセージは、スコーピングが使用されている場合は、IPのプロキシピアのそれとは異なるソースアドレスから、またターゲットの外側から発生する可能性があることに注意してください（セクション4.6を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Examples",
+      "section_title": true,
+      "ja": "8. 例"
+    },
+    {
+      "indent": 3,
+      "text": "IP proxying in HTTP enables many different use cases that can benefit from IP packet proxying and tunnelling. These examples are provided to help illustrate some of the ways in which IP proxying in HTTP can be used.",
+      "ja": "HTTPでのIPプロキシは、IPパケットのプロキシとトンネルの恩恵を受けることができる多くの異なるユースケースを可能にします。これらの例は、HTTPでプロキシを使用する方法のいくつかを説明するために提供されています。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Remote Access VPN",
+      "section_title": true,
+      "ja": "8.1. リモートアクセスVPN"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows a point-to-network VPN setup, where a client receives a set of local addresses and can send to any remote host through the IP proxy. Such VPN setups can be either full-tunnel or split-tunnel.",
+      "ja": "次の例は、ポイントツーネットワークのVPNセットアップを示しています。クライアントはローカルアドレスのセットを受信し、IPプロキシを介して任意のリモートホストに送信できます。このようなVPNセットアップは、フルタンネルまたはスプリットトンネルのいずれかです。"
+    },
+    {
+      "indent": 3,
+      "text": "+--------+ IP A          IP B +--------+           +---> IP D\n|        +--------------------+   IP   | IP C      |\n| Client | IP Subnet C <--> ? |  Proxy +-----------+---> IP E\n|        +--------------------+        |           |\n+--------+                    +--------+           +---> IP ...",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 24,
+      "text": "Figure 14: VPN Tunnel Setup",
+      "ja": "図14：VPNトンネルのセットアップ"
+    },
+    {
+      "indent": 3,
+      "text": "In this case, the client does not specify any scope in its request. The IP proxy assigns the client an IPv4 address (192.0.2.11) and a full-tunnel route of all IPv4 addresses (0.0.0.0/0). The client can then send to any IPv4 host using its assigned address as its source address.",
+      "ja": "この場合、クライアントは要求に範囲を指定しません。IPプロキシは、クライアントにIPv4アドレス（192.0.2.11）とすべてのIPv4アドレス（0.0.0.0/0）のフルトンネルルートを割り当てます。クライアントは、割り当てられたアドレスをソースアドレスとして使用して、任意のIPv4ホストに送信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "[[ From Client ]] [[ From IP Proxy ]]",
+      "ja": "[[クライアントから]] [[IPプロキシから]]"
+    },
+    {
+      "indent": 3,
+      "text": "SETTINGS H3_DATAGRAM = 1",
+      "ja": "設定h3_datagram = 1"
+    },
+    {
+      "indent": 33,
+      "text": "SETTINGS ENABLE_CONNECT_PROTOCOL = 1 H3_DATAGRAM = 1",
+      "ja": "設定enable_connect_protocol = 1 h3_datagram = 1"
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): HEADERS\n:method = CONNECT\n:protocol = connect-ip\n:scheme = https\n:path = /vpn\n:authority = proxy.example.com\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_REQUEST\n(Request ID = 1\n IP Version = 4\n IP Address = 0.0.0.0\n IP Prefix Length = 32)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 1\n IP Version = 4\n IP Address = 192.0.2.11\n IP Prefix Length = 32)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ROUTE_ADVERTISEMENT\n(IP Version = 4\n Start IP Address = 0.0.0.0\n End IP Address = 255.255.255.255\n IP Protocol = 0) // Any",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化IPパケット"
+    },
+    {
+      "indent": 33,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化IPパケット"
+    },
+    {
+      "indent": 21,
+      "text": "Figure 15: VPN Full-Tunnel Example",
+      "ja": "図15：VPNフルトンネルの例"
+    },
+    {
+      "indent": 3,
+      "text": "A setup for a split-tunnel VPN (the case where the client can only access a specific set of private subnets) is quite similar. In this case, the advertised route is restricted to 192.0.2.0/24, rather than 0.0.0.0/0.",
+      "ja": "スプリットトンネルVPNのセットアップ（クライアントが特定のプライベートサブネットのみにアクセスできる場合）は非常に似ています。この場合、広告されたルートは0.0.0.0/0ではなく192.0.2.0/24に制限されています。"
+    },
+    {
+      "indent": 3,
+      "text": "[[ From Client ]] [[ From IP Proxy ]]",
+      "ja": "[[クライアントから]] [[IPプロキシから]]"
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 0\n IP Version = 4\n IP Address = 192.0.2.42\n IP Prefix Length = 32)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ROUTE_ADVERTISEMENT\n(IP Version = 4\n Start IP Address = 192.0.2.0\n End IP Address = 192.0.2.41\n IP Protocol = 0) // Any\n(IP Version = 4\n Start IP Address = 192.0.2.43\n End IP Address = 192.0.2.255\n IP Protocol = 0) // Any",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 16: VPN Split-Tunnel Example",
+      "ja": "図16：VPNスプリットトンネルの例"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Site-to-Site VPN",
+      "section_title": true,
+      "ja": "8.2. サイトからサイトへのVPN"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows how to connect a branch office network to a corporate network such that all machines on those networks can communicate. In this example, the IP proxying client is attached to the branch office network 192.0.2.0/24, and the IP proxy is attached to the corporate network 203.0.113.0/24. There are legacy clients on the branch office network that only allow maintenance requests from machines on their subnet, so the IP proxy is provisioned with an IP address from that subnet.",
+      "ja": "次の例は、ブランチオフィスネットワークを企業ネットワークに接続する方法を示しており、それらのネットワーク上のすべてのマシンが通信できるようにしています。この例では、IPプロキシクライアントはブランチオフィスネットワーク192.0.2.0/24に添付され、IPプロキシはコーポレートネットワーク203.0.113.0/24に添付されています。支店ネットワークには、サブネット上のマシンからのメンテナンスリクエストのみを許可するレガシークライアントがいるため、IPプロキシはそのサブネットのIPアドレスでプロビジョニングされます。"
+    },
+    {
+      "indent": 3,
+      "text": "192.0.2.1 <--+   +--------+             +-------+   +---> 203.0.113.9\n             |   |        +-------------+  IP   |   |\n192.0.2.2 <--+---+ Client | IP Proxying | Proxy +---+---> 203.0.113.8\n             |   |        +-------------+       |   |\n192.0.2.3 <--+   +--------+             +-------+   +---> 203.0.113.7",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 17: Site-to-Site VPN Example",
+      "ja": "図17：サイト間VPNの例"
+    },
+    {
+      "indent": 3,
+      "text": "In this case, the client does not specify any scope in its request. The IP proxy assigns the client an IPv4 address (203.0.113.100) and a split-tunnel route to the corporate network (203.0.113.0/24). The client assigns the IP proxy an IPv4 address (192.0.2.200) and a split-tunnel route to the branch office network (192.0.2.0/24). This allows hosts on both networks to communicate with each other and allows the IP proxy to perform maintenance on legacy hosts in the branch office. Note that IP proxying endpoints will decrement the IP Hop Count (or TTL) when encapsulating forwarded packets, so protocols that require that field be set to 255 will not function.",
+      "ja": "この場合、クライアントは要求に範囲を指定しません。IPプロキシは、クライアントにIPv4アドレス（203.0.113.100）と企業ネットワークへのスプリットトンネルルート（203.0.113.0/24）を割り当てます。クライアントは、IPプロキシとIPv4アドレス（192.0.2.200）とブランチオフィスネットワークへのスプリットトンネルルート（192.0.2.0/24）を割り当てます。これにより、両方のネットワーク上のホストが相互に通信でき、IPプロキシが支店のレガシーホストのメンテナンスを実行できます。IPのプロキシエンドポイントは、転送されたパケットをカプセル化するときにIPホップカウント（またはTTL）を減少させるため、そのフィールドを255に設定する必要があるプロトコルは機能しません。"
+    },
+    {
+      "indent": 3,
+      "text": "[[ From Client ]] [[ From IP Proxy ]]",
+      "ja": "[[クライアントから]] [[IPプロキシから]]"
+    },
+    {
+      "indent": 3,
+      "text": "SETTINGS H3_DATAGRAM = 1",
+      "ja": "設定h3_datagram = 1"
+    },
+    {
+      "indent": 33,
+      "text": "SETTINGS ENABLE_CONNECT_PROTOCOL = 1 H3_DATAGRAM = 1",
+      "ja": "設定enable_connect_protocol = 1 h3_datagram = 1"
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): HEADERS\n:method = CONNECT\n:protocol = connect-ip\n:scheme = https\n:path = /corp\n:authority = proxy.example.com\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 0\nIP Version = 4\nIP Address = 192.0.2.200\nIP Prefix Length = 32)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): DATA\nCapsule Type = ROUTE_ADVERTISEMENT\n(IP Version = 4\nStart IP Address = 192.0.2.0\nEnd IP Address = 192.0.2.255\nIP Protocol = 0) // Any",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 0\n IP Version = 4\n IP Address = 203.0.113.100\n IP Prefix Length = 32)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ROUTE_ADVERTISEMENT\n(IP Version = 4\n Start IP Address = 203.0.113.0\n End IP Address = 203.0.113.255\n IP Protocol = 0) // Any",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化IPパケット"
+    },
+    {
+      "indent": 33,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化IPパケット"
+    },
+    {
+      "indent": 16,
+      "text": "Figure 18: Site-to-Site VPN Capsule Example",
+      "ja": "図18：サイト間VPNカプセルの例"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. IP Flow Forwarding",
+      "section_title": true,
+      "ja": "8.3. IPフロー転送"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows an IP flow forwarding setup, where a client requests to establish a forwarding tunnel to target.example.com using the Stream Control Transmission Protocol (SCTP) (IP protocol 132) and receives a single local address and remote address it can use for transmitting packets. A similar approach could be used for any other IP protocol that isn't easily proxied with existing HTTP methods, such as ICMP, Encapsulating Security Payload (ESP), etc.",
+      "ja": "次の例は、IPフロー転送のセットアップを示しています。クライアントは、ストリームコントロール送信プロトコル（SCTP）（IPプロトコル132）を使用してターゲットへの転送トンネルを確立するように要求し、単一のローカルアドレスとリモートアドレスを受け取ることができます。パケットの送信に使用します。同様のアプローチを、ICMP、カプセル化セキュリティペイロード（ESP）など、既存のHTTPメソッドで簡単にプロキシ化できない他のIPプロトコルにも使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "+--------+ IP A         IP B +--------+\n|        +-------------------+   IP   | IP C\n| Client |    IP C <--> D    |  Proxy +---------> IP D\n|        +-------------------+        |\n+--------+                   +--------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 23,
+      "text": "Figure 19: Proxied Flow Setup",
+      "ja": "図19：プロキシフローセットアップ"
+    },
+    {
+      "indent": 3,
+      "text": "In this case, the client specifies both a target hostname and an Internet Protocol Number in the scope of its request, indicating that it only needs to communicate with a single host. The IP proxy is able to perform DNS resolution on behalf of the client and allocate a specific outbound socket for the client instead of allocating an entire IP address to the client. In this regard, the request is similar to a regular CONNECT proxy request.",
+      "ja": "この場合、クライアントは、リクエストの範囲内のターゲットホスト名とインターネットプロトコル番号の両方を指定し、単一のホストとのみ通信する必要があることを示します。IPプロキシは、クライアントに代わってDNS解像度を実行し、クライアントにIPアドレス全体を割り当てるのではなく、クライアントに特定のアウトバウンドソケットを割り当てることができます。この点で、リクエストは通常の接続プロキシリクエストに似ています。"
+    },
+    {
+      "indent": 3,
+      "text": "The IP proxy assigns a single IPv6 address to the client (2001:db8:1234::a) and a route to a single IPv6 host (2001:db8:3456::b) scoped to SCTP. The client can send and receive SCTP IP packets to the remote host.",
+      "ja": "IPプロキシは、単一のIPv6アドレスをクライアント（2001：DB8：1234 :: A）に割り当て、単一のIPv6ホスト（2001：DB8：3456 :: b）へのルートをSCTPにスコープします。クライアントは、SCTP IPパケットをリモートホストに送信および受信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "[[ From Client ]] [[ From IP Proxy ]]",
+      "ja": "[[クライアントから]] [[IPプロキシから]]"
+    },
+    {
+      "indent": 3,
+      "text": "SETTINGS H3_DATAGRAM = 1",
+      "ja": "設定h3_datagram = 1"
+    },
+    {
+      "indent": 33,
+      "text": "SETTINGS ENABLE_CONNECT_PROTOCOL = 1 H3_DATAGRAM = 1",
+      "ja": "設定enable_connect_protocol = 1 h3_datagram = 1"
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): HEADERS\n:method = CONNECT\n:protocol = connect-ip\n:scheme = https\n:path = /proxy?target=target.example.com&ipproto=132\n:authority = proxy.example.com\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 0\n IP Version = 6\n IP Address = 2001:db8:1234::a\n IP Prefix Length = 128)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ROUTE_ADVERTISEMENT\n(IP Version = 6\n Start IP Address = 2001:db8:3456::b\n End IP Address = 2001:db8:3456::b\n IP Protocol = 132)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated SCTP/IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化されたSCTP/IPパケット"
+    },
+    {
+      "indent": 33,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated SCTP/IP Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化されたSCTP/IPパケット"
+    },
+    {
+      "indent": 20,
+      "text": "Figure 20: Proxied SCTP Flow Example",
+      "ja": "図20：Proxied SCTPフローの例"
+    },
+    {
+      "indent": 0,
+      "text": "8.4. Proxied Connection Racing",
+      "section_title": true,
+      "ja": "8.4. プロキシコネクションレース"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows a setup where a client is proxying UDP packets through an IP proxy in order to control connection establishment racing through an IP proxy, as defined in Happy Eyeballs [HEv2]. This example is a variant of the proxied flow but highlights how IP-level proxying can enable new capabilities, even for TCP and UDP.",
+      "ja": "次の例は、Happy Eyeballs [HEV2]で定義されているように、IPプロキシを介した接続確立レースを制御するために、クライアントがIPプロキシを介してUDPパケットをプロキシをプロキシしているセットアップを示しています。この例は、プロキシフローのバリアントですが、TCPやUDPであっても、IPレベルのプロキシが新しい機能を可能にする方法を強調しています。"
+    },
+    {
+      "indent": 3,
+      "text": "+--------+ IP A         IP B +--------+ IP C\n|        +-------------------+        |<------------> IP E\n| Client |  IP C <--> E      |   IP   |\n|        |     D <--> F      |  Proxy |\n|        +-------------------+        |<------------> IP F\n+--------+                   +--------+ IP D",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 17,
+      "text": "Figure 21: Proxied Connection Racing Setup",
+      "ja": "図21：Proxied Connection Racingセットアップ"
+    },
+    {
+      "indent": 3,
+      "text": "As with proxied flows, the client specifies both a target hostname and an Internet Protocol Number in the scope of its request. When the IP proxy performs DNS resolution on behalf of the client, it can send the various remote address options to the client as separate routes. It can also ensure that the client has both IPv4 and IPv6 addresses assigned.",
+      "ja": "プロキシフローと同様に、クライアントは、リクエストの範囲内のターゲットホスト名とインターネットプロトコル番号の両方を指定します。IPプロキシがクライアントに代わってDNS解像度を実行すると、さまざまなリモートアドレスオプションを別々のルートとしてクライアントに送信できます。また、クライアントにIPv4アドレスとIPv6アドレスの両方が割り当てられていることを確認することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "The IP proxy assigns both an IPv4 address (192.0.2.3) and an IPv6 address (2001:db8:1234::a) to the client, as well as an IPv4 route (198.51.100.2) and an IPv6 route (2001:db8:3456::b), which represent the resolved addresses of the target hostname, scoped to UDP. The client can send and receive UDP IP packets to either one of the IP proxy addresses to enable Happy Eyeballs through the IP proxy.",
+      "ja": "IPプロキシは、IPv4アドレス（192.0.2.3）とIPv6アドレス（2001：DB8：1234 :: A）の両方をクライアントに割り当て、IPv4ルート（198.51.100.2）とIPv6ルート（2001：DB8：3456 :: b）は、UDPにスコープされたターゲットホスト名の解決されたアドレスを表します。クライアントは、IPプロキシを介してHappy Eyeballsを有効にするために、IPプロキシアドレスのいずれかにUDP IPパケットを送信および受信できます。"
+    },
+    {
+      "indent": 3,
+      "text": "[[ From Client ]] [[ From IP Proxy ]]",
+      "ja": "[[クライアントから]] [[IPプロキシから]]"
+    },
+    {
+      "indent": 3,
+      "text": "SETTINGS H3_DATAGRAM = 1",
+      "ja": "設定h3_datagram = 1"
+    },
+    {
+      "indent": 33,
+      "text": "SETTINGS ENABLE_CONNECT_PROTOCOL = 1 H3_DATAGRAM = 1",
+      "ja": "設定enable_connect_protocol = 1 h3_datagram = 1"
+    },
+    {
+      "indent": 3,
+      "text": "STREAM(44): HEADERS\n:method = CONNECT\n:protocol = connect-ip\n:scheme = https\n:path = /proxy?target=target.example.com&ipproto=17\n:authority = proxy.example.com\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): HEADERS\n:status = 200\ncapsule-protocol = ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "STREAM(44): DATA\nCapsule Type = ADDRESS_ASSIGN\n(Request ID = 0\n IP Version = 4\n IP Address = 192.0.2.3\n IP Prefix Length = 32),\n(Request ID = 0\n IP Version = 6\n IP Address = 2001:db8::1234:1234\n IP Prefix Length = 128)",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "                              STREAM(44): DATA\n                              Capsule Type = ROUTE_ADVERTISEMENT\n                              (IP Version = 4\n                               Start IP Address = 198.51.100.2\n                               End IP Address = 198.51.100.2\n                               IP Protocol = 17),\n                              (IP Version = 6\n                               Start IP Address = 2001:db8:3456::b\n                               End IP Address = 2001:db8:3456::b\n                               IP Protocol = 17)\n...",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IPv6 Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化されたIPv6パケット"
+    },
+    {
+      "indent": 3,
+      "text": "DATAGRAM Quarter Stream ID = 11 Context ID = 0 Payload = Encapsulated IPv4 Packet",
+      "ja": "データグラムクォーターストリームID = 11コンテキストID = 0ペイロード=カプセル化IPv4パケット"
+    },
+    {
+      "indent": 16,
+      "text": "Figure 22: Proxied Connection Racing Example",
+      "ja": "図22：Proxied Connection Racingの例"
+    },
+    {
+      "indent": 0,
+      "text": "9. Extensibility Considerations",
+      "section_title": true,
+      "ja": "9. 拡張性の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Extensions to IP proxying in HTTP can define behavior changes to this mechanism. Such extensions SHOULD define new capsule types to exchange configuration information if needed. It is RECOMMENDED for extensions that modify addressing to specify that their extension capsules be sent before the ADDRESS_ASSIGN capsule and that they do not take effect until the ADDRESS_ASSIGN capsule is parsed. This allows modifications to address assignment to operate atomically. Similarly, extensions that modify routing SHOULD behave similarly with regard to the ROUTE_ADVERTISEMENT capsule.",
+      "ja": "HTTPでProxyingに拡張すると、このメカニズムに対する動作の変化を定義できます。このような拡張機能は、必要に応じて構成情報を交換するために新しいカプセルタイプを定義する必要があります。アドレス指定を変更して、拡張カプセルがaddress_Assignカプセルの前に送信され、address_Assignカプセルが解析されるまで有効にならないことを指定する拡張機能に推奨されます。これにより、変更に対処するための変更が原子的に動作することができます。同様に、ルーティングを変更する拡張機能は、Route_Advertisementカプセルに関して同様に動作する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Performance Considerations",
+      "section_title": true,
+      "ja": "10. パフォーマンスに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Bursty traffic can often lead to temporally correlated packet losses; in turn, this can lead to suboptimal responses from congestion controllers in protocols running inside the tunnel. To avoid this, IP proxying endpoints SHOULD strive to avoid increasing burstiness of IP traffic; they SHOULD NOT queue packets in order to increase batching beyond the minimal amount required to take advantage of hardware offloads.",
+      "ja": "破裂したトラフィックは、しばしば一時的に相関するパケット損失につながる可能性があります。次に、これにより、トンネル内で実行されるプロトコル中の混雑コントローラーからの最適ではない応答につながる可能性があります。これを回避するために、IPのプロキシエンドポイントは、IPトラフィックの破裂の増加を避けるように努力する必要があります。ハードウェアのオフロードを活用するために必要な最小量を超えてバッチを増やすためにパケットをキューにするべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When the protocol running inside the tunnel uses congestion control (e.g., [TCP] or [QUIC]), the proxied traffic will incur at least two nested congestion controllers. When tunneled packets are sent using QUIC DATAGRAM frames, the outer HTTP connection MAY disable congestion control for those packets that contain only QUIC DATAGRAM frames encapsulating IP packets. Implementers will benefit from reading the guidance in Section 3.1.11 of [UDP-USAGE].",
+      "ja": "トンネル内で実行されるプロトコルが混雑制御（[TCP]または[QUIC]など）を使用すると、プロキシされたトラフィックには、少なくとも2つのネストされた混雑コントローラーが発生します。QUIC Datagramフレームを使用してトンネルパケットが送信されると、外側のHTTP接続は、IPパケットをカプセル化するQUICデータグラムフレームのみを含むパケットのうっ血制御を無効にする場合があります。実装者は、[UDP-USAGE]のセクション3.1.11のガイダンスを読むことから恩恵を受けます。"
+    },
+    {
+      "indent": 3,
+      "text": "When the protocol running inside the tunnel uses loss recovery (e.g., [TCP] or [QUIC]) and the outer HTTP connection runs over TCP, the proxied traffic will incur at least two nested loss recovery mechanisms. This can reduce performance, as both can sometimes independently retransmit the same data. To avoid this, IP proxying SHOULD be performed over HTTP/3 to allow leveraging the QUIC DATAGRAM frame.",
+      "ja": "トンネル内で実行されるプロトコルが損失回復（[TCP]または[QUIC]など）を使用し、外側のHTTP接続がTCPで実行される場合、プロキシされたトラフィックは少なくとも2つのネストされた損失回復メカニズムが発生します。これにより、両方とも独立して同じデータを再送信することがあるため、パフォーマンスを減らすことができます。これを回避するには、QUICデータグラムフレームを活用できるように、HTTP/3でIPプロキシを実行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. MTU Considerations",
+      "section_title": true,
+      "ja": "10.1. MTUの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "When using HTTP/3 with the QUIC Datagram extension [DGRAM], IP packets are transmitted in QUIC DATAGRAM frames. Since these frames cannot be fragmented, they can only carry packets up to a given length determined by the QUIC connection configuration and the Path MTU (PMTU). If an endpoint is using QUIC DATAGRAM frames and it attempts to route an IP packet through the tunnel that will not fit inside a QUIC DATAGRAM frame, the IP proxy SHOULD NOT send the IP packet in a DATAGRAM capsule, as that defeats the end-to-end unreliability characteristic that methods such as Datagram Packetization Layer PMTU Discovery (DPLPMTUD) depend on [DPLPMTUD]. In this scenario, the endpoint SHOULD drop the IP packet and send an ICMP Packet Too Big message to the sender of the dropped packet; see Section 3.2 of [ICMPv6].",
+      "ja": "QUIC Datagram拡張子[DGRAM]でHTTP/3を使用する場合、IPパケットはQUICデータグラムフレームで送信されます。これらのフレームは断片化できないため、QUIC接続構成とPATH MTU（PMTU）によって決定される特定の長さまでパケットを運ぶことができます。エンドポイントがQUICデータグラムフレームを使用しており、QUICデータグラムフレーム内に収まるトンネルにIPパケットをルーティングしようとする場合、IPプロキシは、エンドツーを無効にするため、IPパケットをデータグラムカプセルに送信しないでください。-Datagramパケット化レイヤーPMTUディスカバリー（DPLPMTUD）などのメソッドが[DPLPMTUD]に依存するという信頼性のない特性をENDしてください。このシナリオでは、エンドポイントはIPパケットをドロップし、削除されたパケットの送信者にICMPパケットをあまりにも大きなメッセージを送信する必要があります。[ICMPV6]のセクション3.2を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. ECN Considerations",
+      "section_title": true,
+      "ja": "10.2. ECNの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "If an IP proxying endpoint with a connection containing an IP proxying request stream disables congestion control, it cannot signal Explicit Congestion Notification (ECN) [ECN] support on that outer connection. That is, the QUIC sender MUST mark all IP headers with the Not ECN-Capable Transport (Not-ECT) codepoint for QUIC packets that are outside of congestion control. The endpoint can still report ECN feedback via QUIC ACK_ECN frames or the TCP ECN-Echo (ECE) bit, as the peer might not have disabled congestion control.",
+      "ja": "IPのプロキシリクエストストリームを含む接続を備えたIPプロキシエンドポイントが混雑制御を無効にする場合、その外側の接続で明示的な輻輳通知（ECN）[ECN]サポートを信号することはできません。つまり、QUIC送信者は、混雑制御の外側にあるQUICパケットのECN対応トランスポート（非極端な）コードポイントですべてのIPヘッダーをマークする必要があります。エンドポイントは、ピアが混雑制御を無効にしていない可能性があるため、QUIC ACK_ECNフレームまたはTCP ECN-ECHO（ECE）ビットを介してECNフィードバックを報告できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Conversely, if congestion control is not disabled on the outer congestion, the guidance in [ECN-TUNNEL] about transferring ECN marks between inner and outer IP headers does not apply because the outer connection will react correctly to congestion notifications if it uses ECN. The inner traffic can also use ECN, independently of whether it is in use on the outer connection.",
+      "ja": "逆に、外側の混雑で混雑制御が無効になっていない場合、外側の接続がECNを使用する場合、外側の接続がうっ血通知に正しく反応するため、内側と外側のIPヘッダー間のECNマークの転送に関する[ECNトンネル]のガイダンスは適用されません。内部トラフィックは、外側の接続で使用されているかどうかとは無関係にECNを使用することもできます。"
+    },
+    {
+      "indent": 0,
+      "text": "10.3. Differentiated Services Considerations",
+      "section_title": true,
+      "ja": "10.3. 差別化されたサービスの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Tunneled IP packets can have Differentiated Services Code Points (DSCPs) [DSCP] set in the traffic class IP header field to request a particular per-hop behavior. If an IP proxying endpoint is configured as part of a Differentiated Services domain, it MAY implement traffic differentiation based on these markings. However, the use of HTTP can limit the possibilities for differentiated treatment of the tunneled IP packets on the path between the IP proxying endpoints.",
+      "ja": "Tunneled IPパケットは、特定のホップごとの動作を要求するために、トラフィッククラスIPヘッダーフィールドに設定された、区別されたサービスコードポイント（DSCPS）[DSCP]を持つことができます。IPプロキシエンドポイントが差別化されたサービスドメインの一部として構成されている場合、これらのマーキングに基づいてトラフィックの差別化を実装する場合があります。ただし、HTTPを使用すると、IPプロキシエンドポイント間のパス上のトンネル付きIPパケットの区別化された処理の可能性を制限する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When an HTTP connection is congestion-controlled, marking packets with different DSCPs can lead to reordering between them, and that can in turn lead the underlying transport connection's congestion controller to perform poorly. If tunneled packets are subject to congestion control by the outer connection, they need to avoid carrying DSCP markings that are not equivalent in forwarding behavior to prevent this situation. In this scenario, the IP proxying endpoint MUST NOT copy the DSCP field from the inner IP header to the outer IP header of the packet carrying this packet. Instead, an application would need to use separate connections to the proxy, one for each DSCP. Note that this document does not define a way for requests to scope to particular DSCP values; such support is left to future extensions.",
+      "ja": "HTTP接続が混雑制御の場合、異なるDSCPでパケットをマークすると、それらの間を並べ替えることができ、それにより、基礎となる輸送接続の混雑コントローラーがパフォーマンスを低下させることができます。トンネルパケットが外側の接続によって輻輳制御の対象となる場合、この状況を防ぐために転送動作に同等ではないDSCPマーキングを運ぶことを避ける必要があります。このシナリオでは、IPプロキシエンドポイントは、DSCPフィールドを内部IPヘッダーからこのパケットを運ぶパケットの外側IPヘッダーにコピーしてはなりません。代わりに、アプリケーションは、各DSCPに1つのプロキシに個別の接続を使用する必要があります。このドキュメントは、特定のDSCP値にスコープするリクエストの方法を定義していないことに注意してください。このようなサポートは、将来の拡張に任されています。"
+    },
+    {
+      "indent": 3,
+      "text": "If tunneled packets use QUIC datagrams and are not subject to congestion control by the outer connection, the IP proxying endpoints MAY translate the DSCP field value from the tunneled traffic to the outer IP header. IP proxying endpoints MUST NOT coalesce multiple inner packets into the same outer packet unless they have the same DSCP marking or an equivalent traffic class. Note that the ability to translate DSCP values is dependent on the tunnel ingress and egress belonging to the same Differentiated Service domain or not.",
+      "ja": "TunneledパケットがQUICデータグラムを使用し、外側の接続によって輻輳制御の対象ではない場合、IPプロキシエンドポイントは、トンネルされたトラフィックから外部IPヘッダーにDSCPフィールド値を変換する場合があります。IPプロキシエンドポイントは、同じDSCPマーキングまたは同等のトラフィッククラスがない限り、複数の内側パケットを同じ外側パケットに合体してはなりません。DSCP値を翻訳する機能は、同じ差別化されたサービスドメインに属するトンネルの侵入と出口に依存していることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "11. Security Considerations",
+      "section_title": true,
+      "ja": "11. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "There are significant risks in allowing arbitrary clients to establish a tunnel that permits sending to arbitrary hosts, regardless of whether tunnels are scoped to specific hosts or not. Bad actors could abuse this capability to send traffic and have it attributed to the IP proxy. HTTP servers that support IP proxying SHOULD restrict its use to authenticated users. Depending on the deployment, possible authentication mechanisms include mutual TLS between IP proxying endpoints, HTTP-based authentication via the HTTP Authorization header [HTTP], or even bearer tokens. Proxies can enforce policies for authenticated users to further constrain client behavior or deal with possible abuse. For example, proxies can rate limit individual clients that send an excessively large amount of traffic through the proxy. As another example, proxies can restrict address (prefix) assignment to clients based on certain client attributes, such as geographic location.",
+      "ja": "任意のクライアントが、特定のホストにスコープされているかどうかにかかわらず、任意のホストに送信することを許可するトンネルを確立できるようにすることには大きなリスクがあります。悪い俳優は、この能力を悪用してトラフィックを送信し、IPプロキシに起因すると考えられます。IPプロキシをサポートするHTTPサーバーは、その使用を認証されたユーザーに制限する必要があります。展開に応じて、可能な認証メカニズムには、IPプロキシエンドポイント間の相互TLS、HTTP認証ヘッダー[HTTP]、またはベアラートークンによるHTTPベースの認証が含まれます。プロキシは、認証されたユーザーがクライアントの行動をさらに制約したり、虐待の可能性に対処するためにポリシーを実施することができます。たとえば、プロキシは、プロキシを介して過度に大量のトラフィックを送信する個々のクライアントを制限することができます。別の例として、プロキシは、地理的場所などの特定のクライアント属性に基づいて、クライアントへのアドレス（プレフィックス）割り当てを制限できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Address assignment can have privacy implications for endpoints. For example, if a proxy partitions its address space by the number of authenticated clients and then assigns distinct address ranges to each client, target hosts could use this information to determine when IP packets correspond to the same client. Avoiding such tracking vectors may be important for certain proxy deployments. Proxies SHOULD avoid persistent per-client address (prefix) assignment when possible.",
+      "ja": "アドレスの割り当ては、エンドポイントにプライバシーの影響を与える可能性があります。たとえば、プロキシが認証されたクライアントの数でアドレス空間をパーティション化し、各クライアントに個別のアドレス範囲を割り当てる場合、ターゲットホストはこの情報を使用して、IPパケットが同じクライアントに対応する時期を判断できます。このような追跡ベクトルを避けることは、特定のプロキシの展開にとって重要かもしれません。プロキシは、可能であれば、クライアントごとの永続的なアドレス（プレフィックス）割り当てを回避する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Falsifying IP source addresses in sent traffic has been common for denial-of-service attacks. Implementations of this mechanism need to ensure that they do not facilitate such attacks. In particular, there are scenarios where an endpoint knows that its peer is only allowed to send IP packets from a given prefix. For example, that can happen through out-of-band configuration information or when allowed prefixes are shared via ADDRESS_ASSIGN capsules. In such scenarios, endpoints MUST follow the recommendations from [BCP38] to prevent source address spoofing.",
+      "ja": "送信されたトラフィックでIPソースアドレスを偽造することは、サービス拒否攻撃に共通しています。このメカニズムの実装は、そのような攻撃を促進しないようにする必要があります。特に、エンドポイントが、ピアが特定のプレフィックスからIPパケットを送信することのみが許可されていることをエンドポイントが知っているシナリオがあります。たとえば、それは帯域外の構成情報を介して発生する可能性があります。このようなシナリオでは、エンドポイントは[BCP38]の推奨事項に従って、ソースアドレスのスプーフィングを防ぐ必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Limiting request scope (see Section 4.6) allows two clients to share one of the proxy's external IP addresses if their requests are scoped to different Internet Protocol Numbers. If the proxy receives an ICMP packet destined for that external IP address, it has the option to forward it back to the clients. However, some of these ICMP packets carry part of the original IP packet that triggered the ICMP response. Forwarding such packets can accidentally divulge information about one client's traffic to another client. To avoid this, proxies that forward ICMP on shared external IP addresses MUST inspect the invoking packet included in the ICMP packet and only forward the ICMP packet to the client whose scoping matches the invoking packet.",
+      "ja": "リクエスト範囲の制限（セクション4.6を参照）により、2つのクライアントは、リクエストが異なるインターネットプロトコル番号にスコープされている場合、プロキシの外部IPアドレスのいずれかを共有できます。プロキシがその外部IPアドレスに任命されたICMPパケットを受信した場合、クライアントに転送するオプションがあります。ただし、これらのICMPパケットの一部は、ICMP応答をトリガーする元のIPパケットの一部を搭載しています。このようなパケットを転送すると、あるクライアントのトラフィックに関する情報を別のクライアントに誤って変化させる可能性があります。これを回避するために、共有外部IPアドレスのフォワードICMPがICMPパケットに含まれる呼び出しパケットを検査し、スコーピングが呼び出パケットと一致するクライアントにのみ転送する必要があるというプロキシが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Implementers will benefit from reading the guidance in [TUNNEL-SECURITY]. Since there are known risks with some IPv6 extension headers (e.g., [ROUTING-HDR]), implementers need to follow the latest guidance regarding handling of IPv6 extension headers.",
+      "ja": "実装者は、[トンネルセキュリティ]のガイダンスを読むことから利益を得ます。一部のIPv6拡張ヘッダー（[Routing-HDR]など）には既知のリスクがあるため、実装者はIPv6拡張ヘッダーの処理に関する最新のガイダンスに従う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Transferring DSCP markings from inner to outer packets (see Section 10.3) exposes end-to-end flow level information to an on-path observer between the IP proxying endpoints. This can potentially expose a single end-to-end flow. Because of this, such use of DSCPs in privacy-sensitive contexts is NOT RECOMMENDED.",
+      "ja": "DSCPマーキングを内側のパケットから外側のパケットから外側に転送する（セクション10.3を参照）では、エンドツーエンドのフローレベル情報をIPプロキシエンドポイント間のオンパスオブザーバーに公開します。これにより、単一のエンドツーエンドのフローが潜在的に露出する可能性があります。このため、プライバシーに敏感なコンテキストでのDSCPのそのような使用は推奨されません。"
+    },
+    {
+      "indent": 3,
+      "text": "Opportunistic sending of IP packets (see Section 7.1) is not allowed in HTTP/1.x because a server could reject the HTTP Upgrade and attempt to parse the IP packets as a subsequent HTTP request, allowing request smuggling attacks; see [OPTIMISTIC]. In particular, an intermediary that re-encodes a request from HTTP/2 or 3 to HTTP/1.1 MUST NOT forward any received capsules until it has parsed a successful IP proxying response.",
+      "ja": "IPパケットの日和見的送信（セクション7.1を参照）は、HTTP/1.xでは、サーバーがHTTPのアップグレードを拒否し、IPパケットをその後のHTTP要求として解析しようと試みることができ、リクエストの密輸攻撃を許可するため、許可されません。[楽観的]を参照してください。特に、HTTP/2または3からHTTP/1.1へのリクエストを再エンコードする仲介者は、IPプロキシ応答が成功するまで受け取ったカプセルを転送してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "12. IANA Considerations",
+      "section_title": true,
+      "ja": "12. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "12.1. HTTP Upgrade Token Registration",
+      "section_title": true,
+      "ja": "12.1. HTTPアップグレードトークン登録"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has registered \"connect-ip\" in the \"HTTP Upgrade Tokens\" registry maintained at <https://www.iana.org/assignments/http-upgrade-tokens>.",
+      "ja": "IANAは、<https://www.iana.org/assignments/http-upgrade-tokens>に維持されている「HTTPアップグレードトークントークン」レジストリに「Connect-IP」を登録しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Value: connect-ip Description: Proxying of IP Payloads Expected Version Tokens: None References: RFC 9484",
+      "ja": "値：Connect-IP説明：IPペイロードのプロキシ予想バージョントークン：なし参照：RFC 9484"
+    },
+    {
+      "indent": 0,
+      "text": "12.2. MASQUE URI Suffixes Registry Creation",
+      "section_title": true,
+      "ja": "12.2. マスクURIサフィックスレジストリの作成"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created the \"MASQUE URI Suffixes\" registry maintained at <https://www.iana.org/assignments/masque>. The registration policy is Expert Review; see Section 4.5 of [IANA-POLICY]. This new registry governs the path segment that immediately follows \"masque\" in paths that start with \"/.well-known/masque/\"; see <https://www.iana.org/assignments/well-known-uris> for the registration of \"masque\" in the \"Well-Known URIs\" registry.",
+      "ja": "IANAは、<https://www.iana.org/assignments/masque>に維持されている「マスクウリサフィックス」レジストリを作成しました。登録ポリシーは専門家のレビューです。[iana-policy]のセクション4.5を参照してください。この新しいレジストリは、「/.well-known/masque/」で始まるパスの「マスク」を直接続けるパスセグメントを管理します。「よく知られているURIS」レジストリへの「マスク」の登録については、<https://www.iana.org/assignments/well-known-uris>を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "This new registry contains three columns:",
+      "ja": "この新しいレジストリには3つの列が含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "Path Segment: An ASCII string containing only characters allowed in tokens; see Section 5.6.2 of [HTTP]. Entries in this registry MUST all have distinct entries in this column. Description: A description of the entry. Reference: An optional reference defining the use of the entry.",
+      "ja": "パスセグメント：トークンで許可されている文字のみを含むASCII文字列。[http]のセクション5.6.2を参照してください。このレジストリのエントリは、すべてこの列に明確なエントリを持つ必要があります。説明：エントリの説明。参照：エントリの使用を定義するオプションの参照。"
+    },
+    {
+      "indent": 3,
+      "text": "The registry's initial entries are as follows:",
+      "ja": "レジストリの最初のエントリは次のとおりです。"
+    },
+    {
+      "indent": 16,
+      "text": "+==============+==============+===========+\n| Path Segment | Description  | Reference |\n+==============+==============+===========+\n| udp          | UDP Proxying | RFC 9298  |\n+--------------+--------------+-----------+\n| ip           | IP Proxying  | RFC 9484  |\n+--------------+--------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Table 1: MASQUE URI Suffixes Registry",
+      "ja": "表1：マスクURIサフィックスレジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "Designated experts for this registry are advised that they should approve all requests as long as the expert believes that both (1) the requested Path Segment will not conflict with existing or expected future IETF work and (2) the use case is relevant to proxying.",
+      "ja": "このレジストリの指定された専門家は、専門家が（1）要求されたパスセグメントが既存または予想される将来のIETF作業と矛盾しないと考えている限り、すべての要求を承認する必要があることをお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "12.3. Updates to masque Well-Known URI Registration",
+      "section_title": true,
+      "ja": "12.3. よく知られているURI登録をマスクの更新"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has updated the entry for the \"masque\" URI suffix in the \"Well-Known URIs\" registry maintained at <https://www.iana.org/assignments/ well-known-uris>.",
+      "ja": "IANAは、<https://www.iana.org/assignments/ wearknown-uris>に維持されている「有名なURIS」レジストリの「マスク」URI接尾辞のエントリを更新しました。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has updated the \"Reference\" field to include this document and has replaced the \"Related Information\" field with \"For sub-suffix allocations, see the registry at <https://www.iana.org/assignments/ masque>.\".",
+      "ja": "IANAは「参照」フィールドを更新してこのドキュメントを含め、「関連情報」フィールドを「サブサフィックスの割り当てのために「関連情報」フィールドに置き換えました。。"
+    },
+    {
+      "indent": 0,
+      "text": "12.4. HTTP Capsule Types Registrations",
+      "section_title": true,
+      "ja": "12.4. HTTPカプセルタイプの登録"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has added the following values to the \"HTTP Capsule Types\" registry maintained at <https://www.iana.org/assignments/masque>.",
+      "ja": "IANAは、<https://www.iana.org/assignments/masque>に維持されている「HTTPカプセルタイプ」レジストリに次の値を追加しました。"
+    },
+    {
+      "indent": 22,
+      "text": "+=======+=====================+\n| Value | Capsule Type        |\n+=======+=====================+\n| 0x01  | ADDRESS_ASSIGN      |\n+-------+---------------------+\n| 0x02  | ADDRESS_REQUEST     |\n+-------+---------------------+\n| 0x03  | ROUTE_ADVERTISEMENT |\n+-------+---------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 27,
+      "text": "Table 2: New Capsules",
+      "ja": "表2：新しいカプセル"
+    },
+    {
+      "indent": 3,
+      "text": "All of these new entries use the following values for these fields:",
+      "ja": "これらの新しいエントリはすべて、これらのフィールドに次の値を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Status: permanent Reference: RFC 9484 Change Controller: IETF Contact: masque@ietf.org Notes: None",
+      "ja": "ステータス：永続的な参照：RFC 9484 Change Controller：IETF連絡先：masque@ietf.orgノート：なし"
+    },
+    {
+      "indent": 0,
+      "text": "13. References",
+      "section_title": true,
+      "ja": "13. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "13.1. Normative References",
+      "section_title": true,
+      "ja": "13.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ABNF] Crocker, D., Ed. and P. Overell, \"Augmented BNF for Syntax Specifications: ABNF\", STD 68, RFC 5234, DOI 10.17487/RFC5234, January 2008, <https://www.rfc-editor.org/info/rfc5234>.",
+      "ja": "[ABNF] Crocker、D.、ed。P. Overell、「構文仕様のための拡張BNF：ABNF：STD 68、RFC 5234、DOI 10.17487/RFC5234、2008年1月、<https://www.rfc-editor.org/info/rfc5234>。"
+    },
+    {
+      "indent": 3,
+      "text": "[BCP38] Ferguson, P. and D. Senie, \"Network Ingress Filtering: Defeating Denial of Service Attacks which employ IP Source Address Spoofing\", BCP 38, RFC 2827, DOI 10.17487/RFC2827, May 2000, <https://www.rfc-editor.org/info/rfc2827>.",
+      "ja": "[BCP38]ファーガソン、P。およびD.セニー、「ネットワークイングレスフィルタリング：IPソースアドレスのスプーフィングを採用するサービス拒否攻撃の敗北」、BCP 38、RFC 2827、DOI 10.17487/RFC2827、2000年5月、<https：// wwwwwwwwww.rfc-editor.org/info/rfc2827>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DGRAM] Pauly, T., Kinnear, E., and D. Schinazi, \"An Unreliable Datagram Extension to QUIC\", RFC 9221, DOI 10.17487/RFC9221, March 2022, <https://www.rfc-editor.org/info/rfc9221>.",
+      "ja": "[Dgram] Pauly、T.、Kinnear、E。、およびD. Schinazi、「QUICへの信頼性の低いデータグラム拡張」、RFC 9221、DOI 10.17487/RFC9221、2022年3月、<https://www.rfc-editor.org/info/rfc9221>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DSCP] Nichols, K., Blake, S., Baker, F., and D. Black, \"Definition of the Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers\", RFC 2474, DOI 10.17487/RFC2474, December 1998, <https://www.rfc-editor.org/info/rfc2474>.",
+      "ja": "[DSCP] Nichols、K.、Blake、S.、Baker、F。、およびD. Black、「IPv4およびIPv6ヘッダーの差別化されたサービスフィールド（DSフィールド）の定義」、RFC 2474、DOI 10.17487/RFC2474、1998年12月、<https://www.rfc-editor.org/info/rfc2474>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ECN] Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition of Explicit Congestion Notification (ECN) to IP\", RFC 3168, DOI 10.17487/RFC3168, September 2001, <https://www.rfc-editor.org/info/rfc3168>.",
+      "ja": "[ECN] Ramakrishnan、K.、Floyd、S。、およびD. Black、「IPへの明示的な混雑通知（ECN）の追加」、RFC 3168、DOI 10.17487/RFC3168、2001年9月、<https：// www。rfc-editor.org/info/rfc3168>。"
+    },
+    {
+      "indent": 3,
+      "text": "[EXT-CONNECT2] McManus, P., \"Bootstrapping WebSockets with HTTP/2\", RFC 8441, DOI 10.17487/RFC8441, September 2018, <https://www.rfc-editor.org/info/rfc8441>.",
+      "ja": "[ext-connect2] McManus、P。、 \"HTTP/2でWebStrappetsをブートストラップするWebSocket、RFC 8441、DOI 10.17487/RFC8441、2018年9月、<https://www.rfc-editor.org/info/rfc841>。"
+    },
+    {
+      "indent": 3,
+      "text": "[EXT-CONNECT3] Hamilton, R., \"Bootstrapping WebSockets with HTTP/3\", RFC 9220, DOI 10.17487/RFC9220, June 2022, <https://www.rfc-editor.org/info/rfc9220>.",
+      "ja": "[ext-connect3] Hamilton、R。、「HTTP/3でWebStrappetsをブートストラップするWebStest、RFC 9220、DOI 10.17487/RFC9220、2022年6月、<https://www.rfc-editor.org/info/rfc9220>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP Semantics\", STD 97, RFC 9110, DOI 10.17487/RFC9110, June 2022, <https://www.rfc-editor.org/info/rfc9110>.",
+      "ja": "[HTTP] Fielding、R.、Ed。、Nottingham、M.、Ed。、およびJ. Reschke、ed。、 \"HTTP Semantics\"、Std 97、RFC 9110、DOI 10.17487/RFC9110、2022年6月、<https：//www.rfc-editor.org/info/rfc9110>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP-DGRAM] Schinazi, D. and L. Pardue, \"HTTP Datagrams and the Capsule Protocol\", RFC 9297, DOI 10.17487/RFC9297, August 2022, <https://www.rfc-editor.org/info/rfc9297>.",
+      "ja": "[http-dgram] Schinazi、D。and L. Pardue、「HTTPデータグラムとカプセルプロトコル」、RFC 9297、DOI 10.17487/RFC9297、2022年8月、<https://www.rfc-editor.org/info/rfc9297>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/1.1] Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., \"HTTP/1.1\", STD 99, RFC 9112, DOI 10.17487/RFC9112, June 2022, <https://www.rfc-editor.org/info/rfc9112>.",
+      "ja": "[HTTP/1.1] Fielding、R.、Ed。、Nottingham、M.、ed。、およびJ. Reschke、ed。、 \"Http/1.1\"、Std 99、RFC 9112、DOI 10.17487/RFC9112、2022年6月、<<https://www.rfc-editor.org/info/rfc9112>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/2] Thomson, M., Ed. and C. Benfield, Ed., \"HTTP/2\", RFC 9113, DOI 10.17487/RFC9113, June 2022, <https://www.rfc-editor.org/info/rfc9113>.",
+      "ja": "[HTTP/2] Thomson、M.、ed。and C. Benfield、ed。、「HTTP/2」、RFC 9113、DOI 10.17487/RFC9113、2022年6月、<https://www.rfc-editor.org/info/rfc9113>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP/3] Bishop, M., Ed., \"HTTP/3\", RFC 9114, DOI 10.17487/RFC9114, June 2022, <https://www.rfc-editor.org/info/rfc9114>.",
+      "ja": "[HTTP/3] Bishop、M.、ed。、 \"HTTP/3\"、RFC 9114、DOI 10.17487/RFC9114、2022年6月、<https://www.rfc-editor.org/info/rfc9114>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA-POLICY] Cotton, M., Leiba, B., and T. Narten, \"Guidelines for Writing an IANA Considerations Section in RFCs\", BCP 26, RFC 8126, DOI 10.17487/RFC8126, June 2017, <https://www.rfc-editor.org/info/rfc8126>.",
+      "ja": "[IANA-Policy] Cotton、M.、Leiba、B。、およびT. Narten、「RFCSでIANA考慮事項セクションを書くためのガイドライン」、BCP 26、RFC 8126、DOI 10.17487/RFC8126、2017年6月、<https：//www.rfc-editor.org/info/rfc8126>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ICMP] Postel, J., \"Internet Control Message Protocol\", STD 5, RFC 792, DOI 10.17487/RFC0792, September 1981, <https://www.rfc-editor.org/info/rfc792>.",
+      "ja": "[ICMP] Postel、J。、「インターネットコントロールメッセージプロトコル」、STD 5、RFC 792、DOI 10.17487/RFC0792、1981年9月、<https://www.rfc-editor.org/info/rfc792>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ICMPv6] Conta, A., Deering, S., and M. Gupta, Ed., \"Internet Control Message Protocol (ICMPv6) for the Internet Protocol Version 6 (IPv6) Specification\", STD 89, RFC 4443, DOI 10.17487/RFC4443, March 2006, <https://www.rfc-editor.org/info/rfc4443>.",
+      "ja": "[Icmpv6] Conta、A.、Deering、S。、およびM. Gupta、ed。、「インターネットプロトコルバージョン6（IPv6）仕様のインターネット制御メッセージプロトコル（ICMPV6）、STD 89、RFC 4443、DOI 10.17487/RFC4443、2006年3月、<https://www.rfc-editor.org/info/rfc4443>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6] Deering, S. and R. Hinden, \"Internet Protocol, Version 6 (IPv6) Specification\", STD 86, RFC 8200, DOI 10.17487/RFC8200, July 2017, <https://www.rfc-editor.org/info/rfc8200>.",
+      "ja": "[IPv6] Deering、S。and R. Hinden、「インターネットプロトコル、バージョン6（IPv6）仕様」、STD 86、RFC 8200、DOI 10.17487/RFC8200、2017年7月、<https://www.rfc-editor.org/info/rfc8200>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6-ZONE-ID] Carpenter, B., Cheshire, S., and R. Hinden, \"Representing IPv6 Zone Identifiers in Address Literals and Uniform Resource Identifiers\", RFC 6874, DOI 10.17487/RFC6874, February 2013, <https://www.rfc-editor.org/info/rfc6874>.",
+      "ja": "[IPv6-Zone-ID] Carpenter、B.、Cheshire、S。、およびR. Hinden、「住所リテラルおよび均一なリソース識別子のIPv6ゾーン識別子を表す」、RFC 6874、DOI 10.17487/RFC6874、2013年2月、<https：//www.rfc-editor.org/info/rfc6874>。"
+    },
+    {
+      "indent": 3,
+      "text": "[PROXY-STATUS] Nottingham, M. and P. Sikora, \"The Proxy-Status HTTP Response Header Field\", RFC 9209, DOI 10.17487/RFC9209, June 2022, <https://www.rfc-editor.org/info/rfc9209>.",
+      "ja": "[Proxy-status]ノッティンガム、M。およびP.シコラ、「プロキシステータスHTTP応答ヘッダーフィールド」、RFC 9209、DOI 10.17487/RFC9209、2022年6月、<https://www.rfc-editor.org/info/rfc9209>。"
+    },
+    {
+      "indent": 3,
+      "text": "[QUIC] Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based Multiplexed and Secure Transport\", RFC 9000, DOI 10.17487/RFC9000, May 2021, <https://www.rfc-editor.org/info/rfc9000>.",
+      "ja": "[quic] iyengar、J.、ed。and M. Thomson、ed。、「Quic：UDPベースの多重化および安全な輸送」、RFC 9000、DOI 10.17487/RFC9000、2021年5月、<https://www.rfc-editor.org/info/rfc9000>"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TCP] Eddy, W., Ed., \"Transmission Control Protocol (TCP)\", STD 7, RFC 9293, DOI 10.17487/RFC9293, August 2022, <https://www.rfc-editor.org/info/rfc9293>.",
+      "ja": "[TCP] Eddy、W.、ed。、「Transmission Control Protocol（TCP）」、STD 7、RFC 9293、DOI 10.17487/RFC9293、2022年8月、<https://www.rfc-editor.org/info/RFC92933>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TEMPLATE] Gregorio, J., Fielding, R., Hadley, M., Nottingham, M., and D. Orchard, \"URI Template\", RFC 6570, DOI 10.17487/RFC6570, March 2012, <https://www.rfc-editor.org/info/rfc6570>.",
+      "ja": "[テンプレート]グレゴリオ、J。、フィールディング、R。、ハドリー、M。、ノッティンガム、M。、およびD.オーチャード、「URIテンプレート」、RFC 6570、DOI 10.17487/RFC6570、2012年3月、<https：// wwwww.rfc-editor.org/info/rfc6570>。"
+    },
+    {
+      "indent": 3,
+      "text": "[URI] Berners-Lee, T., Fielding, R., and L. Masinter, \"Uniform Resource Identifier (URI): Generic Syntax\", STD 66, RFC 3986, DOI 10.17487/RFC3986, January 2005, <https://www.rfc-editor.org/info/rfc3986>.",
+      "ja": "[URI] Berners-Lee、T.、Fielding、R。、およびL. Masinter、「Uniform Resource Identifier（URI）：Generic Syntax」、Std 66、RFC 3986、DOI 10.17487/RFC3986、2005年1月、<https：//www.rfc-editor.org/info/rfc3986>。"
+    },
+    {
+      "indent": 0,
+      "text": "13.2. Informative References",
+      "section_title": true,
+      "ja": "13.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[CONNECT-UDP] Schinazi, D., \"Proxying UDP in HTTP\", RFC 9298, DOI 10.17487/RFC9298, August 2022, <https://www.rfc-editor.org/info/rfc9298>.",
+      "ja": "[Connect-udp] Schinazi、D。、「HTTPでUDPのプロキシ」、RFC 9298、DOI 10.17487/RFC9298、2022年8月、<https://www.rfc-editor.org/info/rfc9298>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DPLPMTUD] Fairhurst, G., Jones, T., Txen, M., Rngeler, I., and T. Vlker, \"Packetization Layer Path MTU Discovery for Datagram Transports\", RFC 8899, DOI 10.17487/RFC8899, September 2020, <https://www.rfc-editor.org/info/rfc8899>.",
+      "ja": "[dplpmtud] Fairhurst、G.、Jones、T.、Txen、M.、Rngeler、I。、およびT. Vlker、「Packetization Layer Path MTU Discovery for Datagram Transports」、RFC 8899、DOI 10.17487/RFC8899、9月2020、<https://www.rfc-editor.org/info/rfc8899>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ECN-TUNNEL] Briscoe, B., \"Tunnelling of Explicit Congestion Notification\", RFC 6040, DOI 10.17487/RFC6040, November 2010, <https://www.rfc-editor.org/info/rfc6040>.",
+      "ja": "[ECN-Tunnel] Briscoe、B。、「明示的な混雑通知のトンネル」、RFC 6040、DOI 10.17487/RFC6040、2010年11月、<https://www.rfc-editor.org/info/rfc6040>。"
+    },
+    {
+      "indent": 3,
+      "text": "[HEv2] Schinazi, D. and T. Pauly, \"Happy Eyeballs Version 2: Better Connectivity Using Concurrency\", RFC 8305, DOI 10.17487/RFC8305, December 2017, <https://www.rfc-editor.org/info/rfc8305>.",
+      "ja": "[Hev2] Schinazi、D。and T. Pauly、「Happy Eyeballsバージョン2：並行性を使用したより良い接続性」、RFC 8305、DOI 10.17487/RFC8305、2017年12月、<https://www.rfc-editor.org/info/RFC8305>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IANA-PN] IANA, \"Protocol Numbers\", <https://www.iana.org/assignments/protocol-numbers>.",
+      "ja": "[IANA-PN] IANA、「プロトコル番号」、<https://www.iana.org/assignments/protocol-numbers>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPSEC] Kent, S. and K. Seo, \"Security Architecture for the Internet Protocol\", RFC 4301, DOI 10.17487/RFC4301, December 2005, <https://www.rfc-editor.org/info/rfc4301>.",
+      "ja": "[IPSEC] Kent、S。およびK. SEO、「インターネットプロトコルのセキュリティアーキテクチャ」、RFC 4301、DOI 10.17487/RFC4301、2005年12月、<https://www.rfc-editor.org/info/rfc4301>。"
+    },
+    {
+      "indent": 3,
+      "text": "[IPv6-ADDR] Hinden, R. and S. Deering, \"IP Version 6 Addressing Architecture\", RFC 4291, DOI 10.17487/RFC4291, February 2006, <https://www.rfc-editor.org/info/rfc4291>.",
+      "ja": "[IPv6-Addr] Hinden、R。and S. Deering、「IPバージョン6アドレス指定アーキテクチャ」、RFC 4291、DOI 10.17487/RFC4291、2006年2月、<https://www.rfc-editor.org/info/rfc4291>。"
+    },
+    {
+      "indent": 3,
+      "text": "[OPTIMISTIC] Schwartz, B. M., \"Security Considerations for Optimistic Use of HTTP Upgrade\", Work in Progress, Internet-Draft, draft-schwartz-httpbis-optimistic-upgrade-00, 21 August 2023, <https://datatracker.ietf.org/doc/html/draft-schwartz-httpbis-optimistic-upgrade-00>.",
+      "ja": "[楽観的] Schwartz、B。M.、「HTTPアップグレードの楽観的な使用に関するセキュリティ上の考慮事項」、進行中の作業、インターネットドラフト、ドラフト-Schwartz-Httpbis-optimistic-upgrade-00、2023年8月21日、<https：//datatracker.ietf.org/doc/html/draft-schwartz-httpbis-optimistic-upgrade-00>。"
+    },
+    {
+      "indent": 3,
+      "text": "[PROXY-REQS] Chernyakhovsky, A., McCall, D., and D. Schinazi, \"Requirements for a MASQUE Protocol to Proxy IP Traffic\", Work in Progress, Internet-Draft, draft-ietf-masque-ip-proxy-reqs-03, 27 August 2021, <https://datatracker.ietf.org/doc/html/draft-ietf-masque-ip-proxy-reqs-03>.",
+      "ja": "[Proxy-reqs] Chernyakhovsky、A.、McCall、D。、およびD. Schinazi、「Masque ProtocolへのIPトラフィックへの要件」、進行中の作業、インターネットドラフト、ドラフト-ITF-Masque-IP-Proxy-Reqs-03、2021年8月27日、<https://datatracker.ietf.org/doc/html/draft-masque-ip-proxy-reqs-03>。"
+    },
+    {
+      "indent": 3,
+      "text": "[ROUTING-HDR] Abley, J., Savola, P., and G. Neville-Neil, \"Deprecation of Type 0 Routing Headers in IPv6\", RFC 5095, DOI 10.17487/RFC5095, December 2007, <https://www.rfc-editor.org/info/rfc5095>.",
+      "ja": "[Routing-HDR] Eabley、J.、Savola、P。、およびG. Neville-Neil、「IPv6のタイプ0ルーティングヘッダーの非難」、RFC 5095、DOI 10.17487/RFC5095、2007年12月、<https：// wwwww.rfc-editor.org/info/rfc5095>。"
+    },
+    {
+      "indent": 3,
+      "text": "[TUNNEL-SECURITY] Krishnan, S., Thaler, D., and J. Hoagland, \"Security Concerns with IP Tunneling\", RFC 6169, DOI 10.17487/RFC6169, April 2011, <https://www.rfc-editor.org/info/rfc6169>.",
+      "ja": "[トンネルのセキュリティ]クリシュナン、S。、タラー、D。、およびJ.ホーグランド、「IPトンネリングに関するセキュリティ上の懸念」、RFC 6169、DOI 10.17487/RFC6169、2011年4月、<https：//www.rfc-editor。org/info/rfc6169>。"
+    },
+    {
+      "indent": 3,
+      "text": "[UDP-USAGE] Eggert, L., Fairhurst, G., and G. Shepherd, \"UDP Usage Guidelines\", BCP 145, RFC 8085, DOI 10.17487/RFC8085, March 2017, <https://www.rfc-editor.org/info/rfc8085>.",
+      "ja": "[UDP-Usage] Eggert、L.、Fairhurst、G.、およびG. Shepherd、「UDP使用ガイドライン」、BCP 145、RFC 8085、DOI 10.17487/RFC8085、2017年3月、<https：//www.rfc-editor.org/info/rfc8085>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The design of this method was inspired by discussions in the MASQUE Working Group around [PROXY-REQS]. The authors would like to thank participants in those discussions for their feedback. Additionally, Mike Bishop, Lucas Pardue, and Alejandro Sedeo provided valuable feedback on the document.",
+      "ja": "この方法の設計は、[Proxy-Reqs]の周りのマスクワーキンググループでの議論に触発されました。著者は、フィードバックについてこれらの議論の参加者に感謝したいと思います。さらに、マイク・ビショップ、ルーカス・パルドー、およびアレハンドロ・セデオは、この文書に関する貴重なフィードバックを提供しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Most of the text on client configuration is based on the corresponding text in [CONNECT-UDP].",
+      "ja": "クライアント構成に関するテキストのほとんどは、[connect-udp]の対応するテキストに基づいています。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tommy Pauly (editor) Apple Inc. Email: tpauly@apple.com",
+      "ja": "Tommy Pauly（編集者）Apple Inc.メール：tpauly@apple.com"
+    },
+    {
+      "indent": 3,
+      "text": "David Schinazi Google LLC 1600 Amphitheatre Parkway Mountain View, CA 94043 United States of America Email: dschinazi.ietf@gmail.com",
+      "ja": "David Schinazi Google LLC 1600 Amphitheater Parkway Mountain View、CA 94043アメリカ合衆国電子メール：dschinazi.ietf@gmail.com"
+    },
+    {
+      "indent": 3,
+      "text": "Alex Chernyakhovsky Google LLC Email: achernya@google.com",
+      "ja": "Alex Chernyakhovsky Google LLCメール：achernya@google.com"
+    },
+    {
+      "indent": 3,
+      "text": "Mirja Khlewind Ericsson Email: mirja.kuehlewind@ericsson.com",
+      "ja": "Mirja Khlewind Ericssonメール：mirja.kuehlewind@ericsson.com"
+    },
+    {
+      "indent": 3,
+      "text": "Magnus Westerlund Ericsson Email: magnus.westerlund@ericsson.com",
+      "ja": "Magnus Westerlund Ericsson Email：Magnus.westerlund@ericsson.com"
+    }
+  ]
+}
