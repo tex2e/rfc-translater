@@ -2,6 +2,7 @@
 # RFC翻訳 各機能の呼び出しメインプログラム
 # ------------------------------------------------------------------------------
 
+import sys
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
@@ -22,9 +23,7 @@ def main(rfc_number: int | str) -> None:
             f.write('')
         return
 
-    res = trans_rfc(rfc_number)
-    if res is False:
-        return False
+    trans_rfc(rfc_number)
     make_html(rfc_number)
 
 def continuous_main(begin=None, end=None, only_first=False):
@@ -40,9 +39,7 @@ def continuous_main(begin=None, end=None, only_first=False):
         numbers = numbers[0:1]
 
     for rfc_number in numbers:
-        res = main(rfc_number)
-        if res is False:
-            break
+        main(rfc_number)
 
 
 if __name__ == '__main__':
@@ -119,7 +116,6 @@ if __name__ == '__main__':
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
         for rfc in RFCs:
             make_json_from_html(rfc)
-
     elif RFCs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in RFCs:
@@ -129,3 +125,5 @@ if __name__ == '__main__':
         continuous_main(begin=args.begin, end=args.end, only_first=args.only_first)
     else:
         parser.print_help()
+
+print("[+] 正常終了 %s" % sys.argv[0])

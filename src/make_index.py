@@ -18,7 +18,7 @@ def make_index() -> None:
             html = f.read()
         m = re.search(r'<title>([^<]*)</title>', html)
         if not m:
-            print("not found title: %s" % filename)
+            print("[-] not found title: %s" % filename)
             continue
         title = m[1].replace('日本語訳', '').strip()
         m = re.match(r'rfc(\d+).html', rfcfile)
@@ -52,7 +52,7 @@ def make_index_draft() -> None:
             html = f.read()
         m = re.search(r'<title>([^<]*)</title>', html)
         if not m:
-            print("not found title: %s" % filename)
+            print("[-] not found title: %s" % filename)
             continue
         title = m[1].replace('日本語訳', '').strip()
         m = re.match(r'draft-[^-]+-(?P<draftname>.*).html', rfcfile)

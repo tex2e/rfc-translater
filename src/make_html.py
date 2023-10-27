@@ -32,7 +32,7 @@ def make_html(rfc_number: int | str) -> None:
     output_file = os.path.normpath(output_file)
 
     if not os.path.isfile(input_file):
-        print("make_html: Not found:", input_file)
+        print("[-] make_html: Not found:", input_file)
         return
 
     # 翻訳したRFC (json) の読み込み
