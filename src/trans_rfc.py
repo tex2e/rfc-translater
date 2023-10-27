@@ -10,7 +10,7 @@ from tqdm import tqdm  # pip install tqdm
 import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 import platform
 from datetime import datetime, timedelta, timezone
@@ -242,20 +242,6 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         print("", flush=True)
 
-    except (NoSuchElementException, TimeoutException, MyTranslateException) as e:
-        # NoSuchElementException: Google翻訳で別のページが返ってきたときに発生する例外
-        # TimeoutException: ネットワークなどの問題で発生する例外
-        print(f'[-] Translator Error! ({datetime.now(JST)})')
-        print(e)
-        is_canceled = True
-    except KeyboardInterrupt:
-        # ユーザが意図的に処理を停止したときに発生する例外
-        print('Interrupted!')
-        is_canceled = True
-    finally:
-        translator.close()
-
-    if not is_canceled:
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
         with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
@@ -269,19 +255,31 @@ def trans_rfc(rfc_number: int | str) -> bool:
             os.remove(midway_file)
             print(f"[+] Delete file: {midway_file}")
         return True
-    else:
+
+    except (NoSuchElementException, TimeoutException, WebDriverException, MyTranslateException, KeyboardInterrupt) as e:
+        # NoSuchElementException: Google翻訳で別のページが返ってきたときに発生する例外
+        # TimeoutException: ネットワークなどの問題で発生する例外
+        # WebDriverException: メモリ不足などでWebDriverがエラーしたとき
+        # KeyboardInterrupt: ユーザが意図的に処理を停止したときに発生する例外
+        print(f'[-] Translator Error! ({datetime.now(JST)})')
+        print(f'[-] error={e}')
+
         # 異常終了した時
         # 途中まで翻訳済みのファイルを生成する
         with open(midway_file, 'w', encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, indent=2, ensure_ascii=False)
-            print(f"[-] Save file: {midway_file}")
-        return False
+            print(f"[+] Save file: {midway_file}")
+        # 例外をそのまま投げる
+        raise
+
+    finally:
+        translator.close()
 
 
 def trans_test() -> bool:
     translator = TranslatorSeleniumGoogletrans(total=1)
     ja = translator.translate('test sample.', dest='ja')
-    print('result:', ja)
+    print('[+] result:', ja)
 
 
 if __name__ == '__main__':
