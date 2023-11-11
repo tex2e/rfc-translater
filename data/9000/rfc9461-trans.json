@@ -1,0 +1,595 @@
+{
+  "title": {
+    "text": "RFC 9461 - Service Binding Mapping for DNS Servers",
+    "ja": "RFC 9461 - DNSサーバーのサービスバインディングマッピング"
+  },
+  "number": 9461,
+  "created_at": "2023-11-09 23:47:19.550541+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       B. Schwartz\nRequest for Comments: 9461                          Meta Platforms, Inc.\nCategory: Standards Track                                  November 2023\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 16,
+      "text": "Service Binding Mapping for DNS Servers",
+      "ja": "DNSサーバーのサービスバインディングマッピング"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "The SVCB DNS resource record type expresses a bound collection of endpoint metadata, for use when establishing a connection to a named service. DNS itself can be such a service, when the server is identified by a domain name. This document provides the SVCB mapping for named DNS servers, allowing them to indicate support for encrypted transport protocols.",
+      "ja": "SVCB DNSリソースレコードタイプは、名前付きサービスへの接続を確立するときに使用するために、エンドポイントメタデータのバインドコレクションを表します。DNS自体は、サーバーがドメイン名で識別される場合、そのようなサービスになる可能性があります。このドキュメントは、名前付きDNSサーバーのSVCBマッピングを提供し、暗号化された輸送プロトコルのサポートを示すことができます。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9461.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9461で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2023 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright（c）2023 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  Identities and Names\n  3.1.  Special Case: Non-default Ports\n4.  Applicable Existing SvcParamKeys\n  4.1.  \"alpn\"\n  4.2.  \"port\"\n  4.3.  Other Applicable SvcParamKeys\n5.  New SvcParamKey: \"dohpath\"\n6.  Limitations\n7.  Examples\n8.  Security Considerations\n  8.1.  Adversary on the Query Path\n    8.1.1.  Downgrade Attacks\n    8.1.2.  Redirection Attacks\n  8.2.  Adversary on the Transport Path\n9.  IANA Considerations\n10. References\n  10.1.  Normative References\n  10.2.  Informative References\nAppendix A.  Mapping Summary\nAcknowledgments\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The SVCB resource record (RR) type [SVCB] provides clients with information about how to reach alternative endpoints for a service. These endpoints may offer improved performance or privacy properties. The service is identified by a \"scheme\" indicating the service type, a hostname, and, optionally, other information such as a port number. A DNS server is often identified only by its IP address (e.g., in DHCP), but in some contexts it can also be identified by a hostname (e.g., \"NS\" records, manual resolver configuration) and sometimes also a non-default port number.",
+      "ja": "SVCBリソースレコード（RR）タイプ[SVCB]は、サービスの代替エンドポイントに到達する方法に関する情報をクライアントに提供します。これらのエンドポイントは、パフォーマンスまたはプライバシーの改善されたプロパティを提供する場合があります。このサービスは、サービスタイプ、ホスト名、およびオプションでポート番号などのその他の情報を示す「スキーム」によって識別されます。DNSサーバーは、多くの場合、IPアドレス（DHCPなど）によってのみ識別されますが、一部のコンテキストではホスト名（「NS」レコード、手動リゾルバー構成など）で識別することもできます。番号。"
+    },
+    {
+      "indent": 3,
+      "text": "The use of the SVCB RR type requires a mapping document for each service type (Section 2.4.3 of [SVCB]), indicating how a client for that service can interpret the contents of the SVCB SvcParams. This document provides the mapping for the \"dns\" service type, allowing DNS servers to offer alternative endpoints and transports, including encrypted transports like DNS over TLS (DoT) [RFC7858], DNS over HTTPS (DoH) [RFC8484], and DNS over QUIC (DoQ) [RFC9250].",
+      "ja": "SVCB RRタイプの使用には、各サービスタイプ（[SVCB]のセクション2.4.3）のマッピングドキュメントが必要であり、そのサービスのクライアントがSVCB SVCParamsの内容をどのように解釈できるかを示します。このドキュメントでは、「DNS」サービスタイプのマッピングを提供し、DNSサーバーがTLS（DOT）[RFC7858]のような暗号化されたトランスポート、HTTPS（DOH）（DOH）[RFC8484]のDNSなどの暗号化されたトランスポートを含む代替エンドポイントとトランスポートを提供できるようにします。quic（doq）[rfc9250]。"
+    },
+    {
+      "indent": 3,
+      "text": "The SVCB mapping described in this document is intended as a general-purpose baseline. Subsequent specifications will adapt this mechanism as needed to support specific configurations (e.g., for communication between stub resolvers and recursive resolvers).",
+      "ja": "このドキュメントで説明されているSVCBマッピングは、汎用ベースラインとして意図されています。後続の仕様は、特定の構成をサポートするために必要に応じてこのメカニズムを適合させます（例：スタブリゾルバーと再帰リゾルバー間の通信）。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 慣習と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Identities and Names",
+      "section_title": true,
+      "ja": "3. アイデンティティと名前"
+    },
+    {
+      "indent": 3,
+      "text": "SVCB record names (i.e., QNAMEs) for DNS services are formed using Port Prefix Naming (Section 2.3 of [SVCB]), with a scheme of \"dns\". For example, SVCB records for a DNS service identified as dns1.example.com would be queried at _dns.dns1.example.com.",
+      "ja": "DNSサービスのSVCBレコード名（つまり、QNAME）は、「DNS」のスキームを使用して、ポートプレフィックスネーミング（[SVCB]のセクション2.3）を使用して形成されます。たとえば、DNS1.example.comとして識別されたDNSサービスのSVCBレコードは、_DNS.DNS1.example.comに照会されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In some use cases, the name used for retrieving these DNS records is different from the server identity used to authenticate the secure transport. To distinguish between these, this document uses the following terms:",
+      "ja": "一部のユースケースでは、これらのDNSレコードの取得に使用される名前は、安全なトランスポートを認証するために使用されるサーバーIDとは異なります。これらを区別するために、このドキュメントは次の用語を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Binding authority: The service name (Section 1.3 of [SVCB]) and optional port number used as input to Port Prefix Naming.",
+      "ja": "拘束力のある機関：サービス名（[SVCB]のセクション1.3）およびポートプレフィックスネーミングへの入力として使用されるオプションのポート番号。"
+    },
+    {
+      "indent": 3,
+      "text": "Authentication name: The name used for secure transport authentication. This MUST be a DNS hostname or a literal IP address. Unless otherwise specified, this is the service name from the binding authority.",
+      "ja": "認証名：安全な輸送認証に使用される名前。これは、DNSホスト名またはリテラルIPアドレスである必要があります。特に指定されていない限り、これは拘束力のある機関からのサービス名です。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Special Case: Non-default Ports",
+      "section_title": true,
+      "ja": "3.1. 特別なケース：非デフォルトポート"
+    },
+    {
+      "indent": 3,
+      "text": "Normally, a DNS service is identified by an IP address or a domain name. When connecting to the service using unencrypted DNS over UDP or TCP, clients use the default port number for DNS (53). However, in rare cases, a DNS service might be identified by both a name and a port number. For example, the DNS URI scheme [DNSURI] optionally includes an authority, comprised of a host and a port number (with a default of 53). DNS URIs normally omit the authority or specify an IP address, but a hostname and non-default port number are allowed.",
+      "ja": "通常、DNSサービスはIPアドレスまたはドメイン名によって識別されます。UDPまたはTCPを介して暗号化されていないDNSを使用してサービスに接続する場合、クライアントはDNSに対してデフォルトのポート番号を使用します（53）。ただし、まれに、DNSサービスは、名前とポート番号の両方によって識別される場合があります。たとえば、DNS URIスキーム[DNSURI]には、オプションで、ホストとポート番号（デフォルトの53）で構成される権限が含まれています。DNS URISは通常、当局を省略するか、IPアドレスを指定しますが、ホスト名と非デフォルトポート番号は許可されています。"
+    },
+    {
+      "indent": 3,
+      "text": "When the binding authority specifies a non-default port number, Port Prefix Naming places the port number in an additional prefix on the name. For example, if the binding authority is \"dns1.example.com:9953\", the client would query for SVCB records at _9953._dns.dns1.example.com. If two DNS services operating on different port numbers provide different behaviors, this arrangement allows them to preserve the distinction when specifying alternative endpoints.",
+      "ja": "拘束力のある機関が非デフォルトポート番号を指定すると、ポートプレフィックスの名前を付けて、ポート番号を名前の追加のプレフィックスに配置します。たとえば、拘束力のある機関が「DNS1.example.com:9953」の場合、クライアントは_9953._dns.dns1.example.comでSVCBレコードを照会します。異なるポート番号で動作する2つのDNSサービスが異なる動作を提供する場合、この配置により、代替エンドポイントを指定するときに区別を保持できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Applicable Existing SvcParamKeys",
+      "section_title": true,
+      "ja": "4. 既存のsvcparamkeysの適用"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. \"alpn\"",
+      "section_title": true,
+      "ja": "4.1. 「alpn」"
+    },
+    {
+      "indent": 3,
+      "text": "This key indicates the set of supported protocols (Section 7.1 of [SVCB]). There is no default protocol, so the \"no-default-alpn\" key does not apply. If the \"alpn\" SvcParamKey is absent, the client MUST treat the SVCB record as \"incompatible\" (as defined in Section 8 of [SVCB]) unless some other recognized SvcParam indicates a supported protocol.",
+      "ja": "このキーは、サポートされているプロトコルのセットを示しています（[SVCB]のセクション7.1）。デフォルトのプロトコルはないため、「Do-Default-Alpn」キーは適用されません。「ALPN」SVCParamkeyが存在しない場合、クライアントはSVCBレコードを「互換性のない」（[SVCB]のセクション8で定義）として扱う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the protocol set contains any HTTP versions (e.g., \"h2\", \"h3\"), then the record indicates support for DoH and the \"dohpath\" key MUST be present (Section 5). All keys specified for use with the HTTPS record are also permissible and apply to the resulting HTTP connection.",
+      "ja": "プロトコルセットにHTTPバージョン（「H2」、「H3」など）が含まれている場合、レコードはDOHのサポートを示し、「Dohpath」キーが存在する必要があります（セクション5）。HTTPSレコードで使用するために指定されたすべてのキーも許容され、結果のHTTP接続に適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the protocol set contains protocols with different default ports and no \"port\" key is specified, then protocols are contacted separately on their default ports. Note that in this configuration, Application-Layer Protocol Negotiation (ALPN) negotiation does not defend against cross-protocol downgrade attacks.",
+      "ja": "プロトコルセットに異なるデフォルトポートを持つプロトコルが含まれており、「ポート」キーが指定されていない場合、プロトコルはデフォルトのポートで個別に連絡されます。この構成では、アプリケーション層プロトコルネゴシエーション（ALPN）の交渉は、プロトコルの格下げ攻撃から擁護しないことに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. \"port\"",
+      "section_title": true,
+      "ja": "4.2. \"ポート\""
+    },
+    {
+      "indent": 3,
+      "text": "This key is used to indicate the target port for connection (Section 7.2 of [SVCB]). If omitted, the client SHALL use the default port number for each transport protocol (853 for DoT and DoQ, 443 for DoH).",
+      "ja": "このキーは、接続のターゲットポートを示すために使用されます（[SVCB]のセクション7.2）。省略した場合、クライアントは各輸送プロトコルにデフォルトのポート番号（DOTおよびDOQで853、DOHの場合は443）を使用するものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "This key is automatically mandatory for this binding. This means that a client that does not respect the \"port\" key MUST ignore any SVCB record that contains this key. (See Section 8 of [SVCB] for the definition of \"automatically mandatory\".)",
+      "ja": "このキーは、このバインディングに対して自動的に必須です。これは、「ポート」キーを尊重しないクライアントが、このキーを含むSVCBレコードを無視する必要があることを意味します。（[自動的に必須]の定義については、[SVCB]のセクション8を参照してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "Support for the \"port\" key can be unsafe if the client has implicit elevated access to some network service (e.g., a local service that is inaccessible to remote parties) and that service uses a TCP-based protocol other than TLS. A hostile DNS server might be able to manipulate this service by causing the client to send a specially crafted TLS Server Name Indication (SNI) or session ticket that can be misparsed as a command or exploit. To avoid such attacks, clients SHOULD NOT support the \"port\" key unless one of the following conditions applies:",
+      "ja": "「ポート」キーのサポートは、クライアントが何らかのネットワークサービス（例えば、リモートパーティーにアクセスできないローカルサービス）への暗黙のアクセスがあり、そのサービスがTLS以外のTCPベースのプロトコルを使用している場合、安全でない場合があります。敵対的なDNSサーバーは、クライアントに特別に作成されたTLSサーバー名表示（SNI）またはコマンドまたはエクスプロイトとして誤って比較できるセッションチケットを送信することにより、このサービスを操作できる場合があります。このような攻撃を避けるために、クライアントは次の条件のいずれかが適用されない限り、「ポート」キーをサポートすべきではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "* The client is being used with a DNS server that it trusts not to attempt this attack.",
+      "ja": "* クライアントは、この攻撃を試みないことを信頼するDNSサーバーで使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "* The client is being used in a context where implicit elevated access cannot apply.",
+      "ja": "* クライアントは、暗黙の高さのアクセスが適用できないコンテキストで使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "* The client restricts the set of allowed TCP port values to exclude any ports where a confusion attack is likely to be possible (e.g., the \"bad ports\" list from Section 2.9 (\"Port blocking\") of [FETCH]).",
+      "ja": "* クライアントは、許可されたTCPポート値のセットを制限して、混乱攻撃が可能になる可能性が高いポートを除外します（たとえば、[フェッチ]のセクション2.9（「ポートブロッキング」」の「悪いポート」リスト）。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Other Applicable SvcParamKeys",
+      "section_title": true,
+      "ja": "4.3. その他の該当するsvcparamkeys"
+    },
+    {
+      "indent": 3,
+      "text": "These SvcParamKeys from [SVCB] apply to the \"dns\" scheme without modification:",
+      "ja": "[svcb]のこれらのsvcparamkeysは、変更なしで「DNS」スキームに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* mandatory",
+      "ja": "* 必須必須の"
+    },
+    {
+      "indent": 3,
+      "text": "* ipv4hint",
+      "ja": "* ipv4hint"
+    },
+    {
+      "indent": 3,
+      "text": "* ipv6hint",
+      "ja": "* IPv6hint"
+    },
+    {
+      "indent": 3,
+      "text": "Future SvcParamKeys might also be applicable.",
+      "ja": "将来のSVCParamkeysも適用される可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. New SvcParamKey: \"dohpath\"",
+      "section_title": true,
+      "ja": "5. 新しいsvcparamkey：「dohpath」"
+    },
+    {
+      "indent": 3,
+      "text": "\"dohpath\" is a single-valued SvcParamKey whose value (in both presentation format and wire format) MUST be a URI Template in relative form ([RFC6570], Section 1.1) encoded in UTF-8 [RFC3629]. If the \"alpn\" SvcParam indicates support for HTTP, \"dohpath\" MUST be present. The URI Template MUST contain a \"dns\" variable, and MUST be chosen such that the result after DoH URI Template expansion (Section 6 of [RFC8484]) is always a valid and functional \":path\" value ([RFC9113], Section 8.3.1).",
+      "ja": "「Dohpath」は、UTF-8 [RFC3629]にエンコードされた相対形式（[RFC6570]、セクション1.1）の値（プレゼンテーション形式とワイヤー形式の両方）でなければならない単一値のSVCParamkeyでなければなりません。「ALPN」SVCPARAMがHTTPのサポートを示している場合、「Dohpath」が存在する必要があります。URIテンプレートには「DNS」変数が含まれている必要があり、DOH URIテンプレート拡張後の結果（[RFC8484]のセクション6）が常に有効かつ機能的であるように選択する必要があります。.1）。"
+    },
+    {
+      "indent": 3,
+      "text": "When using this SVCB record, the client MUST send any DoH requests to the HTTP origin identified by the \"https\" scheme, the authentication name, and the port from the \"port\" SvcParam (if present). HTTP requests MUST be directed to the resource resulting from DoH URI Template expansion of the \"dohpath\" value.",
+      "ja": "このSVCBレコードを使用する場合、クライアントは「HTTPS」スキーム、認証名、および「ポート」SVCPARAM（存在する場合）からのポートによって識別されたHTTPオリジンにDOH要求を送信する必要があります。HTTPリクエストは、「Dohpath」値のDOH URIテンプレート拡張に起因するリソースに送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients SHOULD NOT query for any HTTPS RRs when using \"dohpath\". Instead, the SvcParams and address records associated with this SVCB record SHOULD be used for the HTTPS connection, with the same semantics as an HTTPS RR. However, for consistency, service operators SHOULD publish an equivalent HTTPS RR, especially if clients might learn about this DoH service through a different channel.",
+      "ja": "「Dohpath」を使用する場合、クライアントはHTTPS RRSをクエリしないでください。代わりに、このSVCBレコードに関連付けられたSVCPARAMSおよびアドレスレコードは、HTTPS RRと同じセマンティクスを持つHTTPS接続に使用する必要があります。ただし、一貫性のために、サービスオペレーターは、特にクライアントが別のチャネルを介してこのDOHサービスについて学習できる場合、同等のHTTPS RRを公開する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Limitations",
+      "section_title": true,
+      "ja": "6. 制限"
+    },
+    {
+      "indent": 3,
+      "text": "This document is concerned exclusively with the DNS transport and does not affect or inform the construction or interpretation of DNS messages. For example, nothing in this document indicates whether the service is intended for use as a recursive or authoritative DNS server. Clients need to know the intended use of services based on their context.",
+      "ja": "このドキュメントは、DNS輸送のみに関係しており、DNSメッセージの構築または解釈に影響を与えたり、通知したりしません。たとえば、このドキュメントの何も、サービスが再帰的または権威あるDNSサーバーとして使用することを意図しているかどうかを示していません。クライアントは、コンテキストに基づいてサービスの使用を意図した使用を知る必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Not all features of this specification will be applicable or effective in all contexts:",
+      "ja": "この仕様のすべての機能がすべてのコンテキストで適用または効果的であるわけではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "* If the authentication name is received over an insecure channel (e.g., a glue NS record), this specification cannot prevent the client from connecting to an attacker.",
+      "ja": "* 認証名が不安定なチャネル（接着剤NSレコードなど）で受信された場合、この仕様ではクライアントが攻撃者に接続するのを防ぐことはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "* Different transports might prove to be popular for different purposes (e.g., querying a recursive resolver vs. an authoritative server). Implementors are not obligated to implement all the defined transports, although doing so is beneficial for compatibility.",
+      "ja": "* さまざまなトランスポートが、さまざまな目的で人気があることが証明される場合があります（たとえば、再帰的なリゾルバーと権威あるサーバーを照会する）。実装者は、定義されたすべての輸送を実装する義務はありませんが、そうすることは互換性に有益です。"
+    },
+    {
+      "indent": 3,
+      "text": "* Where resolution speed is a high priority, the SVCB TargetName SHOULD follow the convention described in Section 10.2 of [SVCB], and the use of AliasMode records (Section 2.4.2 of [SVCB]) is NOT RECOMMENDED.",
+      "ja": "* 解像度速度が優先度が高い場合、SVCBターゲット名は[SVCB]のセクション10.2で説明されている条約に従う必要があり、AliASMODEレコード（[SVCB]のセクション2.4.2）の使用は推奨されません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Examples",
+      "section_title": true,
+      "ja": "7. 例"
+    },
+    {
+      "indent": 3,
+      "text": "* A resolver known as simple.example that supports DNS over TLS on port 853 (implicitly, as this is its default port):",
+      "ja": "* PORT 853のTLSを超えるDNSをサポートするSimple.exampleとして知られるリゾルバー（暗黙的に、これがデフォルトポートであるため）："
+    },
+    {
+      "indent": 6,
+      "text": "_dns.simple.example. 7200 IN SVCB 1 simple.example. alpn=dot",
+      "ja": "_dns.simple.example。SVCBの7200 1 simple.example。alpn = dot"
+    },
+    {
+      "indent": 3,
+      "text": "* A DoH-only resolver at https://doh.example/dns-query{?dns}. (DNS over TLS is not supported.):",
+      "ja": "* https：//doh.example/dns-query {？dns}のDOHのみのリゾルバー。（TLSを超えるDNSはサポートされていません。）："
+    },
+    {
+      "indent": 6,
+      "text": "_dns.doh.example. 7200 IN SVCB 1 doh.example. (\n      alpn=h2 dohpath=/dns-query{?dns} )",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "* A resolver known as resolver.example that supports:",
+      "ja": "* Resolver.exampleとして知られるリゾルバー：サポート："
+    },
+    {
+      "indent": 6,
+      "text": "- DoT on resolver.example ports 853 (implicit in record 1) and 8530 (explicit in record 2), with \"resolver.example\" as the Authentication Domain Name,",
+      "ja": "- Resolver.example Ports 853（レコード1で暗黙的）および8530（レコード2で明示）、「Resolver.example」が認証ドメイン名として、"
+    },
+    {
+      "indent": 6,
+      "text": "- DoQ on resolver.example port 853 (record 1),",
+      "ja": "- Resolver.exampleポート853（レコード1）のDOQ、"
+    },
+    {
+      "indent": 6,
+      "text": "- DoH at https://resolver.example/q{?dns} (record 1), and",
+      "ja": "- https：//resolver.example/q {？dns}（レコード1）のdoh"
+    },
+    {
+      "indent": 6,
+      "text": "- an experimental protocol on fooexp.resolver.example:5353 (record 3):",
+      "ja": "- fooexp.resolver.exampleの実験プロトコル：5353（レコード3）："
+    },
+    {
+      "indent": 9,
+      "text": "_dns.resolver.example.  7200 IN \\\n  SVCB 1 resolver.example. alpn=dot,doq,h2,h3 dohpath=/q{?dns}\n  SVCB 2 resolver.example. alpn=dot port=8530\n  SVCB 3 fooexp.resolver.example. \\\n    port=5353 alpn=foo foo-info=...",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "* A name server named ns.example. whose service configuration is published on a different domain:",
+      "ja": "* ns.exampleという名前の名前サーバー。そのサービス構成は、別のドメインで公開されています。"
+    },
+    {
+      "indent": 6,
+      "text": "_dns.ns.example. 7200 IN SVCB 0 _dns.ns.nic.example.",
+      "ja": "_dns.ns.example。7200 in SVCB 0 _DNS.NS.NIC.EXAMPLE。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Adversary on the Query Path",
+      "section_title": true,
+      "ja": "8.1. クエリパスの敵"
+    },
+    {
+      "indent": 3,
+      "text": "This section considers an adversary who can add or remove responses to the SVCB query.",
+      "ja": "このセクションでは、SVCBクエリに応答を追加または削除できる敵を検討します。"
+    },
+    {
+      "indent": 3,
+      "text": "During secure transport establishment, clients MUST authenticate the server to its authentication name, which is not influenced by the SVCB record contents. Accordingly, this document does not mandate the use of DNSSEC. This document also does not specify how clients authenticate the name (e.g., selection of roots of trust), as this procedure might vary according to the context.",
+      "ja": "安全な輸送設立中、クライアントはSVCBレコードの内容の影響を受けない認証名にサーバーを認証する必要があります。したがって、このドキュメントはDNSSECの使用を義務付けていません。また、このドキュメントでは、クライアントがコンテキストによって異なる場合があるため、クライアントが名前を認証する方法（たとえば、信頼のルーツの選択）を指定するものではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1.1. Downgrade Attacks",
+      "section_title": true,
+      "ja": "8.1.1. 攻撃のダウングレード"
+    },
+    {
+      "indent": 3,
+      "text": "This attacker cannot impersonate the secure endpoint, but it can forge a response indicating that the requested SVCB records do not exist. For a SVCB-reliant client ([SVCB], Section 3), this only results in a denial of service. However, SVCB-optional clients will generally fall back to insecure DNS in this case, exposing all DNS traffic to attacks.",
+      "ja": "この攻撃者は安全なエンドポイントになりすましませんが、要求されたSVCBレコードが存在しないことを示す応答を偽造できます。SVCBに依存しているクライアント（[SVCB]、セクション3）の場合、これはサービスの拒否のみになります。ただし、SVCBオプションのクライアントは、一般に、この場合、すべてのDNSトラフィックを攻撃にさらしているため、不安定なDNSに戻ります。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1.2. Redirection Attacks",
+      "section_title": true,
+      "ja": "8.1.2. リダイレクト攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "SVCB-reliant clients always enforce the Authentication Domain Name, but they are still subject to attacks using the transport, port number, and \"dohpath\" value, which are controlled by this adversary. By changing these values in the SVCB answers, the adversary can direct DNS queries for $HOSTNAME to any port on $HOSTNAME and any path on \"https://$HOSTNAME\". If the DNS client uses shared TLS or HTTP state, the client could be correctly authenticated (e.g., using a TLS client certificate or HTTP cookie).",
+      "ja": "SVCB依存のクライアントは常に認証ドメイン名を実施していますが、この敵によって制御されるトランスポート、ポート番号、および「Dohpath」値を使用した攻撃の対象となります。SVCBの回答でこれらの値を変更することにより、敵は$ hostnameの任意のポートに$ hostnameのDNSクエリを$ HOSTNAMEおよび「https：// $ hostname」のパスに向けることができます。DNSクライアントが共有TLSまたはHTTP状態を使用している場合、クライアントは正しく認証される可能性があります（たとえば、TLSクライアント証明書またはHTTP Cookieを使用）。"
+    },
+    {
+      "indent": 3,
+      "text": "This behavior creates a number of possible attacks for certain server configurations. For example, if https://$HOSTNAME/upload accepts any POST request as a public file upload, the adversary could forge a SVCB record containing dohpath=/upload{?dns}. This would cause the client to upload and publish every query, resulting in unexpected storage costs for the server and privacy loss for the client. Similarly, if two DoH endpoints are available on the same origin and the service has designated one of them for use with this specification, this adversary can cause clients to use the other endpoint instead.",
+      "ja": "この動作は、特定のサーバー構成に対して多くの可能な攻撃を作成します。たとえば、https：// $ hostname/uploadが公開ファイルのアップロードとしてPOSTリクエストを受け入れると、敵はdohpath =/upload {？dns}を含むSVCBレコードを偽造できます。これにより、クライアントはすべてのクエリをアップロードおよび公開し、サーバーの予期しないストレージコストとクライアントのプライバシー損失になります。同様に、2つのDOHエンドポイントが同じ起源で利用可能であり、サービスの1つをこの仕様で使用するために指定した場合、この敵は代わりにクライアントに他のエンドポイントを使用する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "To mitigate redirection attacks, a client of this SVCB mapping MUST NOT identify or authenticate itself when performing DNS queries, except to servers that it specifically knows are not vulnerable to such attacks. If an endpoint sends an invalid response to a DNS query, the client SHOULD NOT send more queries to that endpoint and MAY log this error. Multiple DNS services MUST NOT share a hostname identifier (Section 3) unless they are so similar that it is safe to allow an attacker to choose which one is used.",
+      "ja": "リダイレクト攻撃を緩和するために、このSVCBマッピングのクライアントは、DNSクエリを実行するときに自分自身を識別または認証してはなりません。エンドポイントがDNSクエリに無効な応答を送信した場合、クライアントはそのエンドポイントにさらにクエリを送信してはならず、このエラーを記録する場合があります。複数のDNSサービスが非常に類似していない限り、ホスト名識別子（セクション3）を共有してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Adversary on the Transport Path",
+      "section_title": true,
+      "ja": "8.2. 輸送経路の敵"
+    },
+    {
+      "indent": 3,
+      "text": "This section considers an adversary who can modify network traffic between the client and the alternative service (identified by the TargetName).",
+      "ja": "このセクションでは、クライアントと代替サービスの間のネットワークトラフィックを変更できる敵を検討します（TargetNameによって識別）。"
+    },
+    {
+      "indent": 3,
+      "text": "For a SVCB-reliant client, this adversary can only cause a denial of service. However, because DNS is unencrypted by default, this adversary can execute a downgrade attack against SVCB-optional clients. Accordingly, when the use of this specification is optional, clients SHOULD switch to SVCB-reliant behavior if SVCB resolution succeeds. Specifications making use of this mapping MAY adjust this fallback behavior to suit their requirements.",
+      "ja": "SVCBに依存しているクライアントの場合、この敵はサービスの拒否を引き起こすだけです。ただし、DNSはデフォルトで暗号化されていないため、この敵はSVCBオプションクライアントに対するダウングレード攻撃を実行できます。したがって、この仕様の使用がオプションである場合、SVCB解像度が成功した場合、クライアントはSVCB依存の動作に切り替える必要があります。このマッピングを使用する仕様は、要件に合わせてこのフォールバック動作を調整する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Per [SVCB], IANA has added the following entry to the \"Service Parameter Keys (SvcParamKeys)\" registry.",
+      "ja": "[SVCB]ごとに、IANAは「Service Parameter Keys（SVCParamkeys）」レジストリに次のエントリを追加しました。"
+    },
+    {
+      "indent": 3,
+      "text": "+======+=======+================+=========+============+===========+\n|Number|Name   | Meaning        |Format   | Change     | Reference |\n|      |       |                |Reference| Controller |           |\n+======+=======+================+=========+============+===========+\n|  7   |dohpath| DNS-over-HTTPS |RFC 9461 | IETF       | RFC 9461  |\n|      |       | path template  |         |            |           |\n+------+-------+----------------+---------+------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Table 1",
+      "ja": "表1"
+    },
+    {
+      "indent": 3,
+      "text": "Per [Attrleaf], IANA has added the following entry to the DNS \"Underscored and Globally Scoped DNS Node Names\" registry:",
+      "ja": "[attrleaf]ごとに、Ianaは次のエントリをDNSに追加しました。"
+    },
+    {
+      "indent": 19,
+      "text": "+=========+============+===========+\n| RR Type | _NODE NAME | Reference |\n+=========+============+===========+\n| SVCB    | _dns       | RFC 9461  |\n+---------+------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Table 2",
+      "ja": "表2"
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3629] Yergeau, F., \"UTF-8, a transformation format of ISO 10646\", STD 63, RFC 3629, DOI 10.17487/RFC3629, November 2003, <https://www.rfc-editor.org/info/rfc3629>.",
+      "ja": "[RFC3629] Yergeau、F。、「UTF-8、ISO 10646の変換形式」、STD 63、RFC 3629、DOI 10.17487/RFC3629、2003年11月、<https://www.rfc-editor.org/info//RFC3629>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6570] Gregorio, J., Fielding, R., Hadley, M., Nottingham, M., and D. Orchard, \"URI Template\", RFC 6570, DOI 10.17487/RFC6570, March 2012, <https://www.rfc-editor.org/info/rfc6570>.",
+      "ja": "[RFC6570]グレゴリオ、J。、フィールディング、R。、ハドリー、M。、ノッティンガム、M。、およびD.オーチャード、「ウリテンプレート」、RFC 6570、doi 10.17487/rfc6570、2012年3月、<https：// wwwwwwwwwwww.rfc-editor.org/info/rfc6570>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの小文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8484] Hoffman, P. and P. McManus, \"DNS Queries over HTTPS (DoH)\", RFC 8484, DOI 10.17487/RFC8484, October 2018, <https://www.rfc-editor.org/info/rfc8484>.",
+      "ja": "[RFC8484] Hoffman、P。and P. McManus、「DNS Queries over HTTPS（DOH）（DOH）（DOH）（DOH）（DOH））、RFC 8484、DOI 10.17487/RFC8484、2018年10月、<https://www.rfc-editor.org/info/rfc8484>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9113] Thomson, M., Ed. and C. Benfield, Ed., \"HTTP/2\", RFC 9113, DOI 10.17487/RFC9113, June 2022, <https://www.rfc-editor.org/info/rfc9113>.",
+      "ja": "[RFC9113] Thomson、M.、ed。and C. Benfield、ed。、「HTTP/2」、RFC 9113、DOI 10.17487/RFC9113、2022年6月、<https://www.rfc-editor.org/info/rfc9113>。"
+    },
+    {
+      "indent": 3,
+      "text": "[SVCB] Schwartz, B., Bishop, M., and E. Nygren, \"Service Binding and Parameter Specification via the DNS (SVCB and HTTPS Resource Records)\", RFC 9460, DOI 10.17487/RFC9460, November 2023, <https://www.rfc-editor.org/info/rfc9460>.",
+      "ja": "[SVCB] Schwartz、B.、Bishop、M。、およびE. Nygren、「DNS（SVCBおよびHTTPSリソースレコード）を介したサービス拘束とパラメーター仕様」、RFC 9460、DOI 10.17487/RFC9460、2023年11月、<HTTPS：//www.rfc-editor.org/info/rfc9460>。"
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[Attrleaf] Crocker, D., \"Scoped Interpretation of DNS Resource Records through \"Underscored\" Naming of Attribute Leaves\", BCP 222, RFC 8552, DOI 10.17487/RFC8552, March 2019, <https://www.rfc-editor.org/info/rfc8552>.",
+      "ja": "[attrleaf] Crocker、D。、「属性の葉の命名を強調した「属性葉の命名」、BCP 222、RFC 8552、DOI 10.17487/RFC852、2019年3月、<https：//www.rfc-editorを介した「DNSリソースレコードのスコープ解釈」。org/info/rfc8552>。"
+    },
+    {
+      "indent": 3,
+      "text": "[DNSURI] Josefsson, S., \"Domain Name System Uniform Resource Identifiers\", RFC 4501, DOI 10.17487/RFC4501, May 2006, <https://www.rfc-editor.org/info/rfc4501>.",
+      "ja": "[Dnsuri] Josefsson、S。、「ドメイン名システムユニフォームリソース識別子」、RFC 4501、DOI 10.17487/RFC4501、2006年5月、<https://www.rfc-editor.org/info/rfc4501>。"
+    },
+    {
+      "indent": 3,
+      "text": "[FETCH] WHATWG, \"Fetch Living Standard\", October 2023, <https://fetch.spec.whatwg.org/>.",
+      "ja": "[Fetch] Whatwg、「Fetch Living Standard」、2023年10月、<https://fetch.spec.whatwg.org/>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7858] Hu, Z., Zhu, L., Heidemann, J., Mankin, A., Wessels, D., and P. Hoffman, \"Specification for DNS over Transport Layer Security (TLS)\", RFC 7858, DOI 10.17487/RFC7858, May 2016, <https://www.rfc-editor.org/info/rfc7858>.",
+      "ja": "[RFC7858] Hu、Z.、Zhu、L.、Heidemann、J.、Mankin、A.、Wessels、D。、およびP. Hoffman、「輸送層のセキュリティ上のDNSの仕様」、RFC 7858、doi10.17487/RFC7858、2016年5月、<https://www.rfc-editor.org/info/rfc7858>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9250] Huitema, C., Dickinson, S., and A. Mankin, \"DNS over Dedicated QUIC Connections\", RFC 9250, DOI 10.17487/RFC9250, May 2022, <https://www.rfc-editor.org/info/rfc9250>.",
+      "ja": "[RFC9250] Huitema、C.、Dickinson、S。、およびA. Mankin、「DNS Over Edectated Quic Connections」、RFC 9250、DOI 10.17487/RFC9250、2022年5月<https://www.rfc-editor.org/情報/RFC9250>。"
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Mapping Summary",
+      "section_title": true,
+      "ja": "付録A. マッピングの概要"
+    },
+    {
+      "indent": 3,
+      "text": "This table serves as a non-normative summary of the DNS mapping for SVCB.",
+      "ja": "この表は、SVCBのDNSマッピングの非規範的な要約として機能します。"
+    },
+    {
+      "indent": 9,
+      "text": "+-----------------+------------------------------------+\n| *Mapped scheme* | \"dns\"                              |\n+-----------------+------------------------------------+\n| *RR type*       | SVCB (64)                          |\n+-----------------+------------------------------------+\n| *Name prefix*   | _dns for port 53, else _$PORT._dns |\n+-----------------+------------------------------------+\n| *Required keys* | alpn or equivalent                 |\n+-----------------+------------------------------------+\n| *Automatically  | port                               |\n| mandatory keys* |                                    |\n+-----------------+------------------------------------+\n| *Special        | Supports all HTTPS RR SvcParamKeys |\n| behaviors*      |                                    |\n+-----------------+------------------------------------+\n|                 | Overrides the HTTPS RR for DoH     |\n+-----------------+------------------------------------+\n|                 | Default port is per-transport      |\n+-----------------+------------------------------------+\n|                 | Cleartext fallback is discouraged  |\n+-----------------+------------------------------------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 33,
+      "text": "Table 3",
+      "ja": "表3"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Thanks to the many reviewers and contributors, including Andrew Campling, Peter van Dijk, Paul Hoffman, Daniel Migault, Matt Nordhoff, Eric Rescorla, Andreas Schulze, and ric Vyncke.",
+      "ja": "アンドリュー・キャンプリング、ピーター・ヴァン・ディック、ポール・ホフマン、ダニエル・ミゴール、マット・ノルドホフ、エリック・レスコルラ、アンドレアス・シュルゼ、リック・ヴィンチなど、多くのレビュアーと貢献者に感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "ja": "著者の連絡先"
+    },
+    {
+      "indent": 3,
+      "text": "Benjamin Schwartz Meta Platforms, Inc. Email: ietf@bemasc.net",
+      "ja": "Benjamin Schwartz Meta Platforms、Inc。電子メール：ietf@bemasc.net"
+    }
+  ]
+}
