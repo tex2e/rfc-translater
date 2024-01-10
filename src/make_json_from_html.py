@@ -39,9 +39,11 @@ def make_json_from_html(rfc_number: int) -> None:
     m = re.match(r'RFC ?(\d+)', data['title']['text'])
     if m:
         data['number'] = int(m[1])
+    print(f"[*] RFC: {data['number']}")
 
     # 更新者
     data['updated_by'] = soup.find(class_="updated_by").text.replace("翻訳編集 : ", "")
+    print(f"[*] 更新者: {data['updated_by']}")
 
     # 各段落
     for row in soup.find_all(class_='row'):
