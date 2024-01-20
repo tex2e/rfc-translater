@@ -1,0 +1,415 @@
+{
+  "title": {
+    "text": "RFC 9467 - Relaxed Packet Counter Verification for Babel MAC Authentication",
+    "ja": "RFC 9467 - Babel Mac認証のためのリラックスしたパケットカウンター検証"
+  },
+  "number": 9467,
+  "created_at": "2024-01-17 23:47:39.635013+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                     J. Chroboczek\nRequest for Comments: 9467                IRIF, University of Paris-Cit\nUpdates: 8967                                       T. Hiland-Jrgensen\nCategory: Standards Track                                        Red Hat\nISSN: 2070-1721                                             January 2024",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 4,
+      "text": "Relaxed Packet Counter Verification for Babel MAC Authentication",
+      "ja": "Babel Mac認証のためのリラックスしたパケットカウンター検証"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document relaxes the packet verification rules defined in \"MAC Authentication for the Babel Routing Protocol\" (RFC 8967) in order to make the protocol more robust in the presence of packet reordering. This document updates RFC 8967.",
+      "ja": "このドキュメントは、パケットの並べ替えの存在下でプロトコルをより堅牢にするために、「BABELルーティングプロトコルのMAC認証」（RFC 8967）で定義されているパケット検証ルールを緩和します。このドキュメントは、RFC 8967を更新します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これは、インターネット標準トラックドキュメントです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。インターネット標準の詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9467.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https：//www.rfc-editor.org/info/rfc9467で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2024 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2024 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Specification of Requirements\n3.  Relaxing PC Verification\n  3.1.  Multiple Highest PC Values\n    3.1.1.  Generalisations\n  3.2.  Window-Based Verification\n  3.3.  Combining the Two Techniques\n4.  Security Considerations\n5.  IANA Considerations\n6.  Normative References\n7.  Informative References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "The design of the Babel MAC authentication mechanism [RFC8967] assumes that packet reordering is an exceptional occurrence, and the protocol drops any packets that arrive out-of-order. The assumption that packets are not routinely reordered is generally correct on wired links, but turns out to be incorrect on some kinds of wireless links.",
+      "ja": "Babel Mac認証メカニズム[RFC8967]の設計は、パケットの再注文が例外的な発生であると想定しており、プロトコルは注文外に到着するパケットをドロップします。パケットが日常的に並べ替えられていないという仮定は、一般に有線リンクでは正しいが、ある種のワイヤレスリンクでは間違っていることが判明した。"
+    },
+    {
+      "indent": 3,
+      "text": "In particular, IEEE 802.11 (Wi-Fi) [IEEE80211] defines a number of power-saving modes that allow stations (mobile nodes) to switch their radio off for extended periods of time, ranging in the hundreds of milliseconds. The access point (network switch) buffers all multicast packets and only sends them out after the power-saving interval ends. The result is that multicast packets are delayed by up to a few hundred milliseconds with respect to unicast packets, which, under some traffic patterns, causes the Packet Counter (PC) verification procedure in RFC 8967 to systematically fail for multicast packets.",
+      "ja": "特に、IEEE 802.11（Wi-Fi）[IEEE80211]は、数百ミリ秒の範囲で、ステーション（モバイルノード）が長期間無線をオフにすることを可能にする多くの発電モードを定義します。アクセスポイント（ネットワークスイッチ）は、すべてのマルチキャストパケットをバッファリングし、電力節約間隔が終了した後にのみ送信します。その結果、マルチキャストパケットはユニキャストパケットに関して最大数百ミリ秒遅れ、いくつかのトラフィックパターンでは、RFC 8967のパケットカウンター（PC）検証手順がマルチキャストパケットに体系的に失敗します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines two distinct ways to relax the PC validation:",
+      "ja": "このドキュメントは、PCの検証を緩和する2つの異なる方法を定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "* using two separate receiver-side states, one for unicast and one for multicast packets (Section 3.1), which allows arbitrary reordering between unicast and multicast packets, and",
+      "ja": "* ユニキャスト用とマルチキャストパケット用の2つのレシーバー側状態（セクション3.1）を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "* using a window of previously received PC values (Section 3.2), which allows a bounded amount of reordering between arbitrary packets.",
+      "ja": "* 以前に受信したPC値のウィンドウ（セクション3.2）を使用すると、任意のパケット間の並べ替えの量の並べ替えが可能になります。"
+    },
+    {
+      "indent": 3,
+      "text": "We assume that reordering between arbitrary packets only happens occasionally, and, since Babel is designed to gracefully deal with occasional packet loss, usage of the former mechanism is RECOMMENDED, while usage of the latter is OPTIONAL. The two mechanisms MAY be used simultaneously (Section 3.3).",
+      "ja": "任意のパケット間の並べ替えはたまに発生することがあり、バベルは時折パケットの損失に優雅に対処するように設計されているため、前者のメカニズムの使用が推奨されますが、後者の使用はオプションです。2つのメカニズムを同時に使用できます（セクション3.3）。"
+    },
+    {
+      "indent": 3,
+      "text": "This document updates RFC 8967 by relaxing the packet verification rules defined therein. It does not change the security properties of the protocol.",
+      "ja": "このドキュメントは、そこに定義されているパケット検証ルールをリラックスさせることにより、RFC 8967を更新します。プロトコルのセキュリティプロパティは変更されません。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Specification of Requirements",
+      "section_title": true,
+      "ja": "2. 要件の仕様"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Relaxing PC Verification",
+      "section_title": true,
+      "ja": "3. リラックスしたPC検証"
+    },
+    {
+      "indent": 3,
+      "text": "The Babel MAC authentication mechanism prevents replay by decorating every sent packet with a strictly increasing value, the Packet Counter (PC). Notwithstanding the name, the PC does not actually count packets: a sender is permitted to increment the PC by more than one between two successively transmitted packets.",
+      "ja": "Babel Mac認証メカニズムは、厳密に増加する値であるパケットカウンター（PC）ですべての送信パケットを装飾することにより、リプレイを防ぎます。名前にかかわらず、PCは実際にパケットをカウントしません。送信者は、連続して送信された2つのパケットの間でPCを複数増やすことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A receiver maintains the highest PC received from each neighbour. When a new packet is received, the receiver compares the PC contained in the packet with the highest received PC:",
+      "ja": "受信者は、各隣人から受け取った最高のPCを維持します。新しいパケットが受信されると、受信機はパケットに含まれるPCを最も高い受信PCと比較します。"
+    },
+    {
+      "indent": 3,
+      "text": "* if the new value is smaller or equal, then the packet is discarded;",
+      "ja": "* 新しい値が小さい場合または等しい場合、パケットは破棄されます。"
+    },
+    {
+      "indent": 3,
+      "text": "* otherwise, the packet is accepted, and the highest PC value for that neighbour is updated.",
+      "ja": "* それ以外の場合、パケットが受け入れられ、その隣人の最高のPC値が更新されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that there does not exist a one-to-one correspondence between sender states and receiver states: multiple receiver states track a single sender state. The receiver states corresponding to a single sender state are not necessarily identical, since only a subset of receiver states are updated when a packet is sent to a unicast address or when a multicast packet is received by a subset of the receivers.",
+      "ja": "送信者状態と受信者状態の間に1対1の対応が存在しないことに注意してください。複数の受信者状態は、単一の送信者状態を追跡します。単一の送信者状態に対応するレシーバー状態は、パケットがユニキャストアドレスに送信されるとき、または受信機のサブセットによってマルチキャストパケットが受信されたときにレシーバー状態のサブセットのみが更新されるため、必ずしも同一ではありません。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Multiple Highest PC Values",
+      "section_title": true,
+      "ja": "3.1. 複数の最高のPC値"
+    },
+    {
+      "indent": 3,
+      "text": "Instead of maintaining a single highest PC value for each neighbour, an implementation of the procedure described in this section uses two values: the highest multicast value PCm and the highest non-multicast (unicast) value PCu. More precisely, the (Index, PC) pair contained in the neighbour table (Section 3.2 of [RFC8967]) is replaced by a triple (Index, PCm, PCu), where:",
+      "ja": "このセクションで説明されている手順の実装では、各近隣の最高のPC値を維持する代わりに、2つの値を使用します。最高のマルチキャスト値PCMと最高の非マルチカスト（ユニキャスト）値PCUです。より正確には、隣のテーブル（[RFC8967]のセクション3.2）に含まれる（インデックス、PC）ペアはトリプル（インデックス、PCM、PCU）に置き換えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* Index is an arbitrary string of 0 to 32 octets, and",
+      "ja": "* インデックスは0〜32オクテットの任意の文字列であり、"
+    },
+    {
+      "indent": 3,
+      "text": "* PCm and PCu are 32-bit (4-octet) integers.",
+      "ja": "* PCMとPCUは32ビット（4-OCTET）整数です。"
+    },
+    {
+      "indent": 3,
+      "text": "When a Challenge Reply is successful, both highest PC values are updated to the value contained in the PC TLV from the packet containing the successful challenge. More precisely, the last sentence of the fourth bullet point of Section 4.3 of [RFC8967] is replaced as follows:",
+      "ja": "チャレンジの返信が成功すると、両方の最高のPC値が、成功したチャレンジを含むパケットからPC TLVに含まれる値に更新されます。より正確には、[RFC8967]のセクション4.3の4番目の箇条書きの最後の文は、次のように置き換えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "OLD:",
+      "ja": "古い："
+    },
+    {
+      "indent": 18,
+      "text": "If the packet contains a successful Challenge Reply, then the PC and Index contained in the PC TLV MUST be stored in the neighbour table entry corresponding to the sender (which already exists in this case), and the packet is accepted.",
+      "ja": "パケットにチャレンジ応答が成功した場合、PC TLVに含まれるPCとインデックスは、送信者（この場合はすでに存在する）に対応するネイバーテーブルエントリに保存する必要があり、パケットは受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "NEW:",
+      "ja": "新しい："
+    },
+    {
+      "indent": 18,
+      "text": "If the packet contains a successful Challenge Reply, then the Index contained in the PC TLV MUST be stored in the Index field of the neighbour table entry corresponding to the sender (which already exists in this case), the PC contained in the TLV MUST be stored in both the PCm and PCu fields of the neighbour table entry, and the packet is accepted.",
+      "ja": "パケットに成功したチャレンジ返信が含まれている場合、PC TLVに含まれるインデックスは、送信者に対応する近隣テーブルエントリのインデックスフィールドに保存する必要があります（この場合、すでに存在します）、TLVに含まれるPCは近隣テーブルエントリのPCMフィールドとPCUフィールドの両方に保存され、パケットは受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "When a packet that does not contain a successful Challenge Reply is received, the PC value that it contains is compared to either the PCu or the PCm field of the corresponding neighbour entry, depending on whether or not the packet was sent to a multicast address. If the comparison is successful, then the same value (PCm or PCu) is updated. More precisely, the last bullet point of Section 4.3 of [RFC8967] is replaced as follows:",
+      "ja": "成功したチャレンジ応答を含めないパケットが受信されると、パケットがマルチキャストアドレスに送信されたかどうかに応じて、対応する近隣エントリのPCUまたはPCMフィールドのいずれかと比較されます。比較が成功した場合、同じ値（PCMまたはPCU）が更新されます。より正確には、[RFC8967]のセクション4.3の最後の箇条書きは次のように置き換えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "OLD:",
+      "ja": "古い："
+    },
+    {
+      "indent": 18,
+      "text": "At this stage, the packet contains no successful Challenge Reply, and the Index contained in the PC TLV is equal to the Index in the neighbour table entry corresponding to the sender. The receiver compares the received PC with the PC contained in the neighbour table; if the received PC is smaller or equal than the PC contained in the neighbour table, the packet MUST be dropped and processing stops (no challenge is sent in this case, since the mismatch might be caused by harmless packet reordering on the link). Otherwise, the PC contained in the neighbour table entry is set to the received PC, and the packet is accepted.",
+      "ja": "この段階では、パケットには成功したチャレンジ応答が含まれておらず、PC TLVに含まれるインデックスは、送信者に対応する近隣テーブルエントリのインデックスに等しくなります。受信者は、受信したPCを隣接テーブルに含まれるPCと比較します。受信したPCが近隣のテーブルに含まれるPCよりも小さいまたは等しい場合、パケットをドロップして処理停止を停止する必要があります（この場合、リンクの無害なパケットの並べ替えが原因である可能性があるため）。それ以外の場合、隣のテーブルエントリに含まれるPCが受信したPCに設定され、パケットが受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "NEW:",
+      "ja": "新しい："
+    },
+    {
+      "indent": 18,
+      "text": "At this stage, the packet contains no successful Challenge Reply and the Index contained in the PC TLV is equal to the Index in the neighbour table entry corresponding to the sender. The receiver compares the received PC with either the PCm field (if the packet was sent to a multicast IP address) or the PCu field (otherwise) in the neighbour table. If the received PC is smaller than or equal to the value contained in the neighbour table, the packet MUST be dropped and processing stops. Note that no challenge is sent in this case, since the mismatch might be caused by harmless packet reordering on the link. Otherwise, the PCm (if the packet was sent to a multicast address) or the PCu (otherwise) field contained in the neighbour table entry is set to the received PC, and the packet is accepted.",
+      "ja": "この段階では、パケットには成功したチャレンジ応答が含まれておらず、PC TLVに含まれるインデックスは、送信者に対応する近隣テーブルエントリのインデックスに等しくなります。受信者は、受信したPCをPCMフィールド（パケットがマルチキャストIPアドレスに送信された場合）または近隣テーブルのPCUフィールド（それ以外の場合）を比較します。受信したPCが近隣テーブルに含まれる値以下の場合、パケットをドロップして処理停止する必要があります。この場合は、リンク上の無害なパケットの並べ替えによって不一致が引き起こされる可能性があるため、チャレンジは送信されないことに注意してください。それ以外の場合、PCM（パケットがマルチキャストアドレスに送信された場合）またはNeighbor Tableエントリに含まれるPCU（そうでない）フィールドが受信PCに設定され、パケットが受け入れられます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. Generalisations",
+      "section_title": true,
+      "ja": "3.1.1. 一般化"
+    },
+    {
+      "indent": 3,
+      "text": "Modern networking hardware tends to maintain more than just two queues, and it might be tempting to generalise the approach taken to more than just the two last PC values. For example, one might be tempted to use distinct last PC values for packets received with different values of the Type of Service (TOS) field, or with different IEEE 802.11 access categories. However, choosing a highest PC field by consulting a value that is not protected by the Message Authentication Code (MAC) (Section 4.1 of [RFC8967]) would no longer protect against replay. In effect, this means that only the destination address and port number as well as the data stored in the packet body may be used for choosing the highest PC value, since these are the only fields that are protected by the MAC (in addition to the source address and port number, which are already used when choosing the neighbour table entry and therefore provide no additional information). Since Babel implementations do not usually send packets with differing TOS values or IEEE 802.11 access categories, this is unlikely to be an issue in practice.",
+      "ja": "最新のネットワーキングハードウェアは、わずか2つ以上のキューを維持する傾向があり、最後の2つのPC値以上のアプローチを一般化するのが魅力的かもしれません。たとえば、種類のサービス（TOS）フィールドの異なる値を受信したパケットに、または異なるIEEE 802.11アクセスカテゴリで受信したパケットに、個別の最後のPC値を使用するように誘惑される場合があります。ただし、メッセージ認証コード（MAC）（[RFC8967]のセクション4.1）によって保護されていない値に相談することにより、最高のPCフィールドを選択すると、再生から保護されなくなります。実際には、これは、宛先アドレスとポート番号、およびパケット本体に保存されているデータのみが最高のPC値を選択するために使用できることを意味します。ソースアドレスとポート番号。これは、近隣のテーブルエントリを選択するときにすでに使用されているため、追加情報を提供しません）。Babelの実装では、通常、TOS値が異なるパケットやIEEE 802.11アクセスカテゴリを送信するわけではないため、これは実際には問題になる可能性は低いです。"
+    },
+    {
+      "indent": 3,
+      "text": "The following example shows why it would be unsafe to select the highest PC depending on the TOS field. Suppose that a node B were to maintain distinct highest PC values for different values T1 and T2 of the TOS field, and that, initially, all of the highest PC fields at B have value 42. Suppose now that a node A sends a packet P1 with TOS equal to T1 and PC equal to 43; when B receives the packet, it sets the highest PC value associated with TOS T1 to 43. If an attacker were now to send an exact copy of P1 but with TOS equal to T2, B would consult the highest PC value associated with T2, which is still equal to 42, and accept the replayed packet.",
+      "ja": "次の例は、TOSフィールドに応じて最高のPCを選択するのが安全でない理由を示しています。ノードBがTOSフィールドの異なる値T1とT2に対して明確な最高のPC値を維持することであり、最初はBの最高のPCフィールドのすべてが値42を持っていると仮定します。TOSはT1に等しく、PCは43に等しくなります。Bがパケットを受信すると、TOS T1に関連付けられた最高のPC値を43に設定します。攻撃者がP1の正確なコピーを送信するが、TOSでT2に等しい場合、BはT2に関連付けられた最高のPC値を相談します。まだ42に等しく、再生されたパケットを受け入れます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Window-Based Verification",
+      "section_title": true,
+      "ja": "3.2. ウィンドウベースの検証"
+    },
+    {
+      "indent": 3,
+      "text": "Window-based verification is similar to what is described in Section 3.4.3 of [RFC4303]. When using window-based verification, in addition to retaining within its neighbour table the highest PC value PCh seen from every neighbour, an implementation maintains a fixed-size window of booleans corresponding to PC values directly below PCh. More precisely, the (Index, PC) pair contained in the neighbour table (Section 3.2 of [RFC8967]) is replaced by:",
+      "ja": "ウィンドウベースの検証は、[RFC4303]のセクション3.4.3で説明されているものに似ています。隣接テーブル内ですべての隣接から見られた最高のPC値PCHを保持することに加えて、ウィンドウベースの検証を使用する場合、実装は、PCHのすぐ下のPC値に対応するブール値の固定サイズのウィンドウを維持します。より正確には、隣のテーブル（[RFC8967]のセクション3.2）に含まれる（インデックス、PC）ペアは次のものに置き換えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "* a triple (Index, PCh, Window), where Index is an arbitrary string of 0 to 32 octets, PCh is a 32-bit (4-octet) integer, and Window is a vector of booleans of size S (the default value S=128 is RECOMMENDED).",
+      "ja": "* インデックスは0〜32オクテットの任意の文字列であるトリプル（インデックス、PCH、ウィンドウ）、PCHは32ビット（4-OCTET）整数であり、ウィンドウはサイズsのブーリアンのベクトルです（デフォルト値s= 128をお勧めします）。"
+    },
+    {
+      "indent": 3,
+      "text": "The window is a vector of S boolean values numbered from 0 (the \"left edge\" of the window) up to S-1 (the \"right edge\"); the boolean associated with the index i indicates whether a packet with a PC value of (PCh - (S-1) + i) has been seen before. Shifting the window to the left by an integer amount k is defined as moving all values so that the value previously at index n is now at index (n - k); k values are discarded at the left edge, and k new unset values are inserted at the right edge.",
+      "ja": "ウィンドウは、0（ウィンドウの「左端」）からS-1（「右端」）に番号が付けられたSブール値のベクトルです。インデックスIに関連付けられているブールIは、（PCH  - （S -1）I）のPC値を持つパケットが以前に見られたかどうかを示します。整数kによってウィンドウを左に移動することは、すべての値を移動すると定義されるため、インデックスnの以前の値がインデックス（n -k）になります。k値は左端で破棄され、kの新しい非整理値が右端に挿入されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Whenever a packet is received, the receiver computes its index i = (PC - PCh + S - 1). It then proceeds as follows:",
+      "ja": "パケットが受信されるたびに、受信者はそのインデックスi =（PC -PCH S -1）を計算します。その後、次のように進みます。"
+    },
+    {
+      "indent": 3,
+      "text": "1. If the index i is negative, the packet is considered too old, and it MUST be discarded.",
+      "ja": "1. インデックスIが負の場合、パケットは古すぎると見なされ、破棄する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "2. If the index i is non-negative and strictly less than the window size S, the window value at the index is checked. If this value is already set, the received PC has been seen before and the packet MUST be discarded. Otherwise, the corresponding window value is marked as set, and the packet is accepted.",
+      "ja": "2. インデックスIが非陰性であり、ウィンドウサイズsより厳密に少ない場合、インデックスのウィンドウ値がチェックされます。この値がすでに設定されている場合、受信したPCは以前に見られ、パケットを破棄する必要があります。それ以外の場合、対応するウィンドウ値はセットとしてマークされ、パケットは受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "3. If the index i is larger or equal to the window size (i.e., PC is strictly larger than PCh), the window MUST be shifted to the left by (i - S + 1) values (or, equivalently, by the difference PC - PCh), and the highest PC value PCh MUST be set to the received PC. The value at the right of the window (the value with index S - 1) MUST be set, and the packet is accepted.",
+      "ja": "3. インデックスIがウィンドウサイズ（つまり、PCがPCHよりも厳密に大きい）よりも大きい場合と等しい場合、ウィンドウは（i -s 1）値（または同等に、PC -PCHによって左にシフトする必要があります。）、そして最高のPC値PCHを受信したPCに設定する必要があります。ウィンドウの右側の値（インデックスS -1の値）を設定する必要があり、パケットは受け入れられます。"
+    },
+    {
+      "indent": 3,
+      "text": "When receiving a successful Challenge Reply, the remembered highest PC value PCh MUST be set to the value received in the Challenge Reply, and all of the values in the window MUST be reset except the value at index S - 1, which MUST be set.",
+      "ja": "成功したチャレンジ応答を受信する場合、記憶されている最高のPC値PCHをチャレンジ応答で受信した値に設定する必要があり、ウィンドウ内のすべての値は、設定する必要があるインデックスS -1の値を除いてリセットする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. Combining the Two Techniques",
+      "section_title": true,
+      "ja": "3.3. 2つのテクニックを組み合わせます"
+    },
+    {
+      "indent": 3,
+      "text": "The two techniques described above serve complementary purposes:",
+      "ja": "上記の2つの手法は、補完的な目的を果たします。"
+    },
+    {
+      "indent": 3,
+      "text": "* splitting the state allows multicast packets to be reordered with respect to unicast ones by an arbitrary number of PC values, while",
+      "ja": "* 状態を分割することで、マルチキャストパケットを任意の数のPC値でユニキャストのパケットに関して並べ替えることができますが、"
+    },
+    {
+      "indent": 3,
+      "text": "* the window-based technique allows arbitrary packets to be reordered but only by a bounded number of PC values.",
+      "ja": "* ウィンドウベースの手法により、任意のパケットを並べ替えることができますが、PC値の限界数によってのみ並べ替えることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Thus, they can profitably be combined.",
+      "ja": "したがって、それらは有益に組み合わせることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "An implementation that uses both techniques MUST maintain, for every entry of the neighbour table, two distinct windows, one for multicast and one for unicast packets. When a successful Challenge Reply is received, both windows MUST be reset. When a packet that does not contain a Challenge Reply is received, if the packet's destination address is a multicast address, the multicast window MUST be consulted and possibly updated, as described in Section 3.2. Otherwise, the unicast window MUST be consulted and possibly updated.",
+      "ja": "両方の手法を使用する実装は、隣のテーブルのすべてのエントリに対して、2つの異なるウィンドウ、1つはマルチキャスト用、もう1つはユニキャストパケット用に維持する必要があります。チャレンジの返信が成功した場合、両方のウィンドウをリセットする必要があります。チャレンジ返信を含めないパケットが受信された場合、パケットの宛先アドレスがマルチキャストアドレスである場合、セクション3.2で説明されているように、マルチキャストウィンドウを参照して更新する必要があります。それ以外の場合は、ユニキャストウィンドウを参照して更新する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The procedures described in this document do not change the security properties described in Section 1.2 of [RFC8967]. In particular, the choice between the multicast and the unicast packet counter is made by examining a packet's destination IP address, which is included in the pseudo-header and therefore participates in MAC computation. Hence, an attacker cannot change the destination address without invalidating the MAC, and therefore cannot replay a unicast packet as a multicast one or vice versa.",
+      "ja": "このドキュメントで説明されている手順は、[RFC8967]のセクション1.2で説明されているセキュリティプロパティを変更しません。特に、マルチキャストとユニキャストパケットカウンターの選択は、擬似ヘッダーに含まれるため、Packetの宛先IPアドレスを調べることで作成され、したがってMac計算に参加します。したがって、攻撃者はMacを無効にせずに宛先アドレスを変更することはできないため、ユニキャストパケットをマルチキャストとして、またはその逆として再生することはできません。"
+    },
+    {
+      "indent": 3,
+      "text": "While these procedures do slightly increase the amount of per-neighbour state maintained by each node, this increase is marginal (between 4 and 36 octets per neighbour, depending on implementation choices), and should not significantly impact the ability of nodes to survive denial-of-service attacks.",
+      "ja": "これらの手順は、各ノードによって維持されるneighbourあたりの状態の量をわずかに増加させますが、この増加はわずかであり（隣人ごとに4〜36オクテット、実装の選択に応じて）、ノードが否定に耐える能力に大きな影響を与えるべきではありません。サービス攻撃。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "このドキュメントにはIANAアクションがありません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Normative References",
+      "section_title": true,
+      "ja": "6. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119] Bradner, S., \"Key words for use in RFCs to Indicate Requirement Levels\", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.",
+      "ja": "[RFC2119] Bradner、S。、「要件レベルを示すためにRFCで使用するためのキーワード」、BCP 14、RFC 2119、DOI 10.17487/RFC2119、1997年3月、<https://www.rfc-editor.org/info/RFC2119>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174] Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "ja": "[RFC8174] Leiba、B。、「RFC 2119キーワードの大文字と小文字の曖昧さ」、BCP 14、RFC 8174、DOI 10.17487/RFC8174、2017年5月、<https：//www.rfc-editor.org/info/RFC8174>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8967] D, C., Kolodziejak, W., and J. Chroboczek, \"MAC Authentication for the Babel Routing Protocol\", RFC 8967, DOI 10.17487/RFC8967, January 2021, <https://www.rfc-editor.org/info/rfc8967>.",
+      "ja": "[RFC8967] D、C.、Kolodziejak、W。、およびJ. Chroboczek、「BABELルーティングプロトコルのMAC認証」、RFC 8967、DOI 10.17487/RFC8967、2021年1月、<https：//www.rfc-editor。org/info/rfc8967>。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Informative References",
+      "section_title": true,
+      "ja": "7. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[IEEE80211] IEEE, \"IEEE Standard for Information Technology-- Telecommunications and Information Exchange between Systems - Local and Metropolitan Area Networks--Specific requirements - Part 11: Wireless LAN Medium Access Control (MAC) and Physical Layer (PHY) Specifications\", DOI 10.1109/IEEESTD.2021.9363693, IEEE Std 802.11-2020, February 2021, <https://ieeexplore.ieee.org/document/9363693>.",
+      "ja": "[IEEE80211] IEEE、「情報技術のIEEE標準 - システム間の電気通信と情報交換 - ローカルおよびメトロポリタンエリアネットワーク - 特定の要件 - パート11：ワイヤレスLANメディアアクセス制御（MAC）および物理層（PHY）仕様」doi 10.1109/ieeestd.2021.9363693、IEEE STD 802.11-2020、2021年2月、<https://ieexplore.ieee.org/document/9363693>。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4303] Kent, S., \"IP Encapsulating Security Payload (ESP)\", RFC 4303, DOI 10.17487/RFC4303, December 2005, <https://www.rfc-editor.org/info/rfc4303>.",
+      "ja": "[RFC4303] Kent、S。、「セキュリティペイロード（ESP）をカプセル化するIP」、RFC 4303、DOI 10.17487/RFC4303、2005年12月、<https://www.rfc-editor.org/info/rfc4303>。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors are greatly indebted to Daniel Grber, who first identified the problem that this document aims to solve and first suggested the solution described in Section 3.1.",
+      "ja": "著者は、この文書が解決することを目的としている問題を最初に特定し、セクション3.1で説明した解決策を提案したことを最初に特定したダニエル・グルバーに大いに感謝しています。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Juliusz Chroboczek IRIF, University of Paris-Cit Case 7014 75205 Paris CEDEX 13 France Email: jch@irif.fr",
+      "ja": "Juliusz Chroboczek Irif、パリ大学ケース7014 75205 Paris Cedex 13フランスメール：jch@irif.fr"
+    },
+    {
+      "indent": 3,
+      "text": "Toke Hiland-Jrgensen Red Hat Email: toke@toke.dk",
+      "ja": "Toke Hiland-Jrgensen Red Hat Email：toke@toke.dk"
+    }
+  ]
+}
