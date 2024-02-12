@@ -14,6 +14,7 @@ def make_html(rfc_number: int | str) -> None:
         is_draft = False
         input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
         input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
+        input_summary_file = f'{input_dir}/rfc{rfc_number}-summary.json'
         output_dir = 'html'
         output_file = f'{output_dir}/rfc{rfc_number}.html'
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):  # Draftは文字列
@@ -23,6 +24,7 @@ def make_html(rfc_number: int | str) -> None:
         rfc_draft_name = m['name']
         input_dir = f'data/draft/{working_group}'
         input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
+        input_summary_file = ''
         output_dir = 'html/draft'
         output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.html'
     else:
@@ -39,12 +41,18 @@ def make_html(rfc_number: int | str) -> None:
     with open(input_file, 'r', encoding="utf-8") as f:
         obj = json.load(f)
 
+    # ChatGPTによる要約が存在すれば、その情報 (json) の読み込み
+    summary = None
+    if input_summary_file != '' and os.path.exists(input_summary_file):
+        with open(input_summary_file) as f:
+            summary = json.load(f)
+
     # テンプレートエンジン「Mako」を使って、値をバインドする
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template('templates/rfc.html')
-    output = mytemplate.render_unicode(ctx=obj, is_draft=is_draft)
+    output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft)
 
     # 出力ディレクトリの作成
     os.makedirs(output_dir, exist_ok=True)
