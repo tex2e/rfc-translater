@@ -35,9 +35,9 @@ def summarize_rfc(rfc_number: int):
         return True
 
     # GPTへ送信するプロンプト作成
-    prompt = f"""{rfc_title} についての要約、利用場面、関連するRFCを3〜5行でまとめてください"""
+    prompt = f"""{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"""
     print(f"[*] ")
-    print(f"[+] prompt: {prompt}")
+    print(f"[+] prompt: \n{prompt}")
     print(f"[*] ")
     if yes_no_input("上記の内容でChatGPTに質問します。よろしいですか？"):
         pass
@@ -58,7 +58,7 @@ def summarize_rfc(rfc_number: int):
     # GPTからの応答の表示
     text = response.choices[0].message.content
     print(f"[+] " + "-" * 80)
-    print(f"[+] output: {text}")
+    print(f"[+] output: \n{text}")
     print(f"[+] " + "-" * 80)
     print(f"[*] ")
 
