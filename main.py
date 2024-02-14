@@ -3,6 +3,7 @@
 # ------------------------------------------------------------------------------
 
 import sys
+import time
 from src.fetch_rfc import fetch_rfc, RFCNotFound
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
@@ -62,6 +63,7 @@ if __name__ == '__main__':
                                          action='store_true', help='make draft/index.html (ex. --make-index-draft)')
     parser.add_argument('--transtest',   action='store_true')
     parser.add_argument('--summarize',   action='store_true', help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
+    parser.add_argument('--chatgpt',     type=str,            help='ChatGPT model version    (ex. --chatgpt gpt-3.5-turbo)')
     args = parser.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）
@@ -88,11 +90,20 @@ if __name__ == '__main__':
         from src.trans_rfc import trans_test
         res = trans_test()
         print('Translate test result:', res)
+    elif args.summarize and args.begin and args.end:
+        # 範囲指定でRFCの要約作成
+        for rfc in range(args.begin, args.end):
+            print("[*] RFC %s を要約" % rfc)
+            if summarize_rfc(rfc, args.chatgpt, args.force):
+                # RFCのHTMLを作成
+                print("[*] RFC %s のHTMLを生成" % rfc)
+                make_html(rfc)
+                time.sleep(10)
     elif args.summarize:
         # RFCの要約作成
         for rfc in rfcs:
             print("[*] RFC %s を要約" % rfc)
-            if summarize_rfc(rfc):
+            if summarize_rfc(rfc, args.chatgpt, args.force):
                 # RFCのHTMLを作成
                 print("[*] RFC %s のHTMLを生成" % rfc)
                 make_html(rfc)

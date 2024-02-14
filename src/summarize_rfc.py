@@ -1,3 +1,6 @@
+# ------------------------------------------------------------------------------
+# RFCの要約を生成するプログラム
+# ------------------------------------------------------------------------------
 
 import re
 import os
@@ -12,7 +15,11 @@ load_dotenv()
 # APIキーの設定
 openai.api_key = os.environ['CHATGPI_API_KEY']
 
-def summarize_rfc(rfc_number: int):
+# ChatGPTのモデル名
+MODEL35 = "gpt-3.5-turbo"
+MODEL4 = "gpt-4-turbo-preview"
+
+def summarize_rfc(rfc_number: int, model: str = MODEL4, force: bool = False):
 
     # 要約対象RFCのタイトルを表示
     input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
@@ -35,19 +42,24 @@ def summarize_rfc(rfc_number: int):
         return True
 
     # GPTへ送信するプロンプト作成
-    prompt = f"""{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"""
-    print(f"[*] ")
+    if model.lower().startswith("gpt-4"):
+        MODEL4 = "gpt-4-turbo-preview"
+        prompt = f"""{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"""
+    elif model.lower().startswith("gpt-3"):
+        model = MODEL35
+        prompt = f"""{rfc_title} についての要約と目的を3行でまとめてください"""
+    else:
+        model = MODEL35
+        prompt = f"""{rfc_title} についての要約と目的を3行でまとめてください"""
     print(f"[+] prompt: \n{prompt}")
-    print(f"[*] ")
-    if yes_no_input("上記の内容でChatGPTに質問します。よろしいですか？"):
+    print(f"[ ]")
+    if force or yes_no_input("上記の内容でChatGPTに質問します。よろしいですか？"):
         pass
     else:
         return False
 
-    # MODEL = "gpt-3.5-turbo"
-    MODEL = "gpt-4-turbo-preview"
     response = openai.chat.completions.create(
-        model=MODEL,
+        model=model,
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt}
@@ -60,9 +72,9 @@ def summarize_rfc(rfc_number: int):
     print(f"[+] " + "-" * 80)
     print(f"[+] output: \n{text}")
     print(f"[+] " + "-" * 80)
-    print(f"[*] ")
+    print(f"[ ] ")
 
-    if yes_no_input(f"上記の内容はRFC {rfc_number}の内容ですか？"):
+    if force or yes_no_input(f"上記の内容はRFC {rfc_number}の内容ですか？"):
         pass
     else:
         return False
@@ -71,7 +83,7 @@ def summarize_rfc(rfc_number: int):
     dt_now = datetime.datetime.now()
     obj = {
         "number": rfc_number,
-        "model": MODEL,
+        "model": model,
         "created_at": dt_now.isoformat(),
         "summary": []
     }
