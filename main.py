@@ -98,7 +98,7 @@ if __name__ == '__main__':
                 # RFCのHTMLを作成
                 print("[*] RFC %s のHTMLを生成" % rfc)
                 make_html(rfc)
-                time.sleep(10)
+                time.sleep(1)
     elif args.summarize:
         # RFCの要約作成
         for rfc in rfcs:
