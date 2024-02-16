@@ -11,7 +11,6 @@ from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.make_json_from_html import make_json_from_html
 from src.fetch_index_group import fetch_index_group
-from src.summarize_rfc import summarize_rfc
 
 def main(rfc_number: int | str) -> None:
     print('[*] RFC %s:' % rfc_number)
@@ -92,6 +91,7 @@ if __name__ == '__main__':
         print('Translate test result:', res)
     elif args.summarize and args.begin and args.end:
         # 範囲指定でRFCの要約作成
+        from src.summarize_rfc import summarize_rfc
         for rfc in range(args.begin, args.end):
             print("[*] RFC %s を要約" % rfc)
             if summarize_rfc(rfc, args.chatgpt, args.force):
@@ -101,6 +101,7 @@ if __name__ == '__main__':
                 time.sleep(1)
     elif args.summarize:
         # RFCの要約作成
+        from src.summarize_rfc import summarize_rfc
         for rfc in rfcs:
             print("[*] RFC %s を要約" % rfc)
             if summarize_rfc(rfc, args.chatgpt, args.force):
