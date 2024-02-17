@@ -10,7 +10,7 @@ from src.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.make_json_from_html import make_json_from_html
-from src.fetch_index_group import fetch_index_group
+from src.fetch_wg import write_rfc_wg_list
 
 def main(rfc_number: int | str) -> None:
     print('[*] RFC %s:' % rfc_number)
@@ -81,9 +81,9 @@ if __name__ == '__main__':
         print("[*] draft/index.htmlの作成")
         make_index_draft()
     elif args.fetch_group:
-        # WorkingGroupのRFCとドラフト一覧の作成
-        print("[*] WorkingGroupのRFCとDraft一覧収集")
-        fetch_index_group()
+        # WorkingGroupの一覧作成
+        print("[*] WorkingGroupの一覧作成")
+        write_rfc_wg_list()
     elif args.transtest:
         # 翻訳のテスト
         from src.trans_rfc import trans_test
