@@ -6,6 +6,7 @@ import os
 import re
 import json
 from mako.lookup import TemplateLookup
+from rfc_utils import RfcUtils
 
 def make_html(rfc_number: int | str) -> None:
 
@@ -38,8 +39,7 @@ def make_html(rfc_number: int | str) -> None:
         return
 
     # 翻訳したRFC (json) の読み込み
-    with open(input_file, 'r', encoding="utf-8") as f:
-        obj = json.load(f)
+    obj = RfcUtils.read_json_file(input_file)
 
     # ChatGPTによる要約が存在すれば、その情報 (json) の読み込み
     summary = None

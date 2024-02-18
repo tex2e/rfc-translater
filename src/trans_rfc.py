@@ -13,6 +13,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 import platform
+from rfc_utils import RfcUtils
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -152,7 +153,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def chunks(alist: list, n: int) -> list:
+def chunks(alist: list, n: int):
     for i in range(0, len(alist), n):
         yield alist[i:i + n]
 
@@ -178,16 +179,14 @@ def trans_rfc(rfc_number: int | str) -> bool:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
-        with open(midway_file, 'r', encoding="utf-8") as f:
-            obj = json.load(f)
+        obj = RfcUtils.read_json_file(midway_file)
     else:
-        with open(input_file, 'r', encoding="utf-8") as f:
-            obj = json.load(f)
+        obj = RfcUtils.read_json_file(input_file)
 
     translator = TranslatorSeleniumGoogletrans(
         total=len(obj['contents']),
         desc='RFC %s' % rfc_number)
-    is_canceled = False
+    # is_canceled = False
 
     try:
         # タイトルの翻訳
@@ -244,9 +243,8 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
-        with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
-            json.dump(obj, f, indent=2, ensure_ascii=False)
-            print(f"[+] Save file: {output_file}")
+        RfcUtils.write_json_file(output_file, obj)
+        print(f"[+] Save file: {output_file}")
         # 不要な入力ファイルの削除
         os.remove(input_file)
         print(f"[+] Delete file: {input_file}")
@@ -266,9 +264,8 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         # 異常終了した時
         # 途中まで翻訳済みのファイルを生成する
-        with open(midway_file, 'w', encoding="utf-8", newline="\n") as f:
-            json.dump(obj, f, indent=2, ensure_ascii=False)
-            print(f"[+] Save file: {midway_file}")
+        RfcUtils.write_json_file(midway_file, obj)
+        print(f"[+] Save file: {midway_file}")
         # 例外をそのまま投げる
         raise
 

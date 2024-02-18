@@ -5,84 +5,30 @@
 import os
 import re
 import json
-import requests
+# from pprint import pprint
 from lxml import etree
-from pprint import pprint
-
-# WorkingGroupのRFCの一覧の保存先
-OUTPUT_PATH = os.path.join("html", "group-rfcs.json")
-
-
-class RfcIndexXmlHandler:
-    rfcs = []
-
-    def start(self, tag: str, attrib):
-        # print("start %s" % tag)
-        if tag.endswith('rfc-entry'):
-            self.rfc = {}
-            return
-
-        self.current_tag = tag
-
-    def end(self, tag: str):
-        # print("end %s" % tag)
-        if tag.endswith('rfc-entry'):
-            RfcIndexXmlHandler.rfcs.append(self.rfc)
-            self.rfc = {}
-            return
-
-    def data(self, data: str):
-        # print("data %r" % data.strip())
-        text = data.strip()
-        if len(text) == 0:
-            return
-        if self.current_tag.endswith('doc-id'):
-            if hasattr(self, 'rfc'):
-                self.rfc['rfc'] = text
-        if self.current_tag.endswith('wg_acronym'):
-            if hasattr(self, 'rfc'):
-                self.rfc['wg'] = text
-
-    def comment(self, text: str):
-        print("comment %s" % text)
-
-    def close(self):
-        print("Finished!")
-        return True
-
-
-def fetch_url(url: str):
-    headers = {'User-agent': '', 'referer': url}
-    page = requests.get(url, headers, timeout=(36.2, 180))
-    return page
+from rfc_utils import RfcUtils
+from rfc_const import RfcXmlElem, RfcJsonElem, RfcFolder
 
 def write_rfc_wg_list():
-    page = fetch_url("https://www.rfc-editor.org/rfc-index.xml")
-    # parser = etree.XMLParser(target=RfcIndexXmlHandler())
-    # etree.XML(page.content, parser)
+    # WorkingGroupのRFCの一覧の保存先
+    OUTPUT_PATH = os.path.join(RfcFolder.OUTPUT_HTML_DIR, "group-rfcs.json")
 
-    # XMLの名前空間名を除去
-    page_content = re.sub(rb' xmlns(:xsi)?="[^"]+"', rb'', page.content, count=1)
-
+    page = RfcUtils.fetch_url("https://www.rfc-editor.org/rfc-index.xml")
+    page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
-    # pprint(tree)
-    # pprint(tree.xpath('/rfc-index/rfc-entry'))
 
     obj = {}
 
-    for item in tree.xpath('/rfc-index/rfc-entry'):
-        # item_content = etree.tostring(item)
-        # item_content = re.sub(rb' xmlns(:xsi)?="[^"]+"', rb'', item_content, count=1)
-        # print('-' * 80)
-        # pprint(item_content)
+    for item in tree.xpath(f'/{RfcXmlElem.RFC_INDEX}/{RfcXmlElem.RFC_ENTRY}'):
         subtree = etree.XML(etree.tostring(item))
 
-        rfc_ids = subtree.xpath('/rfc-entry/doc-id/text()')
+        rfc_ids = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.DOC_ID}/text()')
         if len(rfc_ids) == 0:
             continue
         rfc_id = rfc_ids[0]
 
-        rfc_wgs = subtree.xpath('/rfc-entry/wg_acronym/text()')
+        rfc_wgs = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.WG_ACRONYM}/text()')
         if len(rfc_wgs) == 0:
             continue
         rfc_wg = rfc_wgs[0]
@@ -93,25 +39,64 @@ def write_rfc_wg_list():
             rfc_number = m.group(1)
             obj[rfc_number] = "wg/%s" % rfc_wg
 
+    RfcUtils.write_json_file(OUTPUT_PATH, obj)
 
-    # RfcIndexXmlHandler.rfcs.sort(key=lambda x: x['rfc'])
 
-    # pprint(RfcIndexXmlHandler.rfcs)
+def write_rfc_obsoletes():
+    # RFCステータスの一覧の保存先
+    OUTPUT_PATH = os.path.join(RfcFolder.OUTPUT_HTML_DIR, "obsoletes.json")
 
-    # obj = {}
+    page = RfcUtils.fetch_url("https://www.rfc-editor.org/rfc-index.xml")
+    page_content = RfcUtils.remove_namespace_from_xml(page.content)
+    tree = etree.XML(page_content)
 
-    # for rfc in RfcIndexXmlHandler.rfcs:
-    #     rfc_id = rfc.get('rfc', '')
-    #     rfc_wg = rfc.get('wg', '')
-    #     if not re.match(r'^[^ ]+$', rfc_wg):
-    #         continue
-    #     if m := re.match(r'^RFC([0-9]+)$', rfc_id):
-    #         rfc_number = m.group(1)
-    #         obj[rfc_number] = "wg/%s" % rfc_wg
+    obj = {}
 
-    with open(OUTPUT_PATH, 'w', encoding="utf-8", newline="\n") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
+    for item in tree.xpath(f'/{RfcXmlElem.RFC_INDEX}/{RfcXmlElem.RFC_ENTRY}'):
+        subtree = etree.XML(etree.tostring(item))
+
+        rfc_ids = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.DOC_ID}/text()')
+        if len(rfc_ids) == 0:
+            continue
+        rfc_id = rfc_ids[0]
+        if m := re.match(r'^RFC([0-9]+)$', rfc_id):
+            rfc_number = m.group(1)
+
+        obj[rfc_number] = {}
+
+        # obsoletes
+        rfc_obsoletes = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.OBSOLETES}/{RfcXmlElem.DOC_ID}/text()')
+        if len(rfc_obsoletes) > 0:
+            rfc_obsoletes = [RfcUtils.replace_rfcXXXX_to_XXXX(x) for x in rfc_obsoletes]
+            obj[rfc_number][RfcJsonElem.OBSOLETES] = rfc_obsoletes
+
+        # obsoleted-by
+        rfc_obsoleted_by = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.OBSOLETED_BY}/{RfcXmlElem.DOC_ID}/text()')
+        if len(rfc_obsoleted_by) > 0:
+            rfc_obsoleted_by = [RfcUtils.replace_rfcXXXX_to_XXXX(x) for x in rfc_obsoleted_by]
+            obj[rfc_number][RfcJsonElem.OBSOLETED_BY] = rfc_obsoleted_by
+
+        # updates
+        rfc_updates = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.UPDATES}/{RfcXmlElem.DOC_ID}/text()')
+        if len(rfc_updates) > 0:
+            rfc_updates = [RfcUtils.replace_rfcXXXX_to_XXXX(x) for x in rfc_updates]
+            obj[rfc_number][RfcJsonElem.UPDATES] = rfc_updates
+
+        # updated-by
+        rfc_updated_by = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.UPDATED_BY}/{RfcXmlElem.DOC_ID}/text()')
+        if len(rfc_updated_by) > 0:
+            rfc_updated_by = [RfcUtils.replace_rfcXXXX_to_XXXX(x) for x in rfc_updated_by]
+            obj[rfc_number][RfcJsonElem.UPDATED_BY] = rfc_updated_by
+
+        # current-status
+        rfc_current_status = subtree.xpath(f'/{RfcXmlElem.RFC_ENTRY}/{RfcXmlElem.CURRENT_STATUS}/text()')
+        if len(rfc_current_status) > 0:
+            rfc_current_status = RfcUtils.replace_upper_to_camel(rfc_current_status[0])
+            obj[rfc_number][RfcJsonElem.CURRENT_STATUS] = rfc_current_status
+
+    RfcUtils.write_json_file(OUTPUT_PATH, obj)
 
 
 if __name__ == '__main__':
-    write_rfc_wg_list()
+    # write_rfc_wg_list()
+    write_rfc_obsoletes()

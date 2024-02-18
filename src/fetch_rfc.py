@@ -9,6 +9,7 @@ import textwrap
 import requests
 from lxml import html
 # from pprint import pprint
+from rfc_utils import RfcUtils
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -360,8 +361,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
         raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
 
     # RFCページのTXT形式の取得
-    headers = {'User-agent': '', 'referer': url_txt}
-    page = requests.get(url_txt, headers, timeout=(36.2, 180))
+    page = RfcUtils.fetch_url(url_txt)
 
     text = page.content.decode('ascii', errors='ignore')
 
@@ -438,8 +438,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
             obj['contents'][-1]['toc'] = True
 
     # JSONの保存
-    json_file = open(output_file, 'w', encoding="utf-8")
-    json.dump(obj, json_file, indent=2, ensure_ascii=False)
+    RfcUtils.write_json_file(output_file, obj)
 
 
 if __name__ == '__main__':

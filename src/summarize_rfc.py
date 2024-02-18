@@ -6,10 +6,12 @@ import re
 import os
 import json
 import datetime
-
+#from pprint import pprint
 import openai  # pip install openai
 from dotenv import load_dotenv  # pip install python-dotenv
+from rfc_utils import RfcUtils
 
+# 環境変数の読み込み
 load_dotenv()
 
 # APIキーの設定
@@ -92,8 +94,7 @@ def summarize_rfc(rfc_number: int, model: str = MODEL4, force: bool = False):
         obj['summary'].append(splitted_text)
 
     # RFC要約の出力
-    with open(output_summary_file, 'w', encoding="utf-8", newline="\n") as f:
-        json.dump(obj, f, indent=2, ensure_ascii=False)
+    RfcUtils.write_json_file(output_summary_file, obj)
 
     return True
 
