@@ -6,7 +6,7 @@ import re
 import glob
 # from pprint import pprint
 from lxml import etree
-from rfc_utils import RfcUtils
+from .rfc_utils import RfcUtils
 
 def fetch_remote_index() -> list[int]:
     # 発行されているRFCの番号の一覧をページから取得する

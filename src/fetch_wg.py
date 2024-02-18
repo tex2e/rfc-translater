@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# IETFのWebサイトからWGの一覧を取得するプログラム
+# IETFのWebサイトからRFCステータスとWGの一覧を取得するプログラム
 # ------------------------------------------------------------------------------
 
 import os
@@ -7,8 +7,8 @@ import re
 import json
 # from pprint import pprint
 from lxml import etree
-from rfc_utils import RfcUtils
-from rfc_const import RfcXmlElem, RfcJsonElem, RfcFolder
+from .rfc_utils import RfcUtils
+from .rfc_const import RfcXmlElem, RfcJsonElem, RfcFolder
 
 def write_rfc_wg_list():
     # WorkingGroupのRFCの一覧の保存先
@@ -99,4 +99,5 @@ def write_rfc_obsoletes():
 
 if __name__ == '__main__':
     # write_rfc_wg_list()
-    write_rfc_obsoletes()
+    # write_rfc_obsoletes()
+    pass

@@ -3,11 +3,11 @@
 # ------------------------------------------------------------------------------
 
 import sys
-from fetch_rfc import fetch_rfc, RFCNotFound
-from trans_rfc import trans_rfc
-from make_html import make_html
-from make_index import make_index, make_index_draft
-from fetch_index import diff_remote_and_local_index
+from src.fetch_rfc import fetch_rfc, RFCNotFound
+from src.trans_rfc import trans_rfc
+from src.make_html import make_html
+from src.make_index import make_index, make_index_draft
+from src.fetch_index import diff_remote_and_local_index
 
 def main(rfc_number: int | str) -> None:
     print('[*] RFC %s:' % rfc_number)

@@ -9,7 +9,7 @@ import datetime
 #from pprint import pprint
 import openai  # pip install openai
 from dotenv import load_dotenv  # pip install python-dotenv
-from rfc_utils import RfcUtils
+from .rfc_utils import RfcUtils
 
 # 環境変数の読み込み
 load_dotenv()
