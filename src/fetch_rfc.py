@@ -9,7 +9,7 @@ import textwrap
 import requests
 from lxml import html
 # from pprint import pprint
-from rfc_utils import RfcUtils
+from .rfc_utils import RfcUtils
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 

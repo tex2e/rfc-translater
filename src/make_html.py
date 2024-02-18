@@ -6,7 +6,7 @@ import os
 import re
 import json
 from mako.lookup import TemplateLookup
-from rfc_utils import RfcUtils
+from .rfc_utils import RfcUtils
 
 def make_html(rfc_number: int | str) -> None:
 
