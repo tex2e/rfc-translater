@@ -293,17 +293,18 @@ class RfcListUi {
 
   _searchRfcSet(searchInput) {
     const matchedRfcs = [];
-    const searchWords = searchInput.split(" ");
-    searchWords.forEach(searchWord => {
-      Object.keys(this.rfcSearchIndex).forEach(rfcNumber => {
-        const rfcTitleKeywords = this.rfcSearchIndex[rfcNumber];
-        rfcTitleKeywords.forEach(rfcTitleKeyword => {
-          if (rfcTitleKeyword.startsWith(searchWord)) {
-            matchedRfcs.push(rfcNumber);
-            return;
-          }
-        });
-      });
+    // 検索ワードをスペース区切りで抽出する（ただし空白は除外）
+    const searchWords = searchInput.split(" ").filter(x => x.length > 0);
+    // 全てのRFCタイトルに対して検索を行う
+    Object.keys(this.rfcSearchIndex).forEach(rfcNumber => {
+      // 複数の検索ワードの全てを含むRFCタイトルのみ抽出する
+      const rfcTitleKeywords = Array.from(this.rfcSearchIndex[rfcNumber]);
+      const matched = searchWords.every(searchWord => {
+        return rfcTitleKeywords.some(keyword => keyword.startsWith(searchWord));
+      })
+      if (matched) {
+        matchedRfcs.push(rfcNumber);
+      }
     });
     // console.log("matchedRfcs:", matchedRfcs);
     return new Set(matchedRfcs);
