@@ -10,6 +10,7 @@ import requests
 from lxml import html
 # from pprint import pprint
 from .rfc_utils import RfcUtils
+from .rfc_const import RfcFile
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -306,14 +307,15 @@ def _cleanhtml(raw_html: bytes) -> bytes:
 # [EntryPoint]
 # RFCの取得処理
 def fetch_rfc(number: int | str, force=False) -> None:
+    rfc_number = number
+    output_dir = None
 
     # 変数の初期化
     if type(number) is int:  # RFCは整数
         is_draft = False
         url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
         url_txt = 'https://www.rfc-editor.org/rfc/rfc%d.txt' % number
-        output_dir = 'data/%04d' % (number // 1000 % 10 * 1000)
-        output_file = f'{output_dir}/rfc{number}.json'
+        output_file = RfcFile.get_filepath_json(rfc_number)
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):  # Draftは文字列
         is_draft = True
         organization   = m['org']
@@ -331,11 +333,11 @@ def fetch_rfc(number: int | str, force=False) -> None:
         return
 
     # 出力先ディレクトリの作成
-    os.makedirs(output_dir, exist_ok=True)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     # RFCページのDOMツリーの取得
-    headers = {'User-agent': '', 'referer': url}
-    page = requests.get(url, headers, timeout=(36.2, 180))
+    page = RfcUtils.fetch_url(url)
     tree = html.fromstring(_cleanhtml(page.content))
 
     # タイトル取得
@@ -442,9 +444,9 @@ def fetch_rfc(number: int | str, force=False) -> None:
 
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('rfc_number', type=int)
-    args = parser.parse_args()
-
-    fetch_rfc(args.rfc_number)
+    # import argparse
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('rfc_number', type=int)
+    # args = parser.parse_args()
+    # fetch_rfc(args.rfc_number)
+    pass

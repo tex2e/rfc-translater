@@ -9,7 +9,9 @@ import datetime
 #from pprint import pprint
 import openai  # pip install openai
 from dotenv import load_dotenv  # pip install python-dotenv
+from lxml import etree
 from .rfc_utils import RfcUtils
+from .rfc_const import RfcXmlElem, RfcFile
 
 # 環境変数の読み込み
 load_dotenv()
@@ -21,37 +23,39 @@ openai.api_key = os.environ['CHATGPI_API_KEY']
 MODEL35 = "gpt-3.5-turbo"
 MODEL4 = "gpt-4-turbo-preview"
 
-def summarize_rfc_by_title(rfc_number: int, model: str = MODEL4, force: bool = False):
 
+def get_rfc_title(rfc_number: int) -> str:
     # 要約対象RFCのタイトルを表示
-    input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
-    input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
-    rfc_title = None
+    input_file = RfcFile.get_filepath_trans_json(rfc_number)
     if os.path.exists(input_file):
         # 翻訳済みRFC (json) の読み込み
         ctx = RfcUtils.read_json_file(input_file)
         rfc_title = ctx['title']['text']
+        return rfc_title
     else:
+        return None
+
+def summarize_rfc(rfc_number: int, model: str, force: bool = False):
+
+    if not model or len(model) == 0:
+        model = MODEL35
+
+    rfc_title = get_rfc_title(rfc_number)
+    if not rfc_title:
         print('[!] RFC翻訳が未実施です。先に翻訳作業を完了させてください！')
         return False
 
     # RFC要約済みかの判定
-    output_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
-    output_summary_file = f'{output_dir}/rfc{rfc_number}-summary.json'
+    output_summary_file = RfcFile.get_filepath_summary_json(rfc_number)
     if os.path.exists(output_summary_file):
         print(f"[-] RFCの要約結果がすでに存在します！")
         return True
 
-    # GPTへ送信するプロンプト作成
-    if model.lower().startswith("gpt-4"):
-        MODEL4 = "gpt-4-turbo-preview"
-        prompt = f"""{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"""
-    elif model.lower().startswith("gpt-3"):
-        model = MODEL35
-        prompt = f"""{rfc_title} についての要約と目的を3行でまとめてください"""
+    if rfc_number >= 8650:
+        prompt = summarize_rfc_by_abstract(rfc_number, rfc_title, model)
     else:
-        model = MODEL35
-        prompt = f"""{rfc_title} についての要約と目的を3行でまとめてください"""
+        prompt = summarize_rfc_by_title(rfc_number, rfc_title, model)
+
     print(f"[+] prompt: \n{prompt}")
     print(f"[ ]")
     if force or yes_no_input("上記の内容でChatGPTに質問します。よろしいですか？"):
@@ -96,6 +100,33 @@ def summarize_rfc_by_title(rfc_number: int, model: str = MODEL4, force: bool = F
     RfcUtils.write_json_file(output_summary_file, obj)
 
     return True
+
+def summarize_rfc_by_title(rfc_number: int, rfc_title: str, model: str = MODEL35):
+
+    # GPTへ送信するプロンプト作成
+    if model.lower().startswith("gpt-4"):
+        return f"{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"
+    elif model.lower().startswith("gpt-3"):
+        return f"{rfc_title} についての要約と目的を3行でまとめてください"
+    else:
+        return f"{rfc_title} についての要約と目的を3行でまとめてください"
+
+def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = MODEL35):
+
+    page = RfcUtils.fetch_url(RfcFile.get_url_rfc_xml(rfc_number))
+    page_content = RfcUtils.remove_namespace_from_xml(page.content)
+    tree = etree.XML(page_content)
+
+    rfc_abstract = tree.xpath(f'/{RfcXmlElem.RFC}/{RfcXmlElem.FRONT}/{RfcXmlElem.ABSTRACT}//text()')
+    if not rfc_abstract or len(rfc_abstract) == 0:
+        return False
+
+    rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
+
+    prompt = f"以下の文章を読み、{rfc_title} についての要約と目的を2行でまとめてください。出力はですます調にしてください。\n"
+    prompt += "\n"
+    prompt += f"{rfc_abstract_text}"
+    return prompt
 
 def yes_no_input(question: str):
     while True:

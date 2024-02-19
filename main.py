@@ -86,10 +86,10 @@ if __name__ == '__main__':
         print('Translate test result:', res)
     elif args.summarize and rfcs:
         # RFCの要約作成
-        from src.nlp_summarize_rfc import summarize_rfc_by_title
+        from src.nlp_summarize_rfc import summarize_rfc
         for rfc in rfcs:
             print("[*] RFC %s を要約" % rfc)
-            if summarize_rfc_by_title(rfc, args.chatgpt, args.force):
+            if summarize_rfc(rfc, args.chatgpt, args.force):
                 # RFCのHTMLを作成
                 print("[*] RFC %s のHTMLを生成" % rfc)
                 make_html(rfc)

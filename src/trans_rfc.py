@@ -14,6 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from selenium.webdriver.common.by import By
 import platform
 from .rfc_utils import RfcUtils
+from .rfc_const import RfcFile
 from datetime import datetime, timedelta, timezone
 JST = timezone(timedelta(hours=+9), 'JST')
 
@@ -162,10 +163,13 @@ def trans_rfc(rfc_number: int | str) -> bool:
     # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
         # 通常のRFCのとき
-        input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
-        input_file = f'{input_dir}/rfc{rfc_number}.json'
-        output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
-        midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
+        # input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
+        # input_file = f'{input_dir}/rfc{rfc_number}.json'
+        # output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
+        # midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
+        input_file = RfcFile.get_filepath_json(rfc_number)
+        output_file = RfcFile.get_filepath_trans_json(rfc_number)
+        midway_file = RfcFile.get_filepath_midway_json(rfc_number)
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
         # ドラフト版のRFCのとき
         organization   = m['org']
