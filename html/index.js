@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
-class RfcJsonElem {
+class RfcIndexJsonElem {
   static OBSOLETES = 'obs'
   static OBSOLETED_BY = 'obs_by'
   static UPDATES = 'upd'
@@ -100,16 +100,16 @@ class RfcUi {
     const domRfcAlert = this._getAlertHtmlDomElem();
     if (!this.domRfcDraft && domRfcAlert) {
       // RFCの廃止と修正版の表示
-      if (datum && datum[RfcJsonElem.OBSOLETED_BY]) {
+      if (datum && datum[RfcIndexJsonElem.OBSOLETED_BY]) {
         domRfcAlert.classList.remove("hidden");
 
         const domRfcAlertObsoletedBy = document.getElementById('rfc_alert_obsoleted_by');
         let rfc_links = "";
-        if (datum[RfcJsonElem.OBSOLETED_BY].length >= 1) {
-          for (let i = 0; i < datum[RfcJsonElem.OBSOLETED_BY].length; i++) {
-            let rfcNumber = datum[RfcJsonElem.OBSOLETED_BY][i];
+        if (datum[RfcIndexJsonElem.OBSOLETED_BY].length >= 1) {
+          for (let i = 0; i < datum[RfcIndexJsonElem.OBSOLETED_BY].length; i++) {
+            let rfcNumber = datum[RfcIndexJsonElem.OBSOLETED_BY][i];
             rfc_links += `<a href="./rfc${rfcNumber}.html">RFC ${rfcNumber}</a>`;
-            if (i + 1 < datum[RfcJsonElem.OBSOLETED_BY].length) {
+            if (i + 1 < datum[RfcIndexJsonElem.OBSOLETED_BY].length) {
               rfc_links += ", ";
             }
           }
@@ -120,9 +120,9 @@ class RfcUi {
       }
 
       // RFCステータスの表示
-      if (datum && datum[RfcJsonElem.CURRENT_STATUS]) {
+      if (datum && datum[RfcIndexJsonElem.CURRENT_STATUS]) {
         const domRfcStatus = document.getElementById('rfc_status');
-        const status = datum[RfcJsonElem.CURRENT_STATUS];
+        const status = datum[RfcIndexJsonElem.CURRENT_STATUS];
         // console.log(status);
         const status_color_mapper = {
           // 'Unknown': '',
@@ -153,7 +153,7 @@ class RfcUi {
     // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
     const domRfcWg = this._getWgHtmlDomElem();
     if (!this.domRfcDraft && domRfcWg) {
-      const wg = datum[RfcJsonElem.WG];
+      const wg = datum[RfcIndexJsonElem.WG];
       if (wg) {
         domRfcWg.innerHTML = `, WG: <a href="https://datatracker.ietf.org/wg/${wg}/documents/" class="badge badge-primary">${wg}</a>`;
       }
