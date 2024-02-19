@@ -29,9 +29,8 @@ def summarize_rfc(rfc_number: int, model: str = MODEL4, force: bool = False):
     rfc_title = None
     if os.path.exists(input_file):
         # 翻訳済みRFC (json) の読み込み
-        with open(input_file, 'r', encoding="utf-8") as f:
-            ctx = json.load(f)
-            rfc_title = ctx['title']['text']
+        ctx = RfcUtils.read_json_file(input_file)
+        rfc_title = ctx['title']['text']
     else:
         print('[!] RFC翻訳が未実施です。先に翻訳作業を完了させてください！')
         return False
