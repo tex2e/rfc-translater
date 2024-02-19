@@ -21,7 +21,7 @@ openai.api_key = os.environ['CHATGPI_API_KEY']
 MODEL35 = "gpt-3.5-turbo"
 MODEL4 = "gpt-4-turbo-preview"
 
-def summarize_rfc(rfc_number: int, model: str = MODEL4, force: bool = False):
+def summarize_rfc_by_title(rfc_number: int, model: str = MODEL4, force: bool = False):
 
     # 要約対象RFCのタイトルを表示
     input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
