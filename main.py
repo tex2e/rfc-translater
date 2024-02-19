@@ -77,9 +77,6 @@ if __name__ == '__main__':
         make_index_draft()
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
-        # from src.fetch_wg import write_rfc_wg_list, write_rfc_obsoletes
-        # write_rfc_wg_list()
-        # write_rfc_obsoletes()
         from src.fetch_wg import write_rfc_list_json
         write_rfc_list_json()
     elif args.transtest:
