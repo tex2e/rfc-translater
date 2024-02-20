@@ -15,7 +15,7 @@ class RfcUtils:
     # XMLの名前空間名を除去
     @staticmethod
     def remove_namespace_from_xml(xml: bytes) -> bytes:
-        removed_xml = re.sub(rb' xmlns(:xsi)?="[^"]+"', rb'', xml, count=1)
+        removed_xml = re.sub(rb' xmlns(:[^=]+)?="[^"]+"', rb'', xml, count=1)
         return removed_xml
 
     # 文字列の先頭から「RFC」を除去

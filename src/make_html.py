@@ -7,17 +7,17 @@ import re
 import json
 from mako.lookup import TemplateLookup
 from .rfc_utils import RfcUtils
+from .rfc_const import RfcFile
 
 def make_html(rfc_number: int | str) -> None:
 
     # 変数の初期化
     if type(rfc_number) is int:  # RFCは整数
         is_draft = False
-        input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
-        input_file = f'{input_dir}/rfc{rfc_number}-trans.json'
-        input_summary_file = f'{input_dir}/rfc{rfc_number}-summary.json'
-        output_dir = 'html'
-        output_file = f'{output_dir}/rfc{rfc_number}.html'
+        input_file = RfcFile.get_filepath_trans_json(rfc_number)
+        input_summary_file = RfcFile.get_filepath_summary_json(rfc_number)
+        output_dir = RfcFile.OUTPUT_HTML_DIR
+        output_file = RfcFile.get_filepath_rfc_html(rfc_number)
     elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):  # Draftは文字列
         is_draft = True
         organization   = m['org']
@@ -51,7 +51,7 @@ def make_html(rfc_number: int | str) -> None:
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
-    mytemplate = mylookup.get_template('templates/rfc.html')
+    mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_RFC)
     output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft)
 
     # 出力ディレクトリの作成
@@ -63,9 +63,9 @@ def make_html(rfc_number: int | str) -> None:
 
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('rfc_number', type=int)
-    args = parser.parse_args()
-
-    make_html(args.rfc_number)
+    # import argparse
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('rfc_number', type=int)
+    # args = parser.parse_args()
+    # make_html(args.rfc_number)
+    pass

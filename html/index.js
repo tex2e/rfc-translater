@@ -8,35 +8,35 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
+class RfcIndexJsonElem {
+  static OBSOLETES = 'obs'
+  static OBSOLETED_BY = 'obs_by'
+  static UPDATES = 'upd'
+  static UPDATED_BY = 'upd_by'
+  static CURRENT_STATUS = 'st'
+  static WG = 'wg'
+}
+
 class RfcUi {
+  // RFCのページ表示時に取得する追加情報のファイル名
+  static FETCH_FILENAME = "data-rfc-list.json";
+
   constructor() {
-    this.rfc_draft = null;
+    this.domRfcDraft = null;
   }
 
   dispInit() {
-    // RFCがドラフトかの判定
-    this.rfc_draft = this._isDraft();
+    // RFCがドラフト版かの判定
+    this.domRfcDraft = this._isDraft();
 
     // 編集ページの設定
-    const footer = this._getFooterHtmlElem();
-    if (!this.rfc_draft && footer) {
+    const domFooter = this._getFooterHtmlDomElem();
+    if (!this.domRfcDraft && domFooter) {
       this._addEventToShowEditPage();
     }
 
-    // 廃止RFCの表示
-    const rfc_alert = this._getAlertHtmlElem();
-    if (!this.rfc_draft && rfc_alert) {
-      this._showAlertWhenObsoleted();
-    }
-
-    // RFCの発行WG（ワーキンググループ）の表示
-    const rfc_wg = this._getWgHtmlElem();
-    if (!this.rfc_draft && rfc_wg) { // 標準RFC
-      this._showWg();
-    }
-    if (this.rfc_draft && rfc_wg) { // Draft版のRFC
-      this._showWgOnDraft();
-    }
+    // 廃止RFCの表示、WGの表示
+    this._fetchDataRfcListJson();
 
     // ダークモードへの切り替えボタンの表示
     this._dispDarkmodeButton();
@@ -52,122 +52,110 @@ class RfcUi {
     return document.getElementById('rfc_draft');
   }
 
-  _getFooterHtmlElem() {
+  _getFooterHtmlDomElem() {
     return document.getElementById('rfc_footer')
   }
 
   _addEventToShowEditPage() {
     // 画面を4回連続クリックで編集ページへ移動
-    const rfc_number = parseInt(document.getElementById('rfc_number').innerText);
+    const domRfcNumber = document.getElementById('rfc_number');
+    const rfcNumber = parseInt(domRfcNumber.innerText);
     window.addEventListener('click', function (evt) {
       if (evt.detail === 4) {
         const result = window.confirm("編集ページに移動します");
         if (result) {
-          window.location.href = 'edit.html?rfc=' + rfc_number;
+          window.location.href = `edit.html?rfc=${rfcNumber}`;
         }
       }
     });
   }
 
-  _getAlertHtmlElem() {
+  _fetchDataRfcListJson() {
+    const httpRequest = new XMLHttpRequest();
+    httpRequest.onreadystatechange = () => {
+      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
+        const domRfcNumber = document.getElementById('rfc_number');
+        if (!domRfcNumber) {
+          return;
+        }
+        const rfcNumber = parseInt(domRfcNumber.innerText);
+        const data = JSON.parse(httpRequest.responseText);
+        const datum = data[rfcNumber];
+        // console.log(datum);
+
+        this._showAlertWhenObsoleted(rfcNumber, datum);
+        this._showWg(rfcNumber, datum);
+      }
+    };
+    httpRequest.open('GET', RfcUi.FETCH_FILENAME);
+    httpRequest.send();
+  }
+
+  _getAlertHtmlDomElem() {
     return document.getElementById('rfc_alert');
   }
 
-  _showAlertWhenObsoleted() {
+  _showAlertWhenObsoleted(_rfcNumber, datum) {
     // 対象RFCが廃止されたか確認し、廃止なら修正版RFCへのリンクを表示する。
-    const FETCH_FILENAME = "obsoletes.json";
-    const httpRequest = new XMLHttpRequest();
-    httpRequest.onreadystatechange = function () {
-      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
-        const rfc_number = parseInt(document.getElementById('rfc_number').innerText);
-        const data = JSON.parse(httpRequest.responseText);
-        const datum = data[rfc_number];
-        // console.log(datum);
+    const domRfcAlert = this._getAlertHtmlDomElem();
+    if (!this.domRfcDraft && domRfcAlert) {
+      // RFCの廃止と修正版の表示
+      if (datum && datum[RfcIndexJsonElem.OBSOLETED_BY]) {
+        domRfcAlert.classList.remove("hidden");
 
-        // RFCの廃止と修正版の表示
-        if (datum && datum["obsoleted_by"]) {
-          rfc_alert.classList.remove("hidden");
-
-          const rfc_alert_obsoleted_by = document.getElementById('rfc_alert_obsoleted_by');
-          let rfc_links = "";
-          if (datum["obsoleted_by"].length >= 1) {
-            for (let i = 0; i < datum["obsoleted_by"].length; i++) {
-              let rfc_number = datum["obsoleted_by"][i];
-              rfc_links += '<a href="./rfc' + rfc_number + '.html">RFC ' + rfc_number + '</a>';
-              if (i + 1 < datum["obsoleted_by"].length) {
-                rfc_links += ", ";
-              }
+        const domRfcAlertObsoletedBy = document.getElementById('rfc_alert_obsoleted_by');
+        let rfc_links = "";
+        if (datum[RfcIndexJsonElem.OBSOLETED_BY].length >= 1) {
+          for (let i = 0; i < datum[RfcIndexJsonElem.OBSOLETED_BY].length; i++) {
+            let rfcNumber = datum[RfcIndexJsonElem.OBSOLETED_BY][i];
+            rfc_links += `<a href="./rfc${rfcNumber}.html">RFC ${rfcNumber}</a>`;
+            if (i + 1 < datum[RfcIndexJsonElem.OBSOLETED_BY].length) {
+              rfc_links += ", ";
             }
           }
-          if (rfc_links !== "") {
-            rfc_alert_obsoleted_by.innerHTML = "このRFCは廃止されました。修正版は <span>" + rfc_links + "</span> です。";
-          }
         }
-
-        // RFCステータスの表示
-        if (datum && datum['status']) {
-          const rfc_status = document.getElementById('rfc_status');
-          const status = datum['status'];
-          // console.log(status);
-          const status_color_mapper = {
-            // 'Unknown': '',
-            'Draft': 'danger', // red
-            'Informational': 'warning', // orange
-            'Experimental': 'warning', // yellow
-            'Best Common Practice': 'danger', // pink
-            'Best Current Practice': 'danger', // pink
-            'Proposed Standard': 'info', // purple
-            'Draft Standard': 'info', // skyblue
-            'Internet Standard': 'success', // green
-            'Historic': 'secondary', // gray
-            // 'Obsolete': '', // brown
-          }
-          const badge_class = status_color_mapper[status];
-          // console.log(badge_class);
-
-          rfc_status.innerHTML = ', ST: <a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-' + badge_class + '">' + status + '</a>';
+        if (rfc_links !== "") {
+          domRfcAlertObsoletedBy.innerHTML = `このRFCは廃止されました。修正版は <span>${rfc_links}</span> です。`;
         }
       }
-    };
-    httpRequest.open('GET', FETCH_FILENAME);
-    httpRequest.send();
+
+      // RFCステータスの表示
+      if (datum && datum[RfcIndexJsonElem.CURRENT_STATUS]) {
+        const domRfcStatus = document.getElementById('rfc_status');
+        const status = datum[RfcIndexJsonElem.CURRENT_STATUS];
+        // console.log(status);
+        const status_color_mapper = {
+          // 'Unknown': '',
+          'Draft': 'danger', // red
+          'Informational': 'warning', // orange
+          'Experimental': 'warning', // yellow
+          'Best Common Practice': 'danger', // pink
+          'Best Current Practice': 'danger', // pink
+          'Proposed Standard': 'info', // purple
+          'Draft Standard': 'info', // skyblue
+          'Internet Standard': 'success', // green
+          'Historic': 'secondary', // gray
+          // 'Obsolete': '', // brown
+        }
+        const badge_class = status_color_mapper[status];
+        // console.log(badge_class);
+
+        domRfcStatus.innerHTML = `, ST: <a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-${badge_class}">${status}</a>`;
+      }
+    }
   }
 
-  _getWgHtmlElem() {
+  _getWgHtmlDomElem() {
     return document.getElementById('rfc_wg');
   }
 
-  _showWg() {
+  _showWg(_rfc_number, datum) {
     // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
-    const FETCH_FILENAME = "group-rfcs.json";
-    const httpRequest = new XMLHttpRequest();
-    httpRequest.onreadystatechange = function () {
-      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
-        const rfc_number = parseInt(document.getElementById('rfc_number').innerText);
-        const data = JSON.parse(httpRequest.responseText);
-        const wg = data[rfc_number];
-        if (wg) {
-          const tmp = wg.split('/'); // "wg/tls"
-          if (tmp.length >= 2) {
-            rfc_wg.innerHTML = ', WG: <a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
-          }
-        }
-      }
-    };
-    httpRequest.open('GET', FETCH_FILENAME);
-    httpRequest.send();
-  }
-
-  _showWgOnDraft() {
-    const rfc_draft_name = document.getElementById('rfc_number').innerText;
-    const regex = /^draft-[^-]+-(?<wg_name>[^-]+)/;
-    const m = regex.exec(rfc_draft_name);
-    // console.log(m);
-    if (m) {
-      const wg = m.groups['wg_name'];
-      const tmp = wg.split('/'); // "wg/tls"
-      if (tmp.length >= 2) {
-        rfc_wg.innerHTML = ', WG: <a href="https://datatracker.ietf.org/' + wg + '/documents/" class="badge badge-primary">' + tmp[1] + '</a>';
+    const domRfcWg = this._getWgHtmlDomElem();
+    if (!this.domRfcDraft && domRfcWg) {
+      const wg = datum[RfcIndexJsonElem.WG];
+      if (wg) {
+        domRfcWg.innerHTML = `, WG: <a href="https://datatracker.ietf.org/wg/${wg}/documents/" class="badge badge-primary">${wg}</a>`;
       }
     }
   }
@@ -197,14 +185,13 @@ class RfcUi {
   }
 
   _createRfcLink() {
-    const rfc_draft = this.rfc_draft;
-    document.querySelectorAll('.row .text').forEach(function (el) {
+    document.querySelectorAll('.row .text').forEach(el => {
       // "[RFC5280]" から "<a href="./rfc5280.html">[RFC5280]</a>" へ変換
       // ただし、RFC2220未満は自サイト内に存在しないため、IETFのサイトへのリンクにする
-      el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, function (match, p1) {
+      el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, (match, p1) => {
         if (parseInt(p1) < 2220) {
           return `<a href="https://datatracker.ietf.org/doc/html/rfc${p1}">[RFC${p1}]</a>`
-        } else if (rfc_draft) {
+        } else if (this.domRfcDraft) {
           return `<a href="../rfc${p1}.html">[RFC${p1}]</a>`
         } else {
           return `<a href="./rfc${p1}.html">[RFC${p1}]</a>`

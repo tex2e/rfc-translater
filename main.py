@@ -56,6 +56,7 @@ if __name__ == '__main__':
     ap.add_argument('--make-index-draft', action='store_true', help='Make draft/index.html (ex. --make-index-draft)')
     ap.add_argument('--transtest',        action='store_true')
     ap.add_argument('--summarize',        action='store_true', help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
+    ap.add_argument('--classify',         action='store_true', help='Classify RFC by ChatGPT  (ex. --clasify --rfc 8446)')
     ap.add_argument('--chatgpt',          type=str,            help='ChatGPT model version    (ex. --chatgpt gpt-3.5-turbo)')
     args = ap.parse_args()
 
@@ -76,9 +77,8 @@ if __name__ == '__main__':
         make_index_draft()
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
-        from src.fetch_wg import write_rfc_wg_list, write_rfc_obsoletes
-        write_rfc_wg_list()
-        write_rfc_obsoletes()
+        from src.fetch_wg import write_rfc_list_json
+        write_rfc_list_json()
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         from src.trans_rfc import trans_test
@@ -86,7 +86,7 @@ if __name__ == '__main__':
         print('Translate test result:', res)
     elif args.summarize and rfcs:
         # RFCの要約作成
-        from src.summarize_rfc import summarize_rfc
+        from src.nlp_summarize_rfc import summarize_rfc
         for rfc in rfcs:
             print("[*] RFC %s を要約" % rfc)
             if summarize_rfc(rfc, args.chatgpt, args.force):
