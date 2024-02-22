@@ -106,9 +106,9 @@ if __name__ == '__main__':
     elif args.make and rfcs:
         # RFCのHTMLを作成 (rfcXXXX.html)
         if len(rfcs) == 1:
-            print("[*] RFC %d のHTMLを生成" % (rfcs[0]))
+            print("[*] RFC %s のHTMLを生成" % (rfcs[0]))
         elif len(rfcs) > 1:
-            print("[*] RFC %d - %d のHTMLを生成" % (rfcs[0], rfcs[-1]))
+            print("[*] RFC %s - %s のHTMLを生成" % (rfcs[0], rfcs[-1]))
         for rfc in rfcs:
             make_html(rfc)
     elif args.make_json and rfcs:

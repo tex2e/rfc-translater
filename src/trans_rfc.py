@@ -163,22 +163,15 @@ def trans_rfc(rfc_number: int | str) -> bool:
     # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
         # 通常のRFCのとき
-        # input_dir = 'data/%04d' % (rfc_number // 1000 % 10 * 1000)
-        # input_file = f'{input_dir}/rfc{rfc_number}.json'
-        # output_file = f'{input_dir}/rfc{rfc_number}-trans.json'
-        # midway_file = f'{input_dir}/rfc{rfc_number}-midway.json'
         input_file = RfcFile.get_filepath_json(rfc_number)
         output_file = RfcFile.get_filepath_trans_json(rfc_number)
         midway_file = RfcFile.get_filepath_midway_json(rfc_number)
-    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):  # Draftは文字列
         # ドラフト版のRFCのとき
-        organization   = m['org']
-        working_group  = m['wg']
-        rfc_draft_name = m['name']
-        input_dir = f'data/draft/{working_group}'
-        input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
-        output_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
-        midway_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-midway.json'
+        rfc_draft_id = m['rfc_draft_id']
+        input_file = RfcFile.get_filepath_json(rfc_draft_id)
+        output_file = RfcFile.get_filepath_trans_json(rfc_draft_id)
+        midway_file = RfcFile.get_filepath_midway_json(rfc_draft_id)
     else:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
