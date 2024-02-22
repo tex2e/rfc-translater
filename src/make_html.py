@@ -16,18 +16,13 @@ def make_html(rfc_number: int | str) -> None:
         is_draft = False
         input_file = RfcFile.get_filepath_trans_json(rfc_number)
         input_summary_file = RfcFile.get_filepath_summary_json(rfc_number)
-        output_dir = RfcFile.OUTPUT_HTML_DIR
         output_file = RfcFile.get_filepath_rfc_html(rfc_number)
-    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', rfc_number):  # Draftは文字列
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):  # Draftは文字列
         is_draft = True
-        organization   = m['org']
-        working_group  = m['wg']
-        rfc_draft_name = m['name']
-        input_dir = f'data/draft/{working_group}'
-        input_file = f'{input_dir}/draft-{organization}-{working_group}-{rfc_draft_name}-trans.json'
-        input_summary_file = ''
-        output_dir = 'html/draft'
-        output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.html'
+        rfc_draft_id = m['rfc_draft_id']
+        input_file = RfcFile.get_filepath_trans_json(rfc_draft_id)
+        input_summary_file = RfcFile.get_filepath_summary_json(rfc_draft_id)
+        output_file = RfcFile.get_filepath_rfc_html(rfc_draft_id)
     else:
         raise RuntimeError(f"make_html: Unknown format number={rfc_number}")
 
@@ -53,9 +48,6 @@ def make_html(rfc_number: int | str) -> None:
         input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_RFC)
     output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft)
-
-    # 出力ディレクトリの作成
-    os.makedirs(output_dir, exist_ok=True)
 
     # 翻訳したRFC (html) の作成
     with open(output_file, 'w', encoding="utf-8", newline="\n") as f:

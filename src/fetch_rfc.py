@@ -288,53 +288,41 @@ def _get_line_len_diff(text1: str, text2: str) -> int:
     first_line2 = text2.split('\n')[0]
     return abs(len(first_line1) - len(first_line2))
 
-
-# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
-# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
-class RFCNotFound(Exception):
-    pass
-
-# それ以外の例外（HTML構造に関するエラーなど）はExceptionを投げること。
-# class Exception:
-
-
 # 本文中にあるaタグ（RFCへのリンクなど）を削除する
 def _cleanhtml(raw_html: bytes) -> bytes:
     cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
     cleantext = re.sub(cleaner, b'', raw_html)
     return cleantext
 
+# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
+# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
+class RFCNotFound(Exception):
+    pass
+
+
 # [EntryPoint]
 # RFCの取得処理
-def fetch_rfc(number: int | str, force=False) -> None:
-    rfc_number = number
+def fetch_rfc(rfc_number: int | str, force=False) -> None:
     output_dir = None
 
     # 変数の初期化
-    if type(number) is int:  # RFCは整数
+    if type(rfc_number) is int:  # RFCは整数
         is_draft = False
-        url = 'https://datatracker.ietf.org/doc/html/rfc%d' % number
-        url_txt = 'https://www.rfc-editor.org/rfc/rfc%d.txt' % number
+        url = RfcFile.get_url_rfc_html(rfc_number)
+        url_txt = RfcFile.get_url_rfc_txt(rfc_number)
         output_file = RfcFile.get_filepath_json(rfc_number)
-    elif m := re.match(r'draft-(?P<org>[^-]+)-(?P<wg>[^-]+)-(?P<name>.+)', number):  # Draftは文字列
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):  # Draftは文字列
         is_draft = True
-        organization   = m['org']
-        working_group  = m['wg']
-        rfc_draft_name = m['name']
-        url = f'https://datatracker.ietf.org/doc/html/draft-{organization}-{working_group}-{rfc_draft_name}'
-        url_txt = f'https://www.ietf.org/archive/id/draft-{organization}-{working_group}-{rfc_draft_name}.txt'
-        output_dir = f'data/draft/{working_group}'
-        output_file = f'{output_dir}/draft-{organization}-{working_group}-{rfc_draft_name}.json'
+        rfc_draft_id = m['rfc_draft_id']
+        url = RfcFile.get_url_rfc_html(rfc_draft_id)
+        url_txt = RfcFile.get_url_rfc_txt(rfc_draft_id)
+        output_file = RfcFile.get_filepath_json(rfc_draft_id)
     else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={number}")
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not force and os.path.isfile(output_file):
         return
-
-    # 出力先ディレクトリの作成
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
 
     # RFCページのDOMツリーの取得
     page = RfcUtils.fetch_url(url)
@@ -342,10 +330,8 @@ def fetch_rfc(number: int | str, force=False) -> None:
 
     # タイトル取得
     title = tree.xpath('//title/text()')
-    # タイトル取得（RFC有無確認用）
     if len(title) == 0:
         raise RFCNotFound
-
     title = title[0].strip()
 
     # タイトルの取得（パターンマッチ）
@@ -353,18 +339,17 @@ def fetch_rfc(number: int | str, force=False) -> None:
         tmp = title
         tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
         tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
-        tmp = re.sub(r'^RFC (\d+) -', f'RFC {number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
+        tmp = re.sub(r'^RFC (\d+) -', f'RFC {rfc_number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
         # title = "RFC %s - %s" % (number, tmp)
         title = tmp
     elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
         title = title
     else:
         # タイトルがRFC形式と一致しない場合
-        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (number, title))
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc_number, title))
 
     # RFCページのTXT形式の取得
     page = RfcUtils.fetch_url(url_txt)
-
     text = page.content.decode('ascii', errors='ignore')
 
     # ページ区切りの削除＋前後段落の結合（例：RFC 3830）
@@ -419,7 +404,7 @@ def fetch_rfc(number: int | str, force=False) -> None:
     # 段落情報をJSONに変換する
     obj = {
         'title': {'text': title},
-        'number': number,
+        'number': rfc_number,
         'created_at': str(datetime.now(JST)),
         'updated_by': '',
         'contents': [],

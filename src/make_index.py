@@ -6,10 +6,11 @@ import os
 import re
 import glob
 from mako.lookup import TemplateLookup
+from .rfc_const import RfcFile
 
 # トップページ作成
 def make_index() -> None:
-    output_file = os.path.normpath('html/index.html')
+    output_file = RfcFile.OUTPUT_HTML_INDEX_FILE
 
     files = []
     for filename in glob.glob('html/rfc*.html'):
@@ -33,7 +34,7 @@ def make_index() -> None:
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
-    mytemplate = mylookup.get_template('templates/index.html')
+    mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_INDEX)
     output = mytemplate.render_unicode(ctx={'files': files})
 
     with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
@@ -65,7 +66,7 @@ def make_index_draft() -> None:
     mylookup = TemplateLookup(
         directories=["./"],
         input_encoding='utf-8', output_encoding='utf-8')
-    mytemplate = mylookup.get_template('templates/index.html')
+    mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_INDEX)
     output = mytemplate.render_unicode(ctx={'files': files}, is_draft=is_draft)
 
     with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
