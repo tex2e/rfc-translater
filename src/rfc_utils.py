@@ -1,7 +1,7 @@
 
 import re
-import json
 import requests
+from datetime import datetime, timedelta, timezone
 
 class RfcUtils:
 
@@ -26,28 +26,31 @@ class RfcUtils:
     # 文字列を大文字からキャメルケースに変換
     @staticmethod
     def replace_upper_to_camel(text: str) -> str:
-        return re.sub(r'\b([A-Z])([A-Z0-9]+)\b', RfcUtils._upper_to_camel, text)
+        def _upper_to_camel(matchobj) -> str:
+            return matchobj.group(1) + matchobj.group(2).lower()
+        return re.sub(r'\b([A-Z])([A-Z0-9]+)\b', _upper_to_camel, text)
 
+    # 単一行の2つの文字列のインデントの差を求める関数
     @staticmethod
-    def _upper_to_camel(matchobj):
-        return matchobj.group(1) + matchobj.group(2).lower()
+    def get_indent(text: str) -> int:
+        return len(text) - len(text.lstrip())
 
-    # JSONファイルの書き込み
+    # 複数行の2つの文字列のインデントの差を求める関数
     @staticmethod
-    def write_json_file(filepath: str, obj: object):
-        FILEMODE = 'w'
-        ENCODING = 'utf-8'
-        NEWLINE = "\n"
-        JSON_INDENT = 2
-        with open(filepath, FILEMODE, encoding=ENCODING, newline=NEWLINE) as f:
-            json.dump(obj, f, ensure_ascii=False, indent=JSON_INDENT)
+    def get_line_len_diff(text1: str, text2: str) -> int:
+        first_line1 = text1.split('\n')[0]
+        first_line2 = text2.split('\n')[0]
+        return abs(len(first_line1) - len(first_line2))
 
-    # JSONファイルの読み込み
+    # 本文中にあるaタグ（RFCへのリンクなど）を削除する
     @staticmethod
-    def read_json_file(filepath: str) -> object:
-        FILEMODE = 'r'
-        ENCODING = 'utf-8'
-        with open(filepath, FILEMODE, encoding=ENCODING) as f:
-            obj = json.load(f)
-            return obj
+    def html_rm_link_tag(raw_html: bytes) -> bytes:
+        cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
+        cleantext = re.sub(cleaner, b'', raw_html)
+        return cleantext
 
+    # 現在時刻の取得
+    @staticmethod
+    def get_now():
+        JST = timezone(timedelta(hours=+9), 'JST')
+        return datetime.now(JST)

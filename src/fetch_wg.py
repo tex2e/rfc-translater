@@ -7,7 +7,7 @@ import re
 # from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
-from .rfc_const import RfcIndexXmlElem, RfcIndexJsonElem, RfcFile
+from .rfc_const import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
 
 def write_rfc_list_json():
     OUTPUT_PATH = os.path.join(RfcFile.OUTPUT_HTML_DIR, "data-rfc-list.json")
@@ -70,7 +70,7 @@ def write_rfc_list_json():
             if re.match(r'^[^ ]+$', rfc_wg):
                 obj[rfc_number_str][RfcIndexJsonElem.WG] = str(rfc_wg)
 
-    RfcUtils.write_json_file(OUTPUT_PATH, obj)
+    RfcFile.write_json_file(OUTPUT_PATH, obj)
 
 
 if __name__ == '__main__':

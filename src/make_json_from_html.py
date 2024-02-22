@@ -6,10 +6,10 @@ import sys
 import re
 import json
 import textwrap
-from bs4 import BeautifulSoup
 # from pprint import pprint
-from datetime import datetime, timedelta, timezone
-JST = timezone(timedelta(hours=+9), 'JST')
+from bs4 import BeautifulSoup
+from .rfc_const import RfcFile
+from .rfc_utils import RfcUtils
 
 def make_json_from_html(rfc_number: int) -> None:
 
@@ -22,7 +22,7 @@ def make_json_from_html(rfc_number: int) -> None:
     data = {
         "title": {"text": "", "ja": ""},
         "number": 0,
-        "created_at": str(datetime.now(JST)),
+        "created_at": str(RfcUtils.get_now()),
         "updated_by": "",
         "contents": []
     }
@@ -105,9 +105,8 @@ def make_json_from_html(rfc_number: int) -> None:
     # pprint(data)
 
     # RFCデータ(JSON)の書き込み
-    output_file = 'data/%d/rfc%d-trans.json' % (rfc_number // 1000 % 10 * 1000, rfc_number)
-    with open(output_file, 'w', encoding="utf-8", newline="\n") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    output_file = RfcFile.get_filepath_trans_json(rfc_number)
+    RfcFile.write_json_file(output_file, data)
 
 
 if __name__ == '__main__':

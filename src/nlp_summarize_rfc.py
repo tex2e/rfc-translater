@@ -29,7 +29,7 @@ def get_rfc_title(rfc_number: int) -> str:
     input_file = RfcFile.get_filepath_trans_json(rfc_number)
     if os.path.exists(input_file):
         # 翻訳済みRFC (json) の読み込み
-        ctx = RfcUtils.read_json_file(input_file)
+        ctx = RfcFile.read_json_file(input_file)
         rfc_title = ctx['title']['text']
         return rfc_title
     else:
@@ -97,7 +97,7 @@ def summarize_rfc(rfc_number: int, model: str, force: bool = False):
         obj['summary'].append(splitted_text)
 
     # RFC要約の出力
-    RfcUtils.write_json_file(output_summary_file, obj)
+    RfcFile.write_json_file(output_summary_file, obj)
 
     return True
 

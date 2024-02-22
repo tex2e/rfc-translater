@@ -15,8 +15,6 @@ from selenium.webdriver.common.by import By
 import platform
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile
-from datetime import datetime, timedelta, timezone
-JST = timezone(timedelta(hours=+9), 'JST')
 
 # 変換元は必ず小文字で記載すること
 trans_rules = {
@@ -154,19 +152,14 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def chunks(alist: list, n: int):
-    for i in range(0, len(alist), n):
-        yield alist[i:i + n]
-
 def trans_rfc(rfc_number: int | str) -> bool:
 
-    # 整数はRFC、文字列はDraft
     if type(rfc_number) is int:
         # 通常のRFCのとき
         input_file = RfcFile.get_filepath_json(rfc_number)
         output_file = RfcFile.get_filepath_trans_json(rfc_number)
         midway_file = RfcFile.get_filepath_midway_json(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):  # Draftは文字列
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
         # ドラフト版のRFCのとき
         rfc_draft_id = m['rfc_draft_id']
         input_file = RfcFile.get_filepath_json(rfc_draft_id)
@@ -176,9 +169,9 @@ def trans_rfc(rfc_number: int | str) -> bool:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
-        obj = RfcUtils.read_json_file(midway_file)
+        obj = RfcFile.read_json_file(midway_file)
     else:
-        obj = RfcUtils.read_json_file(input_file)
+        obj = RfcFile.read_json_file(input_file)
 
     translator = TranslatorSeleniumGoogletrans(
         total=len(obj['contents']),
@@ -240,7 +233,7 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
-        RfcUtils.write_json_file(output_file, obj)
+        RfcFile.write_json_file(output_file, obj)
         print(f"[+] Save file: {output_file}")
         # 不要な入力ファイルの削除
         os.remove(input_file)
@@ -256,12 +249,12 @@ def trans_rfc(rfc_number: int | str) -> bool:
         # TimeoutException: ネットワークなどの問題で発生する例外
         # WebDriverException: メモリ不足などでWebDriverがエラーしたとき
         # KeyboardInterrupt: ユーザが意図的に処理を停止したときに発生する例外
-        print(f'[-] Translator Error! ({datetime.now(JST)})')
+        print(f'[-] Translator Error! ({RfcUtils.get_now()})')
         print(f'[-] error={e}')
 
         # 異常終了した時
         # 途中まで翻訳済みのファイルを生成する
-        RfcUtils.write_json_file(midway_file, obj)
+        RfcFile.write_json_file(midway_file, obj)
         print(f"[+] Save file: {midway_file}")
         # 例外をそのまま投げる
         raise
