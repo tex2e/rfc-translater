@@ -4,9 +4,7 @@
 
 import os
 import re
-import json
 import textwrap
-import requests
 from lxml import html
 # from pprint import pprint
 from .rfc_utils import RfcUtils
@@ -38,7 +36,7 @@ class Paragraph:
         # 段落文章（インデントは除く）
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         # インデント数の取得
-        self.indent = _get_line_len_diff(text, self.text)
+        self.indent = RfcUtils.get_line_len_diff(text, self.text)
         # コード・図表の判定
         self.is_code = is_code
         if not self.is_code:
@@ -121,7 +119,7 @@ class Paragraph:
         lines = text.split('\n')
         if len(lines) <= 2:
             return False
-        indent = _get_indent(lines[0])
+        indent = RfcUtils.get_indent(lines[0])
         regex = re.compile(rf'^(?: {{{indent}}}\*  | {{{indent+3}}})[a-zA-Z0-9_<]', re.MULTILINE)
         return all(re.match(regex, line) for line in lines)
 
@@ -278,22 +276,6 @@ class Paragraphs:
         return iter(self.paragraphs)
 
 
-# 単一行の2つの文字列のインデントの差を求める関数
-def _get_indent(text: str) -> int:
-    return len(text) - len(text.lstrip())
-
-# 複数行の2つの文字列のインデントの差を求める関数
-def _get_line_len_diff(text1: str, text2: str) -> int:
-    first_line1 = text1.split('\n')[0]
-    first_line2 = text2.split('\n')[0]
-    return abs(len(first_line1) - len(first_line2))
-
-# 本文中にあるaタグ（RFCへのリンクなど）を削除する
-def _cleanhtml(raw_html: bytes) -> bytes:
-    cleaner = re.compile(rb'<a href="./rfc\d+[^"]*"[^>]*>')
-    cleantext = re.sub(cleaner, b'', raw_html)
-    return cleantext
-
 # RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
 # このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
 class RFCNotFound(Exception):
@@ -303,15 +285,15 @@ class RFCNotFound(Exception):
 # [EntryPoint]
 # RFCの取得処理
 def fetch_rfc(rfc_number: int | str, force=False) -> None:
-    output_dir = None
 
-    # 変数の初期化
-    if type(rfc_number) is int:  # RFCは整数
+    if type(rfc_number) is int:
+        # RFCのとき
         is_draft = False
         url = RfcFile.get_url_rfc_html(rfc_number)
         url_txt = RfcFile.get_url_rfc_txt(rfc_number)
         output_file = RfcFile.get_filepath_json(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):  # Draftは文字列
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        # Draft版RFCのとき
         is_draft = True
         rfc_draft_id = m['rfc_draft_id']
         url = RfcFile.get_url_rfc_html(rfc_draft_id)
@@ -326,7 +308,7 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
 
     # RFCページのDOMツリーの取得
     page = RfcUtils.fetch_url(url)
-    tree = html.fromstring(_cleanhtml(page.content))
+    tree = html.fromstring(RfcUtils.html_rm_link_tag(page.content))
 
     # タイトル取得
     title = tree.xpath('//title/text()')
@@ -377,8 +359,8 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
             last_index = -1
             prev_last_line = contents[i - 1].rstrip('\n').split('\n')[last_index]    # 前ページの最後の行
             next_first_line = contents[i + 1].lstrip('\n').split('\n')[first_index]  # 次ページの最初の行
-            indent1 = _get_indent(prev_last_line)
-            indent2 = _get_indent(next_first_line)
+            indent1 = RfcUtils.get_indent(prev_last_line)
+            indent2 = RfcUtils.get_indent(next_first_line)
             # print('newpage:', i)
             # print('  ', indent1, prev_last_line)
             # print('  ', indent2, next_first_line)
@@ -425,7 +407,7 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
             obj['contents'][-1]['toc'] = True
 
     # JSONの保存
-    RfcUtils.write_json_file(output_file, obj)
+    RfcFile.write_json_file(output_file, obj)
 
 
 if __name__ == '__main__':

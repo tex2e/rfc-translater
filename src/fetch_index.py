@@ -10,9 +10,8 @@ from lxml import etree
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcIndexXmlElem, RfcFile
 
+# 発行されているRFCの番号の一覧をページから取得する
 def fetch_remote_index() -> list[int]:
-    # 発行されているRFCの番号の一覧をページから取得する
-
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_index_xml())
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
@@ -33,8 +32,8 @@ def fetch_remote_index() -> list[int]:
 
     return rfc_numbers
 
+# 作成したRFCに対応するHTMLの番号の一覧をローカルから取得する。
 def fetch_local_index() -> list[int]:
-    # 作成したRFCに対応するHTMLの番号の一覧をローカルから取得する。
     LOCAL_FILEPATH = os.path.join(RfcFile.OUTPUT_HTML_DIR, 'rfc*.html')
     rfc_numbers = []
     for filepath in glob.glob(LOCAL_FILEPATH):
@@ -45,16 +44,13 @@ def fetch_local_index() -> list[int]:
 
     return rfc_numbers
 
+# RFC Indexとローカルのhtml/のRFCの差分を作成する。
+# 返り値は、RFC番号の一覧
 def diff_remote_and_local_index() -> list[int]:
-    # RFC Indexとローカルのhtml/のRFCの差分を作成する。
-    # 返り値は、RFC番号の一覧
     remote_index = fetch_remote_index()
     local_index  = fetch_local_index()
     diff_index = set(remote_index) - set(local_index)
     return diff_index
-
-def get_rfc_number(string: str) -> str:
-    return string.strip().replace("RFC", "")
 
 
 if __name__ == '__main__':

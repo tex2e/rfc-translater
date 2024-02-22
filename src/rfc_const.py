@@ -1,5 +1,6 @@
 
 import os
+import json
 
 class RfcFile:
     OUTPUT_HTML_DIR = 'html'
@@ -7,6 +8,7 @@ class RfcFile:
     OUTPUT_DRAFT = 'draft'
 
     OUTPUT_HTML_INDEX_FILE = os.path.join('html', 'index.html')
+    OUTPUT_HTML_DRAFT_INDEX_FILE = os.path.join('html', 'draft', 'index.html')
 
     TEMPLATE_HTML_INDEX = os.path.join('templates', 'index.html')
     TEMPLATE_HTML_RFC = os.path.join('templates', 'rfc.html')
@@ -87,6 +89,43 @@ class RfcFile:
             return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.txt'
         elif type(rfc_number) is str:
             return f'https://www.ietf.org/archive/id/draft-{rfc_number}.txt'
+
+    # JSONファイルの書き込み
+    @staticmethod
+    def write_json_file(filepath: str, obj: object):
+        FILEMODE = 'w'
+        ENCODING = 'utf-8'
+        NEWLINE = "\n"
+        JSON_INDENT = 2
+        with open(filepath, FILEMODE, encoding=ENCODING, newline=NEWLINE) as f:
+            json.dump(obj, f, ensure_ascii=False, indent=JSON_INDENT)
+
+    # JSONファイルの読み込み
+    @staticmethod
+    def read_json_file(filepath: str) -> object:
+        FILEMODE = 'r'
+        ENCODING = 'utf-8'
+        with open(filepath, FILEMODE, encoding=ENCODING) as f:
+            obj = json.load(f)
+            return obj
+
+    # HTMLファイルの書き込み
+    @staticmethod
+    def write_html_file(filepath: str, obj: object):
+        FILEMODE = 'w'
+        ENCODING = 'utf-8'
+        NEWLINE = "\n"
+        with open(filepath, FILEMODE, encoding=ENCODING, newline=NEWLINE) as f:
+            f.write(obj)
+
+    # HTMLファイルの読み込み
+    @staticmethod
+    def read_html_file(filepath: str) -> str:
+        FILEMODE = 'r'
+        ENCODING = 'utf-8'
+        with open(filepath, FILEMODE, encoding=ENCODING) as f:
+            content = f.read()
+            return content
 
 
 
