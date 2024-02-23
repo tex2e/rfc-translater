@@ -1,7 +1,6 @@
 
 import os
 import json
-from mako.template import Template
 from mako.lookup import TemplateLookup
 
 def make_html(rfc_number):
