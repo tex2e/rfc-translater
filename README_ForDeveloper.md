@@ -117,6 +117,7 @@ python3 -m unittest tests.test_fetch_rfc.TestFetchRfcSectionTitle.test_section_t
 
 ```bash
 find data/draft -name '*' -type f -exec /bin/bash -c '/opt/homebrew/bin/python3 main.py --draft $(basename {} -trans.json) --make' \;
+python main.py --make-index-draft
 ```
 
 ### その他
