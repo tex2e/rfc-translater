@@ -99,6 +99,10 @@ class RfcFile:
         elif type(rfc_number) is str:
             return f'https://www.ietf.org/archive/id/draft-{rfc_number}.txt'
 
+    # RFCの取得先URL (XML)
+    def get_url_rfc_xml(rfc_number: int) -> str:
+        return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.xml'
+
     # RFC Indexの取得先URL (XML)
     @staticmethod
     def get_url_rfc_index_xml():
