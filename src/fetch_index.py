@@ -17,7 +17,6 @@ def fetch_remote_index() -> list[int]:
     tree = etree.XML(page_content)
 
     rfc_numbers = []
-
     for item in tree.xpath(f'/{RfcIndexXmlElem.RFC_INDEX}/{RfcIndexXmlElem.RFC_ENTRY}'):
         subtree = etree.XML(etree.tostring(item))
 

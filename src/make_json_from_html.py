@@ -14,9 +14,8 @@ from .rfc_utils import RfcUtils
 def make_json_from_html(rfc_number: int) -> None:
 
     # RFCデータ(HTML)の読み込み
-    input_file = 'html/rfc%d.html' % rfc_number
-    with open(input_file, 'r', encoding="utf-8", newline="\n") as f:
-        html_text = f.read()
+    input_file = RfcFile.get_filepath_html_rfc(rfc_number)
+    html_text = RfcFile.read_html_file(input_file)
 
     # 保存用JSONの構造
     data = {
@@ -36,9 +35,7 @@ def make_json_from_html(rfc_number: int) -> None:
     data['title']['ja'] = soup.find(class_="title_ja").find("strong").text
 
     # RFC番号
-    m = re.match(r'RFC ?(\d+)', data['title']['text'])
-    if m:
-        data['number'] = int(m[1])
+    data['number'] = RfcUtils.get_rfc_number_int(data['title']['text'])
     print(f"[*] RFC: {data['number']}")
 
     # 更新者
@@ -105,7 +102,7 @@ def make_json_from_html(rfc_number: int) -> None:
     # pprint(data)
 
     # RFCデータ(JSON)の書き込み
-    output_file = RfcFile.get_filepath_trans_json(rfc_number)
+    output_file = RfcFile.get_filepath_data_trans_json(rfc_number)
     RfcFile.write_json_file(output_file, data)
 
 

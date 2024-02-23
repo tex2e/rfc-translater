@@ -10,9 +10,13 @@ class RfcFile:
     OUTPUT_HTML_INDEX_FILE = os.path.join('html', 'index.html')
     OUTPUT_HTML_DRAFT_INDEX_FILE = os.path.join('html', 'draft', 'index.html')
 
+    GLOB_HTML_FILE = os.path.join('html', 'rfc*.html')
+    GLOB_HTML_DRAFT_FILE = os.path.join('html', 'draft', 'draft-*.html')
+
     TEMPLATE_HTML_INDEX = os.path.join('templates', 'index.html')
     TEMPLATE_HTML_RFC = os.path.join('templates', 'rfc.html')
 
+    # RFCのJSONなどの中間ファイル格納先ディレクトリ
     @staticmethod
     def get_dir_data(rfc_number: int | str) -> str:
         if type(rfc_number) is int:
@@ -20,6 +24,7 @@ class RfcFile:
         elif type(rfc_number) is str:
             return os.path.join(RfcFile.OUTPUT_DATA_DIR, RfcFile.OUTPUT_DRAFT)
 
+    # RFCのHTMLファイル格納先ディレクトリ
     @staticmethod
     def get_dir_html(rfc_number: int | str) -> str:
         if type(rfc_number) is int:
@@ -27,55 +32,58 @@ class RfcFile:
         elif type(rfc_number) is str:
             return os.path.join(RfcFile.OUTPUT_HTML_DIR, RfcFile.OUTPUT_DRAFT)
 
+    # RFCの本文取得・解析結果ファイルパス
     @staticmethod
-    def get_filepath_json(rfc_number: int | str) -> str:
+    def get_filepath_data_json(rfc_number: int | str) -> str:
         dir_data = RfcFile.get_dir_data(rfc_number)
         if type(rfc_number) is int:
             return os.path.join(dir_data, f'rfc{rfc_number}.json')
         elif type(rfc_number) is str:
             return os.path.join(dir_data, f'draft-{rfc_number}.json')
 
+    # RFCの翻訳結果ファイルパス
     @staticmethod
-    def get_filepath_trans_json(rfc_number: int | str) -> str:
+    def get_filepath_data_trans_json(rfc_number: int | str) -> str:
         dir_data = RfcFile.get_dir_data(rfc_number)
         if type(rfc_number) is int:
             return os.path.join(dir_data, f'rfc{rfc_number}-trans.json')
         elif type(rfc_number) is str:
             return os.path.join(dir_data, f'draft-{rfc_number}-trans.json')
 
+    # RFCの翻訳作業途中結果ファイルパス
     @staticmethod
-    def get_filepath_midway_json(rfc_number: int | str) -> str:
+    def get_filepath_data_midway_json(rfc_number: int | str) -> str:
         dir_data = RfcFile.get_dir_data(rfc_number)
         if type(rfc_number) is int:
             return os.path.join(dir_data, f'rfc{rfc_number}-midway.json')
         elif type(rfc_number) is str:
             return os.path.join(dir_data, f'draft-{rfc_number}-midway.json')
 
+    # RFCの要約JSONファイルパス
     @staticmethod
-    def get_filepath_summary_json(rfc_number: int | str) -> str:
+    def get_filepath_data_summary_json(rfc_number: int | str) -> str:
         dir_data = RfcFile.get_dir_data(rfc_number)
         if type(rfc_number) is int:
             return os.path.join(dir_data, f'rfc{rfc_number}-summary.json')
         elif type(rfc_number) is str:
             return os.path.join(dir_data, f'draft-{rfc_number}-summary.json')
 
+    # RFCのHTMLファイルパス
     @staticmethod
-    def get_filepath_rfc_html(rfc_number: int | str) -> str:
+    def get_filepath_html_rfc(rfc_number: int | str) -> str:
         dir_html = RfcFile.get_dir_html(rfc_number)
         if type(rfc_number) is int:
             return os.path.join(dir_html, f'rfc{rfc_number}.html')
         elif type(rfc_number) is str:
             return os.path.join(dir_html, f'draft-{rfc_number}.html')
 
+    # RFCの取得先URL (XML)
     @staticmethod
     def get_url_rfc_xml(rfc_number: int | str) -> str:
         if type(rfc_number) is int:
             return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.xml'
 
-    @staticmethod
-    def get_url_rfc_index_xml():
-        return 'https://www.rfc-editor.org/rfc-index.xml'
-
+    # RFCの取得先URL (HTML)
     @staticmethod
     def get_url_rfc_html(rfc_number: int | str) -> str:
         if type(rfc_number) is int:
@@ -83,12 +91,18 @@ class RfcFile:
         elif type(rfc_number) is str:
             return f'https://datatracker.ietf.org/doc/html/draft-{rfc_number}'
 
+    # RFCの取得先URL (TXT)
     @staticmethod
     def get_url_rfc_txt(rfc_number: int | str) -> str:
         if type(rfc_number) is int:
             return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.txt'
         elif type(rfc_number) is str:
             return f'https://www.ietf.org/archive/id/draft-{rfc_number}.txt'
+
+    # RFC Indexの取得先URL (XML)
+    @staticmethod
+    def get_url_rfc_index_xml():
+        return 'https://www.rfc-editor.org/rfc-index.xml'
 
     # JSONファイルの書き込み
     @staticmethod
@@ -165,3 +179,21 @@ class RfcXmlElem:
     FRONT = 'front'
     # level3
     ABSTRACT = 'abstract'
+
+class RfcJsonElem:
+    TITLE = 'title'
+    class Title:
+        TEXT = 'text'
+        JA = 'ja'
+    NUMBER = 'number'
+    CREATED_AT = 'created_at'
+    UPDATED_BY = 'updated_by'
+    CONTENTS = 'contents'
+    class Contents:
+        INDENT = 'indent'
+        TEXT = 'text'
+        JA = 'ja'
+        SECTION_TITLE = 'section_title'
+        RAW = 'raw'
+        TOC = 'toc'
+    IS_DRAFT = 'is_draft'

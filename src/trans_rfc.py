@@ -4,17 +4,16 @@
 
 import os
 import re
-import json
 import time
+import platform
 from tqdm import tqdm  # pip install tqdm
 import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
-import platform
 from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile
+from .rfc_const import RfcFile, RfcJsonElem
 
 # 変換元は必ず小文字で記載すること
 trans_rules = {
@@ -156,49 +155,47 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
     if type(rfc_number) is int:
         # 通常のRFCのとき
-        input_file = RfcFile.get_filepath_json(rfc_number)
-        output_file = RfcFile.get_filepath_trans_json(rfc_number)
-        midway_file = RfcFile.get_filepath_midway_json(rfc_number)
+        input_file = RfcFile.get_filepath_data_json(rfc_number)
+        output_file = RfcFile.get_filepath_data_trans_json(rfc_number)
+        midway_file = RfcFile.get_filepath_data_midway_json(rfc_number)
     elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
         # ドラフト版のRFCのとき
         rfc_draft_id = m['rfc_draft_id']
-        input_file = RfcFile.get_filepath_json(rfc_draft_id)
-        output_file = RfcFile.get_filepath_trans_json(rfc_draft_id)
-        midway_file = RfcFile.get_filepath_midway_json(rfc_draft_id)
+        input_file = RfcFile.get_filepath_data_json(rfc_draft_id)
+        output_file = RfcFile.get_filepath_data_trans_json(rfc_draft_id)
+        midway_file = RfcFile.get_filepath_data_midway_json(rfc_draft_id)
     else:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
-    if os.path.isfile(midway_file):  # 途中まで翻訳済みのファイルがあれば復元する
+    if os.path.isfile(midway_file):
+        # 途中まで翻訳済みのファイルがあれば復元する
         obj = RfcFile.read_json_file(midway_file)
     else:
         obj = RfcFile.read_json_file(input_file)
 
-    translator = TranslatorSeleniumGoogletrans(
-        total=len(obj['contents']),
-        desc='RFC %s' % rfc_number)
-    # is_canceled = False
+    translator = TranslatorSeleniumGoogletrans(total=len(obj[RfcJsonElem.CONTENTS]), desc='RFC %s' % rfc_number)
 
     try:
         # タイトルの翻訳
-        if not obj['title'].get('ja'):
-            titles = obj['title']['text'].split(' - ', 1)  # "RFC XXXX - Title"
+        if not obj[RfcJsonElem.TITLE].get(RfcJsonElem.Title.JA):
+            titles = obj[RfcJsonElem.TITLE][RfcJsonElem.Title.TEXT].split(' - ', 1)  # "RFC XXXX - Title"
             if len(titles) <= 1:
-                obj['title']['ja'] = "RFC %s" % rfc_number
+                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s" % rfc_number
             else:
                 text = titles[1]
                 ja = translator.translate(text)
-                obj['title']['ja'] = "RFC %s - %s" % (rfc_number, ja)
+                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s - %s" % (rfc_number, ja)
 
         # 段落の翻訳
-        for i, obj_contents_i in enumerate(obj['contents']):
+        for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
 
             # 既に翻訳済みの段落はスキップする
-            if obj_contents_i.get('ja'):
+            if obj_contents_i.get(RfcJsonElem.Contents.JA):
                 translator.increment_progress()  # 進捗+1
                 continue
 
             # 英語原文
-            text = obj_contents_i['text']
+            text = obj_contents_i[RfcJsonElem.Contents.TEXT]
             # 英語原文の前文字（箇条書きの記号などを翻訳しないようにするため）
             pre_text = ""
             # 日本語翻訳文
@@ -208,7 +205,7 @@ def trans_rfc(rfc_number: int | str) -> bool:
             # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
             pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
 
-            if obj_contents_i.get('raw') is True:
+            if obj_contents_i.get(RfcJsonElem.Contents.RAW) is True:
                 # 図表は翻訳しない
                 pre_text, text = ('', '')
             elif m := re.match(pattern, text):
@@ -225,7 +222,7 @@ def trans_rfc(rfc_number: int | str) -> bool:
             text_ja = translator.translate(text)
 
             # 翻訳結果を格納
-            obj['contents'][i]['ja'] = pre_text + text_ja
+            obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja
 
             translator.increment_progress()  # 進捗+1
 

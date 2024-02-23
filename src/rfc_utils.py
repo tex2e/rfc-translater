@@ -18,6 +18,20 @@ class RfcUtils:
         removed_xml = re.sub(rb' xmlns(:[^=]+)?="[^"]+"', rb'', xml, count=1)
         return removed_xml
 
+    # RFC番号の取得 (文字列)
+    @staticmethod
+    def get_rfc_number_str(text: str) -> str:
+        if m := re.match(re.compile(r'RFC ?(\d+)', re.IGNORECASE), text):
+            return m[1]
+        return None
+
+    # RFC番号の取得 (文字列)
+    @staticmethod
+    def get_rfc_number_int(text: str) -> int:
+        if m := re.match(re.compile(r'RFC ?(\d+)', re.IGNORECASE), text):
+            return int(m[1])
+        return None
+
     # 文字列の先頭から「RFC」を除去
     @staticmethod
     def replace_rfcXXXX_to_XXXX(text: str) -> str:

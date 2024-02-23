@@ -8,9 +8,7 @@ import textwrap
 from lxml import html
 # from pprint import pprint
 from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile
-from datetime import datetime, timedelta, timezone
-JST = timezone(timedelta(hours=+9), 'JST')
+from .rfc_const import RfcFile, RfcJsonElem
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\x07\x07\x07'
@@ -291,14 +289,14 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
         is_draft = False
         url = RfcFile.get_url_rfc_html(rfc_number)
         url_txt = RfcFile.get_url_rfc_txt(rfc_number)
-        output_file = RfcFile.get_filepath_json(rfc_number)
+        output_file = RfcFile.get_filepath_data_json(rfc_number)
     elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
         # Draft版RFCのとき
         is_draft = True
         rfc_draft_id = m['rfc_draft_id']
         url = RfcFile.get_url_rfc_html(rfc_draft_id)
         url_txt = RfcFile.get_url_rfc_txt(rfc_draft_id)
-        output_file = RfcFile.get_filepath_json(rfc_draft_id)
+        output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
     else:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
@@ -385,26 +383,26 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
 
     # 段落情報をJSONに変換する
     obj = {
-        'title': {'text': title},
-        'number': rfc_number,
-        'created_at': str(datetime.now(JST)),
-        'updated_by': '',
-        'contents': [],
+        RfcJsonElem.TITLE: {RfcJsonElem.Title.TEXT: title},
+        RfcJsonElem.NUMBER: rfc_number,
+        RfcJsonElem.CREATED_AT: str(RfcUtils.get_now()),
+        RfcJsonElem.UPDATED_BY: '',
+        RfcJsonElem.CONTENTS: [],
     }
     if is_draft:
-        obj['is_draft'] = True
+        obj[RfcJsonElem.IS_DRAFT] = True
 
     for paragraph in paragraphs:
-        obj['contents'].append({
-            'indent': paragraph.indent,
-            'text': paragraph.text,
+        obj[RfcJsonElem.CONTENTS].append({
+            RfcJsonElem.Contents.INDENT: paragraph.indent,
+            RfcJsonElem.Contents.TEXT: paragraph.text,
         })
         if paragraph.is_section_title:
-            obj['contents'][-1]['section_title'] = True
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.SECTION_TITLE] = True
         if paragraph.is_code:
-            obj['contents'][-1]['raw'] = True
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.RAW] = True
         if paragraph.is_toc:
-            obj['contents'][-1]['toc'] = True
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TOC] = True
 
     # JSONの保存
     RfcFile.write_json_file(output_file, obj)

@@ -26,7 +26,7 @@ MODEL4 = "gpt-4-turbo-preview"
 
 def get_rfc_title(rfc_number: int) -> str:
     # 要約対象RFCのタイトルを表示
-    input_file = RfcFile.get_filepath_trans_json(rfc_number)
+    input_file = RfcFile.get_filepath_data_trans_json(rfc_number)
     if os.path.exists(input_file):
         # 翻訳済みRFC (json) の読み込み
         ctx = RfcFile.read_json_file(input_file)
@@ -35,6 +35,7 @@ def get_rfc_title(rfc_number: int) -> str:
     else:
         return None
 
+# RFCの要約作成
 def summarize_rfc(rfc_number: int, model: str, force: bool = False):
 
     if not model or len(model) == 0:
@@ -46,11 +47,12 @@ def summarize_rfc(rfc_number: int, model: str, force: bool = False):
         return False
 
     # RFC要約済みかの判定
-    output_summary_file = RfcFile.get_filepath_summary_json(rfc_number)
+    output_summary_file = RfcFile.get_filepath_data_summary_json(rfc_number)
     if os.path.exists(output_summary_file):
         print(f"[-] RFCの要約結果がすでに存在します！")
         return True
 
+    # TODO: ChatGPT 3.5 は2021/9までの情報しか持っていないため、RFCの発行年月で切り分けたい
     if rfc_number >= 8650:
         prompt = summarize_rfc_by_abstract(rfc_number, rfc_title, model)
     else:
@@ -98,11 +100,10 @@ def summarize_rfc(rfc_number: int, model: str, force: bool = False):
 
     # RFC要約の出力
     RfcFile.write_json_file(output_summary_file, obj)
-
     return True
 
+# RFC番号でChatGPTに要約してもらう
 def summarize_rfc_by_title(rfc_number: int, rfc_title: str, model: str = MODEL35):
-
     # GPTへ送信するプロンプト作成
     if model.lower().startswith("gpt-4"):
         return f"{rfc_title} についての要約、目的、利用場面、関連するRFCを3〜5行でまとめてください"
@@ -111,8 +112,8 @@ def summarize_rfc_by_title(rfc_number: int, rfc_title: str, model: str = MODEL35
     else:
         return f"{rfc_title} についての要約と目的を3行でまとめてください"
 
+# RFCの概要(Abstract)でChatGPTに要約してもらう
 def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = MODEL35):
-
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_xml(rfc_number))
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
