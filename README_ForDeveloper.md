@@ -86,16 +86,15 @@ pip3 install -r requirements.txt
 
 | ファイルパス | 説明 | 生成元プログラム |
 |-----------|-----|--------------|
-| html/obsoletes.json | 廃止RFCの一覧 | fetch_index.py (取得)
-| data/A000/rfcABCD.json | 段落区切りの文書 | fetch_rfc.py（取得）
-| data/A000/rfcABCD-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
-| html/rfcABCD.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）
+| html/data-rfc-list.json | 廃止RFC・WGの一覧 | fetch_wg.py (取得)
+| data/N000/rfcNXXX.json | 段落区切りの文書 | fetch_rfc.py（取得）
+| data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
+| html/rfcNXXX.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）
 | html/index.html | トップページの生成 | make_index.py (生成)
-| html/group-rfcs.json | WGの一覧の取得・生成 | fetch_index_group.py (取得・生成)
-| data/draft/WG/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
-| data/draft/WG/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
-| html/draft/index.html | RFCドラフト一覧のトップページHTML | make_html.py（生成）
+| data/draft/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
+| data/draft/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
 | html/draft/draft-*.html | RFCドラフトの原文と翻訳を並べて表示するHTML | make_html.py（生成）
+| html/draft/index.html | RFCドラフト一覧のトップページHTML | make_html.py（生成）
 
 
 ### 翻訳結果確認
