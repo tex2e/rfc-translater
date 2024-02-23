@@ -114,6 +114,12 @@ python3 -m unittest discover -s tests -p "test_*.py"
 python3 -m unittest tests.test_fetch_rfc.TestFetchRfcSectionTitle.test_section_title
 ```
 
+### Draft版の全RFCのHTMLを再作成する
+
+```bash
+find data/draft -name '*' -type f -exec /bin/bash -c '/opt/homebrew/bin/python3 main.py --draft $(basename {} -trans.json) --make' \;
+```
+
 ### その他
 
 #### 図表・ソースコードをJSONへ変換する
