@@ -792,6 +792,8 @@ default_options.__dict__ = {
 import six
 import inspect
 from collections import namedtuple
+import copy
+from wcwidth import wcswidth  # pip install wcwidth
 
 MAX_WIDTH = 72
 SPLITTER_WIDTH = 67
@@ -799,29 +801,46 @@ SPLITTER_WIDTH = 67
 stripspace = " \t\n\r\f\v"
 
 class Line(object):
-    def __init__(self, text, elem):
+    def __init__(self, text, elem, mybreak=False):
         assert isinstance(text, six.text_type)
         self.text = text
         self.elem = elem
         self.page = None
         self.block = None
         self.keep = False               # keep this line with the previous one
+        self.mybreak = mybreak
 
-Joiner      = namedtuple('joiner', ['join', 'indent', 'hang', 'overlap', 'do_outdent'])
+Joiner = namedtuple('joiner', ['join', 'indent', 'hang', 'overlap', 'do_outdent'])
 
-import copy
-
-# import utils
-# wrapper = utils.TextWrapper(width=MAX_WIDTH)
 wrapper = TextWrapper(width=MAX_WIDTH)
-# splitter = utils.TextSplitter(width=SPLITTER_WIDTH)
 splitter = TextSplitter(width=SPLITTER_WIDTH)
-# seen = set()
 
-from wcwidth import wcswidth  # pip install wcwidth
 def textwidth(u):
     "Length of string, disregarding zero-width code points"
     return wcswidth(u)
+
+def align(lines, how, width):
+    "Align the given text block left, center, or right, as a block"
+    if not lines:
+        return lines
+    if how == 'left':
+        return lines
+    w = max( len(l.text) for l in lines )
+    if w >= width:
+        return lines
+    shift = width - w
+    if how == 'center':
+        for i, l in enumerate(lines):
+            if l.text.strip(stripspace):
+                lines[i].text = ' '*(shift//2)+l.text
+    elif how == 'right':
+        for i, l in enumerate(lines):
+            if l.text.strip(stripspace):
+                lines[i].text = ' '*(shift)+l.text
+    else:
+        # XXX TODO: Raise exception, catch in TextWriter, and emit error
+        pass
+    return lines
 
 def center(text, width, **kwargs):
     "Fold and center the given text"
@@ -845,54 +864,18 @@ def mklines(arg, e):
         lines = arg
     return lines
 
-def mktextblock(arg):
-    if isinstance(arg, six.text_type):
-        text = arg
-    else:
-        text = '\u2028'.join([ l.text for l in arg ])
-    return text
-
-def align(lines, how, width):
-    "Align the given text block left, center, or right, as a block"
-    if not lines:
-        return lines
-    if   how == 'left':
-        return lines
-    w = max( len(l.text) for l in lines )
-    if w >= width:
-        return lines
-    shift = width - w
-    if how == 'center':
-        for i, l in enumerate(lines):
-            if l.text.strip(stripspace):
-                lines[i].text = ' '*(shift//2)+l.text
-    elif how == 'right':
-        for i, l in enumerate(lines):
-            if l.text.strip(stripspace):
-                lines[i].text = ' '*(shift)+l.text
-    else:
-        # XXX TODO: Raise exception, catch in TextWriter, and emit error
-        pass
-    return lines
-
-def indent(text, indent=3, hang=0):
-    lines = []
-    text = text.replace('\u2028', '\n')
-    for l in text.split('\n'):
-        if l.strip(stripspace):
-            if lines:
-                lines.append(' '*(indent+hang) + l)
-            else:
-                lines.append(' '*indent + l)
-        else:
-            lines.append('')
-    return '\n'.join(lines)
-
 def mktext(arg):
     if isinstance(arg, six.text_type):
         text = arg
     else:
         text = '\n'.join([ l.text for l in arg ])
+    return text
+
+def mktextblock(arg):
+    if isinstance(arg, six.text_type):
+        text = arg
+    else:
+        text = '\u2028'.join([ l.text for l in arg ])
     return text
 
 def minwidth(arg):
@@ -911,13 +894,25 @@ def fill(text, **kwargs):
     initial=' '*(first+indent)
     subsequent_indent = ' '*(indent+hang)
     if keep:
-        # text = utils.urlkeep(text, max=kwargs['width'])
         text = urlkeep(text, max=kwargs['width'])
     result = wrapper.fill(text, initial=initial, subsequent_indent=subsequent_indent, **kwargs)
     return result
 
 def blankline():
     return [ Line('', None) ]
+
+def indent(text, indent=3, hang=0):
+    lines = []
+    text = text.replace('\u2028', '\n')
+    for l in text.split('\n'):
+        if l.strip(stripspace):
+            if lines:
+                lines.append(' '*(indent+hang) + l)
+            else:
+                lines.append(' '*indent + l)
+        else:
+            lines.append('')
+    return '\n'.join(lines)
 
 def lindent(lines, indent=3, hang=0):
     for i, l in enumerate(lines):
@@ -927,6 +922,7 @@ def lindent(lines, indent=3, hang=0):
             else:
                 lines[i].text = ' '*(indent) + l.text
     return lines
+
 
 class TextWriter:
 
@@ -940,13 +936,6 @@ class TextWriter:
         kwargs = copy.deepcopy(kw)
         func_name = "render_%s" % (e.tag.lower(),)
         func = getattr(self, func_name, self.default_renderer)
-        # if func == self.default_renderer:
-        #     # if e.tag in self.__class__.deprecated_element_tags:
-        #     #     self.warn(e, "Was asked to render a deprecated element: <%s>" % (e.tag, ))
-        #     # elif not e.tag in seen:
-        #     if not e.tag in seen:
-        #         # self.warn(e, "No renderer for <%s> found" % (e.tag, ))
-        #         seen.add(e.tag)
         res = func(e, width, **kwargs)
         return res
 
@@ -969,7 +958,11 @@ class TextWriter:
         lines = []
         for c in children:
             lines = self.ljoin(lines, c, width, **kwargs)
-        title = '\n'+center(title, width).rstrip(stripspace)
+
+        # 図と図のタイトルを分けるための独自要素の挿入
+        lines += [ Line('_____', None, mybreak=True) ]
+
+        title = '\n' + center(title, width).rstrip(stripspace)
         lines += mklines(title, e)
         return lines
 
@@ -1055,6 +1048,10 @@ class TextWriter:
         if table_width < min_title_width:
             table_width = min_title_width
             lines = align(lines, 'center', table_width)
+
+        # 表と表のタイトルを分けるための独自要素の挿入
+        lines += [ Line('_____', None, mybreak=True) ]
+
         title = '\n'+center(title, table_width).rstrip(stripspace)
         lines += mklines(title, e)
         lines = align(lines, e.get('align', 'center'), width)
@@ -1069,9 +1066,6 @@ class TextWriter:
             ctext = self.render(c, width, **kwargs)
             if isinstance(ctext, list):
                 ctext = "\n\n".join(ctext)
-            # if ctext is None and debug:
-            #     debug.show('e')
-            #     debug.show('c')
             text += '\n' + ctext
         text += e.tail or ''
         return text
@@ -1091,7 +1085,6 @@ class TextWriter:
         # models, either text or block-level children; deal with them
         # separately.  Return text and whether this was plain text.
         kwargs = copy.deepcopy(kw)
-        # if utils.hastext(e):
         if hastext(e):
             _tag = e.tag; e.tag = 't'
             text = mktext(self.ljoin([], e, width, **kwargs))

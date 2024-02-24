@@ -31,16 +31,18 @@ xml = page.content
 
 # RfcFile.write_html_file('zzz_fetched.xml', xml.decode('utf-8'))
 
-
 def get_elem_path(nests) -> str:
     return '/' + '/'.join([str(elem.tag) for elem in nests])
 
 def get_indent(nests) -> int:
-    def _convert_to_int(indent_str: str) -> int:
-        if indent_str == 'adaptive':
+    def _convert_to_indent_int(elem) -> int:
+        if elem.tag == 'aside':
+            return 6
+        indent_str = elem.attrib.get('indent', '0')
+        if indent_str == 'adaptive':  # RFC9000: <ol indent="adaptive">
             return 0
         return int(indent_str)
-    return sum([_convert_to_int(elem.attrib.get('indent', '0')) for elem in nests])
+    return sum([_convert_to_indent_int(elem) for elem in nests])
 
 def get_ul_nest_count(nests) -> int:
     return sum([1 for elem in nests if elem.tag == 'ul'])
@@ -50,8 +52,6 @@ def get_ul_li_symbol(nest_count: int) -> str:
     return LIST_SYMBOLS[(nest_count - 1) % 4]
 
 def start_tag(nests, elem, contents):
-    # global figure_name
-
     elem_path = get_elem_path(nests)
 
     # if elem.attrib.get('pn', '').startswith('section-1.3-'):
@@ -112,6 +112,7 @@ def start_tag(nests, elem, contents):
             indent += 3
 
         if re.match(r'^/rfc/.*?/ul/li$', elem_path):
+            # 箇条書き
             if re.match(r'^/rfc/.*?/toc', elem_path):
                 # TOCの目次の箇条書きを新規追加する
                 contents.append(Content(text, indent=indent, toc=True))
@@ -120,6 +121,12 @@ def start_tag(nests, elem, contents):
                 ul_nest_count = get_ul_nest_count(nests)
                 ul_li_symbol = get_ul_li_symbol(ul_nest_count)
                 contents.append(Content(text, indent=indent, list_item=ul_li_symbol))
+        # elif re.match(r'^/rfc/.*?/ol/li$', elem_path):
+        #     # 順序付き箇条書きを追加する
+        #     ul_nest_count = get_ul_nest_count(nests)
+        #     ul_li_symbol = get_ul_li_symbol(ul_nest_count)
+        #     contents.append(Content(text, indent=indent, list_item=ul_li_symbol))
+
         elif re.match(r'^/rfc/.*?/ul/li/t$', elem_path):
             # 箇条書き直下のtタグの内容を直前の要素（liの想定）追加する
             contents[-1].append_content(Content(text))
@@ -138,16 +145,52 @@ def start_tag(nests, elem, contents):
     elif elem.tag in ('table'):
         # 表
         textwriter = TextWriter()
-        res = textwriter.render_table(elem, width=MAX_WIDTH, joiners={})
-        text = '\n'.join([r.text for r in res])
-        contents.append(Content(text, raw=True))
+        table_lines = textwriter.render_table(elem, width=MAX_WIDTH, joiners={})
+        # text = '\n'.join([table_line.text for table_line in table_lines])
+        # contents.append(Content(text, raw=True))
+        # 表の内容
+        break_pos = 0
+        text = ''
+        for i, table_line in enumerate(table_lines):
+            # print(i, table_line.mybreak, table_line.text, file=sys.stderr)
+            if table_line.mybreak:
+                # print(i, file=sys.stderr)
+                break_pos = i
+                break
+            text += table_line.text + '\n'
+        indent = RfcUtils.get_indent(text)
+        contents.append(Content(text, indent=indent, raw=True))
+        # 表のタイトル
+        text = ''
+        for i, table_line in enumerate(table_lines[break_pos+1:]):
+            text += table_line.text + '\n'
+        indent = RfcUtils.get_indent(text)
+        contents.append(Content(text, indent=indent))
 
     elif elem.tag in ('figure'):
         # 図
         textwriter = TextWriter()
-        res = textwriter.render_figure(elem, width=MAX_WIDTH, joiners={})
-        text = '\n'.join([r.text for r in res])
-        contents.append(Content(text, raw=True))
+        figure_lines = textwriter.render_figure(elem, width=MAX_WIDTH, joiners={})
+        # text = '\n'.join([figure_line.text for figure_line in figure_lines])
+        # contents.append(Content(text, raw=True))
+        # 図の内容
+        break_pos = 0
+        text = ''
+        for i, figure_line in enumerate(figure_lines):
+            # print(i, figure_line.mybreak, figure_line.text, file=sys.stderr)
+            if figure_line.mybreak:
+                # print(i, file=sys.stderr)
+                break_pos = i
+                break
+            text += figure_line.text + '\n'
+        indent = RfcUtils.get_indent(text)
+        contents.append(Content(text, indent=indent, raw=True))
+        # 表のタイトル
+        text = ''
+        for i, figure_line in enumerate(figure_lines[break_pos+1:]):
+            text += figure_line.text + '\n'
+        indent = RfcUtils.get_indent(text)
+        contents.append(Content(text, indent=indent))
 
     elif len(nests) > 1 and nests[-2].tag == 't':
         # 任意のtタグ内のタグ (例：<bcp14>MUST NOT</bcp14>)
@@ -175,7 +218,6 @@ contents: list[Content] = []
 
 parser = lxml.etree.XMLPullParser(["start", "end"])
 parser.feed(xml.decode('utf-8'))
-
 for action, elem in parser.read_events():
     # print("%s: %s" % (action, elem.tag))
     if action == 'start':
