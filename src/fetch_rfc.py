@@ -5,7 +5,8 @@
 import os
 import re
 import textwrap
-from lxml import html
+# from lxml import html
+import lxml.html
 # from pprint import pprint
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
@@ -306,7 +307,7 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
 
     # RFCページのDOMツリーの取得
     page = RfcUtils.fetch_url(url)
-    tree = html.fromstring(RfcUtils.html_rm_link_tag(page.content))
+    tree = lxml.html.fromstring(RfcUtils.html_rm_link_tag(page.content))
 
     # タイトル取得
     title = tree.xpath('//title/text()')

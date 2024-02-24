@@ -1,15 +1,16 @@
 
+import os
 import re
 import sys
 import textwrap
 import datetime
 from pprint import pprint
+import lxml.etree
 import xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
 from rfc_utils import RfcUtils
-from rfc_const import RfcFile
-# from rfc_draw_txt import TextWriter
+from rfc_const import RfcFile, RfcJsonElem
 
 
 class Content:
@@ -23,11 +24,6 @@ class Content:
         self.list_item = list_item
         self.tag = tag
 
-url = RfcFile.get_url_rfc_xml(9000)
-page = RfcUtils.fetch_url(url)
-xml = page.content
-
-nests = []
 contents: list[Content] = []
 
 dt_now = datetime.datetime.now()
@@ -37,7 +33,7 @@ default_options.pagination = False
 def get_parent(elem):
     return elem.find('..')
 
-def has_ancestor(elem, tagname):
+def has_ancestor(elem, tagname: str) -> bool:
     current = elem
     while True:
         parent = get_parent(current)
@@ -47,7 +43,7 @@ def has_ancestor(elem, tagname):
             return True
         current = parent
 
-def get_tag_path(elem):
+def get_tag_path(elem) -> str:
     return '/' + '/'.join([a.tag for a in elem.iterancestors()][::-1]) + '/' + elem.tag
 
 # nameタグ
@@ -231,29 +227,125 @@ def new_textwriter_render_author(self, e, width, **kwargs):
     return res
 TextWriter.render_author = new_textwriter_render_author
 
-# XML解析
-options_for_xmlrfcparser = dict()
-parser = xml2rfc.XmlRfcParser(None, quiet=False, options=default_options, **options_for_xmlrfcparser)
-parser.text = xml
-xmlrfc = parser.parse()
-writer = xml2rfc.TextWriter(xmlrfc, quiet=True)
-rfc_txt = writer.process()
 
 
-# デバッグ
-for content in contents:
-    if content.section_title:
-        print(f'\n### {content.text}')
-        print('')
+
+# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
+# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
+class RFCNotFound(Exception):
+    pass
+
+
+# [EntryPoint]
+# RFCの取得処理
+def fetch_rfc(rfc_number: int | str, force=False) -> None:
+
+    if type(rfc_number) is int:
+        # RFCのとき
+        is_draft = False
+        url = RfcFile.get_url_rfc_html(rfc_number)
+        url_xml = RfcFile.get_url_rfc_xml(rfc_number)
+        output_file = RfcFile.get_filepath_data_json(rfc_number)
+    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        # Draft版RFCのとき
+        is_draft = True
+        rfc_draft_id = m['rfc_draft_id']
+        url = RfcFile.get_url_rfc_html(rfc_draft_id)
+        url_xml = RfcFile.get_url_rfc_xml(rfc_draft_id)
+        output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
     else:
-        print(f'[*] indent={content.indent}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
-        content_text = textwrap.dedent(content.text)
-        content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
-        content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
-        if not content.raw:
-            content_text = content_text.lstrip()
-        if content.list_item:
-            content_text = f'{content.list_item}  {content_text}'
-        print(textwrap.indent(content_text, prefix=(" " * content.indent)))
-        print('')
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
+    # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
+    if not force and os.path.isfile(output_file):
+        return
+
+    # RFCページのDOMツリーの取得
+    page = RfcUtils.fetch_url(url)
+    tree = lxml.html.fromstring(RfcUtils.html_rm_link_tag(page.content))
+
+    # タイトル取得
+    title = tree.xpath('//title/text()')
+    if len(title) == 0:
+        raise RFCNotFound
+    title = title[0].strip()
+
+    # タイトルの取得（パターンマッチ）
+    if re.match(r'RFC [^ ]+ - .*$', title):  # RFC
+        tmp = title
+        tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
+        tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
+        tmp = re.sub(r'^RFC (\d+) -', f'RFC {rfc_number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
+        # title = "RFC %s - %s" % (number, tmp)
+        title = tmp
+    elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
+        title = title
+    else:
+        # タイトルがRFC形式と一致しない場合
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc_number, title))
+
+    # RFC (XML) の取得
+    global contents
+    contents: list[Content] = []
+    # url: str = RfcFile.get_url_rfc_xml(9000)
+    page = RfcUtils.fetch_url(url_xml)
+    xml: bytes = page.content
+
+    # XML解析
+    options_for_xmlrfcparser = dict()
+    parser = xml2rfc.XmlRfcParser(None, quiet=False, options=default_options, **options_for_xmlrfcparser)
+    parser.text = xml
+    xmlrfc = parser.parse()
+    writer = xml2rfc.TextWriter(xmlrfc, quiet=True)
+    rfc_txt = writer.process()
+
+
+    # デバッグ
+    for content in contents:
+        if content.section_title:
+            print(f'\n### {content.text}')
+            print('')
+        else:
+            print(f'[*] indent={content.indent}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
+            content_text = textwrap.dedent(content.text)
+            content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
+            content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
+            if not content.raw:
+                content_text = content_text.lstrip()
+            if content.list_item:
+                content_text = f'{content.list_item}  {content_text}'
+            print(textwrap.indent(content_text, prefix=(" " * content.indent)))
+            print('')
+
+    paragraphs = contents
+
+
+    # 段落情報をJSONに変換する
+    obj = {
+        RfcJsonElem.TITLE: {RfcJsonElem.Title.TEXT: title},
+        RfcJsonElem.NUMBER: rfc_number,
+        RfcJsonElem.CREATED_AT: str(RfcUtils.get_now()),
+        RfcJsonElem.UPDATED_BY: '',
+        RfcJsonElem.CONTENTS: [],
+    }
+    if is_draft:
+        obj[RfcJsonElem.IS_DRAFT] = True
+
+    for paragraph in paragraphs:
+        obj[RfcJsonElem.CONTENTS].append({
+            RfcJsonElem.Contents.INDENT: paragraph.indent,
+            RfcJsonElem.Contents.TEXT: paragraph.text,
+        })
+        if paragraph.is_section_title:
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.SECTION_TITLE] = True
+        if paragraph.is_code:
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.RAW] = True
+        if paragraph.is_toc:
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TOC] = True
+
+    # JSONの保存
+    RfcFile.write_json_file(output_file, obj)
+
+
+if __name__ == '__main__':
+    fetch_rfc(9000)
