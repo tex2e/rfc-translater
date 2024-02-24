@@ -1,17 +1,23 @@
 
 import re
+import sys
+import textwrap
+from io import BytesIO
 from pprint import pprint
-from lxml import etree
+import lxml.etree
 from rfc_utils import RfcUtils
 from rfc_const import RfcFile
+from rfc_draw_txt import TextWriter, MAX_WIDTH
+
 
 class Content:
-    def __init__(self, text: str, indent=0, section_title=False, raw=False, toc=False) -> None:
+    def __init__(self, text: str, indent=0, section_title=False, raw=False, toc=False, list_item=False) -> None:
         self.text = text
         self.indent = indent
         self.section_title = section_title
         self.raw = raw
         self.toc = toc
+        self.list_item = list_item
 
     def append_content(self, content):
         self.text += content.text
@@ -23,8 +29,8 @@ url = RfcFile.get_url_rfc_xml(9000)
 page = RfcUtils.fetch_url(url)
 xml = page.content
 
-import textwrap
-from io import BytesIO
+# RfcFile.write_html_file('zzz_fetched.xml', xml.decode('utf-8'))
+
 
 def get_elem_path(nests) -> str:
     return '/' + '/'.join([str(elem.tag) for elem in nests])
@@ -36,31 +42,51 @@ def get_indent(nests) -> int:
         return int(indent_str)
     return sum([_convert_to_int(elem.attrib.get('indent', '0')) for elem in nests])
 
+def get_ul_nest_count(nests) -> int:
+    return sum([1 for elem in nests if elem.tag == 'ul'])
+
+def get_ul_li_symbol(nest_count: int) -> str:
+    LIST_SYMBOLS = ('*', '-', 'o', '+')
+    return LIST_SYMBOLS[(nest_count - 1) % 4]
+
 def start_tag(nests, elem, contents):
+    # global figure_name
+
     elem_path = get_elem_path(nests)
 
-    if re.match(r'^/rfc/.*?/section/name$', elem_path) and elem.tag == 'name':
+    # if elem.attrib.get('pn', '').startswith('section-1.3-'):
+    #     print(elem_path, file=sys.stderr)
+    #     print(elem, file=sys.stderr)
+    #     print(elem.attrib, file=sys.stderr)
+    #     print(elem.text, file=sys.stderr)
+    #     print(elem.tail, file=sys.stderr)
+    #     print(etree.tostring(elem), file=sys.stderr)
 
-        # セクションのタイトル
-        text = elem.text
-        parent_pn = nests[-2].attrib.get('pn', '')
-        pre_text = re.sub(r'section-(?:abstract.*|boilerplate.*|toc.*)?', '', parent_pn)
-        if len(pre_text) > 0:
-            text = f'{pre_text} {text}'
-        contents.append(Content(text, section_title=True))
-
-        # TODO: elem.tail で取りこぼしたテキストも要素に加える
+    if elem.tag == 'name':
+        # タイトル
+        if re.match(r'^/rfc/.*?/section/name$', elem_path):
+            # セクションのタイトル
+            text = elem.text
+            parent_pn = nests[-2].attrib.get('pn', '')
+            pre_text = re.sub(r'section-(?:abstract.*|boilerplate.*|toc.*)?', '', parent_pn)
+            if len(pre_text) > 0:
+                text = f'{pre_text}. {text}'
+            contents.append(Content(text, section_title=True))
 
     elif elem.tag in ('link', 'seriesInfo', 'date'):
         pass
 
     elif elem.tag in ('eref', 'xref'):
-
         # リンク
-        if elem.tag == 'eref':
+        if re.match(r'^/rfc/.*?/table/', elem_path):
+            # 表の中のリンクはtableタグの解析で取得するため、ここでは何もしない
+            pass
+        elif elem.tag == 'eref':
+            # erefタグ
             text = elem.attrib.get('target')
             contents[-1].append_content(Content(text))
         elif elem.tag == 'xref':
+            # xrefタグ
             if elem.text and len(elem.text) > 0:
                 # TOC
                 text = elem.text
@@ -74,22 +100,34 @@ def start_tag(nests, elem, contents):
                 text = f"{elem.attrib.get('derivedContent')}"
                 contents[-1].append_content(Content(text))
 
-        # タグ終了後のテキスト (tタグ)
-        text = elem.tail
-        if text is not None:
-            contents[-1].append_content(Content(text))
-
-    elif elem.tag in ('t'):
-
+    elif elem.tag in ('t', 'li'):
         # タグ内のテキスト (tタグ)
-        indent = get_indent(nests)
         text = elem.text
         if text is None:
             text = ''
-        contents.append(Content(text, indent=indent))
+
+        indent = get_indent(nests)
+        if re.match(r'^/rfc/.*?/dd/t$', elem_path):
+            # 定義のときは定義内容にインデントを追加する
+            indent += 3
+
+        if re.match(r'^/rfc/.*?/ul/li$', elem_path):
+            if re.match(r'^/rfc/.*?/toc', elem_path):
+                # TOCの目次の箇条書きを新規追加する
+                contents.append(Content(text, indent=indent, toc=True))
+            else:
+                # 箇条書きを新規追加する
+                ul_nest_count = get_ul_nest_count(nests)
+                ul_li_symbol = get_ul_li_symbol(ul_nest_count)
+                contents.append(Content(text, indent=indent, list_item=ul_li_symbol))
+        elif re.match(r'^/rfc/.*?/ul/li/t$', elem_path):
+            # 箇条書き直下のtタグの内容を直前の要素（liの想定）追加する
+            contents[-1].append_content(Content(text))
+        else:
+            # 新規追加する
+            contents.append(Content(text, indent=indent))
 
     elif elem.tag in ('dt'):
-
         # 定義 (dl,dt,ddタグ)
         indent = get_indent(nests)
         text = elem.text
@@ -98,22 +136,47 @@ def start_tag(nests, elem, contents):
         contents.append(Content(text, indent=indent))
 
     elif elem.tag in ('table'):
-        pass
-        # TODO: !!! HTMLテーブルをMarkdownテーブルに変換する処理が必要。表のタイトルも下に追加する
+        # 表
+        textwriter = TextWriter()
+        res = textwriter.render_table(elem, width=MAX_WIDTH, joiners={})
+        text = '\n'.join([r.text for r in res])
+        contents.append(Content(text, raw=True))
 
     elif elem.tag in ('figure'):
-        pass
-        # TODO: !!! raw=Trueでcontentsに追加する。加えて図のタイトルも下に追加する
+        # 図
+        textwriter = TextWriter()
+        res = textwriter.render_figure(elem, width=MAX_WIDTH, joiners={})
+        text = '\n'.join([r.text for r in res])
+        contents.append(Content(text, raw=True))
+
+    elif len(nests) > 1 and nests[-2].tag == 't':
+        # 任意のtタグ内のタグ (例：<bcp14>MUST NOT</bcp14>)
+        text = elem.text
+        if text:
+            contents[-1].append_content(Content(text))
+
+    elif elem.tag == 'abstract':
+        # 概要（セクションのタイトル）
+        text = 'Abstract'
+        contents.append(Content(text, section_title=True))
+
+    # タグ終了後の取りこぼしを追加する
+    tail = elem.tail
+    if tail and re.match(r'^/rfc/.*?/(?:t|li)/.*?$', elem_path):
+        text = tail
+        contents[-1].append_content(Content(text))
 
 
 def end_tag(nests, elem, contents):
-    pass
+    return
 
 nests = []
 contents: list[Content] = []
 
-context = etree.iterparse(BytesIO(xml), events=("start", "end"))
-for action, elem in context:
+parser = lxml.etree.XMLPullParser(["start", "end"])
+parser.feed(xml.decode('utf-8'))
+
+for action, elem in parser.read_events():
     # print("%s: %s" % (action, elem.tag))
     if action == 'start':
         nests.append(elem)
@@ -123,12 +186,20 @@ for action, elem in context:
             nests.pop()
         end_tag(nests, elem, contents)
 
-
+# デバッグ
 for content in contents:
-    print(f'[*]')
     if content.section_title:
         print(f'\n### {content.text}')
+        print('')
     else:
-        print(f'indent={content.indent}')
-        print(textwrap.indent(content.text, prefix=(" " * content.indent)))
+        print(f'[*] indent={content.indent}, toc={content.toc}, raw={content.raw}')
+        content_text = textwrap.dedent(content.text)
+        content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
+        content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
+        if not content.raw:
+            content_text = content_text.lstrip()
+        if content.list_item:
+            content_text = f'{content.list_item}  {content_text}'
+        print(textwrap.indent(content_text, prefix=(" " * content.indent)))
+        print('')
 
