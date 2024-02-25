@@ -337,6 +337,7 @@ class RFCNotFound(Exception):
 
 # RFCの取得処理 (XML版)
 def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
+    print("[*] fetch_rfc_xml(%s)" % rfc_number)
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -397,23 +398,23 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
     rfc_txt = writer.process()
     # 解析後はグローバル変数contentsに段落ごとの情報が格納される
 
-    # デバッグ
-    for content in contents:
-        print(f'[*] indent={content.indent}, section_title={content.section_title}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
-        if content.section_title:
-            print('')
-            print(f'### {content.text}')
-            print('')
-        else:
-            content_text = textwrap.dedent(content.text)
-            content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
-            content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
-            if not content.raw:
-                content_text = content_text.lstrip()
-            if content.list_item:
-                content_text = f'{content.list_item} {content_text}'
-            print(textwrap.indent(content_text, prefix=(" " * content.indent)))
-            print('')
+    # # デバッグ
+    # for content in contents:
+    #     print(f'[*] indent={content.indent}, section_title={content.section_title}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
+    #     if content.section_title:
+    #         print('')
+    #         print(f'### {content.text}')
+    #         print('')
+    #     else:
+    #         content_text = textwrap.dedent(content.text)
+    #         content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
+    #         content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
+    #         if not content.raw:
+    #             content_text = content_text.lstrip()
+    #         if content.list_item:
+    #             content_text = f'{content.list_item} {content_text}'
+    #         print(textwrap.indent(content_text, prefix=(" " * content.indent)))
+    #         print('')
 
     # 段落情報をJSONに変換する
     obj = {

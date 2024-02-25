@@ -9,11 +9,13 @@ from src.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 
+fetch_rfc_mode: str = 'xml'
+
 def main(rfc_number: int | str) -> None:
     print('[*] RFC %s:' % rfc_number)
 
     try:
-        fetch_rfc(rfc_number)
+        fetch_rfc(rfc_number, fetch_rfc_mode)
     except RFCNotFound:
         print('Exception: RFCNotFound!')
         filename = "html/rfc%s-not-found.html" % rfc_number
@@ -58,7 +60,11 @@ if __name__ == '__main__':
     ap.add_argument('--summarize',        action='store_true', help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
     ap.add_argument('--classify',         action='store_true', help='Classify RFC by ChatGPT  (ex. --clasify --rfc 8446)')
     ap.add_argument('--chatgpt',          type=str,            help='ChatGPT model version    (ex. --chatgpt gpt-3.5-turbo)')
+    ap.add_argument('--txt',              action='store_true', help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
     args = ap.parse_args()
+
+    if args.txt:
+        fetch_rfc_mode = 'txt'
 
     # RFCの指定（複数の場合はカンマ区切り）
     rfcs = None
@@ -97,7 +103,7 @@ if __name__ == '__main__':
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc in rfcs:
             print("[*] RFC %s を取得" % rfc)
-            fetch_rfc(rfc, args.force)
+            fetch_rfc(rfc, args.force, fetch_rfc_mode)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
         for rfc in rfcs:

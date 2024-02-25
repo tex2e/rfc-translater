@@ -282,6 +282,7 @@ class RFCNotFound(Exception):
 
 # RFCの取得処理 (TXT版)
 def fetch_rfc_txt(rfc_number: int | str, force=False) -> None:
+    print("[*] fetch_rfc_txt(%s)" % rfc_number)
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -409,8 +410,8 @@ def fetch_rfc_txt(rfc_number: int | str, force=False) -> None:
 
 # [EntryPoint]
 # RFCの取得処理
-def fetch_rfc(rfc_number: int | str, force=False) -> None:
-    if rfc_number >= 8560:
+def fetch_rfc(rfc_number: int | str, force=False, fetch_rfc_mode='xml') -> None:
+    if rfc_number >= 8560 or fetch_rfc_mode == 'xml':
         from .fetch_rfc_xml import fetch_rfc_xml
         fetch_rfc_xml(rfc_number, force)
     else:
