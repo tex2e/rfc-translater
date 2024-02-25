@@ -4,13 +4,13 @@ import re
 import sys
 import textwrap
 import datetime
-from pprint import pprint
+# from pprint import pprint
 import lxml.etree
 import xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
-from rfc_utils import RfcUtils
-from rfc_const import RfcFile, RfcJsonElem
+from .rfc_utils import RfcUtils
+from .rfc_const import RfcFile, RfcJsonElem
 
 
 class Content:
@@ -335,9 +335,8 @@ class RFCNotFound(Exception):
     pass
 
 
-# [EntryPoint]
-# RFCの取得処理
-def fetch_rfc(rfc_number: int | str, force=False) -> None:
+# RFCの取得処理 (XML版)
+def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -447,4 +446,4 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
 
 
 if __name__ == '__main__':
-    fetch_rfc(9000)
+    fetch_rfc_xml(9000)

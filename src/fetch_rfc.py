@@ -5,7 +5,6 @@
 import os
 import re
 import textwrap
-# from lxml import html
 import lxml.html
 # from pprint import pprint
 from .rfc_utils import RfcUtils
@@ -281,9 +280,8 @@ class RFCNotFound(Exception):
     pass
 
 
-# [EntryPoint]
-# RFCの取得処理
-def fetch_rfc(rfc_number: int | str, force=False) -> None:
+# RFCの取得処理 (TXT版)
+def fetch_rfc_txt(rfc_number: int | str, force=False) -> None:
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -407,6 +405,16 @@ def fetch_rfc(rfc_number: int | str, force=False) -> None:
 
     # JSONの保存
     RfcFile.write_json_file(output_file, obj)
+
+
+# [EntryPoint]
+# RFCの取得処理
+def fetch_rfc(rfc_number: int | str, force=False) -> None:
+    if rfc_number >= 8560:
+        from .fetch_rfc_xml import fetch_rfc_xml
+        fetch_rfc_xml(rfc_number, force)
+    else:
+        fetch_rfc_txt(rfc_number, force)
 
 
 if __name__ == '__main__':
