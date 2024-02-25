@@ -408,15 +408,14 @@ def fetch_rfc_txt(rfc_number: int | str, force=False) -> None:
     RfcFile.write_json_file(output_file, obj)
 
 
-# [EntryPoint]
-# RFCの取得処理
-def fetch_rfc(rfc_number: int | str, force=False, fetch_rfc_mode='xml') -> None:
-    if rfc_number >= 8560 or fetch_rfc_mode == 'xml':
-        from .fetch_rfc_xml import fetch_rfc_xml
-        fetch_rfc_xml(rfc_number, force)
-    else:
-        fetch_rfc_txt(rfc_number, force)
-
+# # [EntryPoint]
+# # RFCの取得処理
+# def fetch_rfc(rfc_number: int | str, force=False, fetch_rfc_mode='xml') -> None:
+#     if rfc_number >= 8560 or fetch_rfc_mode == 'xml':
+#         from .fetch_rfc_xml import fetch_rfc_xml
+#         fetch_rfc_xml(rfc_number, force)
+#     else:
+#         fetch_rfc_txt(rfc_number, force)
 
 if __name__ == '__main__':
     # import argparse

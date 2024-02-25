@@ -197,6 +197,7 @@ class RfcJsonElem:
         INDENT = 'indent'
         TEXT = 'text'
         JA = 'ja'
+        TITLE = 'title'
         SECTION_TITLE = 'section_title'
         RAW = 'raw'
         TOC = 'toc'

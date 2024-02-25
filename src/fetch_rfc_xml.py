@@ -14,10 +14,11 @@ from .rfc_const import RfcFile, RfcJsonElem
 
 
 class Content:
-    def __init__(self, text: str, indent=0, section_title=False, raw=False,
-                 toc=False, list_item=False, tag='') -> None:
+    def __init__(self, text: str, indent=0, title=False, section_title=False, 
+                 raw=False, toc=False, list_item=False, tag='') -> None:
         self.text = text
         self.indent = indent
+        self.title = title
         self.section_title = section_title
         self.raw = raw
         self.toc = toc
@@ -34,6 +35,8 @@ class Content:
         # 以下xml2rfc対応処理
         self.text = re.sub(r'\xa0', ' ', self.text)  # "Section 1" の空白を正規化する
         self.text = re.sub(r'‑', '-', self.text)  # "[QUIC‑RECOVERY]" のハイフンを正規化する
+        # # Line Separator (\x2028) と Paragraph Separator (\x2029) の削除
+        # self.text = re.sub(r'\x2028|\x2029', '', self.text)
 
 # RFCの段落情報を格納するためのグローバル変数
 contents: list[Content] = []
@@ -255,7 +258,7 @@ def new_textwriter_render_first_page_top(self, e, width, **kwargs):
         # タイトル
         indent = RfcUtils.get_indent(fronttitle.lstrip('\n'))
         fronttitle = textwrap.dedent(fronttitle.lstrip('\n'))
-        contents.append(Content(fronttitle, indent=indent, tag=get_tag_path(e)))
+        contents.append(Content(fronttitle, indent=indent, title=True, section_title=True, tag=get_tag_path(e)))
     return res
 TextWriter.render_first_page_top = new_textwriter_render_first_page_top
 
@@ -318,7 +321,7 @@ TextWriter.render_reference = new_textwriter_render_reference
 textwriter_render_author = TextWriter.render_author
 def new_textwriter_render_author(self, e, width, **kwargs):
     res = textwriter_render_author(self, e, width, **kwargs)
-    if e.get('role'):
+    if get_parent(e).tag == 'section':
         text = '\n'.join([r.text for r in res])
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
@@ -435,6 +438,8 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
             RfcJsonElem.Contents.INDENT: content.indent,
             RfcJsonElem.Contents.TEXT: content.text,
         })
+        if content.title:
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TITLE] = True
         if content.section_title:
             obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.SECTION_TITLE] = True
         if content.raw:
