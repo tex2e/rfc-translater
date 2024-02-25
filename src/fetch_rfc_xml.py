@@ -12,6 +12,11 @@ from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
 
+dt_now = datetime.datetime.now()
+default_options.date = dt_now
+default_options.pagination = False
+default_options.rfc = True
+
 
 class Content:
     def __init__(self, text: str, indent=0, title=False, section_title=False, 
@@ -40,11 +45,6 @@ class Content:
 
 # RFCの段落情報を格納するためのグローバル変数
 contents: list[Content] = []
-
-dt_now = datetime.datetime.now()
-default_options.date = dt_now
-default_options.pagination = False
-default_options.rfc = True
 
 def get_parent(elem):
     return elem.find('..')
@@ -102,8 +102,8 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         if parent.tag in ('ul', 'ol'):
             ancestor_ul_or_ol = parent.tag
             break
-    if has_ancestor(e, tagname='dd') or has_ancestor(e, tagname='toc'):
-        # 親要素が定義(dd)、目次(toc) のときは何もしない
+    if has_ancestor(e, tagname='dl') or has_ancestor(e, tagname='toc'):
+        # 親要素が定義(dl)、目次(toc) のときは何もしない
         pass
     elif ancestor_ul_or_ol == 'ul':
         # 親要素が箇条書きリスト(ul > li)のとき
@@ -127,7 +127,7 @@ def new_textwriter_render_t(self, e, width, **kwargs):
                   sum([a._padding for a in ancestor_uls if hasattr(a, '_padding')]))
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     elif e.attrib.get('pn'):
-        # 親要素が定義(dd)、目次(toc)ではないとき
+        # tタグ
         text = '\n'.join([r.text for r in res])
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
@@ -145,7 +145,7 @@ textwriter_render_dt = TextWriter.render_dt
 def new_textwriter_render_dt(self, e, width, **kwargs):
     res = textwriter_render_dt(self, e, width, **kwargs)
     if e.attrib.get('pn'):
-        text = '\n'.join([r.text for r in res])
+        text = '\n'.join([r.text for r in res]).rstrip('\n')
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         indent = j.indent + 3  # インデント追加
@@ -159,10 +159,10 @@ textwriter_render_dd = TextWriter.render_dd
 def new_textwriter_render_dd(self, e, width, **kwargs):
     res = textwriter_render_dd(self, e, width, **kwargs)
     if e.attrib.get('pn'):
-        text = '\n'.join([r.text for r in res]).lstrip()
+        text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
-        indent = j.indent + 3  # インデント追加
+        indent = j.indent + 9  # インデント追加
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     return res
 TextWriter.render_dd = new_textwriter_render_dd
@@ -176,7 +176,7 @@ def new_textwriter_render_artwork(self, e, width, **kwargs):
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         base_indent = j.indent
-        artwork = '\n'.join([r.text for r in res])
+        artwork = '\n'.join([r.text for r in res]).rstrip('\n')
         artwork = artwork.strip('\n')
         indent = base_indent + RfcUtils.get_indent(artwork)
         text = textwrap.dedent(artwork)
@@ -190,7 +190,7 @@ textwriter_render_figure = TextWriter.render_figure
 def new_textwriter_render_figure(self, e, width, **kwargs):
     res = textwriter_render_figure(self, e, width, **kwargs)
     if e.attrib.get('pn'):
-        text = '\n'.join([r.text for r in res])
+        text = '\n'.join([r.text for r in res]).rstrip('\n')
         if matchobj := re.finditer(re.compile(r'^\s*Figure \d+:', re.MULTILINE), text):
             m = [m for m in matchobj][-1]
             fig = text[0:m.start()]
@@ -279,7 +279,7 @@ def new_textwriter_render_toc(self, e, width, **kwargs):
     res = textwriter_render_toc(self, e, width, **kwargs)
     if len(res) > 0 and re.match(r'Table[\s]of[\s]Contents', res[0].text):
         res = res[1:]  # 最初の行 ("Table of Contents") は削除
-        toc = '\n'.join([r.text for r in res])
+        toc = '\n'.join([r.text for r in res]).rstrip('\n')
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         base_indent = j.indent
@@ -296,7 +296,7 @@ textwriter_render_referencegroup = TextWriter.render_referencegroup
 def new_textwriter_render_referencegroup(self, e, width, **kwargs):
     res = textwriter_render_referencegroup(self, e, width, **kwargs)
     if e.get('anchor'):
-        text = '\n'.join([r.text for r in res])
+        text = '\n'.join([r.text for r in res]).rstrip('\n')
         indent = 3
         contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
     return res
@@ -308,7 +308,7 @@ textwriter_render_reference = TextWriter.render_reference
 def new_textwriter_render_reference(self, e, width, **kwargs):
     res = textwriter_render_reference(self, e, width, **kwargs)
     if e.get('anchor') and not has_ancestor(e, tagname='referencegroup'):
-        text = '\n'.join([r.text for r in res])
+        text = '\n'.join([r.text for r in res]).rstrip('\n')
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         indent = j.indent
@@ -322,7 +322,7 @@ textwriter_render_author = TextWriter.render_author
 def new_textwriter_render_author(self, e, width, **kwargs):
     res = textwriter_render_author(self, e, width, **kwargs)
     if get_parent(e).tag == 'section':
-        text = '\n'.join([r.text for r in res])
+        text = '\n'.join([r.text for r in res]).rstrip('\n')
         joiners = kwargs['joiners']
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         indent = j.indent

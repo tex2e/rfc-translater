@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 
 import sys
-from fetch_rfc_txt import fetch_rfc_txt, RFCNotFound
+from src.fetch_rfc_txt import fetch_rfc_txt, RFCNotFound
 from src.fetch_rfc_xml import fetch_rfc_xml
 from src.trans_rfc import trans_rfc
 from src.make_html import make_html
@@ -43,17 +43,11 @@ def main():
                     help='Do translate test')
     ap.add_argument('--summarize', action='store_true',
                     help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
-    ap.add_argument('--classify', action='store_true',
-                    help='Classify RFC by ChatGPT (ex. --clasify --rfc 8446)')
     ap.add_argument('--chatgpt', type=str,
                     help='ChatGPT model version (ex. --chatgpt gpt-3.5-turbo)')
     ap.add_argument('--txt', action='store_true',
                     help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
     args = ap.parse_args()
-
-    fetch_rfc_mode = 'xml'
-    if args.txt:
-        fetch_rfc_mode = 'txt'
 
     # RFCの指定（複数の場合はカンマ区切り）
     rfcs = None
@@ -91,8 +85,8 @@ def main():
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc_number in rfcs:
-            print("[*] RFC %s を取得" % rfc)
-            if (isinstance(rfc_number, int) and rfc_number >= 8560) or fetch_rfc_mode == 'xml':
+            print("[*] RFC %s を取得" % rfc_number)
+            if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
                 fetch_rfc_xml(rfc_number, args.force)
             else:
                 fetch_rfc_txt(rfc_number, args.force)
@@ -125,10 +119,10 @@ def main():
         ap.print_help()
     print("[+] 正常終了 %s" % sys.argv[0])
 
-def fetch_trans_make(rfc_number: int | str, fetch_rfc_mode='xml', force=False) -> None:
+def fetch_trans_make(rfc_number: int | str, args_txt: bool, force=False) -> None:
     print('[*] RFC %s:' % rfc_number)
     try:
-        if (isinstance(rfc_number, int) and rfc_number >= 8560) or fetch_rfc_mode == 'xml':
+        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args_txt):
             fetch_rfc_xml(rfc_number, force)
         else:
             fetch_rfc_txt(rfc_number, force)
