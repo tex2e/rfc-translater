@@ -111,18 +111,18 @@ def main():
     elif rfcs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in rfcs:
-            fetch_trans_make(rfc)
+            fetch_trans_make(rfc, fetch_txt=args.txt, force=args.force)
     elif args.begin and args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
-        continuous_main(begin=args.begin, end=args.end, only_first=args.only_first)
+        continuous_main(begin=args.begin, end=args.end, only_first=args.only_first, fetch_txt=args.txt)
     else:
         ap.print_help()
     print("[+] 正常終了 %s" % sys.argv[0])
 
-def fetch_trans_make(rfc_number: int | str, args_txt: bool, force=False) -> None:
+def fetch_trans_make(rfc_number: int | str, fetch_txt: bool, force=False) -> None:
     print('[*] RFC %s:' % rfc_number)
     try:
-        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args_txt):
+        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not fetch_txt):
             fetch_rfc_xml(rfc_number, force)
         else:
             fetch_rfc_txt(rfc_number, force)
@@ -135,7 +135,7 @@ def fetch_trans_make(rfc_number: int | str, args_txt: bool, force=False) -> None
     trans_rfc(rfc_number)
     make_html(rfc_number)
 
-def continuous_main(begin=None, end=None, only_first=False):
+def continuous_main(begin=None, end=None, only_first=False, fetch_txt=False):
     numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
     if begin and end:  # 開始と終了区間の設定
         numbers = [x for x in numbers if begin <= x <= end]
@@ -146,7 +146,7 @@ def continuous_main(begin=None, end=None, only_first=False):
         numbers = numbers[0:1]
 
     for rfc_number in numbers:
-        fetch_trans_make(rfc_number)
+        fetch_trans_make(rfc_number, fetch_txt)
 
 if __name__ == '__main__':
     main()

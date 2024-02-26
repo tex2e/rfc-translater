@@ -178,7 +178,7 @@ def new_textwriter_render_artwork(self, e, width, **kwargs):
         base_indent = j.indent
         artwork = '\n'.join([r.text for r in res]).rstrip('\n')
         artwork = artwork.strip('\n')
-        indent = base_indent + RfcUtils.get_indent(artwork)
+        indent = base_indent + RfcUtils.get_indent_multiline(artwork)
         text = textwrap.dedent(artwork)
         contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
     return res
@@ -201,16 +201,16 @@ def new_textwriter_render_figure(self, e, width, **kwargs):
             base_indent = j.indent
             # 図
             fig = fig.strip('\n')
-            indent = base_indent + RfcUtils.get_indent(fig)
+            indent = base_indent + RfcUtils.get_indent_multiline(fig)
             text = textwrap.dedent(fig)
             contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
             # 図の表題
             figname = figname.strip('\n')
-            indent = base_indent + RfcUtils.get_indent(figname)
+            indent = base_indent + RfcUtils.get_indent_multiline(figname)
             text = textwrap.dedent(figname)
             contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
         else:
-            indent = RfcUtils.get_indent(text)
+            indent = RfcUtils.get_indent_multiline(text)
             contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
     return res
 TextWriter.render_figure = new_textwriter_render_figure
@@ -228,16 +228,16 @@ def new_textwriter_render_table(self, e, width, **kwargs):
             tablename = text[m.start():]
             # 表
             table = table.strip('\n')
-            indent = RfcUtils.get_indent(table) + 3  # インデント追加
+            indent = RfcUtils.get_indent_multiline(table) + 3  # インデント追加
             text = textwrap.dedent(table)
             contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
             # 表の表題
             tablename = tablename.strip('\n')
-            indent = RfcUtils.get_indent(tablename) + 3  # インデント追加
+            indent = RfcUtils.get_indent_multiline(tablename) + 3  # インデント追加
             text = textwrap.dedent(tablename)
             contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
         else:
-            indent = RfcUtils.get_indent(text)
+            indent = RfcUtils.get_indent_multiline(text)
             contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
     return res
 TextWriter.render_table = new_textwriter_render_table
@@ -284,7 +284,7 @@ def new_textwriter_render_toc(self, e, width, **kwargs):
         j = joiners[e.tag] if e.tag in joiners else joiners[None]
         base_indent = j.indent
         toc = toc.strip('\n')
-        indent = base_indent + RfcUtils.get_indent(toc)
+        indent = base_indent + RfcUtils.get_indent_multiline(toc)
         text = textwrap.dedent(toc)
         contents.append(Content(text, indent=indent, raw=True, toc=True, tag=get_tag_path(e)))
     return res
