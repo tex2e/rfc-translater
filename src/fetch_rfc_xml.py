@@ -146,9 +146,9 @@ def new_textwriter_render_dt(self, e, width, **kwargs):
     res = textwriter_render_dt(self, e, width, **kwargs)
     if e.attrib.get('pn'):
         text = '\n'.join([r.text for r in res]).rstrip('\n')
-        joiners = kwargs['joiners']
-        j = joiners[e.tag] if e.tag in joiners else joiners[None]
-        indent = j.indent + 3  # インデント追加
+        ancestor_dls = [ a for a in e.iterancestors('dl') ]
+        ancestor_dls_count = len(ancestor_dls)
+        indent = ancestor_dls_count * 3
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     return res
 TextWriter.render_dt = new_textwriter_render_dt
@@ -160,9 +160,9 @@ def new_textwriter_render_dd(self, e, width, **kwargs):
     res = textwriter_render_dd(self, e, width, **kwargs)
     if e.attrib.get('pn'):
         text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()
-        joiners = kwargs['joiners']
-        j = joiners[e.tag] if e.tag in joiners else joiners[None]
-        indent = j.indent + 9  # インデント追加
+        ancestor_dls = [ a for a in e.iterancestors('dl') ]
+        ancestor_dls_count = len(ancestor_dls)
+        indent = ancestor_dls_count * 3 + 9
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     return res
 TextWriter.render_dd = new_textwriter_render_dd
@@ -191,8 +191,10 @@ def new_textwriter_render_figure(self, e, width, **kwargs):
     res = textwriter_render_figure(self, e, width, **kwargs)
     if e.attrib.get('pn'):
         text = '\n'.join([r.text for r in res]).rstrip('\n')
-        if matchobj := re.finditer(re.compile(r'^\s*Figure \d+:', re.MULTILINE), text):
-            m = [m for m in matchobj][-1]
+        matchobj = re.finditer(re.compile(r'^\s*Figure \d+:', re.MULTILINE), text)
+        mlist = [x for x in matchobj]
+        if len(mlist) > 0:
+            m = mlist[-1]
             fig = text[0:m.start()]
             figname = text[m.start():]
             # 基本のインデント
@@ -222,8 +224,10 @@ def new_textwriter_render_table(self, e, width, **kwargs):
     res = textwriter_render_table(self, e, width, **kwargs)
     if e.attrib.get('pn'):
         text = '\n'.join([r.text for r in res])
-        if matchobj := re.finditer(re.compile(r'^\s*Table \d+:', re.MULTILINE), text):
-            m = [m for m in matchobj][-1]
+        matchobj = re.finditer(re.compile(r'^\s*Table \d+:', re.MULTILINE), text)
+        mlist = [x for x in matchobj]
+        if len(mlist) > 0:
+            m = mlist[-1]
             table = text[0:m.start()]
             tablename = text[m.start():]
             # 表
@@ -248,8 +252,10 @@ textwriter_render_first_page_top = TextWriter.render_first_page_top
 def new_textwriter_render_first_page_top(self, e, width, **kwargs):
     res = textwriter_render_first_page_top(self, e, width, **kwargs)
     text = res
-    if matchobj := re.finditer(re.compile(r'\n\n', re.MULTILINE), text):
-        m = [m for m in matchobj][-1]
+    matchobj = re.finditer(re.compile(r'\n\n', re.MULTILINE), text)
+    mlist = [x for x in matchobj]
+    if len(mlist) > 0:
+        m = mlist[-1]
         front = text[0:m.start()]
         fronttitle = text[m.start():]
         # ヘッダー
