@@ -20,7 +20,7 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 - 複数ページにまたがる図表は適切に解釈できない場合があります。
 - 図や表の中に空行が含まれるときも適切に解釈できない場合があります。
 - RFCのHTMLが例外的な構造になっている場合も適切に解釈できません (特に番号の小さいRFC)。
-- 翻訳はRFC2220以降を対象とします (http://rfc-jp.nic.ad.jp/copyright/translate.html)。
+- 翻訳はRFC2220以降を対象とします ([http://rfc-jp.nic.ad.jp/copyright/translate.html](http://rfc-jp.nic.ad.jp/copyright/translate.html))。
 
 <br>
 
