@@ -1,3 +1,6 @@
+# ------------------------------------------------------------------------------
+# IETFのWebサイトからRFCをXML形式で取得し、文章・図・表・コードの判定をするためのプログラム
+# ------------------------------------------------------------------------------
 
 import os
 import re
@@ -10,14 +13,16 @@ import xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile, RfcJsonElem
+from .rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
 
+# xml2rfcのデフォルト値設定
 dt_now = datetime.datetime.now()
 default_options.date = dt_now
 default_options.pagination = False
 default_options.rfc = True
 
 
+# RFCの段落情報を格納するクラス
 class Content:
     def __init__(self, text: str, indent=0, title=False, section_title=False, 
                  raw=False, toc=False, list_item=False, tag='') -> None:
@@ -345,13 +350,7 @@ def new_textwriter_render_author(self, e, width, **kwargs):
 TextWriter.render_author = new_textwriter_render_author
 
 
-
-# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
-# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
-class RFCNotFound(Exception):
-    pass
-
-
+# [EntryPoint]
 # RFCの取得処理 (XML版)
 def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
     print("[*] fetch_rfc_xml(%s)" % rfc_number)
@@ -376,35 +375,19 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
     if not force and os.path.isfile(output_file):
         return
 
-    # RFCページのDOMツリーの取得
-    page = RfcUtils.fetch_url(url)
-    tree = lxml.html.fromstring(RfcUtils.html_rm_link_tag(page.content))
-
-    # タイトル取得
-    title = tree.xpath('//title/text()')
-    if len(title) == 0:
-        raise RFCNotFound
-    title = title[0].strip()
-
-    # タイトルの取得（パターンマッチ）
-    if re.match(r'RFC [^ ]+ - .*$', title):  # RFC
-        tmp = title
-        tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
-        tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
-        tmp = re.sub(r'^RFC (\d+) -', f'RFC {rfc_number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
-        # title = "RFC %s - %s" % (number, tmp)
-        title = tmp
-    elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
-        title = title
-    else:
-        # タイトルがRFC形式と一致しない場合
-        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc_number, title))
-
     # RFC (XML) の取得
     global contents
     contents = []
     page = RfcUtils.fetch_url(url_xml)
     xml: bytes = page.content
+
+    # RFCタイトル取得
+    root = lxml.etree.fromstring(xml)
+    titles = root.xpath(f'/{RfcXmlElem.RFC}/{RfcXmlElem.FRONT}/{RfcXmlElem.TITLE}/text()')
+    if len(titles) > 0:
+        title = f"RFC {rfc_number} - {titles[0]}"
+    else:
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s" % (rfc_number))
 
     # XML解析
     options_for_xmlrfcparser = dict()
@@ -415,23 +398,25 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
     rfc_txt = writer.process()
     # 解析後はグローバル変数contentsに段落ごとの情報が格納される
 
-    # # デバッグ
-    # for content in contents:
-    #     print(f'[*] indent={content.indent}, section_title={content.section_title}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
-    #     if content.section_title:
-    #         print('')
-    #         print(f'### {content.text}')
-    #         print('')
-    #     else:
-    #         content_text = textwrap.dedent(content.text)
-    #         content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
-    #         content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
-    #         if not content.raw:
-    #             content_text = content_text.lstrip()
-    #         if content.list_item:
-    #             content_text = f'{content.list_item} {content_text}'
-    #         print(textwrap.indent(content_text, prefix=(" " * content.indent)))
-    #         print('')
+    # デバッグ
+    debug = False
+    if debug:
+        for content in contents:
+            print(f'[*] indent={content.indent}, section_title={content.section_title}, toc={content.toc}, raw={content.raw}, tag={content.tag}')
+            if content.section_title:
+                print('')
+                print(f'### {content.text}')
+                print('')
+            else:
+                content_text = textwrap.dedent(content.text)
+                content_text = re.sub(re.compile(r'^\n', re.MULTILINE), '', content_text)
+                content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
+                if not content.raw:
+                    content_text = content_text.lstrip()
+                if content.list_item:
+                    content_text = f'{content.list_item} {content_text}'
+                print(textwrap.indent(content_text, prefix=(" " * content.indent)))
+                print('')
 
     # 段落情報をJSONに変換する
     obj = {
