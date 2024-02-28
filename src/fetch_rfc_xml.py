@@ -113,18 +113,26 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         pre_text = ancestor_ul._initial_text(e, ancestor_ul)
         text = '\n'.join([r.text for r in res])
         text = f'{pre_text}{text}'
-        indent = (sum([a._padding for a in ancestor_ols if hasattr(a, '_padding')]) + \
-                  sum([a._padding for a in ancestor_uls if hasattr(a, '_padding')]))
+        indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
+                  sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     elif ancestor_ul_or_ol == 'ol':
         # 親要素が順序リスト(ol > li)のとき
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
         ancestor_uls = [ a for a in e.iterancestors('ul') ]
-        pre_text = e.get('derivedCounter', '1.')
+        # 自分自身がliのとき
+        pre_text = e.get('derivedCounter', None)
+        if not pre_text:
+            # 自分自身がtで親がliのとき
+            ancestor_lis = [ a for a in e.iterancestors('li') ]
+            if len(ancestor_lis) > 0:
+                pre_text = ancestor_lis[0].get('derivedCounter', '1.')
+            else:
+                pre_text = '1.'
         text = '\n'.join([r.text for r in res])
         text = f'{pre_text} {text}'
-        indent = (sum([a._padding for a in ancestor_ols if hasattr(a, '_padding')]) + \
-                  sum([a._padding for a in ancestor_uls if hasattr(a, '_padding')]))
+        indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
+                  sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     elif e.attrib.get('pn'):
         # tタグ
