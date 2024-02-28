@@ -1,5 +1,6 @@
 
 import re
+import textwrap
 import requests
 from datetime import datetime, timedelta, timezone
 
@@ -50,6 +51,13 @@ class RfcUtils:
         return len(text) - len(text.lstrip())
 
     # 複数行の2つの文字列のインデントの差を求める関数
+    @staticmethod
+    def get_indent_multiline(text: str) -> int:
+        str_before = text
+        str_after = textwrap.dedent(text)
+        return len(str_before.split('\n')[0]) - len(str_after.split('\n')[0])
+
+    # 複数行の2つの文字列の長さの差を求める関数
     @staticmethod
     def get_line_len_diff(text1: str, text2: str) -> int:
         first_line1 = text1.split('\n')[0]
