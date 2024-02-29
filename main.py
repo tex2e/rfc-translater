@@ -9,6 +9,7 @@ from src.trans_rfc import trans_rfc
 from src.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
+from src.rfc_utils import RfcUtils
 
 def main():
     import argparse
@@ -117,7 +118,7 @@ def main():
         continuous_main(begin=args.begin, end=args.end, only_first=args.only_first, fetch_txt=args.txt)
     else:
         ap.print_help()
-    print("[+] 正常終了 %s" % sys.argv[0])
+    print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
 
 def fetch_trans_make(rfc_number: int | str, fetch_txt: bool, force=False) -> None:
     print('[*] RFC %s:' % rfc_number)
