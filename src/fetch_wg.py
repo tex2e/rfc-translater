@@ -70,7 +70,7 @@ def write_rfc_list_json():
             if re.match(r'^[^ ]+$', rfc_wg):
                 obj[rfc_number_str][RfcIndexJsonElem.WG] = str(rfc_wg)
 
-    RfcFile.write_json_file(OUTPUT_PATH, obj)
+    RfcFile.write_json_file(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE, obj)
 
 
 if __name__ == '__main__':

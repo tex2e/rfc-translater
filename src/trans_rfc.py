@@ -143,7 +143,7 @@ class TranslatorSeleniumGoogletrans(Translator):
             return ja
 
         # リトライしても翻訳結果が空文字のときは例外とする
-        raise MyTranslateException(f"Translated text is empty string! input text: {text}")
+        raise MyTranslateException(f'Translated text is empty string!\ninput text: "{text}"\nsend url: "{url}"')
 
     def close(self):
         if self._browser is None:

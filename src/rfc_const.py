@@ -7,14 +7,14 @@ class RfcFile:
     OUTPUT_DATA_DIR = 'data'
     OUTPUT_DRAFT = 'draft'
 
-    OUTPUT_HTML_INDEX_FILE = os.path.join('html', 'index.html')
-    OUTPUT_HTML_DRAFT_INDEX_FILE = os.path.join('html', 'draft', 'index.html')
+    OUTPUT_HTML_INDEX_FILE = 'html/index.html'
+    OUTPUT_HTML_DRAFT_INDEX_FILE = 'html/draft/index.html'
+    OUTPUT_HTML_RFC_LIST_JSON_FILE = 'html/data-rfc-list.json'
+    GLOB_HTML_FILE = 'html/rfc*.html'
+    GLOB_HTML_DRAFT_FILE = 'html/draft/draft-*.html'
 
-    GLOB_HTML_FILE = os.path.join('html', 'rfc*.html')
-    GLOB_HTML_DRAFT_FILE = os.path.join('html', 'draft', 'draft-*.html')
-
-    TEMPLATE_HTML_INDEX = os.path.join('templates', 'index.html')
-    TEMPLATE_HTML_RFC = os.path.join('templates', 'rfc.html')
+    TEMPLATE_HTML_INDEX = 'templates/index.html'
+    TEMPLATE_HTML_RFC = 'templates/rfc.html'
 
     # RFCのJSONなどの中間ファイル格納先ディレクトリ
     @staticmethod
@@ -182,6 +182,7 @@ class RfcXmlElem:
     # level2
     FRONT = 'front'
     # level3
+    TITLE = 'title'
     ABSTRACT = 'abstract'
 
 class RfcJsonElem:
