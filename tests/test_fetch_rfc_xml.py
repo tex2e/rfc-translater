@@ -312,6 +312,37 @@ class TestFetchXmlRfc(unittest.TestCase):
         ]
         self.assertEqual(actual, excepted)
 
+    def test_rfc_middle_section_dl_dd_dl_dd(self):  # RFC 9525
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <dl indent="3" newline="false" spacing="normal" pn="section-1.5-2">
+                <dt pn="section-1.5-2.9">identifier type:</dt>
+                <dd pn="section-1.5-2.10">
+                    <t indent="0" pn="section-1.5-2.10.1">A formally defined category of identifier.</t>
+                    <dl spacing="normal" indent="3" newline="false" pn="section-1.5-2.10.2">
+                        <dt pn="section-1.5-2.10.2.1">DNS-ID:</dt>
+                        <dd pn="section-1.5-2.10.2.2"> A subjectAltName entry of type dNSName as defined in <xref target="RFC5280" format="default" sectionFormat="of" derivedContent="PKIX"/>.</dd>
+                    </dl>
+                </dd>
+            </dl>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='identifier type:', indent=3),
+            Content(text='A formally defined category of identifier.', indent=12),
+            Content(text='DNS-ID:', indent=6),
+            Content(text='A subjectAltName entry of type dNSName as defined in PKIX.', indent=15),
+        ]
+        self.assertEqual(actual, excepted)
+
     def test_rfc_middle_section_aside(self):
         self.maxDiff = None
         xml = b'''
