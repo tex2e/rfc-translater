@@ -330,3 +330,51 @@ class TestFetchXmlRfc(unittest.TestCase):
         ]
         self.assertEqual(actual, excepted)
 
+    def test_rfc_middle_section_figure_arwtork(self):
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <figure anchor="fig-stream-send-states" align="left" suppress-title="false" pn="figure-2">
+            <name slugifiedName="name-states-for-sending-parts-of">States for Sending Parts of Streams</name>
+            <artwork name="" type="" align="left" alt="" pn="section-3.1-2.1">
+    +-------+    +-------+
+    | Data  |    | Reset |
+    | Recvd |    | Recvd |
+    +-------+    +-------+
+            </artwork>
+            </figure>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='+-------+    +-------+\n| Data  |    | Reset |\n| Recvd |    | Recvd |\n+-------+    +-------+', raw=True, indent=7),
+            Content(text="Figure 2: States for Sending Parts of Streams", indent=15)
+        ]
+        self.assertEqual(actual, excepted)
+
+    def test_rfc_middle_section_arwtork(self):
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <artwork name="" type="" align="left" alt="" pn="section-3.1-2.1">
+    a*x + b*y = c
+            </artwork>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='a*x + b*y = c', raw=True, indent=7),
+        ]
+        self.assertEqual(actual, excepted)

@@ -381,14 +381,12 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
     if type(rfc_number) is int:
         # RFCのとき
         is_draft = False
-        url = RfcFile.get_url_rfc_html(rfc_number)
         url_xml = RfcFile.get_url_rfc_xml(rfc_number)
         output_file = RfcFile.get_filepath_data_json(rfc_number)
     elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
         # Draft版RFCのとき
         is_draft = True
         rfc_draft_id = m['rfc_draft_id']
-        url = RfcFile.get_url_rfc_html(rfc_draft_id)
         url_xml = RfcFile.get_url_rfc_xml(rfc_draft_id)
         output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
     else:
@@ -399,8 +397,6 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
         return
 
     # RFC (XML) の取得
-    # global contents
-    # contents = []
     page = RfcUtils.fetch_url(url_xml)
     xml: bytes = page.content
 
