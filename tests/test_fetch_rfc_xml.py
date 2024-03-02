@@ -82,6 +82,7 @@ class TestFetchXmlRfc(unittest.TestCase):
         self.assertEqual(actual, excepted)
 
     def test_rfc_middle_section_name(self):
+        self.maxDiff = None
         xml = b'''
         <rfc>
         <middle>
@@ -100,6 +101,7 @@ class TestFetchXmlRfc(unittest.TestCase):
         self.assertEqual(actual, excepted)
 
     def test_rfc_middle_section_t(self):
+        self.maxDiff = None
         xml = b'''
         <rfc>
         <middle>
@@ -118,6 +120,7 @@ class TestFetchXmlRfc(unittest.TestCase):
         self.assertEqual(actual, excepted)
 
     def test_rfc_middle_section_name_and_t(self):
+        self.maxDiff = None
         xml = b'''
         <rfc>
         <middle>
