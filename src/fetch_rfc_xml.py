@@ -15,26 +15,30 @@ from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
 
-# xml2rfcのデフォルト値設定
-dt_now = datetime.datetime.now()
-default_options.date = dt_now
-default_options.pagination = False
-default_options.rfc = True
-
 
 # RFCの段落情報を格納するクラス
 class Content:
     def __init__(self, text: str, indent=0, title=False, section_title=False, 
-                 raw=False, toc=False, list_item=False, tag='') -> None:
+                 raw=False, toc=False, tag='') -> None:
         self.text = text
         self.indent = indent
         self.title = title
         self.section_title = section_title
         self.raw = raw
         self.toc = toc
-        self.list_item = list_item
         self.tag = tag
         self.normalize_text()
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.text == other.text and
+            self.indent == other.indent and
+            self.title == other.title and
+            self.section_title == other.section_title and
+            self.raw == other.raw and
+            self.toc == other.toc and
+            self.tag == other.tag
+        )
 
     def normalize_text(self):
         # 文章のときの処理
@@ -66,6 +70,16 @@ def has_ancestor(elem, tagname: str) -> bool:
 
 def get_tag_path(elem) -> str:
     return '/' + '/'.join([a.tag for a in elem.iterancestors()][::-1]) + '/' + elem.tag
+
+
+# xml2rfc
+# https://github.com/ietf-tools/xml2rfc/blob/main/xml2rfc/writers/text.py
+
+# xml2rfcのデフォルト値設定
+dt_now = datetime.datetime.now()
+default_options.date = dt_now
+default_options.pagination = False
+default_options.rfc = True
 
 # nameタグ
 #   section > name
@@ -107,8 +121,8 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         if parent.tag in ('ul', 'ol'):
             ancestor_ul_or_ol = parent.tag
             break
-    if has_ancestor(e, tagname='dl') or has_ancestor(e, tagname='toc'):
-        # 親要素が定義(dl)、目次(toc) のときは何もしない
+    if has_ancestor(e, tagname='toc'):
+        # 親要素が目次(toc) のときは何もしない
         pass
     elif ancestor_ul_or_ol == 'ul':
         # 親要素が箇条書きリスト(ul > li)のとき
@@ -139,6 +153,13 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
                   sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
+    elif has_ancestor(e, tagname='dl'):
+        # 親要素に定義(dl)が存在するとき
+        text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()
+        ancestor_dls = [ a for a in e.iterancestors('dl') ]
+        ancestor_dls_count = len(ancestor_dls)
+        indent = ancestor_dls_count * 3 + 9
+        contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     elif e.attrib.get('pn'):
         # tタグ
         text = '\n'.join([r.text for r in res])
@@ -165,20 +186,6 @@ def new_textwriter_render_dt(self, e, width, **kwargs):
         contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     return res
 TextWriter.render_dt = new_textwriter_render_dt
-
-# ddタグ
-#   dl > dd
-textwriter_render_dd = TextWriter.render_dd
-def new_textwriter_render_dd(self, e, width, **kwargs):
-    res = textwriter_render_dd(self, e, width, **kwargs)
-    if e.attrib.get('pn'):
-        text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()
-        ancestor_dls = [ a for a in e.iterancestors('dl') ]
-        ancestor_dls_count = len(ancestor_dls)
-        indent = ancestor_dls_count * 3 + 9
-        contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
-    return res
-TextWriter.render_dd = new_textwriter_render_dd
 
 # artworkタグ
 #   section > artwork
@@ -413,8 +420,6 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
                 content_text = re.sub(re.compile(r'\n$', re.MULTILINE), '', content_text)
                 if not content.raw:
                     content_text = content_text.lstrip()
-                if content.list_item:
-                    content_text = f'{content.list_item} {content_text}'
                 print(textwrap.indent(content_text, prefix=(" " * content.indent)))
                 print('')
 
