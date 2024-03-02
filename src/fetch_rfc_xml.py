@@ -118,15 +118,18 @@ textwriter_render_t = TextWriter.render_t
 def new_textwriter_render_t(self, e, width, **kwargs):
     res = textwriter_render_t(self, e, width, **kwargs)
     # 箇条書きのとき、最も近い親要素が ul か ol かを判定する
-    ancestor_ul_or_ol = None
+    ancestor_tag = None
     for parent in e.iterancestors():
         if parent.tag in ('ul', 'ol'):
-            ancestor_ul_or_ol = parent.tag
+            ancestor_tag = parent.tag
+            break
+        elif parent.tag in ('dl'):
+            ancestor_tag = parent.tag
             break
     if has_ancestor(e, tagname='toc'):
         # 親要素が目次(toc) のときは何もしない
         pass
-    elif ancestor_ul_or_ol == 'ul':
+    elif ancestor_tag == 'ul':
         # 親要素が箇条書きリスト(ul > li)のとき
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
         ancestor_uls = [ a for a in e.iterancestors('ul') ]
@@ -137,7 +140,7 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
                   sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
-    elif ancestor_ul_or_ol == 'ol':
+    elif ancestor_tag == 'ol':
         # 親要素が順序リスト(ol > li)のとき
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
         ancestor_uls = [ a for a in e.iterancestors('ul') ]
@@ -155,12 +158,11 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
                   sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
-    elif has_ancestor(e, tagname='dl'):
-        # 親要素に定義(dl)が存在するとき
+    elif ancestor_tag == 'dl':
+        # 親要素が定義(dl)のとき
         text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()
-        ancestor_dls = [ a for a in e.iterancestors('dl') ]
-        ancestor_dls_count = len(ancestor_dls)
-        indent = ancestor_dls_count * 3 + 9
+        ancestors = [ a for a in e.iterancestors() if a.tag in ('ul', 'ol', 'dl') ]
+        indent = len(ancestors) * 3 + 9
         self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     elif e.attrib.get('pn'):
         # tタグ
@@ -182,9 +184,9 @@ def new_textwriter_render_dt(self, e, width, **kwargs):
     res = textwriter_render_dt(self, e, width, **kwargs)
     if e.attrib.get('pn'):
         text = '\n'.join([r.text for r in res]).rstrip('\n')
-        ancestor_dls = [ a for a in e.iterancestors('dl') ]
-        ancestor_dls_count = len(ancestor_dls)
-        indent = ancestor_dls_count * 3
+        ancestors = [ a for a in e.iterancestors() if a.tag in ('ol', 'ul', 'dl') ]
+        ancestors_count = len(ancestors)
+        indent = ancestors_count * 3
         self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
     return res
 TextWriter.render_dt = new_textwriter_render_dt
