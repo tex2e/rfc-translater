@@ -59,8 +59,8 @@ def summarize_rfc(rfc_number: int, model: str, force: bool = False):
         prompt = summarize_rfc_by_title(rfc_number, rfc_title, model)
 
     print(f"[+] prompt: \n{prompt}")
-    print(f"[ ]")
-    if force or yes_no_input("上記の内容でChatGPTに質問します。よろしいですか？"):
+    print(f"")
+    if force or yes_no_input("[?] 上記の内容でChatGPTに質問します。よろしいですか？"):
         pass
     else:
         return False
@@ -68,7 +68,7 @@ def summarize_rfc(rfc_number: int, model: str, force: bool = False):
     response = openai.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a helpful assistant that translates English to Japanese."},
             {"role": "user", "content": prompt}
         ],
         temperature=0
@@ -124,8 +124,12 @@ def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = MODE
 
     rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
 
-    prompt = f"以下の文章を読み、{rfc_title} についての要約と目的を2行でまとめてください。出力はですます調にしてください。\n"
-    prompt += "\n"
+    prompt = ""
+    prompt += f"次の【原文】の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
+    prompt += f"・出力形式はですます調です。\n"
+    prompt += f"・3行以内で要約してください。\n"
+    prompt += f"\n"
+    prompt += f"【原文】\n"
     prompt += f"{rfc_abstract_text}"
     return prompt
 
