@@ -5,6 +5,10 @@ import sys
 import openai  # pip install openai
 from dotenv import load_dotenv  # pip install python-dotenv
 
+# API Document
+# https://platform.openai.com/docs/api-reference/chat/create
+# Chat Usage Example
+# https://cookbook.openai.com/examples/how_to_format_inputs_to_chatgpt_models
 
 # 環境変数の読み込み
 load_dotenv()
@@ -35,7 +39,7 @@ if yes_no_input("[?] 上記の内容でChatGPTに質問します。よろしい�
 else:
     sys.exit(0)
 
-model = MODEL4
+model = MODEL35
 response = openai.chat.completions.create(
     model=model,
     messages=[
