@@ -412,3 +412,52 @@ class TestFetchXmlRfc(unittest.TestCase):
             Content(text='a*x + b*y = c', raw=True, indent=7),
         ]
         self.assertEqual(actual, excepted)
+
+    def test_rfc_middle_section_table_t(self):  # RFC 9435
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+        <table anchor="table6" align="center" pn="table-6">
+          <name slugifiedName="name-the-phb-mapping-recommended">The PHB Mapping Recommended in the Guidelines Recommended in <xref target="GSMA-IR.34" format="default" sectionFormat="of" derivedContent="GSMA-IR.34"/></name>
+          <thead>
+            <tr>
+              <th align="left" colspan="1" rowspan="1">
+                <t indent="0" pn="section-5.3-3.1.1.0.1">QoS Class in <xref target="GSMA-IR.34" format="default" sectionFormat="of" derivedContent="GSMA-IR.34"/></t>
+              </th>
+              <th align="left" colspan="1" rowspan="1">PHB</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td rowspan="4" align="left" colspan="1">
+                <t indent="0" pn="section-5.3-3.2.3.1.1">Interactive</t>
+                <t indent="0" pn="section-5.3-3.2.3.1.2">(ordered by priority, AF3 highest)</t>
+              </td>
+              <td align="left" colspan="1" rowspan="1">AF31</td>
+            </tr>
+            <tr>
+              <td align="left" colspan="1" rowspan="1">AF32</td>
+            </tr>
+            <tr>
+              <td align="left" colspan="1" rowspan="1">AF21</td>
+            </tr>
+            <tr>
+              <td align="left" colspan="1" rowspan="1">AF11</td>
+            </tr>
+          </tbody>
+        </table>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='+====================================+======+\n| QoS Class in GSMA-IR.34            | PHB  |\n+====================================+======+\n| Interactive                        | AF31 |\n|                                    +------+\n| (ordered by priority, AF3 highest) | AF32 |\n|                                    +------+\n|                                    | AF21 |\n|                                    +------+\n|                                    | AF11 |\n+------------------------------------+------+', raw=True, indent=15),
+            Content(text="Table 6: The PHB Mapping Recommended in the Guidelines Recommended in GSMA-IR.34", indent=18),
+        ]
+        self.assertEqual(actual, excepted)
+

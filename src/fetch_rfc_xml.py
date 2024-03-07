@@ -129,6 +129,9 @@ def new_textwriter_render_t(self, e, width, **kwargs):
     if has_ancestor(e, tagname='toc'):
         # 親要素が目次(toc) のときは何もしない
         pass
+    elif has_ancestor(e, tagname='table'):
+        # 親要素が表(table) のときは何もしない
+        pass
     elif ancestor_tag == 'ul':
         # 親要素が箇条書きリスト(ul > li)のとき
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
