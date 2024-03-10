@@ -2,7 +2,6 @@
 # IETFのWebサイトからRFCステータスとWGの一覧を取得するプログラム
 # ------------------------------------------------------------------------------
 
-import os
 import re
 # from pprint import pprint
 from lxml import etree
@@ -10,8 +9,7 @@ from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
 
 def write_rfc_list_json():
-    OUTPUT_PATH = os.path.join(RfcFile.OUTPUT_HTML_DIR, "data-rfc-list.json")
-
+    # Fetch index
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_index_xml())
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
@@ -70,6 +68,7 @@ def write_rfc_list_json():
             if re.match(r'^[^ ]+$', rfc_wg):
                 obj[rfc_number_str][RfcIndexJsonElem.WG] = str(rfc_wg)
 
+    # Save file
     RfcFile.write_json_file(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE, obj)
 
 
