@@ -387,7 +387,11 @@ class TestFetchXmlRfc(unittest.TestCase):
         text_writer.process()
         actual = text_writer._contents
         excepted = [
-            Content(text='+-------+    +-------+\n| Data  |    | Reset |\n| Recvd |    | Recvd |\n+-------+    +-------+', raw=True, indent=7),
+            Content(text=
+                    '+-------+    +-------+\n'+
+                    '| Data  |    | Reset |\n'+
+                    '| Recvd |    | Recvd |\n'+
+                    '+-------+    +-------+', raw=True, indent=7),
             Content(text="Figure 2: States for Sending Parts of Streams", indent=15)
         ]
         self.assertEqual(actual, excepted)
@@ -456,8 +460,58 @@ class TestFetchXmlRfc(unittest.TestCase):
         text_writer.process()
         actual = text_writer._contents
         excepted = [
-            Content(text='+====================================+======+\n| QoS Class in GSMA-IR.34            | PHB  |\n+====================================+======+\n| Interactive                        | AF31 |\n|                                    +------+\n| (ordered by priority, AF3 highest) | AF32 |\n|                                    +------+\n|                                    | AF21 |\n|                                    +------+\n|                                    | AF11 |\n+------------------------------------+------+', raw=True, indent=15),
+            Content(text=
+                    '+====================================+======+\n'+
+                    '| QoS Class in GSMA-IR.34            | PHB  |\n'+
+                    '+====================================+======+\n'+
+                    '| Interactive                        | AF31 |\n'+
+                    '|                                    +------+\n'+
+                    '| (ordered by priority, AF3 highest) | AF32 |\n'+
+                    '|                                    +------+\n'+
+                    '|                                    | AF21 |\n'+
+                    '|                                    +------+\n'+
+                    '|                                    | AF11 |\n'+
+                    '+------------------------------------+------+', raw=True, indent=15),
             Content(text="Table 6: The PHB Mapping Recommended in the Guidelines Recommended in GSMA-IR.34", indent=18),
+        ]
+        self.assertEqual(actual, excepted)
+
+    def test_rfc_back_section_figure_artset(self):  # RFC 9389
+        self.maxDiff = None
+        xml = '''
+        <rfc>
+        <back>
+        <section anchor="capture-math" numbered="true" removeInRFC="false" toc="include" pn="section-appendix.a">
+            <figure anchor="peq1" align="left" suppress-title="false" pn="figure-3">
+                <artset pn="section-appendix.a-3.1">
+                <artwork align="center" type="svg" pn="section-appendix.a-3.1.1"><svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" height="6.176ex" role="img" viewBox="0 -1580.7 7512 2659.1" width="17.447ex">
+                    <defs>
+                        <path d="M304 -161l-12 -16c-158 90 -244 259 -244 429c0 185 87 329 247 424l9 -16c-139 -119 -170 -212 -170 -405c0 -186 30 -299 170 -416Z" id="E1-STIXWEBMAIN-28-gensym001" stroke-width="1"/>
+                    </defs>
+                    <g fill="black" stroke="currentColor" stroke-width="0" transform="matrix(1 0 0 -1 0 0)">
+                    </g>
+                    </svg>
+                </artwork>
+                <artwork type="ascii-art" align="center" pn="section-appendix.a-3.1.2">⎛a⎞      a!
+⎜ ⎟ = ────────
+⎝b⎠   (a-b)!b!
+</artwork>
+                </artset>
+            </figure>
+        </section>
+        </back>
+        </rfc>
+        '''.encode('utf-8')
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text=
+                    '⎛a⎞      a!\n'+
+                    '⎜ ⎟ = ────────\n'+
+                    '⎝b⎠   (a-b)!b!\n'+
+                    '\n'+
+                    '    Figure 3', raw=True, indent=27),
         ]
         self.assertEqual(actual, excepted)
 

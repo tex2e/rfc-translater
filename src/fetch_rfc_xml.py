@@ -239,7 +239,9 @@ def new_textwriter_render_figure(self, e, width, **kwargs):
             text = textwrap.dedent(figname)
             self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
         else:
-            indent = RfcUtils.get_indent_multiline(text)
+            fig = text.strip('\n')
+            indent = RfcUtils.get_indent_multiline(fig)
+            text = textwrap.dedent(fig)
             self._contents.append(Content(text, indent=indent, raw=True, tag=get_tag_path(e)))
     return res
 TextWriter.render_figure = new_textwriter_render_figure
