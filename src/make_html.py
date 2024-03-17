@@ -79,6 +79,10 @@ class RfcHtmlHelper:
             return "自動生成"
         return text
 
+    @staticmethod
+    def is_rfc_greater_than_or_equal_to_8650(text: str | int) -> bool:
+        return isinstance(text, int) and text >= 8650
+
 
 if __name__ == '__main__':
     pass
