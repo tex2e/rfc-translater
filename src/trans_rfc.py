@@ -6,6 +6,7 @@ import os
 import re
 import time
 import platform
+from abc import ABC, abstractmethod
 from tqdm import tqdm  # pip install tqdm
 import urllib.parse
 from selenium import webdriver  # pip install selenium
@@ -14,6 +15,9 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from selenium.webdriver.common.by import By
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
+# ChatGPT
+from .nlp_utils import openai, CHATGPT_MODEL35, get_model_name_from_args_chatgpt
+
 
 # 変換元は必ず小文字で記載すること
 trans_rules = {
@@ -41,12 +45,10 @@ trans_rules = {
     'where': 'ただし',
     'where:': 'ただし：',
     'assume:': '前提：',
-    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in rfc 2119 [rfc2119].":
-        "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はRFC 2119 [RFC2119]で説明されているように解釈されます。",
-    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"not recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in bcp 14 [rfc2119] [rfc8174] when, and only when, they appear in all capitals, as shown here.":
-        "この文書のキーワード \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"MAY\", および \"OPTIONAL\" はBCP 14 [RFC2119] [RFC8174]で説明されているように、すべて大文字の場合にのみ解釈されます。",
-    "this document is subject to bcp 78 and the ietf trust's legal provisions relating to ietf documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. please review these documents carefully, as they describe your rights and restrictions with respect to this document. code components extracted from this document must include simplified bsd license text as described in section 4.e of the trust legal provisions and are provided without warranty as described in the simplified bsd license.":
-        "このドキュメントは、このドキュメントの発行日に有効なBCP 78およびIETFドキュメントに関連するIETFトラストの法的規定（https://trustee.ietf.org/license-info）の対象となります。 これらのドキュメントは、このドキュメントに関するお客様の権利と制限について説明しているため、注意深く確認してください。 このドキュメントから抽出されたコードコンポーネントには、Trust LegalProvisionsのセクション4.eで説明されているSimplifiedBSD Licenseテキストが含まれている必要があり、Simplified BSDLicenseで説明されているように保証なしで提供されます。",
+    'client:': 'クライアント：',
+    'server:': 'サーバ：',
+    'value:': '値：',
+    'for example:': '例えば：',
 }
 
 
@@ -56,14 +58,16 @@ class MyTranslateException(Exception):
 
 
 # 翻訳抽象クラス
-class Translator:
+class Translator(ABC):
 
-    def __init__(self, total, desc=''):
+    def __init__(self, total, desc='', args=None):
         self.count = 0
         self.total = total
         # プログレスバー
         bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}{postfix}]"
         self.bar = tqdm(total=total, desc=desc, bar_format=bar_format)
+        # 初期化
+        self._init_process(args)
 
     def increment_progress(self, incr=1):
         # プログレスバー用の出力
@@ -74,16 +78,32 @@ class Translator:
         # プログレスバーに詳細情報を追加
         self.bar.set_postfix(len=len, sleep=('%.1f' % wait_time))
 
+    def translate(self, text: str) -> str:
+        text = text.strip()
+        if len(text) == 0:
+            return ""
+        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
+        ja = trans_rules.get(text.lower())
+        if ja:
+            return ja
+        return self._translate_process(text)
+
     def close(self):
         return True
 
+    @abstractmethod
+    def _init_process(self):
+        pass
 
+    @abstractmethod
+    def _translate_process(self, text: str) -> str:
+        raise MyTranslateException()
+
+
+# Selenium + Google による翻訳処理
 class TranslatorSeleniumGoogletrans(Translator):
-    # Selenium + Google
 
-    def __init__(self, total, desc=''):
-        super(TranslatorSeleniumGoogletrans, self).__init__(total, desc)
-
+    def _init_process(self, args):
         options = Options()
         options.add_argument('--headless')
         browser = None
@@ -101,13 +121,7 @@ class TranslatorSeleniumGoogletrans(Translator):
         browser.implicitly_wait(3)
         self._browser = browser
 
-    def translate(self, text: str, dest='ja') -> str:
-        if len(text) == 0:
-            return ""
-        # 特定の用語については、翻訳ルール(trans_rules)で翻訳する
-        ja = trans_rules.get(text.lower())
-        if ja:
-            return ja
+    def _translate_process(self, text: str) -> str:
 
         # URLエンコード
         text = text.replace('%', '%25')  # 「%」をURLエンコードする
@@ -118,6 +132,7 @@ class TranslatorSeleniumGoogletrans(Translator):
             browser = self._browser
             # 翻訳したい文をURLに埋め込んでからアクセスする
             text_for_url = urllib.parse.quote_plus(text, safe='')
+            dest='ja'
             url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
             # print('[+] url:', url)
             browser.get(url)
@@ -129,7 +144,7 @@ class TranslatorSeleniumGoogletrans(Translator):
             elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='W297wb']")
             ja = "\n".join(elem.text for elem in elems)
             ja = re.sub(r'(?<!\n)\n(?!\n)', '', ja)
-            # 翻訳結果が空文字のときは別のCSSセレクタでリトライする（例：224.0.0.18を翻訳するとURLになって構造が変わるため）
+            # 翻訳結果が空文字のときは別のCSSセレクタでリトライする（例：「224.0.0.18」を翻訳するとURLになって構造が変わるため）
             if re.match(r'^\s*$', ja):
                 elems = browser.find_elements(By.CSS_SELECTOR, "span[jsname='jqKxS']")
                 ja = "\n".join(elem.text for elem in elems)
@@ -151,7 +166,36 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-def trans_rfc(rfc_number: int | str) -> bool:
+# ChatGPTによる翻訳処理
+class TranslatorChatGPT(Translator):
+
+    def _init_process(self, args):
+        self.model_name = get_model_name_from_args_chatgpt(args.chatgpt)
+
+    def _translate_process(self, text: str) -> str:
+
+        model_name = self.model_name
+        prompt1 = "次の英語を日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
+        prompt2 = f"{text}"
+        # リクエスト送信
+        response = openai.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that translates English to Japanese."},
+                {"role": "user", "content": prompt1},
+                {"role": "user", "content": prompt2},
+            ],
+            temperature=0
+        )
+        # レスポンスから回答内容取得
+        ja = response.choices[0].message.content
+        # 翻訳結果が空文字のときは例外とする
+        if re.match(r'^\s*$', ja):
+            raise MyTranslateException(f'Translated text is empty string!\ninput text: "{text}"')
+        return ja
+
+
+def trans_rfc(rfc_number: int | str, args) -> bool:
 
     if type(rfc_number) is int:
         # 通常のRFCのとき
@@ -173,7 +217,21 @@ def trans_rfc(rfc_number: int | str) -> bool:
     else:
         obj = RfcFile.read_json_file(input_file)
 
-    translator = TranslatorSeleniumGoogletrans(total=len(obj[RfcJsonElem.CONTENTS]), desc='RFC %s' % rfc_number)
+    # 翻訳機の選択
+    total_len = len([con for con in obj[RfcJsonElem.CONTENTS] if not con.get(RfcJsonElem.Contents.RAW)])
+    desc = 'RFC %s' % rfc_number
+    if args.chatgpt:
+        # ChatGPTによる翻訳
+        print(f"[*] ChatGPTで翻訳します ({get_model_name_from_args_chatgpt(args.chatgpt)})")
+        translator = TranslatorChatGPT(total=total_len, desc=desc, args=args)
+    else:
+        # Google翻訳
+        translator = TranslatorSeleniumGoogletrans(total=total_len, desc=desc, args=args)
+
+    # ChatGPTのとき、翻訳編集者に表示する内容を修正
+    if args.chatgpt:
+        if len(obj[RfcJsonElem.UPDATED_BY].strip()) == 0:
+            obj[RfcJsonElem.UPDATED_BY] = '自動生成(GPT)'
 
     try:
         # タイトルの翻訳
@@ -208,23 +266,28 @@ def trans_rfc(rfc_number: int | str) -> bool:
             if obj_contents_i.get(RfcJsonElem.Contents.RAW) is True:
                 # 図表は翻訳しない
                 pre_text, text = ('', '')
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja  # 翻訳結果を格納
             elif m := re.match(pattern, text):
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
                 pre_text, text = m[1], m[2]
+                # 翻訳の実行
+                text_ja = translator.translate(text)
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja  # 翻訳結果を格納
+                translator.increment_progress()  # 進捗+1
             elif m := re.match(r'^Appendix ([A-Z])\. (.*)$', text):
                 # 原文がセクション付録の場合
                 pre_text, text = (f'付録{m[1]}. ', m[2])
+                # 翻訳の実行
+                text_ja = translator.translate(text)
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja  # 翻訳結果を格納
+                translator.increment_progress()  # 進捗+1
             else:
                 # 通常の本文
                 pre_text, text = ('', text)
-
-            # 翻訳の実行
-            text_ja = translator.translate(text)
-
-            # 翻訳結果を格納
-            obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja
-
-            translator.increment_progress()  # 進捗+1
+                # 翻訳の実行
+                text_ja = translator.translate(text)
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja  # 翻訳結果を格納
+                translator.increment_progress()  # 進捗+1
 
         print("", flush=True)
 
@@ -261,10 +324,11 @@ def trans_rfc(rfc_number: int | str) -> bool:
 
 
 def trans_test() -> bool:
-    translator = TranslatorSeleniumGoogletrans(total=1)
-    ja = translator.translate('test sample.', dest='ja')
+    import argparse
+    args = argparse.Namespace()
+    args.chatgpt = CHATGPT_MODEL35
+    # translator = TranslatorSeleniumGoogletrans(total=1)
+    # ja = translator.translate('test sample.')
+    translator = TranslatorChatGPT(total=1, args=args)
+    ja = translator.translate('psk')
     print('[+] result:', ja)
-
-
-if __name__ == '__main__':
-    trans_test()

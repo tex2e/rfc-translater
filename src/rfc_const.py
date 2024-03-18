@@ -184,6 +184,7 @@ class RfcXmlElem:
     # level3
     TITLE = 'title'
     ABSTRACT = 'abstract'
+    DATE = 'date'
 
 class RfcJsonElem:
     TITLE = 'title'
@@ -203,3 +204,13 @@ class RfcJsonElem:
         RAW = 'raw'
         TOC = 'toc'
     IS_DRAFT = 'is_draft'
+
+
+
+# ------------------------------------------------------------------------------
+
+class RfcSummaryJsonElem:
+    NUMBER = 'number'
+    MODEL = 'model'
+    CREATED_AT = 'created_at'
+    SUMMARY = 'summary'
