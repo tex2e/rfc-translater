@@ -18,6 +18,10 @@ CHATGPT_MODEL4 = "gpt-4-turbo-preview"
 
 
 def get_model_name_from_args_chatgpt(args_chatgpt: str) -> str:
+    if args_chatgpt is None:
+        return CHATGPT_MODEL35
+    if re.match(r'^$', args_chatgpt):
+        return CHATGPT_MODEL35
     if re.match(r'^3\.5', args_chatgpt):
         return CHATGPT_MODEL35
     if re.match(r'^4', args_chatgpt):

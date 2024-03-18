@@ -43,10 +43,10 @@ def summarize_rfc(rfc_number: int, args):
         rfc_json = RfcFile.read_json_file(output_summary_file)
         rfc_current_model = rfc_json[RfcSummaryJsonElem.MODEL]
         if rfc_current_model.startswith('gpt-3.5') and model.startswith('gpt-4'):
-            print(f"[+] RFCの要約結果(旧GPTバージョン)を新GPTバージョンの結果で上書きします")
+            print(f"[*] RFCの要約結果(旧GPTバージョン)を新GPTバージョンの結果で上書きします。")
         else:
             print(f"[-] RFCの要約結果がすでに存在します！")
-            return True
+            return False
 
     # 2024/3
     # 注意：ChatGPT-3.5 は2021/9までの情報しか持っていない
@@ -72,31 +72,48 @@ def summarize_rfc(rfc_number: int, args):
             if datetime.datetime(date_year, date_month, 1) <= datetime.datetime(2023, 12, 1):
                 chatgpt_has_knowledge = True
 
+    # RFC番号で翻訳方法の判定
     if rfc_number < 8900:
-        print(f'[+] summarized by "title"')
-        prompt = summarize_rfc_by_title(rfc_number, rfc_title, model)
+        summarize_rfc_by = 'title'
     elif rfc_number >= 8900 and chatgpt_has_knowledge:
+        summarize_rfc_by = 'title'
+    else:
+        summarize_rfc_by = 'abstract'
+        print(f"[*] ChatGPTのモデルを旧バージョン(3.5)に変更します。")
+        model = CHATGPT_MODEL35  # 概要を要約するときはGPT3.5を常に使用する
+
+    # RFC要約済みかの再判定
+    if rfc_current_model.startswith('gpt-3.5') and model.startswith('gpt-3.5'):
+        print(f"[-] RFCの要約結果がすでに存在します！")
+        return False
+
+    # プロンプトの作成
+    if summarize_rfc_by == 'title':
         print(f'[+] summarized by "title"')
-        prompt = summarize_rfc_by_title(rfc_number, rfc_title, model)
+        prompts = summarize_rfc_by_title(rfc_number, rfc_title, model)
     else:
         print(f'[+] summarized by "abstract"')
-        model = CHATGPT_MODEL35  # 概要を要約するときはGPT3.5を常に使用する
-        prompt = summarize_rfc_by_abstract(rfc_number, rfc_title, model)
+        prompts = summarize_rfc_by_abstract(rfc_number, rfc_title, model)
 
     print(f"[+] model: {model}")
-    print(f"[+] prompt: \n{prompt}")
+    print(f"[+] prompts:")
+    pprint(prompts)
     print(f"")
     if force or RfcUtils.yes_no_input(f"[?] 上記の内容でChatGPTに質問します。よろしいですか？"):
         pass
     else:
         return False
 
+    # メッセージ作成
+    messages = []
+    messages.append({"role": "system", "content": "You are a helpful assistant that translates English to Japanese."})
+    for prompt in prompts:
+        messages.append({"role": "user", "content": prompt})
+
+    # リクエスト作成
     response = openai.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that translates English to Japanese."},
-            {"role": "user", "content": prompt}
-        ],
+        messages=messages,
         temperature=0
     )
 
@@ -132,11 +149,11 @@ def summarize_rfc(rfc_number: int, args):
 def summarize_rfc_by_title(rfc_number: int, rfc_title: str, model: str = CHATGPT_MODEL35):
     # GPTへ送信するプロンプト作成
     if model.lower().startswith("gpt-4"):
-        return f"{rfc_title} についての要約、目的、利用場面3行でまとめてください"
+        return (f"{rfc_title} についての要約、目的、利用場面3行でまとめてください",)
     elif model.lower().startswith("gpt-3"):
-        return f"{rfc_title} についての要約と目的を3行でまとめてください"
+        return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
     else:
-        return f"{rfc_title} についての要約と目的を3行でまとめてください"
+        return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
 
 # RFCの概要(Abstract)でChatGPTに要約してもらう
 def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = CHATGPT_MODEL35):
@@ -150,11 +167,8 @@ def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = CHAT
 
     rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
 
-    prompt = ""
-    prompt += f"次の【原文】の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
-    prompt += f"・出力形式はですます調です。\n"
-    prompt += f"・3行以内で要約してください。\n"
-    prompt += f"\n"
-    prompt += f"【原文】\n"
-    prompt += f"{rfc_abstract_text}"
-    return prompt
+    prompt1 = f"次の【原文】の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
+    prompt1 += f"・出力形式はですます調です。\n"
+    prompt1 += f"・3行以内で要約してください。\n"
+    prompt2 = f"{rfc_abstract_text}"
+    return (prompt1, prompt2)
