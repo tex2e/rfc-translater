@@ -3,7 +3,7 @@
 # ------------------------------------------------------------------------------
 
 import re
-# from pprint import pprint
+from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
@@ -70,7 +70,3 @@ def write_rfc_list_json():
 
     # Save file
     RfcFile.write_json_file(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE, obj)
-
-
-if __name__ == '__main__':
-    pass

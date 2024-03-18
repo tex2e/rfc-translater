@@ -146,7 +146,6 @@ class RfcFile:
             return content
 
 
-
 # ------------------------------------------------------------------------------
 # https://www.rfc-editor.org/rfc-index.xml
 
@@ -172,6 +171,7 @@ class RfcIndexJsonElem:
     UPDATED_BY = 'upd_by'
     CURRENT_STATUS = 'st'
     WG = 'wg'
+
 
 # ------------------------------------------------------------------------------
 # https://www.rfc-editor.org/rfc/rfcXXXX.xml
@@ -204,7 +204,6 @@ class RfcJsonElem:
         RAW = 'raw'
         TOC = 'toc'
     IS_DRAFT = 'is_draft'
-
 
 
 # ------------------------------------------------------------------------------

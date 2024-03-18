@@ -8,13 +8,14 @@ import time
 import platform
 from abc import ABC, abstractmethod
 from tqdm import tqdm  # pip install tqdm
+from .rfc_utils import RfcUtils
+from .rfc_const import RfcFile, RfcJsonElem
+# GoogleTranslator
 import urllib.parse
 from selenium import webdriver  # pip install selenium
 from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
-from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile, RfcJsonElem
 # ChatGPT
 from .nlp_utils import openai, CHATGPT_MODEL35, get_model_name_from_args_chatgpt
 
@@ -323,7 +324,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         translator.close()
 
 
-def trans_test() -> bool:
+def trans_test():
     import argparse
     args = argparse.Namespace()
     args.chatgpt = CHATGPT_MODEL35

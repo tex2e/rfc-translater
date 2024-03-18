@@ -3,10 +3,8 @@
 # ------------------------------------------------------------------------------
 
 import sys
-import re
-import json
 import textwrap
-# from pprint import pprint
+from pprint import pprint
 from bs4 import BeautifulSoup
 from .rfc_const import RfcFile
 from .rfc_utils import RfcUtils

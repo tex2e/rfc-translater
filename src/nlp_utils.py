@@ -29,13 +29,14 @@ def get_model_name_from_args_chatgpt(args_chatgpt: str) -> str:
     return CHATGPT_MODEL35
 
 
+
+# API Document
+# https://platform.openai.com/docs/api-reference/chat/create
+# Chat Usage Example
+# https://cookbook.openai.com/examples/how_to_format_inputs_to_chatgpt_models
+
 if __name__ == '__main__':
     import sys
-
-    # API Document
-    # https://platform.openai.com/docs/api-reference/chat/create
-    # Chat Usage Example
-    # https://cookbook.openai.com/examples/how_to_format_inputs_to_chatgpt_models
 
     def yes_no_input(question: str):
         while True:

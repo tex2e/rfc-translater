@@ -72,8 +72,7 @@ def main():
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         from src.trans_rfc import trans_test
-        res = trans_test()
-        print('Translate test result:', res)
+        trans_test()
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.nlp_summarize_rfc import summarize_rfc
@@ -87,10 +86,10 @@ def main():
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc_number in rfcs:
             print("[*] RFC %s を取得" % rfc_number)
-            if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
-                fetch_rfc_xml(rfc_number, args.force)
+            if (isinstance(rfc_number, int) and rfc_number >= 8650) and (not args.txt):
+                fetch_rfc_xml(rfc_number, args)
             else:
-                fetch_rfc_txt(rfc_number, args.force)
+                fetch_rfc_txt(rfc_number, args)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
         for rfc in rfcs:
@@ -122,13 +121,12 @@ def main():
 
 def fetch_trans_make(rfc_number: int | str, args) -> None:
     fetch_txt = args.txt
-    force = args.force
     print('[*] RFC %s:' % rfc_number)
     try:
         if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not fetch_txt):
-            fetch_rfc_xml(rfc_number, force)
+            fetch_rfc_xml(rfc_number, args)
         else:
-            fetch_rfc_txt(rfc_number, force)
+            fetch_rfc_txt(rfc_number, args)
     except RFCNotFound:
         print('Exception: RFCNotFound!')
         filename = "html/rfc%s-not-found.html" % rfc_number

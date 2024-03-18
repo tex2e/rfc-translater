@@ -5,7 +5,7 @@
 import os
 import re
 import glob
-# from pprint import pprint
+from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcIndexXmlElem, RfcFile
@@ -50,8 +50,3 @@ def diff_remote_and_local_index() -> list[int]:
     local_index  = fetch_local_index()
     diff_index = set(remote_index) - set(local_index)
     return diff_index
-
-
-if __name__ == '__main__':
-    # print(fetch_local_index())
-    print(fetch_remote_index())
