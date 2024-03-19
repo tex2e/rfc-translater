@@ -156,6 +156,9 @@ class TranslatorSeleniumGoogletrans(Translator):
                 time.sleep(30)
                 continue
 
+            # 翻訳結果の微修正
+            ja = re.sub('https：', 'https:', ja)
+
             return ja
 
         # リトライしても翻訳結果が空文字のときは例外とする
