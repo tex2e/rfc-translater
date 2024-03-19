@@ -4,10 +4,9 @@
 
 import os
 import re
-import sys
 import textwrap
 import datetime
-# from pprint import pprint
+from pprint import pprint
 import lxml.etree
 import xml2rfc
 from xml2rfc.writers.base import default_options
@@ -380,8 +379,9 @@ def generate_text_writer(xml: bytes):
 
 # [EntryPoint]
 # RFCの取得処理 (XML版)
-def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
+def fetch_rfc_xml(rfc_number: int | str, args) -> None:
     print("[*] fetch_rfc_xml(%s)" % rfc_number)
+    force = args.force
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -465,7 +465,3 @@ def fetch_rfc_xml(rfc_number: int | str, force=False) -> None:
 
     # JSONの保存
     RfcFile.write_json_file(output_file, obj)
-
-
-if __name__ == '__main__':
-    fetch_rfc_xml(9000)

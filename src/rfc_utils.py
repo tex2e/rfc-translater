@@ -76,3 +76,13 @@ class RfcUtils:
     def get_now():
         JST = timezone(timedelta(hours=+9), 'JST')
         return datetime.now(JST)
+
+    # 実行前にユーザに確認を求めるメッセージを表示する。yで継続、nで中断
+    @staticmethod
+    def yes_no_input(question: str):
+        while True:
+            choice = input(question + " [y/N]: ").lower()
+            if choice in ['y', 'ye', 'yes']:
+                return True
+            elif choice in ['n', 'no']:
+                return False

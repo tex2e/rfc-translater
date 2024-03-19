@@ -146,7 +146,6 @@ class RfcFile:
             return content
 
 
-
 # ------------------------------------------------------------------------------
 # https://www.rfc-editor.org/rfc-index.xml
 
@@ -173,6 +172,7 @@ class RfcIndexJsonElem:
     CURRENT_STATUS = 'st'
     WG = 'wg'
 
+
 # ------------------------------------------------------------------------------
 # https://www.rfc-editor.org/rfc/rfcXXXX.xml
 
@@ -184,6 +184,7 @@ class RfcXmlElem:
     # level3
     TITLE = 'title'
     ABSTRACT = 'abstract'
+    DATE = 'date'
 
 class RfcJsonElem:
     TITLE = 'title'
@@ -203,3 +204,12 @@ class RfcJsonElem:
         RAW = 'raw'
         TOC = 'toc'
     IS_DRAFT = 'is_draft'
+
+
+# ------------------------------------------------------------------------------
+
+class RfcSummaryJsonElem:
+    NUMBER = 'number'
+    MODEL = 'model'
+    CREATED_AT = 'created_at'
+    SUMMARY = 'summary'

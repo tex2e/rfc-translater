@@ -5,6 +5,7 @@
 import os
 import re
 import glob
+from pprint import pprint
 from .rfc_const import RfcFile
 from mako.lookup import TemplateLookup
 
@@ -64,7 +65,3 @@ def make_index_draft() -> None:
 
     # HTMLファイル出力
     RfcFile.write_html_file(RfcFile.OUTPUT_HTML_DRAFT_INDEX_FILE, output)
-
-
-if __name__ == '__main__':
-    make_index()
