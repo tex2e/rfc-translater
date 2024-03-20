@@ -47,10 +47,12 @@ trans_rules = {
     'where': 'ただし',
     'where:': 'ただし：',
     'assume:': '前提：',
-    'client:': 'クライアント：',
-    'server:': 'サーバ：',
+    'client:': 'クライアント:',
+    'server:': 'サーバ:',
     'value:': '値：',
     'for example:': '例えば：',
+    'notation and terminology': '表記と用語',
+    'preliminaries': '前提条件',
 }
 
 
@@ -173,6 +175,41 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
+class TranslatorGoogleV2(Translator):
+
+    # 最初の50万文字（1か月あたり）     無料（毎月$10分のクレジットとして適用）
+    # 50万文字以上（1か月あたり）       $20（100 文字あたり）
+
+    def _init_process(self, args):
+        self.args = args
+
+    def _translate_process(target: str, text: str) -> dict:
+
+        from dotenv import load_dotenv  # pip install python-dotenv
+        # 環境変数の読み込み
+        load_dotenv()
+        # ※環境変数GOOGLE_APPLICATION_CREDENTIALS にクレデンシャルファイルのパスを記載すること
+    
+        from google.cloud import translate_v2 as translate
+
+        translate_client = translate.Client()
+
+        if isinstance(text, bytes):
+            text = text.decode("utf-8")
+
+        # Text can also be a sequence of strings, in which case this method
+        # will return a sequence of results for each text.
+        target = 'ja'
+        result = translate_client.translate(text, target_language=target)
+
+        # print("Text: {}".format(result["input"]))
+        # print("Translation: {}".format(result["translatedText"]))
+        # print("Detected source language: {}".format(result["detectedSourceLanguage"]))
+        ja_text = result["translatedText"]
+
+        return ja_text
+
+
 class TranslatorChatGPT(Translator):
     """ChatGPTによる翻訳処理"""
 
@@ -180,8 +217,7 @@ class TranslatorChatGPT(Translator):
         self.model_name = ChatGPT.get_exact_model_name(args.chatgpt)
 
     def _translate_process(self, text: str) -> str:
-        prompt1 = "次のRFCの文章を英語から日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
-        #prompt1 = "次の英語を日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
+        prompt1 = "次の英語を日本語に翻訳してください。翻訳できないときは英語を翻訳しないでそのまま出力してください。"
         prompt2 = f"{text}"
         # リクエスト送信
         response = openai.chat.completions.create(
@@ -235,6 +271,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         # Google翻訳
         print(f"[*] Google翻訳で翻訳します")
         translator = TranslatorSeleniumGoogletrans(total=total_len, desc=desc, args=args)
+        # translator = TranslatorGoogleV2(total=total_len, desc=desc, args=args)
 
     # ChatGPTのとき、翻訳編集者に表示する内容を修正
     if args.chatgpt:
@@ -272,6 +309,11 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
             if obj_contents_i.get(RfcJsonElem.Contents.RAW) is True:
                 # 図表は翻訳しない
                 obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = ''  # 翻訳結果を格納
+            elif m := re.match(r'^([a-zA-Z]{1,3}:)$', text):
+                # 数式の変数説明は翻訳しない
+                text = m[1]
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = text  # 原文をそのまま格納
+                translator.increment_progress()  # 進捗+1
             elif m := re.match(pattern, text):
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
                 pre_text, text = m[1], m[2]
@@ -300,7 +342,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         is_translation_failed = False
         for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
             ja_text = obj_contents_i[RfcJsonElem.Contents.JA]
-            if len(re.findall(r'翻訳できません', ja_text)) > 0:
+            if len(re.findall(r'翻訳(?:できません|する)|I\'m sorry|入力がありません|入力をそのまま出力します', ja_text)) > 0:
                 is_translation_failed = True
                 en_text = obj_contents_i[RfcJsonElem.Contents.TEXT]
                 print(f"[-] ChatGPT翻訳失敗：{en_text}")
@@ -345,6 +387,7 @@ def trans_test(args):
     # args = argparse.Namespace()
     # args.chatgpt = ChatGPT.MODEL35
     translator = TranslatorSeleniumGoogletrans(total=1, args=args)
+    # translator = TranslatorGoogleV2(total=1, args=args)
     # ja = translator.translate('test sample.')
     # translator = TranslatorChatGPT(total=1, args=args)
     # ja = translator.translate('psk')
