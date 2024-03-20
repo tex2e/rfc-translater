@@ -53,14 +53,16 @@ class Content:
         # 以下xml2rfc対応処理
         self.text = re.sub(r'\xa0', ' ', self.text)  # "Section 1" の空白を正規化する
         self.text = re.sub(r'‑', '-', self.text)  # "[QUIC‑RECOVERY]" のハイフンを正規化する
-        # # Line Separator (\x2028) と Paragraph Separator (\x2029) の削除
-        # self.text = re.sub(r'\x2028|\x2029', '', self.text)
+        # Line Separator (\x2028) と Paragraph Separator (\x2029) の削除
+        self.text = re.sub(r'\u2028|\u2029', ' ', self.text)
 
 
 def _get_parent(elem):
+    """XMLツリーの現在の要素から見た親要素を取得する"""
     return elem.find('..')
 
 def _has_ancestor(elem, tagname: str) -> bool:
+    """XMLツリーの現在の要素から見た先祖の要素に指定したタグ名が含まれるときTrueを返す"""
     current = elem
     while True:
         parent = _get_parent(current)
@@ -71,6 +73,7 @@ def _has_ancestor(elem, tagname: str) -> bool:
         current = parent
 
 def _get_tag_path(elem) -> str:
+    """XMLツリーのルートから現在の要素までのタグ一覧を表示する"""
     return '/' + '/'.join([a.tag for a in elem.iterancestors()][::-1]) + '/' + elem.tag
 
 

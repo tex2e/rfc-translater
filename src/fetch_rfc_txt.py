@@ -280,9 +280,9 @@ class RFCNotFound(Exception):
     pass
 
 
-# [EntryPoint]
-# RFCの取得処理 (TXT版)
 def fetch_rfc_txt(rfc_number: int | str, args) -> None:
+    """RFCの取得処理 (TXT版)"""
+
     print("[*] fetch_rfc_txt(%s)" % rfc_number)
     force = args.force
 

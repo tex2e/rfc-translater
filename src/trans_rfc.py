@@ -6,6 +6,7 @@ import os
 import re
 import time
 import platform
+from pprint import pprint
 from abc import ABC, abstractmethod
 from tqdm import tqdm  # pip install tqdm
 from .rfc_utils import RfcUtils
@@ -111,6 +112,7 @@ class TranslatorSeleniumGoogletrans(Translator):
     """Selenium + Google による翻訳処理"""
 
     def _init_process(self, args):
+        self.args = args
         options = Options()
         options.add_argument('--headless')
         browser = None
@@ -129,18 +131,14 @@ class TranslatorSeleniumGoogletrans(Translator):
         self._browser = browser
 
     def _translate_process(self, text: str) -> str:
-        # URLエンコード
-        text = text.replace('%', '%25')  # 「%」をURLエンコードする
-        text = text.replace('|', '%7C')  # 「|」をURLエンコードする
-        text = text.replace('/', '%2F')  # 「/」をURLエンコードする
-
-        for i in range(0, 3):
+        for _ in range(0, 3):
             browser = self._browser
             # 翻訳したい文をURLに埋め込んでからアクセスする
-            text_for_url = urllib.parse.quote_plus(text, safe='')
-            dest='ja'
-            url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, dest)
-            # print('[+] url:', url)
+            text_for_url = urllib.parse.quote_plus(text, safe='()|')
+            # url = "https://translate.google.co.jp/#en/{1}/{0}".format(text_for_url, 'ja')
+            url = "https://translate.google.co.jp/?hl=ja&sl=en&tl=ja&text={0}&op=translate".format(text_for_url)
+            if self.args.debug:
+                pprint(f'[+] url: {url}')
             browser.get(url)
             # 数秒待機する
             wait_time = 6 + len(text) / 1000
@@ -182,7 +180,8 @@ class TranslatorChatGPT(Translator):
         self.model_name = ChatGPT.get_exact_model_name(args.chatgpt)
 
     def _translate_process(self, text: str) -> str:
-        prompt1 = "次の英語を日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
+        prompt1 = "次のRFCの文章を英語から日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
+        #prompt1 = "次の英語を日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
         prompt2 = f"{text}"
         # リクエスト送信
         response = openai.chat.completions.create(
@@ -234,6 +233,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         translator = TranslatorChatGPT(total=total_len, desc=desc, args=args)
     else:
         # Google翻訳
+        print(f"[*] Google翻訳で翻訳します")
         translator = TranslatorSeleniumGoogletrans(total=total_len, desc=desc, args=args)
 
     # ChatGPTのとき、翻訳編集者に表示する内容を修正
@@ -257,7 +257,6 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
 
             # 既に翻訳済みの段落はスキップする
             if obj_contents_i.get(RfcJsonElem.Contents.JA):
-                translator.increment_progress()  # 進捗+1
                 continue
 
             # 英語原文
@@ -266,15 +265,13 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
             pre_text = ""
             # 日本語翻訳文
             text_ja = ""
-
             # 箇条書きのパターン
             # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
             pattern = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
 
             if obj_contents_i.get(RfcJsonElem.Contents.RAW) is True:
                 # 図表は翻訳しない
-                pre_text, text = ('', '')
-                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = pre_text + text_ja  # 翻訳結果を格納
+                obj[RfcJsonElem.CONTENTS][i][RfcJsonElem.Contents.JA] = ''  # 翻訳結果を格納
             elif m := re.match(pattern, text):
                 # 記号的意味を持つ文字から始まる文は箇条書きなので、その前文字を除外して翻訳する。
                 pre_text, text = m[1], m[2]
@@ -308,7 +305,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
                 en_text = obj_contents_i[RfcJsonElem.Contents.TEXT]
                 print(f"[-] ChatGPT翻訳失敗：{en_text}")
         if is_translation_failed:
-            print(f"[-] 一部の原文で翻訳が失敗しました。内容を確認して手動修正してください。")
+            print(f"[-] 一部の原文で翻訳が失敗しました。内容を確認して手動修正してください！")
 
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
@@ -323,7 +320,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
             print(f"[+] Delete file: {midway_file}")
         return True
 
-    except (NoSuchElementException, TimeoutException, WebDriverException, MyTranslateException, KeyboardInterrupt) as e:
+    except (NoSuchElementException, TimeoutException, WebDriverException, MyTranslateException, KeyboardInterrupt, Exception) as e:
         # NoSuchElementException: Google翻訳で別のページが返ってきたときに発生する例外
         # TimeoutException: ネットワークなどの問題で発生する例外
         # WebDriverException: メモリ不足などでWebDriverがエラーしたとき
@@ -342,13 +339,15 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         translator.close()
 
 
-def trans_test():
+def trans_test(args):
     """翻訳処理の動作確認テスト"""
-    import argparse
-    args = argparse.Namespace()
-    args.chatgpt = ChatGPT.MODEL35
-    # translator = TranslatorSeleniumGoogletrans(total=1)
+    # import argparse
+    # args = argparse.Namespace()
+    # args.chatgpt = ChatGPT.MODEL35
+    translator = TranslatorSeleniumGoogletrans(total=1, args=args)
     # ja = translator.translate('test sample.')
-    translator = TranslatorChatGPT(total=1, args=args)
-    ja = translator.translate('psk')
+    # translator = TranslatorChatGPT(total=1, args=args)
+    # ja = translator.translate('psk')
+    ja = translator.translate('The first stems from the fact that entanglement enables stronger-than-classical correlations, leading to opportunities for tasks that require coordination. As a trivial example, consider the problem of consensus between two nodes who want to agree on the value of a single bit. They can use the quantum network to prepare the state (|00⟩ + |11⟩)/sqrt(2) with each node holding one of the two qubits. Once either of the two nodes performs a measurement, the state of the two qubits collapses to either |00⟩ or |11⟩, so whilst the outcome is random and does not exist before measurement, the two nodes will always measure the same value. We can also build the more general multi-qubit state (|00...⟩ + |11...⟩)/sqrt(2) and perform the same algorithm between an arbitrary number of nodes. These stronger-than-classical correlations generalise to measurement schemes that are more complicated as well.')
     print('[+] result:', ja)
+    translator.increment_progress()

@@ -6,7 +6,7 @@ import sys
 import argparse
 from src.fetch_rfc_txt import fetch_rfc_txt, RFCNotFound
 from src.fetch_rfc_xml import fetch_rfc_xml
-from src.trans_rfc import trans_rfc
+from src.trans_rfc import trans_rfc, trans_test
 from src.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
@@ -49,6 +49,8 @@ def main():
                     help='ChatGPT model version (ex. --chatgpt gpt-3.5-turbo)')
     ap.add_argument('--txt', action='store_true',
                     help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
+    ap.add_argument('--debug', action='store_true',
+                    help='Show more output for debug')
     args = ap.parse_args()
 
     # RFCの指定（複数の場合はカンマ区切り）
@@ -71,8 +73,7 @@ def main():
         fetch_status()
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
-        from src.trans_rfc import trans_test
-        trans_test()
+        trans_test(args)
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.nlp_summarize_rfc import summarize_rfc
@@ -111,15 +112,16 @@ def main():
     elif rfcs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc_number in rfcs:
-            fetch_trans_make(rfc_number, args)
+            _fetch_trans_make(rfc_number, args)
     elif args.begin and args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
-        continuous_main(args)
+        _continuous_main(args)
     else:
         ap.print_help()
     print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
 
-def fetch_trans_make(rfc_number: int | str, args) -> None:
+def _fetch_trans_make(rfc_number: int | str, args) -> None:
+    """RFCの取得、翻訳、HTML作成をまとめて行う"""
     print('[*] RFC %s:' % rfc_number)
     try:
         if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
@@ -135,7 +137,8 @@ def fetch_trans_make(rfc_number: int | str, args) -> None:
     trans_rfc(rfc_number, args)
     make_html(rfc_number)
 
-def continuous_main(args):
+def _continuous_main(args):
+    """複数範囲のRFCを処理する"""
     numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
     if args.begin and args.end:
         # 開始と終了区間の設定
