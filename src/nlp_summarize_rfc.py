@@ -10,29 +10,15 @@ from lxml import etree
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
 # ChatGPT
-from .nlp_utils import openai, CHATGPT_MODEL35, get_model_name_from_args_chatgpt
+from .nlp_utils import openai, ChatGPT
 
-
-def get_rfc_title(rfc_number: int) -> str:
-    # 要約対象RFCのタイトルを表示
-    input_file = RfcFile.get_filepath_data_trans_json(rfc_number)
-    if os.path.exists(input_file):
-        # 翻訳済みRFC (json) の読み込み
-        ctx = RfcFile.read_json_file(input_file)
-        rfc_title = ctx['title']['text']
-        return rfc_title
-    else:
-        return None
-
-# RFCの要約作成
 def summarize_rfc(rfc_number: int, args):
-    force = args.force
-    model = args.chatgpt
-
-    model = get_model_name_from_args_chatgpt(args.chatgpt)
+    """RFCの要約作成"""
+    # GPTのモデル名の正式名称を取得
+    gptmodel = ChatGPT.get_exact_model_name(args.chatgpt)
 
     # RFC翻訳済みかの判定
-    rfc_title = get_rfc_title(rfc_number)
+    rfc_title = _get_rfc_title(rfc_number)
     if not rfc_title:
         print('[!] RFC翻訳が未実施です。先に翻訳作業を完了させてください！')
         return False
@@ -42,16 +28,17 @@ def summarize_rfc(rfc_number: int, args):
     if os.path.exists(output_summary_file):
         rfc_json = RfcFile.read_json_file(output_summary_file)
         rfc_current_model = rfc_json[RfcSummaryJsonElem.MODEL]
-        if rfc_current_model.startswith('gpt-3.5') and model.startswith('gpt-4'):
+        rfc_current_gptmodel = ChatGPT.get_exact_model_name(rfc_current_model)
+        if rfc_current_gptmodel == ChatGPT.MODEL35 and gptmodel == ChatGPT.MODEL4:
             print(f"[*] RFCの要約結果(旧GPTバージョン)を新GPTバージョンの結果で上書きします。")
         else:
             print(f"[-] RFCの要約結果がすでに存在します！")
             return False
 
-    # 2024/3
-    # 注意：ChatGPT-3.5 は2021/9までの情報しか持っていない
-    # 注意：ChatGPT-4 は2023/12までの情報しか持っていない
-
+    # ChatGPTが対象のRFCの知識を持っているかの判定
+    # 2024/3時点で
+    # ・ChatGPT-3.5 は2021/9までの情報しか持っていない
+    # ・ChatGPT-4 は2023/12までの情報しか持っていない
     chatgpt_has_knowledge = False
     if rfc_number >= 8650:
         rfc_url = RfcFile.get_url_rfc_xml(rfc_number)
@@ -80,26 +67,26 @@ def summarize_rfc(rfc_number: int, args):
     else:
         summarize_rfc_by = 'abstract'
         print(f"[*] ChatGPTのモデルを旧バージョン(3.5)に変更します。")
-        model = CHATGPT_MODEL35  # 概要を要約するときはGPT3.5を常に使用する
+        gptmodel = ChatGPT.MODEL35  # 概要を要約するときはGPT3.5を常に使用する
 
     # RFC要約済みかの再判定
-    if rfc_current_model.startswith('gpt-3.5') and model.startswith('gpt-3.5'):
+    if rfc_current_gptmodel == ChatGPT.MODEL35 and gptmodel == ChatGPT.MODEL35:
         print(f"[-] RFCの要約結果がすでに存在します！")
         return False
 
     # プロンプトの作成
     if summarize_rfc_by == 'title':
         print(f'[+] summarized by "title"')
-        prompts = summarize_rfc_by_title(rfc_number, rfc_title, model)
+        prompts = _summarize_rfc_by_title(rfc_number, rfc_title, gptmodel)
     else:
         print(f'[+] summarized by "abstract"')
-        prompts = summarize_rfc_by_abstract(rfc_number, rfc_title, model)
+        prompts = _summarize_rfc_by_abstract(rfc_number, rfc_title, gptmodel)
 
-    print(f"[+] model: {model}")
+    print(f"[+] gptmodel: {gptmodel}")
     print(f"[+] prompts:")
     pprint(prompts)
     print(f"")
-    if force or RfcUtils.yes_no_input(f"[?] 上記の内容でChatGPTに質問します。よろしいですか？"):
+    if args.force or RfcUtils.yes_no_input(f"[?] 上記の内容でChatGPTに質問します。よろしいですか？"):
         pass
     else:
         return False
@@ -112,7 +99,7 @@ def summarize_rfc(rfc_number: int, args):
 
     # リクエスト作成
     response = openai.chat.completions.create(
-        model=model,
+        model=gptmodel,
         messages=messages,
         temperature=0
     )
@@ -122,9 +109,9 @@ def summarize_rfc(rfc_number: int, args):
     print(f"[+] " + "-" * 80)
     print(f"[+] output: \n{text}")
     print(f"[+] " + "-" * 80)
-    print(f"[ ] ")
+    print(f"")
 
-    if force or RfcUtils.yes_no_input(f"上記の内容はRFC {rfc_number}の内容ですか？"):
+    if args.force or RfcUtils.yes_no_input(f"上記の内容はRFC {rfc_number}の内容ですか？"):
         pass
     else:
         return False
@@ -133,7 +120,7 @@ def summarize_rfc(rfc_number: int, args):
     dt_now = datetime.datetime.now()
     obj = {
         "number": rfc_number,
-        "model": model,
+        "model": gptmodel,
         "created_at": dt_now.isoformat(),
         "summary": []
     }
@@ -145,18 +132,18 @@ def summarize_rfc(rfc_number: int, args):
     RfcFile.write_json_file(output_summary_file, obj)
     return True
 
-# RFC番号でChatGPTに要約してもらう
-def summarize_rfc_by_title(rfc_number: int, rfc_title: str, model: str = CHATGPT_MODEL35):
+def _summarize_rfc_by_title(rfc_number: int, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
+    """指定したRFC番号をChatGPTに要約させる"""
     # GPTへ送信するプロンプト作成
-    if model.lower().startswith("gpt-4"):
-        return (f"{rfc_title} についての要約、目的、利用場面3行でまとめてください",)
-    elif model.lower().startswith("gpt-3"):
+    if gptmodel == ChatGPT.MODEL4:
+        return (f"{rfc_title} についての要約、目的、利用場面を3行でまとめてください",)
+    elif gptmodel == ChatGPT.MODEL35:
         return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
     else:
         return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
 
-# RFCの概要(Abstract)でChatGPTに要約してもらう
-def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = CHATGPT_MODEL35):
+def _summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
+    """指定したRFCの概要(Abstract)をChatGPTに要約させる"""
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_xml(rfc_number))
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
@@ -167,8 +154,19 @@ def summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, model: str = CHAT
 
     rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
 
-    prompt1 = f"次の【原文】の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
+    prompt1 = f"次の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
     prompt1 += f"・出力形式はですます調です。\n"
     prompt1 += f"・3行以内で要約してください。\n"
     prompt2 = f"{rfc_abstract_text}"
     return (prompt1, prompt2)
+
+def _get_rfc_title(rfc_number: int) -> str:
+    """対象RFCのタイトルを取得"""
+    input_file = RfcFile.get_filepath_data_trans_json(rfc_number)
+    if os.path.exists(input_file):
+        # 翻訳済みRFC (json) の読み込み
+        ctx = RfcFile.read_json_file(input_file)
+        rfc_title = ctx['title']['text']
+        return rfc_title
+    else:
+        return None

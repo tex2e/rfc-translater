@@ -10,6 +10,7 @@ from src.trans_rfc import trans_rfc
 from src.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
+from src.fetch_status import fetch_status
 from src.rfc_utils import RfcUtils
 
 def main():
@@ -33,7 +34,7 @@ def main():
     ap.add_argument('--force', '-f', action='store_true',
                     help='Ignore cache (ex. --rfc 8446 --fetch --force)')
     ap.add_argument('--only-first', action='store_true',
-                    help='Take only first RFC   (ex. --begin 8000 --only-first)')
+                    help='Take only first RFC (ex. --begin 8000 --only-first)')
     ap.add_argument('--draft', type=str,
                     help='Take RFC draft (ex. --draft draft-ietf-tls-esni-14)')
     ap.add_argument('--fetch-status', action='store_true',
@@ -67,8 +68,7 @@ def main():
         make_index_draft()
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
-        from src.fetch_wg import write_rfc_list_json
-        write_rfc_list_json()
+        fetch_status()
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         from src.trans_rfc import trans_test
@@ -76,12 +76,12 @@ def main():
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.nlp_summarize_rfc import summarize_rfc
-        for rfc in rfcs:
-            print("[*] RFC %s を要約" % rfc)
-            if summarize_rfc(rfc, args):
+        for rfc_number in rfcs:
+            print("[*] RFC %s を要約" % rfc_number)
+            if summarize_rfc(rfc_number, args):
                 # RFCのHTMLを作成
-                print("[*] RFC %s のHTMLを生成" % rfc)
-                make_html(rfc)
+                print("[*] RFC %s のHTMLを生成" % rfc_number)
+                make_html(rfc_number)
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc_number in rfcs:
@@ -92,26 +92,26 @@ def main():
                 fetch_rfc_txt(rfc_number, args)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
-        for rfc in rfcs:
-            print("[*] RFC %s を翻訳" % rfc)
-            trans_rfc(rfc, args)
+        for rfc_number in rfcs:
+            print("[*] RFC %s を翻訳" % rfc_number)
+            trans_rfc(rfc_number, args)
     elif args.make and rfcs:
         # RFCのHTMLを作成 (rfcXXXX.html)
         if len(rfcs) == 1:
             print("[*] RFC %s のHTMLを生成" % (rfcs[0]))
         elif len(rfcs) > 1:
             print("[*] RFC %s - %s のHTMLを生成" % (rfcs[0], rfcs[-1]))
-        for rfc in rfcs:
-            make_html(rfc)
+        for rfc_number in rfcs:
+            make_html(rfc_number)
     elif args.make_json and rfcs:
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
         from src.make_json_from_html import make_json_from_html
-        for rfc in rfcs:
-            make_json_from_html(rfc)
+        for rfc_number in rfcs:
+            make_json_from_html(rfc_number)
     elif rfcs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
-        for rfc in rfcs:
-            fetch_trans_make(rfc, args)
+        for rfc_number in rfcs:
+            fetch_trans_make(rfc_number, args)
     elif args.begin and args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
         continuous_main(args)
@@ -120,10 +120,9 @@ def main():
     print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
 
 def fetch_trans_make(rfc_number: int | str, args) -> None:
-    fetch_txt = args.txt
     print('[*] RFC %s:' % rfc_number)
     try:
-        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not fetch_txt):
+        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
             fetch_rfc_xml(rfc_number, args)
         else:
             fetch_rfc_txt(rfc_number, args)
@@ -137,15 +136,16 @@ def fetch_trans_make(rfc_number: int | str, args) -> None:
     make_html(rfc_number)
 
 def continuous_main(args):
-    begin = args.begin
-    end = args.end
     numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
-    if begin and end:  # 開始と終了区間の設定
-        numbers = [x for x in numbers if begin <= x <= end]
-    elif begin:  # 開始のみ設定
-        numbers = [x for x in numbers if begin <= x]
+    if args.begin and args.end:
+        # 開始と終了区間の設定
+        numbers = [x for x in numbers if args.begin <= x <= args.end]
+    elif args.begin:
+        # 開始のみ設定
+        numbers = [x for x in numbers if args.begin <= x]
 
-    if args.only_first:  # 最初の1つのRFCのみ選択
+    if args.only_first:
+        # 最初の1つのRFCのみ選択
         numbers = numbers[0:1]
 
     for rfc_number in numbers:

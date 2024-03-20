@@ -17,7 +17,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 # ChatGPT
-from .nlp_utils import openai, CHATGPT_MODEL35, get_model_name_from_args_chatgpt
+from .nlp_utils import openai, ChatGPT
 
 
 # 変換元は必ず小文字で記載すること
@@ -53,13 +53,13 @@ trans_rules = {
 }
 
 
-# 翻訳処理例外
 class MyTranslateException(Exception):
+    """翻訳処理例外"""
     pass
 
 
-# 翻訳抽象クラス
 class Translator(ABC):
+    """翻訳処理抽象クラス"""
 
     def __init__(self, total, desc='', args=None):
         self.count = 0
@@ -71,15 +71,18 @@ class Translator(ABC):
         self._init_process(args)
 
     def increment_progress(self, incr=1):
+        """進捗の更新"""
         # プログレスバー用の出力
         self.count += incr
         self.bar.update(incr)
 
     def output_progress(self, len, wait_time):
+        """進捗の詳細情報の更新"""
         # プログレスバーに詳細情報を追加
         self.bar.set_postfix(len=len, sleep=('%.1f' % wait_time))
 
     def translate(self, text: str) -> str:
+        """英語から日本語への翻訳"""
         text = text.strip()
         if len(text) == 0:
             return ""
@@ -90,19 +93,22 @@ class Translator(ABC):
         return self._translate_process(text)
 
     def close(self):
+        """翻訳終了処理"""
         return True
 
     @abstractmethod
     def _init_process(self):
+        # 子クラスで実装する翻訳開始処理
         pass
 
     @abstractmethod
     def _translate_process(self, text: str) -> str:
+        # 子クラスで実装する翻訳処理
         raise MyTranslateException()
 
 
-# Selenium + Google による翻訳処理
 class TranslatorSeleniumGoogletrans(Translator):
+    """Selenium + Google による翻訳処理"""
 
     def _init_process(self, args):
         options = Options()
@@ -123,7 +129,6 @@ class TranslatorSeleniumGoogletrans(Translator):
         self._browser = browser
 
     def _translate_process(self, text: str) -> str:
-
         # URLエンコード
         text = text.replace('%', '%25')  # 「%」をURLエンコードする
         text = text.replace('|', '%7C')  # 「|」をURLエンコードする
@@ -170,20 +175,18 @@ class TranslatorSeleniumGoogletrans(Translator):
         return self._browser.quit()
 
 
-# ChatGPTによる翻訳処理
 class TranslatorChatGPT(Translator):
+    """ChatGPTによる翻訳処理"""
 
     def _init_process(self, args):
-        self.model_name = get_model_name_from_args_chatgpt(args.chatgpt)
+        self.model_name = ChatGPT.get_exact_model_name(args.chatgpt)
 
     def _translate_process(self, text: str) -> str:
-
-        model_name = self.model_name
         prompt1 = "次の英語を日本語に翻訳してください。余計な説明は不要です。翻訳できないときは入力をそのまま出力してください。"
         prompt2 = f"{text}"
         # リクエスト送信
         response = openai.chat.completions.create(
-            model=model_name,
+            model=self.model_name,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that translates English to Japanese."},
                 {"role": "user", "content": prompt1},
@@ -200,6 +203,7 @@ class TranslatorChatGPT(Translator):
 
 
 def trans_rfc(rfc_number: int | str, args) -> bool:
+    """指定したRFCを翻訳する"""
 
     if type(rfc_number) is int:
         # 通常のRFCのとき
@@ -226,7 +230,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
     desc = 'RFC %s' % rfc_number
     if args.chatgpt:
         # ChatGPTによる翻訳
-        print(f"[*] ChatGPTで翻訳します ({get_model_name_from_args_chatgpt(args.chatgpt)})")
+        print(f"[*] ChatGPTで翻訳します ({ChatGPT.get_exact_model_name(args.chatgpt)})")
         translator = TranslatorChatGPT(total=total_len, desc=desc, args=args)
     else:
         # Google翻訳
@@ -328,9 +332,10 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
 
 
 def trans_test():
+    """翻訳処理の動作確認テスト"""
     import argparse
     args = argparse.Namespace()
-    args.chatgpt = CHATGPT_MODEL35
+    args.chatgpt = ChatGPT.MODEL35
     # translator = TranslatorSeleniumGoogletrans(total=1)
     # ja = translator.translate('test sample.')
     translator = TranslatorChatGPT(total=1, args=args)

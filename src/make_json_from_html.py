@@ -10,6 +10,7 @@ from .rfc_const import RfcFile
 from .rfc_utils import RfcUtils
 
 def make_json_from_html(rfc_number: int) -> None:
+    """HTMLからJSONへ変換する"""
 
     # RFCデータ(HTML)の読み込み
     input_file = RfcFile.get_filepath_html_rfc(rfc_number)

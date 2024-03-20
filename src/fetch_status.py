@@ -8,8 +8,8 @@ from lxml import etree
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
 
-def write_rfc_list_json():
-    # Fetch index
+def fetch_status():
+    """RFC IndexのXML版を取得してRFCリストを作成する"""
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_index_xml())
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)

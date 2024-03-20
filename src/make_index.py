@@ -9,8 +9,8 @@ from pprint import pprint
 from .rfc_const import RfcFile
 from mako.lookup import TemplateLookup
 
-# トップページ作成
 def make_index() -> None:
+    """トップページ作成"""
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_FILE):
         html = RfcFile.read_html_file(filepath)
@@ -38,8 +38,8 @@ def make_index() -> None:
     RfcFile.write_html_file(RfcFile.OUTPUT_HTML_INDEX_FILE, output)
 
 
-# Draft版のトップページ作成
 def make_index_draft() -> None:
+    """Draft版のトップページ作成"""
     is_draft = True
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_DRAFT_FILE):

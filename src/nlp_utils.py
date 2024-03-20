@@ -12,25 +12,29 @@ load_dotenv()
 # APIキーの設定
 openai.api_key = os.environ['CHATGPI_API_KEY']
 
-# ChatGPTのモデル名
-CHATGPT_MODEL35 = "gpt-3.5-turbo"
-CHATGPT_MODEL4 = "gpt-4-turbo-preview"
+class ChatGPT:
+    """ChatGPT処理クラス"""
 
+    # ChatGPTのモデル名
+    MODEL35 = "gpt-3.5-turbo"
+    MODEL4 = "gpt-4-turbo-preview"
 
-def get_model_name_from_args_chatgpt(args_chatgpt: str) -> str:
-    if args_chatgpt is None:
-        return CHATGPT_MODEL35
-    if re.match(r'^$', args_chatgpt):
-        return CHATGPT_MODEL35
-    if re.match(r'^3\.5', args_chatgpt):
-        return CHATGPT_MODEL35
-    if re.match(r'^4', args_chatgpt):
-        return CHATGPT_MODEL4
-    if re.match(r'^gpt-3\.5', args_chatgpt):
-        return CHATGPT_MODEL35
-    if re.match(r'^gpt-4', args_chatgpt):
-        return CHATGPT_MODEL4
-    return CHATGPT_MODEL35
+    @staticmethod
+    def get_exact_model_name(args_chatgpt: str) -> str:
+        """ChatGPTのモデル名の正式名称を取得"""
+        if args_chatgpt is None:
+            return ChatGPT.MODEL35
+        if re.match(r'^$', args_chatgpt):
+            return ChatGPT.MODEL35
+        if re.match(r'^3\.5', args_chatgpt):
+            return ChatGPT.MODEL35
+        if re.match(r'^4', args_chatgpt):
+            return ChatGPT.MODEL4
+        if re.match(r'^gpt-3\.5', args_chatgpt):
+            return ChatGPT.MODEL35
+        if re.match(r'^gpt-4', args_chatgpt):
+            return ChatGPT.MODEL4
+        return ChatGPT.MODEL35
 
 
 
@@ -61,7 +65,7 @@ if __name__ == '__main__':
     else:
         sys.exit(0)
 
-    model = CHATGPT_MODEL35
+    model = ChatGPT.MODEL35
     response = openai.chat.completions.create(
         model=model,
         messages=[

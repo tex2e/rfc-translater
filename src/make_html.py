@@ -11,6 +11,7 @@ from .rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
 
 def make_html(rfc_number: int | str) -> None:
+    """RFCのHTMLを作成する"""
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -54,9 +55,11 @@ def make_html(rfc_number: int | str) -> None:
 
 
 class RfcHtmlHelper:
+    """テンプレートエンジン側に関数を渡すための汎用クラス"""
 
     @staticmethod
     def my_replace_filter(text):
+        """HTML文字列をエスケープする"""
         text = text.replace('\n\n', '\x06\x06')
         text = str(markupsafe.escape(text))
         text = text.replace('\x06\x06', '<br>')
@@ -64,6 +67,7 @@ class RfcHtmlHelper:
 
     @staticmethod
     def text_to_id(text: str) -> str:
+        """セクションのタイトルのidを作成する"""
         tmp = text
         tmp = re.sub(r'[. ]', '-', tmp)
         tmp = re.sub(r'[^-a-zA-Z0-9]', '', tmp)
@@ -71,14 +75,17 @@ class RfcHtmlHelper:
 
     @staticmethod
     def indent(text: str, prefix: str) -> str:
+        """文字列（複数行可）にインデントを追加する"""
         return textwrap.indent(text, prefix)
 
     @staticmethod
     def get_updated_by(text: str) -> str:
+        """更新者の作成"""
         if text == '':
             return "自動生成"
         return text
 
     @staticmethod
     def is_rfc_greater_than_or_equal_to_8650(text: str | int) -> bool:
+        """RFCが8650より大きいか（XML版が存在するか）を判定する"""
         return isinstance(text, int) and text >= 8650
