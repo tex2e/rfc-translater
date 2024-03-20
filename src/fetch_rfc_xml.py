@@ -136,12 +136,16 @@ def new_textwriter_render_t(self, e, width, **kwargs):
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
         ancestor_uls = [ a for a in e.iterancestors('ul') ]
         ancestor_ul = ancestor_uls[0]
+        indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
+                sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
         pre_text = ancestor_ul._initial_text(e, ancestor_ul)
         text = '\n'.join([r.text for r in res])
-        text = f'{pre_text}{text}'
-        indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
-                  sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
-        self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
+        out_text = f'{pre_text}{text}'
+        # li直下に複数のtタグが存在するときの対応
+        if get_parent(e).tag == 'li' and len(re.findall(r'\.1$', e.get('pn', ''))) == 0:
+            out_text = f'{text}'
+            indent += 4
+        self._contents.append(Content(out_text, indent=indent, tag=get_tag_path(e)))
     elif ancestor_tag == 'ol':
         # 親要素が順序リスト(ol > li)のとき
         ancestor_ols = [ a for a in e.iterancestors('ol') ]
@@ -155,11 +159,15 @@ def new_textwriter_render_t(self, e, width, **kwargs):
                 pre_text = ancestor_lis[0].get('derivedCounter', '1.')
             else:
                 pre_text = '1.'
-        text = '\n'.join([r.text for r in res])
-        text = f'{pre_text} {text}'
         indent = (sum([a._padding * 2 for a in ancestor_ols if hasattr(a, '_padding')]) + \
                   sum([a._padding * 2 for a in ancestor_uls if hasattr(a, '_padding')]))
-        self._contents.append(Content(text, indent=indent, tag=get_tag_path(e)))
+        text = '\n'.join([r.text for r in res])
+        out_text = f'{pre_text} {text}'
+        # li直下に複数のtタグが存在するときの対応
+        if get_parent(e).tag == 'li' and len(re.findall(r'\.1$', e.get('pn', ''))) == 0:
+            out_text = f'{text}'
+            indent += 4
+        self._contents.append(Content(out_text, indent=indent, tag=get_tag_path(e)))
     elif ancestor_tag == 'dl':
         # 親要素が定義(dl)のとき
         text = '\n'.join([r.text for r in res]).rstrip('\n').lstrip()

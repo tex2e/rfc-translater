@@ -198,6 +198,39 @@ class TestFetchXmlRfc(unittest.TestCase):
         ]
         self.assertEqual(actual, excepted)
 
+    def test_rfc_middle_section_ul_li_t(self):
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <ul spacing="normal" bare="false" empty="false" indent="3" pn="section-5.3-3">
+                <li pn="section-5.3-3.1">
+                    <t indent="0" pn="section-6.1-2.1.1">ItemA</t>
+                    <t indent="0" pn="section-6.1-2.1.2">ItemB</t>
+                </li>
+                <li pn="section-5.3-3.2">
+                    <t indent="0" pn="section-6.1-2.2.1">ItemC</t>
+                    <t indent="0" pn="section-6.1-2.2.2">ItemD</t>
+                </li>
+                <li pn="section-5.3-3.3">Item3</li>
+            </ul>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='* ItemA', indent=6),
+            Content(text='ItemB', indent=10),
+            Content(text='* ItemC', indent=6),
+            Content(text='ItemD', indent=10),
+            Content(text='* Item3', indent=6)
+        ]
+        self.assertEqual(actual, excepted)
+
     def test_rfc_middle_section_ol_li(self):
         self.maxDiff = None
         xml = b'''
@@ -250,6 +283,78 @@ class TestFetchXmlRfc(unittest.TestCase):
             Content(text='2. Item2', indent=8),
             Content(text='a. Item2-1', indent=16),
             Content(text='b. Item2-2', indent=16),
+            Content(text='3. Item3', indent=8)
+        ]
+        self.assertEqual(actual, excepted)
+
+    def test_rfc_middle_section_ol_li_t(self):
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <ol spacing="normal" type="1" indent="adaptive" start="1" pn="section-21.1.3.1-8">
+                <li pn="section-5.3-3.1" derivedCounter="1.">
+                    <t indent="0" pn="section-6.1-2.1.1">ItemA</t>
+                    <t indent="0" pn="section-6.1-2.1.2">ItemB</t>
+                </li>
+                <li pn="section-5.3-3.2" derivedCounter="2.">
+                    <t indent="0" pn="section-6.1-2.2.1">ItemC</t>
+                    <t indent="0" pn="section-6.1-2.2.2">ItemD</t>
+                </li>
+                <li pn="section-5.3-3.3" derivedCounter="3.">Item3</li>
+            </ol>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='1. ItemA', indent=8),
+            Content(text='ItemB', indent=12),
+            Content(text='2. ItemC', indent=8),
+            Content(text='ItemD', indent=12),
+            Content(text='3. Item3', indent=8)
+        ]
+        self.assertEqual(actual, excepted)
+
+    def test_rfc_middle_section_ol_li_ul_li_t(self):
+        self.maxDiff = None
+        xml = b'''
+        <rfc>
+        <middle>
+        <section>
+            <ol spacing="normal" type="1" indent="adaptive" start="1" pn="section-21.1.3.1-8">
+                <li pn="section-5.3-3.1" derivedCounter="1.">
+                    <t indent="0" pn="section-6.1-2.1.1">Item1-1</t>
+                    <t indent="0" pn="section-6.1-2.1.2">Item1-2</t>
+                    <ul spacing="normal" bare="false" empty="false" indent="3" pn="section-6.2-2.5.3">
+                        <li pn="section-6.2-2.5.3.1">First</li>
+                        <li pn="section-6.2-2.5.3.2">Second</li>
+                    </ul>
+                </li>
+                <li pn="section-5.3-3.2" derivedCounter="2.">
+                    <t indent="0" pn="section-6.1-2.2.1">Item2-1</t>
+                    <t indent="0" pn="section-6.1-2.2.2">Item2-2</t>
+                </li>
+                <li pn="section-5.3-3.3" derivedCounter="3.">Item3</li>
+            </ol>
+        </section>
+        </middle>
+        </rfc>
+        '''
+        text_writer = generate_text_writer(xml)
+        text_writer.process()
+        actual = text_writer._contents
+        excepted = [
+            Content(text='1. Item1-1', indent=8),
+            Content(text='Item1-2', indent=12),
+            Content(text='* First', indent=14),
+            Content(text='* Second', indent=14),
+            Content(text='2. Item2-1', indent=8),
+            Content(text='Item2-2', indent=12),
             Content(text='3. Item3', indent=8)
         ]
         self.assertEqual(actual, excepted)
