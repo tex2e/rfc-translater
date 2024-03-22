@@ -342,7 +342,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         is_translation_failed = False
         for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
             ja_text = obj_contents_i[RfcJsonElem.Contents.JA]
-            if len(re.findall(r'翻訳(?:できません|する)|I\'m sorry|入力がありません|入力をそのまま出力します', ja_text)) > 0:
+            if len(re.findall(r'翻訳(?:できません|する)|I\'m sorry|入力がありません|入力をそのまま出力します|そのままの文章', ja_text)) > 0:
                 is_translation_failed = True
                 en_text = obj_contents_i[RfcJsonElem.Contents.TEXT]
                 print(f"[-] ChatGPT翻訳失敗：{en_text}")
