@@ -152,7 +152,7 @@ def _continuous_main(args):
         numbers = numbers[0:1]
 
     for rfc_number in numbers:
-        fetch_trans_make(rfc_number, args)
+        _fetch_trans_make(rfc_number, args)
 
 if __name__ == '__main__':
     main()
