@@ -217,7 +217,7 @@ class TranslatorChatGPT(Translator):
         self.model_name = ChatGPT.get_exact_model_name(args.chatgpt)
 
     def _translate_process(self, text: str) -> str:
-        prompt1 = "次の英語を日本語に翻訳してください。翻訳できないときは英語を翻訳しないでそのまま出力してください。"
+        prompt1 = "次の英語を日本語に翻訳してください。翻訳できないときは英語のまま出力してください。"
         prompt2 = f"{text}"
         # リクエスト送信
         response = openai.chat.completions.create(
