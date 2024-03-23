@@ -135,12 +135,7 @@ def summarize_rfc(rfc_number: int, args):
 def _summarize_rfc_by_title(rfc_number: int, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFC番号をChatGPTに要約させる"""
     # GPTへ送信するプロンプト作成
-    if gptmodel == ChatGPT.MODEL4:
-        return (f"{rfc_title} についての要約、目的、利用場面を3行でまとめてください",)
-    elif gptmodel == ChatGPT.MODEL35:
-        return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
-    else:
-        return (f"{rfc_title} についての要約と目的を3行でまとめてください",)
+    return (f"{rfc_title} についての要約、目的、利用場面を技術者の視点から3行でまとめてください。",)
 
 def _summarize_rfc_by_abstract(rfc_number: int, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFCの概要(Abstract)をChatGPTに要約させる"""

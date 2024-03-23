@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 from tqdm import tqdm  # pip install tqdm
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
+from dotenv import load_dotenv  # pip install python-dotenv
+
 # GoogleTranslator
 import urllib.parse
 from selenium import webdriver  # pip install selenium
@@ -20,6 +22,8 @@ from selenium.webdriver.common.by import By
 # ChatGPT
 from .nlp_utils import openai, ChatGPT
 
+# 環境変数の読み込み
+load_dotenv()
 
 # 変換元は必ず小文字で記載すること
 trans_rules = {
@@ -52,6 +56,7 @@ trans_rules = {
     'value:': '値：',
     'for example:': '例えば：',
     'notation and terminology': '表記と用語',
+    'conventions and terminology': '規則と用語',
     'preliminaries': '前提条件',
 }
 
@@ -128,7 +133,12 @@ class TranslatorSeleniumGoogletrans(Translator):
             # sudo apt install python3-pip firefox
             # sudo pip3 install selenium
             #options.binary_location = '/usr/bin/firefox'
-            browser = webdriver.Firefox(options=options)
+            # browser = webdriver.Firefox(options=options)
+            domain = os.environ.get('WEBDRIVER_DOMAIN', 'localhost:4444')
+            browser = webdriver.Remote(
+                command_executor=f'http://{domain}/wd/hub',
+                options=webdriver.ChromeOptions()
+            )
         browser.implicitly_wait(3)
         self._browser = browser
 
@@ -217,7 +227,7 @@ class TranslatorChatGPT(Translator):
         self.model_name = ChatGPT.get_exact_model_name(args.chatgpt)
 
     def _translate_process(self, text: str) -> str:
-        prompt1 = "次の英語を日本語に翻訳してください。翻訳できないときは英語のまま出力してください。"
+        prompt1 = "次の英語を日本語に翻訳してください。翻訳結果のみ出力し、翻訳できないときは英語のまま出力してください。"
         prompt2 = f"{text}"
         # リクエスト送信
         response = openai.chat.completions.create(
@@ -255,6 +265,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     if os.path.isfile(midway_file):
+        print(f'[+] found midway file: {midway_file}')
         # 途中まで翻訳済みのファイルがあれば復元する
         obj = RfcFile.read_json_file(midway_file)
     else:
@@ -338,16 +349,17 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
 
         print("", flush=True)
 
-        # 翻訳結果チェック
-        is_translation_failed = False
-        for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
-            ja_text = obj_contents_i[RfcJsonElem.Contents.JA]
-            if len(re.findall(r'翻訳(?:できません|する)|I\'m sorry|入力がありません|入力をそのまま出力します|そのままの文章', ja_text)) > 0:
-                is_translation_failed = True
-                en_text = obj_contents_i[RfcJsonElem.Contents.TEXT]
-                print(f"[-] ChatGPT翻訳失敗：{en_text}")
-        if is_translation_failed:
-            print(f"[-] 一部の原文で翻訳が失敗しました。内容を確認して手動修正してください！")
+        if args.chatgpt:
+            # 翻訳結果チェック
+            is_translation_failed = False
+            for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
+                ja_text = obj_contents_i[RfcJsonElem.Contents.JA]
+                if len(re.findall(r'翻訳(?:できません|する)|I\'m sorry|入力がありません|入力をそのまま出力します|そのままの文章', ja_text)) > 0:
+                    is_translation_failed = True
+                    en_text = obj_contents_i[RfcJsonElem.Contents.TEXT]
+                    print(f"[-] ChatGPT翻訳失敗：{en_text}")
+            if is_translation_failed:
+                print(f"[-] 一部の原文で翻訳が失敗しました。内容を確認して手動修正してください！")
 
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
