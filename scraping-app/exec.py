@@ -1,7 +1,7 @@
 
 import re
 import json
-from flask import Flask, render_template
+from flask import Flask, render_template, Response
 from flask import request
 import subprocess
 import traceback
@@ -14,28 +14,33 @@ def index():
 
 @app.route('/exec', methods=["POST"])
 def exec():
-    data = request.data.decode('utf-8')
-    httprespons = ""
-    httpstatus = 200
+
+    # コマンドの結果をリアルタイムで返すジェネレータ関数
+    def generate(exec_cmd: str):
+        popen = subprocess.Popen(exec_cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+        for stdout_line in iter(popen.stdout.readline, ""):
+            yield stdout_line
+        popen.stdout.close()
+        return_code = popen.wait()
+        if return_code:
+            raise subprocess.CalledProcessError(return_code, cmd)
+
+    try:
+        data = request.data.decode('utf-8')
+    except Exception as e:
+        return "invalid encoding", 400
     try:
         data = json.loads(data)
-        cmd = data.get('cmd')
-        exec_cmd = re.split(r' +', f'python main.py {cmd}')
-        res = subprocess.run(
-            # ["ls", "-l"],
-            exec_cmd,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True,
-        )
-        httprespons = res.stdout
-        if res.returncode != 0:
-            httpstatus = 500
-    except Exception as ex:
-        httprespons = ''.join(traceback.TracebackException.from_exception(ex).format())
-        httpstatus = 500
-    return httprespons, httpstatus
+    except Exception as e:
+        return "invalid json", 400
+    cmd = data.get('cmd')
+    if not cmd:
+        return "invalid args (cmd)", 400
+    if not isinstance(cmd, list):
+        return "invalid type (cmd)", 400
+    exec_cmd = ['python', 'main.py'] + cmd
+
+    return Response(generate(exec_cmd))
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80, debug=True)
