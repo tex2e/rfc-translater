@@ -6,3 +6,6 @@ WORKDIR /opt/app/
 
 COPY requirements.txt /opt/app/
 RUN pip install -r /opt/app/requirements.txt
+
+COPY scraping-app/exec.py /opt/app/
+CMD ["python", "exec.py"]

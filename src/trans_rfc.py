@@ -271,9 +271,10 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
     else:
         obj = RfcFile.read_json_file(input_file)
 
-    # 翻訳機の選択
+    # 翻訳対象の段落数
     total_len = len([con for con in obj[RfcJsonElem.CONTENTS] if not con.get(RfcJsonElem.Contents.RAW)])
     desc = 'RFC %s' % rfc_number
+    # 翻訳機の選択
     if args.chatgpt:
         # ChatGPTによる翻訳
         print(f"[*] ChatGPTで翻訳します ({ChatGPT.get_exact_model_name(args.chatgpt)})")
@@ -305,6 +306,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
 
             # 既に翻訳済みの段落はスキップする
             if obj_contents_i.get(RfcJsonElem.Contents.JA):
+                translator.increment_progress()  # 進捗+1
                 continue
 
             # 英語原文
