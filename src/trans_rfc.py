@@ -249,6 +249,7 @@ class TranslatorChatGPT(Translator):
 
 def trans_rfc(rfc_number: int | str, args) -> bool:
     """指定したRFCを翻訳する"""
+    print(f"[*] trans_rfc({rfc_number})")
 
     if type(rfc_number) is int:
         # 通常のRFCのとき

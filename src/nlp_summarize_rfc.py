@@ -14,6 +14,8 @@ from .nlp_utils import openai, ChatGPT
 
 def summarize_rfc(rfc_number: int, args):
     """RFCの要約作成"""
+    print(f'[*] summarize_rfc({summarize_rfc})')
+
     # GPTのモデル名の正式名称を取得
     gptmodel = ChatGPT.get_exact_model_name(args.chatgpt)
 

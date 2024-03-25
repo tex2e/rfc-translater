@@ -78,15 +78,15 @@ def main():
         # RFCの要約作成
         from src.nlp_summarize_rfc import summarize_rfc
         for rfc_number in rfcs:
-            print("[*] RFC %s を要約" % rfc_number)
+            # print("[*] RFC %s を要約" % rfc_number)
             if summarize_rfc(rfc_number, args):
                 # RFCのHTMLを作成
-                print("[*] RFC %s のHTMLを生成" % rfc_number)
+                # print("[*] RFC %s のHTMLを生成" % rfc_number)
                 make_html(rfc_number)
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc_number in rfcs:
-            print("[*] RFC %s を取得" % rfc_number)
+            # print("[*] RFC %s を取得" % rfc_number)
             if (isinstance(rfc_number, int) and rfc_number >= 8650) and (not args.txt):
                 fetch_rfc_xml(rfc_number, args)
             else:
@@ -94,14 +94,14 @@ def main():
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
         for rfc_number in rfcs:
-            print("[*] RFC %s を翻訳" % rfc_number)
+            # print("[*] RFC %s を翻訳" % rfc_number)
             trans_rfc(rfc_number, args)
     elif args.make and rfcs:
         # RFCのHTMLを作成 (rfcXXXX.html)
-        if len(rfcs) == 1:
-            print("[*] RFC %s のHTMLを生成" % (rfcs[0]))
-        elif len(rfcs) > 1:
-            print("[*] RFC %s - %s のHTMLを生成" % (rfcs[0], rfcs[-1]))
+        # if len(rfcs) == 1:
+        #     print("[*] RFC %s のHTMLを生成" % (rfcs[0]))
+        # elif len(rfcs) > 1:
+        #     print("[*] RFC %s - %s のHTMLを生成" % (rfcs[0], rfcs[-1]))
         for rfc_number in rfcs:
             make_html(rfc_number)
     elif args.make_json and rfcs:
@@ -122,7 +122,7 @@ def main():
 
 def _fetch_trans_make(rfc_number: int | str, args) -> None:
     """RFCの取得、翻訳、HTML作成をまとめて行う"""
-    print('[*] RFC %s:' % rfc_number)
+    print(f'[*] RFC {rfc_number}:')
     try:
         if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
             fetch_rfc_xml(rfc_number, args)
@@ -130,7 +130,7 @@ def _fetch_trans_make(rfc_number: int | str, args) -> None:
             fetch_rfc_txt(rfc_number, args)
     except RFCNotFound:
         print('Exception: RFCNotFound!')
-        filename = "html/rfc%s-not-found.html" % rfc_number
+        filename = f"html/rfc{rfc_number}-not-found.html"
         with open(filename, "w") as f:
             f.write('')
         return

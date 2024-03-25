@@ -11,6 +11,7 @@ from mako.lookup import TemplateLookup
 
 def make_index() -> None:
     """トップページ作成"""
+    print(f'[*] make_index()')
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_FILE):
         html = RfcFile.read_html_file(filepath)
@@ -40,6 +41,7 @@ def make_index() -> None:
 
 def make_index_draft() -> None:
     """Draft版のトップページ作成"""
+    print(f'[*] make_index_draft()')
     is_draft = True
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_DRAFT_FILE):

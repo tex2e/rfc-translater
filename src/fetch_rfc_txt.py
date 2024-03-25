@@ -282,9 +282,7 @@ class RFCNotFound(Exception):
 
 def fetch_rfc_txt(rfc_number: int | str, args) -> None:
     """RFCの取得処理 (TXT版)"""
-
-    print("[*] fetch_rfc_txt(%s)" % rfc_number)
-    force = args.force
+    print(f"[*] fetch_rfc_txt({rfc_number})")
 
     if type(rfc_number) is int:
         # RFCのとき
@@ -303,7 +301,7 @@ def fetch_rfc_txt(rfc_number: int | str, args) -> None:
         raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
-    if not force and os.path.isfile(output_file):
+    if not args.force and os.path.isfile(output_file):
         return
 
     # RFCページのDOMツリーの取得

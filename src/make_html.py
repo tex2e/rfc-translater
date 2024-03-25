@@ -12,6 +12,7 @@ from mako.lookup import TemplateLookup
 
 def make_html(rfc_number: int | str) -> None:
     """RFCのHTMLを作成する"""
+    print(f'[*] make_html({rfc_number})')
 
     if type(rfc_number) is int:
         # RFCのとき

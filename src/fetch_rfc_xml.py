@@ -392,7 +392,7 @@ def generate_text_writer(xml: bytes):
 def fetch_rfc_xml(rfc_number: int | str, args) -> None:
     """RFCの取得処理 (XML版)"""
 
-    print("[*] fetch_rfc_xml(%s)" % rfc_number)
+    print(f"[*] fetch_rfc_xml({rfc_number})")
     force = args.force
 
     if type(rfc_number) is int:
