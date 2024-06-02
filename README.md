@@ -32,52 +32,52 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 ### 翻訳修正者
 
 1. html/rfcXXXX.htmlの翻訳を修正します。
-   - **見出し**は`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
-      ```html
-      <div class="row">
-        <div class="col-sm-12 col-md-6">
-          <h5 class="text mt-2" id="1--Introduction">
-      1.  Introduction
-          </h5>
+    - **見出し**は`<h5 class="text mt-2">`を使います。1番目に英文、2番目に和文を書きます。
+        ```html
+        <div class="row">
+          <div class="col-sm-12 col-md-6">
+            <h5 class="text mt-2" id="1--Introduction">
+        1.  Introduction
+            </h5>
+          </div>
+          <div class="col-sm-12 col-md-6">
+            <h5 class="text mt-2">
+        1. はじめに
+            </h5>
+          </div>
         </div>
-        <div class="col-sm-12 col-md-6">
-          <h5 class="text mt-2">
-      1. はじめに
-          </h5>
+        ```
+    - **文章**は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
+        ```html
+        <div class="row">
+          <div class="col-sm-12 col-md-6">
+            <p class="text indent-3">
+        Hello, world!
+            </p>
+          </div>
+          <div class="col-sm-12 col-md-6">
+            <p class="text indent-3">
+        こんにちは世界！
+            </p>
+          </div>
         </div>
-      </div>
-      ```
-   - **文章**は`<p class="text indent-X">`を使います。「indent-X」classでインデントの深さを指定します。
-      ```html
-      <div class="row">
-        <div class="col-sm-12 col-md-6">
-          <p class="text indent-3">
-      Hello, world!
-          </p>
+        ```
+    - **図表やプログラム**は`<pre class="text text-monospace">`を使います。英文のみです。
+        ```html
+        <div class="row">
+          <div class="col-sm-12 col-md-12">
+            <pre class="text text-monospace">
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
+            |  Option Type  |  Opt Data Len |  Option Data
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
+            </pre>
+          </div>
         </div>
-        <div class="col-sm-12 col-md-6">
-          <p class="text indent-3">
-      こんにちは世界！
-          </p>
-        </div>
-      </div>
-      ```
-   - **図表やプログラム**は`<pre class="text text-monospace">`を使います。英文のみです。
-      ```html
-      <div class="row">
-        <div class="col-sm-12 col-md-12">
-          <pre class="text text-monospace">
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
-          |  Option Type  |  Opt Data Len |  Option Data
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- - - - - - - - -
-          </pre>
-        </div>
-      </div>
-      ```
-   - 最後に修正者に自動翻訳だけではない旨を記載してください
-     ```html
-     <span class="updated_by">翻訳編集 : 自動生成＆有志による翻訳・編集</span>
-     ```
+        ```
+    - 最後に修正者に自動翻訳だけではない旨を記載してください
+        ```html
+        <span class="updated_by">翻訳編集 : 自動生成＆有志による翻訳・編集</span>
+        ```
 2. 修正したHTMLをブラウザで開いて正しく表示されるか確認します。
 3. GitHub上でPullRequestを出します。
 
