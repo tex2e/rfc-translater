@@ -85,8 +85,8 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 
 1. PullRequestの差分を確認し、HTML構造に問題がないか確認します。
 2. PullRequestのブランチをローカルにPullします。
-3. `python main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認します。
-4. `python main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認します。
+3. `python3 main.py --make-json --rfc <対象RFC>` でHTMLからJSONを逆作成し、変更差分を確認します。
+4. `python3 main.py --make --rfc <対象RFC>` でJSONからHTMLを作成し、変更差分を確認します。
 5. 問題点があれば `git checkout -- html/rfc<対象RFC>.html` で元に戻して、元データの JSON やプログラムの不備を調査します。
 6. 問題がなければMergeし、リモートにPushします。
 
