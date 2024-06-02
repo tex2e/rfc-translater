@@ -96,6 +96,6 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 
 全体像：
 
-![全体像](./img/drawio.png)
+![全体像](./img/rfc-trans.drawio.svg)
 
 詳細は、[README_ForDeveloper](./README_ForDeveloper.md) を参照ください
