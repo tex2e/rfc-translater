@@ -4,10 +4,10 @@
 
 import sys
 import argparse
-from src.fetch_rfc_txt import fetch_rfc_txt, RFCNotFound
-from src.fetch_rfc_xml import fetch_rfc_xml
-from src.trans_rfc import trans_rfc, trans_test
-from src.make_html import make_html
+from src.domain.services.fetch_rfc_txt import fetch_rfc_txt, RFCNotFound
+from src.domain.services.fetch_rfc_xml import fetch_rfc_xml
+from src.domain.services.trans_rfc import trans_rfc, trans_test
+from src.domain.services.make_html import make_html
 from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.fetch_status import fetch_status

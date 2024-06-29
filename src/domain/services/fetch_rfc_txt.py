@@ -2,15 +2,14 @@
 # IETFのWebサイトからRFCをTXT形式で取得し、文章・図・表・コードの判定をするためのプログラム
 # ------------------------------------------------------------------------------
 
-import os
 import re
 import textwrap
 import lxml.html
 from pprint import pprint
-from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile, RfcJsonElem
-from .domain.models.rfc import IRfc, Rfc, RfcDraft
-from .domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
+from ...rfc_utils import RfcUtils
+from ...rfc_const import RfcFile, RfcJsonElem
+from ...domain.models.rfc import IRfc, Rfc, RfcDraft
+from ...domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\x07\x07\x07'

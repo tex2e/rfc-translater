@@ -7,9 +7,9 @@ import re
 import textwrap
 import markupsafe
 from pprint import pprint
-from .rfc_const import RfcFile, RfcJsonElem
+from ...rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
-from .domain.models.rfc import IRfc, Rfc, RfcDraft
+from ..models.rfc import IRfc, Rfc, RfcDraft
 
 def make_html(rfc: IRfc) -> None:
     """RFCのHTMLを作成する"""

@@ -10,10 +10,10 @@ import lxml.etree
 import xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
-from .rfc_utils import RfcUtils
-from .rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
-from .domain.models.rfc import IRfc, Rfc, RfcDraft
-from .domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
+from ...rfc_utils import RfcUtils
+from ...rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
+from ...domain.models.rfc import IRfc, Rfc, RfcDraft
+from ...domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
 
 # RFCの段落情報を格納するクラス
 class Content:
