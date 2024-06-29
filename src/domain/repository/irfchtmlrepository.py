@@ -10,7 +10,7 @@ class IRfcHtmlRepository(metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def find(self, rfc: IRfc) -> object:
+    def find(self, rfc: IRfc) -> str:
         raise NotImplementedError()
 
     @abc.abstractmethod

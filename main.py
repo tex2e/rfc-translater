@@ -67,18 +67,18 @@ def main():
         rfcs = [Rfc(str(rfc_number)) for rfc_number in range(args.begin, args.end)]
     elif args.draft:
         rfcs = [RfcDraft(args.draft)]
-    else:
+    elif args.only_first:
         # RFC 2220以降のみを対象とする。ただし、引数beginで変更可能
         begin = 2220
         if args.begin:
             begin = args.begin
         # リモートとローカルの差分でRFCの一覧を作成する
         rfcs = [Rfc(str(rfc_number)) for rfc_number in diff_remote_and_local_index() if rfc_number >= begin]
+        # 未翻訳の最初のRFCのみ取得
+        if args.only_first:
+            rfcs = rfcs[0:1]
 
     all_option_none = ((not args.fetch) and (not args.trans) and (not args.make))
-
-    if args.only_first:
-        rfcs = rfcs[0:1]
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
@@ -96,7 +96,7 @@ def main():
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
         from src.domain.services.make_json_from_html import make_json_from_html
         for rfc in rfcs:
-            make_json_from_html(rfc)
+            make_json_from_html(rfc, RfcHtmlFileRepository(), RfcJsonTransFileRepository())
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.domain.services.nlp_summarize_rfc import summarize_rfc

@@ -9,11 +9,11 @@ class RfcHtmlFileRepository(IRfcHtmlRepository):
     def findpath(self, rfc: IRfc) -> str:
         return RfcFile.get_filepath_html_rfc(rfc)
 
-    def find(self, rfc: IRfc) -> object:
+    def find(self, rfc: IRfc) -> str:
         filepath = self.findpath(rfc)
         if not os.path.isfile(filepath):
             return None
-        obj = RfcFile.read_json_file(filepath)
+        obj = RfcFile.read_html_file(filepath)  # HTML入力
         return obj
 
     def save(self, rfc: IRfc, output_string: object) -> None:

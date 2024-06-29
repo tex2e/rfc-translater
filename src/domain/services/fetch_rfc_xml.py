@@ -460,7 +460,8 @@ def fetch_rfc_xml(rfc: IRfc,
             RfcJsonElem.Contents.TEXT: content.text,
         })
         if content.title:
-            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TITLE] = True
+            # obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TITLE] = True
+            obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.INDENT] = 0
         if content.section_title:
             obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.SECTION_TITLE] = True
         if content.raw:

@@ -55,7 +55,6 @@ pip3 install -r requirements.txt
     python3 main.py --rfc 1234 --make   # HTMLの生成だけ
     python3 main.py --begin 2220 --end 10000         # RFC2220〜10000を翻訳する
     python3 main.py --make --begin 2220 --end 10000  # RFC2220〜10000のHTMLを生成する
-    python3 main.py                            # 未翻訳RFCを順番に翻訳する
     python3 main.py --begin 8000 --only-first  # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
     ```
 
