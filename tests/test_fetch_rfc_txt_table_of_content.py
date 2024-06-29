@@ -3,7 +3,7 @@
 
 import unittest
 import difflib
-from src.fetch_rfc_txt import Paragraph
+from src.domain.services.fetch_rfc_txt import Paragraph
 
 
 # --- Table of Content ---------------------------------------------------------

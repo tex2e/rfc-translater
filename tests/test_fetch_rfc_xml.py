@@ -3,7 +3,7 @@
 
 import unittest
 from pprint import pprint
-from src.fetch_rfc_xml import generate_text_writer, Content
+from src.domain.services.fetch_rfc_xml import generate_text_writer, Content
 
 class TestFetchXmlRfc(unittest.TestCase):
 
