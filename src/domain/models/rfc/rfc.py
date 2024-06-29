@@ -1,5 +1,5 @@
 
-from .rfcmeta import IRfc
+from .irfc import IRfc
 
 
 class Rfc(IRfc):

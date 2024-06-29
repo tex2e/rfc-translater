@@ -1,5 +1,5 @@
 
-from .rfcmeta import IRfc
+from .irfc import IRfc
 
 
 class RfcDraft(IRfc):
@@ -9,4 +9,4 @@ class RfcDraft(IRfc):
         self.draftname = draftname
 
     def get_id(self) -> str:
-        return self.number
+        return self.draftname
