@@ -3,37 +3,42 @@
 # ------------------------------------------------------------------------------
 
 import re
-import os
 import datetime
 from pprint import pprint
 from lxml import etree
-from .rfc_utils import RfcUtils
-from .rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
-from .domain.models.rfc import IRfc, Rfc
+from ...rfc_utils import RfcUtils
+from ...rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
+from ..models.rfc import IRfc, Rfc
+from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
+from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT
-from .nlp_utils import openai, ChatGPT
+from ...nlp_utils import openai, ChatGPT
 
-def summarize_rfc(rfc: IRfc, args):
+def summarize_rfc(rfc: IRfc,
+                  rfc_json_trans_repo: IRfcJsonTransRepository,
+                  rfc_json_data_summary_repo: IRfcJsonDataSummaryRepository,
+                  args):
     """RFCの要約作成"""
 
     assert isinstance(rfc, IRfc)
     assert isinstance(rfc, Rfc)  # Draft版以外のみ対応
+    assert isinstance(rfc_json_trans_repo, IRfcJsonTransRepository)
+    assert isinstance(rfc_json_data_summary_repo, IRfcJsonDataSummaryRepository)
 
-    print(f'[*] summarize_rfc({summarize_rfc})')
+    print(f'[*] summarize_rfc({rfc.get_id()})')
 
     # GPTのモデル名の正式名称を取得
     gptmodel = ChatGPT.get_exact_model_name(args.chatgpt)
 
     # RFC翻訳済みかの判定
-    rfc_title = _get_rfc_title(rfc)
+    rfc_title = rfc_json_trans_repo.get_title(rfc)
     if not rfc_title:
         print('[!] RFC翻訳が未実施です。先に翻訳作業を完了させてください！')
         return False
 
     # RFC要約済みかの判定
-    output_summary_file = RfcFile.get_filepath_data_summary_json(rfc)
-    if os.path.exists(output_summary_file):
-        rfc_json = RfcFile.read_json_file(output_summary_file)
+    rfc_current_gptmodel = None
+    if rfc_json := rfc_json_data_summary_repo.find(rfc):
         rfc_current_model = rfc_json[RfcSummaryJsonElem.MODEL]
         rfc_current_gptmodel = ChatGPT.get_exact_model_name(rfc_current_model)
         if rfc_current_gptmodel == ChatGPT.MODEL35 and gptmodel == ChatGPT.MODEL4:
@@ -136,13 +141,13 @@ def summarize_rfc(rfc: IRfc, args):
         obj['summary'].append(splitted_text)
 
     # RFC要約の出力
-    RfcFile.write_json_file(output_summary_file, obj)
+    rfc_json_data_summary_repo.save(rfc, obj)
     return True
 
 def _summarize_rfc_by_title(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFC番号をChatGPTに要約させる"""
     # GPTへ送信するプロンプト作成
-    return (f"{rfc_title} についての要約、目的、利用場面を技術者の視点から3行でまとめてください。",)
+    return (f"{rfc_title} についての要約、目的、利用場面を技術者の視点から2行でまとめてください。",)
 
 def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFCの概要(Abstract)をChatGPTに要約させる"""
@@ -156,19 +161,9 @@ def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGP
 
     rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
 
-    prompt1 = f"次の英語の文章を日本語で要約してください。翻訳するときに以下の条件を満たしてください。\n"
-    prompt1 += f"・出力形式はですます調です。\n"
-    prompt1 += f"・3行以内で要約してください。\n"
+    prompt1 = f"次の英語の文章を以下の条件で要約してください。\n"
+    prompt1 += f"・出力言語は日本語n"
+    prompt1 += f"・出力形式はですます調\n"
+    prompt1 += f"・2行で要約\n\n"
     prompt2 = f"{rfc_abstract_text}"
     return (prompt1, prompt2)
-
-def _get_rfc_title(rfc: IRfc) -> str:
-    """対象RFCのタイトルを取得"""
-    input_file = RfcFile.get_filepath_data_trans_json(rfc)
-    if os.path.exists(input_file):
-        # 翻訳済みRFC (json) の読み込み
-        ctx = RfcFile.read_json_file(input_file)
-        rfc_title = ctx['title']['text']
-        return rfc_title
-    else:
-        return None

@@ -27,3 +27,10 @@ class RfcJsonTransFileRepository(IRfcJsonTransRepository):
             os.remove(filepath)
             return True
         return False
+
+    def get_title(self, rfc: IRfc) -> str:
+        """対象RFCのタイトルを取得"""
+        obj = self.find(rfc)
+        # 翻訳済みRFC (json) の読み込み
+        rfc_title = obj['title']['text']
+        return rfc_title

@@ -19,6 +19,7 @@ from src.infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTr
 from src.infrastructure.repository.rfcjsondatasummaryrepository import RfcJsonDataSummaryFileRepository
 from src.infrastructure.repository.rfchtmlrepository import RfcHtmlFileRepository
 
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--rfc', type=str,
@@ -82,14 +83,11 @@ def main():
         trans_test(args)
     elif args.summarize and rfcs:
         # RFCの要約作成
-        from src.nlp_summarize_rfc import summarize_rfc
+        from src.domain.services.nlp_summarize_rfc import summarize_rfc
         for rfc in rfcs:
-            rfc_number = rfc.get_id()
-            # print("[*] RFC %s を要約" % rfc_number)
-            if summarize_rfc(rfc_number, args):
+            if summarize_rfc(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), args):
                 # RFCのHTMLを作成
-                # print("[*] RFC %s のHTMLを生成" % rfc_number)
-                make_html(rfc)
+                make_html(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), RfcHtmlFileRepository())
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc in rfcs:
