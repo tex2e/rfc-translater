@@ -9,7 +9,9 @@ from pprint import pprint
 from ...rfc_utils import RfcUtils
 from ...rfc_const import RfcFile, RfcJsonElem
 from ...domain.models.rfc import IRfc, Rfc, RfcDraft
-from ...domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
+from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ..models.rfc.rfcnotfound import RFCNotFoundException
+
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\x07\x07\x07'
@@ -275,16 +277,12 @@ class Paragraphs:
         return iter(self.paragraphs)
 
 
-# RFC取得先リンクにデータが存在しないときは、RFCNotFoundエラーを投げること。
-# このエラーを投げると、html/rfcXXXX-not-found.html が作成される。
-class RFCNotFound(Exception):
-    pass
-
-
-def fetch_rfc_txt(rfc: IRfc, rfc_json_plain_repo: IRfcJsonPlainRepository, args) -> None:
+def fetch_rfc_txt(rfc: IRfc,
+                  rfc_json_plain_repo: IRfcJsonDataRepository,
+                  args) -> None:
     """RFCの取得処理 (TXT版)"""
     assert isinstance(rfc, IRfc)
-    assert isinstance(rfc_json_plain_repo, IRfcJsonPlainRepository)
+    assert isinstance(rfc_json_plain_repo, IRfcJsonDataRepository)
 
     print(f"[*] fetch_rfc_txt({rfc.get_id()})")
 
@@ -300,7 +298,7 @@ def fetch_rfc_txt(rfc: IRfc, rfc_json_plain_repo: IRfcJsonPlainRepository, args)
     # タイトル取得
     title = tree.xpath('//title/text()')
     if len(title) == 0:
-        raise RFCNotFound
+        raise RFCNotFoundException
     title = title[0].strip()
 
     # タイトルの取得（パターンマッチ）

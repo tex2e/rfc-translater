@@ -7,11 +7,14 @@ import re
 import time
 import platform
 from pprint import pprint
-from abc import ABC, abstractmethod
+import abc
 from tqdm import tqdm  # pip install tqdm
 from ...rfc_utils import RfcUtils
 from ...rfc_const import RfcFile, RfcJsonElem
 from ..models.rfc import IRfc, Rfc, RfcDraft
+from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
+from ..repository.irfcjsontransmidwayrepository import IRfcJsonTransMidwayRepository
 from dotenv import load_dotenv  # pip install python-dotenv
 
 # GoogleTranslator
@@ -67,7 +70,7 @@ class MyTranslateException(Exception):
     pass
 
 
-class Translator(ABC):
+class Translator(abc.ABC):
     """翻訳処理抽象クラス"""
 
     def __init__(self, total, desc='', args=None):
@@ -105,12 +108,12 @@ class Translator(ABC):
         """翻訳終了処理"""
         return True
 
-    @abstractmethod
+    @abc.abstractmethod
     def _init_process(self):
         # 子クラスで実装する翻訳開始処理
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def _translate_process(self, text: str) -> str:
         # 子クラスで実装する翻訳処理
         raise MyTranslateException()
@@ -248,10 +251,17 @@ class TranslatorChatGPT(Translator):
         return ja
 
 
-def trans_rfc(rfc: IRfc, args) -> bool:
+def trans_rfc(rfc: IRfc,
+              rfc_json_data_repo: IRfcJsonDataRepository,
+              rfc_json_trans_repo: IRfcJsonTransRepository,
+              rfc_json_trans_midway_repo: IRfcJsonTransMidwayRepository,
+              args) -> bool:
     """指定したRFCを翻訳する"""
 
     assert isinstance(rfc, IRfc)
+    assert isinstance(rfc_json_data_repo, IRfcJsonDataRepository)
+    assert isinstance(rfc_json_trans_repo, IRfcJsonTransRepository)
+    assert isinstance(rfc_json_trans_midway_repo, IRfcJsonTransMidwayRepository)
 
     print(f"[*] trans_rfc({rfc.get_id()})")
 
@@ -262,9 +272,9 @@ def trans_rfc(rfc: IRfc, args) -> bool:
     if os.path.isfile(midway_file):
         print(f'[+] found midway file: {midway_file}')
         # 途中まで翻訳済みのファイルがあれば復元する
-        obj = RfcFile.read_json_file(midway_file)
+        obj = rfc_json_trans_midway_repo.find(rfc)
     else:
-        obj = RfcFile.read_json_file(input_file)
+        obj = rfc_json_data_repo.find(rfc)
 
     # 翻訳対象の段落数
     total_len = len([con for con in obj[RfcJsonElem.CONTENTS] if not con.get(RfcJsonElem.Contents.RAW)])
@@ -360,14 +370,13 @@ def trans_rfc(rfc: IRfc, args) -> bool:
 
         # 正常終了した時
         # 翻訳成果物をファイルに出力する
-        RfcFile.write_json_file(output_file, obj)
+        rfc_json_trans_repo.save(rfc, obj)
         print(f"[+] Save file: {output_file}")
         # 不要な入力ファイルの削除
-        os.remove(input_file)
-        print(f"[+] Delete file: {input_file}")
+        if rfc_json_data_repo.delete(rfc):
+            print(f"[+] Delete file: {input_file}")
         # 不要な中間ファイルの削除
-        if os.path.isfile(midway_file):
-            os.remove(midway_file)
+        if rfc_json_trans_midway_repo.delete(rfc):
             print(f"[+] Delete file: {midway_file}")
         return True
 
@@ -381,7 +390,7 @@ def trans_rfc(rfc: IRfc, args) -> bool:
 
         # 異常終了した時
         # 途中まで翻訳済みのファイルを生成する
-        RfcFile.write_json_file(midway_file, obj)
+        rfc_json_trans_midway_repo.save(rfc, obj)
         print(f"[+] Save file: {midway_file}")
         # 例外をそのまま投げる
         raise

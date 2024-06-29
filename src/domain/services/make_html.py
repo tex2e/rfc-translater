@@ -10,32 +10,34 @@ from pprint import pprint
 from ...rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
 from ..models.rfc import IRfc, Rfc, RfcDraft
+from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
+from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
+from ..repository.irfchtmlrepository import IRfcHtmlRepository
 
-def make_html(rfc: IRfc) -> None:
+
+def make_html(rfc: IRfc,
+              rfc_json_trans_repo: IRfcJsonTransRepository,
+              rfc_json_data_summary_repo: IRfcJsonDataSummaryRepository,
+              rfc_json_html_repo: IRfcHtmlRepository) -> None:
     """RFCのHTMLを作成する"""
 
     assert isinstance(rfc, IRfc)
+    assert isinstance(rfc_json_trans_repo, IRfcJsonTransRepository)
+    assert isinstance(rfc_json_data_summary_repo, IRfcJsonDataSummaryRepository)
+    assert isinstance(rfc_json_html_repo, IRfcHtmlRepository)
 
     print(f'[*] make_html({rfc.get_id()})')
 
-    input_file = RfcFile.get_filepath_data_trans_json(rfc)
-    input_summary_file = RfcFile.get_filepath_data_summary_json(rfc)
-    output_file = RfcFile.get_filepath_html_rfc(rfc)
-
-    input_file = os.path.normpath(input_file)
-    output_file = os.path.normpath(output_file)
-
-    if not os.path.isfile(input_file):
+    input_file = rfc_json_trans_repo.findpath(rfc)
+    if not input_file:
         print("[-] make_html: Not found:", input_file)
         return
 
     # 翻訳したRFC (json) の読み込み
-    obj = RfcFile.read_json_file(input_file)
+    obj = rfc_json_trans_repo.find(rfc)
 
     # ChatGPTによる要約が存在すれば、その情報 (json) の読み込み
-    summary = None
-    if input_summary_file != '' and os.path.exists(input_summary_file):
-        summary = RfcFile.read_json_file(input_summary_file)
+    summary = rfc_json_data_summary_repo.find(rfc)
 
     # テンプレートエンジン「Mako」を使って、値をバインドする
     mylookup = TemplateLookup(directories=["./"], input_encoding='utf-8', output_encoding='utf-8')
@@ -44,7 +46,7 @@ def make_html(rfc: IRfc) -> None:
                                        RfcJsonElem=RfcJsonElem, RfcHtmlHelper=RfcHtmlHelper)
 
     # 翻訳したRFC (html) の作成
-    RfcFile.write_html_file(output_file, output)
+    rfc_json_html_repo.save(rfc, output)
 
 
 class RfcHtmlHelper:

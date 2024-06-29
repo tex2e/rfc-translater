@@ -13,7 +13,9 @@ from xml2rfc.writers.text import TextWriter
 from ...rfc_utils import RfcUtils
 from ...rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
 from ...domain.models.rfc import IRfc, Rfc, RfcDraft
-from ...domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
+from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ..models.rfc.rfcnotfound import RFCNotFoundException
+
 
 # RFCの段落情報を格納するクラス
 class Content:
@@ -389,11 +391,13 @@ def generate_text_writer(xml: bytes):
     return text_writer
 
 
-def fetch_rfc_xml(rfc: IRfc, rfc_json_plain_repo: IRfcJsonPlainRepository, args) -> None:
+def fetch_rfc_xml(rfc: IRfc,
+                  rfc_json_plain_repo: IRfcJsonDataRepository,
+                  args) -> None:
     """RFCの取得処理 (XML版)"""
 
     assert isinstance(rfc, IRfc)
-    assert isinstance(rfc_json_plain_repo, IRfcJsonPlainRepository)
+    assert isinstance(rfc_json_plain_repo, IRfcJsonDataRepository)
 
     print(f"[*] fetch_rfc_xml({rfc.get_id()})")
     force = args.force
