@@ -4,6 +4,7 @@
 
 import os
 import json
+from .domain.models.rfc import IRfc, Rfc, RfcDraft
 
 class RfcFile:
     """RFCファイル関連クラス"""
@@ -22,91 +23,102 @@ class RfcFile:
     TEMPLATE_HTML_RFC = 'templates/rfc.html'
 
     @staticmethod
-    def get_dir_data(rfc_number: int | str) -> str:
+    def get_dir_data(rfc: IRfc) -> str:
         """RFCのJSONなどの中間ファイル格納先ディレクトリ"""
-        if type(rfc_number) is int:
-            return os.path.join(RfcFile.OUTPUT_DATA_DIR, '%04d' % (rfc_number // 1000 % 10 * 1000))
-        elif type(rfc_number) is str:
+        assert isinstance(rfc, IRfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(RfcFile.OUTPUT_DATA_DIR, '%04d' % (int(rfc.get_id()) // 1000 % 10 * 1000))
+        elif isinstance(rfc, RfcDraft):
             return os.path.join(RfcFile.OUTPUT_DATA_DIR, RfcFile.OUTPUT_DRAFT)
 
     @staticmethod
-    def get_dir_html(rfc_number: int | str) -> str:
+    def get_dir_html(rfc: IRfc) -> str:
         """RFCのHTMLファイル格納先ディレクトリ"""
-        if type(rfc_number) is int:
+        assert isinstance(rfc, IRfc)
+        if isinstance(rfc, Rfc):
             return os.path.join(RfcFile.OUTPUT_HTML_DIR)
-        elif type(rfc_number) is str:
+        elif isinstance(rfc, RfcDraft):
             return os.path.join(RfcFile.OUTPUT_HTML_DIR, RfcFile.OUTPUT_DRAFT)
 
     @staticmethod
-    def get_filepath_data_json(rfc_number: int | str) -> str:
+    def get_filepath_data_json(rfc: IRfc) -> str:
         """RFCの本文取得・解析結果ファイルパス"""
-        dir_data = RfcFile.get_dir_data(rfc_number)
-        if type(rfc_number) is int:
-            return os.path.join(dir_data, f'rfc{rfc_number}.json')
-        elif type(rfc_number) is str:
-            return os.path.join(dir_data, f'draft-{rfc_number}.json')
+        assert isinstance(rfc, IRfc)
+        dir_data = RfcFile.get_dir_data(rfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(dir_data, f'rfc{rfc.get_id()}.json')
+        elif isinstance(rfc, RfcDraft):
+            return os.path.join(dir_data, f'draft-{rfc.get_id()}.json')
 
     @staticmethod
-    def get_filepath_data_trans_json(rfc_number: int | str) -> str:
+    def get_filepath_data_trans_json(rfc: IRfc) -> str:
         """RFCの翻訳結果ファイルパス"""
-        dir_data = RfcFile.get_dir_data(rfc_number)
-        if type(rfc_number) is int:
-            return os.path.join(dir_data, f'rfc{rfc_number}-trans.json')
-        elif type(rfc_number) is str:
-            return os.path.join(dir_data, f'draft-{rfc_number}-trans.json')
+        assert isinstance(rfc, IRfc)
+        dir_data = RfcFile.get_dir_data(rfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(dir_data, f'rfc{rfc.get_id()}-trans.json')
+        elif isinstance(rfc, RfcDraft):
+            return os.path.join(dir_data, f'draft-{rfc.get_id()}-trans.json')
 
     @staticmethod
-    def get_filepath_data_midway_json(rfc_number: int | str) -> str:
+    def get_filepath_data_midway_json(rfc: IRfc) -> str:
         """RFCの翻訳作業途中結果ファイルパス"""
-        dir_data = RfcFile.get_dir_data(rfc_number)
-        if type(rfc_number) is int:
-            return os.path.join(dir_data, f'rfc{rfc_number}-midway.json')
-        elif type(rfc_number) is str:
-            return os.path.join(dir_data, f'draft-{rfc_number}-midway.json')
+        assert isinstance(rfc, IRfc)
+        dir_data = RfcFile.get_dir_data(rfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(dir_data, f'rfc{rfc.get_id()}-midway.json')
+        elif isinstance(rfc, RfcDraft):
+            return os.path.join(dir_data, f'draft-{rfc.get_id()}-midway.json')
 
     @staticmethod
-    def get_filepath_data_summary_json(rfc_number: int | str) -> str:
+    def get_filepath_data_summary_json(rfc: IRfc) -> str:
         """RFCの要約JSONファイルパス"""
-        dir_data = RfcFile.get_dir_data(rfc_number)
-        if type(rfc_number) is int:
-            return os.path.join(dir_data, f'rfc{rfc_number}-summary.json')
-        elif type(rfc_number) is str:
-            return os.path.join(dir_data, f'draft-{rfc_number}-summary.json')
+        assert isinstance(rfc, IRfc)
+        dir_data = RfcFile.get_dir_data(rfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(dir_data, f'rfc{rfc.get_id()}-summary.json')
+        elif isinstance(rfc, RfcDraft):
+            return os.path.join(dir_data, f'draft-{rfc.get_id()}-summary.json')
 
     @staticmethod
-    def get_filepath_html_rfc(rfc_number: int | str) -> str:
+    def get_filepath_html_rfc(rfc: IRfc) -> str:
         """RFCのHTMLファイルパス"""
-        dir_html = RfcFile.get_dir_html(rfc_number)
-        if type(rfc_number) is int:
-            return os.path.join(dir_html, f'rfc{rfc_number}.html')
-        elif type(rfc_number) is str:
-            return os.path.join(dir_html, f'draft-{rfc_number}.html')
+        assert isinstance(rfc, IRfc)
+        dir_html = RfcFile.get_dir_html(rfc)
+        if isinstance(rfc, Rfc):
+            return os.path.join(dir_html, f'rfc{rfc.get_id()}.html')
+        elif isinstance(rfc, RfcDraft):
+            return os.path.join(dir_html, f'draft-{rfc.get_id()}.html')
 
     @staticmethod
-    def get_url_rfc_xml(rfc_number: int | str) -> str:
+    def get_url_rfc_xml(rfc: IRfc) -> str:
         """RFCの取得先URL (XML)"""
-        if type(rfc_number) is int:
-            return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.xml'
+        assert isinstance(rfc, IRfc)
+        if isinstance(rfc, Rfc):
+            return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.xml'
 
     @staticmethod
-    def get_url_rfc_html(rfc_number: int | str) -> str:
+    def get_url_rfc_html(rfc: IRfc) -> str:
         """RFCの取得先URL (HTML)"""
-        if type(rfc_number) is int:
-            return f'https://datatracker.ietf.org/doc/html/rfc{rfc_number}'
-        elif type(rfc_number) is str:
-            return f'https://datatracker.ietf.org/doc/html/draft-{rfc_number}'
+        assert isinstance(rfc, IRfc)
+        if isinstance(rfc, Rfc):
+            return f'https://datatracker.ietf.org/doc/html/rfc{rfc.get_id()}'
+        elif isinstance(rfc, RfcDraft):
+            return f'https://datatracker.ietf.org/doc/html/draft-{rfc.get_id()}'
 
     @staticmethod
-    def get_url_rfc_txt(rfc_number: int | str) -> str:
+    def get_url_rfc_txt(rfc: IRfc) -> str:
         """RFCの取得先URL (TXT)"""
-        if type(rfc_number) is int:
-            return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.txt'
-        elif type(rfc_number) is str:
-            return f'https://www.ietf.org/archive/id/draft-{rfc_number}.txt'
+        assert isinstance(rfc, IRfc)
+        if isinstance(rfc, Rfc):
+            return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.txt'
+        elif isinstance(rfc, RfcDraft):
+            return f'https://www.ietf.org/archive/id/draft-{rfc.get_id()}.txt'
 
-    def get_url_rfc_xml(rfc_number: int) -> str:
+    def get_url_rfc_xml(rfc: IRfc) -> str:
         """RFCの取得先URL (XML)"""
-        return f'https://www.rfc-editor.org/rfc/rfc{rfc_number}.xml'
+        assert isinstance(rfc, IRfc)
+        return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.xml'
 
     @staticmethod
     def get_url_rfc_index_xml():

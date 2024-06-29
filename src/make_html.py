@@ -9,26 +9,29 @@ import markupsafe
 from pprint import pprint
 from .rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
+from .domain.models.rfc import IRfc, Rfc, RfcDraft
 
-def make_html(rfc_number: int | str) -> None:
+def make_html(rfc: IRfc) -> None:
     """RFCのHTMLを作成する"""
-    print(f'[*] make_html({rfc_number})')
 
-    if type(rfc_number) is int:
+    assert isinstance(rfc, IRfc)
+
+    print(f'[*] make_html({rfc.get_id()})')
+
+    if isinstance(rfc, Rfc):
         # RFCのとき
-        is_draft = False
-        input_file = RfcFile.get_filepath_data_trans_json(rfc_number)
-        input_summary_file = RfcFile.get_filepath_data_summary_json(rfc_number)
-        output_file = RfcFile.get_filepath_html_rfc(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        input_file = RfcFile.get_filepath_data_trans_json(rfc)
+        input_summary_file = RfcFile.get_filepath_data_summary_json(rfc)
+        output_file = RfcFile.get_filepath_html_rfc(rfc)
+    elif isinstance(rfc, RfcDraft):
+        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
         # Draft版のRFCのとき
-        is_draft = True
         rfc_draft_id = m['rfc_draft_id']
         input_file = RfcFile.get_filepath_data_trans_json(rfc_draft_id)
         input_summary_file = RfcFile.get_filepath_data_summary_json(rfc_draft_id)
         output_file = RfcFile.get_filepath_html_rfc(rfc_draft_id)
     else:
-        raise RuntimeError(f"make_html: Unknown format number={rfc_number}")
+        raise RuntimeError(f"make_html: Unknown format number={rfc.get_id()}")
 
     input_file = os.path.normpath(input_file)
     output_file = os.path.normpath(output_file)
@@ -48,7 +51,7 @@ def make_html(rfc_number: int | str) -> None:
     # テンプレートエンジン「Mako」を使って、値をバインドする
     mylookup = TemplateLookup(directories=["./"], input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_RFC)
-    output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft,
+    output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=isinstance(rfc, RfcDraft),
                                        RfcJsonElem=RfcJsonElem, RfcHtmlHelper=RfcHtmlHelper)
 
     # 翻訳したRFC (html) の作成

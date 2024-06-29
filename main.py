@@ -12,6 +12,7 @@ from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.fetch_status import fetch_status
 from src.rfc_utils import RfcUtils
+from src.domain.models.rfc import Rfc, RfcDraft
 
 def main():
     ap = argparse.ArgumentParser()
@@ -56,11 +57,11 @@ def main():
     # RFCの指定（複数の場合はカンマ区切り）
     rfcs = None
     if args.rfc:
-        rfcs = [int(rfc_number) for rfc_number in args.rfc.split(",")]
+        rfcs = [Rfc(str(rfc_number)) for rfc_number in args.rfc.split(",")]
     elif args.begin and args.end:
-        rfcs = list(range(args.begin, args.end))
+        rfcs = [Rfc(str(rfc_number)) for rfc_number in range(args.begin, args.end)]
     elif args.draft:
-        rfcs = [args.draft]
+        rfcs = [RfcDraft(args.draft)]
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
@@ -77,41 +78,37 @@ def main():
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.nlp_summarize_rfc import summarize_rfc
-        for rfc_number in rfcs:
+        for rfc in rfcs:
+            rfc_number = rfc.get_id()
             # print("[*] RFC %s を要約" % rfc_number)
             if summarize_rfc(rfc_number, args):
                 # RFCのHTMLを作成
                 # print("[*] RFC %s のHTMLを生成" % rfc_number)
-                make_html(rfc_number)
+                make_html(rfc)
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
-        for rfc_number in rfcs:
-            # print("[*] RFC %s を取得" % rfc_number)
-            if (isinstance(rfc_number, int) and rfc_number >= 8650) and (not args.txt):
-                fetch_rfc_xml(rfc_number, args)
+        for rfc in rfcs:
+            if isinstance(rfc, Rfc) and (int(rfc.get_id()) >= 8650) and (not args.txt):
+                fetch_rfc_xml(rfc, args)
             else:
-                fetch_rfc_txt(rfc_number, args)
+                fetch_rfc_txt(rfc, args)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
-        for rfc_number in rfcs:
-            # print("[*] RFC %s を翻訳" % rfc_number)
-            trans_rfc(rfc_number, args)
+        for rfc in rfcs:
+            trans_rfc(rfc, args)
     elif args.make and rfcs:
         # RFCのHTMLを作成 (rfcXXXX.html)
-        # if len(rfcs) == 1:
-        #     print("[*] RFC %s のHTMLを生成" % (rfcs[0]))
-        # elif len(rfcs) > 1:
-        #     print("[*] RFC %s - %s のHTMLを生成" % (rfcs[0], rfcs[-1]))
-        for rfc_number in rfcs:
-            make_html(rfc_number)
+        for rfc in rfcs:
+            make_html(rfc)
     elif args.make_json and rfcs:
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
         from src.make_json_from_html import make_json_from_html
-        for rfc_number in rfcs:
-            make_json_from_html(rfc_number)
+        for rfc in rfcs:
+            make_json_from_html(rfc)
     elif rfcs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
-        for rfc_number in rfcs:
+        for rfc in rfcs:
+            rfc_number = rfc.get_id()
             _fetch_trans_make(rfc_number, args)
     elif args.begin and args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成

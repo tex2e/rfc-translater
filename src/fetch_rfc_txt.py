@@ -9,6 +9,7 @@ import lxml.html
 from pprint import pprint
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
+from .domain.models.rfc import IRfc, Rfc, RfcDraft
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\x07\x07\x07'
@@ -280,25 +281,26 @@ class RFCNotFound(Exception):
     pass
 
 
-def fetch_rfc_txt(rfc_number: int | str, args) -> None:
+def fetch_rfc_txt(rfc: IRfc, args) -> None:
     """RFCの取得処理 (TXT版)"""
-    print(f"[*] fetch_rfc_txt({rfc_number})")
+    assert isinstance(rfc, IRfc)
 
-    if type(rfc_number) is int:
+    print(f"[*] fetch_rfc_txt({rfc.get_id()})")
+
+    if isinstance(rfc, Rfc):
         # RFCのとき
-        is_draft = False
-        url = RfcFile.get_url_rfc_html(rfc_number)
-        url_txt = RfcFile.get_url_rfc_txt(rfc_number)
-        output_file = RfcFile.get_filepath_data_json(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        url = RfcFile.get_url_rfc_html(rfc)
+        url_txt = RfcFile.get_url_rfc_txt(rfc)
+        output_file = RfcFile.get_filepath_data_json(rfc)
+    elif isinstance(rfc, RfcDraft):
+        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc)
         # Draft版RFCのとき
-        is_draft = True
         rfc_draft_id = m['rfc_draft_id']
         url = RfcFile.get_url_rfc_html(rfc_draft_id)
         url_txt = RfcFile.get_url_rfc_txt(rfc_draft_id)
         output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
     else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not args.force and os.path.isfile(output_file):
@@ -319,14 +321,14 @@ def fetch_rfc_txt(rfc_number: int | str, args) -> None:
         tmp = title
         tmp = re.sub(r' ?\(RFC \d+\)$', '', tmp)
         tmp = re.sub(r' ?\(Internet-Draft, \d+\)$', '', tmp)
-        tmp = re.sub(r'^RFC (\d+) -', f'RFC {rfc_number} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
+        tmp = re.sub(r'^RFC (\d+) -', f'RFC {rfc.get_id()} -', tmp)  # 廃止RFCの場合、最新RFCにリダイレクトされるため
         # title = "RFC %s - %s" % (number, tmp)
         title = tmp
     elif re.match(r'draft-[-a-zA-Z0-9]+\d$', title):  # Draft版
         title = title
     else:
         # タイトルがRFC形式と一致しない場合
-        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc_number, title))
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc.get_id(), title))
 
     # RFCページのTXT形式の取得
     page = RfcUtils.fetch_url(url_txt)
@@ -382,14 +384,15 @@ def fetch_rfc_txt(rfc_number: int | str, args) -> None:
     paragraphs = Paragraphs(text)
 
     # 段落情報をJSONに変換する
-    obj = {
-        RfcJsonElem.TITLE: {RfcJsonElem.Title.TEXT: title},
-        RfcJsonElem.NUMBER: rfc_number,
-        RfcJsonElem.CREATED_AT: str(RfcUtils.get_now()),
-        RfcJsonElem.UPDATED_BY: '',
-        RfcJsonElem.CONTENTS: [],
-    }
-    if is_draft:
+    obj = {}
+    obj[RfcJsonElem.TITLE] = { RfcJsonElem.Title.TEXT: title }
+    obj[RfcJsonElem.NUMBER] = rfc.get_id()
+    obj[RfcJsonElem.CREATED_AT] = str(RfcUtils.get_now())
+    obj[RfcJsonElem.UPDATED_BY] = ''
+    obj[RfcJsonElem.CONTENTS] = []
+    if isinstance(rfc, Rfc):
+        obj[RfcJsonElem.NUMBER] = int(obj[RfcJsonElem.NUMBER])
+    if isinstance(rfc, RfcDraft):
         obj[RfcJsonElem.IS_DRAFT] = True
 
     for paragraph in paragraphs:

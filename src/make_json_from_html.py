@@ -8,12 +8,16 @@ from pprint import pprint
 from bs4 import BeautifulSoup
 from .rfc_const import RfcFile
 from .rfc_utils import RfcUtils
+from .domain.models.rfc import IRfc, Rfc
 
-def make_json_from_html(rfc_number: int) -> None:
+def make_json_from_html(rfc: IRfc) -> None:
     """HTMLからJSONへ変換する"""
 
+    assert isinstance(rfc, IRfc)
+    assert isinstance(rfc, Rfc)  # Draft版以外のみ対応
+
     # RFCデータ(HTML)の読み込み
-    input_file = RfcFile.get_filepath_html_rfc(rfc_number)
+    input_file = RfcFile.get_filepath_html_rfc(rfc.get_id())
     html_text = RfcFile.read_html_file(input_file)
 
     # 保存用JSONの構造
@@ -101,7 +105,7 @@ def make_json_from_html(rfc_number: int) -> None:
     # pprint(data)
 
     # RFCデータ(JSON)の書き込み
-    output_file = RfcFile.get_filepath_data_trans_json(rfc_number)
+    output_file = RfcFile.get_filepath_data_trans_json(rfc.get_id())
     RfcFile.write_json_file(output_file, data)
 
 

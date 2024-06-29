@@ -13,7 +13,7 @@ from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
-
+from .domain.models.rfc import IRfc, Rfc, RfcDraft
 
 # RFCの段落情報を格納するクラス
 class Content:
@@ -389,25 +389,26 @@ def generate_text_writer(xml: bytes):
     return text_writer
 
 
-def fetch_rfc_xml(rfc_number: int | str, args) -> None:
+def fetch_rfc_xml(rfc: IRfc, args) -> None:
     """RFCの取得処理 (XML版)"""
 
-    print(f"[*] fetch_rfc_xml({rfc_number})")
+    assert isinstance(rfc, IRfc)
+
+    print(f"[*] fetch_rfc_xml({rfc.get_id()})")
     force = args.force
 
-    if type(rfc_number) is int:
+    if isinstance(rfc, Rfc):
         # RFCのとき
-        is_draft = False
-        url_xml = RfcFile.get_url_rfc_xml(rfc_number)
-        output_file = RfcFile.get_filepath_data_json(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        url_xml = RfcFile.get_url_rfc_xml(rfc)
+        output_file = RfcFile.get_filepath_data_json(rfc)
+    elif isinstance(rfc, RfcDraft):
+        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
         # Draft版RFCのとき
-        is_draft = True
         rfc_draft_id = m['rfc_draft_id']
         url_xml = RfcFile.get_url_rfc_xml(rfc_draft_id)
         output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
     else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not force and os.path.isfile(output_file):
@@ -421,9 +422,9 @@ def fetch_rfc_xml(rfc_number: int | str, args) -> None:
     root = lxml.etree.fromstring(xml)
     titles = root.xpath(f'/{RfcXmlElem.RFC}/{RfcXmlElem.FRONT}/{RfcXmlElem.TITLE}/text()')
     if len(titles) > 0:
-        title = f"RFC {rfc_number} - {titles[0]}"
+        title = f"RFC {rfc.get_id()} - {titles[0]}"
     else:
-        raise Exception("[-] Cannot extract RFC Title!: RFC=%s" % (rfc_number))
+        raise Exception("[-] Cannot extract RFC Title!: RFC=%s" % (rfc.get_id()))
 
     # XML解析
     text_writer = generate_text_writer(xml)
@@ -448,14 +449,15 @@ def fetch_rfc_xml(rfc_number: int | str, args) -> None:
                 print('')
 
     # 段落情報をJSONに変換する
-    obj = {
-        RfcJsonElem.TITLE: {RfcJsonElem.Title.TEXT: title},
-        RfcJsonElem.NUMBER: rfc_number,
-        RfcJsonElem.CREATED_AT: str(RfcUtils.get_now()),
-        RfcJsonElem.UPDATED_BY: '',
-        RfcJsonElem.CONTENTS: [],
-    }
-    if is_draft:
+    obj = {}
+    obj[RfcJsonElem.TITLE] = { RfcJsonElem.Title.TEXT: title }
+    obj[RfcJsonElem.NUMBER] = rfc.get_id()
+    obj[RfcJsonElem.CREATED_AT] = str(RfcUtils.get_now())
+    obj[RfcJsonElem.UPDATED_BY] = ''
+    obj[RfcJsonElem.CONTENTS] = []
+    if isinstance(rfc, Rfc):
+        obj[RfcJsonElem.NUMBER] = int(obj[RfcJsonElem.NUMBER])
+    if isinstance(rfc, RfcDraft):
         obj[RfcJsonElem.IS_DRAFT] = True
 
     for content in text_writer._contents:

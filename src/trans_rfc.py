@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from tqdm import tqdm  # pip install tqdm
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
+from .domain.models.rfc import IRfc, Rfc, RfcDraft
 from dotenv import load_dotenv  # pip install python-dotenv
 
 # GoogleTranslator
@@ -247,23 +248,27 @@ class TranslatorChatGPT(Translator):
         return ja
 
 
-def trans_rfc(rfc_number: int | str, args) -> bool:
+def trans_rfc(rfc: IRfc, args) -> bool:
     """指定したRFCを翻訳する"""
-    print(f"[*] trans_rfc({rfc_number})")
 
-    if type(rfc_number) is int:
+    assert isinstance(rfc, IRfc)
+
+    print(f"[*] trans_rfc({rfc.get_id()})")
+
+    if isinstance(rfc, Rfc):
         # 通常のRFCのとき
-        input_file = RfcFile.get_filepath_data_json(rfc_number)
-        output_file = RfcFile.get_filepath_data_trans_json(rfc_number)
-        midway_file = RfcFile.get_filepath_data_midway_json(rfc_number)
-    elif m := re.match(r'draft-(?P<rfc_draft_id>.+)', rfc_number):
+        input_file = RfcFile.get_filepath_data_json(rfc)
+        output_file = RfcFile.get_filepath_data_trans_json(rfc)
+        midway_file = RfcFile.get_filepath_data_midway_json(rfc)
+    elif isinstance(rfc, RfcDraft):
+        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
         # ドラフト版のRFCのとき
         rfc_draft_id = m['rfc_draft_id']
         input_file = RfcFile.get_filepath_data_json(rfc_draft_id)
         output_file = RfcFile.get_filepath_data_trans_json(rfc_draft_id)
         midway_file = RfcFile.get_filepath_data_midway_json(rfc_draft_id)
     else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc_number}")
+        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
 
     if os.path.isfile(midway_file):
         print(f'[+] found midway file: {midway_file}')
@@ -274,7 +279,7 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
 
     # 翻訳対象の段落数
     total_len = len([con for con in obj[RfcJsonElem.CONTENTS] if not con.get(RfcJsonElem.Contents.RAW)])
-    desc = 'RFC %s' % rfc_number
+    desc = 'RFC %s' % rfc.get_id()
     # 翻訳機の選択
     if args.chatgpt:
         # ChatGPTによる翻訳
@@ -296,11 +301,11 @@ def trans_rfc(rfc_number: int | str, args) -> bool:
         if not obj[RfcJsonElem.TITLE].get(RfcJsonElem.Title.JA):
             titles = obj[RfcJsonElem.TITLE][RfcJsonElem.Title.TEXT].split(' - ', 1)  # "RFC XXXX - Title"
             if len(titles) <= 1:
-                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s" % rfc_number
+                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s" % rfc.get_id()
             else:
                 text = titles[1]
                 ja = translator.translate(text)
-                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s - %s" % (rfc_number, ja)
+                obj[RfcJsonElem.TITLE][RfcJsonElem.Title.JA] = "RFC %s - %s" % (rfc.get_id(), ja)
 
         # 段落の翻訳
         for i, obj_contents_i in enumerate(obj[RfcJsonElem.CONTENTS]):
