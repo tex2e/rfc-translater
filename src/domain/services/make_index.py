@@ -6,7 +6,7 @@ import os
 import re
 import glob
 from pprint import pprint
-from ..models.rfc.rfc_const import RfcFile
+from ..models.rfc import RfcFile
 from mako.lookup import TemplateLookup
 
 def make_index() -> None:

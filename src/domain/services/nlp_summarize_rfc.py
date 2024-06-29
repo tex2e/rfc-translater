@@ -7,8 +7,7 @@ import datetime
 from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
-from ..models.rfc.rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
-from ..models.rfc import IRfc, Rfc
+from ..models.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT

@@ -11,10 +11,8 @@ import xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
-from ..models.rfc.rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
-from ...domain.models.rfc import IRfc, Rfc, RfcDraft
+from ..models.rfc import RfcFile, RfcJsonElem, RfcXmlElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
 from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
-from ..models.rfc.rfcnotfound import RFCNotFoundException
 
 
 # RFCの段落情報を格納するクラス

@@ -8,7 +8,7 @@ import glob
 from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
-from ..models.rfc.rfc_const import RfcIndexXmlElem, RfcFile
+from ..models.rfc import RfcIndexXmlElem, RfcFile
 
 def fetch_remote_index() -> list[int]:
     """発行されているRFCの番号の一覧をページから取得する"""

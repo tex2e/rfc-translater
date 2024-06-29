@@ -4,7 +4,7 @@
 
 import sys
 import argparse
-from src.domain.models.rfc.rfcnotfound import RFCNotFoundException
+from src.domain.models.rfc import IRfc, Rfc, RfcDraft, RFCNotFoundException
 from src.domain.services.fetch_rfc import fetch_rfc
 from src.domain.services.trans_rfc import trans_rfc, trans_test
 from src.domain.services.make_html import make_html
@@ -12,7 +12,6 @@ from src.domain.services.make_index import make_index, make_index_draft
 from src.domain.services.fetch_index import diff_remote_and_local_index
 from src.domain.services.fetch_status import fetch_status
 from src.domain.services.rfc_utils import RfcUtils
-from src.domain.models.rfc import IRfc, Rfc, RfcDraft
 from src.infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from src.infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
 from src.infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTransMidwayFileRepository
@@ -68,6 +67,18 @@ def main():
         rfcs = [Rfc(str(rfc_number)) for rfc_number in range(args.begin, args.end)]
     elif args.draft:
         rfcs = [RfcDraft(args.draft)]
+    else:
+        # RFC 2220以降のみを対象とする。ただし、引数beginで変更可能
+        begin = 2220
+        if args.begin:
+            begin = args.begin
+        # リモートとローカルの差分でRFCの一覧を作成する
+        rfcs = [Rfc(str(rfc_number)) for rfc_number in diff_remote_and_local_index() if rfc_number >= begin]
+
+    all_option_none = ((not args.fetch) and (not args.trans) and (not args.make))
+
+    if args.only_first:
+        rfcs = rfcs[0:1]
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
@@ -81,6 +92,11 @@ def main():
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         trans_test(args)
+    elif args.make_json and rfcs:
+        # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
+        from src.domain.services.make_json_from_html import make_json_from_html
+        for rfc in rfcs:
+            make_json_from_html(rfc)
     elif args.summarize and rfcs:
         # RFCの要約作成
         from src.domain.services.nlp_summarize_rfc import summarize_rfc
@@ -88,64 +104,30 @@ def main():
             if summarize_rfc(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), args):
                 # RFCのHTMLを作成
                 make_html(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), RfcHtmlFileRepository())
-    elif args.fetch and rfcs:
-        # 指定したRFCの取得 (rfcXXXX.json)
-        for rfc in rfcs:
-            fetch_rfc(rfc, RfcJsonDataFileRepository(), args)
-    elif args.trans and rfcs:
-        # RFCの翻訳 (rfcXXXX-trans.json)
-        for rfc in rfcs:
-            trans_rfc(rfc, RfcJsonDataFileRepository(), RfcJsonTransFileRepository(), RfcJsonTransMidwayFileRepository(), args)
-    elif args.make and rfcs:
-        # RFCのHTMLを作成 (rfcXXXX.html)
-        for rfc in rfcs:
-            make_html(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), RfcHtmlFileRepository())
-    elif args.make_json and rfcs:
-        # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
-        from src.domain.services.make_json_from_html import make_json_from_html
-        for rfc in rfcs:
-            make_json_from_html(rfc)
     elif rfcs:
-        # 範囲指定でRFCを順番に取得・翻訳・作成
-        for rfc in rfcs:
-            _fetch_trans_make(rfc, args)
-    elif args.begin and args.only_first:
-        # 未翻訳のRFCを順番に取得・翻訳・作成
-        _continuous_main(args)
+        # 取得、翻訳、作成の一連の流れ
+        if args.fetch or all_option_none:
+            # 指定したRFCの取得 (rfcXXXX.json)
+            for rfc in rfcs:
+                try:
+                    fetch_rfc(rfc, RfcJsonDataFileRepository(), args)
+                except RFCNotFoundException:
+                    print('Exception: RFCNotFound!')
+                    filename = f"html/rfc{rfc.get_id()}-not-found.html"
+                    with open(filename, "w") as f:
+                        f.write('')
+        if args.trans or all_option_none:
+            # RFCの翻訳 (rfcXXXX-trans.json)
+            for rfc in rfcs:
+                trans_rfc(rfc, RfcJsonDataFileRepository(), RfcJsonTransFileRepository(), RfcJsonTransMidwayFileRepository(), args)
+        if args.make or all_option_none:
+            # RFCのHTMLを作成 (rfcXXXX.html)
+            for rfc in rfcs:
+                make_html(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), RfcHtmlFileRepository())
     else:
         ap.print_help()
     print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
 
-def _fetch_trans_make(rfc: IRfc, args) -> None:
-    """RFCの取得、翻訳、HTML作成をまとめて行う"""
-    print(f'[*] RFC {rfc.get_id()}:')
-    try:
-        fetch_rfc(rfc, RfcJsonDataFileRepository(), args)
-    except RFCNotFoundException:
-        print('Exception: RFCNotFound!')
-        filename = f"html/rfc{rfc.get_id()}-not-found.html"
-        with open(filename, "w") as f:
-            f.write('')
-        return
-    trans_rfc(rfc, RfcJsonDataFileRepository(), RfcJsonTransFileRepository(), RfcJsonTransMidwayFileRepository(), args)
-    make_html(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), RfcHtmlFileRepository())
-
-def _continuous_main(args):
-    """複数範囲のRFCを処理する"""
-    numbers = [x for x in diff_remote_and_local_index() if x >= 2220]
-    if args.begin and args.end:
-        # 開始と終了区間の設定
-        numbers = [x for x in numbers if args.begin <= x <= args.end]
-    elif args.begin:
-        # 開始のみ設定
-        numbers = [x for x in numbers if args.begin <= x]
-
-    if args.only_first:
-        # 最初の1つのRFCのみ選択
-        numbers = numbers[0:1]
-
-    for rfc_number in numbers:
-        _fetch_trans_make(rfc_number, args)
 
 if __name__ == '__main__':
     main()

@@ -6,9 +6,8 @@ import sys
 import textwrap
 from pprint import pprint
 from bs4 import BeautifulSoup
-from ..models.rfc.rfc_const import RfcFile
+from ..models.rfc import RfcFile, IRfc, Rfc
 from .rfc_utils import RfcUtils
-from ..models.rfc import IRfc, Rfc
 
 def make_json_from_html(rfc: IRfc) -> None:
     """HTMLからJSONへ変換する"""

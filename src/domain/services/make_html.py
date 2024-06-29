@@ -2,14 +2,12 @@
 # 翻訳済みJSONからHTMLを生成するためのプログラム
 # ------------------------------------------------------------------------------
 
-import os
 import re
 import textwrap
 import markupsafe
 from pprint import pprint
-from ..models.rfc.rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
-from ..models.rfc import IRfc, Rfc, RfcDraft
+from ..models.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 from ..repository.irfchtmlrepository import IRfcHtmlRepository

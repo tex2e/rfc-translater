@@ -10,7 +10,7 @@ from pprint import pprint
 import abc
 from tqdm import tqdm  # pip install tqdm
 from .rfc_utils import RfcUtils
-from ..models.rfc.rfc_const import RfcFile, RfcJsonElem
+from ..models.rfc import RfcFile, RfcJsonElem
 from ..models.rfc import IRfc, Rfc, RfcDraft
 from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
