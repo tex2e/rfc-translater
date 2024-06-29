@@ -18,20 +18,9 @@ def make_html(rfc: IRfc) -> None:
 
     print(f'[*] make_html({rfc.get_id()})')
 
-    if isinstance(rfc, Rfc):
-        # RFCのとき
-        input_file = RfcFile.get_filepath_data_trans_json(rfc)
-        input_summary_file = RfcFile.get_filepath_data_summary_json(rfc)
-        output_file = RfcFile.get_filepath_html_rfc(rfc)
-    elif isinstance(rfc, RfcDraft):
-        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
-        # Draft版のRFCのとき
-        rfc_draft_id = m['rfc_draft_id']
-        input_file = RfcFile.get_filepath_data_trans_json(rfc_draft_id)
-        input_summary_file = RfcFile.get_filepath_data_summary_json(rfc_draft_id)
-        output_file = RfcFile.get_filepath_html_rfc(rfc_draft_id)
-    else:
-        raise RuntimeError(f"make_html: Unknown format number={rfc.get_id()}")
+    input_file = RfcFile.get_filepath_data_trans_json(rfc)
+    input_summary_file = RfcFile.get_filepath_data_summary_json(rfc)
+    output_file = RfcFile.get_filepath_html_rfc(rfc)
 
     input_file = os.path.normpath(input_file)
     output_file = os.path.normpath(output_file)

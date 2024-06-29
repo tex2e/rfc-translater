@@ -48,7 +48,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return os.path.join(dir_data, f'rfc{rfc.get_id()}.json')
         elif isinstance(rfc, RfcDraft):
-            return os.path.join(dir_data, f'draft-{rfc.get_id()}.json')
+            return os.path.join(dir_data, f'{rfc.get_id()}.json')
 
     @staticmethod
     def get_filepath_data_trans_json(rfc: IRfc) -> str:
@@ -58,7 +58,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return os.path.join(dir_data, f'rfc{rfc.get_id()}-trans.json')
         elif isinstance(rfc, RfcDraft):
-            return os.path.join(dir_data, f'draft-{rfc.get_id()}-trans.json')
+            return os.path.join(dir_data, f'{rfc.get_id()}-trans.json')
 
     @staticmethod
     def get_filepath_data_midway_json(rfc: IRfc) -> str:
@@ -68,7 +68,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return os.path.join(dir_data, f'rfc{rfc.get_id()}-midway.json')
         elif isinstance(rfc, RfcDraft):
-            return os.path.join(dir_data, f'draft-{rfc.get_id()}-midway.json')
+            return os.path.join(dir_data, f'{rfc.get_id()}-midway.json')
 
     @staticmethod
     def get_filepath_data_summary_json(rfc: IRfc) -> str:
@@ -78,7 +78,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return os.path.join(dir_data, f'rfc{rfc.get_id()}-summary.json')
         elif isinstance(rfc, RfcDraft):
-            return os.path.join(dir_data, f'draft-{rfc.get_id()}-summary.json')
+            return os.path.join(dir_data, f'{rfc.get_id()}-summary.json')
 
     @staticmethod
     def get_filepath_html_rfc(rfc: IRfc) -> str:
@@ -88,7 +88,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return os.path.join(dir_html, f'rfc{rfc.get_id()}.html')
         elif isinstance(rfc, RfcDraft):
-            return os.path.join(dir_html, f'draft-{rfc.get_id()}.html')
+            return os.path.join(dir_html, f'{rfc.get_id()}.html')
 
     @staticmethod
     def get_url_rfc_xml(rfc: IRfc) -> str:
@@ -96,6 +96,8 @@ class RfcFile:
         assert isinstance(rfc, IRfc)
         if isinstance(rfc, Rfc):
             return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.xml'
+        elif isinstance(rfc, RfcDraft):
+            return f'https://www.ietf.org/archive/id/{rfc.get_id()}.xml'
 
     @staticmethod
     def get_url_rfc_html(rfc: IRfc) -> str:
@@ -104,7 +106,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return f'https://datatracker.ietf.org/doc/html/rfc{rfc.get_id()}'
         elif isinstance(rfc, RfcDraft):
-            return f'https://datatracker.ietf.org/doc/html/draft-{rfc.get_id()}'
+            return f'https://datatracker.ietf.org/doc/html/{rfc.get_id()}'
 
     @staticmethod
     def get_url_rfc_txt(rfc: IRfc) -> str:
@@ -113,12 +115,7 @@ class RfcFile:
         if isinstance(rfc, Rfc):
             return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.txt'
         elif isinstance(rfc, RfcDraft):
-            return f'https://www.ietf.org/archive/id/draft-{rfc.get_id()}.txt'
-
-    def get_url_rfc_xml(rfc: IRfc) -> str:
-        """RFCの取得先URL (XML)"""
-        assert isinstance(rfc, IRfc)
-        return f'https://www.rfc-editor.org/rfc/rfc{rfc.get_id()}.xml'
+            return f'https://www.ietf.org/archive/id/{rfc.get_id()}.txt'
 
     @staticmethod
     def get_url_rfc_index_xml():

@@ -17,7 +17,7 @@ def make_json_from_html(rfc: IRfc) -> None:
     assert isinstance(rfc, Rfc)  # Draft版以外のみ対応
 
     # RFCデータ(HTML)の読み込み
-    input_file = RfcFile.get_filepath_html_rfc(rfc.get_id())
+    input_file = RfcFile.get_filepath_html_rfc(rfc)
     html_text = RfcFile.read_html_file(input_file)
 
     # 保存用JSONの構造

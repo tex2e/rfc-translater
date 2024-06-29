@@ -88,10 +88,13 @@ def main():
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
         for rfc in rfcs:
-            if isinstance(rfc, Rfc) and (int(rfc.get_id()) >= 8650) and (not args.txt):
-                fetch_rfc_xml(rfc, args)
-            else:
+            if isinstance(rfc, RfcDraft):
                 fetch_rfc_txt(rfc, args)
+            elif isinstance(rfc, Rfc):
+                if (int(rfc.get_id()) >= 8650) and (not args.txt):
+                    fetch_rfc_xml(rfc, args)
+                else:
+                    fetch_rfc_txt(rfc, args)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
         for rfc in rfcs:

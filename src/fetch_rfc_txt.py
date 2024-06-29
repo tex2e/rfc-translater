@@ -287,20 +287,9 @@ def fetch_rfc_txt(rfc: IRfc, args) -> None:
 
     print(f"[*] fetch_rfc_txt({rfc.get_id()})")
 
-    if isinstance(rfc, Rfc):
-        # RFCのとき
-        url = RfcFile.get_url_rfc_html(rfc)
-        url_txt = RfcFile.get_url_rfc_txt(rfc)
-        output_file = RfcFile.get_filepath_data_json(rfc)
-    elif isinstance(rfc, RfcDraft):
-        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc)
-        # Draft版RFCのとき
-        rfc_draft_id = m['rfc_draft_id']
-        url = RfcFile.get_url_rfc_html(rfc_draft_id)
-        url_txt = RfcFile.get_url_rfc_txt(rfc_draft_id)
-        output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
-    else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
+    url = RfcFile.get_url_rfc_html(rfc)
+    url_txt = RfcFile.get_url_rfc_txt(rfc)
+    output_file = RfcFile.get_filepath_data_json(rfc)
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not args.force and os.path.isfile(output_file):

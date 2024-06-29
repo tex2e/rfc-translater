@@ -397,18 +397,8 @@ def fetch_rfc_xml(rfc: IRfc, args) -> None:
     print(f"[*] fetch_rfc_xml({rfc.get_id()})")
     force = args.force
 
-    if isinstance(rfc, Rfc):
-        # RFCのとき
-        url_xml = RfcFile.get_url_rfc_xml(rfc)
-        output_file = RfcFile.get_filepath_data_json(rfc)
-    elif isinstance(rfc, RfcDraft):
-        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
-        # Draft版RFCのとき
-        rfc_draft_id = m['rfc_draft_id']
-        url_xml = RfcFile.get_url_rfc_xml(rfc_draft_id)
-        output_file = RfcFile.get_filepath_data_json(rfc_draft_id)
-    else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
+    url_xml = RfcFile.get_url_rfc_xml(rfc)
+    output_file = RfcFile.get_filepath_data_json(rfc)
 
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
     if not force and os.path.isfile(output_file):
