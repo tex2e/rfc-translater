@@ -4,7 +4,7 @@
 
 import os
 import json
-from .domain.models.rfc import IRfc, Rfc, RfcDraft
+from . import IRfc, Rfc, RfcDraft
 
 class RfcFile:
     """RFCファイル関連クラス"""

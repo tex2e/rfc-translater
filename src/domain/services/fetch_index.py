@@ -8,7 +8,7 @@ import glob
 from pprint import pprint
 from lxml import etree
 from .rfc_utils import RfcUtils
-from .rfc_const import RfcIndexXmlElem, RfcFile
+from ..models.rfc.rfc_const import RfcIndexXmlElem, RfcFile
 
 def fetch_remote_index() -> list[int]:
     """発行されているRFCの番号の一覧をページから取得する"""
@@ -33,12 +33,11 @@ def fetch_remote_index() -> list[int]:
 
 def fetch_local_index() -> list[int]:
     """作成したRFCに対応するHTMLの番号の一覧をローカルから取得する"""
-    LOCAL_FILEPATH = os.path.join(RfcFile.OUTPUT_HTML_DIR, 'rfc*.html')
+    local_filepath = os.path.join(RfcFile.OUTPUT_HTML_DIR, 'rfc*.html')
     rfc_numbers = []
-    for filepath in glob.glob(LOCAL_FILEPATH):
+    for filepath in glob.glob(local_filepath):
         filename = re.sub(rf'^{RfcFile.OUTPUT_HTML_DIR}[/\\]', '', filepath)
-        m = re.match(r'^rfc(\d+)', filename)
-        if m:
+        if m := re.match(r'^rfc(\d+)', filename):
             rfc_numbers.append(int(m[1]))
 
     return rfc_numbers

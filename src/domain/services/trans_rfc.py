@@ -9,8 +9,8 @@ import platform
 from pprint import pprint
 import abc
 from tqdm import tqdm  # pip install tqdm
-from ...rfc_utils import RfcUtils
-from ...rfc_const import RfcFile, RfcJsonElem
+from .rfc_utils import RfcUtils
+from ..models.rfc.rfc_const import RfcFile, RfcJsonElem
 from ..models.rfc import IRfc, Rfc, RfcDraft
 from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
@@ -24,7 +24,7 @@ from selenium.webdriver.firefox.options import Options
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 # ChatGPT
-from ...nlp_utils import openai, ChatGPT
+from ..models.nlp.utils import openai, ChatGPT
 
 # 環境変数の読み込み
 load_dotenv()

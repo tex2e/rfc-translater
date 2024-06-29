@@ -1,6 +1,6 @@
 
 import os
-from ...rfc_const import RfcFile
+from ...domain.models.rfc.rfc_const import RfcFile
 from ...domain.models.rfc import IRfc
 from ...domain.repository.irfcjsontransrepository import IRfcJsonTransRepository
 

@@ -55,9 +55,7 @@ if __name__ == '__main__':
             elif choice in ['n', 'no']:
                 return False
 
-    prompt = f"""
-    最も有名なRFCは何番ですか
-    """
+    prompt = "最も有名なRFCは何番ですか"
 
     print(f"[+] prompt: \n{prompt}")
     print(f"")

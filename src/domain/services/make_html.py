@@ -7,7 +7,7 @@ import re
 import textwrap
 import markupsafe
 from pprint import pprint
-from ...rfc_const import RfcFile, RfcJsonElem
+from ..models.rfc.rfc_const import RfcFile, RfcJsonElem
 from mako.lookup import TemplateLookup
 from ..models.rfc import IRfc, Rfc, RfcDraft
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository

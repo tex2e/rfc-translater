@@ -6,8 +6,8 @@ import re
 import textwrap
 import lxml.html
 from pprint import pprint
-from ...rfc_utils import RfcUtils
-from ...rfc_const import RfcFile, RfcJsonElem
+from .rfc_utils import RfcUtils
+from ..models.rfc.rfc_const import RfcFile, RfcJsonElem
 from ...domain.models.rfc import IRfc, Rfc, RfcDraft
 from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 from ..models.rfc.rfcnotfound import RFCNotFoundException

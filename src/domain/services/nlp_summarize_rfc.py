@@ -6,13 +6,22 @@ import re
 import datetime
 from pprint import pprint
 from lxml import etree
-from ...rfc_utils import RfcUtils
-from ...rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
+from .rfc_utils import RfcUtils
+from ..models.rfc.rfc_const import RfcXmlElem, RfcSummaryJsonElem, RfcFile
 from ..models.rfc import IRfc, Rfc
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT
-from ...nlp_utils import openai, ChatGPT
+from ..models.nlp.utils import openai, ChatGPT
+
+
+class SummarizeRfcType:
+    TITLE = 'title'
+    ABSTRACT = 'abstract'
+
+
+RFC8650 = 8650  # RFCがXML形式に対応した最小RFC番号（それ以前はTXT形式しか存在しない）
+
 
 def summarize_rfc(rfc: IRfc,
                   rfc_json_trans_repo: IRfcJsonTransRepository,
@@ -52,7 +61,7 @@ def summarize_rfc(rfc: IRfc,
     # ・ChatGPT-3.5 は2021/9までの情報しか持っていない
     # ・ChatGPT-4 は2023/12までの情報しか持っていない
     chatgpt_has_knowledge = False
-    if int(rfc.get_id()) >= 8650:
+    if int(rfc.get_id()) >= RFC8650:
         rfc_url = RfcFile.get_url_rfc_xml(rfc)
         page = RfcUtils.fetch_url(rfc_url)
         page_content = RfcUtils.remove_namespace_from_xml(page.content)
@@ -72,12 +81,12 @@ def summarize_rfc(rfc: IRfc,
                 chatgpt_has_knowledge = True
 
     # RFC番号で翻訳方法の判定
-    if int(rfc.get_id()) < 8900:
-        summarize_rfc_by = 'title'
-    elif int(rfc.get_id()) >= 8900 and chatgpt_has_knowledge:
-        summarize_rfc_by = 'title'
+    if int(rfc.get_id()) < RFC8650:
+        summarize_rfc_by = SummarizeRfcType.TITLE
+    elif int(rfc.get_id()) >= RFC8650 and chatgpt_has_knowledge:
+        summarize_rfc_by = SummarizeRfcType.TITLE
     else:
-        summarize_rfc_by = 'abstract'
+        summarize_rfc_by = SummarizeRfcType.ABSTRACT
         print(f"[*] ChatGPTのモデルを旧バージョン(3.5)に変更します。")
         gptmodel = ChatGPT.MODEL35  # 概要を要約するときはGPT3.5を常に使用する
 
@@ -87,7 +96,7 @@ def summarize_rfc(rfc: IRfc,
         return False
 
     # プロンプトの作成
-    if summarize_rfc_by == 'title':
+    if summarize_rfc_by == SummarizeRfcType.TITLE:
         print(f'[+] summarized by "title"')
         prompts = _summarize_rfc_by_title(rfc, rfc_title, gptmodel)
     else:
@@ -131,14 +140,14 @@ def summarize_rfc(rfc: IRfc,
     # GPTからの要約結果をJSON化
     dt_now = datetime.datetime.now()
     obj = {
-        "number": rfc.get_id(),
-        "model": gptmodel,
-        "created_at": dt_now.isoformat(),
-        "summary": []
+        RfcSummaryJsonElem.NUMBER: rfc.get_id(),
+        RfcSummaryJsonElem.MODEL: gptmodel,
+        RfcSummaryJsonElem.CREATED_AT: dt_now.isoformat(),
+        RfcSummaryJsonElem.SUMMARY: []
     }
     splitted_texts = re.split(r'\n\n+', text)
     for splitted_text in splitted_texts:
-        obj['summary'].append(splitted_text)
+        obj[RfcSummaryJsonElem.SUMMARY].append(splitted_text)
 
     # RFC要約の出力
     rfc_json_data_summary_repo.save(rfc, obj)
