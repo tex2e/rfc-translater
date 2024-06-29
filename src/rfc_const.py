@@ -125,37 +125,26 @@ class RfcFile:
     @staticmethod
     def write_json_file(filepath: str, obj: object):
         """JSONファイルの書き込み"""
-        FILEMODE = 'w'
-        ENCODING = 'utf-8'
-        NEWLINE = "\n"
-        JSON_INDENT = 2
-        with open(filepath, FILEMODE, encoding=ENCODING, newline=NEWLINE) as f:
-            json.dump(obj, f, ensure_ascii=False, indent=JSON_INDENT)
+        with open(filepath, 'w', encoding='utf-8', newline="\n") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
 
     @staticmethod
     def read_json_file(filepath: str) -> object:
         """JSONファイルの読み込み"""
-        FILEMODE = 'r'
-        ENCODING = 'utf-8'
-        with open(filepath, FILEMODE, encoding=ENCODING) as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             obj = json.load(f)
             return obj
 
     @staticmethod
     def write_html_file(filepath: str, obj: object):
         """HTMLファイルの書き込み"""
-        FILEMODE = 'w'
-        ENCODING = 'utf-8'
-        NEWLINE = "\n"
-        with open(filepath, FILEMODE, encoding=ENCODING, newline=NEWLINE) as f:
+        with open(filepath, 'w', encoding='utf-8', newline="\n") as f:
             f.write(obj)
 
     @staticmethod
     def read_html_file(filepath: str) -> str:
         """HTMLファイルの読み込み"""
-        FILEMODE = 'r'
-        ENCODING = 'utf-8'
-        with open(filepath, FILEMODE, encoding=ENCODING) as f:
+        with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
             return content
 

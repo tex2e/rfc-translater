@@ -10,6 +10,7 @@ from pprint import pprint
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem
 from .domain.models.rfc import IRfc, Rfc, RfcDraft
+from .domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
 
 # 段落がページをまたぐことを表す文字
 BREAK = '\x07\x07\x07'
@@ -281,21 +282,19 @@ class RFCNotFound(Exception):
     pass
 
 
-def fetch_rfc_txt(rfc: IRfc, args) -> None:
+def fetch_rfc_txt(rfc: IRfc, rfc_json_plain_repo: IRfcJsonPlainRepository, args) -> None:
     """RFCの取得処理 (TXT版)"""
     assert isinstance(rfc, IRfc)
+    assert isinstance(rfc_json_plain_repo, IRfcJsonPlainRepository)
 
     print(f"[*] fetch_rfc_txt({rfc.get_id()})")
 
-    url = RfcFile.get_url_rfc_html(rfc)
-    url_txt = RfcFile.get_url_rfc_txt(rfc)
-    output_file = RfcFile.get_filepath_data_json(rfc)
-
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
-    if not args.force and os.path.isfile(output_file):
+    if not args.force and rfc_json_plain_repo.find(rfc):
         return
 
     # RFCページのDOMツリーの取得
+    url = RfcFile.get_url_rfc_html(rfc)
     page = RfcUtils.fetch_url(url)
     tree = lxml.html.fromstring(RfcUtils.html_rm_link_tag(page.content))
 
@@ -320,6 +319,7 @@ def fetch_rfc_txt(rfc: IRfc, args) -> None:
         raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc.get_id(), title))
 
     # RFCページのTXT形式の取得
+    url_txt = RfcFile.get_url_rfc_txt(rfc)
     page = RfcUtils.fetch_url(url_txt)
     text = page.content.decode('ascii', errors='ignore')
 
@@ -397,4 +397,4 @@ def fetch_rfc_txt(rfc: IRfc, args) -> None:
             obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TOC] = True
 
     # JSONの保存
-    RfcFile.write_json_file(output_file, obj)
+    rfc_json_plain_repo.save(rfc, obj)

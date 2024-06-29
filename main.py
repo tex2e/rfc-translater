@@ -12,7 +12,8 @@ from src.make_index import make_index, make_index_draft
 from src.fetch_index import diff_remote_and_local_index
 from src.fetch_status import fetch_status
 from src.rfc_utils import RfcUtils
-from src.domain.models.rfc import Rfc, RfcDraft
+from src.domain.models.rfc import IRfc, Rfc, RfcDraft
+from src.infrastructure.repository.rfcjsonrepository import RfcJsonPlainFileRepository
 
 def main():
     ap = argparse.ArgumentParser()
@@ -87,14 +88,15 @@ def main():
                 make_html(rfc)
     elif args.fetch and rfcs:
         # 指定したRFCの取得 (rfcXXXX.json)
+        rfc_json_plain_file_repo = RfcJsonPlainFileRepository()
         for rfc in rfcs:
             if isinstance(rfc, RfcDraft):
-                fetch_rfc_txt(rfc, args)
+                fetch_rfc_txt(rfc, rfc_json_plain_file_repo, args)
             elif isinstance(rfc, Rfc):
                 if (int(rfc.get_id()) >= 8650) and (not args.txt):
-                    fetch_rfc_xml(rfc, args)
+                    fetch_rfc_xml(rfc, rfc_json_plain_file_repo, args)
                 else:
-                    fetch_rfc_txt(rfc, args)
+                    fetch_rfc_txt(rfc, rfc_json_plain_file_repo, args)
     elif args.trans and rfcs:
         # RFCの翻訳 (rfcXXXX-trans.json)
         for rfc in rfcs:
@@ -111,8 +113,7 @@ def main():
     elif rfcs:
         # 範囲指定でRFCを順番に取得・翻訳・作成
         for rfc in rfcs:
-            rfc_number = rfc.get_id()
-            _fetch_trans_make(rfc_number, args)
+            _fetch_trans_make(rfc, args)
     elif args.begin and args.only_first:
         # 未翻訳のRFCを順番に取得・翻訳・作成
         _continuous_main(args)
@@ -120,22 +121,26 @@ def main():
         ap.print_help()
     print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
 
-def _fetch_trans_make(rfc_number: int | str, args) -> None:
+def _fetch_trans_make(rfc: IRfc, args) -> None:
     """RFCの取得、翻訳、HTML作成をまとめて行う"""
-    print(f'[*] RFC {rfc_number}:')
+    print(f'[*] RFC {rfc.get_id()}:')
     try:
-        if (isinstance(rfc_number, int) and rfc_number >= 8560) and (not args.txt):
-            fetch_rfc_xml(rfc_number, args)
-        else:
-            fetch_rfc_txt(rfc_number, args)
+        rfc_json_plain_file_repo = RfcJsonPlainFileRepository()
+        if isinstance(rfc, RfcDraft):
+            fetch_rfc_txt(rfc, rfc_json_plain_file_repo, args)
+        elif isinstance(rfc, Rfc):
+            if (int(rfc.get_id()) >= 8650) and (not args.txt):
+                fetch_rfc_xml(rfc, rfc_json_plain_file_repo, args)
+            else:
+                fetch_rfc_txt(rfc, rfc_json_plain_file_repo, args)
     except RFCNotFound:
         print('Exception: RFCNotFound!')
-        filename = f"html/rfc{rfc_number}-not-found.html"
+        filename = f"html/rfc{rfc.get_id()}-not-found.html"
         with open(filename, "w") as f:
             f.write('')
         return
-    trans_rfc(rfc_number, args)
-    make_html(rfc_number)
+    trans_rfc(rfc, args)
+    make_html(rfc)
 
 def _continuous_main(args):
     """複数範囲のRFCを処理する"""

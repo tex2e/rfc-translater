@@ -255,20 +255,9 @@ def trans_rfc(rfc: IRfc, args) -> bool:
 
     print(f"[*] trans_rfc({rfc.get_id()})")
 
-    if isinstance(rfc, Rfc):
-        # 通常のRFCのとき
-        input_file = RfcFile.get_filepath_data_json(rfc)
-        output_file = RfcFile.get_filepath_data_trans_json(rfc)
-        midway_file = RfcFile.get_filepath_data_midway_json(rfc)
-    elif isinstance(rfc, RfcDraft):
-        m = re.match(r'draft-(?P<rfc_draft_id>.+)', rfc.get_id())
-        # ドラフト版のRFCのとき
-        rfc_draft_id = m['rfc_draft_id']
-        input_file = RfcFile.get_filepath_data_json(rfc_draft_id)
-        output_file = RfcFile.get_filepath_data_trans_json(rfc_draft_id)
-        midway_file = RfcFile.get_filepath_data_midway_json(rfc_draft_id)
-    else:
-        raise RuntimeError(f"fetch_rfc: Unknown format number={rfc.get_id()}")
+    input_file = RfcFile.get_filepath_data_json(rfc)
+    output_file = RfcFile.get_filepath_data_trans_json(rfc)
+    midway_file = RfcFile.get_filepath_data_midway_json(rfc)
 
     if os.path.isfile(midway_file):
         print(f'[+] found midway file: {midway_file}')

@@ -2,7 +2,6 @@
 # IETFのWebサイトからRFCをXML形式で取得し、文章・図・表・コードの判定をするためのプログラム
 # ------------------------------------------------------------------------------
 
-import os
 import re
 import textwrap
 import datetime
@@ -14,6 +13,7 @@ from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
 from .rfc_const import RfcFile, RfcJsonElem, RfcXmlElem
 from .domain.models.rfc import IRfc, Rfc, RfcDraft
+from .domain.repository.irfcjsonplainrepository import IRfcJsonPlainRepository
 
 # RFCの段落情報を格納するクラス
 class Content:
@@ -389,22 +389,21 @@ def generate_text_writer(xml: bytes):
     return text_writer
 
 
-def fetch_rfc_xml(rfc: IRfc, args) -> None:
+def fetch_rfc_xml(rfc: IRfc, rfc_json_plain_repo: IRfcJsonPlainRepository, args) -> None:
     """RFCの取得処理 (XML版)"""
 
     assert isinstance(rfc, IRfc)
+    assert isinstance(rfc_json_plain_repo, IRfcJsonPlainRepository)
 
     print(f"[*] fetch_rfc_xml({rfc.get_id()})")
     force = args.force
 
-    url_xml = RfcFile.get_url_rfc_xml(rfc)
-    output_file = RfcFile.get_filepath_data_json(rfc)
-
     # すでに出力ファイルが存在する場合は終了 (--forceオプションが有効なとき以外)
-    if not force and os.path.isfile(output_file):
+    if not force and rfc_json_plain_repo.find(rfc):
         return
 
     # RFC (XML) の取得
+    url_xml = RfcFile.get_url_rfc_xml(rfc)
     page = RfcUtils.fetch_url(url_xml)
     xml: bytes = page.content
 
@@ -468,4 +467,4 @@ def fetch_rfc_xml(rfc: IRfc, args) -> None:
             obj[RfcJsonElem.CONTENTS][-1][RfcJsonElem.Contents.TOC] = True
 
     # JSONの保存
-    RfcFile.write_json_file(output_file, obj)
+    rfc_json_plain_repo.save(rfc, obj)
