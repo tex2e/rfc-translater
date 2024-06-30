@@ -11,7 +11,7 @@ from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, I
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT
-from ...domain.valueobject.nlp.utils import openai, ChatGPT
+from ...domain.services.nlputils import openai, ChatGPT
 
 
 class SummarizeRfcType:

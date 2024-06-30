@@ -1,9 +1,9 @@
 
 import re
-from .metatranslater import Translator, MyTranslateException
 from dotenv import load_dotenv  # pip install python-dotenv
+from .metatranslater import Translator, MyTranslateException
 # ChatGPT
-from ...models.nlp.utils import openai, ChatGPT
+from ....domain.services.nlputils import openai, ChatGPT
 
 # 環境変数の読み込み
 load_dotenv()
