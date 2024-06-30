@@ -6,7 +6,7 @@ import re
 import textwrap
 from pprint import pprint
 import lxml.etree  # pip install lxml
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcJsonElem, RfcXmlElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
 from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 from ...infrastructure.apiclient.rfcapiclient import IRfcApiClient

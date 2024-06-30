@@ -1,7 +1,7 @@
 
 import abc
-from ...domain.valueobject.rfc import RfcFile
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
+from ...domain.services.rfcfile import RfcFile
 
 
 class IRfcIndexApiClient(metaclass=abc.ABCMeta):

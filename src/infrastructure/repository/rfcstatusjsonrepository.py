@@ -1,6 +1,7 @@
 
 import abc
-from ...domain.valueobject.rfc import RfcFile, IRfc
+from ...domain.valueobject.rfc import IRfc
+from ...domain.services.rfcfile import RfcFile
 
 
 class IRfcStatusRepository(metaclass=abc.ABCMeta):

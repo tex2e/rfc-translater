@@ -4,7 +4,7 @@
 
 from pprint import pprint
 from mako.lookup import TemplateLookup
-from ...domain.valueobject.rfc import RfcFile
+from ...domain.services.rfcfile import RfcFile
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 from ...infrastructure.repository.indexhtmlrepository import IIndexHtmlRepository
 from ...infrastructure.repository.indexdrafthtmlrepository import IIndexDraftHtmlRepository

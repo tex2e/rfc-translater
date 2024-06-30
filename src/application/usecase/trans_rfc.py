@@ -4,7 +4,7 @@
 
 import re
 from pprint import pprint
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcJsonElem, IRfc
 from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository

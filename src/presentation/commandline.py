@@ -12,7 +12,7 @@ from ..application.usecase.make_index import make_index, make_index_draft
 from ..application.usecase.fetch_index import diff_remote_and_local_index
 from ..application.usecase.fetch_status import fetch_status
 from ..application.usecase.make_json_from_html import make_json_from_html
-from ..domain.services.rfc_utils import RfcUtils
+from ..domain.services.rfcutils import RfcUtils
 from ..infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from ..infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
 from ..infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTransMidwayFileRepository

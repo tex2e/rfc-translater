@@ -5,8 +5,8 @@
 import re
 import lxml.html
 from pprint import pprint
-from ...domain.services.rfc_utils import RfcUtils
-from ...domain.valueobject.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
+from ...domain.services.rfcutils import RfcUtils
+from ...domain.valueobject.rfc import RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
 from ...domain.valueobject.rfc.contents.paragraph import BREAK
 from ...domain.valueobject.rfc.contents.paragraphs import Paragraphs
 from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository

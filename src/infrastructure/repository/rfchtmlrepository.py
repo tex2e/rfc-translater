@@ -3,8 +3,9 @@ import os
 import re
 import abc
 import glob
-from ...domain.valueobject.rfc import RfcFile, IRfc
+from ...domain.valueobject.rfc import IRfc
 from ...domain.valueobject.html import HtmlFile
+from ...domain.services.rfcfile import RfcFile
 
 
 class IRfcHtmlRepository(metaclass=abc.ABCMeta):

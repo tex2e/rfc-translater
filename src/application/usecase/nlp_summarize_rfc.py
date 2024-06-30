@@ -6,7 +6,7 @@ import re
 import datetime
 from pprint import pprint
 from lxml import etree  # pip install lxml
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository

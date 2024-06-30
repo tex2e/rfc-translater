@@ -5,7 +5,7 @@
 import re
 from pprint import pprint
 from lxml import etree  # pip install lxml
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcIndexXmlElem
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 from ...infrastructure.apiclient.rfcindexapiclient import IRfcIndexApiClient

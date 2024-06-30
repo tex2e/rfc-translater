@@ -1,7 +1,7 @@
 
 import abc
 from ...domain.valueobject.rfc import IRfc
-from ...domain.valueobject.rfc import RfcFile
+from ...domain.services.rfcfile import RfcFile
 
 
 class IIndexDraftHtmlRepository(metaclass=abc.ABCMeta):

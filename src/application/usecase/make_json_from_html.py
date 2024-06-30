@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup  # pip install beautifulsoup4
 from ...domain.valueobject.rfc import IRfc, Rfc, RfcJsonElem
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
-from ...domain.services.rfc_utils import RfcUtils
+from ...domain.services.rfcutils import RfcUtils
 
 
 def make_json_from_html(rfc: IRfc,

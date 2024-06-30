@@ -1,7 +1,7 @@
 
 import os
 import json
-from . import IRfc, Rfc, RfcDraft
+from ..valueobject.rfc import IRfc, Rfc, RfcDraft
 
 class RfcFile:
     """RFCファイル関連クラス"""

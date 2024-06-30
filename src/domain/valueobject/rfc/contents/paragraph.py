@@ -3,7 +3,7 @@
 
 import re
 import textwrap
-from ....services.rfc_utils import RfcUtils
+from ....services.rfcutils import RfcUtils
 
 
 # 段落がページをまたぐことを表す文字
