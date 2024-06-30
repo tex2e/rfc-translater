@@ -1,6 +1,7 @@
 
 import abc
 from ..models.rfc import IRfc
+from ..models.html import HtmlFile
 
 
 class IRfcHtmlRepository(metaclass=abc.ABCMeta):
@@ -20,4 +21,12 @@ class IRfcHtmlRepository(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def delete(self, rfc: IRfc) -> bool:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def findall(self) -> list[HtmlFile]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def findalldraft(self) -> list[HtmlFile]:
         raise NotImplementedError()

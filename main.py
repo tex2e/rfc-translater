@@ -84,10 +84,10 @@ def main():
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
-        make_index(IndexHtmlFileRepository())
+        make_index(IndexHtmlFileRepository(), RfcHtmlFileRepository())
     elif args.make_index_draft:
         print("[*] draft/index.htmlの作成")
-        make_index_draft(IndexDraftHtmlFileRepository())
+        make_index_draft(IndexDraftHtmlFileRepository(), RfcHtmlFileRepository())
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
         fetch_status()

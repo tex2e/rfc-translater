@@ -1,6 +1,9 @@
 
 import os
+import re
+import glob
 from ...domain.models.rfc import RfcFile, IRfc
+from ...domain.models.html import HtmlFile
 from ...domain.repository.irfchtmlrepository import IRfcHtmlRepository
 
 
@@ -26,3 +29,44 @@ class RfcHtmlFileRepository(IRfcHtmlRepository):
             os.remove(filepath)
             return True
         return False
+
+    def findall(self) -> list[HtmlFile]:
+        """RFC全件取得"""
+        files = []
+        for filepath in glob.glob(RfcFile.GLOB_HTML_FILE):
+            html = RfcFile.read_html_file(filepath)
+            m = re.search(r'<title>([^<]*)</title>', html)
+            if not m:
+                print("[-] not found title: %s" % filepath)
+                continue
+            title = m[1].replace('日本語訳', '').strip()
+            filename = os.path.basename(filepath)
+            if m := re.match(r'rfc(\d+).html', filename):
+                filenum = int(m[1])
+                if filenum < 2220:  # RFC 2220 以降を対象とする
+                    continue
+                files.append(HtmlFile(filenum, filename, title))
+
+        # RFC番号順（降順）でソート
+        files.sort(reverse=True, key=lambda x: x.get_id())
+        return files
+
+    def findalldraft(self) -> list[HtmlFile]:
+        """Draft版RFC全件取得"""
+        files = []
+        for filepath in glob.glob(RfcFile.GLOB_HTML_DRAFT_FILE):
+            html = RfcFile.read_html_file(filepath)
+            m = re.search(r'<title>([^<]*)</title>', html)
+            if not m:
+                print("[-] not found title: %s" % filepath)
+                continue
+            title = m[1].replace('日本語訳', '').strip()
+
+            rfcfile = os.path.basename(filepath)
+            if m := re.match(r'draft-[^-]+-(?P<draftname>.*).html', rfcfile):
+                filenum = m['draftname']
+                files.append(HtmlFile(filenum, rfcfile, title))
+
+        # RFCドラフト名でソート
+        files.sort(key=lambda x: x.get_id())
+        return files
