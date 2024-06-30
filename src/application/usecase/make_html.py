@@ -7,10 +7,10 @@ import textwrap
 import markupsafe
 from pprint import pprint
 from mako.lookup import TemplateLookup
-from ..models.rfc import RfcFile, RfcJsonElem, IRfc, RfcDraft
-from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
-from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
-from ..repository.irfchtmlrepository import IRfcHtmlRepository
+from ...domain.valueobject.rfc import RfcFile, RfcJsonElem, IRfc, RfcDraft
+from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
+from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
+from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 
 
 def make_html(rfc: IRfc,

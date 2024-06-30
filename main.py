@@ -4,14 +4,14 @@
 
 import sys
 import argparse
-from src.domain.models.rfc import Rfc, RfcDraft, RFCNotFoundException
-from src.domain.application.fetch_rfc import fetch_rfc
-from src.domain.application.trans_rfc import trans_rfc, trans_test
-from src.domain.application.make_html import make_html
-from src.domain.application.make_index import make_index, make_index_draft
-from src.domain.application.fetch_index import diff_remote_and_local_index
-from src.domain.application.fetch_status import fetch_status
-from src.domain.application.make_json_from_html import make_json_from_html
+from src.domain.valueobject.rfc import Rfc, RfcDraft, RFCNotFoundException
+from src.application.usecase.fetch_rfc import fetch_rfc
+from src.application.usecase.trans_rfc import trans_rfc, trans_test
+from src.application.usecase.make_html import make_html
+from src.application.usecase.make_index import make_index, make_index_draft
+from src.application.usecase.fetch_index import diff_remote_and_local_index
+from src.application.usecase.fetch_status import fetch_status
+from src.application.usecase.make_json_from_html import make_json_from_html
 from src.domain.services.rfc_utils import RfcUtils
 from src.infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from src.infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
@@ -20,7 +20,7 @@ from src.infrastructure.repository.rfcjsondatasummaryrepository import RfcJsonDa
 from src.infrastructure.repository.rfchtmlrepository import RfcHtmlFileRepository
 from src.infrastructure.repository.indexhtmlrepository import IndexHtmlFileRepository
 from src.infrastructure.repository.indexdrafthtmlrepository import IndexDraftHtmlFileRepository
-from src.infrastructure.repository.rfcstatusjsonfilerepository import RfcStatusJsonRepository
+from src.infrastructure.repository.rfcstatusjsonrepository import RfcStatusJsonFileRepository
 
 
 def main():
@@ -92,7 +92,7 @@ def main():
         make_index_draft(IndexDraftHtmlFileRepository(), RfcHtmlFileRepository())
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
-        fetch_status(RfcStatusJsonRepository())
+        fetch_status(RfcStatusJsonFileRepository())
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         trans_test(args)
@@ -102,7 +102,7 @@ def main():
             make_json_from_html(rfc, RfcHtmlFileRepository(), RfcJsonTransFileRepository())
     elif args.summarize and rfcs:
         # RFCの要約作成
-        from src.domain.application.nlp_summarize_rfc import summarize_rfc
+        from src.application.usecase.nlp_summarize_rfc import summarize_rfc
         for rfc in rfcs:
             if summarize_rfc(rfc, RfcJsonTransFileRepository(), RfcJsonDataSummaryFileRepository(), args):
                 # RFCのHTMLを作成

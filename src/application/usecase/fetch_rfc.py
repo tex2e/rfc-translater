@@ -1,6 +1,6 @@
 
-from ..models.rfc import IRfc, Rfc, RfcDraft
-from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ...domain.valueobject.rfc import IRfc, Rfc, RfcDraft
+from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 from .fetch_rfc_txt import fetch_rfc_txt
 from .fetch_rfc_xml import fetch_rfc_xml
 

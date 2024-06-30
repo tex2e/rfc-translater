@@ -3,8 +3,8 @@
 
 import unittest
 from pprint import pprint
-from src.domain.services.fetch_rfc_xml import generate_text_writer
-from src.domain.models.rfc.contents.content import Content
+from src.application.usecase.fetch_rfc_xml import generate_text_writer
+from src.domain.valueobject.rfc.contents.content import Content
 
 
 class TestFetchXmlRfc(unittest.TestCase):

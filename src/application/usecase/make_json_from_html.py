@@ -5,11 +5,11 @@
 import sys
 import textwrap
 from pprint import pprint
-from bs4 import BeautifulSoup
-from ..models.rfc import IRfc, Rfc, RfcJsonElem
-from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
-from ..repository.irfchtmlrepository import IRfcHtmlRepository
-from ..services.rfc_utils import RfcUtils
+from bs4 import BeautifulSoup  # pip install beautifulsoup4
+from ...domain.valueobject.rfc import IRfc, Rfc, RfcJsonElem
+from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
+from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
+from ...domain.services.rfc_utils import RfcUtils
 
 
 def make_json_from_html(rfc: IRfc,

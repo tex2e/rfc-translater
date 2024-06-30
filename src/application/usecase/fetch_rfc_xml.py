@@ -10,10 +10,10 @@ import lxml.etree  # pip install lxml
 import xml2rfc  # pip install xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
-from ..services.rfc_utils import RfcUtils
-from ..models.rfc import RfcFile, RfcJsonElem, RfcXmlElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
-from ..models.rfc.contents.content import Content
-from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ...domain.services.rfc_utils import RfcUtils
+from ...domain.valueobject.rfc import RfcFile, RfcJsonElem, RfcXmlElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
+from ...domain.valueobject.rfc.contents.content import Content
+from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 
 
 def _get_parent(elem):

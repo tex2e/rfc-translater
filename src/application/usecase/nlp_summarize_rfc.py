@@ -5,13 +5,13 @@
 import re
 import datetime
 from pprint import pprint
-from lxml import etree
-from ..services.rfc_utils import RfcUtils
-from ..models.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
-from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
-from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
+from lxml import etree  # pip install lxml
+from ...domain.services.rfc_utils import RfcUtils
+from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
+from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
+from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT
-from ..models.nlp.utils import openai, ChatGPT
+from ...domain.valueobject.nlp.utils import openai, ChatGPT
 
 
 class SummarizeRfcType:

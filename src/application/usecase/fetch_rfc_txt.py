@@ -5,11 +5,11 @@
 import re
 import lxml.html
 from pprint import pprint
-from ..services.rfc_utils import RfcUtils
-from ..models.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
-from ..models.rfc.contents.paragraph import BREAK
-from ..models.rfc.contents.paragraphs import Paragraphs
-from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
+from ...domain.services.rfc_utils import RfcUtils
+from ...domain.valueobject.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
+from ...domain.valueobject.rfc.contents.paragraph import BREAK
+from ...domain.valueobject.rfc.contents.paragraphs import Paragraphs
+from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 
 
 def fetch_rfc_txt(rfc: IRfc,

@@ -1,7 +1,27 @@
 
 import os
-from ...domain.models.rfc import RfcFile, IRfc
-from ...domain.repository.irfcjsondatarepository import IRfcJsonDataRepository
+import abc
+from ...domain.valueobject.rfc import RfcFile, IRfc
+
+
+class IRfcJsonDataRepository(metaclass=abc.ABCMeta):
+    """RFC取得データJSONを管理するレポジトリ"""
+
+    @abc.abstractmethod
+    def findpath(self, rfc: IRfc) -> str:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def find(self, rfc: IRfc) -> object:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def save(self, rfc: IRfc, obj: object) -> None:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def delete(self, rfc: IRfc) -> bool:
+        raise NotImplementedError()
 
 
 class RfcJsonDataFileRepository(IRfcJsonDataRepository):

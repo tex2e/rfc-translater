@@ -5,9 +5,9 @@
 import re
 from pprint import pprint
 from lxml import etree  # pip install lxml
-from ..services.rfc_utils import RfcUtils
-from ..models.rfc import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
-from ..repository.irfcstatusjsonrepository import IRfcStatusRepository
+from ...domain.services.rfc_utils import RfcUtils
+from ...domain.valueobject.rfc import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
+from ...infrastructure.repository.rfcstatusjsonrepository import IRfcStatusRepository
 
 
 def fetch_status(rfc_status_repo: IRfcStatusRepository) -> None:

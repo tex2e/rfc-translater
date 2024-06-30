@@ -2,7 +2,7 @@
 # python3 -m unittest discover -s tests -p "test_*.py"
 
 import unittest
-from src.domain.models.rfc.contents.paragraph import Paragraph
+from src.domain.valueobject.rfc.contents.paragraph import Paragraph
 
 
 # --- Sentence -----------------------------------------------------------------
