@@ -7,7 +7,7 @@ import re
 import glob
 from pprint import pprint
 from lxml import etree
-from .rfc_utils import RfcUtils
+from ..services.rfc_utils import RfcUtils
 from ..models.rfc import RfcIndexXmlElem, RfcFile
 
 def fetch_remote_index() -> list[int]:

@@ -6,8 +6,8 @@ from pprint import pprint
 from mako.lookup import TemplateLookup
 from ..models.rfc import RfcFile
 from ..repository.irfchtmlrepository import IRfcHtmlRepository
-from ...domain.repository.iindexhtmlrepository import IIndexHtmlRepository
-from ...domain.repository.iindexdrafthtmlrepository import IIndexDraftHtmlRepository
+from ..repository.iindexhtmlrepository import IIndexHtmlRepository
+from ..repository.iindexdrafthtmlrepository import IIndexDraftHtmlRepository
 
 
 def make_index(index_html_repo: IIndexHtmlRepository,

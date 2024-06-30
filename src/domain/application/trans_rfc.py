@@ -4,13 +4,13 @@
 
 import re
 from pprint import pprint
-from .rfc_utils import RfcUtils
+from ..services.rfc_utils import RfcUtils
 from ..models.rfc import RfcJsonElem, IRfc
 from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfcjsontransmidwayrepository import IRfcJsonTransMidwayRepository
-from .translater.metatranslater import MyTranslateException
-from .translater.seleniumgoogletranslater import TranslatorSeleniumGoogletrans
+from ..services.translater.metatranslater import MyTranslateException
+from ..services.translater.seleniumgoogletranslater import TranslatorSeleniumGoogletrans
 
 
 def trans_rfc(rfc: IRfc,

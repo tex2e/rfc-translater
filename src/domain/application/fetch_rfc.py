@@ -1,8 +1,8 @@
 
 from ..models.rfc import IRfc, Rfc, RfcDraft
+from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 from .fetch_rfc_txt import fetch_rfc_txt
 from .fetch_rfc_xml import fetch_rfc_xml
-from ..repository.irfcjsondatarepository import IRfcJsonDataRepository
 
 
 def fetch_rfc(rfc: IRfc,

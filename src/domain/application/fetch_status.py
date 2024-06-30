@@ -3,9 +3,9 @@
 # ------------------------------------------------------------------------------
 
 import re
-from lxml import etree
 from pprint import pprint
-from .rfc_utils import RfcUtils
+from lxml import etree  # pip install lxml
+from ..services.rfc_utils import RfcUtils
 from ..models.rfc import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
 from ..repository.irfcstatusjsonrepository import IRfcStatusRepository
 

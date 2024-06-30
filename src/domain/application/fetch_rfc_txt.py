@@ -5,7 +5,7 @@
 import re
 import lxml.html
 from pprint import pprint
-from .rfc_utils import RfcUtils
+from ..services.rfc_utils import RfcUtils
 from ..models.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
 from ..models.rfc.contents.paragraph import BREAK
 from ..models.rfc.contents.paragraphs import Paragraphs
@@ -16,6 +16,7 @@ def fetch_rfc_txt(rfc: IRfc,
                   rfc_json_plain_repo: IRfcJsonDataRepository,
                   args) -> None:
     """RFCの取得処理 (TXT版)"""
+
     assert isinstance(rfc, IRfc)
     assert isinstance(rfc_json_plain_repo, IRfcJsonDataRepository)
 

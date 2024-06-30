@@ -6,7 +6,7 @@ import re
 import datetime
 from pprint import pprint
 from lxml import etree
-from .rfc_utils import RfcUtils
+from ..services.rfc_utils import RfcUtils
 from ..models.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository

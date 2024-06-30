@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from ..models.rfc import IRfc, Rfc, RfcJsonElem
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfchtmlrepository import IRfcHtmlRepository
-from .rfc_utils import RfcUtils
+from ..services.rfc_utils import RfcUtils
 
 
 def make_json_from_html(rfc: IRfc,
