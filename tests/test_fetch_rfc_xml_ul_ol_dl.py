@@ -3,7 +3,9 @@
 
 import unittest
 from pprint import pprint
-from src.domain.services.fetch_rfc_xml import generate_text_writer, Content
+from src.domain.services.fetch_rfc_xml import generate_text_writer
+from src.domain.models.rfc.contents.content import Content
+
 
 class TestFetchXmlRfcUnorderdOrderdDefinitionList(unittest.TestCase):
 
