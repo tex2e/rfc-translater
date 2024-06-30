@@ -6,10 +6,11 @@ import sys
 import textwrap
 from pprint import pprint
 from bs4 import BeautifulSoup
-from ..models.rfc import RfcFile, IRfc, Rfc, RfcJsonElem
+from ..models.rfc import IRfc, Rfc, RfcJsonElem
 from ..repository.irfcjsontransrepository import IRfcJsonTransRepository
 from ..repository.irfchtmlrepository import IRfcHtmlRepository
 from .rfc_utils import RfcUtils
+
 
 def make_json_from_html(rfc: IRfc,
                         rfc_html_repo: IRfcHtmlRepository,

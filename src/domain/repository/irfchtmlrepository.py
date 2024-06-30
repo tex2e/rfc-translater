@@ -4,6 +4,7 @@ from ..models.rfc import IRfc
 
 
 class IRfcHtmlRepository(metaclass=abc.ABCMeta):
+    """RFC翻訳済みHTMLを管理するレポジトリ"""
 
     @abc.abstractmethod
     def findpath(self, rfc: IRfc) -> str:

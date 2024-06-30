@@ -4,6 +4,7 @@ from ..models.rfc import IRfc
 
 
 class IRfcJsonDataRepository(metaclass=abc.ABCMeta):
+    """RFC取得データJSONを管理するレポジトリ"""
 
     @abc.abstractmethod
     def findpath(self, rfc: IRfc) -> str:

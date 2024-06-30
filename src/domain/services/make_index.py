@@ -6,12 +6,19 @@ import os
 import re
 import glob
 from pprint import pprint
-from ..models.rfc import RfcFile
 from mako.lookup import TemplateLookup
+from ..models.rfc import RfcFile
+from ...domain.repository.iindexhtmlrepository import IIndexHtmlRepository
+from ...domain.repository.iindexdrafthtmlrepository import IIndexDraftHtmlRepository
 
-def make_index() -> None:
+
+def make_index(index_html_repo: IIndexHtmlRepository) -> None:
     """トップページ作成"""
+
+    assert isinstance(index_html_repo, IIndexHtmlRepository)
+
     print(f'[*] make_index()')
+
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_FILE):
         html = RfcFile.read_html_file(filepath)
@@ -36,12 +43,17 @@ def make_index() -> None:
     output = mytemplate.render_unicode(ctx={'files': files})
 
     # HTMLファイル出力
-    RfcFile.write_html_file(RfcFile.OUTPUT_HTML_INDEX_FILE, output)
+    # RfcFile.write_html_file(RfcFile.OUTPUT_HTML_INDEX_FILE, output)
+    index_html_repo.save(output)
 
 
-def make_index_draft() -> None:
+def make_index_draft(index_draft_html_repo: IIndexDraftHtmlRepository) -> None:
     """Draft版のトップページ作成"""
+
+    assert isinstance(index_draft_html_repo, IIndexDraftHtmlRepository)
+
     print(f'[*] make_index_draft()')
+
     is_draft = True
     files = []
     for filepath in glob.glob(RfcFile.GLOB_HTML_DRAFT_FILE):
@@ -66,4 +78,5 @@ def make_index_draft() -> None:
     output = mytemplate.render_unicode(ctx={'files': files}, is_draft=is_draft)
 
     # HTMLファイル出力
-    RfcFile.write_html_file(RfcFile.OUTPUT_HTML_DRAFT_INDEX_FILE, output)
+    # RfcFile.write_html_file(RfcFile.OUTPUT_HTML_DRAFT_INDEX_FILE, output)
+    index_draft_html_repo.save(output)

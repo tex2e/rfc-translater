@@ -4,7 +4,7 @@
 
 import sys
 import argparse
-from src.domain.models.rfc import IRfc, Rfc, RfcDraft, RFCNotFoundException
+from src.domain.models.rfc import Rfc, RfcDraft, RFCNotFoundException
 from src.domain.services.fetch_rfc import fetch_rfc
 from src.domain.services.trans_rfc import trans_rfc, trans_test
 from src.domain.services.make_html import make_html
@@ -17,6 +17,8 @@ from src.infrastructure.repository.rfcjsontransrepository import RfcJsonTransFil
 from src.infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTransMidwayFileRepository
 from src.infrastructure.repository.rfcjsondatasummaryrepository import RfcJsonDataSummaryFileRepository
 from src.infrastructure.repository.rfchtmlrepository import RfcHtmlFileRepository
+from src.infrastructure.repository.indexhtmlrepository import IndexHtmlFileRepository
+from src.infrastructure.repository.indexdrafthtmlrepository import IndexDraftHtmlFileRepository
 
 
 def main():
@@ -31,30 +33,30 @@ def main():
                     help='Only make HTML (ex. --rfc 8446 --fetch)')
     ap.add_argument('--make-json', action='store_true',
                     help='Make JSON from HTML (ex. --make-json --rfc 8446)')
-    ap.add_argument('--begin', type=int,
-                    help='Set begin rfc number (ex. --begin 8000)')
-    ap.add_argument('--end', type=int,
-                    help='Set end rfc number (ex. --begin 8000 --end 9000)')
     ap.add_argument('--make-index', action='store_true',
                     help='Make html/index.html (ex. --make-index)')
     ap.add_argument('--force', '-f', action='store_true',
                     help='Ignore cache (ex. --rfc 8446 --fetch --force)')
+    ap.add_argument('--begin', type=int,
+                    help='Set begin rfc number (ex. --begin 8000)')
+    ap.add_argument('--end', type=int,
+                    help='Set end rfc number (ex. --begin 8000 --end 9000)')
     ap.add_argument('--only-first', action='store_true',
                     help='Take only first RFC (ex. --begin 8000 --only-first)')
     ap.add_argument('--draft', type=str,
                     help='Take RFC draft (ex. --draft draft-ietf-tls-esni-14)')
-    ap.add_argument('--fetch-status', action='store_true',
-                    help='Make group-rfcs.json and obsoletes.json')
     ap.add_argument('--make-index-draft', action='store_true',
                     help='Make draft/index.html (ex. --make-index-draft)')
-    ap.add_argument('--transtest', action='store_true',
-                    help='Do translate test')
+    ap.add_argument('--fetch-status', action='store_true',
+                    help='Make group-rfcs.json and obsoletes.json')
     ap.add_argument('--summarize', action='store_true',
                     help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
     ap.add_argument('--chatgpt', type=str,
                     help='ChatGPT model version (ex. --chatgpt gpt-3.5-turbo)')
     ap.add_argument('--txt', action='store_true',
                     help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
+    ap.add_argument('--transtest', action='store_true',
+                    help='Do translate test')
     ap.add_argument('--debug', action='store_true',
                     help='Show more output for debug')
     args = ap.parse_args()
@@ -82,10 +84,10 @@ def main():
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
-        make_index()
+        make_index(IndexHtmlFileRepository())
     elif args.make_index_draft:
         print("[*] draft/index.htmlの作成")
-        make_index_draft()
+        make_index_draft(IndexDraftHtmlFileRepository())
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
         fetch_status()
