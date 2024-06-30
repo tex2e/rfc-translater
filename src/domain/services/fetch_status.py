@@ -3,13 +3,17 @@
 # ------------------------------------------------------------------------------
 
 import re
-from pprint import pprint
 from lxml import etree
+from pprint import pprint
 from .rfc_utils import RfcUtils
 from ..models.rfc import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
+from ..repository.irfcstatusjsonrepository import IRfcStatusRepository
 
-def fetch_status():
+
+def fetch_status(rfc_status_repo: IRfcStatusRepository) -> None:
     """RFC IndexのXML版を取得してRFCリストを作成する"""
+
+    assert isinstance(rfc_status_repo, IRfcStatusRepository)
 
     print(f'[*] fetch_status()')
 
@@ -72,4 +76,4 @@ def fetch_status():
                 obj[rfc_number_str][RfcIndexJsonElem.WG] = str(rfc_wg)
 
     # Save file
-    RfcFile.write_json_file(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE, obj)
+    rfc_status_repo.save(obj)

@@ -11,6 +11,7 @@ from src.domain.services.make_html import make_html
 from src.domain.services.make_index import make_index, make_index_draft
 from src.domain.services.fetch_index import diff_remote_and_local_index
 from src.domain.services.fetch_status import fetch_status
+from src.domain.services.make_json_from_html import make_json_from_html
 from src.domain.services.rfc_utils import RfcUtils
 from src.infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from src.infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
@@ -19,6 +20,7 @@ from src.infrastructure.repository.rfcjsondatasummaryrepository import RfcJsonDa
 from src.infrastructure.repository.rfchtmlrepository import RfcHtmlFileRepository
 from src.infrastructure.repository.indexhtmlrepository import IndexHtmlFileRepository
 from src.infrastructure.repository.indexdrafthtmlrepository import IndexDraftHtmlFileRepository
+from src.infrastructure.repository.rfcstatusjsonfilerepository import RfcStatusJsonRepository
 
 
 def main():
@@ -90,13 +92,12 @@ def main():
         make_index_draft(IndexDraftHtmlFileRepository(), RfcHtmlFileRepository())
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
-        fetch_status()
+        fetch_status(RfcStatusJsonRepository())
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         trans_test(args)
     elif args.make_json and rfcs:
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
-        from src.domain.services.make_json_from_html import make_json_from_html
         for rfc in rfcs:
             make_json_from_html(rfc, RfcHtmlFileRepository(), RfcJsonTransFileRepository())
     elif args.summarize and rfcs:
