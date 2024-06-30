@@ -10,15 +10,18 @@ from ...domain.valueobject.rfc import RfcFile, RfcJsonElem, IRfc, Rfc, RfcDraft,
 from ...domain.valueobject.rfc.contents.paragraph import BREAK
 from ...domain.valueobject.rfc.contents.paragraphs import Paragraphs
 from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
+from ...infrastructure.apiclient.rfcapiclient import IRfcApiClient
 
 
 def fetch_rfc_txt(rfc: IRfc,
                   rfc_json_plain_repo: IRfcJsonDataRepository,
+                  rfc_api: IRfcApiClient,
                   args) -> None:
     """RFCの取得処理 (TXT版)"""
 
     assert isinstance(rfc, IRfc)
     assert isinstance(rfc_json_plain_repo, IRfcJsonDataRepository)
+    assert isinstance(rfc_api, IRfcApiClient)
 
     print(f"[*] fetch_rfc_txt({rfc.get_id()})")
 
@@ -27,8 +30,7 @@ def fetch_rfc_txt(rfc: IRfc,
         return
 
     # RFCページのDOMツリーの取得
-    url = RfcFile.get_url_rfc_html(rfc)
-    page = RfcUtils.fetch_url(url)
+    page = rfc_api.fetch_html(rfc)
     tree = lxml.html.fromstring(RfcUtils.html_rm_link_tag(page.content))
 
     # タイトル取得
@@ -52,8 +54,7 @@ def fetch_rfc_txt(rfc: IRfc,
         raise Exception("[-] Cannot extract RFC Title!: RFC=%s, title=%s" % (rfc.get_id(), title))
 
     # RFCページのTXT形式の取得
-    url_txt = RfcFile.get_url_rfc_txt(rfc)
-    page = RfcUtils.fetch_url(url_txt)
+    page = rfc_api.fetch_txt(rfc)
     text = page.content.decode('ascii', errors='ignore')
 
     # ページ区切りの削除＋前後段落の結合（例：RFC 3830）
@@ -112,8 +113,10 @@ def fetch_rfc_txt(rfc: IRfc,
     obj[RfcJsonElem.CREATED_AT] = str(RfcUtils.get_now())
     obj[RfcJsonElem.UPDATED_BY] = ''
     obj[RfcJsonElem.CONTENTS] = []
+    # 通常のRFCのとき、RFC番号は整数型に変換する
     if isinstance(rfc, Rfc):
         obj[RfcJsonElem.NUMBER] = int(obj[RfcJsonElem.NUMBER])
+    # Draft版RFCのとき、DraftフラグをONにする
     if isinstance(rfc, RfcDraft):
         obj[RfcJsonElem.IS_DRAFT] = True
 

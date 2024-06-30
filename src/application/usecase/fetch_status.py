@@ -8,16 +8,19 @@ from lxml import etree  # pip install lxml
 from ...domain.services.rfc_utils import RfcUtils
 from ...domain.valueobject.rfc import RfcFile, RfcIndexXmlElem, RfcIndexJsonElem
 from ...infrastructure.repository.rfcstatusjsonrepository import IRfcStatusRepository
+from ...infrastructure.apiclient.rfcindexapiclient import IRfcIndexApiClient
 
 
-def fetch_status(rfc_status_repo: IRfcStatusRepository) -> None:
+def fetch_status(rfc_status_repo: IRfcStatusRepository,
+                 rfc_api: IRfcIndexApiClient) -> None:
     """RFC IndexのXML版を取得してRFCリストを作成する"""
 
     assert isinstance(rfc_status_repo, IRfcStatusRepository)
+    assert isinstance(rfc_api, IRfcIndexApiClient)
 
     print(f'[*] fetch_status()')
 
-    page = RfcUtils.fetch_url(RfcFile.get_url_rfc_index_xml())
+    page = rfc_api.fetch_index_xml()
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
 

@@ -2,17 +2,21 @@
 # IETFのWebサイトからRFC一覧を取得するプログラム
 # ------------------------------------------------------------------------------
 
-import os
 import re
-import glob
 from pprint import pprint
-from lxml import etree
+from lxml import etree  # pip install lxml
 from ...domain.services.rfc_utils import RfcUtils
-from ...domain.valueobject.rfc import RfcIndexXmlElem, RfcFile
+from ...domain.valueobject.rfc import RfcIndexXmlElem
+from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
+from ...infrastructure.apiclient.rfcindexapiclient import IRfcIndexApiClient
 
-def fetch_remote_index() -> list[int]:
+
+def fetch_remote_index(rfc_index_api_client: IRfcIndexApiClient) -> list[int]:
     """発行されているRFCの番号の一覧をページから取得する"""
-    page = RfcUtils.fetch_url(RfcFile.get_url_rfc_index_xml())
+
+    assert isinstance(rfc_index_api_client, IRfcIndexApiClient)
+
+    page = rfc_index_api_client.fetch_index_xml()
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
     tree = etree.XML(page_content)
 
@@ -31,20 +35,26 @@ def fetch_remote_index() -> list[int]:
 
     return rfc_numbers
 
-def fetch_local_index() -> list[int]:
+def fetch_local_index(rfc_html_repo: IRfcHtmlRepository) -> list[int]:
     """作成したRFCに対応するHTMLの番号の一覧をローカルから取得する"""
-    local_filepath = os.path.join(RfcFile.OUTPUT_HTML_DIR, 'rfc*.html')
+
+    assert isinstance(rfc_html_repo, IRfcHtmlRepository)
+
+    files = rfc_html_repo.findall()
     rfc_numbers = []
-    for filepath in glob.glob(local_filepath):
-        filename = re.sub(rf'^{RfcFile.OUTPUT_HTML_DIR}[/\\]', '', filepath)
-        if m := re.match(r'^rfc(\d+)', filename):
-            rfc_numbers.append(int(m[1]))
+    for file in files:
+        rfc_numbers.append(int(file.filenum))
 
     return rfc_numbers
 
-def diff_remote_and_local_index() -> list[int]:
-    """RFC Indexとローカルのhtml/のRFCの差分を作成する。返り値はRFC番号の一覧"""
-    remote_index = fetch_remote_index()
-    local_index  = fetch_local_index()
+def diff_remote_and_local_index(rfc_index_api_client: IRfcIndexApiClient,
+                                rfc_html_repo: IRfcHtmlRepository) -> list[int]:
+    """RFC IndexとローカルのhtmlディレクトリのRFCの差分を作成する。返り値はRFC番号の一覧"""
+
+    assert isinstance(rfc_index_api_client, IRfcIndexApiClient)
+    assert isinstance(rfc_html_repo, IRfcHtmlRepository)
+
+    remote_index = fetch_remote_index(rfc_index_api_client)
+    local_index = fetch_local_index(rfc_html_repo)
     diff_index = set(remote_index) - set(local_index)
     return diff_index
