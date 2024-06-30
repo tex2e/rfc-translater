@@ -2,8 +2,7 @@
 # python3 -m unittest discover -s tests -p "test_*.py"
 
 import unittest
-import difflib
-from src.domain.services.fetch_rfc_txt import Paragraph
+from src.domain.models.rfc.contents.paragraph import Paragraph
 
 
 # --- Sentence -----------------------------------------------------------------

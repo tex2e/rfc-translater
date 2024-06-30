@@ -6,8 +6,8 @@ import re
 import textwrap
 import datetime
 from pprint import pprint
-import lxml.etree
-import xml2rfc
+import lxml.etree  # pip install lxml
+import xml2rfc  # pip install xml2rfc
 from xml2rfc.writers.base import default_options
 from xml2rfc.writers.text import TextWriter
 from .rfc_utils import RfcUtils
