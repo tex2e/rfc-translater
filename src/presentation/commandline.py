@@ -86,6 +86,9 @@ def main():
         # 未翻訳の最初のRFCのみ取得
         if args.only_first:
             rfcs = rfcs[0:1]
+        if len(rfcs) == 0:
+            print("[+] ローカルとリモートのRFCに差分なし")
+            return
 
     if args.make_index:
         print("[*] トップページ(index.html)の作成")
