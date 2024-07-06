@@ -9,10 +9,12 @@ class IRfcStatusRepository(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def findpath(self, rfc: IRfc) -> str:
+        """JSONファイルのパスを取得する"""
         raise NotImplementedError()
 
     @abc.abstractmethod
     def save(self, obj: object) -> None:
+        """JSONファイルに保存する"""
         raise NotImplementedError()
 
 

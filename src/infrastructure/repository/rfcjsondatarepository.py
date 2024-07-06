@@ -10,18 +10,22 @@ class IRfcJsonDataRepository(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def findpath(self, rfc: IRfc) -> str:
+        """JSONファイルのパスを取得する"""
         raise NotImplementedError()
 
     @abc.abstractmethod
     def find(self, rfc: IRfc) -> object:
+        """JSONファイルが存在するとき、その内容を取得する"""
         raise NotImplementedError()
 
     @abc.abstractmethod
     def save(self, rfc: IRfc, obj: object) -> None:
+        """JSONファイルを保存する"""
         raise NotImplementedError()
 
     @abc.abstractmethod
     def delete(self, rfc: IRfc) -> bool:
+        """JSONファイルを削除する"""
         raise NotImplementedError()
 
 

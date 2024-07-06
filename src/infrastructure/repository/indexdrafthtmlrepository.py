@@ -9,10 +9,12 @@ class IIndexDraftHtmlRepository(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def findpath(self, rfc: IRfc) -> str:
+        """Draft版IndexのHTMLファイルのパスを取得する"""
         raise NotImplementedError()
 
     @abc.abstractmethod
     def save(self, rfc: IRfc, obj: object) -> None:
+        """Draft版IndexのHTMLファイルを作成する"""
         raise NotImplementedError()
 
 
