@@ -5,6 +5,7 @@
 import sys
 import argparse
 from ..domain.valueobject.rfc import Rfc, RfcDraft, RFCNotFoundException
+from ..domain.services.rfcutils import RfcUtils
 from ..application.usecase.fetch_rfc import fetch_rfc
 from ..application.usecase.trans_rfc import trans_rfc, trans_test
 from ..application.usecase.make_html import make_html
@@ -12,7 +13,6 @@ from ..application.usecase.make_index import make_index, make_index_draft
 from ..application.usecase.fetch_index import diff_remote_and_local_index
 from ..application.usecase.fetch_status import fetch_status
 from ..application.usecase.make_json_from_html import make_json_from_html
-from ..domain.services.rfcutils import RfcUtils
 from ..infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from ..infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
 from ..infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTransMidwayFileRepository
@@ -34,7 +34,7 @@ def main():
     ap.add_argument('--trans', action='store_true',
                     help='Only translate (ex. --rfc 8446 --trans)')
     ap.add_argument('--make', action='store_true',
-                    help='Only make HTML (ex. --rfc 8446 --fetch)')
+                    help='Only make HTML (ex. --rfc 8446 --make)')
     ap.add_argument('--make-json', action='store_true',
                     help='Make JSON from HTML (ex. --make-json --rfc 8446)')
     ap.add_argument('--make-index', action='store_true',
@@ -88,6 +88,7 @@ def main():
             rfcs = rfcs[0:1]
         if len(rfcs) == 0:
             print("[+] ローカルとリモートのRFCに差分なし")
+            print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
             return
 
     if args.make_index:
@@ -148,4 +149,5 @@ def main():
                           RfcHtmlFileRepository())
     else:
         ap.print_help()
+        print()
     print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
