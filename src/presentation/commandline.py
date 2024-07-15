@@ -13,6 +13,7 @@ from ..application.usecase.make_index import make_index, make_index_draft
 from ..application.usecase.fetch_index import diff_remote_and_local_index
 from ..application.usecase.fetch_status import fetch_status
 from ..application.usecase.make_json_from_html import make_json_from_html
+from ..application.usecase.access_page import access_page
 from ..infrastructure.repository.rfcjsondatarepository import RfcJsonDataFileRepository
 from ..infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
 from ..infrastructure.repository.rfcjsontransmidwayrepository import RfcJsonTransMidwayFileRepository
@@ -61,6 +62,8 @@ def main():
                     help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
     ap.add_argument('--transtest', action='store_true',
                     help='Do translate test')
+    ap.add_argument('--access-page', nargs='*', type=str,
+                    help='Access page')
     ap.add_argument('--debug', action='store_true',
                     help='Show more output for debug')
     args = ap.parse_args()
@@ -106,6 +109,9 @@ def main():
     elif args.transtest:
         print("[*] 翻訳テスト開始...")
         trans_test(args)
+    elif args.access_page:
+        print("[*] ページアクセス開始...")
+        access_page(args)
     elif args.make_json and rfcs:
         # 指定したRFCのJSONを翻訳修正したHTMLから逆作成
         for rfc in rfcs:
