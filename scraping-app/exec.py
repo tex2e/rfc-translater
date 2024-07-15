@@ -1,10 +1,7 @@
 
-import re
 import json
-from flask import Flask, render_template, Response
-from flask import request
+from flask import Flask, Response, request
 import subprocess
-import traceback
 
 app = Flask(__name__)
 
