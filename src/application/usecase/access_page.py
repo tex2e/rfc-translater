@@ -18,6 +18,9 @@ class MyAccessPageException(Exception):
 class AccessPage():
     """ページアクセス処理"""
 
+    def __init__(self) -> None:
+        self._browser = None
+
     def initial_process(self):
         options = Options()
         options.add_argument('--headless')
@@ -25,6 +28,7 @@ class AccessPage():
         # Ubuntu:
         # browser = webdriver.Firefox(options=options)
         domain = os.environ.get('WEBDRIVER_DOMAIN', 'localhost:4444')
+        # print(f"[*] webdriver.Remote: {domain}")
         browser = webdriver.Remote(
             command_executor=f'http://{domain}/wd/hub',
             options=webdriver.ChromeOptions()
@@ -35,12 +39,13 @@ class AccessPage():
     def fetch_url(self, urls: str) -> str:
         try:
             browser = self._browser
-            titles = []
             for url in urls:
+                print(f'[*] url: {url}')
                 browser.get(url)
-                titles.append(browser.title)
+                title = browser.title
+                print(f'[*] title: {title}')
                 time.sleep(3)
-            return titles
+            return
 
         except (NoSuchElementException, TimeoutException, WebDriverException) as e:
             # NoSuchElementException: Google翻訳で別のページが返ってきたときに発生する例外
@@ -64,8 +69,7 @@ def access_page(args):
     fetchpage = AccessPage()
     try:
         fetchpage.initial_process()
-        title = fetchpage.fetch_url(urls)
-        print(f"[+] title: {title}")
+        fetchpage.fetch_url(urls)
     finally:
         fetchpage.close()
 
