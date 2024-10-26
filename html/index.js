@@ -230,7 +230,7 @@ class RfcUi {
 
 document.addEventListener('DOMContentLoaded', function () {
   const rfcList = new RfcListUi();
-  rfcList.dispInit();
+  rfcList.setup();
 });
 
 
@@ -244,11 +244,13 @@ class RfcListUi {
     this.rfcSearchIndex = {};
   }
 
-  dispInit() {
+  // 初期設定
+  setup() {
     this._createIndex();
     // console.log("rfcSearchIndex:", this.rfcSearchIndex);
-    const domSearchRfc = document.querySelector('#searchRfc')
+    const domSearchRfc = document.querySelector('#searchRfc');
     if (domSearchRfc) {
+      // RFCタイトル検索項目入力時のイベント登録
       domSearchRfc.addEventListener('input', () => {
         // 検索文字列が1文字以下のときは、抽出しない
         if (domSearchRfc.value.length <= 1) {
@@ -261,12 +263,14 @@ class RfcListUi {
     }
   }
 
+  // 検索処理
   _search(searchInput) {
     // console.log("searchText:", searchInput);
     const matchedRfcs = this._searchRfcSet(this._normalizeSearchWord(searchInput));
     this._renderRfcList(matchedRfcs);
   }
 
+  // 検索用インデックスの作成
   _createIndex() {
     document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
       const rfcId = el.attributes["id"].value;
@@ -278,6 +282,7 @@ class RfcListUi {
     });
   }
 
+  // インデックスを利用した検索処理
   _searchRfcSet(searchInput) {
     const matchedRfcs = [];
     // 検索ワードをスペース区切りで抽出する（ただし空白は除外）
@@ -297,6 +302,7 @@ class RfcListUi {
     return new Set(matchedRfcs);
   }
 
+  // 指定したRFC一覧の描画
   _renderRfcList(rfcNumbers) {
     document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
       const rfcId = el.attributes["id"].value;
@@ -309,12 +315,14 @@ class RfcListUi {
     });
   }
 
+  // RFC一覧の描画
   _renderRfcListAll() {
     document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
       el.classList.remove(RfcListUi.CSSCLASS_HIDE);
     });
   }
 
+  // 検索キーワードの静音化
   _normalizeSearchWord(word) {
     return word.replace(/[-()/:]/, '')
   }
