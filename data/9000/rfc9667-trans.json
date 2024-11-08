@@ -1,0 +1,3009 @@
+{
+  "title": {
+    "text": "RFC 9667 - Dynamic Flooding on Dense Graphs",
+    "ja": "RFC 9667 - 高密度グラフの動的洪水"
+  },
+  "number": 9667,
+  "created_at": "2024-11-03 23:24:36.814160+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                        T. Li, Ed.\nRequest for Comments: 9667                              Juniper Networks\nCategory: Experimental                                    P. Psenak, Ed.\nISSN: 2070-1721                                      Cisco Systems, Inc.\n                                                                 H. Chen\n                                                               Futurewei\n                                                                L. Jalil\n                                                                 Verizon\n                                                              S. Dontula\n                                                                    AT&T\n                                                            October 2024",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Dynamic Flooding on Dense Graphs",
+      "section_title": true,
+      "ja": "高密度グラフの動的洪水"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "Routing with link-state protocols in dense network topologies can result in suboptimal convergence times due to the overhead associated with flooding. This can be addressed by decreasing the flooding topology so that it is less dense.",
+      "ja": "密なネットワークトポロジのリンク状態プロトコルを使用したルーティングは、洪水に関連するオーバーヘッドにより、最適ではない収束時間をもたらす可能性があります。これは、洪水トポロジを減らすことで対処でき、密度が低くなります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document discusses the problem in some depth and an architectural solution. Specific protocol changes for IS-IS, OSPFv2, and OSPFv3 are described in this document.",
+      "ja": "このドキュメントでは、ある程度の深さと建築ソリューションで問題について説明します。IS-IS、OSPFV2、およびOSPFV3の特定のプロトコルの変更については、このドキュメントで説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for examination, experimental implementation, and evaluation.",
+      "ja": "このドキュメントは、インターネット標準の追跡仕様ではありません。試験、実験的実装、および評価のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an Experimental Protocol for the Internet community. This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "このドキュメントでは、インターネットコミュニティ向けの実験プロトコルを定義しています。このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。IESGによって承認されたすべてのドキュメントが、インターネット標準のあらゆるレベルの候補者であるわけではありません。RFC 7841のセクション2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9667.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https://www.rfc-editor.org/info/rfc9667で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2024 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2024 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Requirements Language\n2.  Problem Statement\n3.  Solution Requirements\n4.  Dynamic Flooding\n  4.1.  Applicability\n  4.2.  Leader Election\n  4.3.  Computing the Flooding Topology\n  4.4.  Topologies on Complete Bipartite Graphs\n    4.4.1.  A Minimal Flooding Topology\n    4.4.2.  Xia Topologies\n    4.4.3.  Optimization\n  4.5.  Encoding the Flooding Topology\n  4.6.  Advertising the Local Edges Enabled for Flooding\n5.  Protocol Elements\n  5.1.  IS-IS TLVs\n    5.1.1.  IS-IS Area Leader Sub-TLV\n    5.1.2.  IS-IS Dynamic Flooding Sub-TLV\n    5.1.3.  IS-IS Area Node IDs TLV\n    5.1.4.  IS-IS Flooding Path TLV\n    5.1.5.  IS-IS Flooding Request TLV\n    5.1.6.  IS-IS LEEF Advertisement\n  5.2.  OSPF LSAs and TLVs\n    5.2.1.  OSPF Area Leader Sub-TLV\n    5.2.2.  OSPF Dynamic Flooding Sub-TLV\n    5.2.3.  OSPFv2 Dynamic Flooding Opaque LSA\n    5.2.4.  OSPFv3 Dynamic Flooding LSA\n    5.2.5.  OSPF Area Router ID TLVs\n      5.2.5.1.  OSPFv2 Area Router ID TLV\n      5.2.5.2.  OSPFv3 Area Router ID TLV\n    5.2.6.  OSPF Flooding Path TLV\n    5.2.7.  OSPF Flooding Request Bit\n    5.2.8.  OSPF LEEF Advertisement\n6.  Behavioral Specification\n  6.1.  Terminology\n  6.2.  Flooding Topology\n  6.3.  Leader Election\n  6.4.  Area Leader Responsibilities\n  6.5.  Distributed Flooding Topology Calculation\n  6.6.  Use of LANs in the Flooding Topology\n    6.6.1.  Use of LANs in Centralized Mode\n    6.6.2.  Use of LANs in Distributed Mode\n      6.6.2.1.  Partial Flooding on a LAN in IS-IS\n      6.6.2.2.  Partial Flooding on a LAN in OSPF\n  6.7.  Flooding Behavior\n  6.8.  Treatment of Topology Events\n    6.8.1.  Temporary Addition of Links to the Flooding Topology\n    6.8.2.  Local Link Addition\n    6.8.3.  Node Addition\n    6.8.4.  Failures of Links Not on the Flooding Topology\n    6.8.5.  Failures of Links On the Flooding Topology\n    6.8.6.  Node Deletion\n    6.8.7.  Local Link Addition to the Flooding Topology\n    6.8.8.  Local Link Deletion from the Flooding Topology\n    6.8.9.  Treatment of Disconnected Adjacent Nodes\n    6.8.10. Failure of the Area Leader\n    6.8.11. Recovery from Multiple Failures\n    6.8.12. Rate-Limiting Temporary Flooding\n7.  IANA Considerations\n  7.1.  IS-IS\n  7.2.  OSPF\n    7.2.1.  OSPF Dynamic Flooding LSA TLVs Registry\n    7.2.2.  OSPF Link Attributes Sub-TLV Bit Values Registry\n  7.3.  IGP\n8.  Security Considerations\n9.  References\n  9.1.  Normative References\n  9.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "In recent years, there has been increased focus on how to address the dynamic routing of networks that have a bipartite (also known as spine-leaf or leaf-spine), Clos [Clos], or Fat-tree [Leiserson] topology. Conventional Interior Gateway Protocols (IGPs; i.e., IS-IS [ISO10589], OSPFv2 [RFC2328], and OSPFv3 [RFC5340]) underperform, redundantly flooding information throughout the dense topology. This leads to overloaded control plane inputs and thereby create operational issues. For practical considerations, network architects have resorted to applying unconventional techniques to address the problem, e.g., applying BGP in the data center [RFC7938]. However, some network architects feel that using an Exterior Gateway Protocol (EGP) as an IGP is suboptimal, perhaps only because of the configuration overhead.",
+      "ja": "近年、二部（脊椎葉または葉の脊椎とも呼ばれる）、クロア[クロア]、または脂肪木[レジャーソン]トポロジを持つネットワークの動的ルーティングに対処する方法に焦点が当てられています。従来のインテリアゲートウェイプロトコル（IGPS;すなわち、IS-IS [ISO10589]、OSPFV2 [RFC2328]、およびOSPFV3 [RFC5340]）がパフォーマンスを低下させ、密集したトポロジー全体で冗長性を浸水させます。これにより、過負荷のコントロールプレーン入力が発生し、それによって運用上の問題が発生します。実際の考慮事項のために、ネットワークアーキテクトは、問題に対処するために型破りな手法を適用することに頼りました。たとえば、データセンター[RFC7938]にBGPを適用しています。ただし、一部のネットワークアーキテクトは、Exterior Gateway Protocol（EGP）をIGPとして使用することは最適ではないと感じています。"
+    },
+    {
+      "indent": 3,
+      "text": "The primary issue that is demonstrated when conventional IGPs are applied is the poor reaction of the network to topology changes. Normal link-state routing protocols rely on a flooding algorithm for state distribution within an area. In a dense topology, this flooding algorithm is highly redundant and results in unnecessary overhead. Each node in the topology receives each link state update multiple times. Ultimately, all of the redundant copies will be discarded, but only after they have reached the control plane and have been processed. This creates issues because significant Link State Database (LSDB) updates can become queued behind many redundant copies of another update. This delays convergence as the LSDB does not stabilize promptly.",
+      "ja": "従来のIGPが適用されたときに実証されている主な問題は、トポロジの変化に対するネットワークの反応が悪いことです。通常のリンク状態ルーティングプロトコルは、エリア内の状態分布のための洪水アルゴリズムに依存しています。密なトポロジでは、この洪水アルゴリズムは非常に冗長であり、不必要なオーバーヘッドになります。トポロジの各ノードは、各リンク状態の更新を複数回受信します。最終的に、すべての冗長なコピーは破棄されますが、それらはコントロールプレーンに到達して処理された後にのみです。これにより、重要なリンク状態データベース（LSDB）の更新が、別の更新の多くの冗長コピーの背後にキューになっている可能性があるため、これは問題が発生します。LSDBが迅速に安定しないため、これは収束を遅らせます。"
+    },
+    {
+      "indent": 3,
+      "text": "In a real-world implementation, the packet queues leading to the control plane are necessarily of finite size, so if the flooding rate exceeds the update processing rate for long enough, then the control plane will be obligated to drop incoming updates. If these lost updates are of significance, this will further delay the stabilization of the LSDB and the convergence of the network.",
+      "ja": "現実世界の実装では、制御プレーンに通じるパケットキューは必然的に有限サイズであるため、洪水速度が十分に長い間更新処理速度を超えた場合、コントロールプレーンは着信アップデートをドロップする義務があります。これらの失われた更新が重要である場合、これにより、LSDBの安定化とネットワークの収束がさらに遅れます。"
+    },
+    {
+      "indent": 3,
+      "text": "This is not a new problem. Historically, when routing protocols have been deployed in networks where the underlying topology is a complete graph, there have been similar issues. This was more common when the underlying link-layer fabric presented the network layer with a full mesh of virtual connections. This was addressed by reducing the flooding topology through IS-IS Mesh Groups [RFC2973], but this approach requires careful configuration of the flooding topology.",
+      "ja": "これは新しい問題ではありません。歴史的に、基礎となるトポロジが完全なグラフであるネットワークにルーティングプロトコルが展開されている場合、同様の問題がありました。これは、基礎となるリンク層ファブリックが、仮想接続の完全なメッシュでネットワーク層を提示した場合、より一般的でした。これは、IS-ISメッシュグループ[RFC2973]を介して洪水トポロジを減らすことで対処されましたが、このアプローチには洪水トポロジの慎重な構成が必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "Thus, the root problem is not limited to massively scalable data centers. It exists with any dense topology at scale.",
+      "ja": "したがって、根の問題は、大規模なスケーラブルなデータセンターに限定されません。大規模な密なトポロジーが存在します。"
+    },
+    {
+      "indent": 3,
+      "text": "Link-state routing protocols were conceived when links were very expensive and topologies were sparse. The fact that those same designs are suboptimal in a dense topology should not come as a huge surprise. Technology has progressed to the point where links are cheap and common. This represents a complete reversal in the economic fundamentals of network engineering. The original designs are to be commended for continuing to provide correct operation to this point and optimizations for operation in today's environment are to be expected.",
+      "ja": "リンク状態のルーティングプロトコルは、リンクが非常に高価で、トポロジがまばらであったときに考案されました。これらの同じデザインが密集したトポロジーの最適ではないという事実は、大きな驚きではないはずです。テクノロジーは、リンクが安価で一般的な場所に進みました。これは、ネットワークエンジニアリングの経済的基礎における完全な逆転を表しています。元の設計は、この時点で正しい操作を提供し続けることで賞賛されるべきであり、今日の環境での操作の最適化が予想されるべきです。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Requirements Language",
+      "section_title": true,
+      "ja": "1.1. 要件言語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "「必須」、「必要」、「必須」、「shall」、「shall」、「suff」、 \"not\"、 \"becommended\"、 \"becommented\"、 \"may\"、 \"optional「このドキュメントでは、BCP 14 [RFC2119] [RFC8174]で説明されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "These words may also appear in this document in lower case as plain English words without their normative meanings.",
+      "ja": "これらの単語は、この文書には、規範的な意味のない単純な英語の単語として低いケースで表示される場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Problem Statement",
+      "section_title": true,
+      "ja": "2. 問題ステートメント"
+    },
+    {
+      "indent": 3,
+      "text": "In a dense topology, the flooding algorithm that is the heart of conventional link-state routing protocols causes a great deal of redundant messaging. This is exacerbated by scale. While the protocol can survive this combination, the redundant messaging is unnecessary overhead and delays convergence. Thus, the problem is how to provide routing in dense, scalable topologies with rapid convergence.",
+      "ja": "密集したトポロジでは、従来のリンク状態ルーティングプロトコルの中心である洪水アルゴリズムは、多くの冗長なメッセージングを引き起こします。これは規模で悪化します。プロトコルはこの組み合わせに耐えることができますが、冗長なメッセージングは不要なオーバーヘッドであり、収束の遅延です。したがって、問題は、急速な収束を伴う密集したスケーラブルなトポロジーでルーティングを提供する方法です。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Solution Requirements",
+      "section_title": true,
+      "ja": "3. 解決策要件"
+    },
+    {
+      "indent": 3,
+      "text": "A solution to this problem must meet the following requirements:",
+      "ja": "この問題の解決策は、次の要件を満たす必要があります。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 1: Provide a dynamic routing solution. Reachability must be restored after any topology change.",
+      "ja": "要件1：動的ルーティングソリューションを提供します。トポロジの変更後に到達可能性を回復する必要があります。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 2: Provide a significant improvement in convergence.",
+      "ja": "要件2：収束の大幅な改善を提供します。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 3: The solution should address a variety of dense topologies. Just addressing a complete bipartite topology such as K5,8 is insufficient (see [Bondy]). Multi-stage Clos topologies must also be addressed, as well as topologies that are slight variants. Addressing complete graphs is a good demonstration of generality.",
+      "ja": "要件3：ソリューションは、さまざまな密なトポロジに対処する必要があります。K5,8などの完全な二部トポロジに対処するだけでは不十分です（[Bondy]を参照）。マルチステージのクローズトポロジも、わずかなバリアントであるトポロジーに対処する必要があります。完全なグラフに対処することは、一般性の良いデモンストレーションです。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 4: There must be no single point of failure. The loss of any link or node should not unduly hinder convergence.",
+      "ja": "要件4：障害の単一のポイントがないはずです。リンクまたはノードの損失は、収束を不当に妨害してはなりません。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 5: The workload for flooding should be evenly distributed. A hot spot, where one node has an extreme workload, would be a performance limitation and a vulnerability for resiliency.",
+      "ja": "要件5：洪水のワークロードは均等に分散する必要があります。1つのノードに極端なワークロードがあるホットスポットは、パフォーマンスの制限であり、回復力の脆弱性です。"
+    },
+    {
+      "indent": 32,
+      "text": "Requirement 6: Dense topologies are subgraphs of much larger topologies. Operational efficiency requires that the dense subgraph not operate in a radically different manner than the remainder of the topology. While some operational differences are permissible, they should be minimized. Any change to any node outside of the dense subgraph is not acceptable. These situations occur when massively scaled data centers are part of an overall larger wide-area network. Having a second protocol operating just on this subgraph would add much more complexity at the edge of the subgraph where the two protocols would have to interoperate.",
+      "ja": "要件6：密なトポロジーは、はるかに大きなトポロジのサブグラフです。運用効率では、密なサブグラフが残りのトポロジとは根本的に異なる方法で動作しないことが必要です。いくつかの運用上の違いは許容されますが、最小化する必要があります。密なサブグラフの外側のノードへの変更は受け入れられません。これらの状況は、大規模にスケーリングされたデータセンターが全体的に大きい幅の広いネットワークの一部である場合に発生します。このサブグラフのみで2番目のプロトコルを動作させると、2つのプロトコルが相互操作する必要があるサブグラフの端にはるかに複雑さが加わります。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Dynamic Flooding",
+      "section_title": true,
+      "ja": "4. 動的洪水"
+    },
+    {
+      "indent": 3,
+      "text": "The combination of a dense topology and flooding on the physical topology is suboptimal for network scaling. However, if the flooding topology is decoupled from the physical topology and restricted to a greatly reduced portion of that topology, the result can be efficient flooding and the resilience of existing protocols. A node that supports flooding on the decoupled flooding topology is said to support dynamic flooding.",
+      "ja": "密なトポロジーと物理的トポロジの洪水の組み合わせは、ネットワークスケーリングの最適です。ただし、洪水トポロジーが物理的トポロジーから切り離され、そのトポロジの大幅に減少した部分に限定されている場合、結果は効率的な洪水と既存のプロトコルの回復力になる可能性があります。分離された洪水トポロジの洪水をサポートするノードは、動的な洪水をサポートすると言われています。"
+    },
+    {
+      "indent": 3,
+      "text": "With dynamic flooding, the flooding topology is computed within an IGP area with the dense topology either centrally on an elected node, termed the Area Leader, or in a distributed manner on all nodes that are supporting dynamic flooding. If the flooding topology is computed centrally, it is encoded into and distributed as part of the normal LSDB. This is the centralized mode of operation. If the flooding topology is computed in a distributed fashion, this is the distributed mode of operation. Nodes within such an IGP area would only flood on the flooding topology. On links outside of the flooding topology, normal database synchronization mechanisms, i.e., OSPF database exchange and IS-IS Complete Sequence Number PDUs (CSNPs), would apply, but flooding may not. The detailed behavior of the nodes participating in IGP is described in Section 6. New link-state information that arrives from outside of the flooding topology suggests that the sender has no flooding topology information or that it is operating on old information about the flooding topology. In these cases, the new link-state information should be flooded on the flooding topology as well.",
+      "ja": "動的な洪水により、洪水トポロジーはIGP領域内で計算され、選挙で選ばれたノードの中心に、エリアリーダーと呼ばれるか、動的洪水をサポートしているすべてのノードで分散した方法で計算されます。洪水トポロジーが中央に計算されている場合、通常のLSDBの一部としてエンコードおよび分布しています。これは集中操作モードです。洪水トポロジーが分散型ファッションで計算されている場合、これは分散型動作モードです。このようなIGP領域内のノードは、洪水トポロジに洪水のみになります。洪水トポロジ外のリンクでは、通常のデータベース同期メカニズム、つまりOSPFデータベース交換とIS-IS完全なシーケンス番号PDU（CSNP）が適用されますが、洪水はそうではありません。IGPに参加するノードの詳細な動作は、セクション6で説明されています。洪水トポロジの外部から到着する新しいリンク状態情報は、送信者に洪水トポロジ情報がないこと、または洪水トポロジに関する古い情報に基づいて動作していることを示唆しています。これらの場合、新しいリンク状態情報も洪水トポロジに浸水する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The flooding topology covers the full set of nodes within the area, but excludes some of the links that standard flooding would employ.",
+      "ja": "洪水トポロジは、エリア内のノードの完全なセットをカバーしていますが、標準の洪水が採用するリンクの一部は除外されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the flooding topology is computed before topology changes, the effort required to compute it does not factor into the convergence time and can be done when the topology is stable. In the case of centralized mode, the speed of the computation and its distribution is not a significant issue.",
+      "ja": "洪水トポロジーは、トポロジーが変わる前に計算されるため、それを計算するために必要な努力は収束時間を考慮せず、トポロジが安定しているときに行うことができます。集中モードの場合、計算の速度とその分布は重要な問題ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Graph theory defines the \"degree\" of a node to be the number of edges that are attached to the node. To keep the flooding workload scalable and distributed, there should be no nodes in the flooding topology that have a much higher degree than other nodes.",
+      "ja": "グラフ理論は、ノードの「程度」をノードに取り付けられているエッジの数であると定義しています。洪水のワークロードをスケーラブルで分布させるために、他のノードよりもはるかに高い程度の洪水トポロジにノードはないはずです。"
+    },
+    {
+      "indent": 3,
+      "text": "If a node does not have any flooding topology information when it receives new link-state information, it should flood according to standard flooding rules. This situation will occur when the dense topology is first established but is unlikely to recur.",
+      "ja": "ノードに新しいリンク状態情報を受け取ったときに洪水トポロジ情報がない場合、標準的な洪水ルールに従って洪水が発生するはずです。この状況は、密なトポロジーが最初に確立されたが、再発する可能性は低い場合に発生します。"
+    },
+    {
+      "indent": 3,
+      "text": "Link-state protocols are intentionally designed to be asynchronous with nodes acting independently. During the flooding process, different nodes will have different information, resulting in transient conditions that can temporarily produce suboptimal forwarding. These periods of transient conditions are known as \"transients.\"",
+      "ja": "リンク状態のプロトコルは、独立して作用するノードで非同期であるように意図的に設計されています。洪水プロセス中、異なるノードには異なる情報があり、その結果、一時的に最適な転送を生成できる過渡状態が生じます。これらの一時的な条件の期間は、「トランジェント」として知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "When centralized mode is used and if there are multiple flooding topologies being advertised during a transient, then nodes should flood link-state updates on all of the flooding topologies. Each node should locally evaluate the election of the Area Leader for the IGP area and first flood on its flooding topology. The rationale behind this is straightforward: if there is a transient and there has been a recent change in Area Leader, then propagating topology information promptly along the most likely flooding topology should be the priority.",
+      "ja": "集中モードが使用され、過渡中に複数のフラッディングトポロジが宣伝されている場合、ノードはすべてのフラッディングトポロジに関するリンク状態の更新をフラッディングする必要があります。各ノードは、IGPエリアのエリアリーダーの選挙をローカルで評価し、その洪水トポロジに関する最初の洪水を照らしている必要があります。この背後にある理論的根拠は簡単です。一過性があり、地域のリーダーに最近の変化があった場合、最も可能性の高い洪水トポロジーに沿って迅速にトポロジー情報を伝播することが優先事項です。"
+    },
+    {
+      "indent": 3,
+      "text": "During transients, loops may form in the flooding topology. This is not problematic, as the standard flooding rules would cause duplicate updates to be ignored. Similarly, during transients, the flooding topology may become disconnected. Section 6.8.11 discusses how such conditions are handled.",
+      "ja": "過渡現象中、ループは洪水トポロジーで形成される場合があります。標準的な洪水ルールでは、複製の更新が無視されるため、これは問題ではありません。同様に、トランジェント中に、洪水トポロジーが切断される可能性があります。セクション6.8.11では、そのような条件がどのように処理されるかについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Applicability",
+      "section_title": true,
+      "ja": "4.1. 適用可能性"
+    },
+    {
+      "indent": 3,
+      "text": "In a complete graph, this approach is appealing because it drastically decreases the flooding topology without the manual configuration of mesh groups. By controlling the diameter of the flooding topology, as well as the maximum node degree in the flooding topology, convergence time goals can be met, and the stability of the control plane can be assured.",
+      "ja": "完全なグラフでは、メッシュグループの手動構成なしに洪水トポロジを大幅に減少させるため、このアプローチは魅力的です。洪水トポロジの直径を制御することと、洪水トポロジの最大ノード度を制御することにより、収束時間の目標を達成でき、コントロールプレーンの安定性を保証できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, in a massively scaled data center (where there are many opportunities for redundant flooding), this mechanism guarantees that flooding is redundant, with each leaf and spine well connected, while ensuring that no update takes too many hops and that no node shares an undue portion of the flooding effort.",
+      "ja": "同様に、非常にスケーリングされたデータセンター（冗長洪水に多くの機会がある場合）では、このメカニズムは、各葉と背骨がよくつながっている間、洪水が冗長であることを保証します。洪水の努力の過度の部分。"
+    },
+    {
+      "indent": 3,
+      "text": "In a network where only a portion of the nodes support dynamic flooding, the remaining nodes will continue to perform standard flooding. This is not an issue for correctness, as no node can become isolated.",
+      "ja": "ノードの一部のみが動的洪水をサポートするネットワークでは、残りのノードは引き続き標準的な洪水を実行します。ノードが分離されないため、これは正確性の問題ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Flooding that is initiated by nodes that support dynamic flooding will remain within the flooding topology until it reaches a legacy node, where standard flooding is resumed. Standard flooding will be bounded by nodes supporting dynamic flooding, which can help limit the propagation of unnecessary flooding. Whether or not the network can remain stable in this condition is very dependent on the number and location of the nodes that support dynamic flooding.",
+      "ja": "動的洪水をサポートするノードによって開始される洪水は、標準的な洪水が再開されるレガシーノードに到達するまで、洪水トポロジ内に残ります。標準的な洪水は、動的な洪水をサポートするノードによって制限されます。これは、不必要な洪水の伝播を制限するのに役立ちます。この状態でネットワークが安定したままであるかどうかは、動的洪水をサポートするノードの数と場所に非常に依存しています。"
+    },
+    {
+      "indent": 3,
+      "text": "During incremental deployment of dynamic flooding, an area will consist of one or more sets of connected nodes that support dynamic flooding and one or more sets of connected nodes that do not, i.e., nodes that support standard flooding. The flooding topology is the union of these sets of nodes. Each set of nodes that does not support dynamic flooding needs to be part of the flooding topology and such a set of nodes may provide connectivity between two or more sets of nodes that support dynamic flooding.",
+      "ja": "動的洪水の増分展開中、エリアは、動的洪水をサポートする接続ノードの1つ以上のセットと、標準的な洪水をサポートするノード、つまり標準的な洪水をサポートするノードの1つ以上のセットで構成されます。洪水トポロジは、これらのノードのセットの結合です。動的洪水をサポートしないノードの各セットは、洪水トポロジの一部である必要があり、そのような一連のノードは、動的洪水をサポートする2つ以上のノード間の接続性を提供する場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Leader Election",
+      "section_title": true,
+      "ja": "4.2. リーダー選挙"
+    },
+    {
+      "indent": 3,
+      "text": "A single node within the dense topology is elected as an Area Leader.",
+      "ja": "密なトポロジ内の単一のノードがエリアリーダーとして選出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A generalization of the mechanisms used in existing Designated Router (OSPF) or Designated Intermediate-System (IS-IS) elections is used for leader election. The elected node is known as the Area Leader.",
+      "ja": "既存の指定ルーター（OSPF）または指定された中間システム（IS-IS）選挙で使用されるメカニズムの一般化は、リーダー選挙に使用されます。選出されたノードは、エリアリーダーとして知られています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of centralized mode, the Area Leader is responsible for computing and distributing the flooding topology. When a new Area Leader is elected and has distributed new flooding topology information, then any prior Area Leaders should withdraw any of their flooding topology information from their LSDB entries.",
+      "ja": "集中モードの場合、エリアリーダーは洪水トポロジの計算と分散を担当します。新しいエリアリーダーが選出され、新しい洪水トポロジ情報を配布すると、以前のエリアリーダーは、LSDBエントリから洪水トポロジ情報を撤回する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of distributed mode, the distributed algorithm advertised by the Area Leader MUST be used by all nodes that participate in dynamic flooding.",
+      "ja": "分散モードの場合、エリアリーダーによって宣伝されている分散アルゴリズムは、動的洪水に参加するすべてのノードで使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Not every node needs to be a candidate to be the Area Leader within an area, as a single candidate is sufficient for correct operation. However, for redundancy, it is strongly RECOMMENDED that there be multiple candidates.",
+      "ja": "単一の候補者が正しい操作に十分であるため、すべてのノードがエリア内のエリアリーダーになるために候補者である必要はありません。ただし、冗長性のために、複数の候補者がいることを強くお勧めします。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Computing the Flooding Topology",
+      "section_title": true,
+      "ja": "4.3. 洪水トポロジーの計算"
+    },
+    {
+      "indent": 3,
+      "text": "There is a great deal of flexibility in how the flooding topology may be computed. For resilience, it needs to at least contain a cycle of all nodes in the dense subgraph. However, additional links could be added to decrease the convergence time. The trade-off between the density of the flooding topology and the convergence time is a matter for further study. The exact algorithm for computing the flooding topology in the case of the centralized computation need not be standardized, as it is not an interoperability issue. Only the encoding of the resultant topology needs to be documented. In the case of distributed mode, all nodes in the IGP area need to use the same algorithm to compute the flooding topology. It is possible to use private algorithms to compute flooding topology, so long as all nodes in the IGP area use the same algorithm.",
+      "ja": "洪水トポロジをどのように計算するかには、非常に柔軟性があります。回復力のために、密なサブグラフ内のすべてのノードのサイクルを少なくとも含める必要があります。ただし、収束時間を短縮するために追加のリンクを追加できます。洪水トポロジの密度と収束時間の間のトレードオフは、さらなる研究の問題です。集中化された計算の場合のフラッディングトポロジを計算するための正確なアルゴリズムは、相互運用性の問題ではないため、標準化する必要はありません。結果のトポロジのエンコードのみを文書化する必要があります。分散モードの場合、IGP領域のすべてのノードは、同じアルゴリズムを使用して洪水トポロジを計算する必要があります。IGP領域のすべてのノードが同じアルゴリズムを使用している限り、プライベートアルゴリズムを使用して洪水トポロジを計算することができます。"
+    },
+    {
+      "indent": 3,
+      "text": "While the flooding topology should be a covering cycle, it need not be a Hamiltonian cycle where each node appears only once. In fact, in many relevant topologies, this will not be possible (e.g., K5,8). This is fortunate, as computing a Hamiltonian cycle is known to be NP-complete.",
+      "ja": "洪水トポロジーはカバーサイクルである必要がありますが、各ノードが1回だけ表示されるハミルトニアンサイクルである必要はありません。実際、多くの関連トポロジーでは、これは不可能です（例：K5,8）。ハミルトニアンサイクルを計算することはNP完全であることが知られているため、これは幸運です。"
+    },
+    {
+      "indent": 3,
+      "text": "A simple algorithm to compute the topology for a complete bipartite graph is to simply select unvisited nodes on each side of the graph until both sides are completely visited. If the numbers of nodes on each side of the graph are unequal, then revisiting nodes on the less populated side of the graph will be inevitable. This algorithm can run in O(N) time, so it is quite efficient.",
+      "ja": "完全な二部グラフのトポロジーを計算する簡単なアルゴリズムは、グラフの両側に完全に訪問されるまで、グラフの両側に訪問されていないノードを単に選択することです。グラフの両側のノードの数が不平等である場合、グラフのあまり存在しない側のノードを再検討することは避けられません。このアルゴリズムはO（n）時間で実行できるため、非常に効率的です。"
+    },
+    {
+      "indent": 3,
+      "text": "While a simple cycle is adequate for correctness and resiliency, it may not be optimal for convergence. At scale, a cycle may have a diameter that is half the number of nodes in the graph. This could cause an undue delay in link-state update propagation. Therefore, it may be useful to have a bound on the diameter of the flooding topology. Introducing more links into the flooding topology would reduce the diameter but at the trade-off of possibly adding redundant messaging. The optimal trade-off between convergence time and graph diameter is for further study.",
+      "ja": "単純なサイクルは正確性と回復力には適していますが、収束には最適ではない場合があります。大規模なサイクルでは、グラフ内のノードの半分の直径を持つ場合があります。これにより、リンク状態の更新伝播が過度の遅延を引き起こす可能性があります。したがって、洪水トポロジの直径に縛られていると便利かもしれません。洪水トポロジにより多くのリンクを導入すると、直径が減少しますが、冗長なメッセージングを追加することのトレードオフになります。収束時間とグラフの直径の間の最適なトレードオフは、さらなる研究のためです。"
+    },
+    {
+      "indent": 3,
+      "text": "Similarly, if additional redundancy is added to the flooding topology, specific nodes in that topology may end up with a very high degree. This could result in overloading the control plane of those nodes, resulting in poor convergence. Thus, it may be preferable to have an upper bound on the degree of nodes in the flooding topology. Again, the optimal trade-off between graph diameter, node degree, convergence time, and topology computation time is for further study.",
+      "ja": "同様に、洪水トポロジに追加の冗長性が追加された場合、そのトポロジの特定のノードは非常に高度になる可能性があります。これにより、これらのノードのコントロールプレーンが過負荷になり、収束が不十分になる可能性があります。したがって、洪水トポロジのノードの程度に上限があることが望ましい場合があります。繰り返しますが、グラフの直径、ノードの程度、収束時間、およびトポロジの計算時間間の最適なトレードオフは、さらなる研究のためです。"
+    },
+    {
+      "indent": 3,
+      "text": "If the leader chooses to include a multi-access broadcast LAN segment as part of the flooding topology, all of the adjacencies in that LAN segment should be included as well. Once updates are flooded on the LAN, they will be received by every attached node.",
+      "ja": "リーダーが洪水トポロジの一部としてマルチアクセスブロードキャストLANセグメントを含めることを選択した場合、そのLANセグメントのすべての隣接も含める必要があります。LANに更新があふれると、添付のすべてのノードが受信されます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4. Topologies on Complete Bipartite Graphs",
+      "section_title": true,
+      "ja": "4.4. 完全な二部グラフのトポロジ"
+    },
+    {
+      "indent": 3,
+      "text": "Complete bipartite graph topologies have become popular for data center applications and are commonly called leaf-spine or spine-leaf topologies. This section discusses some flooding topologies that are of particular interest in these networks.",
+      "ja": "完全な二部グラフトポロジーは、データセンターアプリケーションに人気があり、一般に葉脊椎または脊椎葉トポロジと呼ばれます。このセクションでは、これらのネットワークに特に関心のあるいくつかの洪水トポロジについて説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.1. A Minimal Flooding Topology",
+      "section_title": true,
+      "ja": "4.4.1. 最小限の洪水トポロジ"
+    },
+    {
+      "indent": 3,
+      "text": "A minimal flooding topology on a complete bipartite graph is one in which the topology is connected and each node has at least degree two. This is of interest because it guarantees that the flooding topology has no single point of failure.",
+      "ja": "完全な二部グラフでの最小限の洪水トポロジは、トポロジが接続され、各ノードが少なくとも2度2つあるものです。これは、洪水トポロジが単一の障害点がないことを保証するため、興味深いものです。"
+    },
+    {
+      "indent": 3,
+      "text": "In practice, this implies that every leaf node in the flooding topology will have a degree of two. As there are usually more leaves than spines, the degree of the spines will be higher, but the load on the individual spines can be evenly distributed.",
+      "ja": "実際には、これは、洪水トポロジのすべてのリーフノードに2つの葉の2つがあることを意味します。通常、棘よりも多くの葉があるため、棘の程度は高くなりますが、個々の棘の負荷を均等に分布させることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This type of flooding topology is also of interest because it scales well. As the number of leaves increases, it is possible to construct flooding topologies that perform well. Specifically, for N spines and M leaves, if M >= N(N/2-1), then there is a flooding topology that has a diameter of 4.",
+      "ja": "このタイプの洪水トポロジーも、それがよく拡大するため、興味深いものです。葉の数が増えると、うまく機能する洪水トポロジを構築することが可能です。具体的には、n棘とmの葉の場合、m> = n（n/2-1）の場合、直径4の洪水トポロジーがあります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.2. Xia Topologies",
+      "section_title": true,
+      "ja": "4.4.2. Xiaトポロジ"
+    },
+    {
+      "indent": 3,
+      "text": "A Xia topology on a complete bipartite graph is one in which all spine nodes are biconnected through leaves with degree two, but the remaining leaves all have degree one and are evenly distributed across the spines.",
+      "ja": "完全な二部グラフのXIAトポロジーは、すべての脊椎ノードが2度の葉を通してバイコン接続されているものですが、残りの葉にはすべて1度があり、背骨全体に均等に分布しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Constructively, one can create a Xia topology by iterating through the spines. Each spine can be connected to the next spine by selecting any unused leaf. Since leaves are connected to all spines, all leaves will have a connection to both the first and second spine and one can therefore choose any leaf without loss of generality. Continuing this iteration across all of the spines, selecting a new leaf at each iteration will result in a path that connects all spines. Adding one more leaf between the last and first spine will produce a cycle of N spines and N leaves.",
+      "ja": "建設的には、背骨を繰り返すことでXiaトポロジを作成できます。各脊椎は、未使用の葉を選択することにより、次の背骨に接続できます。葉はすべての棘に接続されているため、すべての葉は第1脊椎と2番目の背骨の両方に接続されているため、一般性を失うことなく葉を選択できます。すべての棘にわたってこの反復を継続し、各反復で新しい葉を選択すると、すべての棘をつなぐパスが生じます。最後の脊椎と最初の脊椎の間にもう1つの葉を追加すると、Nスパインとn葉のサイクルが生成されます。"
+    },
+    {
+      "indent": 3,
+      "text": "At this point, M-N leaves remain unconnected. These can be distributed evenly across the remaining spines and connected by a single link.",
+      "ja": "この時点で、m-n葉は接続されていないままです。これらは、残りの背骨全体に均等に分布し、単一のリンクで接続できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Xia topologies represent a compromise that trades off increased risk and decreased performance for lower flooding amplification. Xia topologies will have a larger diameter. For M spines, the diameter will be M + 2.",
+      "ja": "Xiaトポロジーは、より低い洪水増幅のためにリスクの増加とパフォーマンスの低下をトレードオフする妥協点を表しています。Xiaトポロジーの直径が大きくなります。Mスパインの場合、直径はM + 2になります。"
+    },
+    {
+      "indent": 3,
+      "text": "In a Xia topology, some leaves are singly connected. This represents a risk in that convergence may be delayed in some failures. However, there may be some alternate behaviors that can be employed to mitigate these risks. If a leaf node sees that its single link on the flooding topology has failed, it can compensate by performing a database synchronization check with a different spine. Similarly, if a leaf determines that its connected spine on the flooding topology has failed, it can compensate by performing a database synchronization check with a different spine. In both of these cases, the synchronization check is intended to ameliorate any delays in link-state propagation due to the fragmentation of the flooding topology.",
+      "ja": "XIAトポロジーでは、いくつかの葉が単独で接続されています。これは、いくつかの障害で収束が遅れる可能性があるというリスクを表しています。ただし、これらのリスクを軽減するために使用できるいくつかの代替行動があるかもしれません。リーフノードが、洪水トポロジの単一リンクが失敗したことを確認した場合、別の背骨でデータベース同期チェックを実行することで補償できます。同様に、葉が洪水トポロジの接続された脊椎が失敗したと判断した場合、別の背骨でデータベース同期チェックを実行することで補償できます。これらの両方のケースでは、同期チェックは、洪水トポロジーの断片化により、リンク状態伝播の遅延を改善することを目的としています。"
+    },
+    {
+      "indent": 3,
+      "text": "The benefit of this topology is that flooding load is easily understood. Each node in the spine cycle will never receive an update more than twice. For M leaves and N spines, a spine never transmits more than (M/N +1) updates.",
+      "ja": "このトポロジの利点は、洪水負荷が簡単に理解されることです。背骨サイクルの各ノードは、2回以上更新を受信することはありません。m葉とn棘の場合、脊椎は（m/n +1）更新を超えることはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.4.3. Optimization",
+      "section_title": true,
+      "ja": "4.4.3. 最適化"
+    },
+    {
+      "indent": 3,
+      "text": "If two nodes are adjacent in the flooding topology and there is a set of parallel links between them, then any given update MUST be flooded over only one of those links. The selection of the specific link is implementation-specific.",
+      "ja": "フラッディングトポロジーに2つのノードが隣接しており、それらの間に一連の並列リンクがある場合、特定のアップデートは、それらのリンクの1つだけに浸水する必要があります。特定のリンクの選択は実装固有です。"
+    },
+    {
+      "indent": 0,
+      "text": "4.5. Encoding the Flooding Topology",
+      "section_title": true,
+      "ja": "4.5. 洪水トポロジのエンコード"
+    },
+    {
+      "indent": 3,
+      "text": "There are a variety of ways that the flooding topology could be encoded efficiently. If the topology was only a cycle, a simple list of the nodes in the topology would suffice. However, this is insufficiently flexible, as it would require a slightly different encoding scheme as soon as a single additional link is added. Instead, this document chooses to encode the flooding topology as a set of intersecting paths, where each path is a set of connected links.",
+      "ja": "洪水トポロジを効率的にエンコードできるさまざまな方法があります。トポロジーがサイクルにすぎない場合、トポロジのノードの単純なリストで十分です。ただし、1つの追加リンクが追加されるとすぐにわずかに異なるエンコードスキームが必要になるため、これは柔軟性が不十分です。代わりに、このドキュメントでは、各パスが接続されたリンクのセットである交差するパスのセットとして、フラッディングトポロジーをエンコードすることを選択します。"
+    },
+    {
+      "indent": 3,
+      "text": "Advertisement of the flooding topology includes support for multi-access broadcast LANs. When a LAN is included in the flooding topology, all edges between the LAN and nodes connected to the LAN are assumed to be part of the flooding topology. To reduce the size of the flooding topology advertisement, explicit advertisement of these edges is optional. Note that this may result in the possibility of \"hidden nodes\" or \"stealth nodes\", which are part of the flooding topology but are not explicitly mentioned in the flooding topology advertisements. These hidden nodes can be found by examination of the LSDB where connectivity between a LAN and nodes connected to the LAN is fully specified.",
+      "ja": "洪水トポロジの広告には、マルチアクセス放送LANのサポートが含まれます。LANが洪水トポロジに含まれる場合、LANに接続されたLANとノードの間のすべてのエッジは、洪水トポロジの一部であると想定されます。洪水トポロジの広告のサイズを縮小するために、これらのエッジの明示的な広告はオプションです。これにより、洪水トポロジの一部であるが、洪水トポロジの広告で明示的に言及されていない「隠れノード」または「ステルスノード」の可能性が生じる可能性があることに注意してください。これらの隠されたノードは、LANに接続されたLANとノード間の接続が完全に指定されているLSDBの調査によって見つけることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that while all nodes MUST be part of the advertised flooding topology, not all multi-access LANs need to be included. Only those LANs that are part of the flooding topology need to be included in the advertised flooding topology.",
+      "ja": "すべてのノードは宣伝されている洪水トポロジの一部である必要がありますが、すべてのマルチアクセスLANを含める必要はありません。洪水トポロジの一部であるLANのみを、宣伝された洪水トポロジに含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Other encodings are certainly possible. This document has attempted to make a useful trade-off between simplicity, generality, and space.",
+      "ja": "他のエンコーディングは確かに可能です。このドキュメントは、シンプルさ、一般性、空間の間で有用なトレードオフをしようとしました。"
+    },
+    {
+      "indent": 0,
+      "text": "4.6. Advertising the Local Edges Enabled for Flooding",
+      "section_title": true,
+      "ja": "4.6. 洪水のために有効になっているローカルエッジを宣伝します"
+    },
+    {
+      "indent": 3,
+      "text": "Correct operation of the flooding topology requires that all nodes that participate in the flooding topology choose local links for flooding that are part of the calculated flooding topology. Failure to do so could result in an unexpected partition of the flooding topology and/or suboptimal flooding reduction. As an aid to diagnosing problems when dynamic flooding is in use, this document defines a means of advertising the Local Edges Enabled for Flooding (LEEF). The protocol-specific encodings are defined in Sections 5.1.6 and 5.2.8.",
+      "ja": "洪水トポロジの正しい操作には、洪水トポロジに参加するすべてのノードが、計算された洪水トポロジの一部である洪水のためにローカルリンクを選択することが必要です。そうしないと、洪水トポロジの予期せぬ分割や最適ではない洪水削減が生じる可能性があります。動的洪水が使用されているときに問題を診断するための支援として、このドキュメントは、洪水に可能になったローカルエッジを宣伝する手段（LEEF）を定義します。プロトコル固有のエンコーディングは、セクション5.1.6および5.2.8で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The following guidelines apply:",
+      "ja": "次のガイドラインが適用されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* Advertisement of LEEF is optional.",
+      "ja": "* Leefの広告はオプションです。"
+    },
+    {
+      "indent": 6,
+      "text": "* As the flooding topology is defined in terms of edges (i.e., pairs of nodes) and not in terms of links, the advertisement SHOULD indicate that all such links have been enabled in cases where parallel adjacencies to the same neighbor exist.",
+      "ja": "* 洪水トポロジーは、リンクの観点からではなく、エッジ（つまり、ノードのペア）の観点から定義されているため、広告は、同じ隣人への並列隣接が存在する場合にそのようなリンクがすべて有効になっていることを示す必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "* LEEF advertisements MUST NOT include edges enabled for temporary flooding (Section 6.7).",
+      "ja": "* Leefの広告には、一時的な洪水のために有効になっているエッジを含めてはなりません（セクション6.7）。"
+    },
+    {
+      "indent": 6,
+      "text": "* LEEF advertisements MUST NOT be used either when calculating a flooding topology or when determining what links to add temporarily to the flooding topology when the flooding topology is temporarily partitioned.",
+      "ja": "* 洪水トポロジーを計算するとき、またはフラッディングトポロジが一時的に分割されているときに洪水トポロジに一時的に追加するリンクを決定するとき、Leef広告は使用してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Protocol Elements",
+      "section_title": true,
+      "ja": "5. プロトコル要素"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. IS-IS TLVs",
+      "section_title": true,
+      "ja": "5.1. IS-IS TLV"
+    },
+    {
+      "indent": 3,
+      "text": "The following TLVs/sub-TLVs are added to IS-IS:",
+      "ja": "次のTLV/Sub-TLVがIS-ISに追加されます。"
+    },
+    {
+      "indent": 8,
+      "text": "1. A sub-TLV that an IS may include in its Link State PDU (LSP) to indicate its preference for becoming the Area Leader.",
+      "ja": "1. ANがリンク状態PDU（LSP）に含まれるサブTLVは、エリアリーダーになることを好むことを示しています。"
+    },
+    {
+      "indent": 8,
+      "text": "2. A sub-TLV that an IS may include in its LSP to indicate that it supports dynamic flooding and the algorithms that it supports for distributed mode, if any.",
+      "ja": "2. ANがLSPにISに含まれるサブTLVは、動的洪水と分散モードをサポートするアルゴリズムをサポートすることを示します。"
+    },
+    {
+      "indent": 8,
+      "text": "3. A TLV to advertise the list of system IDs that compose the flooding topology for the area. A system ID is an identifier for a node.",
+      "ja": "3. エリアの洪水トポロジを構成するシステムIDのリストを宣伝するTLV。システムIDは、ノードの識別子です。"
+    },
+    {
+      "indent": 8,
+      "text": "4. A TLV to advertise a path that is part of the flooding topology.",
+      "ja": "4. 洪水トポロジの一部であるパスを宣伝するTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "5. A TLV that requests flooding from the adjacent node.",
+      "ja": "5. 隣接するノードから洪水を要求するTLV。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.1. IS-IS Area Leader Sub-TLV",
+      "section_title": true,
+      "ja": "5.1.1. IS-ISエリアリーダーSub-TLV"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Area Leader Sub-TLV allows a system to:",
+      "ja": "IS-ISエリアリーダーのSub-TLVを使用すると、システムを次のように許可します。"
+    },
+    {
+      "indent": 8,
+      "text": "1. Indicate its eligibility and priority for becoming the Area Leader.",
+      "ja": "1. 地域のリーダーになるための適格性と優先事項を示します。"
+    },
+    {
+      "indent": 8,
+      "text": "2. Indicate whether centralized or distributed mode is to be used to compute the flooding topology in the area.",
+      "ja": "2. 集中モードまたは分散モードを使用して、この地域の洪水トポロジーを計算するかを示します。"
+    },
+    {
+      "indent": 8,
+      "text": "3. Indicate the algorithm identifier for the algorithm that is used to compute the flooding topology in distributed mode.",
+      "ja": "3. 分散モードでフラッディングトポロジを計算するために使用されるアルゴリズムのアルゴリズム識別子を示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Intermediate Systems (nodes) that are not advertising this sub-TLV are not eligible to become the Area Leader.",
+      "ja": "このサブTLVを宣伝していない中間システム（ノード）は、エリアリーダーになる資格がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The Area Leader is the node with the numerically highest Area Leader priority in the area. In the event of ties, the node with the numerically highest system ID is the Area Leader. Due to transients during database flooding, different nodes may not agree on the Area Leader. This is not problematic, as subsequent flooding will cause the entire area to converge.",
+      "ja": "エリアリーダーは、このエリアで数値的に最高のエリアリーダーの優先順位を持つノードです。絆が発生した場合、数値的に最も高いシステムIDを持つノードがエリアリーダーです。データベース洪水中の過渡現象により、エリアリーダーに異なるノードが同意しない場合があります。これは問題ではありません。その後の洪水により、エリア全体が収束するためです。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Area Leader Sub-TLV is advertised as a sub-TLV of the IS-IS Router Capability TLV (242) [RFC7981] and has the following format:",
+      "ja": "IS-ISエリアリーダーのSub-TLVは、IS-ISルーター機能TLV（242）[RFC7981]のサブTLVとして宣伝されており、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |     Length    |   Priority    |   Algorithm   |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 1: IS-IS Area Leader Sub-TLV",
+      "ja": "図1：IS-ISエリアリーダーサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "27",
+      "ja": "27"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "2 octets",
+      "ja": "2オクテット"
+    },
+    {
+      "indent": 3,
+      "text": "Priority:",
+      "ja": "優先度："
+    },
+    {
+      "indent": 12,
+      "text": "0-255, unsigned integer. Determination of the priority is outside of the scope of this document.",
+      "ja": "0-255、署名されていない整数。優先順位の決定は、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 12,
+      "text": "A numeric identifier in the range 0-255 that identifies the algorithm used to calculate the flooding topology. The following values are defined:",
+      "ja": "洪水トポロジの計算に使用されるアルゴリズムを識別する範囲0-255の数値識別子。次の値が定義されています。"
+    },
+    {
+      "indent": 6,
+      "text": "0:",
+      "ja": "0："
+    },
+    {
+      "indent": 15,
+      "text": "Centralized computation by the Area Leader.",
+      "ja": "エリアリーダーによる集中計算。"
+    },
+    {
+      "indent": 6,
+      "text": "1-127:",
+      "ja": "1-127："
+    },
+    {
+      "indent": 15,
+      "text": "Standardized distributed algorithms.",
+      "ja": "標準化された分散アルゴリズム。"
+    },
+    {
+      "indent": 6,
+      "text": "128-254:",
+      "ja": "128-254："
+    },
+    {
+      "indent": 15,
+      "text": "Private distributed algorithms. Individual values are to be assigned according to the \"Private Use\" policy defined in Section 4.1 of [RFC8126] (see Section 7.3).",
+      "ja": "プライベート分散アルゴリズム。個々の値は、[RFC8126]のセクション4.1で定義されている「私的使用」ポリシーに従って割り当てられます（セクション7.3を参照）。"
+    },
+    {
+      "indent": 6,
+      "text": "255:",
+      "ja": "255："
+    },
+    {
+      "indent": 15,
+      "text": "Reserved",
+      "ja": "予約済み"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.2. IS-IS Dynamic Flooding Sub-TLV",
+      "section_title": true,
+      "ja": "5.1.2. IS-ISダイナミックフラッディングサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Dynamic Flooding Sub-TLV allows a system to:",
+      "ja": "IS-IS Dynamic Flooding Sub-TLVを使用すると、システムは次のようになります。"
+    },
+    {
+      "indent": 8,
+      "text": "1. Indicate that it supports dynamic flooding. This is indicated by the advertisement of this sub-TLV.",
+      "ja": "1. 動的な洪水をサポートしていることを示します。これは、このサブTLVの広告によって示されます。"
+    },
+    {
+      "indent": 8,
+      "text": "2. Indicate the set of algorithms that it supports.",
+      "ja": "2. サポートするアルゴリズムのセットを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "In incremental deployments, understanding which nodes support dynamic flooding can be used to optimize the flooding topology. In distributed mode, knowing the capabilities of the nodes can allow the Area Leader to select the optimal algorithm.",
+      "ja": "増分展開では、どのノードが動的洪水をサポートするかを理解することを使用して、洪水トポロジを最適化できます。分散モードでは、ノードの機能を知ることで、エリアリーダーが最適なアルゴリズムを選択できるようになります。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Dynamic Flooding Sub-TLV is advertised as a sub-TLV of the IS-IS Router Capability TLV (242) [RFC7981] and has the following format:",
+      "ja": "IS-ISダイナミックフラッディングサブTLVは、IS-ISルーター機能TLV（242）[RFC7981]のサブTLVとして宣伝されており、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |     Length    | Algorithm...  |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 2: IS-IS Dynamic Flooding Sub-TLV",
+      "ja": "図2：IS-I-ISダイナミックフラッディングサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "28",
+      "ja": "28"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "1-255 octets; number of Algorithms",
+      "ja": "1-255オクテット;アルゴリズムの数"
+    },
+    {
+      "indent": 3,
+      "text": "Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 12,
+      "text": "Numeric identifiers in the range 0-255 that identify the algorithm used to calculate the flooding topology as described in Section 5.1.1.",
+      "ja": "セクション5.1.1で説明されているように、洪水トポロジを計算するために使用されるアルゴリズムを識別する範囲0-255の数値識別子。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.3. IS-IS Area Node IDs TLV",
+      "section_title": true,
+      "ja": "5.1.3. IS-ISエリアノードIDSTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Area Node IDs TLV is only used in centralized mode.",
+      "ja": "IS-ISエリアノードIDS TLVは、集中モードでのみ使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Area Node IDs TLV is used by the Area Leader to enumerate the node IDs (System ID + pseudonode ID) that it has used in computing the area flooding topology. Conceptually, the Area Leader creates a list of node IDs for all nodes in the area (including pseudonodes for all LANs in the topology) and assigns an index to each node, starting with index 0. Indices are implicitly assigned sequentially, with the index of the first node being the Starting Index and each subsequent node's index is the previous node's index + 1.",
+      "ja": "IS-ISエリアノードIDS TLVは、エリアリーダーがエリアフラッディングトポロジーの計算に使用したノードID（システムID +擬似ノードID）を列挙するために使用されます。概念的には、エリアリーダーは、エリア内のすべてのノードのノードIDのリストを作成し（トポロジ内のすべてのLANの擬似ノードを含む）、各ノードにインデックスを割り当てます。最初のノードは開始インデックスであり、各後続のノードのインデックスは、以前のノードのインデックス + 1です。"
+    },
+    {
+      "indent": 3,
+      "text": "Because the space in a single TLV is limited, more than one TLV may be required to encode all of the node IDs in the area. This TLV may be present in multiple LSPs.",
+      "ja": "単一のTLVのスペースは限られているため、エリア内のすべてのノードIDをエンコードするには、複数のTLVが必要になる場合があります。このTLVは、複数のLSPに存在する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Area Node IDs TLV has the following format:",
+      "ja": "IS-ISエリアノードIDS TLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |     Length    | Starting Index                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|L| Reserved    | Node IDs ...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\nNode IDs continued ....\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 3: IS-IS Area Node IDs TLV",
+      "ja": "図3：IS-ISエリアノードIDSTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "17",
+      "ja": "17"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "3 + ((System ID Length + 1) * (number of node IDs)) in octets",
+      "ja": "3 +（（システムID長 + 1） *（ノードIDの数））オクテットの"
+    },
+    {
+      "indent": 3,
+      "text": "Starting Index:",
+      "ja": "開始インデックス："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the first node ID that appears in this TLV.",
+      "ja": "このTLVに表示される最初のノードIDのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "L (Last):",
+      "ja": "L（最後）："
+    },
+    {
+      "indent": 12,
+      "text": "This bit is set if the index of the last node ID that appears in this TLV is equal to the last index in the full list of node IDs for the area.",
+      "ja": "このビットは、このTLVに表示される最後のノードIDのインデックスが、領域のノードIDの完全なリストの最後のインデックスに等しい場合に設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Node IDs:",
+      "ja": "ノードID："
+    },
+    {
+      "indent": 12,
+      "text": "A concatenated list of node IDs for the area.",
+      "ja": "エリアのノードIDの連結リスト。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple IS-IS Area Node IDs TLVs with the L bit set are advertised by the same node, the TLV that specifies the smaller maximum index is used and the other TLVs with the L bit set are ignored. TLVs that specify node IDs with indices greater than that specified by the TLV with the L bit set are also ignored.",
+      "ja": "Lビットセットを備えた複数のIS-ISエリアノードIDSTLVが同じノードによって宣伝されている場合、より小さな最大インデックスを指定するTLVが使用され、Lビットセットのある他のTLVは無視されます。Lビットセットを使用してTLVで指定されたものよりも大きいインデックスを使用してノードIDを指定するTLVも無視されます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.4. IS-IS Flooding Path TLV",
+      "section_title": true,
+      "ja": "5.1.4. IS-ISフラッディングパスTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Path TLV is only used in centralized mode.",
+      "ja": "IS-ISフラッディングパスTLVは、集中モードでのみ使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Path TLV is used to denote a path in the flooding topology. The goal is an efficient encoding of the links of the topology. A single link is a simple case of a path that only covers two nodes. A connected path may be described as a sequence of indices (I1, I2, I3, ...), denoting a link from the system with index 1 to the system with index 2, a link from the system with index 2 to the system with index 3, and so on.",
+      "ja": "IS-ISフラッディングパスTLVは、洪水トポロジのパスを示すために使用されます。目標は、トポロジのリンクの効率的なエンコードです。単一のリンクは、2つのノードのみをカバーするパスの単純なケースです。接続されたパスは、インデックス1からインデックス1を持つシステムへのリンクをインデックス2のシステムに示すインデックスのシーケンス（I1、I2、I3、...）として記述される場合があります。インデックス3など。"
+    },
+    {
+      "indent": 3,
+      "text": "If a path exceeds the size that can be stored in a single TLV, then the path may be distributed across multiple TLVs by the replication of a single system index.",
+      "ja": "パスが単一のTLVに保存できるサイズを超えた場合、単一のシステムインデックスの複製により、パスを複数のTLVに分布させることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "Complex topologies that are not a single path can be described using multiple TLVs.",
+      "ja": "単一のパスではない複雑なトポロジーは、複数のTLVを使用して説明できます。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Path TLV contains a list of system indices relative to the systems advertised through the IS-IS Area Node IDs TLV. At least 2 indices must be included in the TLV. Due to the length restriction of TLVs, this TLV can contain 126 system indices at most.",
+      "ja": "IS-ISフラッディングパスTLVには、IS-ISエリアノードIDS TLVを介して宣伝されているシステムに関連するシステムインデックスのリストが含まれています。少なくとも2つのインデックスをTLVに含める必要があります。TLVの長さの制限により、このTLVにはせいぜい126のシステムインデックスが含まれています。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Path TLV has the following format:",
+      "ja": "IS-ISフラッディングパスTLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |     Length    | Starting Index                |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n| Index 2                       | Additional indices ...\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 4: IS-IS Flooding Path TLV",
+      "ja": "図4：IS-I-ISフラッディングパスTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "18",
+      "ja": "18"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "2 * (number of indices in the path) in octets",
+      "ja": "2 *（パス内のインデックスの数）オクテットの"
+    },
+    {
+      "indent": 3,
+      "text": "Starting Index:",
+      "ja": "開始インデックス："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the first system in the path.",
+      "ja": "パス内の最初のシステムのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "Index 2:",
+      "ja": "インデックス2："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the next system in the path.",
+      "ja": "パス内の次のシステムのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "Additional indices (optional):",
+      "ja": "追加のインデックス（オプション）："
+    },
+    {
+      "indent": 12,
+      "text": "A sequence of additional indices to systems along the path.",
+      "ja": "パスに沿ったシステムへの追加のインデックスのシーケンス。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.5. IS-IS Flooding Request TLV",
+      "section_title": true,
+      "ja": "5.1.5. IS-IS洪水リクエストTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Request TLV allows a system to request an adjacent node to enable flooding towards it on a specific link in the case where the connection to the adjacent node is not part of the existing flooding topology.",
+      "ja": "IS-ISフラッディングリクエストTLVにより、システムは、隣接するノードに隣接するノードを要求して、隣接するノードへの接続が既存のフラッディングトポロジの一部ではない場合に、特定のリンクでそれに向かって洪水を可能にすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A node that supports dynamic flooding MAY include the IS-IS Flooding Request TLV in its IS-IS Hello (IIH) Protocol Data Units (PDUs).",
+      "ja": "動的洪水をサポートするノードには、IS-IS Hello（IIH）プロトコルデータユニット（PDU）にIS-IS Flooding Request TLVが含まれる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The IS-IS Flooding Request TLV has the following format:",
+      "ja": "IS-ISフラッディングリクエストTLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|     Type      |     Length    |   Levels      |    Scope      |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    ...        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 20,
+      "text": "Figure 5: IS-IS Flooding Request TLV",
+      "ja": "図5：IS-I-IS洪水リクエストTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "19",
+      "ja": "19"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "1 + number of advertised flooding scopes in octets",
+      "ja": "1 +オクテットの広告洪水スコープの数"
+    },
+    {
+      "indent": 3,
+      "text": "Levels:",
+      "ja": "レベル："
+    },
+    {
+      "indent": 12,
+      "text": "The levels for which flooding is requested. Levels are encoded as the circuit type as specified in IS-IS [ISO10589]",
+      "ja": "洪水が要求されるレベル。レベルは、IS-ISで指定されている回路タイプとしてエンコードされます[ISO10589]"
+    },
+    {
+      "indent": 3,
+      "text": "Scope (8 bits):",
+      "ja": "スコープ（8ビット）："
+    },
+    {
+      "indent": 12,
+      "text": "Flooding scope for which the flooding is requested as defined in the LSP Flooding Scope Identifier Registry as created by [RFC7356]. Inclusion of flooding scopes is optional and is only necessary if [RFC7356] is supported. Multiple flooding scopes MAY be included. Values are restricted to the range 0..127.",
+      "ja": "[RFC7356]によって作成されたLSPフラッディングスコープ識別子レジストリで定義されているように、洪水が要求される洪水範囲。洪水スコープを含めることはオプションであり、[RFC7356]がサポートされている場合にのみ必要です。複数の洪水スコープが含まれる場合があります。値は範囲0..127に制限されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Circuit flooding scope MUST NOT be sent in the Flooding Request TLV and MUST be ignored if received.",
+      "ja": "洪水範囲の洪水スコープを洪水リクエストTLVに送信してはならず、受け取った場合は無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the TLV is received in a level-specific LAN-Hello PDU (L1-LAN-IIH or L2-LAN-IIH), only levels that match the PDU type are valid. Levels that do not match the PDU type MUST be ignored on receipt.",
+      "ja": "TLVがレベル固有のLAN-Hello PDU（L1-LAN-IIHまたはL2-LAN-IIH）で受信されると、PDUタイプに一致するレベルのみが有効です。PDUタイプと一致しないレベルは、受領時に無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the TLV is received in a Point-to-Point Hello (P2P-IIH), only levels that are supported by the established adjacency are valid. Levels that are not supported by the adjacency MUST be ignored on receipt.",
+      "ja": "TLVがポイントツーポイントのhello（P2P-IIH）で受信されると、確立された隣接性によってサポートされるレベルのみが有効です。隣接によってサポートされていないレベルは、受領時に無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If flooding was disabled on the received link due to dynamic flooding, then flooding MUST be temporarily enabled over the link for the specified Circuit Types and flooding scopes received in the in the IS-IS Flooding Request TLV. Flooding MUST be enabled until the Circuit Type or Flooding Scope is no longer advertised in the IS-IS Flooding Request TLV or the TLV no longer appears in IIH PDUs received on the link.",
+      "ja": "動的な洪水により受信したリンクで洪水が無効になった場合、指定された回路タイプのリンクとIS-IS洪水リクエストTLVで受け取った洪水スコープに対して一時的に洪水を有効にする必要があります。IS-ISフラッディングリクエストTLVまたはTLVがリンクで受け取ったIIH PDUに表示されなくなった場合、回路の種類または洪水スコープが宣伝されなくなるまで、洪水を有効にする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When flooding is temporarily enabled on the link for any Circuit Type or Flooding Scope due to receiving the IS-IS Flooding Request TLV, the receiver MUST perform standard database synchronization for the corresponding Circuit Types and flooding scopes on the link. In the case of IS-IS, this results in setting the Send Routeing Message (SRM) flag for all related LSPs on the link and sending CSNPs.",
+      "ja": "IS-ISフラッディングリクエストTLVを受信したため、回路タイプまたはフラッディングスコープのリンクで洪水が一時的に有効になっている場合、受信者は、リンク上の対応する回路タイプとフラッディングスコープに対して標準のデータベース同期を実行する必要があります。IS-ISの場合、これにより、リンク上のすべての関連LSPの送信ルーティングメッセージ（SRM）フラグを設定し、CSNPを送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "So long as the IS-IS Flooding Request TLV is being received, flooding MUST NOT be disabled for any of the Circuit Types or flooding scopes present in the IS-IS Flooding Request TLV, even if the connection between the neighbors is removed from the flooding topology. Flooding for such Circuit Types or flooding scopes MUST continue on the link and be considered temporarily enabled.",
+      "ja": "IS-ISの洪水リクエストが受信されている限り、IS-ISの洪水リクエストTLVに存在する回路の種類または洪水スコープについては、洪水を無効にしてはなりません。トポロジー。このような回路の種類または洪水スコープの洪水は、リンク上で継続し、一時的に有効になっていると見なされる必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.6. IS-IS LEEF Advertisement",
+      "section_title": true,
+      "ja": "5.1.6. IS-IS Leef Advertisement"
+    },
+    {
+      "indent": 3,
+      "text": "In support of advertising which edges are currently enabled in the flooding topology, an implementation MAY indicate that a link is part of the flooding topology by advertising a bit value in the Link Attributes sub-TLV defined by [RFC5029].",
+      "ja": "洪水トポロジで現在有効になっている広告をサポートするために、実装は、[RFC5029]で定義されたリンク属性のサブTLVに少し価値を広告することにより、リンクがフラッディングトポロジの一部であることを示している可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The following bit-value is defined by this document:",
+      "ja": "次のビット値は、このドキュメントで定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Local Edge Enabled for Flooding (LEEF):",
+      "ja": "洪水に対応するローカルエッジ（LEEF）："
+    },
+    {
+      "indent": 12,
+      "text": "0x4",
+      "ja": "0x4"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. OSPF LSAs and TLVs",
+      "section_title": true,
+      "ja": "5.2. OSPF LSAおよびTLV"
+    },
+    {
+      "indent": 3,
+      "text": "This section defines new Link State Advertisements (LSAs) and TLVs for both OSPFv2 and OSPFv3.",
+      "ja": "このセクションでは、OSPFV2とOSPFV3の両方の新しいリンク状態広告（LSA）とTLVを定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "The following LSAs and TLVs/sub-TLVs are added to OSPFv2/OSPFv3:",
+      "ja": "次のLSAおよびTLVS/SUB-TLVがOSPFV2/OSPFV3に追加されます。"
+    },
+    {
+      "indent": 8,
+      "text": "1. A TLV that is used to advertise the preference for becoming the Area Leader.",
+      "ja": "1. エリアリーダーになるための好みを宣伝するために使用されるTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "2. A TLV that is used to indicate the support for dynamic flooding and the algorithms that the advertising node supports for distributed mode, if any.",
+      "ja": "2. 動的洪水のサポートと、広告ノードが分散モードをサポートするアルゴリズムを示すために使用されるTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "3. An OSPFv2 Opaque LSA and OSPFv3 LSA to advertise the flooding topology for centralized mode.",
+      "ja": "3. OSPFV2不透明LSAおよびOSPFV3 LSAは、集中モードの洪水トポロジを宣伝します。"
+    },
+    {
+      "indent": 8,
+      "text": "4. A TLV to advertise the list of Router IDs that comprise the flooding topology for the area.",
+      "ja": "4. エリアの洪水トポロジを構成するルーターIDのリストを宣伝するTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "5. A TLV to advertise a path that is part of the flooding topology.",
+      "ja": "5. 洪水トポロジの一部であるパスを宣伝するTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "6. A bit in the Link-Local Signaling (LLS) Type 1 Extended Options and Flags that requests flooding from the adjacent node.",
+      "ja": "6. Link-Local Signaling（LLS）タイプ1の拡張オプションと隣接するノードからの洪水を要求するフラグで少し。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.1. OSPF Area Leader Sub-TLV",
+      "section_title": true,
+      "ja": "5.2.1. OSPFエリアリーダーSub-TLV"
+    },
+    {
+      "indent": 3,
+      "text": "The usage of the OSPF Area Leader Sub-TLV is identical to that of the IS-IS Area Leader Sub-TLV described in Section 5.1.1.",
+      "ja": "OSPFエリアリーダーのSub-TLVの使用法は、セクション5.1.1で説明されているIS-ISエリアリーダーSub-TLVの使用法と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Area Leader Sub-TLV is used by both OSPFv2 and OSPFv3.",
+      "ja": "OSPFエリアリーダーSub-TLVは、OSPFv2とOSPFV3の両方で使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Area Leader Sub-TLV is advertised as a top-level TLV of the Router Information (RI) LSA that is defined in [RFC7770] and has the following format:",
+      "ja": "OSPFエリアリーダーSub-TLVは、[RFC7770]で定義され、次の形式を持っているルーター情報（RI）LSAのトップレベルTLVとして宣伝されています。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Priority   |   Algorithm   |            Reserved           |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 6: OSPF Area Leader Sub-TLV",
+      "ja": "図6：OSPFエリアリーダーSub-TLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "17",
+      "ja": "17"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "4 octets",
+      "ja": "4オクテット"
+    },
+    {
+      "indent": 3,
+      "text": "Priority:",
+      "ja": "優先度："
+    },
+    {
+      "indent": 12,
+      "text": "0-255, unsigned integer",
+      "ja": "0-255、署名されていない整数"
+    },
+    {
+      "indent": 3,
+      "text": "Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 12,
+      "text": "As defined in Section 5.1.1.",
+      "ja": "セクション5.1.1で定義されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.2. OSPF Dynamic Flooding Sub-TLV",
+      "section_title": true,
+      "ja": "5.2.2. OSPFダイナミックフラッディングサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The usage of the OSPF Dynamic Flooding Sub-TLV is identical to that of the IS-IS Dynamic Flooding Sub-TLV described in Section 5.1.2.",
+      "ja": "OSPFダイナミックフラッディングSub-TLVの使用は、セクション5.1.2で説明されているIS-I-I-IS Dynamic Flooding Sub-TLVの使用法と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Dynamic Flooding Sub-TLV is used by both OSPFv2 and OSPFv3.",
+      "ja": "OSPFダイナミックフラッディングSub-TLVは、OSPFV2とOSPFV3の両方で使用されています。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Dynamic Flooding Sub-TLV is advertised as a top-level TLV of the RI LSA that is defined in [RFC7770] and has the following format:",
+      "ja": "OSPF Dynamic Flooding Sub-TLVは、[RFC7770]で定義され、次の形式を持っているRi LSAのトップレベルTLVとして宣伝されています。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n| Algorithm ... |                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 7: OSPF Dynamic Flooding Sub-TLV",
+      "ja": "図7：OSPFダイナミックフラッディングサブTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "18",
+      "ja": "18"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "Number of Algorithms in octets",
+      "ja": "オクテットのアルゴリズムの数"
+    },
+    {
+      "indent": 3,
+      "text": "Algorithm:",
+      "ja": "アルゴリズム："
+    },
+    {
+      "indent": 12,
+      "text": "As defined in Section 5.1.1.",
+      "ja": "セクション5.1.1で定義されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.3. OSPFv2 Dynamic Flooding Opaque LSA",
+      "section_title": true,
+      "ja": "5.2.3. OSPFV2ダイナミックフラッディング不透明LSA"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv2 Dynamic Flooding Opaque LSA is only used in centralized mode.",
+      "ja": "OSPFV2ダイナミックフラッディング不透明LSAは、集中モードでのみ使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv2 Dynamic Flooding Opaque LSA is used to advertise additional data related to dynamic flooding in OSPFv2. OSPFv2 Opaque LSAs are described in [RFC5250].",
+      "ja": "OSPFV2ダイナミックフラッディング不透明LSAは、OSPFV2の動的洪水に関連する追加データを宣伝するために使用されます。OSPFV2不透明LSAは[RFC5250]で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Multiple OSPFv2 Dynamic Flooding Opaque LSAs can be advertised by an OSPFv2 router. The flooding scope of the OSPFv2 Dynamic Flooding Opaque LSA is area-local.",
+      "ja": "複数のOSPFV2ダイナミックフラッディング不透明LSAは、OSPFV2ルーターによって宣伝できます。OSPFV2ダイナミックフラッディング不透明LSAの洪水範囲は地域ローカルです。"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the OSPFv2 Dynamic Flooding Opaque LSA is as follows:",
+      "ja": "OSPFV2ダイナミックフラッディング不透明LSAの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|            LS age             |     Options   |   LS Type     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|       10      |                 Opaque ID                     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                     Advertising Router                        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                     LS sequence number                        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|         LS checksum           |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-                            TLVs                             -+\n|                             ...                               |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 16,
+      "text": "Figure 8: OSPFv2 Dynamic Flooding Opaque LSA",
+      "ja": "図8：OSPFV2ダイナミックフラッディング不透明LSA"
+    },
+    {
+      "indent": 3,
+      "text": "The opaque type used by OSPFv2 Dynamic Flooding Opaque LSA is 10. The opaque type is used to differentiate the various types of OSPFv2 Opaque LSAs as described in Section 3 of [RFC5250]. The LS Type is 10. The LSA Length field [RFC2328] represents the total length (in octets) of the Opaque LSA including the LSA header and all TLVs (including padding).",
+      "ja": "OSPFV2ダイナミックフラッディング不透明LSAで使用される不透明なタイプは10です。不透明タイプは、[RFC5250]のセクション3で説明されているように、さまざまなタイプのOSPFV2不透明LSAを区別するために使用されます。LSタイプは10です。LSA長[RFC2328]は、LSAヘッダーとすべてのTLV（パディングを含む）を含む不透明LSAの総長さ（オクテット）を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "The Opaque ID field is an arbitrary value used to maintain multiple Dynamic Flooding Opaque LSAs. For OSPFv2 Dynamic Flooding Opaque LSAs, the Opaque ID has no semantic significance other than to differentiate Dynamic Flooding Opaque LSAs originated from the same OSPFv2 router.",
+      "ja": "不透明IDフィールドは、複数の動的洪水不透明LSAを維持するために使用される任意の値です。OSPFV2ダイナミックフラッディング不透明LSAの場合、不透明なIDは、同じOSPFV2ルーターに由来する動的洪水の不透明LSAを区別する以外に意味的に重要ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the TLVs within the body of the OSPFv2 Dynamic Flooding Opaque LSA is the same as the format used by the Traffic Engineering Extensions to OSPF [RFC3630].",
+      "ja": "OSPFV2ダイナミックフラッディング不透明LSAの本体内のTLVの形式は、Traffic Engineering ExtensionsがOSPF [RFC3630]に使用する形式と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "The Length field defines the length of the value portion in octets (thus a TLV with no value portion would have a length of 0 octets). The TLV is padded to a 4-octet alignment; padding is not included in the length field (so a 3-octet value would have a length of 3 octets, but the total size of the TLV would be 8 octets). Nested TLVs are also 32-bit aligned. For example, a 1-octet value would have the length field set to 1, and 3 octets of padding would be added to the end of the value portion of the TLV. The padding is composed of zeros.",
+      "ja": "長さのフィールドは、オクテットの値部分の長さを定義します（したがって、値部分のないTLVには0オクテットの長さがあります）。TLVは、4オクテットのアライメントにパッド入ります。パディングは長さフィールドに含まれていません（したがって、3オクテットの値は3オクテットの長さになりますが、TLVの合計サイズは8オクテットになります）。ネストされたTLVも32ビットアライメントされています。たとえば、1-OCTET値の長さフィールドは1に設定され、TLVの値部分の最後に3オクテットのパディングが追加されます。パディングはゼロで構成されています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.4. OSPFv3 Dynamic Flooding LSA",
+      "section_title": true,
+      "ja": "5.2.4. OSPFV3ダイナミックフラッディングLSA"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv3 Dynamic Flooding Opaque LSA is only used in centralized mode.",
+      "ja": "OSPFV3ダイナミックフラッディング不透明LSAは、集中モードでのみ使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv3 Dynamic Flooding LSA is used to advertise additional data related to dynamic flooding in OSPFv3.",
+      "ja": "OSPFV3動的洪水LSAは、OSPFV3の動的洪水に関連する追加データを宣伝するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv3 Dynamic Flooding LSA has a function code of 16. The flooding scope of the OSPFv3 Dynamic Flooding LSA is area-local. The U bit will be set indicating that the OSPFv3 Dynamic Flooding LSA should be flooded even if it is not understood. The Link State ID (LSID) value for this LSA is the Instance ID. OSPFv3 routers MAY advertise multiple OSPFv3 Dynamic Flooding Opaque LSAs in each area.",
+      "ja": "OSPFV3ダイナミックフラッディングLSAの関数コードは16です。OSPFV3ダイナミックフラッディングLSAの洪水範囲はエリアローカルです。uビットは、たとえ理解されていなくても、OSPFV3の動的洪水LSAを浸水させるべきであることを示すuビットが設定されます。このLSAのリンク状態ID（LSID）値はインスタンスIDです。OSPFV3ルーターは、各領域で複数のOSPFV3ダイナミックフラッディング不透明LSAを宣伝する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The format of the OSPFv3 Dynamic Flooding LSA is as follows:",
+      "ja": "OSPFV3ダイナミックフラッディングLSAの形式は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|            LS age             |1|0|1|           16            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Link State ID                              |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Advertising Router                         |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    LS sequence number                         |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|        LS checksum            |            Length             |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-                            TLVs                             -+\n|                             ...                               |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 9: OSPFv3 Dynamic Flooding LSA",
+      "ja": "図9：OSPFV3ダイナミックフラッディングLSA"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.5. OSPF Area Router ID TLVs",
+      "section_title": true,
+      "ja": "5.2.5. OSPFエリアルーターID TLVS"
+    },
+    {
+      "indent": 3,
+      "text": "In OSPF, TLVs are defined to advertise indices associated with nodes and Broadcast / Non-Broadcast Multi-Access (NBMA) networks. Due to identifier differences between OSPFv2 and OSPFv3, two different TLVs are defined as described in the following sub-sections.",
+      "ja": "OSPFでは、TLVはノードとブロードキャスト /非ブロードキャストマルチアクセス（NBMA）ネットワークに関連付けられたインデックスを宣伝するように定義されています。OSPFV2とOSPFV3の識別子の違いにより、次のサブセクションで説明されているように、2つの異なるTLVが定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Area Router ID TLVs are used by the Area Leader to enumerate the Router IDs that it has used in computing the flooding topology. This includes the identifiers associated with Broadcast/NBMA networks as defined for Network LSAs. Conceptually, the Area Leader creates a list of Router IDs for all routers in the area and assigns an index to each router, starting with index 0. Indices are implicitly assigned sequentially, with the index of the first node being the Starting Index and each subsequent node's index is the previous node's index + 1.",
+      "ja": "OSPFエリアルーターID TLVは、洪水トポロジの計算に使用されているルーターIDを列挙するために、エリアリーダーによって使用されます。これには、ネットワークLSAで定義されているブロードキャスト/NBMAネットワークに関連付けられた識別子が含まれます。概念的には、エリアリーダーはエリア内のすべてのルーターのルーターIDのリストを作成し、各ルーターにインデックスを割り当てます。インデックス0から始めます。インデックスは暗黙的に順次割り当てられ、最初のノードのインデックスは開始インデックスであり、各後続ノードのインデックスは、以前のノードのインデックス + 1です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.5.1. OSPFv2 Area Router ID TLV",
+      "section_title": true,
+      "ja": "5.2.5.1. OSPFV2エリアルーターID TLV"
+    },
+    {
+      "indent": 3,
+      "text": "This TLV is a top-level TLV of the OSPFv2 Dynamic Flooding Opaque LSA.",
+      "ja": "このTLVは、OSPFV2ダイナミックフラッディング不透明LSAのトップレベルTLVです。"
+    },
+    {
+      "indent": 3,
+      "text": "Because the space in a single OSPFv2 opaque LSA is limited, more than one LSA may be required to encode all of the Router IDs in the area. This TLV MAY be advertised in multiple OSPFv2 Dynamic Flooding Opaque LSAs so that all Router IDs can be advertised.",
+      "ja": "単一のOSPFV2不透明LSAのスペースは制限されているため、エリア内のすべてのルーターIDをエンコードするには複数のLSAが必要になる場合があります。このTLVは、すべてのルーターIDを宣伝できるように、複数のOSPFV2ダイナミックフラッディング不透明LSAで宣伝される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv2 Area Router IDs TLV has the following format:",
+      "ja": "OSPFV2エリアルーターIDSTLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Starting Index             |L| Flags       |   Reserved    |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-        OSPFv2 Router ID TLV Entry                           -+\n|                           ...                                 |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 10: OSPFv2 Area Router IDs TLV",
+      "ja": "図10：OSPFV2エリアルーターIDSTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "1",
+      "ja": "1"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "4 + sum of the lengths of all TLV entries in octets",
+      "ja": "オクテットのすべてのTLVエントリの長さの4 +合計"
+    },
+    {
+      "indent": 3,
+      "text": "Starting Index:",
+      "ja": "開始インデックス："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the first Router/Designated Router ID that appears in this TLV.",
+      "ja": "このTLVに表示される最初のルーター/指定ルーターIDのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "L (Last):",
+      "ja": "L（最後）："
+    },
+    {
+      "indent": 12,
+      "text": "This bit is set if the index of the last Router/Designated Router ID that appears in this TLV is equal to the last index in the full list of Router IDs for the area.",
+      "ja": "このビットは、このTLVに表示される最後のルーター/指定ルーターIDのインデックスが、エリアのルーターIDの完全なリストの最後のインデックスに等しい場合に設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "OSPFv2 Router ID TLV Entries:",
+      "ja": "OSPFV2ルーターID TLVエントリ："
+    },
+    {
+      "indent": 12,
+      "text": "A concatenated list of Router ID TLV Entries for the area.",
+      "ja": "エリアのルーターID TLVエントリの連結リスト。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple OSPFv2 Area Router ID TLVs with the L bit set are advertised by the same router, the TLV that specifies the smaller maximum index is used and the other TLVs with L bit set are ignored. TLVs that specify Router IDs with indices greater than that specified by the TLV with the L bit set are also ignored.",
+      "ja": "Lビットセットを備えた複数のOSPFV2エリアルーターID TLVが同じルーターによって宣伝されている場合、より小さな最大インデックスを指定するTLVが使用され、Lビットセットのある他のTLVは無視されます。Lビットセットを使用してTLVで指定されたものよりも大きいインデックスを使用してルーターIDを指定するTLVも無視されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Each entry in the OSPFv2 Area Router IDs TLV represents either a node or a Broadcast/NBMA network identifier. An entry has the following format:",
+      "ja": "OSPFV2エリアルーターIDSTLVの各エントリは、ノードまたはブロードキャスト/NBMAネットワーク識別子のいずれかを表します。エントリには次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    ID Type    |  Number of IDs                |  Reserved     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-    Originating Router ID/DR Address                         -+\n|                     ...                                       |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 11: OSPFv2 Router IDs TLV Entry",
+      "ja": "図11：OSPFV2ルーターIDSTLVエントリ"
+    },
+    {
+      "indent": 3,
+      "text": "ID Type:",
+      "ja": "IDタイプ："
+    },
+    {
+      "indent": 12,
+      "text": "1 octet. The following values are defined:",
+      "ja": "1オクテット。次の値が定義されています。"
+    },
+    {
+      "indent": 6,
+      "text": "1:",
+      "ja": "1："
+    },
+    {
+      "indent": 15,
+      "text": "Router",
+      "ja": "ルーター"
+    },
+    {
+      "indent": 6,
+      "text": "2:",
+      "ja": "2："
+    },
+    {
+      "indent": 15,
+      "text": "Designated Router",
+      "ja": "指定ルーター"
+    },
+    {
+      "indent": 3,
+      "text": "Number of IDs:",
+      "ja": "IDの数："
+    },
+    {
+      "indent": 12,
+      "text": "2 octets",
+      "ja": "2オクテット"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved:",
+      "ja": "予約済み："
+    },
+    {
+      "indent": 12,
+      "text": "1 octet. MUST be transmitted as 0 and MUST be ignored on receipt.",
+      "ja": "1オクテット。0として送信する必要があり、受領時に無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Originating Router ID/DR Address:",
+      "ja": "Router ID/DRアドレスの発生："
+    },
+    {
+      "indent": 12,
+      "text": "(4 * Number of IDs) octets as indicated by the ID Type.",
+      "ja": "（4 * IDの数）IDタイプで示されるオクテット。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.5.2. OSPFv3 Area Router ID TLV",
+      "section_title": true,
+      "ja": "5.2.5.2. OSPFV3エリアルーターID TLV"
+    },
+    {
+      "indent": 3,
+      "text": "This TLV is a top-level TLV of the OSPFv3 Dynamic Flooding LSA.",
+      "ja": "このTLVは、OSPFV3ダイナミックフラッディングLSAのトップレベルTLVです。"
+    },
+    {
+      "indent": 3,
+      "text": "Because the space in a single OSPFv3 Dynamic Flooding LSA is limited, more than one LSA may be required to encode all of the Router IDs in the area. This TLV MAY be advertised in multiple OSPFv3 Dynamic Flooding Opaque LSAs so that all Router IDs can be advertised.",
+      "ja": "単一のOSPFV3ダイナミックフラッディングLSAのスペースは限られているため、エリア内のすべてのルーターIDをエンコードするには複数のLSAが必要になる場合があります。このTLVは、すべてのルーターIDを宣伝できるように、複数のOSPFV3ダイナミックフラッディング不透明LSAで宣伝される場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPFv3 Area Router IDs TLV has the following format:",
+      "ja": "OSPFV3エリアルーターIDSTLVには、次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Starting Index             |L| Flags       |   Reserved    |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-        OSPFv3 Router ID TLV Entry                           -+\n|                           ...                                 |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 12: OSPFv3 Area Router IDs TLV",
+      "ja": "図12：OSPFV3エリアルーターIDSTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "1",
+      "ja": "1"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "4 + sum of the lengths of all TLV entries in octets",
+      "ja": "オクテットのすべてのTLVエントリの長さの4 +合計"
+    },
+    {
+      "indent": 3,
+      "text": "Starting Index:",
+      "ja": "開始インデックス："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the first Router/Designated Router ID that appears in this TLV.",
+      "ja": "このTLVに表示される最初のルーター/指定ルーターIDのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "L (Last):",
+      "ja": "L（最後）："
+    },
+    {
+      "indent": 12,
+      "text": "This bit is set if the index of the last Router/Designated Router ID that appears in this TLV is equal to the last index in the full list of Router IDs for the area.",
+      "ja": "このビットは、このTLVに表示される最後のルーター/指定ルーターIDのインデックスが、エリアのルーターIDの完全なリストの最後のインデックスに等しい場合に設定されます。"
+    },
+    {
+      "indent": 3,
+      "text": "OSPFv3 Router ID TLV Entries:",
+      "ja": "OSPFV3ルーターID TLVエントリ："
+    },
+    {
+      "indent": 12,
+      "text": "A concatenated list of Router ID TLV Entries for the area.",
+      "ja": "エリアのルーターID TLVエントリの連結リスト。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple OSPFv3 Area Router ID TLVs with the L bit set are advertised by the same router the TLV that specifies the smaller maximum index is used and the other TLVs with L bit set are ignored. TLVs that specify Router IDs with indices greater than that specified by the TLV with the L bit set are also ignored.",
+      "ja": "Lビットセットを備えた複数のOSPFV3エリアルーターID TLVが同じルーターによって宣伝されている場合、より小さな最大インデックスを指定するTLVが使用され、Lビットセットのある他のTLVは無視されます。Lビットセットを使用してTLVで指定されたものよりも大きいインデックスを使用してルーターIDを指定するTLVも無視されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Each entry in the OSPFv3 Area Router IDs TLV represents either a router or a Broadcast/NBMA network identifier. An entry has the following format:",
+      "ja": "OSPFV3エリアルーターIDSTLVの各エントリは、ルーターまたはブロードキャスト/NBMAネットワーク識別子のいずれかを表します。エントリには次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    ID Type    |  Number of IDs                |  Reserved     |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-    Originating ID Entry                                     -+\n|                    ...                                        |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 19,
+      "text": "Figure 13: OSPFv3 Router ID TLV Entry",
+      "ja": "図13：OSPFV3ルーターID TLVエントリ"
+    },
+    {
+      "indent": 3,
+      "text": "ID Type:",
+      "ja": "IDタイプ："
+    },
+    {
+      "indent": 12,
+      "text": "1 octet. The following values are defined:",
+      "ja": "1オクテット。次の値が定義されています。"
+    },
+    {
+      "indent": 6,
+      "text": "1:",
+      "ja": "1："
+    },
+    {
+      "indent": 15,
+      "text": "Router",
+      "ja": "ルーター"
+    },
+    {
+      "indent": 6,
+      "text": "2:",
+      "ja": "2："
+    },
+    {
+      "indent": 15,
+      "text": "Designated Router",
+      "ja": "指定ルーター"
+    },
+    {
+      "indent": 3,
+      "text": "Number of IDs:",
+      "ja": "IDの数："
+    },
+    {
+      "indent": 12,
+      "text": "2 octets",
+      "ja": "2オクテット"
+    },
+    {
+      "indent": 3,
+      "text": "Reserved:",
+      "ja": "予約済み："
+    },
+    {
+      "indent": 12,
+      "text": "1 octet. MUST be transmitted as 0 and MUST be ignored on receipt.",
+      "ja": "1オクテット。0として送信する必要があり、受領時に無視する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The Originating ID Entry takes one of the following forms, depending on the ID Type.",
+      "ja": "IDタイプに応じて、発信元のIDエントリは、次のフォームのいずれかを採用します。"
+    },
+    {
+      "indent": 3,
+      "text": "For a Router:",
+      "ja": "ルーターの場合："
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Originating Router ID                                      |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The length of the Originating ID Entry is (4 * Number of IDs) octets.",
+      "ja": "発信元IDエントリの長さは（4 * IDSの数）オクテットです。"
+    },
+    {
+      "indent": 3,
+      "text": "For a Designated Router:",
+      "ja": "指定されたルーターの場合："
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Originating Router ID                                      |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Interface ID                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The length of the Originating ID Entry is (8 * Number of IDs) octets.",
+      "ja": "元のIDエントリの長さは（8 * IDSの数）オクテットです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.6. OSPF Flooding Path TLV",
+      "section_title": true,
+      "ja": "5.2.6. OSPF洪水パスTLV"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Flooding Path TLV is a top-level TLV of the OSPFv2 Dynamic Flooding Opaque LSAs and OSPFv3 Dynamic Flooding LSA.",
+      "ja": "OSPF洪水パスTLVは、OSPFV2ダイナミックフラッディング不透明LSAとOSPFV3ダイナミックフラッディングLSAのトップレベルTLVです。"
+    },
+    {
+      "indent": 3,
+      "text": "The usage of the OSPF Flooding Path TLV is identical to that of the IS-IS Flooding Path TLV described in Section 5.1.4.",
+      "ja": "OSPFフラッディングパスTLVの使用は、セクション5.1.4で説明されているIS-I-I-ISフラッディングパスTLVの使用法と同じです。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Flooding Path TLV contains a list of Router ID indices relative to the Router IDs advertised through the OSPF Area Router IDs TLV. At least 2 indices must be included in the TLV.",
+      "ja": "OSPFフラッディングパスTLVには、OSPFエリアルーターIDSTLVを介して宣伝されているルーターIDに対するルーターIDインデックスのリストが含まれています。少なくとも2つのインデックスをTLVに含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Multiple OSPF Flooding Path TLVs can be advertised in a single OSPFv2 Dynamic Flooding Opaque LSA or OSPFv3 Dynamic Flooding LSA. OSPF Flooding Path TLVs can also be advertised in multiple OSPFv2 Dynamic Flooding Opaque LSAs or OSPFv3 Dynamic Flooding LSAs if they all cannot fit in a single LSA.",
+      "ja": "複数のOSPF洪水パスTLVは、単一のOSPFV2ダイナミックフラッディング不透明LSAまたはOSPFV3ダイナミックフラッディングLSAで宣伝できます。OSPF洪水パスTLVは、単一のLSAに収まることができない場合、複数のOSPFV2ダイナミックフラッディング不透明LSAまたはOSPFV3ダイナミックフラッディングLSAで宣伝することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "The OSPF Flooding Path TLV has the following format:",
+      "ja": "OSPF洪水パスTLVには次の形式があります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Starting Index             |       Index 2                 |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-                        Additional Indices                   -+\n|                           ...                                 |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 21,
+      "text": "Figure 14: OSPF Flooding Path TLV",
+      "ja": "図14：OSPF洪水パスTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "2",
+      "ja": "2"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "2 * (number of indices in the path) in octets",
+      "ja": "2 *（パス内のインデックスの数）オクテットの"
+    },
+    {
+      "indent": 3,
+      "text": "Starting Index:",
+      "ja": "開始インデックス："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the first Router ID in the path.",
+      "ja": "パス内の最初のルーターIDのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "Index 2:",
+      "ja": "インデックス2："
+    },
+    {
+      "indent": 12,
+      "text": "The index of the next Router ID in the path.",
+      "ja": "パス内の次のルーターIDのインデックス。"
+    },
+    {
+      "indent": 3,
+      "text": "Additional indices (optional):",
+      "ja": "追加のインデックス（オプション）："
+    },
+    {
+      "indent": 12,
+      "text": "A sequence of additional indices to Router IDs along the path.",
+      "ja": "パスに沿ったルーターIDへの追加インデックスのシーケンス。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.7. OSPF Flooding Request Bit",
+      "section_title": true,
+      "ja": "5.2.7. OSPF洪水リクエストビット"
+    },
+    {
+      "indent": 3,
+      "text": "A single new option bit, the Flooding Request (FR) bit, is defined in the LLS Type 1 Extended Options and Flags field [RFC5613]. The FR bit allows a router to request an adjacent node to enable flooding towards it on a specific link in the case where the connection to the adjacent node is not part of the current flooding topology.",
+      "ja": "単一の新しいオプションビット、フラッディングリクエスト（FR）ビットは、LLSタイプ1拡張オプションとフラグフィールド[RFC5613]で定義されています。FRビットにより、ルーターが隣接するノードを要求して、隣接するノードへの接続が現在のフラッディングトポロジの一部ではない場合の特定のリンクでそれに向かって洪水を可能にすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A node that supports dynamic flooding MAY include the FR bit in its OSPF LLS Extended Options and Flags TLV.",
+      "ja": "動的洪水をサポートするノードには、OSPF LLS拡張オプションとフラグTLVにFR BITが含まれる場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the FR bit is signaled for a link on which flooding was disabled due to dynamic flooding, then flooding MUST be temporarily enabled over the link. Flooding MUST be enabled until the FR bit is no longer advertised in the OSPF LLS Extended Options and Flags TLV or the OSPF LLS Extended Options and Flags TLV no longer appears in the OSPF Hellos.",
+      "ja": "動的洪水により洪水が無効になったリンクにFRビットが信号を送られた場合、リンク上で洪水を一時的に有効にする必要があります。FR BITがOSPF LLS拡張オプションとフラグTLVに宣伝されなくなるまで洪水を有効にする必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When flooding is temporarily enabled on the link for any area due to receiving the FR bit in the OSPF LLS Extended Options and Flags TLV, the receiver MUST perform standard database synchronization for the area corresponding to the link. If the adjacency is already in the FULL state, the mechanism specified in [RFC4811] MUST be used for database resynchronization.",
+      "ja": "OSPF LLS拡張オプションとフラグTLVでFRビットを受信したため、あらゆるエリアのリンクで洪水が一時的に有効になっている場合、レシーバーはリンクに対応する領域の標準データベース同期を実行する必要があります。隣接がすでに完全な状態にある場合、[RFC4811]で指定されたメカニズムは、データベースの再同期に使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "So long as the FR bit is being received in the OSPF LLS Extended Options and Flags TLV for a link, flooding MUST NOT be disabled on the link, even if the connection between the neighbors is removed from the flooding topology. Flooding MUST continue on the link and be considered as temporarily enabled.",
+      "ja": "FR BITがOSPF LLS拡張オプションとLINKのFlags TLVで受信されている限り、近隣の接続が洪水トポロジから削除された場合でも、リンクで洪水を無効にしてはなりません。洪水はリンク上で継続し、一時的に有効になっていると見なされなければなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.8. OSPF LEEF Advertisement",
+      "section_title": true,
+      "ja": "5.2.8. OSPF Leef Advertisement"
+    },
+    {
+      "indent": 3,
+      "text": "In support of advertising the specific edges that are currently enabled in the flooding topology, an implementation MAY indicate that a link is part of the flooding topology. The OSPF Link Attributes Bits TLV is defined to support this advertisement.",
+      "ja": "洪水トポロジで現在有効になっている特定のエッジを宣伝することをサポートするために、実装はリンクが洪水トポロジの一部であることを示している可能性があります。OSPFリンク属性ビットTLVは、この広告をサポートするために定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|              Type             |             Length            |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|    Link Attribute Bits                                        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n+-            Additional Link Attribute Bits                   -+\n|                           ...                                 |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 18,
+      "text": "Figure 15: OSPF Link Attributes Bits TLV",
+      "ja": "図15：OSPFリンク属性ビットTLV"
+    },
+    {
+      "indent": 3,
+      "text": "Type:",
+      "ja": "タイプ："
+    },
+    {
+      "indent": 12,
+      "text": "21 (for OSPFv2) or 10 (for OSPFv3)",
+      "ja": "21（OSPFV2の場合）または10（OSPFV3の場合）"
+    },
+    {
+      "indent": 3,
+      "text": "Length:",
+      "ja": "長さ："
+    },
+    {
+      "indent": 12,
+      "text": "Size of the Link Attribute Bits in octets. It MUST be a multiple of 4 octets.",
+      "ja": "オクテットのリンク属性ビットのサイズ。それは4オクテットの倍数でなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following bits are defined:",
+      "ja": "次のビットが定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Bit #0:",
+      "ja": "ビット＃0："
+    },
+    {
+      "indent": 12,
+      "text": "Local Edge Enabled for Flooding (LEEF)",
+      "ja": "洪水に対応するローカルエッジ（Leef）"
+    },
+    {
+      "indent": 3,
+      "text": "OSPF Link-attribute Bits TLV appears as:",
+      "ja": "OSPF link-aTtribute bits tlvは次のように表示されます。"
+    },
+    {
+      "indent": 8,
+      "text": "1. A sub-TLV of the OSPFv2 Extended Link TLV [RFC7684].",
+      "ja": "1. OSPFV2拡張リンクTLV [RFC7684]のサブTLV。"
+    },
+    {
+      "indent": 8,
+      "text": "2. A sub-TLV of the OSPFv3 Router-Link TLV [RFC8362].",
+      "ja": "2. OSPFV3ルーターリンクTLV [RFC8362]のサブTLV。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Behavioral Specification",
+      "section_title": true,
+      "ja": "6. 行動仕様"
+    },
+    {
+      "indent": 3,
+      "text": "This section specifies the detailed behavior of the nodes participating in the IGP.",
+      "ja": "このセクションでは、IGPに参加するノードの詳細な動作を指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Terminology",
+      "section_title": true,
+      "ja": "6.1. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "Some terminology to be used in the following sections:",
+      "ja": "次のセクションで使用されるいくつかの用語："
+    },
+    {
+      "indent": 3,
+      "text": "Reachable:",
+      "ja": "到達可能："
+    },
+    {
+      "indent": 12,
+      "text": "A node is considered reachable if it is part of the connected network graph. Note that this is independent of any constraints that may be considered when performing IGP shortest-path tree calculation, e.g., link metrics, overload bit state, etc. The two-way connectivity check MUST be performed before including an edge in the connected network graph.",
+      "ja": "接続されたネットワークグラフの一部である場合、ノードは到達可能であると見なされます。これは、IGP最短パスツリー計算、例えばリンクメトリック、オーバーロードビット状態などを実行するときに考慮される可能性のある制約に依存しないことに注意してください。接続ネットワークにエッジを含める前に、双方向接続チェックを実行する必要があります。。"
+    },
+    {
+      "indent": 3,
+      "text": "Connected:",
+      "ja": "接続："
+    },
+    {
+      "indent": 12,
+      "text": "A node is connected to the flooding topology if it has at least one local link, which is part of the flooding topology.",
+      "ja": "ノードは、洪水トポロジの一部である少なくとも1つのローカルリンクがある場合、洪水トポロジに接続されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Disconnected:",
+      "ja": "切断："
+    },
+    {
+      "indent": 12,
+      "text": "A node is disconnected from the flooding topology when it is not connected to the flooding topology.",
+      "ja": "ノードは、洪水トポロジに接続されていない場合、洪水トポロジから切断されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Current flooding topology:",
+      "ja": "現在の洪水トポロジ："
+    },
+    {
+      "indent": 12,
+      "text": "The latest version of the flooding topology that has been received (in the case of centralized mode) or calculated locally (in the case of distributed mode).",
+      "ja": "（集中モードの場合）またはローカルで計算された（分散モードの場合）、受信された洪水トポロジの最新バージョン。"
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Flooding Topology",
+      "section_title": true,
+      "ja": "6.2. 洪水トポロジ"
+    },
+    {
+      "indent": 3,
+      "text": "The flooding topology MUST include all reachable nodes in the area.",
+      "ja": "洪水トポロジには、エリア内のすべての到達可能なノードを含める必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a node's reachability changes, the flooding topology MUST be recalculated. In centralized mode, the Area Leader MUST advertise a new flooding topology.",
+      "ja": "ノードの到達可能性が変化する場合、洪水トポロジーを再計算する必要があります。集中モードでは、エリアリーダーは新しい洪水トポロジを宣伝する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a node becomes disconnected from the current flooding topology but is still reachable, then a new flooding topology MUST be calculated. In centralized mode, the Area Leader MUST advertise the new flooding topology.",
+      "ja": "ノードが現在の洪水トポロジから切断されたが、まだ到達可能な場合、新しい洪水トポロジを計算する必要があります。集中モードでは、エリアリーダーは新しい洪水トポロジを宣伝する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The flooding topology SHOULD be biconnected to provide network resiliency, but this does incur some amount of redundant flooding. Xia topologies (Section 4.4.2) are an example of an explicit decision to sacrifice resiliency to avoid redundancy.",
+      "ja": "洪水トポロジーは、ネットワークの弾力性を提供するためにバイコン化されるべきですが、これにはある程度の冗長洪水が発生します。XIAトポロジ（セクション4.4.2）は、冗長性を避けるために回復力を犠牲にするという明示的な決定の例です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.3. Leader Election",
+      "section_title": true,
+      "ja": "6.3. リーダー選挙"
+    },
+    {
+      "indent": 3,
+      "text": "Any capable node MAY advertise its eligibility to become the Area Leader.",
+      "ja": "有能なノードは、エリアリーダーになる資格を宣伝する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes that are not reachable are not eligible to become the Area Leader. Nodes that do not advertise their eligibility to become the Area Leader are not eligible. Amongst the eligible nodes, the node with the numerically highest priority is the Area Leader. If multiple nodes all have the highest priority, then the node with the numerically highest system identifier (in the case of IS-IS) or Router ID (in the case of OSPFv2 and OSPFv3) is the Area Leader.",
+      "ja": "到達不可能なノードは、エリアリーダーになる資格がありません。エリアリーダーになる資格を宣伝しないノードは資格がありません。適格なノードの中で、数値的に最も高い優先度を持つノードはエリアリーダーです。複数のノードがすべて最優先事項を持っている場合、数値的に最も高いシステム識別子（IS-ISの場合）またはルーターID（OSPFV2およびOSPFV3の場合）を持つノードがエリアリーダーです。"
+    },
+    {
+      "indent": 0,
+      "text": "6.4. Area Leader Responsibilities",
+      "section_title": true,
+      "ja": "6.4. エリアリーダーの責任"
+    },
+    {
+      "indent": 3,
+      "text": "If the Area Leader operates in centralized mode, it MUST advertise algorithm 0 in its Area Leader Sub-TLV. For dynamic flooding to be enabled, it also MUST compute and advertise a flooding topology for the area. The Area Leader may update the flooding topology at any time. However, it should not destabilize the network with undue or overly frequent topology changes. If the Area Leader operates in centralized mode and needs to advertise a new flooding topology, it floods the new flooding topology on both the new and old flooding topologies.",
+      "ja": "エリアリーダーが集中モードで動作する場合、エリアリーダーSub-TLVでアルゴリズム0を宣伝する必要があります。動的洪水を有効にするためには、地域の洪水トポロジを計算して宣伝する必要があります。地域のリーダーは、いつでも洪水トポロジを更新することができます。ただし、過度のトポロジーの変化でネットワークを不安定にするべきではありません。エリアリーダーが集中モードで動作し、新しい洪水トポロジを宣伝する必要がある場合、新しい洪水トポロジと古い洪水トポロジの両方で新しい洪水トポロジーを洪水にします。"
+    },
+    {
+      "indent": 3,
+      "text": "If the Area Leader operates in distributed mode, it MUST advertise a nonzero algorithm in its Area Leader Sub-TLV.",
+      "ja": "エリアリーダーが分散モードで動作する場合、エリアリーダーのサブTLVでゼロ以外のアルゴリズムを宣伝する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "When the Area Leader advertises algorithm 0 in its Area Leader Sub-TLV and does not advertise a flooding topology, dynamic flooding is disabled for the area. Note this applies whether the Area Leader intends to operate in centralized mode or distributed mode.",
+      "ja": "エリアリーダーがエリアリーダーのSub-TLVにアルゴリズム0を宣伝し、洪水トポロジを宣伝しない場合、この地域の動的洪水は無効になります。これは、エリアリーダーが集中モードで動作するか分散モードで動作するかを適用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that once dynamic flooding is enabled, disabling it risks destabilizing the network due to the issues discussed in Section 1.",
+      "ja": "動的洪水が有効になると、セクション1で説明されている問題のために、それを無効にするとネットワークの不安定化が危険にさらされることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "6.5. Distributed Flooding Topology Calculation",
+      "section_title": true,
+      "ja": "6.5. 分散洪水トポロジの計算"
+    },
+    {
+      "indent": 3,
+      "text": "If the Area Leader advertises a nonzero algorithm in its Area Leader Sub-TLV, all nodes in the area that support dynamic flooding and support the algorithm advertised by the Area Leader MUST compute the flooding topology based on the Area Leader's advertised algorithm.",
+      "ja": "エリアリーダーがエリアリーダーのサブTLVにゼロ以外のアルゴリズムを宣伝する場合、動的洪水をサポートし、エリアリーダーが宣伝するアルゴリズムをサポートするエリアのすべてのノードは、エリアリーダーの宣伝されたアルゴリズムに基づいて洪水トポロジを計算する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes that do not support the advertised algorithm MUST continue to use standard IS-IS/OSPF flooding mechanisms. Nodes that do not support the flooding algorithm advertised by the Area Leader MUST be considered as dynamic flooding incapable nodes by the Area Leader.",
+      "ja": "広告されたアルゴリズムをサポートしていないノードは、標準のIS-IS/OSPF洪水メカニズムを引き続き使用する必要があります。エリアリーダーによって宣伝されている洪水アルゴリズムをサポートしていないノードは、エリアリーダーによる動的な洪水の無力なノードと見なされる必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the value of the algorithm advertised by the Area Leader is from the range 128-254 (private distributed algorithms), it is the responsibility of the network operator to guarantee that all nodes in the area agree on the dynamic flooding algorithm corresponding to the advertised value.",
+      "ja": "エリアリーダーによって宣伝されているアルゴリズムの値が範囲128-254（プライベート分散アルゴリズム）からのものである場合、エリア内のすべてのノードが広告に対応する動的フラッディングアルゴリズムに一致することを保証することはネットワークオペレーターの責任です。価値。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6. Use of LANs in the Flooding Topology",
+      "section_title": true,
+      "ja": "6.6. 洪水トポロジでのLANの使用"
+    },
+    {
+      "indent": 3,
+      "text": "The use of LANs in the flooding topology differs depending on whether the area is operating in centralized mode or distributed mode.",
+      "ja": "洪水トポロジでのLANの使用は、領域が集中モードで動作しているか分散モードで動作しているかによって異なります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6.1. Use of LANs in Centralized Mode",
+      "section_title": true,
+      "ja": "6.6.1. 集中モードでのLANの使用"
+    },
+    {
+      "indent": 3,
+      "text": "As specified in Section 4.5, when a LAN is advertised as part of the flooding topology, all nodes connected to the LAN are assumed to be using the LAN as part of the flooding topology. This assumption is made to reduce the size of the flooding topology advertisement.",
+      "ja": "セクション4.5で指定されているように、LANが洪水トポロジの一部として宣伝されている場合、LANに接続されているすべてのノードは、洪水トポロジの一部としてLANを使用していると想定されます。この仮定は、洪水トポロジの広告のサイズを縮小するために行われます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6.2. Use of LANs in Distributed Mode",
+      "section_title": true,
+      "ja": "6.6.2. 分散モードでのLANの使用"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, the flooding topology is NOT advertised; thus, the space consumed to advertise it is not a concern. Therefore, it is possible to assign only a subset of the nodes connected to the LAN to use the LAN as part of the flooding topology. Doing so may further optimize flooding by reducing the amount of redundant flooding on a LAN. However, support of flooding by a subset of the nodes connected to a LAN requires some modest but backward-compatible changes in the way flooding is performed on a LAN.",
+      "ja": "分散モードでは、洪水トポロジは宣伝されていません。したがって、それを宣伝するために消費されたスペースは懸念事項ではありません。したがって、LANに接続されたノードのサブセットのみを割り当てて、LANを洪水トポロジの一部として使用することができます。そうすることで、LANでの冗長洪水の量を減らすことにより、さらに洪水を最適化する可能性があります。ただし、LANに接続されたノードのサブセットによる洪水のサポートには、LANでの洪水の実行方法における控えめながらも後方互換性のある変化が必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6.2.1. Partial Flooding on a LAN in IS-IS",
+      "section_title": true,
+      "ja": "6.6.2.1. IS-ISのLANの部分的な洪水"
+    },
+    {
+      "indent": 3,
+      "text": "The Designated Intermediate System (DIS) for a LAN MUST use the standard flooding behavior.",
+      "ja": "LAN用の指定された中間システム（DIS）は、標準の洪水挙動を使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-DIS nodes whose connection to the LAN is included in the flooding topology MUST use the standard flooding behavior.",
+      "ja": "LANへの接続が洪水トポロジに含まれる非DISノードは、標準的な洪水挙動を使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-DIS nodes whose connection to the LAN is NOT included in the flooding topology behave as follows:",
+      "ja": "LANへの接続が洪水トポロジに含まれていない非DISノードは次のように動作します。"
+    },
+    {
+      "indent": 6,
+      "text": "* Received CSNPs from the DIS are ignored.",
+      "ja": "* DISからCSNPを受け取ったことは無視されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* Partial Sequence Number PDUs (PSNPs) are NOT originated on the LAN.",
+      "ja": "* 部分シーケンス番号PDU（PSNP）は、LANで発生しません。"
+    },
+    {
+      "indent": 6,
+      "text": "* An LSP that is received on the LAN and is newer than the corresponding LSP present in the Link State PDU Database (LSPDB) is retained and flooded on all local circuits that are part of the flooding topology (i.e., do not discard newer LSPs simply because they were received on a LAN that the receiving node is not using for flooding).",
+      "ja": "* LANで受信され、リンク状態PDUデータベース（LSPDB）に存在する対応するLSPよりも新しいLSPは、洪水トポロジの一部であるすべてのローカル回路で保持および浸水します（つまり、新しいLSPを廃止しないでください。それらは、受信ノードが洪水に使用していないことをLANで受け取りました）。"
+    },
+    {
+      "indent": 6,
+      "text": "* An LSP received on the LAN that is older or the same as the corresponding LSP in the LSPDB is silently discarded.",
+      "ja": "* LANで、LSPDBの対応するLSPと同じLANで受け取ったLSPは、静かに廃棄されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* LSPs received on links other than the LAN are NOT flooded on the LAN.",
+      "ja": "* LAN以外のリンクで受信したLSPは、LANに浸水しません。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: If any node connected to the LAN requests the enablement of temporary flooding, all nodes MUST revert to the standard flooding behavior on the LAN.",
+      "ja": "注：LANに接続されたノードが一時的な洪水の有効化を要求する場合、すべてのノードはLANの標準的な洪水挙動に戻る必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.6.2.2. Partial Flooding on a LAN in OSPF",
+      "section_title": true,
+      "ja": "6.6.2.2. OSPFのLANの部分的な洪水"
+    },
+    {
+      "indent": 3,
+      "text": "The Designated Router (DR) and Backup Designated Router (BDR) for LANs MUST use the standard flooding behavior.",
+      "ja": "指定されたルーター（DR）およびLANSのバックアップ指定ルーター（BDR）は、標準の洪水挙動を使用する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-DR/BDR nodes with a connection to a LAN that is included in the flooding topology use the standard flooding behavior on that LAN.",
+      "ja": "洪水トポロジに含まれるLANへの接続を持つ非DR/BDRノードは、そのLANの標準的な洪水挙動を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Non-DR/BDR nodes with a connection to a LAN that is NOT included in the flooding topology behave as follows:",
+      "ja": "洪水トポロジに含まれていないLANへの接続を持つ非DR/BDRノードは、次のように動作します。"
+    },
+    {
+      "indent": 6,
+      "text": "* LSAs received on the LAN are acknowledged to the DR/BDR.",
+      "ja": "* LANで受け取ったLSAは、DR/BDRに認められています。"
+    },
+    {
+      "indent": 6,
+      "text": "* LSAs received on interfaces other than the LAN are NOT flooded on the LAN.",
+      "ja": "* LAN以外のインターフェイスで受け取ったLSAは、LANに浸水していません。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: If any node connected to the LAN requests the enablement of temporary flooding, all nodes revert to the standard flooding behavior.",
+      "ja": "注：LANに接続されたノードが一時的な洪水の有効化を要求する場合、すべてのノードは標準の洪水挙動に戻ります。"
+    },
+    {
+      "indent": 3,
+      "text": "NOTE: The sending of LSA Acknowledgements by nodes NOT using the LAN as part of the flooding topology eliminates the need for changes on the part of the DR/BDR, which might include nodes that do not support the dynamic flooding algorithm.",
+      "ja": "注：洪水トポロジの一部としてLANを使用していないノードによるLSA謝辞の送信は、DR/BDRの一部の変更の必要性を排除します。これには、動的洪水アルゴリズムをサポートしないノードが含まれる場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.7. Flooding Behavior",
+      "section_title": true,
+      "ja": "6.7. 洪水行動"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes that support dynamic flooding MUST use the flooding topology for flooding when possible and MUST NOT revert to standard flooding when a valid flooding topology is available.",
+      "ja": "動的洪水をサポートするノードは、可能な場合は洪水のために洪水トポロジーを使用する必要があり、有効な洪水トポロジが利用可能な場合は標準的な洪水に戻ってはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "In some cases, a node that supports dynamic flooding may need to add local links to the flooding topology temporarily, even though the links are not part of the calculated flooding topology. This is termed \"temporary flooding\" and is discussed in Section 6.8.1.",
+      "ja": "場合によっては、リンクが計算された洪水トポロジの一部ではない場合でも、動的な洪水をサポートするノードが一時的に洪水トポロジにローカルリンクを追加する必要がある場合があります。これは「一時的な洪水」と呼ばれ、セクション6.8.1で説明されています。"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, the flooding topology is calculated locally. In centralized mode, the flooding topology is advertised in the area LSDB. Received link-state updates, whether received on a link that is in the flooding topology or on a link that is not in the flooding topology, MUST be flooded on all links that are in the flooding topology except for the link on which the update was received.",
+      "ja": "分散モードでは、洪水トポロジーがローカルで計算されます。集中モードでは、洪水トポロジーがエリアLSDBで宣伝されています。洪水トポロジーにあるリンクまたは洪水トポロジーにないリンクで受信したリンク状態の更新は、更新があったリンクを除き、フラッディングトポロジーにあるすべてのリンクに浸水する必要があります。受け取った。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, new information in the form of new paths or new node ID assignments can be received at any time. This may replace some or all of the existing information about the flooding topology. There may be transient conditions where the information that a node has is inconsistent or incomplete. If a node detects that its current information is inconsistent, then the node may wait for an implementation-specific amount of time, expecting more information to arrive that will provide a consistent, complete view of the flooding topology.",
+      "ja": "集中モードでは、新しいパスまたは新しいノードID割り当ての形式の新しい情報をいつでも受信できます。これは、洪水トポロジに関する既存の情報の一部またはすべてを置き換える可能性があります。ノードが持っている情報が一貫性がないか不完全な一時的な条件があるかもしれません。ノードが現在の情報が一貫していないことを検出した場合、ノードは実装固有の時間を待つ場合があり、より多くの情報が到着することを期待して、洪水トポロジの一貫した完全なビューを提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "In both centralized and distributed mode, if a node determines that some of its adjacencies are to be added to the flooding topology, it should add those and begin flooding on those adjacencies immediately. If a node determines that adjacencies are to be removed from the flooding topology, then it should wait for an implementation-specific amount of time before acting on that information. This serves to ensure that new information is flooded promptly and completely, allowing all nodes to receive updates in a timely fashion.",
+      "ja": "集中型モードと分散モードの両方で、ノードがその隣接トポロジーに追加されると判断した場合、それらを追加し、すぐにそれらの隣接を洪水にする必要があります。ノードが隣接が洪水トポロジから削除されると判断した場合、その情報に基づいて行動する前に、実装固有の時間を待つ必要があります。これは、新しい情報が迅速かつ完全に浸水することを保証するのに役立ち、すべてのノードがタイムリーに更新を受信できるようにします。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8. Treatment of Topology Events",
+      "section_title": true,
+      "ja": "6.8. トポロジイベントの治療"
+    },
+    {
+      "indent": 3,
+      "text": "This section explicitly considers a variety of different topological events in the network and how dynamic flooding should address them.",
+      "ja": "このセクションでは、ネットワーク内のさまざまな異なるトポロジイベントと、動的洪水にどのように対処するかを明示的に検討します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.1. Temporary Addition of Links to the Flooding Topology",
+      "section_title": true,
+      "ja": "6.8.1. 洪水トポロジへのリンクの一時的な追加"
+    },
+    {
+      "indent": 3,
+      "text": "When temporary flooding is enabled on the link, the flooding needs to be enabled in both directions. To achieve that, the following steps MUST be performed:",
+      "ja": "リンクで一時的な洪水が有効になっている場合、洪水を両方向に有効にする必要があります。それを達成するには、次の手順を実行する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "* The LSDB needs to be resynchronised on the link. This is done using the standard protocol mechanisms. In the case of IS-IS, this results in setting the SRM bit for all LSPs on the circuit and sending a complete set of CSNPs on the link. In OSPF, the mechanism specified in [RFC4811] is used.",
+      "ja": "* LSDBは、リンクで再同期する必要があります。これは、標準のプロトコルメカニズムを使用して行われます。IS-ISの場合、これにより、回路上のすべてのLSPのSRMビットを設定し、リンクにCSNPの完全なセットを送信します。OSPFでは、[RFC4811]で指定されたメカニズムが使用されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* Flooding is enabled locally on the link.",
+      "ja": "* 洪水はリンクでローカルに有効になっています。"
+    },
+    {
+      "indent": 6,
+      "text": "* Flooding is requested from the neighbor using the mechanism specified in Sections 5.1.5 or 5.2.7.",
+      "ja": "* セクション5.1.5または5.2.7で指定されたメカニズムを使用して、隣人から洪水が要求されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The request for temporary flooding MUST be withdrawn on the link when all of the following conditions are met:",
+      "ja": "次のすべての条件が満たされている場合、一時的な洪水のリクエストはリンクで撤回する必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "* The node itself is connected to the current flooding topology.",
+      "ja": "* ノード自体は、現在の洪水トポロジに接続されています。"
+    },
+    {
+      "indent": 6,
+      "text": "* The adjacent node is connected to the current flooding topology.",
+      "ja": "* 隣接するノードは、現在の洪水トポロジに接続されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Any change in the flooding topology MUST result in an evaluation of the above conditions for any link on which temporary flooding was enabled.",
+      "ja": "洪水トポロジの変更は、一時的な洪水が有効になったリンクの上記の条件を評価する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Temporary flooding is stopped on the link when both adjacent nodes stop requesting temporary flooding on the link.",
+      "ja": "両方の隣接するノードがリンクで一時的な洪水を要求するのを停止すると、リンクで一時的な洪水が停止します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.2. Local Link Addition",
+      "section_title": true,
+      "ja": "6.8.2. ローカルリンクの追加"
+    },
+    {
+      "indent": 3,
+      "text": "If a local link is added to the topology, the protocol will form a normal adjacency on the link and update the appropriate LSAs for the nodes on either end of the link. These link state updates will be flooded on the flooding topology.",
+      "ja": "トポロジーにローカルリンクが追加された場合、プロトコルはリンク上の通常の隣接を形成し、リンクの両端のノードに適したLSAを更新します。これらのリンク状態の更新は、洪水トポロジに浸水します。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, the Area Leader may choose to retain the existing flooding topology or modify the flooding topology upon receiving these updates. If the Area Leader decides to change the flooding topology, it will update the flooding topology in the LSDB and flood it using the new flooding topology.",
+      "ja": "集中モードでは、エリアリーダーは、既存の洪水トポロジを保持するか、これらの更新を受信したときに洪水トポロジを変更することを選択できます。地域のリーダーが洪水トポロジを変更することを決定した場合、LSDBの洪水トポロジーを更新し、新しい洪水トポロジを使用して洪水になります。"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, any change in the topology, including the link addition, MUST trigger the flooding topology recalculation. This is done to ensure that all nodes converge to the same flooding topology, regardless of the time of the calculation.",
+      "ja": "分散モードでは、リンクの追加を含むトポロジの変更は、洪水トポロジの再計算をトリガーする必要があります。これは、計算の時間に関係なく、すべてのノードが同じ洪水トポロジに収束するようにするために行われます。"
+    },
+    {
+      "indent": 3,
+      "text": "Temporary flooding MUST be enabled on the newly added local link as long as at least one of the following conditions are met:",
+      "ja": "次の条件の少なくとも1つが満たされている限り、新しく追加されたローカルリンクで一時的な洪水を有効にする必要があります。"
+    },
+    {
+      "indent": 6,
+      "text": "* The node on which the local link was added is not connected to the current flooding topology.",
+      "ja": "* ローカルリンクが追加されたノードは、現在の洪水トポロジに接続されていません。"
+    },
+    {
+      "indent": 6,
+      "text": "* The new adjacent node is not connected to the current flooding topology.",
+      "ja": "* 新しい隣接するノードは、現在の洪水トポロジに接続されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that in this case there is no need to perform a database synchronization as part of the enablement of the temporary flooding because it was part of the adjacency bring-up itself.",
+      "ja": "この場合、隣接する膨張自体の一部であったため、一時的な洪水の有効化の一部としてデータベースの同期を実行する必要はないことに注意してください。"
+    },
+    {
+      "indent": 3,
+      "text": "If multiple local links are added to the topology before the flooding topology is updated, temporary flooding MUST be enabled on a subset of these links per the conditions discussed in Section 6.8.12.",
+      "ja": "洪水トポロジが更新される前に複数のローカルリンクがトポロジに追加される場合、セクション6.8.12で説明した条件ごとに、これらのリンクのサブセットで一時的な洪水を有効にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.3. Node Addition",
+      "section_title": true,
+      "ja": "6.8.3. ノードの追加"
+    },
+    {
+      "indent": 3,
+      "text": "If a node is added to the topology, then at least one link is also added to the topology. Section 6.8.2 applies.",
+      "ja": "トポロジーにノードが追加された場合、トポロジに少なくとも1つのリンクも追加されます。セクション6.8.2が適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A node that has a large number of neighbors is at risk of introducing a local flooding storm if all neighbors are brought up at once and temporary flooding is enabled on all links simultaneously. The most robust way to address this is to limit the rate of initial adjacency formation following bootup. This reduces unnecessary redundant flooding as part of initial database synchronization and minimizes the need for temporary flooding, as it allows time for the new node to be added to the flooding topology after only a small number of adjacencies have been formed.",
+      "ja": "多くの隣人を持つノードは、すべての隣人が一度に育ち、すべてのリンクで同時に一時的な洪水が有効になった場合、地元の洪水嵐を導入するリスクがあります。これに対処するための最も堅牢な方法は、ブートアップ後の初期隣接形成の速度を制限することです。これにより、初期データベースの同期の一部として不必要な冗長洪水が減り、一時的な洪水の必要性が最小限に抑えられます。これにより、少数の隣接だけが形成された後、新しいノードを洪水トポロジに追加する時間を確保できます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the event a node elects to bring up a large number of adjacencies simultaneously, a significant amount of redundant flooding may be introduced as multiple neighbors of the new node enable temporary flooding to the new node, which initially is not part of the flooding topology.",
+      "ja": "ノードが多数の隣接を同時に持ち出すことを選択した場合、新しいノードの複数の隣人が新しいノードへの一時的な洪水を可能にするため、かなりの量の冗長洪水が導入される場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.4. Failures of Links Not on the Flooding Topology",
+      "section_title": true,
+      "ja": "6.8.4. 洪水トポロジーではないリンクの障害"
+    },
+    {
+      "indent": 3,
+      "text": "If a link that is not part of the flooding topology fails, then the adjacent nodes will update their LSAs and flood them on the flooding topology.",
+      "ja": "洪水トポロジの一部ではないリンクが失敗した場合、隣接するノードはLSAを更新し、洪水トポロジに浸水します。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, the Area Leader may choose to retain the existing flooding topology or modify the flooding topology upon receiving these updates. If it elects to change the flooding topology, it will update the flooding topology in the LSDB and flood it using the new flooding topology.",
+      "ja": "集中モードでは、エリアリーダーは、既存の洪水トポロジを保持するか、これらの更新を受信したときに洪水トポロジを変更することを選択できます。洪水トポロジを変更することを選択した場合、LSDBの洪水トポロジーを更新し、新しい洪水トポロジを使用して洪水になります。"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, any change in the topology, including the failure of the link that is not part of the flooding topology, MUST trigger the flooding topology recalculation. This is done to ensure that all nodes converge to the same flooding topology, regardless of the time of the calculation.",
+      "ja": "分散モードでは、洪水トポロジの一部ではないリンクの障害を含むトポロジの変更は、洪水トポロジの再計算を引き起こす必要があります。これは、計算の時間に関係なく、すべてのノードが同じ洪水トポロジに収束するようにするために行われます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.5. Failures of Links On the Flooding Topology",
+      "section_title": true,
+      "ja": "6.8.5. 洪水トポロジのリンクの障害"
+    },
+    {
+      "indent": 3,
+      "text": "If there is a failure on the flooding topology, the adjacent nodes will update their LSAs and flood them. If the original flooding topology is biconnected, the flooding topology should still be connected despite a single failure.",
+      "ja": "洪水トポロジに障害がある場合、隣接するノードはLSAを更新し、洪水になります。元の洪水トポロジーがバイコン化されている場合、単一の障害にもかかわらず、洪水トポロジはまだ接続されるはずです。"
+    },
+    {
+      "indent": 3,
+      "text": "If the failed local link represented the only connection to the flooding topology on the node where the link failed, the node MUST enable temporary flooding on a subset of its local links. This allows the node to send its updated LSAs and receive link-state updates from other nodes in the network before the new flooding topology is calculated and distributed (in the case of centralized mode).",
+      "ja": "失敗したローカルリンクが、リンクが故障したノードのフラッディングトポロジーへの唯一の接続を表した場合、ノードはローカルリンクのサブセットで一時的な洪水を有効にする必要があります。これにより、ノードは更新されたLSAを送信し、新しいフラッディングトポロジが計算および分布する前にネットワーク内の他のノードからリンク状態の更新を受信できます（集中モードの場合）。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, the Area Leader will notice the change in the flooding topology, recompute the flooding topology, and flood it using the new flooding topology.",
+      "ja": "集中モードでは、地域のリーダーは、洪水トポロジーの変化に気付き、洪水トポロジーを再計算し、新しい洪水トポロジを使用して洪水になります。"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, all nodes supporting dynamic flooding will notice the change in the topology and recompute the new flooding topology.",
+      "ja": "分散モードでは、動的洪水をサポートするすべてのノードは、トポロジの変化に気付き、新しい洪水トポロジを再計算します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.6. Node Deletion",
+      "section_title": true,
+      "ja": "6.8.6. ノード削除"
+    },
+    {
+      "indent": 3,
+      "text": "If a node is deleted from the topology, then at least one link is also removed from the topology. Section 6.8.4 and Section 6.8.5 apply.",
+      "ja": "トポロジからノードが削除された場合、トポロジから少なくとも1つのリンクも削除されます。セクション6.8.4およびセクション6.8.5が適用されます。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.7. Local Link Addition to the Flooding Topology",
+      "section_title": true,
+      "ja": "6.8.7. 洪水トポロジへのローカルリンクの追加"
+    },
+    {
+      "indent": 3,
+      "text": "If the flooding topology changes and a local link that was not part of the flooding topology is now part of the flooding topology, then the node MUST:",
+      "ja": "洪水トポロジが変化し、洪水トポロジの一部ではなかったローカルリンクが洪水トポロジの一部である場合、ノードは次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "* Resynchronize the LSDB over the link. This is done using the standard protocol mechanisms. In the case of IS-IS, this requires sending a complete set of CSNPs. In OSPF, the mechanism specified in [RFC4811] is used.",
+      "ja": "* リンク上のLSDBを再同期させます。これは、標準のプロトコルメカニズムを使用して行われます。IS-ISの場合、これにはCSNPの完全なセットを送信する必要があります。OSPFでは、[RFC4811]で指定されたメカニズムが使用されます。"
+    },
+    {
+      "indent": 6,
+      "text": "* Make the link part of the flooding topology and start flooding on it.",
+      "ja": "* 洪水トポロジーのリンク部分を作り、洪水を開始します。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.8. Local Link Deletion from the Flooding Topology",
+      "section_title": true,
+      "ja": "6.8.8. 洪水トポロジからのローカルリンクの削除"
+    },
+    {
+      "indent": 3,
+      "text": "If the flooding topology changes and a local link that was part of the flooding topology is no longer part of the flooding topology, then the node MUST remove the link from the flooding topology.",
+      "ja": "洪水トポロジが変化し、洪水トポロジの一部であったローカルリンクが洪水トポロジの一部ではなくなった場合、ノードは洪水トポロジからリンクを削除する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The node MUST keep flooding on such link for a limited amount of time to allow other nodes to migrate to the new flooding topology.",
+      "ja": "ノードは、他のノードが新しい洪水トポロジに移行できるように、限られた時間の間、そのようなリンクに洪水を続ける必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the removed local link represented the only connection to the flooding topology on the node, the node MUST enable temporary flooding on a subset of its local links. This allows the node to send its updated LSAs and receive link-state updates from other nodes in the network before the new flooding topology is calculated and distributed (in the case of centralized mode).",
+      "ja": "削除されたローカルリンクがノード上のフラッディングトポロジへの唯一の接続を表している場合、ノードはローカルリンクのサブセットで一時的な洪水を可能にする必要があります。これにより、ノードは更新されたLSAを送信し、新しいフラッディングトポロジが計算および分布する前にネットワーク内の他のノードからリンク状態の更新を受信できます（集中モードの場合）。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.9. Treatment of Disconnected Adjacent Nodes",
+      "section_title": true,
+      "ja": "6.8.9. 切断された隣接するノードの処理"
+    },
+    {
+      "indent": 3,
+      "text": "Every time there is a change in the flooding topology, a node MUST check if any adjacent nodes are disconnected from the current flooding topology. Temporary flooding MUST be enabled towards a subset of the disconnected nodes per Sections 6.8.12 and 6.7.",
+      "ja": "洪水トポロジに変更があるたびに、ノードは、現在の洪水トポロジから隣接するノードが切断されているかどうかを確認する必要があります。一時的な洪水は、セクション6.8.12および6.7ごとに切断されたノードのサブセットに向けて有効にする必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.10. Failure of the Area Leader",
+      "section_title": true,
+      "ja": "6.8.10. 地域のリーダーの失敗"
+    },
+    {
+      "indent": 3,
+      "text": "The failure of the Area Leader can be detected by observing that it is no longer reachable. In this case, the Area Leader election process is repeated and a new Area Leader is elected.",
+      "ja": "地域のリーダーの失敗は、もはや到達不可能ではないことを観察することによって検出できます。この場合、地域リーダーの選挙プロセスが繰り返され、新しいエリアリーダーが選出されます。"
+    },
+    {
+      "indent": 3,
+      "text": "To minimize disruption to dynamic flooding if the Area Leader becomes unreachable, the node that has the second-highest priority for becoming Area Leader (including the system identifier / Router ID tiebreaker if necessary) SHOULD advertise the same algorithm in its Area Leader Sub-TLV as the Area Leader and (in centralized mode) SHOULD advertise a flooding topology. This SHOULD be done even when the Area Leader is reachable.",
+      "ja": "エリアリーダーが到達不能になった場合、動的洪水の混乱を最小限に抑えるために、エリアリーダーになるための2番目に高い優先順位を持つノード（必要に応じてシステム識別子 /ルーターIDタイブレーカーを含む）は、エリアリーダーのサブTLVで同じアルゴリズムを宣伝する必要があります。エリアリーダーと（集中モードで）洪水トポロジを宣伝する必要があるため。これは、エリアリーダーに到達可能な場合でも行う必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, the new Area Leader will compute a new flooding topology and flood it using the new flooding topology. To minimize disruption, the new flooding topology SHOULD have as much in common as possible with the old flooding topology. This will minimize the risk of excess flooding with the new flooding topology.",
+      "ja": "集中モードでは、新しいエリアリーダーが新しい洪水トポロジーを計算し、新しい洪水トポロジを使用して洪水を洪水にします。混乱を最小限に抑えるために、新しい洪水トポロジーは、古い洪水トポロジーと可能な限り共通する必要があります。これにより、新しい洪水トポロジーによる過剰な洪水のリスクが最小限に抑えられます。"
+    },
+    {
+      "indent": 3,
+      "text": "In the distributed mode, the new flooding topology will be calculated on all nodes that support the algorithm that is advertised by the new Area Leader. Nodes that do not support the algorithm advertised by the new Area Leader will no longer participate in dynamic flooding and will revert to standard flooding.",
+      "ja": "分散モードでは、新しいエリアリーダーによって宣伝されているアルゴリズムをサポートするすべてのノードで新しい洪水トポロジが計算されます。新しいエリアリーダーによって宣伝されたアルゴリズムをサポートしていないノードは、動的洪水に参加せず、標準的な洪水に戻ります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.11. Recovery from Multiple Failures",
+      "section_title": true,
+      "ja": "6.8.11. 複数の障害からの回復"
+    },
+    {
+      "indent": 3,
+      "text": "In the event of multiple failures on the flooding topology, it may become partitioned. The nodes that remain active on the edges of the flooding topology partitions will recognize this and will try to repair the flooding topology locally by enabling temporary flooding towards the nodes that they consider disconnected from the flooding topology until a new flooding topology becomes connected again.",
+      "ja": "洪水トポロジに複数の障害が発生した場合、それは分割される可能性があります。洪水トポロジパーティションの端でアクティブなままであるノードは、これを認識し、新しい洪水トポロジが再び接続されるまで、洪水トポロジから切断されたノードに向かって一時的な洪水を可能にすることにより、洪水トポロジーをローカルに修復しようとします。"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes, where local failure was detected, update their LSAs and flood them on the remainder of the flooding topology.",
+      "ja": "局所的な故障が検出されたノードは、LSAを更新し、残りの洪水トポロジの残りの部分で洪水にします。"
+    },
+    {
+      "indent": 3,
+      "text": "In centralized mode, the Area Leader will notice the change in the flooding topology, recompute the flooding topology, and flood it using the new flooding topology.",
+      "ja": "集中モードでは、地域のリーダーは、洪水トポロジーの変化に気付き、洪水トポロジーを再計算し、新しい洪水トポロジを使用して洪水になります。"
+    },
+    {
+      "indent": 3,
+      "text": "In distributed mode, all nodes that actively participate in dynamic flooding will compute the new flooding topology.",
+      "ja": "分散モードでは、動的洪水に積極的に参加するすべてのノードが新しい洪水トポロジを計算します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this is very different from the area partition because there is still a connected network graph between the nodes in the area. The area may remain connected and forwarding may still be functioning correctly.",
+      "ja": "エリアのノード間に接続されたネットワークグラフがまだあるため、これはエリアパーティションとは大きく異なることに注意してください。エリアは接続されたままであり、転送がまだ正しく機能している可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "6.8.12. Rate-Limiting Temporary Flooding",
+      "section_title": true,
+      "ja": "6.8.12. レート制限一時的な洪水"
+    },
+    {
+      "indent": 3,
+      "text": "As discussed in the previous sections, some events require the introduction of temporary flooding on edges that are not part of the current flooding topology. This can occur regardless of whether the area is operating in centralized mode or distributed mode.",
+      "ja": "前のセクションで説明したように、一部のイベントでは、現在の洪水トポロジの一部ではないエッジに一時的な洪水を導入する必要があります。これは、領域が集中モードで動作しているか分散モードで動作しているかに関係なく発生する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Nodes that decide to enable temporary flooding also have to decide whether to do so on a subset of the edges that are currently not part of the flooding topology or on all the edges that are currently not part of the flooding topology. Doing the former risks a longer convergence time as it may miss vital edges and not fully repair the flooding topology. Doing the latter risks introducing a flooding storm that destabilizes the network.",
+      "ja": "一時的な洪水を有効にすることを決定するノードは、現在洪水トポロジの一部ではないエッジのサブセットで、または現在洪水トポロジの一部ではないすべてのエッジでそうするかどうかを決定する必要があります。前者のリスクは、重要なエッジを見逃し、洪水トポロジを完全に修復しない可能性があるため、より長い収束時間があります。後者を行うと、ネットワークを不安定にする洪水の嵐を導入するリスクがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "It is recommended that a node rate limit the number of edges on which it chooses to enable temporary flooding. Initial values for the number of edges on which to enable temporary flooding and the rate at which additional edges may subsequently be enabled is left as an implementation decision.",
+      "ja": "ノードレートは、一時的な洪水を可能にすることを選択するエッジの数を制限することをお勧めします。一時的な洪水を可能にするエッジ数の初期値と、その後追加のエッジを有効にする速度は、実装決定として残されます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IANA Considerations",
+      "section_title": true,
+      "ja": "7. IANAの考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. IS-IS",
+      "section_title": true,
+      "ja": "7.1. IS-IS"
+    },
+    {
+      "indent": 3,
+      "text": "The following code points have been assigned in the \"IS-IS Sub-TLVs for IS-IS Router CAPABILITY TLV\" registry (IS-IS TLV 242).",
+      "ja": "次のコードポイントは、「IS-ISルーター機能TLVのIS-ISサブTLV」レジストリ（IS-IS TLV 242）に割り当てられています。"
+    },
+    {
+      "indent": 4,
+      "text": "    +======+========================+==========================+\n    | Type | Description            | Reference                |\n    +======+========================+==========================+\n    | 27   | IS-IS Area Leader      | RFC 9667 (Section 5.1.1) |\n    +------+------------------------+--------------------------+\n    | 28   | IS-IS Dynamic Flooding | RFC 9667 (Section 5.1.2) |\n    +------+------------------------+--------------------------+\n\n                              Table 1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "IANA has assigned code points from the \"IS-IS Top-Level TLV Codepoints\" registry, one for each of the following TLVs:",
+      "ja": "IANAは、「IS-ISトップレベルのTLV CodePoints」レジストリからコードポイントを割り当てました。"
+    },
+    {
+      "indent": 4,
+      "text": "    +======+========================+==========================+\n    | Type | Description            | Reference                |\n    +======+========================+==========================+\n    | 17   | IS-IS Area Node IDs    | RFC 9667 (Section 5.1.3) |\n    +------+------------------------+--------------------------+\n    | 18   | IS-IS Flooding Path    | RFC 9667 (Section 5.1.4) |\n    +------+------------------------+--------------------------+\n    | 19   | IS-IS Flooding Request | RFC 9667 (Section 5.1.5) |\n    +------+------------------------+--------------------------+\n\n                              Table 2",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "IANA has extended the \"IS-IS Neighbor Link-Attribute Bit Values\" registry to contain an \"L2BM\" column that indicates if a bit may appear in an L2 Bundle Member Attributes TLV. All existing rows have the value \"N\" for \"L2BM\". The following explanatory note has been added to the registry:",
+      "ja": "IANAは、L2バンドルメンバー属性TLVにビットが表示されるかどうかを示す「L2BM」列を含むように「IS-IS Neighter Link-Attribute Bit値」レジストリを拡張しました。既存のすべての行には、「L2BM」の値「n」があります。次の説明メモがレジストリに追加されました。"
+    },
+    {
+      "indent": 0,
+      "text": "The \"L2BM\" column indicates applicability to the L2 Bundle Member Attributes TLV. The options for the \"L2BM\" column are:",
+      "ja": "「L2BM」列は、L2バンドルメンバー属性TLVへの適用性を示しています。「L2BM」列のオプションは次のとおりです。"
+    },
+    {
+      "indent": 0,
+      "text": "Y - This bit MAY appear in the L2 Bundle Member Attributes TLV.",
+      "ja": "Y-このビットは、L2バンドルメンバー属性TLVに表示される場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "N - This bit MUST NOT appear in the L2 Bundle Member Attributes TLV.",
+      "ja": "n-このビットは、L2バンドルメンバー属性TLVに表示されてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has allocated a new bit-value from the \"IS-IS Neighbor Link-Attribute Bit Values\" registry.",
+      "ja": "IANAは、「IS-IS Neighbor Rink-Attribute Bit値」レジストリから新しいビット価値を割り当てました。"
+    },
+    {
+      "indent": 0,
+      "text": "+=======+======+========================================+===========+\n| Value | L2BM | Name                                   | Reference |\n+=======+======+========================================+===========+\n| 0x4   | N    | Local Edge Enabled                     | RFC 9667  |\n|       |      | for Flooding (LEEF)                    |           |\n+-------+------+----------------------------------------+-----------+\n\n                               Table 3",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7.2. OSPF",
+      "section_title": true,
+      "ja": "7.2. OSPF"
+    },
+    {
+      "indent": 3,
+      "text": "The following code points have been assigned in the \"OSPF Router Information (RI) TLVs\" registry:",
+      "ja": "次のコードポイントは、「OSPFルーター情報（RI）TLVS」レジストリに割り当てられています。"
+    },
+    {
+      "indent": 4,
+      "text": "    +=======+=======================+==========================+\n    | Value | TLV Name              | Reference                |\n    +=======+=======================+==========================+\n    | 17    | OSPF Area Leader      | RFC 9667 (Section 5.2.1) |\n    +-------+-----------------------+--------------------------+\n    | 18    | OSPF Dynamic Flooding | RFC 9667 (Section 5.2.2) |\n    +-------+-----------------------+--------------------------+\n\n                              Table 4",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following code points have been assigned in the \"Opaque Link-State Advertisements (LSA) Option Types\" registry:",
+      "ja": "次のコードポイントは、「Opaque Link-State Advertisements（LSA）オプションタイプ」レジストリに割り当てられています。"
+    },
+    {
+      "indent": 2,
+      "text": "  +=======+====================================+=================+\n  | Value | Opaque Type                        | Reference       |\n  +=======+====================================+=================+\n  | 10    | OSPFv2 Dynamic Flooding Opaque LSA | RFC 9667        |\n  |       |                                    | (Section 5.2.3) |\n  +-------+------------------------------------+-----------------+\n\n                              Table 5",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following code point has been assigned in the \"OSPFv3 LSA Function Codes\" registry:",
+      "ja": "次のコードポイントは、「OSPFV3 LSA関数コード」レジストリに割り当てられています。"
+    },
+    {
+      "indent": 1,
+      "text": " +=======+=============================+==========================+\n | Value | LSA Function Code Name      | Reference                |\n +=======+=============================+==========================+\n | 16    | OSPFv3 Dynamic Flooding LSA | RFC 9667 (Section 5.2.4) |\n +-------+-----------------------------+--------------------------+\n\n                              Table 6",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "IANA has assigned a new bit in the \"LLS Type 1 Extended Options and Flags\" registry:",
+      "ja": "IANAは、「LLSタイプ1拡張オプションとフラグ」レジストリに新しいビットを割り当てました。"
+    },
+    {
+      "indent": 1,
+      "text": " +==============+======================+==========================+\n | Bit Position | Description          | Reference                |\n +==============+======================+==========================+\n | 0x00000020   | Flooding Request bit | RFC 9667 (Section 5.2.7) |\n +--------------+----------------------+--------------------------+\n\n                              Table 7",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following code point has been assigned in the \"OSPFv2 Extended Link TLV Sub-TLVs\" registry:",
+      "ja": "次のコードポイントは、「OSPFV2拡張リンクTLVサブTLV」レジストリに割り当てられています。"
+    },
+    {
+      "indent": 2,
+      "text": "  +======+========================+===========+===================+\n  | Type | Description            | Reference | L2 Bundle Member  |\n  |      |                        |           | Attributes (L2BM) |\n  +======+========================+===========+===================+\n  | 21   | OSPFv2 Link Attributes | RFC 9667  | Y                 |\n  |      | Bits Sub-TLV           | (Section  |                   |\n  |      |                        | 5.2.8)    |                   |\n  +------+------------------------+-----------+-------------------+\n\n                               Table 8",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "The following code point has been assigned in the \"OSPFv3 Extended LSA Sub-TLVs\" registry:",
+      "ja": "次のコードポイントは、「OSPFV3拡張LSAサブTLV」レジストリに割り当てられています。"
+    },
+    {
+      "indent": 2,
+      "text": "  +======+========================+===========+===================+\n  | Type | Description            | Reference | L2 Bundle Member  |\n  |      |                        |           | Attributes (L2BM) |\n  +======+========================+===========+===================+\n  | 10   | OSPFv3 Link Attributes | RFC 9667  | Y                 |\n  |      | Bits Sub-TLV           | (Section  |                   |\n  |      |                        | 5.2.8)    |                   |\n  +------+------------------------+-----------+-------------------+\n\n                               Table 9",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7.2.1. OSPF Dynamic Flooding LSA TLVs Registry",
+      "section_title": true,
+      "ja": "7.2.1. OSPFダイナミックフラッディングLSA TLVSレジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "A new registry has been created: \"OSPF Dynamic Flooding LSA TLVs\". New values can be allocated via IETF Review or IESG Approval.",
+      "ja": "新しいレジストリが作成されました：「OSPFダイナミックフラッディングLSA TLV」。IETFレビューまたはIESGの承認を介して、新しい値を割り当てることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"OSPF Dynamic Flooding LSA TLVs\" registry defines top-level TLVs for the OSPFv2 Dynamic Flooding Opaque LSA and OSPFv3 Dynamic Flooding LSAs. It has been added to the \"Open Shortest Path First (OSPF) Parameters\" registry group.",
+      "ja": "「OSPFダイナミックフラッディングLSA TLVS」レジストリは、OSPFV2ダイナミックフラッディング不透明LSAおよびOSPFV3ダイナミックフラッディングLSAのトップレベルTLVを定義します。「Open Shortest Path First（OSPF）パラメーター」レジストリグループに追加されました。"
+    },
+    {
+      "indent": 3,
+      "text": "The following initial values have been allocated:",
+      "ja": "次の初期値が割り当てられています。"
+    },
+    {
+      "indent": 5,
+      "text": "     +======+======================+==========================+\n     | Type | Description          | Reference                |\n     +======+======================+==========================+\n     | 0    | Reserved             | RFC 9667                 |\n     +------+----------------------+--------------------------+\n     | 1    | OSPF Area Router IDs | RFC 9667 (Section 5.2.5) |\n     +------+----------------------+--------------------------+\n     | 2    | OSPF Flooding Path   | RFC 9667 (Section 5.2.6) |\n     +------+----------------------+--------------------------+\n\n                              Table 10",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Types in the range 32768-33023 are Reserved for Experimental Use; these will not be registered with IANA and MUST NOT be mentioned by RFCs.",
+      "ja": "範囲32768-33023のタイプは、実験用に予約されています。これらはIANAに登録されておらず、RFCSで言及してはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Types in the range 33024-65535 are Reserved. They are not to be assigned at this time. Before any assignments can be made in the 33024-65535 range, there MUST be an IETF specification that specifies IANA Considerations that cover the range being assigned.",
+      "ja": "範囲33024-65535のタイプは予約されています。彼らは現時点では割り当てられるべきではありません。33024-65535範囲で割り当てを行う前に、割り当てられている範囲をカバーするIANAの考慮事項を指定するIETF仕様が必要です。"
+    },
+    {
+      "indent": 0,
+      "text": "7.2.2. OSPF Link Attributes Sub-TLV Bit Values Registry",
+      "section_title": true,
+      "ja": "7.2.2. OSPFリンク属性サブTLVビット値レジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "A new registry has been created: \"OSPF Link Attributes Sub-TLV Bit Values\". New values can be allocated via IETF Review or IESG Approval.",
+      "ja": "新しいレジストリが作成されました：「OSPFリンク属性サブTLVビット値」。IETFレビューまたはIESGの承認を介して、新しい値を割り当てることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"OSPF Link Attributes Sub-TLV Bit Values\" registry defines Link Attribute bit-values for the OSPFv2 Link Attributes Sub-TLV and OSPFv3 Link Attributes Sub-TLV. It has been added to the \"Open Shortest Path First (OSPF) Parameters\" registry group. This registry contains a column \"L2BM\" that indicates if a bit may appear in an L2 Bundle Member Attributes (L2BM) Sub-TLV. The following explanatory note has been added to the registry:",
+      "ja": "「OSPFリンク属性サブTLVビット値」レジストリは、OSPFV2リンク属性のリンク属性ビット値を定義します。「Open Shortest Path First（OSPF）パラメーター」レジストリグループに追加されました。このレジストリには、L2バンドルメンバー属性（L2BM）Sub-TLVに少し表示されるかどうかを示す列「L2BM」が含まれています。次の説明メモがレジストリに追加されました。"
+    },
+    {
+      "indent": 0,
+      "text": "The \"L2BM\" column indicates applicability to the L2 Bundle Member Attributes sub-TLV. The options for the \"L2BM\" column are:",
+      "ja": "「L2BM」列は、L2バンドルメンバー属性への適用性を示しています。「L2BM」列のオプションは次のとおりです。"
+    },
+    {
+      "indent": 0,
+      "text": "Y - This bit MAY appear in the L2 Bundle Member Attributes sub-TLV.",
+      "ja": "Y -このビットは、L2バンドルメンバー属性Sub -TLVに表示される場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "N - This bit MUST NOT appear in the L2 Bundle Member Attributes sub-TLV.",
+      "ja": "n-このビットは、L2バンドルメンバー属性Sub -TLVに表示されてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "The following initial value is allocated:",
+      "ja": "次の初期値が割り当てられます。"
+    },
+    {
+      "indent": 2,
+      "text": "  +========+=====================+===========+===================+\n  | Bit    | Description         | Reference | L2 Bundle Member  |\n  | Number |                     |           | Attributes (L2BM) |\n  +========+=====================+===========+===================+\n  | 0      | Local Edge Enabled  | RFC 9667  | N                 |\n  |        | for Flooding (LEEF) | (Section  |                   |\n  |        |                     | 5.2.8)    |                   |\n  +--------+---------------------+-----------+-------------------+\n\n                              Table 11",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7.3. IGP",
+      "section_title": true,
+      "ja": "7.3. IGP"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created a registry called \"IGP Algorithm Type For Computing Flooding Topology\" in the existing \"Interior Gateway Protocol (IGP) Parameters\" registry group.",
+      "ja": "IANAは、既存の「インテリアゲートウェイプロトコル（IGP）パラメーター」レジストリグループに「フラッディングトポロジを計算するためのIGPアルゴリズムタイプ」というレジストリを作成しました。"
+    },
+    {
+      "indent": 3,
+      "text": "The registration policy for this registry is Expert Review.",
+      "ja": "このレジストリの登録ポリシーは、専門家のレビューです。"
+    },
+    {
+      "indent": 3,
+      "text": "Values in this registry come from the range 0-255.",
+      "ja": "このレジストリの値は、0-255の範囲からのものです。"
+    },
+    {
+      "indent": 3,
+      "text": "The initial values in the \"IGP Algorithm Type For Computing Flooding Topology\" registry are as follows:",
+      "ja": "「フラッディングトポロジを計算するためのIGPアルゴリズムタイプ」の初期値は次のとおりです。"
+    },
+    {
+      "indent": 3,
+      "text": "   +=========+==================================================+\n   | Value   | Description                                      |\n   +=========+==================================================+\n   | 0       | Reserved for centralized mode                    |\n   +---------+--------------------------------------------------+\n   | 1-127   | Unassigned.  Individual values are to be         |\n   |         | assigned according to the \"Expert Review\" policy |\n   |         | defined in [RFC8126].  The designated experts    |\n   |         | should require a clear, public specification of  |\n   |         | the algorithm and comply with [RFC7370].         |\n   +---------+--------------------------------------------------+\n   | 128-254 | Reserved for Private Use                         |\n   +---------+--------------------------------------------------+\n   | 255     | Reserved                                         |\n   +---------+--------------------------------------------------+\n\n                              Table 12",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document introduces no new security issues. Security of routing within a domain is already addressed as part of the routing protocols themselves. This document proposes no changes to those security architectures.",
+      "ja": "このドキュメントでは、新しいセキュリティの問題はありません。ドメイン内のルーティングのセキュリティは、ルーティングプロトコル自体の一部としてすでに対処されています。このドキュメントでは、これらのセキュリティアーキテクチャに変更は提案されていません。"
+    },
+    {
+      "indent": 3,
+      "text": "An attacker could become the Area Leader and introduce a flawed flooding algorithm into the network thus compromising the operation of the protocol. Authentication methods as described in [RFC5304] and [RFC5310] for IS-IS, [RFC2328] and [RFC7474] for OSPFv2, and [RFC5340] and [RFC4552] for OSPFv3 SHOULD be used to prevent such attacks.",
+      "ja": "攻撃者はエリアリーダーになり、欠陥のあるフラッディングアルゴリズムをネットワークに導入することができ、プロトコルの動作を損なう可能性があります。IS-ISの[RFC5304]および[RFC5310]、および[RFC2328]および[RFC2328]および[RFC53474]のOSPFV2、および[RFC5340]および[RFC5340]および[RFC4552]のOSPFV3の認証方法は、そのような攻撃を防ぐために使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "9. References",
+      "section_title": true,
+      "ja": "9. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Normative References",
+      "section_title": true,
+      "ja": "9.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ISO10589] ISO, \"Information technology - Telecommunications and\n           information exchange between systems - Intermediate System\n           to Intermediate System intra-domain routeing information\n           exchange protocol for use in conjunction with the protocol\n           for providing the connectionless-mode network service (ISO\n           8473)\", Second Edition, ISO/IEC 10589:2002, November 2002,\n           <https://www.iso.org/standard/30932.html>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2328]  Moy, J., \"OSPF Version 2\", STD 54, RFC 2328,\n           DOI 10.17487/RFC2328, April 1998,\n           <https://www.rfc-editor.org/info/rfc2328>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4552]  Gupta, M. and N. Melam, \"Authentication/Confidentiality\n           for OSPFv3\", RFC 4552, DOI 10.17487/RFC4552, June 2006,\n           <https://www.rfc-editor.org/info/rfc4552>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5029]  Vasseur, JP. and S. Previdi, \"Definition of an IS-IS Link\n           Attribute Sub-TLV\", RFC 5029, DOI 10.17487/RFC5029,\n           September 2007, <https://www.rfc-editor.org/info/rfc5029>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5250]  Berger, L., Bryskin, I., Zinin, A., and R. Coltun, \"The\n           OSPF Opaque LSA Option\", RFC 5250, DOI 10.17487/RFC5250,\n           July 2008, <https://www.rfc-editor.org/info/rfc5250>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5304]  Li, T. and R. Atkinson, \"IS-IS Cryptographic\n           Authentication\", RFC 5304, DOI 10.17487/RFC5304, October\n           2008, <https://www.rfc-editor.org/info/rfc5304>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5310]  Bhatia, M., Manral, V., Li, T., Atkinson, R., White, R.,\n           and M. Fanto, \"IS-IS Generic Cryptographic\n           Authentication\", RFC 5310, DOI 10.17487/RFC5310, February\n           2009, <https://www.rfc-editor.org/info/rfc5310>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5340]  Coltun, R., Ferguson, D., Moy, J., and A. Lindem, \"OSPF\n           for IPv6\", RFC 5340, DOI 10.17487/RFC5340, July 2008,\n           <https://www.rfc-editor.org/info/rfc5340>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5613]  Zinin, A., Roy, A., Nguyen, L., Friedman, B., and D.\n           Yeung, \"OSPF Link-Local Signaling\", RFC 5613,\n           DOI 10.17487/RFC5613, August 2009,\n           <https://www.rfc-editor.org/info/rfc5613>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7356]  Ginsberg, L., Previdi, S., and Y. Yang, \"IS-IS Flooding\n           Scope Link State PDUs (LSPs)\", RFC 7356,\n           DOI 10.17487/RFC7356, September 2014,\n           <https://www.rfc-editor.org/info/rfc7356>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7474]  Bhatia, M., Hartman, S., Zhang, D., and A. Lindem, Ed.,\n           \"Security Extension for OSPFv2 When Using Manual Key\n           Management\", RFC 7474, DOI 10.17487/RFC7474, April 2015,\n           <https://www.rfc-editor.org/info/rfc7474>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7684]  Psenak, P., Gredler, H., Shakir, R., Henderickx, W.,\n           Tantsura, J., and A. Lindem, \"OSPFv2 Prefix/Link Attribute\n           Advertisement\", RFC 7684, DOI 10.17487/RFC7684, November\n           2015, <https://www.rfc-editor.org/info/rfc7684>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7770]  Lindem, A., Ed., Shen, N., Vasseur, JP., Aggarwal, R., and\n           S. Shaffer, \"Extensions to OSPF for Advertising Optional\n           Router Capabilities\", RFC 7770, DOI 10.17487/RFC7770,\n           February 2016, <https://www.rfc-editor.org/info/rfc7770>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7981]  Ginsberg, L., Previdi, S., and M. Chen, \"IS-IS Extensions\n           for Advertising Router Information\", RFC 7981,\n           DOI 10.17487/RFC7981, October 2016,\n           <https://www.rfc-editor.org/info/rfc7981>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126]  Cotton, M., Leiba, B., and T. Narten, \"Guidelines for\n           Writing an IANA Considerations Section in RFCs\", BCP 26,\n           RFC 8126, DOI 10.17487/RFC8126, June 2017,\n           <https://www.rfc-editor.org/info/rfc8126>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8362]  Lindem, A., Roy, A., Goethals, D., Reddy Vallem, V., and\n           F. Baker, \"OSPFv3 Link State Advertisement (LSA)\n           Extensibility\", RFC 8362, DOI 10.17487/RFC8362, April\n           2018, <https://www.rfc-editor.org/info/rfc8362>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Informative References",
+      "section_title": true,
+      "ja": "9.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[Bondy]    Bondy, J. A. and U. S. R. Murty, \"Graph Theory With\n           Applications\", Elsevier Science Publishing Co., Inc.,\n           ISBN 0-444-19451-7, 1976,\n           <https://www.zib.de/groetschel/teaching/WS1314/\n           BondyMurtyGTWA.pdf>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[Clos]     Clos, C., \"A study of non-blocking switching networks\",\n           The Bell System Technical Journal, Volume 32, Issue 2, pp.\n           406-424, DOI 10.1002/j.1538-7305.1953.tb01433.x, March\n           1953,\n           <https://doi.org/10.1002/j.1538-7305.1953.tb01433.x>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[Leiserson]\n           Leiserson, C. E., \"Fat-trees: Universal networks for\n           hardware-efficient supercomputing\", IEEE Transactions on\n           Computers, Volume C-34, Issue 10, pp. 892-901,\n           DOI 10.1109/TC.1985.6312192, October 1985,\n           <https://doi.org/10.1109/TC.1985.6312192>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2973]  Balay, R., Katz, D., and J. Parker, \"IS-IS Mesh Groups\",\n           RFC 2973, DOI 10.17487/RFC2973, October 2000,\n           <https://www.rfc-editor.org/info/rfc2973>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3630]  Katz, D., Kompella, K., and D. Yeung, \"Traffic Engineering\n           (TE) Extensions to OSPF Version 2\", RFC 3630,\n           DOI 10.17487/RFC3630, September 2003,\n           <https://www.rfc-editor.org/info/rfc3630>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4811]  Nguyen, L., Roy, A., and A. Zinin, \"OSPF Out-of-Band Link\n           State Database (LSDB) Resynchronization\", RFC 4811,\n           DOI 10.17487/RFC4811, March 2007,\n           <https://www.rfc-editor.org/info/rfc4811>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7370]  Ginsberg, L., \"Updates to the IS-IS TLV Codepoints\n           Registry\", RFC 7370, DOI 10.17487/RFC7370, September 2014,\n           <https://www.rfc-editor.org/info/rfc7370>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7938]  Lapukhov, P., Premji, A., and J. Mitchell, Ed., \"Use of\n           BGP for Routing in Large-Scale Data Centers\", RFC 7938,\n           DOI 10.17487/RFC7938, August 2016,\n           <https://www.rfc-editor.org/info/rfc7938>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Sarah Chen, Tony Przygienda, Dave Cooper, Gyan Mishra, and Les Ginsberg for their contributions to this work. The authors would also like to thank Arista Networks for supporting the development of this technology.",
+      "ja": "著者は、この作業への貢献について、サラ・チェン、トニー・プラジエンダ、デイブ・クーパー、ギャン・ミシュラ、レ・ギンズバーグに感謝したいと思います。著者は、この技術の開発をサポートしてくれたArista Networksにも感謝したいと思います。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Zeqing (Fred) Xia, Naiming Shen, Adam Sweeney, Acee Lindem, and Olufemi Komolafe for their helpful comments.",
+      "ja": "著者は、Zeqing（Fred）Xia、Naiming Shen、Adam Sweeney、Acee Lindem、およびOlufemi Komolafeの有益なコメントに感謝したいと思います。"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank Tom Edsall for initially introducing them to the problem.",
+      "ja": "著者は、最初に問題を紹介してくれたTom Edsallに感謝したいと思います。"
+    },
+    {
+      "indent": 3,
+      "text": "Advertising Local Edges Enabled for Flooding (LEEF) is based on an idea proposed by Huaimo Chen, Mehmet Toy, Yi Yang, Aijun Wang, Xufeng Liu, Yanhe Fan, and Lei Liu. The authors wish to thank them for their contributions.",
+      "ja": "洪水に可能になった地元のエッジ（LEEF）の広告は、Huaimo Chen、Mehmet Toy、Yi Yang、Aijun Wang、Xufeng Liu、Yanhe Fan、Lei Liuによって提案されたアイデアに基づいています。著者は、彼らの貢献に感謝したいと考えています。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Tony Li (editor)\nJuniper Networks\n1133 Innovation Way\nSunnyvale, California 94089\nUnited States of America\nEmail: tony.li@tony.li",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Peter Psenak (editor)\nCisco Systems, Inc.\nEurovea Centre, Central 3\nPribinova Street 10\n81109 Bratislava\nSlovakia\nEmail: ppsenak@cisco.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Huaimo Chen\nFuturewei\nBoston, Massachusetts\nUnited States of America\nEmail: hchen.ietf@gmail.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Luay Jalil\nVerizon\nRichardson, Texas 75081\nUnited States of America\nEmail: luay.jalil@verizon.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Srinath Dontula\nAT&T\n200 S Laurel Ave\nMiddletown, New Jersey 07748\nUnited States of America\nEmail: sd947e@att.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
