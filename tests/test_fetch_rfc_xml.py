@@ -264,8 +264,10 @@ class TestFetchXmlRfc(unittest.TestCase):
                     '| QoS Class in GSMA-IR.34            | PHB  |\n'+
                     '+====================================+======+\n'+
                     '| Interactive                        | AF31 |\n'+
+                    '|                                    |      |\n'+
+                    '| (ordered by priority, AF3 highest) |      |\n'+
                     '|                                    +------+\n'+
-                    '| (ordered by priority, AF3 highest) | AF32 |\n'+
+                    '|                                    | AF32 |\n'+
                     '|                                    +------+\n'+
                     '|                                    | AF21 |\n'+
                     '|                                    +------+\n'+
