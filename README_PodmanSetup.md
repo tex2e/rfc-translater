@@ -25,3 +25,11 @@ chmod 666 html/*.json
 ```bash
 podman compose up -d
 ```
+
+### サーバ再起動時もコンテナを自動起動させる
+
+一般ユーザで以下を実行する
+
+```bash
+systemctl --user enable --now podman-restart
+```
