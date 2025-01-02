@@ -81,6 +81,13 @@ pip3 install -r requirements.txt
     python3 main.py --make-index-draft  # インデックスページの作成
     ```
 
+- **RFCの要約作成**
+
+    ```bash
+    python3 main.py --summarize --make --rfc 9446  # 指定したRFCのみ
+    python3 main.py --summarize --make --force --begin 9600 --end 9700  # 範囲指定
+    ```
+
 生成物：
 
 | ファイルパス | 説明 | 生成元プログラム |
