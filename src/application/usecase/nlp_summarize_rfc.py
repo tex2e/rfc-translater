@@ -170,9 +170,6 @@ def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGP
 
     rfc_abstract_text = re.sub(r'\s+', ' ', ' '.join(rfc_abstract).strip())
 
-    prompt1 = f"次の英語の文章を以下の条件で要約してください。\n"
-    prompt1 += f"・出力言語は日本語n"
-    prompt1 += f"・出力形式はですます調\n"
-    prompt1 += f"・二行で要約\n\n"
+    prompt1 = f"次の英語の文章を日本語でまとめてください。出力形式はですます調で、簡潔に3行以内で要約してください\n\n"
     prompt2 = f"{rfc_abstract_text}"
     return (prompt1, prompt2)
