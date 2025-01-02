@@ -61,5 +61,7 @@ class RfcJsonTransFileRepository(IRfcJsonTransRepository):
         """対象RFCのタイトルを取得"""
         obj = self.find(rfc)
         # 翻訳済みRFC (json) の読み込み
-        rfc_title = obj['title']['text']
+        rfc_title = None
+        if obj and obj['title'] and obj['title']['text']:
+            rfc_title = obj['title']['text']
         return rfc_title

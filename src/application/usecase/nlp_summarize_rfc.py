@@ -7,7 +7,8 @@ import datetime
 from pprint import pprint
 from lxml import etree  # pip install lxml
 from ...domain.services.rfcutils import RfcUtils
-from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, RfcFile, IRfc, Rfc
+from ...domain.services.rfcfile import RfcFile
+from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, IRfc, Rfc
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 # ChatGPT
@@ -155,7 +156,7 @@ def summarize_rfc(rfc: IRfc,
 def _summarize_rfc_by_title(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFC番号をChatGPTに要約させる"""
     # GPTへ送信するプロンプト作成
-    return (f"{rfc_title} についての要約、目的、利用場面を技術者の視点から2行でまとめてください。",)
+    return (f"{rfc_title} についての要約と目的を技術者の視点から2行でまとめてください。",)
 
 def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
     """指定したRFCの概要(Abstract)をChatGPTに要約させる"""
@@ -172,6 +173,6 @@ def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGP
     prompt1 = f"次の英語の文章を以下の条件で要約してください。\n"
     prompt1 += f"・出力言語は日本語n"
     prompt1 += f"・出力形式はですます調\n"
-    prompt1 += f"・2行で要約\n\n"
+    prompt1 += f"・二行で要約\n\n"
     prompt2 = f"{rfc_abstract_text}"
     return (prompt1, prompt2)
