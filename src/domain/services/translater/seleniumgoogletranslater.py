@@ -52,7 +52,7 @@ class TranslatorSeleniumGoogletrans(Translator):
                     pprint(f'[+] url: {url}')
                 browser.get(url)
                 # 数秒待機する
-                wait_time = 6 + len(text) / 1000
+                wait_time = 10 + len(text) / 300
                 self.output_progress(len=len(text), wait_time=wait_time)  # プログレスバーに詳細情報を追加
                 time.sleep(wait_time)
                 # 翻訳結果を抽出する

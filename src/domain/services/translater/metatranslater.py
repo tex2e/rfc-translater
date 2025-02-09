@@ -35,6 +35,7 @@ trans_rules = {
     'notation and terminology': '表記と用語',
     'conventions and terminology': '規則と用語',
     'preliminaries': '前提条件',
+    "the key words \"must\", \"must not\", \"required\", \"shall\", \"shall not\", \"should\", \"should not\", \"recommended\", \"not recommended\", \"may\", and \"optional\" in this document are to be interpreted as described in bcp 14 [rfc2119] [rfc8174] when, and only when, they appear in all capitals, as shown here.": 'このドキュメント内のキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 [RFC2119] [RFC8174] で説明されているように解釈されます。',
 }
 
 
