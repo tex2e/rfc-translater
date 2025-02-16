@@ -1,0 +1,633 @@
+{
+  "title": {
+    "text": "RFC 9609 - Initializing a DNS Resolver with Priming Queries",
+    "ja": "RFC 9609 - プライミングクエリでDNSリゾルバーを初期化します"
+  },
+  "number": 9609,
+  "created_at": "2025-02-12 23:24:06.316309+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                           P. Koch\nRequest for Comments: 9609                                      DENIC eG\nBCP: 209                                                       M. Larson\nObsoletes: 8109                                               P. Hoffman\nCategory: Best Current Practice                                    ICANN\nISSN: 2070-1721                                            February 2025",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Initializing a DNS Resolver with Priming Queries",
+      "section_title": true,
+      "ja": "プライミングクエリでDNSリゾルバーを初期化します"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes the queries that a DNS resolver should emit to initialize its cache. The result is that the resolver gets both a current NS resource record set (RRset) for the root zone and the necessary address information for reaching the root servers.",
+      "ja": "このドキュメントでは、DNSリゾルバーがキャッシュを初期化するために発射する必要があるクエリについて説明します。その結果、リゾルバーは、ルートゾーンの現在のNSリソースレコードセット（RRSET）と、ルートサーバーに到達するために必要なアドレス情報の両方を取得します。"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes RFC 8109.",
+      "ja": "このドキュメントは、RFC 8109を廃止します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本文書の位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This memo documents an Internet Best Current Practice.",
+      "ja": "このメモは、インターネットの最高の現在の練習を文書化しています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on BCPs is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは、インターネットエンジニアリングタスクフォース（IETF）の製品です。IETFコミュニティのコンセンサスを表しています。公開レビューを受けており、インターネットエンジニアリングステアリンググループ（IESG）からの出版が承認されています。BCPSの詳細については、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9609.",
+      "ja": "このドキュメントの現在のステータス、任意のERRATA、およびそのフィードバックを提供する方法に関する情報は、https://www.rfc-editor.org/info/rfc9609で取得できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2025 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権（c）2025 IETF Trustおよび文書著者として特定された人。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "このドキュメントは、BCP 78およびIETFドキュメント（https://trustee.ietf.org/license-info）に関連するIETF Trustの法的規定の対象となります。この文書に関するあなたの権利と制限を説明するので、これらの文書を注意深く確認してください。このドキュメントから抽出されたコードコンポーネントには、セクション4.Eで説明されている法的規定のセクション4.Eで説明されており、改訂されたBSDライセンスで説明されている保証なしで提供されるように、改訂されたBSDライセンステキストを含める必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n  1.1.  Terminology\n2.  Description of Priming\n  2.1.  Content of Priming Information\n3.  Priming Queries\n  3.1.  Repeating Priming Queries\n  3.2.  Target Selection\n  3.3.  DNSSEC with Priming Queries\n4.  Priming Responses\n  4.1.  Expected Properties of the Priming Response\n  4.2.  Completeness of the Response\n5.  Post-Priming Strategies\n6.  Security Considerations\n7.  IANA Considerations\n8.  References\n  8.1.  Normative References\n  8.2.  Informative References\nAppendix A.  Changes from RFC 8109\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Recursive DNS resolvers need a starting point to resolve queries. [RFC1034] describes a common scenario for recursive resolvers: They begin with an empty cache and some configuration for finding the names and addresses of the DNS root servers. [RFC1034] describes that configuration as a list of servers that will give authoritative answers to queries about the root. This has become a common implementation choice for recursive resolvers and is the topic of this document.",
+      "ja": "再帰DNSリゾルバーには、クエリを解決するための出発点が必要です。[RFC1034]は、再帰リゾルバーの一般的なシナリオを説明しています。これらは、空のキャッシュと、DNSルートサーバーの名前とアドレスを見つけるための構成から始めます。[RFC1034]は、その構成を、ルートに関するクエリに対する権威ある回答を提供するサーバーのリストとして説明しています。これは、再帰的なリゾルバーの一般的な実装の選択肢となり、このドキュメントのトピックです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes the steps needed for this common implementation choice. Note that this is not the only way to start a recursive name server with an empty cache, but it is the only one described in [RFC1034]. Some implementers have chosen other directions, some of which work well and others of which fail (sometimes disastrously) under different conditions. For example, an implementation that only gets the addresses of the root name servers from configuration, not from the DNS as described in this document, will have stale data that could cause slower resolution.",
+      "ja": "このドキュメントでは、この一般的な実装の選択に必要な手順について説明します。これは、空のキャッシュを備えた再帰名サーバーを起動する唯一の方法ではありませんが、[RFC1034]で説明されている唯一の方法であることに注意してください。一部の実装者は他の方向を選択していますが、その一部はうまく機能し、その他はさまざまな条件下で（時には悲惨に）失敗します。たとえば、このドキュメントで説明されているDNSからではなく、構成からルート名サーバーのアドレスのみを取得する実装には、解像度が遅くなる可能性のある古いデータがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document only deals with recursive name servers (also called \"recursive resolvers\" and just \"resolvers\") for the IN class.",
+      "ja": "このドキュメントでは、クラスのために再帰名サーバー（「再帰リゾルバー」と「リゾルバー」とも呼ばれます）のみを扱います。"
+    },
+    {
+      "indent": 3,
+      "text": "See Appendix A for the list of changes from [RFC8109].",
+      "ja": "[RFC8109]の変更のリストについては、付録Aを参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "1.1. Terminology",
+      "section_title": true,
+      "ja": "1.1. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "このドキュメント内のキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 [RFC2119] [RFC8174] で説明されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "See [RSSAC026v2] for terminology that relates to the root server system. See [RFC9499] for terminology that relates to the DNS in general.",
+      "ja": "ルートサーバーシステムに関連する用語については、[RSSAC026V2]を参照してください。一般的なDNSに関連する用語については、[RFC9499]を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Description of Priming",
+      "section_title": true,
+      "ja": "2. プライミングの説明"
+    },
+    {
+      "indent": 3,
+      "text": "Priming is the act of finding the list of root servers from a configuration that lists some or all of the purported IP addresses of some or all of those root servers. In priming, a recursive resolver starts with no cached information about the root servers, and it finishes with a full list of their names and addresses in its cache.",
+      "ja": "プライミングは、これらのルートサーバーの一部またはすべてのいくつかまたはすべてのIPアドレスの一部またはすべてをリストする構成からルートサーバーのリストを見つける行為です。プライミングでは、再帰的なリゾルバーは、ルートサーバーに関するキャッシュされた情報なしで始まり、キャッシュの名前とアドレスの完全なリストで終了します。"
+    },
+    {
+      "indent": 3,
+      "text": "Priming is described in Sections 5.3.2 and 5.3.3 of [RFC1034]. (It is called \"SBELT\", a \"safety belt\" structure, in that document.) The scenario used in that description, that of a recursive server that is also authoritative, is no longer as common.",
+      "ja": "プライミングは、[RFC1034]のセクション5.3.2および5.3.3で説明されています。（このドキュメントでは、「Sbelt」、「安全ベルト」構造と呼ばれます。）その説明で使用されるシナリオ、また権威ある再帰サーバーのシナリオは、もはや一般的ではありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The configured list of IP addresses for the root servers usually comes from the vendor or distributor of the recursive server software. Although this list is generally accurate and complete at the time of distribution, it may become outdated over time.",
+      "ja": "ルートサーバーのIPアドレスの構成リストは、通常、再帰サーバーソフトウェアのベンダーまたはディストリビューターからのものです。このリストは一般に配布時に正確で完全ですが、時間とともに時代遅れになる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The domain names for the root servers are called the \"root server identifiers\". Although this list has remained stable since 1997, the associated IPv4 and IPv6 addresses for these root server identifiers occasionally change. Research indicates that, following such changes, certain resolvers fail to update to the new addresses; for further details, refer to [OLD-J].",
+      "ja": "ルートサーバーのドメイン名は「ルートサーバー識別子」と呼ばれます。このリストは1997年以来安定していますが、これらのルートサーバー識別子の関連するIPv4およびIPv6アドレスは時々変化します。調査によると、このような変更に続いて、特定のリゾルバーが新しいアドレスに更新できないことが示されています。詳細については、[Old-J]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Therefore, it is important that resolvers are able to cope with change, even without relying upon configuration updates to be applied by their operator. Root server identifier and address changes are the main reasons that resolvers need to use priming to get a full and accurate list of root servers, instead of just using a statically configured list.",
+      "ja": "したがって、オペレーターによって適用される構成の更新に依存しても、リゾルバーが変化に対処できることが重要です。ルートサーバー識別子とアドレスの変更は、リソースバーがプライミングを使用して、静的に構成されたリストを使用するのではなく、ルートサーバーの完全かつ正確なリストを取得する必要がある主な理由です。"
+    },
+    {
+      "indent": 3,
+      "text": "See [RSSAC023v2] for a history of the root server system.",
+      "ja": "ルートサーバーシステムの履歴については、[RSSAC023V2]を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Although this document is targeted at the global DNS, it could apply to a private DNS as well. These terms are defined in [RFC9499].",
+      "ja": "このドキュメントはグローバルDNSを対象としていますが、プライベートDNSにも適用できます。これらの用語は[RFC9499]で定義されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Some systems serve a copy of the full root zone on the same server as the resolver, e.g., as described in [RFC8806]. In such a setup, the resolver primes its cache using the same methods as those described in the rest of this document.",
+      "ja": "一部のシステムでは、[RFC8806]で説明されているように、リゾルバーと同じサーバー上の完全なルートゾーンのコピーを提供します。このようなセットアップでは、リゾルバーは、このドキュメントの残りの部分で説明した方法と同じ方法を使用してキャッシュをプライムします。"
+    },
+    {
+      "indent": 0,
+      "text": "2.1. Content of Priming Information",
+      "section_title": true,
+      "ja": "2.1. プライミング情報の内容"
+    },
+    {
+      "indent": 3,
+      "text": "As described above, the configuration for priming is a list of IP addresses. The priming information in software may be in any format that gives the software the addresses associated with at least some of the root server identifiers.",
+      "ja": "上記のように、プライミングの構成はIPアドレスのリストです。ソフトウェアのプライミング情報は、ソフトウェアに少なくとも一部のルートサーバー識別子に関連付けられたアドレスを提供するあらゆる形式である場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Some software has configuration that also contains the root server identifiers (such as \"L.ROOT-SERVERS.NET\"), sometimes as comments and sometimes as data consumed by the software. For example, the \"root hints file\" published by IANA at <https://www.internic.net/domain/ named.root> is derived directly from the root zone and contains all of the addresses of the root server identifiers found in the root zone. It is in DNS zone file presentation format and includes the root server identifiers. Although there is no harm in adding these names, they are not useful in the priming process.",
+      "ja": "一部のソフトウェアには、ルートサーバーの識別子（「l.root-servers.net」など）も含まれる構成があり、時にはコメントとして、時にはソフトウェアによって消費されるデータとして。たとえば、<https://www.internic.net/domain/ named.root>でianaが発行した「root Hintsファイル」は、ルートゾーンから直接導出され、で見つかったルートサーバー識別子のすべてのアドレスが含まれています。ルートゾーン。DNSゾーンファイルのプレゼンテーション形式であり、ルートサーバー識別子が含まれます。これらの名前を追加することには害はありませんが、プライミングプロセスでは役に立ちません。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Priming Queries",
+      "section_title": true,
+      "ja": "3. プライミングクエリ"
+    },
+    {
+      "indent": 3,
+      "text": "A priming query is a DNS query whose response provides root server identifiers and addresses. It has a QNAME of \".\", a QTYPE of NS, and a QCLASS of IN; it is sent to one of the addresses in the configuration for the recursive resolver. The priming query can be sent over either UDP or TCP. If the query is sent over UDP, the source port SHOULD be randomly selected (see [RFC5452]) to hamper on-path attacks. DNS cookies [RFC7873] can also be used to hamper on-path attacks. The Recursion Desired (RD) bit SHOULD be set to 0. The meaning when RD is set to 1 is undefined for priming queries and is outside the scope of this document.",
+      "ja": "プライミングクエリは、ROUTサーバー識別子とアドレスを提供する応答のDNSクエリです。「。」のqname、nsのqtype、およびinのqclassがあります。再帰リゾルバーの構成内のアドレスの1つに送信されます。プライミングクエリは、UDPまたはTCPで送信できます。クエリがUDPを介して送信された場合、ソースポートをランダムに選択する必要があります（[RFC5452]を参照）。DNS Cookie [RFC7873]は、パス上の攻撃を妨げるためにも使用できます。希望の再帰（RD）ビットは0に設定する必要があります。RDが1に設定されている場合の意味は、プライミングクエリの場合は未定義であり、このドキュメントの範囲外です。"
+    },
+    {
+      "indent": 3,
+      "text": "The recursive resolver SHOULD use EDNS0 [RFC6891] for priming queries and SHOULD announce and handle a reassembly size of at least 1024 octets [RFC3226]. Doing so allows responses that cover the size of a full priming response (see Section 4.2) for the current set of root servers. See Section 3.3 for discussion of setting the DNSSEC OK (DO) bit (defined in [RFC4033]).",
+      "ja": "再帰リゾルバーは、プライミングクエリにEDNS0 [RFC6891]を使用し、少なくとも1024オクテット[RFC3226]の再組み立てサイズを発表および処理する必要があります。そうすることで、ルートサーバーの現在のセットの完全なプライミング応答のサイズ（セクション4.2を参照）をカバーする応答が可能になります。DNSSEC OK（do）ビットの設定についての議論については、セクション3.3を参照してください（[RFC4033]で定義）。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Repeating Priming Queries",
+      "section_title": true,
+      "ja": "3.1. プライミングクエリを繰り返します"
+    },
+    {
+      "indent": 3,
+      "text": "The recursive resolver SHOULD send a priming query only when it is needed, such as when the resolver starts with an empty cache or when the NS resource record set (RRset) for the root zone has expired. Because the NS records for the root zone are not special, the recursive resolver expires those NS records according to their TTL values. (Note that a recursive resolver MAY pre-fetch the NS RRset before it expires.)",
+      "ja": "The recursive resolver SHOULD send a priming query only when it is needed, such as when the resolver starts with an empty cache or when the NS resource record set (RRset) for the root zone has expired.ルートゾーンのNSレコードは特別ではないため、再帰リゾルバーはTTLの値に従ってこれらのNSレコードを期限切れにします。（再帰的なリゾルバーは、NS RRSetが失効する前に事前に解放される可能性があることに注意してください。）"
+    },
+    {
+      "indent": 3,
+      "text": "If a resolver chooses to pre-fetch the root NS RRset before that RRset has expired in its cache, it needs to choose whether to use the addresses for the root NS RRset that it already has in its cache or to use the addresses it has in its configuration. Such a resolver SHOULD send queries to the addresses in its cache in order to reduce the chance of delay due to out-of-date addresses in its configuration.",
+      "ja": "リゾルバーがRRSetがキャッシュで期限切れになる前にルートns RRSetを事前にフェッチすることを選択した場合、キャッシュに既に持っているルートns RRSetのアドレスを使用するか、それとも持っているアドレスを使用するかを選択する必要があります。その構成。このようなリゾルバーは、その構成の時代遅れのアドレスによる遅延の可能性を減らすために、キャッシュのアドレスにクエリを送信する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If a priming query does not get a response, the recursive resolver MUST retry the query with a different target address from the configuration.",
+      "ja": "プライミングクエリが応答を取得しない場合、再帰リゾルバーは、構成とは異なるターゲットアドレスでクエリを再試行する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Target Selection",
+      "section_title": true,
+      "ja": "3.2. ターゲット選択"
+    },
+    {
+      "indent": 3,
+      "text": "In order to spread the load across all the root server identifiers, the recursive resolver SHOULD select the target for a priming query randomly from the list of addresses. The recursive resolver might choose either IPv4 or IPv6 addresses based on its knowledge of whether the system on which it is running has adequate connectivity on either type of address.",
+      "ja": "すべてのルートサーバー識別子に負荷を広めるために、再帰リゾルバーは、アドレスのリストからプライミングクエリのターゲットをランダムに選択する必要があります。再帰リゾルバーは、実行中のシステムがいずれかのアドレスに適切な接続性を持っているかどうかの知識に基づいて、IPv4またはIPv6アドレスを選択する場合があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that this recommended method is not the only way to choose from the list in a recursive resolver's configuration. Two other common methods include picking the first from the list, and remembering which address in the list gave the fastest response earlier and using that one. There are probably other methods in use today. However, the random method SHOULD be used for priming.",
+      "ja": "この推奨されるメソッドは、再帰リゾルバーの構成のリストから選択する唯一の方法ではないことに注意してください。他の2つの一般的な方法には、リストから最初のものを選択すること、リスト内のどのアドレスが最速の応答を以前に回答し、それを使用したことを覚えています。おそらく今日使用されている他の方法があります。ただし、ランダム方法はプライミングに使用する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.3. DNSSEC with Priming Queries",
+      "section_title": true,
+      "ja": "3.3. プライミングクエリを備えたDNSSEC"
+    },
+    {
+      "indent": 3,
+      "text": "The root NS RRset is signed and can be validated by a DNSSEC validating resolver. At the time this document is published, the addresses for the names in the root NS RRset are in the \"root-servers.net\" zone. All root servers are also authoritative for the \"root-servers.net\" zone, which allows priming responses to include the appropriate root name server A and AAAA RRsets. However, because at the time this document is published the \"root-servers.net\" zone is not signed, the root name server A and AAAA RRsets cannot be validated. An attacker that is able to provide a spoofed priming response can provide alternative A and AAAA RRsets and thus fool a resolver into considering addresses under the control of the attacker to be authoritative for the root zone.",
+      "ja": "ルートNS RRSETに署名されており、DNSSEC検証リゾルバーによって検証できます。このドキュメントが公開された時点で、ルートns rrsetの名前のアドレスは「root-servers.net」ゾーンにあります。すべてのルートサーバーは、「root-servers.net」ゾーンの権威あるものでもあります。これにより、プライミング応答が適切なルート名サーバーAおよびAAAA rrsetsを含めることができます。ただし、このドキュメントが公開されている時点では、「root-servers.net」ゾーンに署名されていないため、ルート名サーバーAおよびAAAA rrsetsを検証できません。スプーフィングされたプライミング応答を提供できる攻撃者は、代替AおよびAAAA rrsetsを提供し、攻撃者の制御下でルートゾーンの権威あるアドレスを検討するためにリゾルバーをだますことができます。"
+    },
+    {
+      "indent": 3,
+      "text": "A rogue root name server can view all queries from the resolver to the root and alter all unsigned parts of responses, such as the parent-side NS RRsets and glue in referral responses. A resolver can be fooled into trusting child (Top-Level Domain (TLD)) NS addresses that are under the control of the attacker as being authoritative if the resolver:",
+      "ja": "Rogue Root Name Serverは、すべてのクエリをリゾルバーからルートまで表示し、紹介応答の親側ns rrsetsや接着剤など、応答の符号なしの部分をすべて変更できます。リゾルバーは、攻撃者の制御下にあるResolverの場合、攻撃者の制御下にあるNSアドレスを信頼する子供（トップレベルのドメイン（TLD））にだまされる可能性があります。"
+    },
+    {
+      "indent": 6,
+      "text": "* follows referrals from a rogue root server,",
+      "ja": "* 不正なルートサーバーからの紹介に従います。"
+    },
+    {
+      "indent": 6,
+      "text": "* and does not explicitly query the authoritative NS RRset at the apex of the child (TLD) zone,",
+      "ja": "* また、子供の頂点（TLD）ゾーンで権威あるNS RRSetを明示的に照会しません。"
+    },
+    {
+      "indent": 6,
+      "text": "* and does not explicitly query for the authoritative A and AAAA RRsets for the child (TLD) NS RRsets.",
+      "ja": "* また、子供（TLD）ns rrsetsの権威あるaおよびaaaa rrsetsを明示的に照会しません。"
+    },
+    {
+      "indent": 3,
+      "text": "With such resolvers, an attacker that controls a rogue root server effectively controls the entire domain name space and can view all queries and alter all unsigned data undetected unless other protections are configured at the resolver.",
+      "ja": "このようなリゾルバーを使用すると、Rogue Root Serverを制御する攻撃者がドメイン名スペース全体を効果的に制御し、すべてのクエリを表示し、他の保護がリゾルバで構成されていない限り、すべての署名されていないデータを変更できません。"
+    },
+    {
+      "indent": 3,
+      "text": "An attacker controlling a rogue root name server also has complete control over all unsigned delegations and over the entire domain name space in the case of non-DNSSEC validating resolvers.",
+      "ja": "Rogue Root Name Serverを制御する攻撃者は、非DNSSEC検証リゾルバーの場合、すべての署名されていない代表団とドメイン名全体を完全に制御します。"
+    },
+    {
+      "indent": 3,
+      "text": "If the \"root-servers.net\" zone is later signed or if the root servers are named in a different zone and that zone is signed, having DNSSEC validation for the priming queries might be valuable. The benefits and costs of resolvers validating the responses will depend heavily on the naming scheme used.",
+      "ja": "「root-servers.net」ゾーンが後で署名された場合、またはルートサーバーが別のゾーンで名前が付けられ、そのゾーンが署名されている場合、プライミングクエリのDNSSEC検証が価値がある場合があります。応答を検証するリソースバーの利点とコストは、使用される命名スキームに大きく依存します。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Priming Responses",
+      "section_title": true,
+      "ja": "4. プライミング応答"
+    },
+    {
+      "indent": 3,
+      "text": "A priming query is a normal DNS query. Thus, a root server cannot distinguish a priming query from any other query for the root NS RRset. Thus, the root server's response will also be a normal DNS response.",
+      "ja": "プライミングクエリは、通常のDNSクエリです。したがって、ルートサーバーは、ルートns rrsetの他のクエリとプライミングクエリを区別することはできません。したがって、ルートサーバーの応答も通常のDNS応答になります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Expected Properties of the Priming Response",
+      "section_title": true,
+      "ja": "4.1. プライミング応答の予想特性"
+    },
+    {
+      "indent": 3,
+      "text": "The priming response MUST have an RCODE of NOERROR and MUST have the Authoritative Answer (AA) bit set. Also, it MUST have an NS RRset in the Answer section (because the NS RRset originates from the root zone) and an empty Authority section (because the NS RRset already appears in the Answer section). There will also be an Additional section with A and/or AAAA RRsets for the root servers pointed at by the NS RRset.",
+      "ja": "プライミング応答には、noerrorのrcodeが必要であり、権威ある回答（AA）ビットセットが必要です。また、回答セクション（NS RRSTがルートゾーンから発信されるため）と空の権限セクション（NS RRSTが既に回答セクションに表示されるため）にNS RRSETが必要です。また、NS RRSetが指すルートサーバーのAおよび/またはAAAA RRSetsを備えた追加セクションもあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Resolver software SHOULD treat the response to the priming query as a normal DNS response, just as it would use any other data fed to its cache. Resolver software SHOULD NOT expect 13 NS RRs because, historically, some root servers have returned fewer.",
+      "ja": "Resolverソフトウェアは、Primingクエリへの応答を通常のDNS応答として扱う必要があります。歴史的には、一部のルートサーバーが戻ってくるため、リゾルバーソフトウェアは13 ns RRを期待してはなりません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Completeness of the Response",
+      "section_title": true,
+      "ja": "4.2. 応答の完全性"
+    },
+    {
+      "indent": 3,
+      "text": "At the time this document is published, there are 13 root server operators operating a total of more than 1500 root server instances. Each instance has one IPv4 address and one IPv6 address. The combined size of all the A and AAAA RRsets exceeds the original 512-octet payload limit specified in [RFC1035].",
+      "ja": "このドキュメントが公開されたときに、13のルートサーバーオペレーターが合計1500を超えるルートサーバーインスタンスを操作しています。各インスタンスには、1つのIPv4アドレスと1つのIPv6アドレスがあります。すべてのAとAAAA rrsetsの合計サイズは、[RFC1035]で指定された元の512-OCTETペイロード制限を超えています。"
+    },
+    {
+      "indent": 3,
+      "text": "In the event of a response where the Additional section omits certain root server address information, reissuing of the priming query does not help with those root name servers that respond with a fixed order of addresses in the Additional section. Instead, the recursive resolver needs to issue direct queries for A and AAAA RRsets for the remaining names. At the time this document is published, these RRsets would be authoritatively available from the root name servers.",
+      "ja": "追加のセクションで特定のルートサーバーアドレス情報を省略している応答がある場合、プライミングクエリの再発行は、追加セクションのアドレスの固定順序で応答するルート名サーバーに役立ちません。代わりに、再帰リゾルバーは、AおよびAAAA rrsetsの直接クエリを残りの名前に発行する必要があります。このドキュメントが公開された時点で、これらのrrsetはルート名サーバーから権威あるものを利用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "If some root server addresses are omitted from the Additional section, there is no expectation that the TC bit in the response will be set to 1. At the time this document is written, many of the root servers are not setting the TC bit when omitting addresses from the Additional section.",
+      "ja": "追加のセクションからいくつかのルートサーバーアドレスが省略されている場合、応答のTCビットが1に設定されるという期待はありません。このドキュメントの記述時に、ルートサーバーの多くは省略時にTCビットを設定していません。追加セクションのアドレス。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that [RFC9471] updates [RFC1034] with respect to the use of the TC bit. It says",
+      "ja": "[RFC9471]は、TCビットの使用に関して[RFC1034]を更新することに注意してください。それは言う"
+    },
+    {
+      "indent": 0,
+      "text": "If message size constraints prevent the inclusion of all glue records for in-domain name servers over the chosen transport, the server MUST set the TC (Truncated) flag to inform the client that the response is incomplete and that the client SHOULD use another transport to retrieve the full response.",
+      "ja": "メッセージサイズの制約により、選択したトランスポート上のドメイン内ネームサーバーのすべての接着剤レコードが含まれない場合、サーバーはTC（切り捨てられた）フラグを設定して、応答が不完全であり、クライアントが別のトランスポートを使用する必要があることをクライアントに通知する必要があります。完全な応答を取得します。"
+    },
+    {
+      "indent": 3,
+      "text": "Because the priming response is not a referral, root server addresses in the priming response are not considered glue records. Thus, [RFC9471] does not apply to the priming response and root servers are not required to set the TC bit if not all root server addresses fit within message size constraints. There are no requirements on the number of root server addresses that a root server must include in a priming response.",
+      "ja": "プライミング応答は紹介ではないため、プライミング応答のルートサーバーアドレスは接着剤レコードとは見なされません。したがって、[RFC9471]はプライミング応答には適用されず、ルートサーバーは、すべてのルートサーバーアドレスがメッセージサイズの制約内に適合するわけではないにしても、TCビットを設定する必要はありません。ルートサーバーがプライミング応答に含める必要があるルートサーバーアドレスの数には要件はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Post-Priming Strategies",
+      "section_title": true,
+      "ja": "5. ポストプライミング戦略"
+    },
+    {
+      "indent": 3,
+      "text": "When a resolver has a zone's NS RRset in its cache and it receives a query for a domain in that zone that cannot be answered from its cache, the resolver has to choose which NS to send queries to. (This statement is as true for the root zone as for any other zone in the DNS.) Two common strategies for choosing are \"determine the fastest name server and always use it\" and \"create buckets of fastness and pick randomly in the buckets\". This document does not specify a preference for any particular strategy other than to suggest that resolvers not treat the root zone as special for this decision.",
+      "ja": "リゾルバーがキャッシュにゾーンのNS RRSetを持ち、キャッシュから回答できないゾーンのドメインのクエリを受信する場合、リゾルバーはクエリを送信するNSを選択する必要があります。（このステートメントは、DNSの他のゾーンと同様にルートゾーンに当てはまります。）選択するための2つの一般的な戦略は、「最速の名前サーバーを決定し、常に使用する」と「バケツのバケツを作成し、バケツでランダムに選択」することです。。このドキュメントでは、リソースバーがルートゾーンをこの決定に特別なものとして扱わないことを示唆する以外の特定の戦略の好みを指定していません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Security Considerations",
+      "section_title": true,
+      "ja": "6. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Spoofing a response to a priming query can be used to redirect all of the queries originating from a victim recursive resolver to one or more servers for the attacker. Until the responses to priming queries are protected with DNSSEC, there is no definitive way to prevent such redirection.",
+      "ja": "プライミングクエリへの応答のスプーフィングを使用して、攻撃者のために被害者の再帰リゾルバーから1つ以上のサーバーに由来するすべてのクエリをリダイレクトできます。プライミングクエリへの応答がDNSSECで保護されるまで、そのようなリダイレクトを防ぐための決定的な方法はありません。"
+    },
+    {
+      "indent": 3,
+      "text": "An on-path attacker who sees a priming query coming from a resolver can inject false answers before a root server can give correct answers. If the attacker's answers are accepted, this can set up the ability to give further false answers for future queries to the resolver. False answers for root servers are more dangerous than, say, false answers for TLDs, because the root is the highest node of the DNS. See Section 3.3 for more discussion.",
+      "ja": "ルートサーバーが正しい答えを与えることができる前に、リゾルバーからのプライミングクエリを見ているパス攻撃者は、誤った答えを挿入できます。攻撃者の回答が受け入れられた場合、これにより、将来のクエリに対してリゾルバーにさらに誤った回答を与える機能が設定されます。ルートサーバーの虚偽の回答は、ルートがDNSの最高ノードであるため、TLDの誤った回答よりも危険です。詳細については、セクション3.3を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "In both of the scenarios listed here, a validating resolver will be able to detect the attack if its chain of queries comes for a zone that is signed, but not for those that are unsigned.",
+      "ja": "ここにリストされている両方のシナリオで、検証済みのリゾルバーは、そのクエリのチェーンが署名されているゾーンでは署名されていないゾーンではない場合、攻撃を検出できます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. IANA Considerations",
+      "section_title": true,
+      "ja": "7. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "このドキュメントにはIANAアクションがありません。"
+    },
+    {
+      "indent": 0,
+      "text": "8. References",
+      "section_title": true,
+      "ja": "8. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Normative References",
+      "section_title": true,
+      "ja": "8.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034]  Mockapetris, P., \"Domain names - concepts and facilities\",\n           STD 13, RFC 1034, DOI 10.17487/RFC1034, November 1987,\n           <https://www.rfc-editor.org/info/rfc1034>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1035]  Mockapetris, P., \"Domain names - implementation and\n           specification\", STD 13, RFC 1035, DOI 10.17487/RFC1035,\n           November 1987, <https://www.rfc-editor.org/info/rfc1035>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3226]  Gudmundsson, O., \"DNSSEC and IPv6 A6 aware server/resolver\n           message size requirements\", RFC 3226,\n           DOI 10.17487/RFC3226, December 2001,\n           <https://www.rfc-editor.org/info/rfc3226>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4033]  Arends, R., Austein, R., Larson, M., Massey, D., and S.\n           Rose, \"DNS Security Introduction and Requirements\",\n           RFC 4033, DOI 10.17487/RFC4033, March 2005,\n           <https://www.rfc-editor.org/info/rfc4033>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5452]  Hubert, A. and R. van Mook, \"Measures for Making DNS More\n           Resilient against Forged Answers\", RFC 5452,\n           DOI 10.17487/RFC5452, January 2009,\n           <https://www.rfc-editor.org/info/rfc5452>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6891]  Damas, J., Graff, M., and P. Vixie, \"Extension Mechanisms\n           for DNS (EDNS(0))\", STD 75, RFC 6891,\n           DOI 10.17487/RFC6891, April 2013,\n           <https://www.rfc-editor.org/info/rfc6891>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7873]  Eastlake 3rd, D. and M. Andrews, \"Domain Name System (DNS)\n           Cookies\", RFC 7873, DOI 10.17487/RFC7873, May 2016,\n           <https://www.rfc-editor.org/info/rfc7873>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8109]  Koch, P., Larson, M., and P. Hoffman, \"Initializing a DNS\n           Resolver with Priming Queries\", BCP 209, RFC 8109,\n           DOI 10.17487/RFC8109, March 2017,\n           <https://www.rfc-editor.org/info/rfc8109>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9471]  Andrews, M., Huque, S., Wouters, P., and D. Wessels, \"DNS\n           Glue Requirements in Referral Responses\", RFC 9471,\n           DOI 10.17487/RFC9471, September 2023,\n           <https://www.rfc-editor.org/info/rfc9471>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9499]  Hoffman, P. and K. Fujiwara, \"DNS Terminology\", BCP 219,\n           RFC 9499, DOI 10.17487/RFC9499, March 2024,\n           <https://www.rfc-editor.org/info/rfc9499>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Informative References",
+      "section_title": true,
+      "ja": "8.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[OLD-J]    Wessels, D., Castonguay, J., and P. Barber, \"Thirteen\n           Years of 'Old J Root'\", DNS-OARC Fall 2015 Workshop,\n           October 2015,\n           <https://indico.dns-oarc.net/event/24/contributions/378/>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8806]  Kumari, W. and P. Hoffman, \"Running a Root Server Local to\n           a Resolver\", RFC 8806, DOI 10.17487/RFC8806, June 2020,\n           <https://www.rfc-editor.org/info/rfc8806>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RSSAC023v2]\n           \"History of the Root Server System\", A Report from the\n           ICANN Root Server System Advisory Committee (RSSAC),\n           RSSAC023v2, June 2020,\n           <https://www.icann.org/en/system/files/files/rssac-\n           023-17jun20-en.pdf>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RSSAC026v2]\n           \"RSSAC Lexicon\", An Advisory from the ICANN Root Server\n           System Advisory Committee (RSSAC), RSSAC026v2, March 2020,\n           <https://www.icann.org/en/system/files/files/rssac-026-\n           lexicon-12mar20-en.pdf>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Changes from RFC 8109",
+      "section_title": true,
+      "ja": "付録A. RFC 8109からの変更"
+    },
+    {
+      "indent": 3,
+      "text": "This document obsoletes [RFC8109]. The significant changes from RFC 8109 are as follows:",
+      "ja": "この文書は廃止[RFC8109]。RFC 8109からの重要な変更は次のとおりです。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added section on the content of priming information.",
+      "ja": "* プライミング情報の内容に関するセクションを追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added paragraph about no expectation that the TC bit in responses will be set.",
+      "ja": "* 応答のTCビットが設定されるという期待がないという段落を追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added paragraph about RFC 9471 and requirements on authoritative servers and the TC bit. This clarified the role of glue records and truncation for responses from the root zone.",
+      "ja": "* RFC 9471に関する段落と、権威あるサーバーとTCビットの要件を追加しました。これにより、ルートゾーンからの応答に対する接着剤記録と切り捨ての役割が明らかになりました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Changed \"man-in-the-middle\" to \"machine-in-the-middle\" to be both more inclusive and more technically accurate.",
+      "ja": "* 「中間者」をより包括的かつ技術的に正確にするために、「中間者」を「中程度の機械」に変更しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Clarified that there are other effects of machine-in-the-middle attacks.",
+      "ja": "* 中間の攻撃の他の効果があることを明らかにしました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Clarified language for root server domain names as \"root server identifiers\".",
+      "ja": "* 「ルートサーバー識別子」としてルートサーバードメイン名の明確な言語。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added short discussion of post-priming strategies.",
+      "ja": "* ポストプライミング戦略の短い議論を追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added informative references to Root Server System Advisory Committee (RSSAC) documents.",
+      "ja": "* ルートサーバーシステムアドバイザリー委員会（RSSAC）文書に有益な参照を追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added short discussion about this document and private DNS.",
+      "ja": "* このドキュメントとプライベートDNSについての短い議論を追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Clarified that machine-in-the-middle attacks could be successful for non-signed TLDs.",
+      "ja": "* 中程度の攻撃は、署名されていないTLDで成功する可能性があることを明らかにしました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added discussion of where resolvers that pre-fetch should get the root NS addresses.",
+      "ja": "* プレフェッチがどこでルートnsアドレスを取得するのかについての議論が追加されました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Elevated the expectations in Section 4.1 (\"Expected Properties of the Priming Response\") to MUST-level.",
+      "ja": "* セクション4.1（「プライミング応答の予想特性」）の期待を必見のレベルに上げました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Clarified that \"currently\" means \"at the time this document is published\".",
+      "ja": "* このドキュメントが公開された時点で「現在」とは「意味する」ことを明らかにしました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added a note about priming and RFC 8806.",
+      "ja": "* プライミングとRFC 8806に関するメモを追加しました。"
+    },
+    {
+      "indent": 6,
+      "text": "* Added a reference to research about discontinued root server addresses.",
+      "ja": "* 中止されたルートサーバーアドレスに関する調査への参照を追加しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "RFC 8109 was the product of the DNSOP WG and benefited from the reviews done there. This document also benefited from review by Duane Wessels.",
+      "ja": "RFC 8109はDNSOP WGの産物であり、そこで行われたレビューの恩恵を受けました。このドキュメントは、Duane Wesselsによるレビューの恩恵も受けました。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "著者のアドレス"
+    },
+    {
+      "indent": 3,
+      "text": "Peter Koch\nDENIC eG\nEmail: pk@DENIC.DE",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Matt Larson\nICANN\nEmail: matt.larson@icann.org",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Paul Hoffman\nICANN\nEmail: paul.hoffman@icann.org",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
