@@ -258,7 +258,7 @@ class RfcListUi {
           return;
         }
         // 検索文字列が2文字以上のときは、タイトルに文字列が含まれるものだけ抽出する
-        this._search(domSearchRfc.value);
+        this._search(domSearchRfc.value?.toLowerCase());
       });
     }
   }
