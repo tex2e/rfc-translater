@@ -3,6 +3,9 @@
 
 RFCを翻訳するツール群 & 翻訳済みRFCサイト
 
+### 公開サイト
+- [RFC日本語訳一覧 - RFC Trans](https://tex2e.github.io/rfc-translater/html/index.html)
+
 ### 目的
 1. RFCの英語を読むのが辛いので、Google翻訳した文を横に並べたものを読みたい。
 [RFCの日本語訳リンク集](https://www.nic.ad.jp/ja/tech/rfc-jp-links.html)では原文と日本語訳が別々のページで、日本語訳が正しいのか判断しにくい問題がある。
@@ -27,6 +30,7 @@ RFCを翻訳するツール群 & 翻訳済みRFCサイト
 ## 翻訳を修正したいときは
 
 当サイトをご利用いただきありがとうございます。
+RFCを翻訳するツール群と翻訳済みRFCサイトの原本は全て[GitHub](https://github.com/tex2e/rfc-translater)上で管理しています。
 翻訳修正の手順は以下の通りです。
 
 ### 翻訳修正者
