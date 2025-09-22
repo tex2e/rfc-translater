@@ -1,10 +1,10 @@
 
-# RFC Translater
+# RFC Translator
 
 RFCを翻訳するツール群 & 翻訳済みRFCサイト
 
 ### 公開サイト
-- [RFC日本語訳一覧 - RFC Trans](https://tex2e.github.io/rfc-translater/html/index.html)
+- [RFC日本語訳一覧 - RFC Translator](https://tex2e.github.io/rfc-translater/html/index.html)
 
 ### 目的
 1. RFCの英語を読むのが辛いので、Google翻訳した文を横に並べたものを読みたい。
