@@ -11,9 +11,6 @@ from ...domain.services.rfcfile import RfcFile
 from ...domain.valueobject.rfc import RfcXmlElem, RfcSummaryJsonElem, IRfc, Rfc
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
-# ChatGPT
-from ...domain.services.nlputils import openai, ChatGPT
-
 
 class SummarizeRfcType:
     TITLE = 'title'
@@ -27,7 +24,7 @@ def summarize_rfc(rfc: IRfc,
                   rfc_json_trans_repo: IRfcJsonTransRepository,
                   rfc_json_data_summary_repo: IRfcJsonDataSummaryRepository,
                   args):
-    """RFCの要約作成"""
+    """RFCの要約作成（ChatGPT版）"""
 
     assert isinstance(rfc, IRfc)
     assert isinstance(rfc, Rfc)  # Draft版以外のみ対応
@@ -35,6 +32,8 @@ def summarize_rfc(rfc: IRfc,
     assert isinstance(rfc_json_data_summary_repo, IRfcJsonDataSummaryRepository)
 
     print(f'[*] summarize_rfc({rfc.get_id()})')
+
+    from ...domain.services.nlputils import openai, ChatGPT
 
     # GPTのモデル名の正式名称を取得
     gptmodel = ChatGPT.get_exact_model_name(args.chatgpt)
@@ -173,3 +172,43 @@ def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGP
     prompt1 = f"次の英語の文章を日本語でまとめてください。出力形式はですます調で、簡潔に3行以内で要約してください\n\n"
     prompt2 = f"{rfc_abstract_text}"
     return (prompt1, prompt2)
+
+
+
+
+# def summarize_rfc(rfc: IRfc,
+#                   rfc_json_trans_repo: IRfcJsonTransRepository,
+#                   rfc_json_data_summary_repo: IRfcJsonDataSummaryRepository,
+#                   args) -> bool:
+#     """RFCの要約作成（Gemini版）"""
+
+#     assert isinstance(rfc, IRfc)
+#     assert isinstance(rfc, Rfc)  # Draft版以外のみ対応
+#     assert isinstance(rfc_json_trans_repo, IRfcJsonTransRepository)
+#     assert isinstance(rfc_json_data_summary_repo, IRfcJsonDataSummaryRepository)
+
+#     # RFC翻訳済みかの判定
+#     rfc_title = rfc_json_trans_repo.get_title(rfc)
+#     if not rfc_title:
+#         print('[!] RFC翻訳が未実施です。先に翻訳作業を完了させてください！')
+#         return False
+
+#     # RFC要約済みかの判定
+#     if rfc_json := rfc_json_data_summary_repo.find(rfc):
+#         print(f"[-] RFCの要約結果がすでに存在します！")
+#         return False
+
+#     from google import genai  # pip install -q -U google-genai
+
+#     rfc_id = rfc.get_id()
+
+#     client = genai.Client()
+
+#     response = client.models.generate_content(
+#         # model="gemini-2.5-flash",
+#         model="gemini-2.5-pro",
+#         contents=f"以下のURLを読み取り、要約を3行でまとめてください。出力するときはMarkdown形式や空行は含めないでください\n\nhttps://www.rfc-editor.org/rfc/rfc{rfc_id}.html"
+#     )
+#     print(response.text)
+
+#     return True
