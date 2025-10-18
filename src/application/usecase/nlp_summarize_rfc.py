@@ -152,12 +152,12 @@ def summarize_rfc(rfc: IRfc,
     rfc_json_data_summary_repo.save(rfc, obj)
     return True
 
-def _summarize_rfc_by_title(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
+def _summarize_rfc_by_title(rfc: IRfc, rfc_title: str, gptmodel: str = ""):
     """指定したRFC番号をChatGPTに要約させる"""
     # GPTへ送信するプロンプト作成
     return (f"{rfc_title} についての要約と目的を技術者の視点から2行でまとめてください。",)
 
-def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ChatGPT.MODEL35):
+def _summarize_rfc_by_abstract(rfc: IRfc, rfc_title: str, gptmodel: str = ""):
     """指定したRFCの概要(Abstract)をChatGPTに要約させる"""
     page = RfcUtils.fetch_url(RfcFile.get_url_rfc_xml(rfc))
     page_content = RfcUtils.remove_namespace_from_xml(page.content)
