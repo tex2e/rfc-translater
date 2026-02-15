@@ -34,6 +34,9 @@ def make_html(rfc: IRfc,
 
     # 翻訳したRFC (json) の読み込み
     obj = rfc_json_trans_repo.find(rfc)
+    if not obj:
+        print("[-] make_html: Not found json:", input_file)
+        return
 
     # ChatGPTによる要約が存在すれば、その情報 (json) の読み込み
     summary = rfc_json_data_summary_repo.find(rfc)
