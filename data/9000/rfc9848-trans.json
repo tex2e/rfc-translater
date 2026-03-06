@@ -1,0 +1,469 @@
+{
+  "title": {
+    "text": "RFC 9848 - Bootstrapping TLS Encrypted ClientHello with DNS Service Bindings",
+    "ja": "RFC 9848 - DNS サービス バインディングを使用した TLS 暗号化 ClientHello のブートストラップ"
+  },
+  "number": 9848,
+  "created_at": "2026-03-04 23:24:34.880644+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                       B. Schwartz\nRequest for Comments: 9848                          Meta Platforms, Inc.\nCategory: Standards Track                                      M. Bishop\nISSN: 2070-1721                                                E. Nygren\n                                                     Akamai Technologies\n                                                              March 2026",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Bootstrapping TLS Encrypted ClientHello with DNS Service Bindings",
+      "section_title": true,
+      "ja": "DNS サービス バインディングを使用した TLS 暗号化 ClientHello のブートストラップ"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "To use TLS Encrypted ClientHello (ECH), the client needs to learn the ECH configuration for a server before it attempts a connection to the server. This specification provides a mechanism for conveying the ECH configuration information via DNS, using a SVCB or HTTPS resource record (RR).",
+      "ja": "TLS 暗号化 ClientHello (ECH) を使用するには、クライアントはサーバーへの接続を試行する前にサーバーの ECH 構成を学習する必要があります。この仕様は、SVCB または HTTPS リソース レコード (RR) を使用して、DNS 経由で ECH 構成情報を伝達するメカニズムを提供します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本文書の状態"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット標準化トラックの文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは Internet Engineering Task Force (IETF) の成果物です。これは IETF コミュニティのコンセンサスを表しています。この文書は公開レビューを受け、Internet Engineering Steering Group (IESG) によって公開が承認されています。インターネット標準の詳細については、RFC 7841 のセクション 2 を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc9848.",
+      "ja": "この文書の現在のステータス、正誤表、およびそれに対するフィードバックの提供方法に関する情報は、https://www.rfc-editor.org/info/rfc9848 で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright (c) 2026 IETF Trust および文書の著者として特定された人物。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "この文書は、BCP 78 およびこの文書の発行日に有効な IETF 文書に関する IETF トラストの法的規定 (https://trustee.ietf.org/license-info) の対象となります。これらの文書には、この文書に関するお客様の権利と制限が記載されているため、注意深くお読みください。このドキュメントから抽出されたコード コンポーネントには、トラスト法的規定のセクション 4.e に記載されている改訂 BSD ライセンス テキストが含まれている必要があり、改訂 BSD ライセンスに記載されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Overview\n2.  Terminology\n3.  SvcParam for ECH Configuration\n4.  Requirements for Server Deployments\n5.  Requirements for Client Implementations\n  5.1.  Disabling Fallback\n  5.2.  ClientHello Construction\n  5.3.  Performance Optimizations\n6.  Interaction with HTTP Alt-Svc\n7.  Examples\n8.  Security Considerations\n9.  IANA Considerations\n10. References\n  10.1.  Normative References\n  10.2.  Informative References\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Overview",
+      "section_title": true,
+      "ja": "1. 概要"
+    },
+    {
+      "indent": 3,
+      "text": "The Service Bindings framework [SVCB] allows server operators to publish a detailed description of their service in the Domain Name System (DNS) (see [RFC1034] and [BCP219]) using SVCB or HTTPS records. Each SVCB record describes a single \"alternative endpoint\" and contains a collection of \"SvcParams\" that can be extended with new kinds of information that may be of interest to a client. Clients can use the SvcParams to improve the privacy, security, and performance of their connection to this endpoint.",
+      "ja": "サービス バインディング フレームワーク [SVCB] を使用すると、サーバー オペレーターは SVCB または HTTPS レコードを使用して、ドメイン ネーム システム (DNS) ([RFC1034] および [BCP219] を参照) でサービスの詳細な説明を公開できます。各 SVCB レコードは単一の「代替エンドポイント」を記述し、クライアントにとって興味深い可能性のある新しい種類の情報で拡張できる「SvcParams」のコレクションを含みます。クライアントは SvcParams を使用して、このエンドポイントへの接続のプライバシー、セキュリティ、およびパフォーマンスを向上させることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "This specification defines a new SvcParam to enable the use of TLS Encrypted ClientHello [ECH] in TLS-based protocols. This SvcParam can be used in SVCB, HTTPS, or any future SVCB-compatible DNS records and is intended to serve as the primary bootstrap mechanism for ECH.",
+      "ja": "この仕様では、TLS ベースのプロトコルで TLS 暗号化 ClientHello [ECH] の使用を可能にする新しい SvcParam を定義します。この SvcParam は、SVCB、HTTPS、または将来の SVCB 互換 DNS レコードで使用でき、ECH の主要なブートストラップ メカニズムとして機能することを目的としています。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "このドキュメント内のキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 [RFC2119] [RFC8174] で説明されているように解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. SvcParam for ECH Configuration",
+      "section_title": true,
+      "ja": "3. ECH 構成用の SvcParam"
+    },
+    {
+      "indent": 3,
+      "text": "The \"ech\" SvcParamKey conveys the ECH configuration of an alternative endpoint. It is applicable to all schemes that use TLS-based protocols (including DTLS [RFC9147] and QUIC version 1 [RFC9001]) unless otherwise specified.",
+      "ja": "「ech」SvcParamKey は、代替エンドポイントの ECH 構成を伝えます。特に指定がない限り、TLS ベースのプロトコル (DTLS [RFC9147] および QUIC バージョン 1 [RFC9001] を含む) を使用するすべてのスキームに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "In wire format, the value of the parameter is an ECHConfigList (Section 4 of [ECH]), including the redundant length prefix. In presentation format, the value is the ECHConfigList in Base 64 encoding (Section 4 of [RFC4648]). Base 64 is used here to simplify integration with TLS server software. To enable simpler parsing, this SvcParam MUST NOT contain escape sequences.",
+      "ja": "ワイヤ形式では、パラメータの値は、冗長長プレフィックスを含む ECHConfigList ([ECH] のセクション 4) です。プレゼンテーション形式では、値は Base 64 エンコーディングの ECHConfigList です ([RFC4648] のセクション 4)。ここでは、TLS サーバー ソフトウェアとの統合を簡素化するために Base 64 が使用されています。より単純な解析を可能にするために、この SvcParam にエスケープ シーケンスを含めてはなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "This example uses line wrapping per [RFC8792].",
+      "ja": "この例では、[RFC8792] に従って行折り返しを使用しています。"
+    },
+    {
+      "indent": 3,
+      "text": "ech=\"AEj+DQBEAQAgACAdd+scUi0IYFsXnUIU7ko2Nd9+F8M26pAGZVpz/KrWPgAEAAE\\\nAAWQVZWNoLXNpdGVzLmV4YW1wbGUubmV0AAA=\"",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 4,
+      "text": "Figure 1: ECH SvcParam with a public_name of \"ech-sites.example.net\"",
+      "ja": "図 1: public_name が「ech-sites.example.net」の ECH SvcParam"
+    },
+    {
+      "indent": 0,
+      "text": "4. Requirements for Server Deployments",
+      "section_title": true,
+      "ja": "4. サーバー展開の要件"
+    },
+    {
+      "indent": 3,
+      "text": "When publishing a record containing an \"ech\" parameter, the publisher MUST ensure that all IP addresses of TargetName correspond to servers that have access to the corresponding private key or are authoritative for the public name. (See Sections 6.1.7 and 8.1.1 of [ECH] for requirements related to the public name.) Otherwise, connections will fail entirely.",
+      "ja": "「ech」パラメータを含むレコードを公開する場合、公開者は、TargetName のすべての IP アドレスが、対応する秘密キーにアクセスできるサーバー、またはパブリック名に対して権限のあるサーバーに対応していることを確認しなければなりません (MUST)。(パブリック名に関する要件については、[ECH] のセクション 6.1.7 および 8.1.1 を参照してください。) そうしないと、接続は完全に失敗します。"
+    },
+    {
+      "indent": 3,
+      "text": "These servers SHOULD support a protocol version that is compatible with ECH. At the time of writing, the compatible versions are TLS 1.3, DTLS 1.3, and QUIC version 1. If the server does not support a compatible version, each connection attempt will have to be retried, delaying the connection and wasting resources.",
+      "ja": "これらのサーバーは、ECH と互換性のあるプロトコル バージョンをサポートする必要があります (SHOULD)。この記事の執筆時点では、互換性のあるバージョンは TLS 1.3、DTLS 1.3、および QUIC バージョン 1 です。サーバーが互換性のあるバージョンをサポートしていない場合は、接続を再試行する必要があり、接続が遅れてリソースが無駄になります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Requirements for Client Implementations",
+      "section_title": true,
+      "ja": "5. クライアント実装の要件"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes client behavior in using ECH configurations provided in SVCB or HTTPS records.",
+      "ja": "このセクションでは、SVCB または HTTPS レコードで提供される ECH 構成を使用するときのクライアントの動作について説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Disabling Fallback",
+      "section_title": true,
+      "ja": "5.1. フォールバックの無効化"
+    },
+    {
+      "indent": 3,
+      "text": "The SVCB-optional client behavior specified in Section 3 of [SVCB] permits clients to fall back to a direct connection if all SVCB options fail. This behavior is not suitable for ECH, because fallback would negate the privacy benefits of ECH. Accordingly, ECH-capable, SVCB-optional clients MUST switch to SVCB-reliant connection establishment if SVCB resolution succeeded (as defined in Section 3 of [SVCB]) and all alternative endpoints have an \"ech\" SvcParam.",
+      "ja": "[SVCB] のセクション 3 で指定されている SVCB オプションのクライアント動作により、すべての SVCB オプションが失敗した場合にクライアントが直接接続にフォールバックすることが許可されます。フォールバックは ECH のプライバシー上の利点を無効にするため、この動作は ECH には適していません。したがって、ECH 対応の SVCB オプションのクライアントは、([SVCB] のセクション 3 で定義されているように) SVCB 解決が成功し、すべての代替エンドポイントが \"ech\" SvcParam を持っている場合、SVCB に依存した接続確立に切り替えなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. ClientHello Construction",
+      "section_title": true,
+      "ja": "5.2. ClientHello Construction"
+    },
+    {
+      "indent": 3,
+      "text": "When ECH is in use, the TLS ClientHello is divided into an unencrypted \"outer\" and an encrypted \"inner\" ClientHello. The outer ClientHello is an implementation detail of ECH, and its contents are controlled by the ECHConfig in accordance with [ECH]. The inner ClientHello is used for establishing a connection to the service, so its contents may be influenced by other SVCB parameters. For example, the requirements related to Application-Layer Protocol Negotiation (ALPN) protocol identifiers in Section 7.1.2 of [SVCB] apply only to the inner ClientHello. Similarly, it is the inner ClientHello whose Server Name Indication (SNI) identifies the desired service.",
+      "ja": "ECH が使用されている場合、TLS ClientHello は、暗号化されていない「外側」の ClientHello と暗号化された「内側」の ClientHello に分割されます。外側の ClientHello は ECH の実装詳細であり、その内容は [ECH] に従って ECHConfig によって制御されます。内部の ClientHello はサービスへの接続を確立するために使用されるため、その内容は他の SVCB パラメーターの影響を受ける可能性があります。たとえば、[SVCB] のセクション 7.1.2 にあるアプリケーション層プロトコル ネゴシエーション (ALPN) プロトコル識別子に関連する要件は、内部の ClientHello にのみ適用されます。同様に、これは内部 ClientHello であり、その Server Name Indication (SNI) が目的のサービスを識別します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. Performance Optimizations",
+      "section_title": true,
+      "ja": "5.3. パフォーマンスの最適化"
+    },
+    {
+      "indent": 3,
+      "text": "Prior to retrieving the SVCB records, the client does not know whether they contain an \"ech\" parameter. As a latency optimization, clients MAY prefetch DNS records that will only be used if this parameter is not present (i.e., only in SVCB-optional mode).",
+      "ja": "SVCB レコードを取得する前は、クライアントはレコードに「ech」パラメータが含まれているかどうかを知りません。レイテンシの最適化として、クライアントは、このパラメータが存在しない場合 (つまり、SVCB オプション モードでのみ) にのみ使用される DNS レコードをプリフェッチしてもよい(MAY)。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"ech\" SvcParam alters the contents of the TLS ClientHello if it is present. Therefore, clients that support ECH MUST NOT issue any TLS ClientHello until after SVCB resolution has completed. (See Section 5.1 of [SVCB].)",
+      "ja": "「ech」SvcParam は、TLS ClientHello が存在する場合、その内容を変更します。したがって、ECH をサポートするクライアントは、SVCB 解決が完了するまで TLS ClientHello を発行してはなりません。([SVCB] のセクション 5.1 を参照してください。)"
+    },
+    {
+      "indent": 0,
+      "text": "6. Interaction with HTTP Alt-Svc",
+      "section_title": true,
+      "ja": "6. HTTP Alt-Svc との対話"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP clients that implement both HTTP Alt-Svc [RFC7838] and the HTTPS record type [SVCB] can use them together, provided that they only perform connection attempts that are \"consistent\" with both sets of parameters (Section 9.3 of [SVCB]). At the time of writing, there is no defined parameter related to ECH for Alt-Svc. Accordingly, a connection attempt that uses ECH is considered \"consistent\" with an Alt-Svc field value that does not mention ECH.",
+      "ja": "HTTP Alt-Svc [RFC7838] と HTTPS レコードタイプ [SVCB] の両方を実装する HTTP クライアントは、両方のパラメータセットと「一貫性のある」接続試行のみを実行するという条件で、それらを一緒に使用できます ([SVCB] のセクション 9.3)。執筆時点では、Alt-Svc の ECH に関連する定義されたパラメーターはありません。したがって、ECH を使用する接続試行は、ECH に言及していない Alt-Svc フィールド値と「一致している」と見なされます。"
+    },
+    {
+      "indent": 3,
+      "text": "Origins that publish an \"ech\" SvcParam in their HTTPS record SHOULD also publish an HTTPS record with the \"ech\" SvcParam for every alt-authority offered in its Alt-Svc field values. Otherwise, clients might reveal the name of the server in an unencrypted ClientHello to an alt-authority.",
+      "ja": "HTTPS レコードで「ech」SvcParam を公開するオリジンは、Alt-Svc フィールド値で提供されるすべての alt-authority に対して「ech」SvcParam を含む HTTPS レコードも公開する必要があります (SHOULD)。そうしないと、クライアントが暗号化されていない ClientHello 内のサーバー名を alt-authority に公開する可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If all HTTPS records for an alt-authority contain \"ech\" SvcParams, the client MUST adopt SVCB-reliant behavior (as in Section 5.1) for that resource record set (RRSet). This precludes the use of certain connections that Alt-Svc would otherwise allow, as discussed in Section 9.3 of [SVCB].",
+      "ja": "alt-authority のすべての HTTPS レコードに「ech」SvcParams が含まれている場合、クライアントはそのリソース レコード セット (RRSet) に対して SVCB に依存した動作 (セクション 5.1 と同様) を採用しなければなりません (MUST)。[SVCB] のセクション 9.3 で説明されているように、これにより、Alt-Svc が許可する特定の接続の使用が妨げられます。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Examples",
+      "section_title": true,
+      "ja": "7. 例"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN simple.example. ; Simple example zone\n@ 300 IN A     192.0.2.1\n         AAAA  2001:db8::1\n         HTTPS 1 . ech=ABC...\nwww 300 IN A 192.0.2.1\n           AAAA 2001:db8::1\n           HTTPS 1 . ech=ABC...",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 6,
+      "text": "Figure 2: Simple Example Zone with the Same Configuration on the Apex and Web Domain",
+      "ja": "図 2: Apex ドメインと Web ドメインで同じ構成を持つ単純なゾーンの例"
+    },
+    {
+      "indent": 3,
+      "text": "The example above is compatible with clients that do or do not support HTTPS records.",
+      "ja": "上記の例は、HTTPS レコードをサポートするクライアントとサポートしないクライアントと互換性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN heterogeneous.example. ; Example zone with 2 pools of servers\npool1 300 IN    A    192.0.2.1\n                AAAA 2001:db8:1::a\npool2 300 IN    A    192.0.2.2\n                AAAA 2001:db8:2::a\nservice 300 IN SVCB 1 pool1 ech=ABC...\n               SVCB 1 pool2 ech=DEF...\n               A 192.0.2.1\n               A 192.0.2.2\n               AAAA 2001:db8:1::a\n               AAAA 2001:db8:2::a",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 8,
+      "text": "Figure 3: Service That Allows Clients to Choose Between Two Server Pools with Different ECH Configurations",
+      "ja": "図 3: クライアントが異なる ECH 構成を持つ 2 つのサーバー プールから選択できるサービス"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN cdn.example. ; CDN operator zone\npool 300 IN A 192.0.2.1\n            AAAA 2001:db8::1\n            HTTPS 1 . ech=ABC...\n\n$ORIGIN customer.example. ; CDN customer's zone\n@   3600 IN HTTPS 0 pool.cdn.example.\n; Apex IP records for compatibility with clients that do not support\n; HTTPS records.\n@   300  IN A    192.0.2.1\n            AAAA 2001:db8::1\n\nwww 300  IN CNAME pool.cdn.example.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 11,
+      "text": "Figure 4: ECH Usage Pattern for an Aliasing-Based CDN",
+      "ja": "図 4: エイリアシングベースの CDN の ECH 使用パターン"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN secret.example. ; High confidentiality zone\nwww     3600 IN HTTPS 1 backend ech=ABC... mandatory=ech\nbackend 300  IN A     192.0.2.1\n                AAAA  2001:db8::1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Figure 5: A Domain That is Only Reachable Using ECH",
+      "ja": "図 5: ECH を使用してのみ到達可能なドメイン"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN cdn1.example. ; First CDN operator zone\npool 300 IN A     192.0.2.1\n            AAAA  2001:db8::1\n            HTTPS 1 . ech=ABC...\n\n$ORIGIN cdn2.example. ; Second CDN operator zone\npool 300 IN A     192.0.2.2\n            AAAA  2001:db8::2\n            HTTPS 1 . ech=DEF...\n\n;; Multi-CDN customer zone (version 1)\n$ORIGIN customer.example.\n@   3600 IN HTTPS 0 pool.cdn1.example.\n; Apex IP records for compatibility with clients that do not support\n; HTTPS records.\n@   300  IN A    192.0.2.1\n            AAAA 2001:db8::1\nwww 3600  IN CNAME pool.cdn1.example.\n\n;; Multi-CDN customer zone (version 2)\n@   3600 IN HTTPS 0 pool.cdn2.example.\n@   300  IN A    192.0.2.2\n            AAAA 2001:db8::2\nwww 3600  IN CNAME pool.cdn2.example.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 7,
+      "text": "Figure 6: Multi-CDN Configuration Using Server-Side Selection",
+      "ja": "図 6: サーバー側の選択を使用したマルチ CDN 構成"
+    },
+    {
+      "indent": 3,
+      "text": "$ORIGIN dns.example. ; DNS server example.\n@    3600 IN A     192.0.2.1\n             AAAA  2001:db8::1\n             HTTPS 1 . ech=ABC... alpn=h3 dohpath=/q{?dns}\n\n_dns 3600 IN SVCB  1 @ ech=ABC... alpn=dot,doq,h3 dohpath=/q{?dns}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 12,
+      "text": "Figure 7: Example of a DNS Server That Supports ECH",
+      "ja": "図 7: ECH をサポートする DNS サーバーの例"
+    },
+    {
+      "indent": 0,
+      "text": "8. Security Considerations",
+      "section_title": true,
+      "ja": "8. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "A SVCB RRSet containing some RRs with \"ech\" and some without is vulnerable to a downgrade attack: A network intermediary can block connections to the endpoints that support ECH, causing the client to fall back to a non-ECH endpoint. This configuration is NOT RECOMMENDED, but it may be unavoidable when combining endpoints from different providers or conducting a staged rollout. Zone owners who do use such a mixed configuration SHOULD mark the RRs with \"ech\" as more preferred (i.e., lower SvcPriority value) than those without, in order to maximize the likelihood that ECH will be used in the absence of an active adversary.",
+      "ja": "「ech」を含む RR と含まない RR を含む SVCB RRSet は、ダウングレード攻撃に対して脆弱です。ネットワーク仲介者が ECH をサポートするエンドポイントへの接続をブロックし、クライアントが非 ECH エンドポイントにフォールバックする可能性があります。この構成は推奨されませんが、異なるプロバイダーのエンドポイントを組み合わせたり、段階的なロールアウトを実施したりする場合には避けられない場合があります。このような混合構成を使用するゾーン所有者は、アクティブな敵対者が存在しない場合に ECH が使用される可能性を最大化するために、「ech」を持つ RR を持たない RR よりも優先される (つまり、SvcPriority 値が低い) とマークする必要があります (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "When Encrypted ClientHello is deployed, the inner TLS SNI is protected from disclosure to attackers. However, there are still many ways that an attacker might infer the SNI. Even in an idealized deployment, ECH's protection is limited to an anonymity set consisting of all the ECH-enabled server domains supported by a given client-facing server that share an ECH configuration. An attacker who can enumerate this set can always guess the encrypted SNI with a probability of at least 1/K, where K is the number of domains in the set. Some attackers may achieve much greater accuracy using traffic analysis, popularity weighting, and other mechanisms (e.g., see [CLINIC]).",
+      "ja": "暗号化された ClientHello が展開されると、内部 TLS SNI は攻撃者への開示から保護されます。ただし、攻撃者が SNI を推測する方法はまだたくさんあります。理想的な展開であっても、ECH の保護は、ECH 構成を共有する特定のクライアント側サーバーによってサポートされるすべての ECH 対応サーバー ドメインで構成される匿名性セットに限定されます。このセットを列挙できる攻撃者は、常に少なくとも 1/K (K はセット内のドメインの数) の確率で暗号化された SNI を推測できます。一部の攻撃者は、トラフィック分析、人気度の重み付け、およびその他のメカニズムを使用して、より高い精度を達成する可能性があります (例: [CLINIC] を参照)。"
+    },
+    {
+      "indent": 3,
+      "text": "ECH ensures that TLS does not disclose the SNI, but the same information is also present in the DNS queries used to resolve the server's hostname. This specification does not conceal the server name from the DNS resolver. If DNS messages are sent between the client and resolver without authenticated encryption, an attacker on this path can also learn the destination server name. A similar attack applies if the client can be linked to a request from the resolver to a DNS authority.",
+      "ja": "ECH は、TLS が SNI を公開しないことを保証しますが、サーバーのホスト名を解決するために使用される DNS クエリにも同じ情報が存在します。この仕様では、DNS リゾルバーからサーバー名が隠蔽されません。DNS メッセージが認証された暗号化を行わずにクライアントとリゾルバーの間で送信される場合、このパス上の攻撃者は宛先サーバー名を知ることもできます。同様の攻撃は、クライアントがリゾルバーから DNS 機関へのリクエストにリンクされている場合にも適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "An attacker who can prevent SVCB resolution can deny clients any associated security benefits. A hostile recursive resolver can always deny service to SVCB queries, but network intermediaries can often prevent resolution as well, even when the client and recursive resolver validate DNSSEC [RFC9364] and use a secure transport. These downgrade attacks can prevent a client from being aware that \"ech\" is configured, which could result in the client sending the ClientHello in cleartext. To prevent downgrades, Section 3.1 of [SVCB] recommends that clients abandon the connection attempt when such an attack is detected.",
+      "ja": "SVCB の解決を阻止できる攻撃者は、クライアントに関連するセキュリティ上の利点を一切拒否する可能性があります。敵対的な再帰リゾルバーは常に SVCB クエリへのサービスを拒否できますが、クライアントと再帰リゾルバーが DNSSEC [RFC9364] を検証し、安全なトランスポートを使用している場合でも、ネットワーク仲介者が解決を妨げる場合があります。これらのダウングレード攻撃により、クライアントは「ech」が設定されていることを認識できなくなり、クライアントが ClientHello をクリアテキストで送信する可能性があります。ダウングレードを防ぐために、[SVCB] のセクション 3.1 では、そのような攻撃が検出された場合にクライアントが接続の試みを放棄することを推奨しています。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has modified the entry for \"ech\" in the \"DNS SVCB Service Parameter Keys (SvcParamKeys)\" registry in the \"DNS Service Bindings (SVCB)\" registry group as follows:",
+      "ja": "IANA は、「DNS Service Bindings (SVCB)」レジストリ グループの「DNS SVCB Service Parameter Keys (SvcParamKeys)」レジストリの「ech」のエントリを次のように変更しました。"
+    },
+    {
+      "indent": 3,
+      "text": "   +========+======+====================+============+===========+\n   | Number | Name | Meaning            | Change     | Reference |\n   |        |      |                    | Controller |           |\n   +========+======+====================+============+===========+\n   | 5      | ech  | TLS Encrypted      | IETF       | RFC 9848  |\n   |        |      | ClientHello Config |            |           |\n   +--------+------+--------------------+------------+-----------+\n\n                               Table 1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "10. References",
+      "section_title": true,
+      "ja": "10. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "10.1. Normative References",
+      "section_title": true,
+      "ja": "10.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[ECH]      Rescorla, E., Oku, K., Sullivan, N., and C. A. Wood, \"TLS\n           Encrypted Client Hello\", RFC 9849, DOI 10.17487/RFC9849,\n           March 2026, <https://www.rfc-editor.org/info/rfc9849>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC1034]  Mockapetris, P., \"Domain names - concepts and facilities\",\n           STD 13, RFC 1034, DOI 10.17487/RFC1034, November 1987,\n           <https://www.rfc-editor.org/info/rfc1034>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4648]  Josefsson, S., \"The Base16, Base32, and Base64 Data\n           Encodings\", RFC 4648, DOI 10.17487/RFC4648, October 2006,\n           <https://www.rfc-editor.org/info/rfc4648>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9364]  Hoffman, P., \"DNS Security Extensions (DNSSEC)\", BCP 237,\n           RFC 9364, DOI 10.17487/RFC9364, February 2023,\n           <https://www.rfc-editor.org/info/rfc9364>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[SVCB]     Schwartz, B., Bishop, M., and E. Nygren, \"Service Binding\n           and Parameter Specification via the DNS (SVCB and HTTPS\n           Resource Records)\", RFC 9460, DOI 10.17487/RFC9460,\n           November 2023, <https://www.rfc-editor.org/info/rfc9460>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "10.2. Informative References",
+      "section_title": true,
+      "ja": "10.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[BCP219]   Best Current Practice 219,\n           <https://www.rfc-editor.org/info/bcp219>.\n           At the time of writing, this BCP comprises the following:\n\n           Hoffman, P. and K. Fujiwara, \"DNS Terminology\", BCP 219,\n           RFC 9499, DOI 10.17487/RFC9499, March 2024,\n           <https://www.rfc-editor.org/info/rfc9499>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[CLINIC]   Miller, B., Huang, L., Joseph, A., and J. Tygar, \"I Know\n           Why You Went to the Clinic: Risks and Realization of HTTPS\n           Traffic Analysis\", Lecture Notes in Computer Science, vol.\n           8555, pp. 143-163, DOI 10.1007/978-3-319-08506-7_8, 2014,\n           <https://doi.org/10.1007/978-3-319-08506-7_8>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7838]  Nottingham, M., McManus, P., and J. Reschke, \"HTTP\n           Alternative Services\", RFC 7838, DOI 10.17487/RFC7838,\n           April 2016, <https://www.rfc-editor.org/info/rfc7838>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8792]  Watsen, K., Auerswald, E., Farrel, A., and Q. Wu,\n           \"Handling Long Lines in Content of Internet-Drafts and\n           RFCs\", RFC 8792, DOI 10.17487/RFC8792, June 2020,\n           <https://www.rfc-editor.org/info/rfc8792>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9001]  Thomson, M., Ed. and S. Turner, Ed., \"Using TLS to Secure\n           QUIC\", RFC 9001, DOI 10.17487/RFC9001, May 2021,\n           <https://www.rfc-editor.org/info/rfc9001>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9147]  Rescorla, E., Tschofenig, H., and N. Modadugu, \"The\n           Datagram Transport Layer Security (DTLS) Protocol Version\n           1.3\", RFC 9147, DOI 10.17487/RFC9147, April 2022,\n           <https://www.rfc-editor.org/info/rfc9147>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Ben Schwartz\nMeta Platforms, Inc.\nEmail: ietf@bemasc.net",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Mike Bishop\nAkamai Technologies\nEmail: mbishop@evequefou.be",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Erik Nygren\nAkamai Technologies\nEmail: erik+ietf@nygren.org",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
