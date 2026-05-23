@@ -9,7 +9,7 @@ all: $(TRANS_HTML)
 define F
 $(2): $(1)
 	@#echo "$(1) ==> $(2)"
-	python3 main.py --make --rfc $(patsubst html/rfc%.html,%,$(2))
+	python3.12 main.py --make --rfc $(patsubst html/rfc%.html,%,$(2))
 
 endef
 
