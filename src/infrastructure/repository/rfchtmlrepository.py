@@ -87,8 +87,8 @@ class RfcHtmlFileRepository(IRfcHtmlRepository):
                     continue
                 files.append(HtmlFile(str(filenum), filename, title))
 
-        # RFC番号順（降順）でソート
-        files.sort(reverse=True, key=lambda x: x.get_id())
+        # RFC番号順（降順）でソート（5桁以上のRFCのために数値でソートする）
+        files.sort(reverse=True, key=lambda x: int(x.get_id()))
         return files
 
     def findalldraft(self) -> list[HtmlFile]:
