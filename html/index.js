@@ -242,14 +242,24 @@ class RfcUi {
 class RfcHistoryGraphUi {
   // 全RFCの日本語タイトルを格納したファイル名（概要パネルの初回表示時に取得する）
   static FETCH_TITLE_FILENAME = 'data-rfc-title.json';
+  // 全RFCの発行年月を格納したファイル名（グラフの横軸に使用する）
+  static FETCH_DATE_FILENAME = 'data-rfc-date.json';
   // 描画する最大ノード数（念のための上限。現在RFCから関係の近い順に採用する）
   static MAX_NODES = 250;
   // ノードの大きさ・間隔
   static NODE_W = 96;
   static NODE_H = 34;
-  static H_GAP = 28;
+  static MIN_H_GAP = 12;
   static V_GAP = 72;
   static MARGIN = 48;
+  // グラフ全体の横幅の下限・上限
+  static MIN_GRAPH_W = 720;
+  static MAX_GRAPH_W = 12000;
+  // 横軸の年の目盛りの間隔の候補（細かい順）と、ラベルが重ならないための最小間隔
+  static YEAR_STEPS = [1, 5, 10, 20, 50];
+  static YEAR_LABEL_MIN_PX = 60;
+  // 横の距離が縦の距離のこの倍率を超えたら、矢印を上下ではなく左右の辺につなぐ
+  static SIDE_ATTACH_RATIO = 1.5;
   // ズームの範囲
   static SCALE_MIN = 0.2;
   static SCALE_MAX = 2.5;
@@ -267,6 +277,9 @@ class RfcHistoryGraphUi {
     this.titles = null;
     this.summaries = new Map();
     this.detailRfcNumber = null;
+    // グラフの横軸に使用する発行年月
+    this.dates = {};
+    this.isOpening = false;
   }
 
   setup() {
@@ -286,24 +299,34 @@ class RfcHistoryGraphUi {
     this._addShowGraphButton();
   }
 
-  // 「Orig」ボタンの下に「変遷」ボタンを追加する
+  // WorkingGroupの右隣に、変遷グラフを表示するボタンを追加する
   _addShowGraphButton() {
-    const container = document.querySelector('.jump-to-original-rfc-container');
-    if (!container) {
+    const domRfcWg = document.getElementById('rfc_wg');
+    if (!domRfcWg) {
       return;
     }
     const button = document.createElement('button');
     button.type = 'button';
     button.classList.add('btn', 'btn-light', 'btn-sm', 'rfc-history-open');
-    button.title = 'このRFCの変遷をグラフで表示';
-    button.innerHTML = '<span class="jump-to-original-rfc">変遷</span>';
+    button.title = 'このRFCがどのように改訂されてきたかをグラフで表示します';
+    button.textContent = '改訂の流れを見る';
     button.addEventListener('click', () => this._openDialog());
-    container.appendChild(button);
+    domRfcWg.insertAdjacentElement('afterend', button);
   }
 
-  _openDialog() {
+  async _openDialog() {
+    if (this.isOpening) {
+      return;
+    }
     if (!this.dialog) {
-      this._createDialog();
+      // 横軸に使用する発行年月を取得してからグラフを組み立てる
+      this.isOpening = true;
+      try {
+        this.dates = await this._fetchJson(RfcHistoryGraphUi.FETCH_DATE_FILENAME) || {};
+        this._createDialog();
+      } finally {
+        this.isOpening = false;
+      }
     }
     this.dialog.showModal();
     this._hideDetail();
@@ -318,7 +341,7 @@ class RfcHistoryGraphUi {
     const titlebar = document.createElement('div');
     titlebar.classList.add('rfc-history-titlebar');
     titlebar.innerHTML = `
-      <strong>RFC ${this.rfcNumber} の変遷</strong>
+      <strong>RFC ${this.rfcNumber} の改訂の流れ</strong>
       <span class="rfc-history-legend">
         <svg width="30" height="10" viewBox="0 0 30 10"><line x1="0" y1="5" x2="26" y2="5" stroke="#d9534f" stroke-width="1.5"></line><path d="M 30 5 L 22 1 L 22 9 z" fill="#d9534f"></path></svg>廃止
         <svg width="30" height="10" viewBox="0 0 30 10"><line x1="0" y1="5" x2="26" y2="5" stroke="#4a89dc" stroke-width="1.5" stroke-dasharray="4 3"></line><path d="M 30 5 L 22 1 L 22 9 z" fill="#4a89dc"></path></svg>更新
@@ -460,50 +483,182 @@ class RfcHistoryGraphUi {
       layers[layer].push(node);
     }
 
-    // 座標の割り当てと、辺の交差を減らすための並べ替え（先行ノードのX座標の平均順）
-    const { NODE_W, NODE_H, H_GAP, V_GAP, MARGIN } = RfcHistoryGraphUi;
+    // X座標は発行年月に比例させ、Y座標は系譜の段とする
+    const { NODE_W, NODE_H, MIN_H_GAP, V_GAP, MARGIN } = RfcHistoryGraphUi;
     const positions = new Map();
-    const assignX = (layerNodes, layerIndex) => {
-      const width = layerNodes.length * (NODE_W + H_GAP) - H_GAP;
-      layerNodes.forEach((node, i) => {
-        positions.set(node, {
-          x: -width / 2 + i * (NODE_W + H_GAP),
-          y: layerIndex * (NODE_H + V_GAP),
-        });
-      });
-    };
+    const monthsOf = this._getMonthsResolver(sortedNodes);
+
+    // 発行年月の範囲から、1ヶ月あたりの幅を決める
+    const allMonths = sortedNodes.map(monthsOf);
+    const minMonth = Math.min(...allMonths);
+    const maxMonth = Math.max(...allMonths);
+    const pxPerMonth = this._getPxPerMonth(layers, monthsOf, maxMonth - minMonth);
+    const pitch = NODE_W + MIN_H_GAP;
+    const rawX = (node) => (monthsOf(node) - minMonth) * pxPerMonth;
+
     layers.forEach((layerNodes, layerIndex) => {
-      if (layerIndex > 0) {
-        const barycenter = (node) => {
-          const xs = (preds.get(node) || [])
-            .filter(pred => positions.has(pred))
-            .map(pred => positions.get(pred).x);
-          if (xs.length === 0) {
-            return Number.MAX_SAFE_INTEGER;  // 先行ノードなしは右端へ（番号順を維持）
-          }
-          return xs.reduce((a, b) => a + b, 0) / xs.length;
-        };
-        const keys = new Map(layerNodes.map(node => [node, barycenter(node)]));
-        layerNodes.sort((a, b) => keys.get(a) - keys.get(b) || parseInt(a) - parseInt(b));
+      layerNodes.sort((a, b) => rawX(a) - rawX(b) || parseInt(a) - parseInt(b));
+      let prevRight = -Infinity;
+      for (let i = 0; i < layerNodes.length; ) {
+        // 発行年月が同じRFCは重ねられないため、その年月の位置を中心に左右へ振り分ける
+        let j = i;
+        while (j + 1 < layerNodes.length && rawX(layerNodes[j + 1]) === rawX(layerNodes[i])) {
+          j++;
+        }
+        const count = j - i + 1;
+        let x = rawX(layerNodes[i]) - (count - 1) * pitch / 2;
+        for (let k = i; k <= j; k++) {
+          // 同じ段の左隣のノードと重ならないように右へ押し出す
+          x = Math.max(x, prevRight);
+          positions.set(layerNodes[k], { x: x, y: layerIndex * (NODE_H + V_GAP) });
+          prevRight = x + pitch;
+          x += pitch;
+        }
+        i = j + 1;
       }
-      assignX(layerNodes, layerIndex);
     });
 
     // 全体を正の座標へ平行移動
     let minX = Infinity;
     positions.forEach(pos => { minX = Math.min(minX, pos.x); });
-    positions.forEach(pos => { pos.x += MARGIN - minX; pos.y += MARGIN; });
+    const shiftX = MARGIN - minX;
+    positions.forEach(pos => { pos.x += shiftX; pos.y += MARGIN; });
 
     let maxX = 0, maxY = 0;
     positions.forEach(pos => {
       maxX = Math.max(maxX, pos.x + NODE_W);
       maxY = Math.max(maxY, pos.y + NODE_H);
     });
+
+    // 横軸の年の目盛り
+    const yearTicks = this._getYearTicks(minMonth, maxMonth, pxPerMonth, shiftX);
     return {
       positions: positions,
-      width: maxX + MARGIN,
+      yearTicks: yearTicks,
+      yearPx: pxPerMonth * 12,  // 1年あたりの幅（目盛りの間隔をズームに応じて決めるのに使う）
+      width: Math.max(maxX, ...yearTicks.map(tick => tick.x)) + MARGIN,
       height: maxY + MARGIN,
     };
+  }
+
+  // RFC番号から発行年月（1970年1月からの月数）を求める関数を返す。
+  // 発行年月が不明なRFCは、RFC番号が最も近いRFCの発行年月で代用する
+  _getMonthsResolver(sortedNodes) {
+    const known = [];
+    for (const node of sortedNodes) {
+      const date = this.dates[node];
+      const m = date && date.match(/^(\d+)-(\d+)$/);
+      if (m) {
+        known.push({ node: parseInt(node), months: parseInt(m[1]) * 12 + (parseInt(m[2]) - 1) });
+      }
+    }
+    return (node) => {
+      const date = this.dates[node];
+      const m = date && date.match(/^(\d+)-(\d+)$/);
+      if (m) {
+        return parseInt(m[1]) * 12 + (parseInt(m[2]) - 1);
+      }
+      if (known.length === 0) {
+        return 0;
+      }
+      // RFC番号が近いものほど発行時期も近いため、最も番号が近いRFCで代用する
+      const target = parseInt(node);
+      let nearest = known[0];
+      for (const candidate of known) {
+        if (Math.abs(candidate.node - target) < Math.abs(nearest.node - target)) {
+          nearest = candidate;
+        }
+      }
+      return nearest.months;
+    };
+  }
+
+  // 1ヶ月あたりの幅を求める。
+  // 同じ段のノードが押し出されずに実際の発行年月の位置に置ける幅を採用することで、
+  // 年の目盛りとノードの位置がずれないようにする
+  _getPxPerMonth(layers, monthsOf, totalMonths) {
+    const { NODE_W, MIN_H_GAP, MIN_GRAPH_W, MAX_GRAPH_W } = RfcHistoryGraphUi;
+    if (totalMonths <= 0) {
+      return 0;
+    }
+    const pitch = NODE_W + MIN_H_GAP;
+    let pxPerMonth = 0;
+    let maxLayerSize = 0;
+    for (const layerNodes of layers) {
+      maxLayerSize = Math.max(maxLayerSize, layerNodes.length);
+      // 発行年月が同じRFCはどれだけ広げても重なるため、異なる発行年月だけを対象にする
+      const months = Array.from(new Set(layerNodes.map(monthsOf))).sort((a, b) => a - b);
+      for (let i = 0; i < months.length; i++) {
+        for (let j = i + 1; j < months.length; j++) {
+          // i番目からj番目までを重ねずに並べるのに必要な幅から、1ヶ月あたりの幅を求める
+          pxPerMonth = Math.max(pxPerMonth, (j - i) * pitch / (months[j] - months[i]));
+        }
+      }
+    }
+    // 広がりすぎ・狭すぎを防ぐため、全体幅で上下限を設ける
+    const width = Math.min(
+      Math.max(pxPerMonth * totalMonths, MIN_GRAPH_W, maxLayerSize * pitch),
+      MAX_GRAPH_W);
+    return width / totalMonths;
+  }
+
+  // 横軸に引く年の目盛りを求める。
+  // 全ての年ぶん作っておき、実際に何年間隔で表示するかは、
+  // ズーム倍率に応じて描画時（_applyView）に決める
+  _getYearTicks(minMonth, maxMonth, pxPerMonth, shiftX) {
+    if (pxPerMonth <= 0) {
+      return [];
+    }
+    const minYear = Math.floor(minMonth / 12);
+    const maxYear = Math.floor(maxMonth / 12);
+    const ticks = [];
+    for (let year = minYear; year <= maxYear; year++) {
+      ticks.push({ year: year, x: (year * 12 - minMonth) * pxPerMonth + shiftX });
+    }
+    return ticks;
+  }
+
+  // 現在のズーム倍率で、目盛りを何年間隔で表示するかを決める。
+  // 拡大するほど間隔を狭め（10年→5年→1年）、ラベル同士が重ならない範囲で細かくする
+  _getYearStep(scale) {
+    const yearPx = this.layoutResult.yearPx * scale;
+    for (const step of RfcHistoryGraphUi.YEAR_STEPS) {
+      if (step * yearPx >= RfcHistoryGraphUi.YEAR_LABEL_MIN_PX) {
+        return step;
+      }
+    }
+    return RfcHistoryGraphUi.YEAR_STEPS[RfcHistoryGraphUi.YEAR_STEPS.length - 1];
+  }
+
+  // 2つのノードを結ぶ曲線を求める。
+  // 横に大きく離れているときは、真上から入るより見やすいように左右の辺どうしを結ぶ
+  _getEdgePath(src, dst, offset) {
+    const { NODE_W, NODE_H, SIDE_ATTACH_RATIO } = RfcHistoryGraphUi;
+    const srcMidX = src.x + NODE_W / 2;
+    const srcMidY = src.y + NODE_H / 2;
+    const dstMidX = dst.x + NODE_W / 2;
+    const dstMidY = dst.y + NODE_H / 2;
+    const dx = dstMidX - srcMidX;
+    const dy = dstMidY - srcMidY;
+
+    if (Math.abs(dx) > Math.abs(dy) * SIDE_ATTACH_RATIO) {
+      // 横長の接続：出る辺と入る辺を左右に取り、制御点も横に伸ばす
+      const toRight = (dx > 0);
+      const x1 = src.x + (toRight ? NODE_W : 0);
+      const y1 = srcMidY + offset;
+      const x2 = dst.x + (toRight ? 0 : NODE_W);
+      const y2 = dstMidY + offset;
+      const bend = Math.max(30, Math.min(90, Math.abs(x2 - x1) / 2));
+      const dir = toRight ? 1 : -1;
+      return `M ${x1} ${y1} C ${x1 + dir * bend} ${y1}, ${x2 - dir * bend} ${y2}, ${x2} ${y2}`;
+    }
+    // 縦長の接続：下辺から出て上辺へ入る
+    const x1 = srcMidX + offset;
+    const y1 = src.y + NODE_H;
+    const x2 = dstMidX + offset;
+    const y2 = dst.y;
+    const bend = Math.max(20, Math.min(40, Math.abs(y2 - y1) / 2));
+    return `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`;
   }
 
   _svgElem(tag, attrs) {
@@ -534,7 +689,19 @@ class RfcHistoryGraphUi {
     const panGroup = this._svgElem('g');
     svg.appendChild(panGroup);
 
+    // 横軸（発行年月）の区切り線を、辺やノードより後ろに描画する。
+    // 全ての年ぶん用意しておき、何年間隔で見せるかはズームに応じて切り替える
+    this.yearTickElems = layout.yearTicks.map(tick => {
+      const line = this._svgElem('line', {
+        'class': 'rfc-history-year-line',
+        x1: tick.x, y1: 0, x2: tick.x, y2: layout.height,
+      });
+      panGroup.appendChild(line);
+      return { tick: tick, line: line };
+    });
+
     // 辺の描画（矢印は 古いRFC → 新しいRFC を指す）
+    this.edgeElems = [];
     for (const edge of edges) {
       const src = layout.positions.get(edge.src);
       const dst = layout.positions.get(edge.dst);
@@ -543,20 +710,16 @@ class RfcHistoryGraphUi {
       }
       // 廃止と更新の両方の関係がある場合に重ならないよう少しずらす
       const offset = (edge.type === 'obs') ? -3 : 3;
-      const x1 = src.x + NODE_W / 2 + offset;
-      const y1 = src.y + NODE_H;
-      const x2 = dst.x + NODE_W / 2 + offset;
-      const y2 = dst.y;
-      const bend = Math.max(20, Math.min(40, Math.abs(y2 - y1) / 2));
       // 現在のRFCに直接つながる辺は強調して表示する
       const isCurrentEdge = (edge.src === this.rfcNumber || edge.dst === this.rfcNumber);
       const path = this._svgElem('path', {
-        d: `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`,
+        d: this._getEdgePath(src, dst, offset),
         'class': `rfc-history-edge rfc-history-edge-${edge.type}`
           + (isCurrentEdge ? ' rfc-history-edge-current' : ''),
         'marker-end': `url(#rfc-history-arrow-${edge.type})`,
       });
       panGroup.appendChild(path);
+      this.edgeElems.push({ src: edge.src, dst: edge.dst, elem: path });
     }
 
     // ノードの描画
@@ -579,6 +742,7 @@ class RfcHistoryGraphUi {
         directNeighbors.add(neighbor);
       }
     }
+    this.nodeElems = new Map();
     layout.positions.forEach((pos, node) => {
       const datum = this.data[node] || {};
       const status = datum[RfcIndexJsonElem.CURRENT_STATUS] || 'Unknown';
@@ -609,14 +773,32 @@ class RfcHistoryGraphUi {
         x: pos.x, y: pos.y, width: NODE_W, height: NODE_H, rx: 6,
         stroke: statusColorMapper[status] || '#888888',
       }));
+      // 縦方向の中央寄せにdominant-baselineを使うと、Chrome/Safariでは
+      // ホバー時の下線が文字の上に描かれてしまうため、dyでずらす
       const text = this._svgElem('text', {
         x: pos.x + NODE_W / 2, y: pos.y + NODE_H / 2,
-        'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'text-anchor': 'middle', dy: '0.35em',
       });
       text.textContent = `RFC ${node}`;
       link.appendChild(text);
       panGroup.appendChild(link);
+      this.nodeElems.set(node, link);
     });
+
+    // 年のラベルは、縦に移動しても見えるように上端へ固定する
+    const yearAxis = this._svgElem('g', { 'class': 'rfc-history-year-axis' });
+    yearAxis.appendChild(this._svgElem('rect', {
+      'class': 'rfc-history-year-axis-bg', x: 0, y: 0, width: '100%', height: 22,
+    }));
+    for (const entry of this.yearTickElems) {
+      const label = this._svgElem('text', {
+        'class': 'rfc-history-year-label', y: 15, 'text-anchor': 'middle',
+      });
+      label.textContent = `${entry.tick.year}年`;
+      yearAxis.appendChild(label);
+      entry.label = label;
+    }
+    svg.appendChild(yearAxis);
 
     this.panGroup = panGroup;
     return svg;
@@ -625,31 +807,45 @@ class RfcHistoryGraphUi {
   _applyView() {
     const { tx, ty, scale } = this.view;
     this.panGroup.setAttribute('transform', `translate(${tx}, ${ty}) scale(${scale})`);
+
+    // 年の目盛りを、ズーム倍率に応じた間隔だけ表示する。
+    // ラベルは対応する区切り線の真上に来るように配置し直す
+    const viewportW = this.canvas.clientWidth;
+    const step = this._getYearStep(scale);
+    for (const { tick, line, label } of this.yearTickElems) {
+      const isShown = (tick.year % step === 0);
+      line.style.display = isShown ? '' : 'none';
+      const x = tick.x * scale + tx;
+      label.setAttribute('x', x);
+      // 表示しない年と、画面外にはみ出したラベルは隠す
+      label.style.display = (isShown && x >= 16 && x <= viewportW - 16) ? '' : 'none';
+    }
   }
 
-  // 現在のRFCが画面中央付近に来るように表示位置を初期化する
+  // 現在のRFCが画面中央に来るように表示位置を初期化する。
+  // 全体を収めることよりも読みやすさを優先し、等倍で表示する
+  // （画面に入りきらない部分は、地図のようにドラッグで移動して見る）
   _resetView() {
-    const viewportW = this.canvas.clientWidth;
-    const viewportH = this.canvas.clientHeight;
-    // 全体が収まるスケールにする。ただし文字が読めなくなるほどは縮小せず、
-    // 収まらない分は地図のようにドラッグで移動して見られるようにする
-    const scale = Math.max(0.75, Math.min(1,
-      viewportW / this.layoutResult.width, viewportH / this.layoutResult.height));
+    const { NODE_W, NODE_H } = RfcHistoryGraphUi;
     const current = this.layoutResult.positions.get(this.rfcNumber);
-    this.view.scale = scale;
-    if (this.layoutResult.width * scale <= viewportW) {
-      // 全体が収まる場合はグラフ全体をセンタリングする
-      this.view.tx = (viewportW - this.layoutResult.width * scale) / 2;
-    } else {
-      // 収まらない場合は現在のRFCを中央にする
-      this.view.tx = viewportW / 2 - (current.x + RfcHistoryGraphUi.NODE_W / 2) * scale;
-    }
-    if (this.layoutResult.height * scale <= viewportH) {
-      this.view.ty = (viewportH - this.layoutResult.height * scale) / 2;
-    } else {
-      this.view.ty = Math.min(0, viewportH / 2 - (current.y + RfcHistoryGraphUi.NODE_H / 2) * scale);
-    }
+    this.view.scale = 1;
+    this.view.tx = this._getInitialOffset(
+      this.canvas.clientWidth / 2 - (current.x + NODE_W / 2),
+      this.canvas.clientWidth, this.layoutResult.width);
+    this.view.ty = this._getInitialOffset(
+      this.canvas.clientHeight / 2 - (current.y + NODE_H / 2),
+      this.canvas.clientHeight, this.layoutResult.height);
     this._applyView();
+  }
+
+  // 中央寄せの位置を、グラフの外側に無駄な余白ができない範囲に収める。
+  // 現在のRFCが端にあるときは、中央に置く代わりにグラフ全体を寄せて表示する
+  _getInitialOffset(centeredOffset, viewportSize, contentSize) {
+    if (contentSize <= viewportSize) {
+      // 全体が画面に収まるなら、グラフ全体を中央に置く
+      return (viewportSize - contentSize) / 2;
+    }
+    return Math.min(0, Math.max(viewportSize - contentSize, centeredOffset));
   }
 
   // ドラッグによる移動と、マウスホイールによる拡大縮小
@@ -759,9 +955,31 @@ class RfcHistoryGraphUi {
     return this.summaries.get(rfcNumber);
   }
 
+  // 選択中のRFCと、そこにつながる線を強調する。
+  // 線には流れるアニメーションを付け、どのRFCを見ているかが一目で分かるようにする。
+  // 表示中のRFCにつながる線は、別のRFCを選んでもアニメーションが止まるだけで、
+  // 強調表示（不透明）は保たれる（rfc-history-edge-current による）
+  _setSelected(rfcNumber) {
+    this.selectedRfcNumber = rfcNumber;
+    // 選択中のRFCにつながる線を強調し、その線の両端のRFCも一緒に強調する
+    const highlighted = new Set([rfcNumber]);
+    for (const edge of this.edgeElems) {
+      const isSelectedEdge = (edge.src === rfcNumber || edge.dst === rfcNumber);
+      edge.elem.classList.toggle('rfc-history-edge-selected', isSelectedEdge);
+      if (isSelectedEdge) {
+        highlighted.add(edge.src);
+        highlighted.add(edge.dst);
+      }
+    }
+    this.nodeElems.forEach((elem, node) => {
+      elem.classList.toggle('rfc-history-node-highlighted', highlighted.has(node));
+    });
+  }
+
   // ノードクリック時に、そのRFCの概要パネルを表示する
   async _showDetail(rfcNumber) {
     this.detailRfcNumber = rfcNumber;
+    this._setSelected(rfcNumber);
     this._renderDetail(rfcNumber, null, null, true);
 
     const [titles, summary] = await Promise.all([
@@ -778,6 +996,8 @@ class RfcHistoryGraphUi {
   _hideDetail() {
     this.detailRfcNumber = null;
     this.detailPanel.classList.add('hidden');
+    // 選択を解除したときは、表示中のRFCを選んだ状態に戻す
+    this._setSelected(this.rfcNumber);
   }
 
   _renderDetail(rfcNumber, title, summary, isLoading) {
@@ -791,6 +1011,7 @@ class RfcHistoryGraphUi {
       <div class="rfc-history-detail-head">
         <strong class="rfc-history-detail-number"></strong>
         <span class="rfc-history-detail-badges"></span>
+        <span class="rfc-history-detail-date"></span>
         <button type="button" class="rfc-history-detail-close" title="閉じる">&times;</button>
       </div>
       <div class="rfc-history-detail-title"></div>
@@ -812,6 +1033,13 @@ class RfcHistoryGraphUi {
       badge.className = 'badge badge-primary';
       badge.textContent = wg;
       badges.appendChild(badge);
+    }
+
+    // 発行年月（"2018-08" を "2018年8月発行" として表示する）
+    const date = (this.dates[rfcNumber] || '').match(/^(\d+)-(\d+)$/);
+    if (date) {
+      panel.querySelector('.rfc-history-detail-date').textContent
+        = `${parseInt(date[1])}年${parseInt(date[2])}月発行`;
     }
 
     // タイトルと要約（未取得・未作成のときは代替の文言を表示する）

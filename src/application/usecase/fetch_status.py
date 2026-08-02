@@ -8,14 +8,25 @@ from lxml import etree  # pip install lxml
 from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcIndexXmlElem, RfcIndexJsonElem
 from ...infrastructure.repository.rfcstatusjsonrepository import IRfcStatusRepository
+from ...infrastructure.repository.rfcdatejsonrepository import IRfcDateRepository
 from ...infrastructure.apiclient.rfcindexapiclient import IRfcIndexApiClient
 
 
+# RFC Index内の月名（英語）から月番号への変換表
+MONTH_NAME_TO_NUMBER = {
+    'January': 1, 'February': 2, 'March': 3, 'April': 4,
+    'May': 5, 'June': 6, 'July': 7, 'August': 8,
+    'September': 9, 'October': 10, 'November': 11, 'December': 12,
+}
+
+
 def fetch_status(rfc_status_repo: IRfcStatusRepository,
+                 rfc_date_repo: IRfcDateRepository,
                  rfc_api: IRfcIndexApiClient) -> None:
     """RFC IndexのXML版を取得してRFCリストを作成する"""
 
     assert isinstance(rfc_status_repo, IRfcStatusRepository)
+    assert isinstance(rfc_date_repo, IRfcDateRepository)
     assert isinstance(rfc_api, IRfcIndexApiClient)
 
     print(f'[*] fetch_status()')
@@ -25,6 +36,8 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
     tree = etree.XML(page_content)
 
     obj = {}
+    # RFCの発行年月（変遷グラフの横軸に使用するため、別ファイルに保存する）
+    dates = {}
 
     for item in tree.xpath(f'/{RfcIndexXmlElem.RFC_INDEX}/{RfcIndexXmlElem.RFC_ENTRY}'):
         subtree = etree.XML(etree.tostring(item))
@@ -78,5 +91,14 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
             if re.match(r'^[^ ]+$', rfc_wg):
                 obj[rfc_number_str][RfcIndexJsonElem.WG] = str(rfc_wg)
 
+        # date (発行年月)
+        rfc_years = subtree.xpath(f'/{RfcIndexXmlElem.RFC_ENTRY}/{RfcIndexXmlElem.DATE}/{RfcIndexXmlElem.YEAR}/text()')
+        if len(rfc_years) > 0:
+            rfc_months = subtree.xpath(f'/{RfcIndexXmlElem.RFC_ENTRY}/{RfcIndexXmlElem.DATE}/{RfcIndexXmlElem.MONTH}/text()')
+            # 月が不明なRFCも存在するため、その場合は1月として扱う
+            rfc_month = MONTH_NAME_TO_NUMBER.get(rfc_months[0].strip(), 1) if len(rfc_months) > 0 else 1
+            dates[rfc_number_str] = '%s-%02d' % (rfc_years[0].strip(), rfc_month)
+
     # Save file
     rfc_status_repo.save(obj)
+    rfc_date_repo.save(dates)

@@ -39,19 +39,30 @@ CHECKS = {
 
 # RFC2119キーワード -> 規範強度クラス
 # 長いキーワードを先に並べる (MUST NOT を MUST より先に判定するため)
+# (表示名, 正規表現, 規範強度)
+# 否定語 NOT は大小文字を問わない。RFCによっては "MUST not" のように
+# 小文字で書かれるが、意味は MUST NOT と同じ禁止である。
 RFC2119 = [
-    ("MUST NOT", "禁止"),
-    ("SHALL NOT", "禁止"),
-    ("SHOULD NOT", "非推奨"),
-    ("NOT RECOMMENDED", "非推奨"),
-    ("MUST", "必須"),
-    ("SHALL", "必須"),
-    ("REQUIRED", "必須"),
-    ("RECOMMENDED", "推奨"),
-    ("SHOULD", "推奨"),
-    ("OPTIONAL", "任意"),
-    ("MAY", "任意"),
+    ("MUST NOT", r"\bMUST\s+[Nn][Oo][Tt]\b", "禁止"),
+    ("SHALL NOT", r"\bSHALL\s+[Nn][Oo][Tt]\b", "禁止"),
+    ("SHOULD NOT", r"\bSHOULD\s+[Nn][Oo][Tt]\b", "非推奨"),
+    ("NOT RECOMMENDED", r"\bNOT\s+RECOMMENDED\b", "非推奨"),
+    ("MUST", r"\bMUST\b", "必須"),
+    ("SHALL", r"\bSHALL\b", "必須"),
+    ("REQUIRED", r"\bREQUIRED\b", "必須"),
+    ("RECOMMENDED", r"\bRECOMMENDED\b", "推奨"),
+    ("SHOULD", r"\bSHOULD\b", "推奨"),
+    ("OPTIONAL", r"\bOPTIONAL\b", "任意"),
+    ("MAY", r"\bMAY\b", "任意"),
 ]
+
+# 原文に含まれる否定表現。
+# "MUST reject" / "MUST be absent" / "MUST X but not Y" のように、
+# 肯定形のキーワードでも意味は禁止になる文がある。この場合に訳文が
+# 「〜してはなりません」となるのは正しい訳であり、誤訳ではない。
+EN_NEGATION = re.compile(
+    r"\b(not|never|no longer|absent|cannot|refrain|omit|exclude|without|"
+    r"prohibit\w*|forbid\w*|reject\w*|disallow\w*|deny|denied)\b", re.IGNORECASE)
 
 # 規範強度クラス -> 日本語表現のパターン
 STRENGTH_PATTERNS = {
@@ -118,6 +129,12 @@ CAMEL_STOPWORDS = {
 
 # 本文がですます調でないと判定するパターン (文末)
 PLAIN_FORM_RE = re.compile(r"(である|であった|だった|していた|(?<!ませ)んだ)。\s*$")
+
+# 箇条書きの先頭記号。AGENTS.mdの規約上、箇条書きはですます調の対象外。
+# trans_rfc.py が翻訳時に使うパターンと同じものを用いる。
+BULLET_RE = re.compile(
+    r"^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |"
+    r"\[[0-9a-z]{1,2}\] |[a-z]\. )")
 
 # 見出しがですます調になっているパターン
 TITLE_MASU_RE = re.compile(r"(ます|です|ました|ません)。?\s*$")
@@ -210,8 +227,7 @@ def detect_rfc2119(en):
     長いキーワードを優先し、重複カウントを避ける。"""
     found = []
     masked = en
-    for kw, strength in RFC2119:
-        pattern = r"\b" + kw.replace(" ", r"\s+") + r"\b"
+    for kw, pattern, strength in RFC2119:
         for _ in re.finditer(pattern, masked):
             found.append((kw, strength))
         masked = re.sub(pattern, "_" * 4, masked)
@@ -258,6 +274,12 @@ def check_rfc2119(en, ja):
                 continue
             # 「必須」と「任意」は表現が重なりやすいので誤検知を避ける
             if expected == "必須" and strength == "任意":
+                continue
+            # 肯定形キーワード + 原文の否定表現 -> 訳文が禁止/非推奨になるのは正しい。
+            # 例) "MUST be absent" -> 「存在してはいけません」
+            #     "MUST signal X but not execute Y" -> 「実行してはなりません」
+            if (expected in ("必須", "推奨") and strength in ("禁止", "非推奨")
+                    and EN_NEGATION.search(en)):
                 continue
             if any(re.search(p, ja) for p in patterns):
                 return ("E002", f"強度不一致: 原文 {kw}({expected}) に対し訳文は{strength}相当")
@@ -344,7 +366,9 @@ def lint_file(path, enabled):
                 findings.append(Finding("W006", path, rfc, i,
                                         "見出しが体言止めでない", en, ja))
         else:
-            if "W005" in enabled and len(ja) >= 30 and PLAIN_FORM_RE.search(ja):
+            # 箇条書きは規約上ですます調の対象外なので除外する
+            if ("W005" in enabled and len(ja) >= 30 and PLAIN_FORM_RE.search(ja)
+                    and not BULLET_RE.match(en) and not BULLET_RE.match(ja)):
                 findings.append(Finding("W005", path, rfc, i,
                                         "本文がですます調でない", en, ja))
 

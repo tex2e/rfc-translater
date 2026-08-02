@@ -17,3 +17,7 @@ class RfcIndexXmlElem:
     UPDATED_BY = 'updated-by'
     CURRENT_STATUS = 'current-status'
     WG_ACRONYM = 'wg_acronym'
+    DATE = 'date'
+    # level4 (date)
+    YEAR = 'year'
+    MONTH = 'month'

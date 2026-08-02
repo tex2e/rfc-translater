@@ -24,6 +24,7 @@ from ..infrastructure.repository.indexhtmlrepository import IndexHtmlFileReposit
 from ..infrastructure.repository.indexdrafthtmlrepository import IndexDraftHtmlFileRepository
 from ..infrastructure.repository.rfcstatusjsonrepository import RfcStatusJsonFileRepository
 from ..infrastructure.repository.rfctitlejsonrepository import RfcTitleJsonFileRepository
+from ..infrastructure.repository.rfcdatejsonrepository import RfcDateJsonFileRepository
 from ..infrastructure.apiclient.rfcapiclient import RfcHttpApiClient
 from ..infrastructure.apiclient.rfcindexapiclient import RfcIndexHttpApiClient
 
@@ -115,8 +116,9 @@ def main():
         make_title_json(RfcTitleJsonFileRepository(),
                         RfcJsonTransFileRepository())
     elif args.fetch_status:
-        print("[*] RFCの更新状況とWorkingGroupの一覧作成")
+        print("[*] RFCの更新状況とWorkingGroupと発行年月の一覧作成")
         fetch_status(RfcStatusJsonFileRepository(),
+                     RfcDateJsonFileRepository(),
                      RfcIndexHttpApiClient())
     elif args.transtest:
         print("[*] 翻訳テスト開始...")

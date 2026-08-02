@@ -29,7 +29,7 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lint_translation import (  # noqa: E402
-    CAMEL_RE, CAMEL_STOPWORDS, URL_RE, ambiguous_lowers,
+    CAMEL_RE, CAMEL_STOPWORDS, URL_RE, ambiguous_lowers, BULLET_RE,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -46,6 +46,19 @@ TAIGEN_PATTERNS = [
     # 「Xに更新されます」「Xに署名しています」 -> 「Xに更新」「Xに署名」
     # サ変名詞が語尾に直接続く形。助詞「を」を伴わないため「の」は挿入しない。
     (re.compile(rf"^(.*?)({SAHEN})(?:されています|されます|しています|します|する)$"), r"\1\2"),
+]
+
+# 変換結果が「〜が<名詞>」で終わるものを弾くための判定
+DANGLING_GA_RE = re.compile(r"が[一-龠々]{2,6}$")
+
+# --- W005: である調 -> ですます調 ---
+# 文末(「。」の直前)のみを対象にする。「〜であるため」のような文中の用法は
+# 「。」が続かないため影響を受けない。
+DESU_PATTERNS = [
+    (re.compile(r"であった。"), "でした。"),
+    (re.compile(r"していた。"), "していました。"),
+    (re.compile(r"である。"), "です。"),
+    (re.compile(r"だった。"), "でした。"),
 ]
 
 # 見出し先頭の番号 (「6.1.1. 」「付録A. 」など) は変換対象から外して温存する
@@ -121,9 +134,24 @@ def fix_taigendome(ja):
     for pat, repl in TAIGEN_PATTERNS:
         if pat.match(body):
             new_body = pat.sub(repl, body)
-            if new_body != body and new_body.strip():
-                return prefix + new_body
+            if new_body == body or not new_body.strip():
+                continue
+            # 主語マーカー「が」が述語を失う変換は行わない。
+            # 「同等のアルゴリズムが許可されています」->「同等のアルゴリズムが許可」は
+            # 体言止めではなく係り先のない断片になり、元より読みにくい。
+            if DANGLING_GA_RE.search(new_body):
+                return None
+            return prefix + new_body
     return None
+
+
+def fix_desumasu(ja):
+    """W005: 文末のである調をですます調に変換する。
+    段落内の全ての文末を変換し、最後の文だけ直す中途半端な状態を作らない。"""
+    new = ja
+    for pat, repl in DESU_PATTERNS:
+        new = pat.sub(repl, new)
+    return new if new != ja else None
 
 
 def process_file(path, checks, dry_run, samples, stats):
@@ -140,9 +168,34 @@ def process_file(path, checks, dry_run, samples, stats):
         return False
 
     changed = False
+
+    # --- E007: title.ja の "RFC XXXX - " prefix ---
+    if "E007" in checks and isinstance(obj.get("title"), dict):
+        num = re.sub(r"\D", "", os.path.basename(path))
+        ja_title = obj["title"].get("ja") or ""
+        if ja_title and not ja_title.startswith(f"RFC {num} - "):
+            new_title = f"RFC {num} - {ja_title}"
+            if len(samples["E007"]) < 12:
+                samples["E007"].append((os.path.basename(path), None, ja_title[:90], new_title[:90]))
+            obj["title"]["ja"] = new_title
+            stats["E007"] += 1
+            changed = True
+
     for c in contents:
-        if not isinstance(c, dict) or c.get("raw") is True:
+        if not isinstance(c, dict):
             continue
+
+        # --- E004: raw段落に翻訳が入っている ---
+        if c.get("raw") is True:
+            if "E004" in checks and (c.get("ja") or "").strip():
+                if len(samples["E004"]) < 12:
+                    samples["E004"].append((os.path.basename(path), None,
+                                            (c.get("ja") or "")[:90], "(空文字)"))
+                c["ja"] = ""
+                stats["E004"] += 1
+                changed = True
+            continue
+
         en = c.get("text", "") or ""
         ja = c.get("ja", "") or ""
         if not en or not ja:
@@ -169,6 +222,18 @@ def process_file(path, checks, dry_run, samples, stats):
             elif new_ja is None and re.search(r"(ます|です)。?$", ja):
                 stats["W006_skipped"] += 1
 
+        # --- W005: 本文のである調 -> ですます調 ---
+        # 見出しは体言止めが正しいので対象外。箇条書きも規約上ですます調の対象外。
+        if ("W005" in checks and not c.get("section_title")
+                and not BULLET_RE.match(en) and not BULLET_RE.match(ja)):
+            new_ja = fix_desumasu(ja)
+            if new_ja:
+                if len(samples["W005"]) < 12:
+                    samples["W005"].append((os.path.basename(path), None, ja[-90:], new_ja[-90:]))
+                stats["W005"] += 1
+                c["ja"] = new_ja
+                changed = True
+
     if changed and not dry_run:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, ensure_ascii=False, indent=2)
@@ -191,7 +256,8 @@ def collect_paths(rfcs, dirs):
 
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
-    p.add_argument("--check", nargs="+", required=True, choices=["E001", "W006"])
+    p.add_argument("--check", nargs="+", required=True,
+                   choices=["E001", "E004", "E007", "W005", "W006"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -205,7 +271,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {"E001": [], "W006": []}
+    samples = {k: [] for k in ("E001", "E004", "E007", "W005", "W006")}
     files_changed = 0
 
     for path in paths:
@@ -216,6 +282,12 @@ def main():
     print(f"{mode}対象ファイル: {len(paths)}  変更ファイル: {files_changed}")
     if "E001" in checks:
         print(f"  E001 識別子を修正: {stats['E001']} 箇所")
+    if "E004" in checks:
+        print(f"  E004 raw段落のjaを空に: {stats['E004']} 件")
+    if "E007" in checks:
+        print(f"  E007 タイトルprefixを付与: {stats['E007']} 件")
+    if "W005" in checks:
+        print(f"  W005 ですます調に変換: {stats['W005']} 段落")
     if "W006" in checks:
         print(f"  W006 体言止めに変換: {stats['W006']} 件")
         print(f"  W006 変換できず据え置き: {stats['W006_skipped']} 件 (要人手/AI対応)")
@@ -223,7 +295,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "W006"):
+        for code in ("E001", "E004", "E007", "W005", "W006"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:
