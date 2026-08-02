@@ -39,3 +39,54 @@ jobs:
       - name: Run unittest
         run: |
           python -m unittest discover -s tests -p "test_*.py"
+
+  # 翻訳品質linter。
+  # 既存データには大量の未修正欠陥があるため（tools/QUALITY_BASELINE.md 参照）、
+  # 全件ではなく「このPRで変更された翻訳ファイル」だけを検査する。
+  # これにより、バックログを解消しなくても新規の劣化だけを止められる。
+  lint-translation:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Lint changed translation files
+        run: |
+          set -e
+          BASE=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          CHANGED=$(git diff --name-only "$BASE" HEAD -- 'data/*/rfc*-trans.json')
+          if [ -z "$CHANGED" ]; then
+            echo "翻訳ファイルの変更なし。スキップします。"
+            exit 0
+          fi
+          RFCS=$(echo "$CHANGED" | sed -E 's#.*/rfc([0-9]+)-trans\.json#\1#' | sort -u)
+          echo "== 対象RFC: $(echo $RFCS) =="
+
+          # 変更後の検出数
+          python3 tools/lint_translation.py --rfc $RFCS --format text > /tmp/head.txt || true
+          AFTER=$(grep -oP '検出総数: \K\d+' /tmp/head.txt || echo 0)
+
+          # 変更前(マージベース)の検出数。既存の欠陥でPRを落とさないため、
+          # 「増えていないか」だけを判定する。
+          # linter自体は常に最新版を使う（基準を揃えるため）。
+          git worktree add -q /tmp/base "$BASE"
+          mkdir -p /tmp/base/tools
+          cp tools/lint_translation.py /tmp/base/tools/
+          (cd /tmp/base && python3 tools/lint_translation.py --rfc $RFCS --format summary > /tmp/base.txt) || true
+          BEFORE=$(grep -oP '検出総数: \K\d+' /tmp/base.txt || echo 0)
+
+          echo "変更前: ${BEFORE:-0} 件 / 変更後: ${AFTER:-0} 件"
+          cat /tmp/head.txt
+
+          if [ "${AFTER:-0}" -gt "${BEFORE:-0}" ]; then
+            echo "::error::翻訳品質の検出数が ${BEFORE} → ${AFTER} に増加しました。AGENTS.md の翻訳スタイルガイドを確認してください。"
+            exit 1
+          fi
+          echo "翻訳品質の劣化はありません。"
