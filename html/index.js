@@ -15,6 +15,13 @@ class RfcIndexJsonElem {
   static UPDATED_BY = 'upd_by'
   static CURRENT_STATUS = 'st'
   static WG = 'wg'
+  static DATE = 'date'
+}
+
+// "2018-08" を "2018年8月" に変換する（発行年月が不明なときは null を返す）
+function formatRfcDate(date) {
+  const m = (date || '').match(/^(\d+)-(\d+)$/);
+  return m ? `${parseInt(m[1])}年${parseInt(m[2])}月` : null;
 }
 
 class RfcSummaryJsonElem {
@@ -103,6 +110,7 @@ class RfcUi {
         // console.log(datum);
 
         this._showAlertWhenObsoleted(rfcNumber, datum);
+        this._showDate(rfcNumber, datum);
         this._showWg(rfcNumber, datum);
 
         // RFCの変遷グラフ表示ボタンの設定
@@ -151,9 +159,25 @@ class RfcUi {
         const badge_class = RFC_STATUS_BADGE_CLASS[status];
         // console.log(badge_class);
 
-        domRfcStatus.innerHTML = `, ST: <a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-${badge_class}">${status}</a>`;
+        domRfcStatus.innerHTML = `<a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-${badge_class}">${status}</a>`;
       }
     }
+  }
+
+  _showDate(_rfcNumber, datum) {
+    // RFCの発行年月を、ステータスの左隣に表示する
+    const domRfcStatus = document.getElementById('rfc_status');
+    if (this.domRfcDraft || !domRfcStatus || !datum) {
+      return;
+    }
+    const date = formatRfcDate(datum[RfcIndexJsonElem.DATE]);
+    if (!date) {
+      return;
+    }
+    const domRfcDate = document.createElement('span');
+    domRfcDate.id = 'rfc_date';
+    domRfcDate.textContent = `, 発行 : ${date}`;
+    domRfcStatus.insertAdjacentElement('beforebegin', domRfcDate);
   }
 
   _getWgHtmlDomElem() {
@@ -166,7 +190,7 @@ class RfcUi {
     if (!this.domRfcDraft && domRfcWg) {
       const wg = datum[RfcIndexJsonElem.WG];
       if (wg) {
-        domRfcWg.innerHTML = `, WG: <a href="https://datatracker.ietf.org/wg/${wg}/documents/" class="badge badge-primary">${wg}</a>`;
+        domRfcWg.innerHTML = `<a href="https://datatracker.ietf.org/wg/${wg}/documents/" class="badge badge-primary">${wg}</a>`;
       }
     }
   }
@@ -242,8 +266,6 @@ class RfcUi {
 class RfcHistoryGraphUi {
   // 全RFCの日本語タイトルを格納したファイル名（概要パネルの初回表示時に取得する）
   static FETCH_TITLE_FILENAME = 'data-rfc-title.json';
-  // 全RFCの発行年月を格納したファイル名（グラフの横軸に使用する）
-  static FETCH_DATE_FILENAME = 'data-rfc-date.json';
   // 描画する最大ノード数（念のための上限。現在RFCから関係の近い順に採用する）
   static MAX_NODES = 250;
   // ノードの大きさ・間隔
@@ -277,9 +299,11 @@ class RfcHistoryGraphUi {
     this.titles = null;
     this.summaries = new Map();
     this.detailRfcNumber = null;
-    // グラフの横軸に使用する発行年月
-    this.dates = {};
-    this.isOpening = false;
+  }
+
+  // 指定したRFCの発行年月（"2018-08" 形式。不明なときは undefined）
+  _getDate(rfcNumber) {
+    return (this.data[rfcNumber] || {})[RfcIndexJsonElem.DATE];
   }
 
   setup() {
@@ -314,19 +338,9 @@ class RfcHistoryGraphUi {
     domRfcWg.insertAdjacentElement('afterend', button);
   }
 
-  async _openDialog() {
-    if (this.isOpening) {
-      return;
-    }
+  _openDialog() {
     if (!this.dialog) {
-      // 横軸に使用する発行年月を取得してからグラフを組み立てる
-      this.isOpening = true;
-      try {
-        this.dates = await this._fetchJson(RfcHistoryGraphUi.FETCH_DATE_FILENAME) || {};
-        this._createDialog();
-      } finally {
-        this.isOpening = false;
-      }
+      this._createDialog();
     }
     this.dialog.showModal();
     this._hideDetail();
@@ -546,14 +560,14 @@ class RfcHistoryGraphUi {
   _getMonthsResolver(sortedNodes) {
     const known = [];
     for (const node of sortedNodes) {
-      const date = this.dates[node];
+      const date = this._getDate(node);
       const m = date && date.match(/^(\d+)-(\d+)$/);
       if (m) {
         known.push({ node: parseInt(node), months: parseInt(m[1]) * 12 + (parseInt(m[2]) - 1) });
       }
     }
     return (node) => {
-      const date = this.dates[node];
+      const date = this._getDate(node);
       const m = date && date.match(/^(\d+)-(\d+)$/);
       if (m) {
         return parseInt(m[1]) * 12 + (parseInt(m[2]) - 1);
@@ -990,7 +1004,9 @@ class RfcHistoryGraphUi {
     if (this.detailRfcNumber !== rfcNumber) {
       return;
     }
-    this._renderDetail(rfcNumber, titles[rfcNumber], summary, false);
+    // RFC番号はパネルの見出しに別途表示しているため、タイトル先頭の「RFC XXXX - 」は省く
+    const title = (titles[rfcNumber] || '').replace(/^RFC\s*\d+\s*-\s*/, '');
+    this._renderDetail(rfcNumber, title, summary, false);
   }
 
   _hideDetail() {
@@ -1035,11 +1051,10 @@ class RfcHistoryGraphUi {
       badges.appendChild(badge);
     }
 
-    // 発行年月（"2018-08" を "2018年8月発行" として表示する）
-    const date = (this.dates[rfcNumber] || '').match(/^(\d+)-(\d+)$/);
+    // 発行年月
+    const date = formatRfcDate(this._getDate(rfcNumber));
     if (date) {
-      panel.querySelector('.rfc-history-detail-date').textContent
-        = `${parseInt(date[1])}年${parseInt(date[2])}月発行`;
+      panel.querySelector('.rfc-history-detail-date').textContent = `${date}発行`;
     }
 
     // タイトルと要約（未取得・未作成のときは代替の文言を表示する）

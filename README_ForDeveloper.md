@@ -68,8 +68,8 @@ pip3 install -r requirements.txt
 
 - **RFCのステータス・WG・発行年月の一覧作成**
 
-    RFCのステータス・WGの一覧と、RFCの発行年月の一覧を作成して、JSONに保存するためのコマンドです。
-    発行年月はRFCの変遷グラフの横軸（時間軸）に使用します。
+    RFCのステータス・WG・発行年月の一覧を作成して、JSONに保存するためのコマンドです。
+    発行年月はRFCページのヘッダー表示と、変遷グラフの横軸（時間軸）に使用します。
 
     ```bash
     python3 main.py --fetch-status
@@ -104,9 +104,8 @@ pip3 install -r requirements.txt
 
 | ファイルパス | 説明 | 生成元プログラム |
 |-----------|-----|--------------|
-| html/data-rfc-list.json | 廃止RFC・WGの一覧 | fetch_wg.py (取得)
+| html/data-rfc-list.json | 廃止RFC・WG・発行年月の一覧 | fetch_status.py (取得)
 | html/data-rfc-title.json | 全RFCの日本語タイトル一覧 | make_title_json.py (生成)
-| html/data-rfc-date.json | 全RFCの発行年月の一覧 | fetch_status.py (取得)
 | data/N000/rfcNXXX.json | 段落区切りの文書 | fetch_rfc.py（取得）
 | data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
 | html/rfcNXXX.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）

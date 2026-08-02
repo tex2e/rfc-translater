@@ -8,7 +8,6 @@ from lxml import etree  # pip install lxml
 from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcIndexXmlElem, RfcIndexJsonElem
 from ...infrastructure.repository.rfcstatusjsonrepository import IRfcStatusRepository
-from ...infrastructure.repository.rfcdatejsonrepository import IRfcDateRepository
 from ...infrastructure.apiclient.rfcindexapiclient import IRfcIndexApiClient
 
 
@@ -21,12 +20,10 @@ MONTH_NAME_TO_NUMBER = {
 
 
 def fetch_status(rfc_status_repo: IRfcStatusRepository,
-                 rfc_date_repo: IRfcDateRepository,
                  rfc_api: IRfcIndexApiClient) -> None:
     """RFC IndexのXML版を取得してRFCリストを作成する"""
 
     assert isinstance(rfc_status_repo, IRfcStatusRepository)
-    assert isinstance(rfc_date_repo, IRfcDateRepository)
     assert isinstance(rfc_api, IRfcIndexApiClient)
 
     print(f'[*] fetch_status()')
@@ -36,8 +33,6 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
     tree = etree.XML(page_content)
 
     obj = {}
-    # RFCの発行年月（変遷グラフの横軸に使用するため、別ファイルに保存する）
-    dates = {}
 
     for item in tree.xpath(f'/{RfcIndexXmlElem.RFC_INDEX}/{RfcIndexXmlElem.RFC_ENTRY}'):
         subtree = etree.XML(etree.tostring(item))
@@ -97,8 +92,7 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
             rfc_months = subtree.xpath(f'/{RfcIndexXmlElem.RFC_ENTRY}/{RfcIndexXmlElem.DATE}/{RfcIndexXmlElem.MONTH}/text()')
             # 月が不明なRFCも存在するため、その場合は1月として扱う
             rfc_month = MONTH_NAME_TO_NUMBER.get(rfc_months[0].strip(), 1) if len(rfc_months) > 0 else 1
-            dates[rfc_number_str] = '%s-%02d' % (rfc_years[0].strip(), rfc_month)
+            obj[rfc_number_str][RfcIndexJsonElem.DATE] = '%s-%02d' % (rfc_years[0].strip(), rfc_month)
 
     # Save file
     rfc_status_repo.save(obj)
-    rfc_date_repo.save(dates)

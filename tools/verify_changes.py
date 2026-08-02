@@ -26,11 +26,20 @@ HEADING_NUM_RE = re.compile(r"^((?:付録)?[A-Z0-9]+(?:\.[0-9]+)*\.?\s+)")
 DANGLING_RE = re.compile(r"[がはをにでとやへも][一-龠々]{0,6}$")
 
 
-def collect():
-    """変更のあった全段落を (種別, ファイル, EN, 旧JA, 新JA) で返す"""
-    out = subprocess.run(["git", "status", "--porcelain", "--", "data/"],
-                         capture_output=True, text=True).stdout.splitlines()
-    files = [l[3:].strip() for l in out if l.strip().endswith("-trans.json")]
+def collect(base="HEAD"):
+    """変更のあった全段落を (種別, ファイル, EN, 旧JA, 新JA) で返す。
+
+    base に過去のコミットを指定すると、そのコミット以降の変更をまとめて検証できる。
+    修正をコミットしたあとに検証したい場合は、修正前のコミットを指定する。
+    """
+    if base == "HEAD":
+        out = subprocess.run(["git", "status", "--porcelain", "--", "data/"],
+                             capture_output=True, text=True).stdout.splitlines()
+        files = [l[3:].strip() for l in out if l.strip().endswith("-trans.json")]
+    else:
+        out = subprocess.run(["git", "diff", "--name-only", base, "--", "data/"],
+                             capture_output=True, text=True).stdout.splitlines()
+        files = [l.strip() for l in out if l.strip().endswith("-trans.json")]
     p = subprocess.Popen(["git", "cat-file", "--batch"],
                          stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     rows, skipped = [], 0
@@ -40,7 +49,7 @@ def collect():
         except Exception:
             skipped += 1
             continue
-        p.stdin.write(f"HEAD:{f}\n".encode())
+        p.stdin.write(f"{base}:{f}\n".encode())
         p.stdin.flush()
         head = p.stdout.readline().decode().strip()
         if "missing" in head:
@@ -77,9 +86,11 @@ def collect():
 def main():
     ap = argparse.ArgumentParser(description="一括修正の検証")
     ap.add_argument("--samples", type=int, default=0, help="表示する変換例の件数")
+    ap.add_argument("--base", default="HEAD",
+                    help="比較元のコミット (修正をコミット済みなら修正前のコミットを指定)")
     args = ap.parse_args()
 
-    rows, n_files, skipped = collect()
+    rows, n_files, skipped = collect(args.base)
     case = [r for r in rows if r[0] == "case"]
     rew = [r for r in rows if r[0] == "heading"]
     body = [r for r in rows if r[0] == "body"]

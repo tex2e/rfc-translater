@@ -7,3 +7,4 @@ class RfcIndexJsonElem:
     UPDATED_BY = 'upd_by'
     CURRENT_STATUS = 'st'
     WG = 'wg'
+    DATE = 'date'
