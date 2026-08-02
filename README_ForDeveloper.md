@@ -61,6 +61,7 @@ pip3 install -r requirements.txt
 - **トップページの生成**
 
     htmlフォルダ内に存在するRFCファイルの一覧から、トップページを作成します。
+    同時に、RFCの日本語タイトル一覧（data-rfc-title.json）も作成します。
     ```bash
     python3 main.py --make-index  # インデックス（目次）ページの作成
     ```
@@ -71,6 +72,16 @@ pip3 install -r requirements.txt
 
     ```bash
     python3 main.py --fetch-status
+    ```
+
+- **RFCの日本語タイトル一覧作成**
+
+    翻訳済みJSONから日本語タイトルの一覧を作成して、JSONに保存するためのコマンドです。
+    RFCの変遷グラフ（RFCページの「変遷」ボタン）で、リンク先RFCのタイトルを表示するために使用します。
+    `--make-index` を実行したときにも同時に作成されるため、単体で作り直したいときに使用します。
+
+    ```bash
+    python3 main.py --make-title-json
     ```
 
 - **RFC Draftの翻訳**
@@ -93,6 +104,7 @@ pip3 install -r requirements.txt
 | ファイルパス | 説明 | 生成元プログラム |
 |-----------|-----|--------------|
 | html/data-rfc-list.json | 廃止RFC・WGの一覧 | fetch_wg.py (取得)
+| html/data-rfc-title.json | 全RFCの日本語タイトル一覧 | make_title_json.py (生成)
 | data/N000/rfcNXXX.json | 段落区切りの文書 | fetch_rfc.py（取得）
 | data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
 | html/rfcNXXX.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）

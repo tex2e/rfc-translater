@@ -30,6 +30,7 @@ CHECKS = {
     "E002": "RFC2119キーワードの強度不一致 (原文と異なる規範強度で訳されている)",
     "W003": "RFC2119キーワードの強度未表現 (訳文に規範強度が読み取れない)",
     "E004": "raw段落に翻訳が入っている (図表・コードは翻訳しない)",
+    "W009": "識別子の表記破壊(機械判定不可) 原文内で表記が揺れており自動修正できない",
     "W005": "本文の文体違反 (ですます調でない)",
     "W006": "見出しの体言止め違反 (section_titleがですます調)",
     "E007": "タイトルのprefix違反 (title.jaが 'RFC XXXX - ' で始まらない)",
@@ -98,6 +99,13 @@ NON_NORMATIVE_NEGATION = re.compile(
 #   Trust / License / Subject / Password                       -> 対象外
 CAMEL_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*[a-z0-9_][A-Z][A-Za-z0-9_]*\b")
 
+# 表記ゆれ判定用。CamelCaseに限らず全ての英数字トークンを拾う。
+# CAMEL_RE だけで判定すると、同じ識別子の全小文字版・全大文字版を見落とす。
+#   例) "CMSG_DATA() ... the cmsg_data[] member ..."
+#       CAMEL_RE は CMSG_DATA しか拾わないため、原文に小文字版が併存すること
+#       に気づけず、訳文の cmsg_data を CMSG_DATA に誤変換してしまう。
+ALL_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*\b")
+
 # URL・メールアドレス。この中の文字列は識別子照合の対象外にする
 # (例: trustee.ietf.org/license-info が "Trust" や "License" に誤マッチする)
 URL_RE = re.compile(r"(https?://\S+|\b[\w.\-]+@[\w.\-]+\b|\b[\w\-]+\.(?:ietf|org|com|net|edu)\b\S*)")
@@ -145,6 +153,16 @@ class Finding:
 # 個別チェック
 # ------------------------------------------------------------------------------
 
+def ambiguous_lowers(en_clean):
+    """原文内で同じ綴りが複数の表記で現れるトークンの集合(小文字化キー)。
+    どちらの表記に合わせるべきか決まらないため、検出・修正の対象外にする。
+    例) CMSG_DATA と cmsg_data が併存する段落"""
+    by_lower = {}
+    for t in ALL_TOKEN_RE.findall(en_clean):
+        by_lower.setdefault(t.lower(), set()).add(t)
+    return {k for k, v in by_lower.items() if len(v) > 1}
+
+
 def check_identifier_case(en, ja):
     """E001: 原文のCamelCase識別子が、訳文で異なる大小文字表記になっていないか。
 
@@ -152,12 +170,28 @@ def check_identifier_case(en, ja):
       - URL/メールアドレス内の文字列は照合対象から除く
       - 訳文側も語境界で一致した場合のみ「表記が壊れている」と判定する
         (例: 'Trust' が 'trustee' の一部にマッチするのを防ぐ)
+      - 原文内で表記が揺れている識別子は対象外にする
+        (例: CMSG_DATA と cmsg_data の併存)
     """
     en_clean = URL_RE.sub(" ", en)
     ja_clean = URL_RE.sub(" ", ja)
+    ambiguous = ambiguous_lowers(en_clean)
+    variants = {}
+    for t in ALL_TOKEN_RE.findall(en_clean):
+        variants.setdefault(t.lower(), set()).add(t)
     problems = []
+    unresolvable = []
     for tok in dict.fromkeys(CAMEL_RE.findall(en_clean)):
         if tok in CAMEL_STOPWORDS or len(tok) < 4:
+            continue
+        if tok.lower() in ambiguous:
+            # 原文内で表記が揺れているため、どの表記に直すべきか機械判定できない。
+            # ただし訳文がどの表記とも一致しない場合は壊れているので別枠で報告する。
+            m = re.search(
+                r"(?<![A-Za-z0-9_])" + re.escape(tok) + r"(?![A-Za-z0-9_])",
+                ja_clean, re.IGNORECASE)
+            if m and m.group(0) not in variants[tok.lower()]:
+                unresolvable.append((tok, m.group(0), sorted(variants[tok.lower()])))
             continue
         # 正しい表記で存在すればOK (語境界で確認)
         if re.search(r"(?<![A-Za-z0-9_])" + re.escape(tok) + r"(?![A-Za-z0-9_])", ja_clean):
@@ -168,7 +202,7 @@ def check_identifier_case(en, ja):
         )
         if m:
             problems.append((tok, m.group(0)))
-    return problems
+    return problems, unresolvable
 
 
 def detect_rfc2119(en):
@@ -285,10 +319,18 @@ def lint_file(path, enabled):
             continue  # 参考文献・著者情報など、原文のまま残すのが正しい段落
 
         # --- 識別子 ---
-        if "E001" in enabled:
-            for tok, actual in check_identifier_case(en, ja):
-                findings.append(Finding("E001", path, rfc, i,
-                                        f"識別子 '{tok}' が訳文で '{actual}' になっている", en, ja))
+        if "E001" in enabled or "W009" in enabled:
+            problems, unresolvable = check_identifier_case(en, ja)
+            if "E001" in enabled:
+                for tok, actual in problems:
+                    findings.append(Finding("E001", path, rfc, i,
+                                            f"識別子 '{tok}' が訳文で '{actual}' になっている", en, ja))
+            if "W009" in enabled:
+                for tok, actual, variants in unresolvable:
+                    findings.append(Finding(
+                        "W009", path, rfc, i,
+                        f"識別子が訳文で '{actual}' になっているが、原文に "
+                        f"{variants} が併存するため自動判定不可", en, ja))
 
         # --- RFC2119 ---
         if "E002" in enabled or "W003" in enabled:

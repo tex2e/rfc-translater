@@ -104,7 +104,20 @@ python3 tools/lint_translation.py --rfc <RFC番号> --format text
 python3 -m json.tool data/N000/rfcNXXX-trans.json > /dev/null
 ```
 
+### 6. 修正の優先順位
+
+どのRFCから直すかは `tools/rank_rfcs.py` が決めます。他のRFCからの被引用数を
+重要度の代理指標とし、linterの検出数を深刻度として掛け合わせて順位を出します。
+
+```sh
+python3 tools/rank_rfcs.py --scan            # 全件スキャン (帯ごとに --dir 指定で再開可)
+python3 tools/rank_rfcs.py --report --check E002 --limit 30
+```
+
+修正が済んだRFCは再スキャンすると検出数が減り、自動的に順位が下がります。
+進捗管理用の状態ファイルは持ちません（linterの結果そのものが進捗です）。
+
 ### 補足: スクリプトの置き場所
 
-- `tools/` : 恒久的に使うツール（linterなど）。消さないこと。
+- `tools/` : 恒久的に使うツール（linter、優先順位付け）。消さないこと。
 - `scripts/` : 一括置換などの使い捨てスクリプト。作業後に破棄してよい。

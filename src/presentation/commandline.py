@@ -10,6 +10,7 @@ from ..application.usecase.fetch_rfc import fetch_rfc
 from ..application.usecase.trans_rfc import trans_rfc, trans_test
 from ..application.usecase.make_html import make_html
 from ..application.usecase.make_index import make_index, make_index_draft
+from ..application.usecase.make_title_json import make_title_json
 from ..application.usecase.fetch_index import diff_remote_and_local_index
 from ..application.usecase.fetch_status import fetch_status
 from ..application.usecase.make_json_from_html import make_json_from_html
@@ -22,6 +23,7 @@ from ..infrastructure.repository.rfchtmlrepository import RfcHtmlFileRepository
 from ..infrastructure.repository.indexhtmlrepository import IndexHtmlFileRepository
 from ..infrastructure.repository.indexdrafthtmlrepository import IndexDraftHtmlFileRepository
 from ..infrastructure.repository.rfcstatusjsonrepository import RfcStatusJsonFileRepository
+from ..infrastructure.repository.rfctitlejsonrepository import RfcTitleJsonFileRepository
 from ..infrastructure.apiclient.rfcapiclient import RfcHttpApiClient
 from ..infrastructure.apiclient.rfcindexapiclient import RfcIndexHttpApiClient
 
@@ -40,6 +42,8 @@ def main():
                     help='Make JSON from HTML (ex. --make-json --rfc 8446)')
     ap.add_argument('--make-index', action='store_true',
                     help='Make html/index.html (ex. --make-index)')
+    ap.add_argument('--make-title-json', action='store_true',
+                    help='Make html/data-rfc-title.json (ex. --make-title-json)')
     ap.add_argument('--force', '-f', action='store_true',
                     help='Ignore cache (ex. --rfc 8446 --fetch --force)')
     ap.add_argument('--begin', type=int,
@@ -98,10 +102,18 @@ def main():
         print("[*] トップページ(index.html)の作成")
         make_index(IndexHtmlFileRepository(),
                    RfcHtmlFileRepository())
+        # トップページと同じくRFC一覧に依存するため、まとめて最新化する
+        print("[*] RFCの日本語タイトル一覧(data-rfc-title.json)の作成")
+        make_title_json(RfcTitleJsonFileRepository(),
+                        RfcJsonTransFileRepository())
     elif args.make_index_draft:
         print("[*] draft/index.htmlの作成")
         make_index_draft(IndexDraftHtmlFileRepository(),
                          RfcHtmlFileRepository())
+    elif args.make_title_json:
+        print("[*] RFCの日本語タイトル一覧(data-rfc-title.json)の作成")
+        make_title_json(RfcTitleJsonFileRepository(),
+                        RfcJsonTransFileRepository())
     elif args.fetch_status:
         print("[*] RFCの更新状況とWorkingGroupの一覧作成")
         fetch_status(RfcStatusJsonFileRepository(),

@@ -1,7 +1,9 @@
 
 import os
+import re
 import abc
-from ...domain.valueobject.rfc import IRfc
+import glob
+from ...domain.valueobject.rfc import IRfc, RfcJsonElem
 from ...domain.services.rfcfile import RfcFile
 
 
@@ -31,6 +33,11 @@ class IRfcJsonTransRepository(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_title(self, rfc: IRfc) -> str:
         """JSONの内容からRFCのタイトルを取得する"""
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def findall_titles_ja(self) -> dict[str, str]:
+        """全RFCの日本語タイトルを取得する"""
         raise NotImplementedError()
 
 
@@ -65,3 +72,20 @@ class RfcJsonTransFileRepository(IRfcJsonTransRepository):
         if obj and obj['title'] and obj['title']['text']:
             rfc_title = obj['title']['text']
         return rfc_title
+
+    def findall_titles_ja(self) -> dict[str, str]:
+        """全RFCの日本語タイトルを {RFC番号: タイトル} で取得"""
+        titles = {}
+        for filepath in glob.glob(RfcFile.GLOB_DATA_TRANS_JSON_FILE):
+            m = re.match(r'rfc(\d+)-trans\.json$', os.path.basename(filepath))
+            if not m:
+                continue
+            rfc_number = int(m[1])
+            if rfc_number < 2220:  # 著作権の関係から RFC 2220 以降のみを対象とする
+                continue
+            obj = RfcFile.read_json_file(filepath)
+            title_ja = obj.get(RfcJsonElem.TITLE, {}).get(RfcJsonElem.Title.JA)
+            if not title_ja:
+                continue
+            titles[str(rfc_number)] = title_ja
+        return titles
