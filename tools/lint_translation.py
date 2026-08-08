@@ -61,8 +61,15 @@ RFC2119 = [
 # 肯定形のキーワードでも意味は禁止になる文がある。この場合に訳文が
 # 「〜してはなりません」となるのは正しい訳であり、誤訳ではない。
 EN_NEGATION = re.compile(
-    r"\b(not|never|no longer|absent|cannot|refrain|omit|exclude|without|"
+    r"\b(not|never|no longer|be no|absent|cannot|refrain|omit|exclude|without|"
     r"prohibit\w*|forbid\w*|reject\w*|disallow\w*|deny|denied)\b", re.IGNORECASE)
+
+# 原文中に RFC2119キーワード以外の規範的な形容詞/副詞が含まれる場合、訳文の
+# 規範語彙がその語に由来する可能性があり、キーワードとの対応を一意に断定
+# できない (例: "others MAY be used" と同じ文中の "recommended")。
+OTHER_NORMATIVE_WORDS = re.compile(
+    r"\b(recommended|discouraged|desirable|undesirable|mandatory|preferred|advisable)\b",
+    re.IGNORECASE)
 
 # 規範強度クラス -> 日本語表現のパターン
 STRENGTH_PATTERNS = {
@@ -236,7 +243,11 @@ def detect_rfc2119(en):
 
 def is_single_sentence(en):
     """原文が単文か。略語のピリオド (e.g. / i.e. / Sec. / RFC 2119.) を除いて
-    文末ピリオドが1つだけなら単文とみなす。"""
+    文末ピリオドが1つだけなら単文とみなす。
+    " -- " やセミコロンで繋がれた独立節も、キーワードと無関係な節の規範語彙
+    を拾って誤検知するため単文として扱わない。"""
+    if " -- " in en or ";" in en:
+        return False
     s = re.sub(r"\b(?:e\.g|i\.e|etc|vs|cf|Sec|Fig|No|Dr|Mr|Ms|St|approx)\.", " ", en)
     s = re.sub(r"\b[A-Z]\.", " ", s)          # 頭文字 (J. Smith)
     s = re.sub(r"\d+\.\d+", " ", s)           # バージョン・節番号
@@ -266,9 +277,10 @@ def check_rfc2119(en, ja):
         return None
 
     # 「強度不一致(E002)」と断定できるのは、原文が単文で、訳文中の規範表現が
-    # そのキーワードに対応すると一意に決まる場合に限る。複数文の段落では
-    # 別の節の表現を誤って拾うため、断定せず W003 に落とす。
-    if is_single_sentence(en):
+    # そのキーワードに対応すると一意に決まる場合に限る。複数文の段落や、
+    # "recommended"/"discouraged" のようなRFC2119キーワード以外の規範的な語を
+    # 含む段落では、別の語の訳を誤って拾うため、断定せず W003 に落とす。
+    if is_single_sentence(en) and not OTHER_NORMATIVE_WORDS.search(en):
         for strength, patterns in STRENGTH_PATTERNS.items():
             if strength == expected:
                 continue
