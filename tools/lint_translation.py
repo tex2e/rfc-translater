@@ -61,7 +61,7 @@ RFC2119 = [
 # 肯定形のキーワードでも意味は禁止になる文がある。この場合に訳文が
 # 「〜してはなりません」となるのは正しい訳であり、誤訳ではない。
 EN_NEGATION = re.compile(
-    r"\b(not|never|no longer|be no|absent|cannot|refrain|omit|exclude|without|"
+    r"\b(not|never|no longer|be no|no|absent|cannot|refrain|avoid|omit|exclude|without|"
     r"prohibit\w*|forbid\w*|reject\w*|disallow\w*|deny|denied)\b", re.IGNORECASE)
 
 # 原文中に RFC2119キーワード以外の規範的な形容詞/副詞が含まれる場合、訳文の
@@ -72,30 +72,80 @@ OTHER_NORMATIVE_WORDS = re.compile(
     re.IGNORECASE)
 
 # 規範強度クラス -> 日本語表現のパターン
+#
+# 「必要があります/がある」系は、このコーパスではMUST/SHOULDのどちらの訳にも
+# 実際に使われており、語彙だけでは強度を一意に判別できない
+# (W003調査で判明、2026-08-08)。両方のtierに登録し「強度不明だが規範性は
+# ある」として扱う。ただし禁止/非推奨tierには入れない: 「持っている必要が
+# あります」(誤訳=肯定) と「持たない必要があります」(正しい=二重否定でMUST
+# NOT相当) を部分一致では区別できず、後者を許すと前者のような否定抜け誤訳を
+# 隠してしまうため。禁止/非推奨側は個別レビューでE002として拾う運用とする。
+_NECESSITY = [r"必要があ", r"必要です"]
+# 「〜ないでください」は動詞語幹を問わず (送信し/含め/渡さ/変更し等) MUST NOT/
+# SHOULD NOTの訳に広く使われるため、活用部分を含めない語尾一致にする。
+_PROHIBITION_REQUEST = [r"ないでください"]
+# 「ものとします」はSHALL/SHALL NOTどちらの訳にも使われる形式ばった言い回し
+# だが、動詞側が既に否定形になっているケース (例:「〜されないものとします」
+# =SHALL NOT) が大半のため、必要があ系と異なり両tierに登録して問題ない。
+_SHALL_FORMAL = [r"ものとします"]
+
 STRENGTH_PATTERNS = {
     "必須": [
         r"しなければなりません", r"なければなりません", r"ねばなりません",
-        r"しなければならない", r"必須です", r"必須である", r"必要とします",
+        # 「しなければならない」は受身/他動詞語幹 (省略されなければならない 等) を
+        # 拾えないため、し-プレフィックスなしの平叙形も登録する
+        # (旧「しなければならない」を包含するため削除)。
+        r"なければならない",
+        r"必要とします",
+        # 「必須」は日本語で「必須の/必須です/必須である」以外に「必須属性」
+        # 「（必須）」のような名詞複合・ラベル形でも使われ、多義性が低く
+        # 誤爆リスクも小さいため裸の部分一致で登録する。
+        r"必須",
+        *_NECESSITY, *_SHALL_FORMAL,
     ],
     # 注: 「禁止されています」「できます」は記述的な文でも多用され、規範表現の
     # 判定材料にすると誤検知が多発するため、意図的に含めない。
     "禁止": [
-        r"てはなりません", r"てはいけません", r"てはならない",
-        r"しないものとします",
+        r"てはなりません", r"てはいけません", r"てはならない", r"てはならず",
+        # む/ぶ/ぬ語幹の動詞 (含む→含んで、読む→読んで 等) は音便でて形が
+        # 「んで」になるため、「ては」パターンでは拾えない。
+        r"んではなりません", r"んではいけません", r"んではならない", r"んではならず",
+        r"しないものとします", *_PROHIBITION_REQUEST, *_SHALL_FORMAL,
     ],
     "推奨": [
-        r"べきです", r"べきである", r"推奨されます", r"推奨される",
-        r"することが望ましい", r"のが望ましい", r"お勧めします", r"推奨します",
-        r"推奨されています", r"した方がよい", r"したほうがよい",
+        r"べきです", r"べきである",
+        r"することが望ましい", r"のが望ましい", r"お勧めします",
+        r"した方がよい", r"したほうがよい", r"はずです", r"はずである",
+        # 「推奨」も「必須」と同様、名詞複合・ラベル形 (推奨値/推奨DSCP/(推奨) 等)
+        # を拾うため裸の部分一致にする。
+        r"推奨",
+        *_NECESSITY,
     ],
     "非推奨": [
         r"べきではありません", r"べきではない", r"推奨されません",
-        r"推奨されない", r"望ましくありません",
+        r"推奨されない", r"望ましくありません", *_PROHIBITION_REQUEST,
     ],
     "任意": [
-        r"してもよい", r"してもかまいません", r"しても構いません",
+        # 「し」プレフィックス限定だと受身/他動詞語幹 (共有されてもよい 等) を
+        # 拾えないため、語尾のみのパターンにする。
+        r"てもよい", r"てもかまいません", r"ても構いません",
         r"任意です", r"任意である", r"選択できます", r"することもできます",
+        r"場合があります", r"オプションです", *_NECESSITY,
     ],
+}
+
+# 「オプションの」「任意の」はOPTIONAL/MAY自身の段落 (例: "An OPTIONAL <X>
+# element") を正しく識別する分には有用だが、他のキーワードの段落で
+# 「any/arbitrary」や「オプション (RFC2119のOPTIONALとは無関係の一般名詞)」
+# として無関係に現れ、E002の誤検知を招くことが実証済み (2026-08-08)。
+# そのため、自分の期待強度を確認する has_expected でのみ使用し、他の強度
+# との不一致を断定する診断ループ (STRENGTH_PATTERNS) には含めない。
+CONFIRM_ONLY_PATTERNS = {
+    # 「(オプション)」のような丸括弧付きの裸ラベルは、見出しや属性一覧で
+    # "(OPTIONAL)" をそのまま訳した形として頻出する。括弧で囲まれている
+    # ことで一般名詞の「オプション」との衝突リスクが低いため、確認専用
+    # パターンとして追加する。
+    "任意": [r"オプションの", r"任意の", r"[（(]オプション[）)]"],
 }
 
 # 訳文中の明示注釈 (例: 「〜しなければなりません (MUST)」)
@@ -108,6 +158,15 @@ ANNOTATION_RE = re.compile(
 NON_NORMATIVE_NEGATION = re.compile(
     r"\b(not required|need not|no need|not necessary|is not mandatory|does not have to|do not have to)\b",
     re.IGNORECASE,
+)
+
+# 「a MUST」「a SHOULD NOT」のように冠詞つきで名詞的に使われるRFC2119キーワードは、
+# その段落自身が発する規範的指示ではなく、他所のルールへの言及(例: "this would
+# violate a SHOULD NOT in Section 3.5") であることが多い。この場合は訳文の強度と
+# 比較する対象がそもそも存在しないため、検査対象から外す。
+REFERENTIAL_KEYWORD_RE = re.compile(
+    r"\b(?:a|an)\s+(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\b"
 )
 
 # CamelCase識別子。
@@ -259,6 +318,8 @@ def check_rfc2119(en, ja):
     誤検知を避けるため、原文にRFC2119キーワードがちょうど1個だけの段落に限定する。"""
     if NON_NORMATIVE_NEGATION.search(en):
         return None
+    if REFERENTIAL_KEYWORD_RE.search(en):
+        return None
     found = detect_rfc2119(en)
     if len(found) != 1:
         return None
@@ -272,7 +333,8 @@ def check_rfc2119(en, ja):
             return None
         return ("E002", f"注釈不一致: 原文 {kw} に対し訳文の注釈は ({ann_kw})")
 
-    has_expected = any(re.search(p, ja) for p in STRENGTH_PATTERNS[expected])
+    confirm_patterns = STRENGTH_PATTERNS[expected] + CONFIRM_ONLY_PATTERNS.get(expected, [])
+    has_expected = any(re.search(p, ja) for p in confirm_patterns)
     if has_expected:
         return None
 
@@ -290,7 +352,10 @@ def check_rfc2119(en, ja):
             # 肯定形キーワード + 原文の否定表現 -> 訳文が禁止/非推奨になるのは正しい。
             # 例) "MUST be absent" -> 「存在してはいけません」
             #     "MUST signal X but not execute Y" -> 「実行してはなりません」
-            if (expected in ("必須", "推奨") and strength in ("禁止", "非推奨")
+            # 「MAY NOT」はRFC2119上未定義の組み合わせで、"MAY"として検出されるが
+            # 実質「〜しないことが許容される」という弱い禁止/非推奨に近い意味で
+            # 使われることが多いため、任意(MAY)もこの許容対象に含める。
+            if (expected in ("必須", "推奨", "任意") and strength in ("禁止", "非推奨")
                     and EN_NEGATION.search(en)):
                 continue
             if any(re.search(p, ja) for p in patterns):
