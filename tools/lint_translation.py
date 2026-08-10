@@ -171,6 +171,17 @@ CONFIRM_ONLY_PATTERNS = {
         # は既にSTRENGTH_PATTERNSにあるが「場合もあります」(助詞違い)は
         # 拾えないためここに追加する。
         r"ことがあります", r"可能性があります", r"場合もあります",
+        # 「かもしれません」もMAYの自然な訳の一つだが、一般的な推量表現でも
+        # 多用されるため確認専用にする。
+        r"かもしれません",
+        # 「場合があります」の連用中止形(〜であり、場合があり、〜も 等)。
+        # 「なければならず」と同様の理由で語尾のみのパターンにする。
+        r"場合があり(?!ます)",
+        # 「可能性がある」の連体修飾形(「〜する可能性のある〜」)。
+        r"可能性のある",
+        # フィールド定義・パラメータ一覧などで「OPTIONAL.」がそのまま
+        # 「オプション。」という裸ラベルで訳されることが多い。
+        r"オプション[。.]",
     ],
     # 「してください」はSHOULDの依頼調の訳としてよく使われるが、文末の
     # 「詳細は〜を参照してください/ご覧ください」のような、キーワードと無関係の
@@ -209,7 +220,11 @@ NON_NORMATIVE_NEGATION = re.compile(
 # 比較する対象がそもそも存在しないため、検査対象から外す。
 REFERENTIAL_KEYWORD_RE = re.compile(
     r"\b(?:a|an)\s+(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
-    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\b"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\b|"
+    # 「at the SHOULD level」のように、キーワードを規範強度のラベルとして
+    # 言及する形も同様に、その段落自身の指示ではなく強度分類への言及。
+    r"\bat the\s+(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\s+level\b"
 )
 
 # CamelCase識別子。
