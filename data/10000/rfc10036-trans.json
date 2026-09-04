@@ -1,0 +1,532 @@
+{
+  "title": {
+    "text": "RFC 10036 - Incremental Forwarding of HTTP Messages",
+    "ja": "RFC 10036 - HTTP メッセージの増分転送"
+  },
+  "number": 10036,
+  "created_at": "2026-08-23 23:24:09.748886+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                            K. Oku\nRequest for Comments: 10036                                       Fastly\nCategory: Standards Track                                       T. Pauly\nISSN: 2070-1721                                                    Apple\n                                                              M. Thomson\n                                                                 Mozilla\n                                                             August 2026",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Incremental Forwarding of HTTP Messages",
+      "section_title": true,
+      "ja": "HTTP メッセージの増分転送"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies the \"Incremental\" HTTP header field, which instructs HTTP intermediaries to forward the HTTP message incrementally.",
+      "ja": "この文書は、HTTP 仲介者に HTTP メッセージを段階的に転送するように指示する「増分」HTTP ヘッダー フィールドを指定します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本文書の状態"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはインターネット標準化トラックの文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "このドキュメントは Internet Engineering Task Force (IETF) の成果物です。これは IETF コミュニティのコンセンサスを表しています。この文書は公開レビューを受け、Internet Engineering Steering Group (IESG) によって公開が承認されています。インターネット標準の詳細については、RFC 7841 のセクション 2 を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc10036.",
+      "ja": "この文書の現在のステータス、正誤表、およびそれに対するフィードバックの提供方法に関する情報は、https://www.rfc-editor.org/info/rfc10036 で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright (c) 2026 IETF Trust および文書の著者として特定された人物。無断転載を禁じます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "この文書は、BCP 78 およびこの文書の発行日に有効な IETF 文書に関する IETF トラストの法的規定 (https://trustee.ietf.org/license-info) の対象となります。これらの文書には、この文書に関するお客様の権利と制限が記載されているため、注意深くお読みください。この文書から抽出されたコード コンポーネントには、トラスト法的規定のセクション 4.e に記載されている改訂 BSD ライセンス テキストが含まれている必要があり、改訂 BSD ライセンスに記載されているように保証なしで提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  The Incremental Header Field\n4.  Security Considerations\n  4.1.  Permanent Rejection\n  4.2.  Temporary Rejection\n  4.3.  Handling of Small Packets\n5.  IANA Considerations\n6.  References\n  6.1.  Normative References\n  6.2.  Informative References\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "HTTP [HTTP] permits receivers to begin processing portions of HTTP messages as they arrive, rather than requiring them to wait for the entire HTTP message to be received before acting.",
+      "ja": "HTTP [HTTP] では、受信者が HTTP メッセージ全体の受信を待ってから動作するのではなく、受信時に HTTP メッセージの一部の処理を開始できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Some applications are specifically designed to take advantage of this capability.",
+      "ja": "一部のアプリケーションは、この機能を活用するように特別に設計されています。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, Server-Sent Events [SSE] uses a long-running HTTP response, where the server continually sends notifications as they become available.",
+      "ja": "たとえば、Server-Sent Events [SSE] は長時間実行される HTTP 応答を使用し、サーバーは通知が利用可能になると継続的に通知を送信します。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of Chunked Oblivious HTTP Messages [CHUNKED-OHTTP], the client opens an HTTP request and incrementally sends application data, while the server can start responding even before the HTTP request is fully complete. In this way, the HTTP request-response pair could create what is, in effect, a bidirectional communication channel.",
+      "ja": "Chunked Oblivious HTTP Messages [CHUNKED-OHTTP] の場合、クライアントは HTTP リクエストを開いてアプリケーション データを段階的に送信しますが、サーバーは HTTP リクエストが完全に完了する前でも応答を開始できます。このようにして、HTTP 要求と応答のペアは、事実上、双方向通信チャネルを作成できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that rely on incremental delivery of data are fragile when HTTP intermediaries are involved. This is because HTTP intermediaries are not only permitted but are frequently deployed to buffer complete HTTP messages before forwarding them downstream (Section 7.6 of [HTTP]).",
+      "ja": "データの増分配信に依存するアプリケーションは、HTTP 仲介者が関与すると脆弱になります。これは、HTTP 仲介者が許可されているだけでなく、完全な HTTP メッセージを下流に転送する前にバッファリングするために頻繁に配備されているためです ([HTTP] のセクション 7.6)。"
+    },
+    {
+      "indent": 3,
+      "text": "If such a buffering HTTP intermediary exists between the client and the server, these applications may fail to function as intended.",
+      "ja": "このようなバッファリング HTTP 仲介がクライアントとサーバーの間に存在する場合、これらのアプリケーションは意図したとおりに機能しない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of Server-Sent Events, an intermediary that tries to buffer the HTTP response completely before forwarding it could be left waiting indefinitely. A client might never receive any portion of the response.",
+      "ja": "サーバー送信イベントの場合、HTTP 応答を転送する前に完全にバッファリングしようとする仲介者が、無期限に待機したままになる可能性があります。クライアントは応答のいかなる部分も受信しない可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "In the case of requests that involve any bidirectional exchange, an intermediary that tries to buffer entire messages -- either request or response -- prevents any data from being delivered.",
+      "ja": "双方向の交換を伴うリクエストの場合、仲介者がリクエストまたはレスポンスのメッセージ全体をバッファリングしようとすると、データの配信が妨げられます。"
+    },
+    {
+      "indent": 3,
+      "text": "To help avoid such behavior, this document specifies the \"Incremental\" HTTP header field, which requests that HTTP intermediaries begin forwarding the HTTP message downstream before receiving the complete message.",
+      "ja": "このような動作を回避するために、この文書では「増分」HTTP ヘッダー フィールドを指定します。これは、HTTP 仲介者が完全なメッセージを受信する前に HTTP メッセージのダウンストリーム転送を開始することを要求します。"
+    },
+    {
+      "indent": 3,
+      "text": "This indication might not be supported by intermediaries. Intermediaries that are unaware of this field will not change their behavior. Intermediaries that support the field might choose instead to reject a request; see Section 4.",
+      "ja": "この表示は仲介業者によってサポートされていない可能性があります。この分野を知らない仲介者は、その行動を変えることはありません。この分野をサポートする仲介者は、代わりにリクエストを拒否することを選択する可能性があります。セクション 4 を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 規則と定義"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "このドキュメント内のキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 [RFC2119] [RFC8174] で説明されているように解釈されます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document relies on structured field definitions of Item and Boolean [STRUCTURED-FIELDS].",
+      "ja": "このドキュメントは、Item および Boolean の構造化フィールド定義 [STRUCTURED-FIELDS] に依存しています。"
+    },
+    {
+      "indent": 0,
+      "text": "3. The Incremental Header Field",
+      "section_title": true,
+      "ja": "3. インクリメンタルヘッダーフィールド"
+    },
+    {
+      "indent": 3,
+      "text": "The Incremental HTTP header field expresses the sender's intent for HTTP intermediaries to start forwarding the message downstream before the entire message is received.",
+      "ja": "Incremental HTTP ヘッダー フィールドは、メッセージ全体が受信される前に HTTP 仲介者がメッセージの下流への転送を開始するという送信者の意図を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "The Incremental header field is defined as a structured field [STRUCTURED-FIELDS] of type Item. Only Boolean values (Section 3.3.6 of [STRUCTURED-FIELDS]) are valid; a recipient ignores the field if it contains any other type.",
+      "ja": "Incremental ヘッダー フィールドは、Item タイプの構造化フィールド [STRUCTURED-FIELDS] として定義されます。ブール値 ([STRUCTURED-FIELDS] のセクション 3.3.6) のみが有効です。他のタイプがフィールドに含まれている場合、受信者はフィールドを無視します。"
+    },
+    {
+      "indent": 3,
+      "text": "Incremental: ?1",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "A true value (\"?1\") indicates that the sender requests intermediaries to forward the message incrementally, as described below.",
+      "ja": "true 値 (\"?1\") は、以下で説明するように、送信者が仲介者にメッセージを段階的に転送するよう要求していることを示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Incremental: ?0",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "A false value (\"?0\") indicates the default behavior defined in [HTTP], where intermediaries might buffer the entire message before forwarding it. However, this explicit signal might give an intermediary greater confidence in choosing to buffer.",
+      "ja": "false 値 (\"?0\") は、[HTTP] で定義されているデフォルトの動作を示します。この動作では、仲介者がメッセージ全体を転送する前にバッファリングする可能性があります。ただし、この明示的なシグナルにより、仲介者がバッファリングを選択する際の確信度が高まる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The Incremental HTTP header field applies to each HTTP message. Therefore, if both the HTTP request and response need to be forwarded incrementally, the Incremental HTTP header field MUST be set for both the HTTP request and the response.",
+      "ja": "Incremental HTTP ヘッダー フィールドは、各 HTTP メッセージに適用されます。したがって、HTTP リクエストとレスポンスの両方を段階的に転送する必要がある場合は、HTTP リクエストとレスポンスの両方に Incremental HTTP ヘッダー フィールドを設定しなければなりません。"
+    },
+    {
+      "indent": 3,
+      "text": "Upon receiving a header section that includes an Incremental header field with a true value, HTTP intermediaries SHOULD NOT buffer the entire message before forwarding it. Instead, intermediaries SHOULD transmit the header section downstream and continuously forward the bytes of the message content as they arrive. As the Incremental header field indicates only how the message content is to be forwarded, intermediaries can still buffer the entire header and trailer sections of the message before forwarding them downstream.",
+      "ja": "true 値を持つ Incremental ヘッダー フィールドを含むヘッダー セクションを受信した場合、HTTP 仲介者は、メッセージを転送する前にメッセージ全体をバッファリングしてはなりません (SHOULD NOT)。代わりに、仲介者はヘッダーセクションを下流に送信し、メッセージコンテンツのバイトが到着するたびに継続的に転送する必要があります(SHOULD)。Incremental ヘッダー フィールドはメッセージ コンテンツの転送方法のみを示すため、仲介者はメッセージのヘッダー セクションとトレーラー セクション全体を下流に転送する前にバッファリングできます。"
+    },
+    {
+      "indent": 3,
+      "text": "If an intermediary decides outright to refuse forwarding the message body incrementally, the intermediary MUST generate an error response rather than buffering an entire message before forwarding. Typical scenarios under which an intermediary might refuse are discussed in Section 4.",
+      "ja": "中継者がメッセージ本文の段階的な転送を拒否することを完全に決定した場合、中継者は転送前にメッセージ全体をバッファリングするのではなく、エラー応答を生成しなければなりません(MUST)。仲介業者が拒否する可能性のある典型的なシナリオについては、セクション 4 で説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "The request to use incremental forwarding also applies to HTTP implementations. Though most HTTP APIs provide the ability to incrementally transfer message content, those that do not for any reason SHOULD use the presence of the Incremental header field to reduce or disable buffering.",
+      "ja": "増分転送を使用する要求は、HTTP 実装にも適用されます。ほとんどの HTTP API はメッセージ コンテンツを増分転送する機能を提供しますが、何らかの理由でそれを行わない API では、バッファリングを削減または無効にするために Incremental ヘッダー フィールドの存在を使用する必要があります (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "The Incremental field might not be supported by intermediaries. Intermediaries that are unaware of the field or that do not support the field might buffer messages, even when explicitly requested otherwise. Clients and servers therefore cannot expect all intermediaries to understand and respect a request to deliver messages incrementally. Clients that depend on support for incremental forwarding can rely on prior knowledge or probe for support on individual resources.",
+      "ja": "Incremental フィールドは仲介者によってサポートされていない可能性があります。このフィールドを認識していない、またはそのフィールドをサポートしていない仲介者は、明示的に別の方法で要求された場合でも、メッセージをバッファリングする可能性があります。したがって、クライアントとサーバーは、すべての仲介者がメッセージを段階的に配信するリクエストを理解し、尊重することを期待できません。増分転送のサポートに依存するクライアントは、事前の知識に頼ったり、個々のリソースのサポートを調べたりすることができます。"
+    },
+    {
+      "indent": 3,
+      "text": "The Incremental header field facilitates the establishment of a bidirectional byte channel over HTTP, as its presence in both requests and responses requests that intermediaries forward early responses (Section 7.5 of [HTTP]) and transmit message contents incrementally in both directions. However, when developing bidirectional protocols over HTTP, Extended CONNECT [RFC8441][RFC9220] is generally more consistent with HTTP's architecture.",
+      "ja": "Incremental ヘッダー フィールドは、リクエストと応答の両方にこのヘッダー フィールドが存在すると、仲介者が初期応答を転送し ([HTTP] のセクション 7.5)、メッセージ コンテンツを増分的に両方向に送信するよう要求するため、HTTP を介した双方向バイト チャネルの確立を容易にします。ただし、HTTP 経由で双方向プロトコルを開発する場合、一般に Extended CONNECT [RFC8441][RFC9220] の方が HTTP のアーキテクチャとの整合性が高くなります。"
+    },
+    {
+      "indent": 3,
+      "text": "This document does not define any parameters for the Incremental header field value, but future documents might define parameters. Receivers MUST ignore unknown parameters.",
+      "ja": "このドキュメントでは、Incremental ヘッダー フィールド値のパラメータは定義されていませんが、将来のドキュメントではパラメータが定義される可能性があります。受信者は未知のパラメータを無視しなければなりません(MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Security Considerations",
+      "section_title": true,
+      "ja": "4. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "When receiving a request or response that asks for incremental forwarding, intermediaries might reject the HTTP request due to security concerns. The following subsections explore typical scenarios under which the intermediaries might reject requests.",
+      "ja": "増分転送を要求するリクエストまたはレスポンスを受信した場合、セキュリティ上の懸念から仲介者が HTTP リクエストを拒否する可能性があります。次のサブセクションでは、仲介者がリクエストを拒否する可能性がある典型的なシナリオについて説明します。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that rejecting requests based on the value of the Incremental field only occurs when an intermediary understands the field.",
+      "ja": "Incremental フィールドの値に基づくリクエストの拒否は、仲介者がフィールドを理解している場合にのみ行われることに注意してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Permanent Rejection",
+      "section_title": true,
+      "ja": "4.1. 永久的な拒否"
+    },
+    {
+      "indent": 3,
+      "text": "Some intermediaries inspect the content of HTTP messages and forward them only if their content is deemed safe. Any feature that depends on seeing the entirety of the message in this way is incompatible with incremental delivery.",
+      "ja": "一部の仲介者は HTTP メッセージの内容を検査し、その内容が安全であると判断された場合にのみ転送します。この方法でメッセージ全体を表示することに依存する機能は、増分配信と互換性がありません。"
+    },
+    {
+      "indent": 3,
+      "text": "When an intermediary is asked to incrementally forward a message and cannot -- whether that message is a request or a response -- due to security concerns about the message content, the intermediary SHOULD respond with a 501 (Not Implemented) error with an incremental_refused Proxy-Status response header field (Section 5).",
+      "ja": "中間者がメッセージを段階的に転送するように要求され、そのメッセージが要求であるか応答であるかに関係なく、メッセージの内容に関するセキュリティ上の懸念によりそれができない場合、中間者は、incremental_refreded Proxy-Status 応答ヘッダー フィールドを含む 501 (未実装) エラーで応答する必要があります (セクション 5)。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Temporary Rejection",
+      "section_title": true,
+      "ja": "4.2. 一時的な拒否"
+    },
+    {
+      "indent": 3,
+      "text": "To conserve resources required to handle HTTP requests or connections, it is common for intermediaries to impose limits on the maximum number of concurrent HTTP requests that they forward, while buffering requests that exceed this limit.",
+      "ja": "HTTP リクエストまたは接続の処理に必要なリソースを節約するために、仲介者が転送する同時 HTTP リクエストの最大数に制限を設け、この制限を超えるリクエストをバッファリングするのが一般的です。"
+    },
+    {
+      "indent": 3,
+      "text": "Such intermediaries could apply a more restrictive concurrency limit to requests marked as incremental to ensure that capacity remains available for non-incremental requests, even when the maximum number of incremental requests is reached. This approach helps balance the processing of different types of requests and maintains service availability across all requests.",
+      "ja": "このような仲介者は、増分リクエストの最大数に達した場合でも、非増分リクエストに使用可能な容量を確保するために、増分としてマークされたリクエストに対してより制限的な同時実行制限を適用できます。このアプローチは、さまざまな種類のリクエストの処理のバランスをとり、すべてのリクエストにわたってサービスの可用性を維持するのに役立ちます。"
+    },
+    {
+      "indent": 3,
+      "text": "When rejecting incremental requests due to reaching the concurrency limit, intermediaries SHOULD respond with a 429 (Too Many Requests) error (Section 4 of [EXTRA-STATUS]), accompanied by a connection_limit_reached Proxy-Status response header field (Section 2.3.12 of [PROXY-STATUS]).",
+      "ja": "同時実行制限に達したために増分リクエストを拒否する場合、仲介者は、connection_limit_reached プロキシステータス応答ヘッダーフィールド ([PROXY-STATUS] のセクション 2.3.12) を伴う 429 (Too Many Requests) エラー ([EXTRA-STATUS] のセクション 4) で応答すべきです (SHOULD)。"
+    },
+    {
+      "indent": 0,
+      "text": "4.3. Handling of Small Packets",
+      "section_title": true,
+      "ja": "4.3. 小型パケットの取り扱い"
+    },
+    {
+      "indent": 3,
+      "text": "For performance and efficiency reasons, a small amount of buffering might be used by intermediaries, even for incremental messages. Immediate forwarding might be exploited to cause an intermediary to waste effort on many small packets. Enabling incremental delivery might instead set limits on the number of bytes that are buffered or the length of time that buffers are held before forwarding. Any buffering could adversely affect application latency, even if it improves efficiency. In all cases, intermediaries cannot hold data in buffers indefinitely, so data needs to be forwarded when either the time limit or the byte limit is reached.",
+      "ja": "パフォーマンスと効率の理由から、増分メッセージであっても仲介者によって少量のバッファリングが使用される場合があります。即時転送を悪用すると、仲介者が多くの小さなパケットに労力を浪費する可能性があります。増分配信を有効にすると、代わりに、バッファリングされるバイト数または転送前にバッファが保持される時間の長さに制限が設定される場合があります。バッファリングは、たとえ効率が向上したとしても、アプリケーションの遅延に悪影響を与える可能性があります。いずれの場合も、仲介者はデータをバッファに無制限に保持することはできないため、時間制限またはバイト制限に達したときにデータを転送する必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. IANA Considerations",
+      "section_title": true,
+      "ja": "5. IANAの考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "An HTTP field named Incremental has been registered in the \"Hypertext Transfer Protocol (HTTP) Field Name Registry\" following the procedures in Section 18.4 of [HTTP]. The following values are registered:",
+      "ja": "[HTTP] のセクション 18.4 の手順に従って、Incremental という名前の HTTP フィールドが「ハイパーテキスト転送プロトコル (HTTP) フィールド名レジストリ」に登録されました。以下の値が登録されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Field Name:",
+      "ja": "フィールド名:"
+    },
+    {
+      "indent": 12,
+      "text": "Incremental",
+      "ja": "増分"
+    },
+    {
+      "indent": 3,
+      "text": "Status:",
+      "ja": "状態："
+    },
+    {
+      "indent": 12,
+      "text": "permanent",
+      "ja": "永続"
+    },
+    {
+      "indent": 3,
+      "text": "Structured Type:",
+      "ja": "構造化タイプ:"
+    },
+    {
+      "indent": 12,
+      "text": "Item",
+      "ja": "アイテム"
+    },
+    {
+      "indent": 3,
+      "text": "Reference:",
+      "ja": "参照："
+    },
+    {
+      "indent": 12,
+      "text": "This document",
+      "ja": "この文書"
+    },
+    {
+      "indent": 3,
+      "text": "Comments:",
+      "ja": "コメント:"
+    },
+    {
+      "indent": 12,
+      "text": "None",
+      "ja": "なし"
+    },
+    {
+      "indent": 3,
+      "text": "An HTTP Proxy Error Type has been registered in the \"HTTP Proxy Error Types\" registry as shown below:",
+      "ja": "HTTP プロキシ エラー タイプは、以下に示すように「HTTP プロキシ エラー タイプ」レジストリに登録されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Name:",
+      "ja": "名前："
+    },
+    {
+      "indent": 12,
+      "text": "incremental_refused",
+      "ja": "増分_拒否"
+    },
+    {
+      "indent": 3,
+      "text": "Description:",
+      "ja": "説明："
+    },
+    {
+      "indent": 12,
+      "text": "The HTTP message contained the Incremental HTTP header field, but the intermediary refused to forward the message incrementally.",
+      "ja": "HTTP メッセージには増分 HTTP ヘッダー フィールドが含まれていましたが、仲介者はメッセージの増分転送を拒否しました。"
+    },
+    {
+      "indent": 3,
+      "text": "Extra Parameters:",
+      "ja": "追加のパラメータ:"
+    },
+    {
+      "indent": 12,
+      "text": "none",
+      "ja": "なし"
+    },
+    {
+      "indent": 3,
+      "text": "Recommended HTTP Status Code:",
+      "ja": "推奨される HTTP ステータス コード:"
+    },
+    {
+      "indent": 12,
+      "text": "501",
+      "ja": "501"
+    },
+    {
+      "indent": 3,
+      "text": "Response Only Generated By Intermediaries:",
+      "ja": "仲介者のみが生成する応答:"
+    },
+    {
+      "indent": 12,
+      "text": "true",
+      "ja": "真実"
+    },
+    {
+      "indent": 3,
+      "text": "Reference:",
+      "ja": "参照："
+    },
+    {
+      "indent": 12,
+      "text": "This document",
+      "ja": "この文書"
+    },
+    {
+      "indent": 0,
+      "text": "6. References",
+      "section_title": true,
+      "ja": "6. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "6.1. Normative References",
+      "section_title": true,
+      "ja": "6.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[EXTRA-STATUS]\n           Nottingham, M. and R. Fielding, \"Additional HTTP Status\n           Codes\", RFC 6585, DOI 10.17487/RFC6585, April 2012,\n           <https://www.rfc-editor.org/info/rfc6585>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[HTTP]     Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,\n           Ed., \"HTTP Semantics\", STD 97, RFC 9110,\n           DOI 10.17487/RFC9110, June 2022,\n           <https://www.rfc-editor.org/info/rfc9110>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[PROXY-STATUS]\n           Nottingham, M. and P. Sikora, \"The Proxy-Status HTTP\n           Response Header Field\", RFC 9209, DOI 10.17487/RFC9209,\n           June 2022, <https://www.rfc-editor.org/info/rfc9209>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[STRUCTURED-FIELDS]\n           Nottingham, M. and P. Kamp, \"Structured Field Values for\n           HTTP\", RFC 9651, DOI 10.17487/RFC9651, September 2024,\n           <https://www.rfc-editor.org/info/rfc9651>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "6.2. Informative References",
+      "section_title": true,
+      "ja": "6.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[CHUNKED-OHTTP]\n           Pauly, T. and M. Thomson, \"Chunked Oblivious HTTP\n           Messages\", Work in Progress, Internet-Draft, draft-ietf-\n           ohai-chunked-ohttp-08, 18 February 2026,\n           <https://datatracker.ietf.org/doc/html/draft-ietf-ohai-\n           chunked-ohttp-08>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8441]  McManus, P., \"Bootstrapping WebSockets with HTTP/2\",\n           RFC 8441, DOI 10.17487/RFC8441, September 2018,\n           <https://www.rfc-editor.org/info/rfc8441>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9220]  Hamilton, R., \"Bootstrapping WebSockets with HTTP/3\",\n           RFC 9220, DOI 10.17487/RFC9220, June 2022,\n           <https://www.rfc-editor.org/info/rfc9220>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[SSE]      WHATWG, \"HTML - Server-Sent Events\", WHATWG Living\n           Standard, <https://html.spec.whatwg.org/multipage/server-\n           sent-events.html>.  Commit snapshot:\n           <https://html.spec.whatwg.org/commit-\n           snapshots/6f84b26bd6eb8bd0e0e8df9819e43e901867166b/>",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors would like to thank many members of the IETF HTTP Working Group for their discussions and feedback on this specification. In particular, the authors would like to thank Mark Thomas, Piotr Sikora, Thibault Meunier, Marius Kleidl, Ben Schwartz, Willy Tarreau, Will Hawkins, Mark Nottingham, and Lucas Pardue for close review and suggested changes.",
+      "ja": "著者らは、この仕様に関する議論とフィードバックを提供してくれた IETF HTTP ワーキング グループの多くのメンバーに感謝したいと思います。特に、著者らは、綿密なレビューと変更の提案について、Mark Thomas、Piotr Sikora、Thibault Meunier、Marius Kleidl、Ben Schwartz、Willy Tarreau、Will Hawkins、Mark Nottingham、および Lucas Pardue に感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "著者の住所"
+    },
+    {
+      "indent": 3,
+      "text": "Kazuho Oku\nFastly\nEmail: kazuhooku@gmail.com\n\nAdditional contact information:\n\n   奥 一穂\n   Fastly",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Tommy Pauly\nApple\nEmail: tpauly@apple.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Martin Thomson\nMozilla\nEmail: mt@lowentropy.net",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
