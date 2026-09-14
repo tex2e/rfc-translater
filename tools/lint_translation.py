@@ -41,11 +41,12 @@ CHECKS = {
 # 長いキーワードを先に並べる (MUST NOT を MUST より先に判定するため)
 # (表示名, 正規表現, 規範強度)
 # 否定語 NOT は大小文字を問わない。RFCによっては "MUST not" のように
-# 小文字で書かれるが、意味は MUST NOT と同じ禁止である。
+# また、"MUST also not", "MUST therefore not" のように副詞が挟まるケースも
+# 禁止・非推奨として扱う。
 RFC2119 = [
-    ("MUST NOT", r"\bMUST\s+[Nn][Oo][Tt]\b", "禁止"),
-    ("SHALL NOT", r"\bSHALL\s+[Nn][Oo][Tt]\b", "禁止"),
-    ("SHOULD NOT", r"\bSHOULD\s+[Nn][Oo][Tt]\b", "非推奨"),
+    ("MUST NOT", r"\bMUST\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "禁止"),
+    ("SHALL NOT", r"\bSHALL\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "禁止"),
+    ("SHOULD NOT", r"\bSHOULD\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "非推奨"),
     ("NOT RECOMMENDED", r"\bNOT\s+RECOMMENDED\b", "非推奨"),
     ("MUST", r"\bMUST\b", "必須"),
     ("SHALL", r"\bSHALL\b", "必須"),
