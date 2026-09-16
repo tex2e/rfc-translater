@@ -220,12 +220,14 @@ NON_NORMATIVE_NEGATION = re.compile(
 # violate a SHOULD NOT in Section 3.5") であることが多い。この場合は訳文の強度と
 # 比較する対象がそもそも存在しないため、検査対象から外す。
 REFERENTIAL_KEYWORD_RE = re.compile(
-    r"\b(?:a|an)\s+(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
-    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\b|"
+    r"\b(?:a|an)\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\b|"
+    r"\b(?:vs\.?|versus)\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\b|"
     # 「at the SHOULD level」のように、キーワードを規範強度のラベルとして
     # 言及する形も同様に、その段落自身の指示ではなく強度分類への言及。
-    r"\bat the\s+(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
-    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\s+level\b"
+    r"\bat the\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\s+level\b"
 )
 
 # CamelCase識別子。
