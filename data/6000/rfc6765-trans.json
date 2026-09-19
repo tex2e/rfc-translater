@@ -301,8 +301,8 @@
       "ja": "G.Bond検出メカニズムでは、ifStackTableとifCapStackTableという2つのテーブルが使用されます。次の疑似コードは、このMIBモジュールで定義されたオブジェクトとIF-CAP-STACK-を使用して、セントラルオフィス（CO）にある汎用マルチGBS G.Bondデバイスの検出と自動BCE割り当ての例を示していますMIBおよびIF-MIBモジュール[自動BCE割り当ては、例の目的でここにのみ示されていることに注意してください。特定の実装では、代替の内部アルゴリズムを使用した固定BCE事前割り当て、手動割り当て、または自動割り当てを選択できます]："
     },
     {
-      "indent": 0,
-      "text": "   // Go over all GBS ports in the CO device\n   FOREACH gbs[i] IN CO_device\n   { // Perform discovery and auto-assignment on GBS ports\n     // with room for more channels.\n     IF ( gbs[i].NumBCEs < gbs[i].BondCapacity )\n     { // Assign a unique 6-octet local discovery code to the GBS,\n       // e.g., MAC address of the associated port or some other\n       // unique number specifically allocated for this purpose.\n       dc = gbs[i].DiscoveryCode = MAC[i];\n       // Go over all disconnected channels, which can\n       // potentially be connected to the GBS.\n       FOREACH bce[j] IN ifCapStackTable[gbs[i]] AND\n                      NOT IN ifStackTable[gbs[i]]  // not connected\n       { // Try to grab the Remote Terminal device (RT) by writing the\n         // value of the local 6-byte discovery code to the remote\n         // discovery code register (via a handshake mechanism).\n         // This operation is an atomic Set-if-Clear action; i.e., it\n         // would succeed only if the remote discovery register was\n         // zero.  Read the remote discovery code register via a Get\n         // operation to see if the RT, attached via the BCE,\n         // is indeed marked as being the CO_device peer.\n         bce[j].RemoteDiscoveryCode = dc;          // Set-if-Clear\n         r = bce[j].RemoteDiscoveryCode;           // Get\n         IF ( r == dc AND gbs[i].NumBCEs < gbs[i].BondCapacity )\n         { // RT connected via BCE[j] is/was a peer\n           // for GBS[i], and there is room for another BCE in the\n           // GBS[i] aggregation group (max. Bonding capacity is\n           // not reached yet).\n           // Connect this BCE to the GBS (via the ifStackTable; the\n           // ifInvStackTable, which is the inverse of the ifStackTable,\n           // is updated automatically; i.e., gbs[i] is auto-added\n           // to ifInvStackTable[bce[j]]).\n           ADD bce[j] TO ifStackTable[gbs[i]];\n           gbs[i].NumBCEs = gbs[i].NumBCEs + 1;\n           // Discover all other disconnected BCEs\n           // attached to the same RT and connect them to\n           // the GBS, provided there is enough room for more BCEs.\n           FOREACH bce[k] IN ifCapStackTable[gbs[i]] and\n                          NOT IN ifStackTable[gbs[i]]\n           { // Get the remote discovery code from the BCE to see if\n             // it belongs to a connected RT \"grabbed\" by\n             // the CO_device.\n             r = bce[k].RemoteDiscoveryCode;\n             IF ( r == dc AND gbs[i].NumBCEs < gbs[i].BondCapacity )\n             { // Physically connect the BCE to the GBS.\n               // (gbs[i] is auto-added TO ifInvStackTable[bce[k]]).\n               ADD bce[k] TO ifStackTable[gbs[i]];\n               gbs[i].NumBCEs = gbs[i].NumBCEs + 1;\n             }\n           }\n         }\n         // At this point we have discovered all local BCEs that\n         // are physically connected to the same RT and\n         // connected them to GBS[i].  Go to the next GBS.\n         BREAK;\n       }\n     }\n   }",
+      "indent": 3,
+      "text": "// Go over all GBS ports in the CO device\nFOREACH gbs[i] IN CO_device\n{ // Perform discovery and auto-assignment on GBS ports\n  // with room for more channels.\n  IF ( gbs[i].NumBCEs < gbs[i].BondCapacity )\n  { // Assign a unique 6-octet local discovery code to the GBS,\n    // e.g., MAC address of the associated port or some other\n    // unique number specifically allocated for this purpose.\n    dc = gbs[i].DiscoveryCode = MAC[i];\n    // Go over all disconnected channels, which can\n    // potentially be connected to the GBS.\n    FOREACH bce[j] IN ifCapStackTable[gbs[i]] AND\n                   NOT IN ifStackTable[gbs[i]]  // not connected\n    { // Try to grab the Remote Terminal device (RT) by writing the\n      // value of the local 6-byte discovery code to the remote\n      // discovery code register (via a handshake mechanism).\n      // This operation is an atomic Set-if-Clear action; i.e., it\n      // would succeed only if the remote discovery register was\n      // zero.  Read the remote discovery code register via a Get\n      // operation to see if the RT, attached via the BCE,\n      // is indeed marked as being the CO_device peer.\n      bce[j].RemoteDiscoveryCode = dc;          // Set-if-Clear\n      r = bce[j].RemoteDiscoveryCode;           // Get\n      IF ( r == dc AND gbs[i].NumBCEs < gbs[i].BondCapacity )\n      { // RT connected via BCE[j] is/was a peer\n        // for GBS[i], and there is room for another BCE in the\n        // GBS[i] aggregation group (max. Bonding capacity is\n        // not reached yet).\n        // Connect this BCE to the GBS (via the ifStackTable; the\n        // ifInvStackTable, which is the inverse of the ifStackTable,\n        // is updated automatically; i.e., gbs[i] is auto-added\n        // to ifInvStackTable[bce[j]]).\n        ADD bce[j] TO ifStackTable[gbs[i]];\n        gbs[i].NumBCEs = gbs[i].NumBCEs + 1;\n        // Discover all other disconnected BCEs\n        // attached to the same RT and connect them to\n        // the GBS, provided there is enough room for more BCEs.\n        FOREACH bce[k] IN ifCapStackTable[gbs[i]] and\n                       NOT IN ifStackTable[gbs[i]]\n        { // Get the remote discovery code from the BCE to see if\n          // it belongs to a connected RT \"grabbed\" by\n          // the CO_device.\n          r = bce[k].RemoteDiscoveryCode;\n          IF ( r == dc AND gbs[i].NumBCEs < gbs[i].BondCapacity )\n          { // Physically connect the BCE to the GBS.\n            // (gbs[i] is auto-added TO ifInvStackTable[bce[k]]).\n            ADD bce[k] TO ifStackTable[gbs[i]];\n            gbs[i].NumBCEs = gbs[i].NumBCEs + 1;\n          }\n        }\n      }\n      // At this point we have discovered all local BCEs that\n      // are physically connected to the same RT and\n      // connected them to GBS[i].  Go to the next GBS.\n      BREAK;\n    }\n  }\n}",
       "raw": true,
       "ja": ""
     },
@@ -627,8 +627,9 @@
     },
     {
       "indent": 6,
-      "text": "Naming Conventions: BCE - Bonding Channel Entity BTU - Bonding Terminating Unit BTU-C - Bonding Terminating Unit, CO side BTU-R - Bonding Terminating Unit, Remote Terminal (CPE) side CO - Central Office CPE - Customer Premises Equipment GBS - Generic Bonding Sub-layer PM - Performance Monitoring SNR - Signal to Noise Ratio TCA - Threshold Crossing Alert",
-      "ja": "命名規則：BCE-ボンディングチャネルエンティティBTU-ボンディングターミネーションユニットBTU-C-ボンディングターミネーションユニット、CO側BTU-R-ボンディングターミネーションユニット、リモートターミナル（CPE）サイドCO-セントラルオフィスCPE-顧客宅内機器GBS-一般的なボンディングサブレイヤーPM-パフォーマンスモニタリングSNR-信号対雑音比TCA-しきい値超過アラート"
+      "text": "Naming Conventions:\n  BCE   - Bonding Channel Entity\n  BTU   - Bonding Terminating Unit\n  BTU-C - Bonding Terminating Unit, CO side\n  BTU-R - Bonding Terminating Unit, Remote Terminal (CPE) side\n  CO    - Central Office\n  CPE   - Customer Premises Equipment\n  GBS   - Generic Bonding Sub-layer\n  PM    - Performance Monitoring\n  SNR   - Signal to Noise Ratio\n  TCA   - Threshold Crossing Alert",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -652,8 +653,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   -- Sections of the module\n   -- Structured as recommended by RFC 4181, Appendix D\n   gBondObjects     OBJECT IDENTIFIER ::= { gBondMIB 1 }",
+      "indent": 3,
+      "text": "-- Sections of the module\n-- Structured as recommended by RFC 4181, Appendix D\ngBondObjects     OBJECT IDENTIFIER ::= { gBondMIB 1 }",
       "raw": true,
       "ja": ""
     },
@@ -784,8 +785,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   gBondPmTca15MinSESCrossing NOTIFICATION-TYPE\n     OBJECTS {\n       -- ifIndex is not needed here, since we are under specific GBS\n       gBondPortPmCur15MinSES,\n       gBondPortPmTcaProfileThresh15MinSES\n     }\n     STATUS      current\n     DESCRIPTION\n       \"This notification indicates that the Severely Errored Seconds\n       threshold, specified by gBondPortPmTcaProfileThresh15MinSES,\n       has been reached or exceeded for the GBS port.",
+      "indent": 3,
+      "text": "gBondPmTca15MinSESCrossing NOTIFICATION-TYPE\n  OBJECTS {\n    -- ifIndex is not needed here, since we are under specific GBS\n    gBondPortPmCur15MinSES,\n    gBondPortPmTcaProfileThresh15MinSES\n  }\n  STATUS      current\n  DESCRIPTION\n    \"This notification indicates that the Severely Errored Seconds\n    threshold, specified by gBondPortPmTcaProfileThresh15MinSES,\n    has been reached or exceeded for the GBS port.",
       "raw": true,
       "ja": ""
     },
@@ -892,9 +893,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortConfAdminScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-write STATUS current DESCRIPTION \"A desired bonding scheme for a G.Bond GBS port. The following values instruct the port to use the corresponding bonding scheme if supported: none(0) - instructs the port not to use bonding (only on a single-BCE G.998.2 GBS) g9981(1) - instructs the port to use G.998.1 bonding g9982(2) - instructs the port to use G.998.2 bonding g9983(3) - instructs the port to use G.998.3 bonding",
-      "ja": "gBondPortConfAdminScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-write STATUS current DESCRIPTION \"G.Bond GBSポートの望ましいボンディングスキーム。サポートされている場合、次の値は対応するボンディングスキームを使用するようにポートに指示します：none（0）-ボンディングを使用しないポート（シングルBCE G.998.2 GBSのみ）g9981（1）-G.998.1ボンディングを使用するようにポートに指示しますg9982（2）-G.998.2ボンディングを使用するようにポートに指示しますg9983（3）- G.998.3ボンディングを使用するようにポートに指示します"
+      "indent": 3,
+      "text": "gBondPortConfAdminScheme  OBJECT-TYPE\n  SYNTAX      IANAgBondScheme\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A desired bonding scheme for a G.Bond GBS port.\n    The following values instruct the port to use the corresponding\n    bonding scheme if supported:\n      none(0)       - instructs the port not to use bonding\n                      (only on a single-BCE G.998.2 GBS)\n      g9981(1)      - instructs the port to use G.998.1 bonding\n      g9982(2)      - instructs the port to use G.998.2 bonding\n      g9983(3)      - instructs the port to use G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -909,8 +911,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfPeerAdminScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-write STATUS current DESCRIPTION \"A desired bonding scheme for a peer (link partner) G.Bond port (GBS). The following values instruct the peer port to use the corresponding bonding scheme if supported: none(0) - instructs the port not to use bonding (only on a single-BCE G.998.2 GBS) g9981(1) - instructs the port to use G.998.1 bonding g9982(2) - instructs the port to use G.998.2 bonding g9983(3) - instructs the port to use G.998.3 bonding",
-      "ja": "gBondPortConfPeerAdminScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-write STATUS現在の説明「ピア（リンクパートナー）G.Bondポート（GBS）に必要なボンディングスキーム。次の値は、サポートされている場合、対応するボンディングスキームを使用するようにピアポートに指示します：none（0）-ポートにボンディングを使用しないように指示します（シングルBCE G.998.2 GBSのみ）g9981（1）-G.998.1ボンディングを使用するようにポートに指示しますg9982（2）-Gを使用するようにポートに指示します.998.2ボンディングg9983（3）-G.998.3ボンディングを使用するようにポートに指示します"
+      "text": "gBondPortConfPeerAdminScheme  OBJECT-TYPE\n  SYNTAX      IANAgBondScheme\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A desired bonding scheme for a peer (link partner) G.Bond\n    port (GBS).\n    The following values instruct the peer port to use the\n    corresponding bonding scheme if supported:\n      none(0)       - instructs the port not to use bonding\n                      (only on a single-BCE G.998.2 GBS)\n      g9981(1)      - instructs the port to use G.998.1 bonding\n      g9982(2)      - instructs the port to use G.998.2 bonding\n      g9983(3)      - instructs the port to use G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 0,
@@ -925,8 +928,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfDiscoveryCode OBJECT-TYPE SYNTAX PhysAddress (SIZE (6)) MAX-ACCESS read-write STATUS current DESCRIPTION \"A discovery code of the G.Bond port (GBS). A unique 6-octet-long code used by the Discovery function. This object MUST be instantiated for the -O subtype GBS before write operations on the gBondBceConfRemoteDiscoveryCode (Set_if_Clear and Clear_if_Same) are performed by BCEs associated with the GBS. The initial value of this object for -R subtype ports after reset is all zeroes. For -R subtype ports, the value of this object cannot be changed directly. This value may be changed as a result of a write operation on the gBondBceConfRemoteDiscoveryCode object of a remote BCE of -O subtype, connected to one of the local BCEs associated with the GBS.",
-      "ja": "gBondPortConfDiscoveryCode OBJECT-TYPE SYNTAX PhysAddress（SIZE（6））MAX-ACCESS read-write STATUS現在の説明「G.Bondポート（GBS）のディスカバリーコード。ディスカバリー機能で使用される一意の6オクテット長のコード。これはgBondBceConfRemoteDiscoveryCode（Set_if_ClearおよびClear_if_Same）への書き込み操作がGBSに関連付けられたBCEによって実行される前に、オブジェクトは-OサブタイプGBSに対してインスタンス化される必要があります。リセット後の-Rサブタイプポートのこのオブジェクトの初期値はすべてゼロです。サブタイプポートの場合、このオブジェクトの値を直接変更することはできません。この値は、GBSに関連付けられているローカルBCEの1つに接続されている-OサブタイプのリモートBCEのgBondBceConfRemoteDiscoveryCodeオブジェクトに対する書き込み操作の結果として変更される可能性があります。"
+      "text": "gBondPortConfDiscoveryCode  OBJECT-TYPE\n  SYNTAX      PhysAddress (SIZE (6))\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A discovery code of the G.Bond port (GBS).\n    A unique 6-octet-long code used by the Discovery function.\n    This object MUST be instantiated for the -O subtype GBS before\n    write operations on the gBondBceConfRemoteDiscoveryCode\n    (Set_if_Clear and Clear_if_Same) are performed by BCEs\n    associated with the GBS.\n    The initial value of this object for -R subtype ports after\n    reset is all zeroes.  For -R subtype ports, the value of this\n    object cannot be changed directly.  This value may be changed\n    as a result of a write operation on the\n    gBondBceConfRemoteDiscoveryCode object of a remote BCE of -O\n    subtype, connected to one of the local BCEs associated with\n    the GBS.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -940,9 +944,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortConfTargetUpDataRate OBJECT-TYPE SYNTAX Unsigned32 (0|1..10000000) UNITS \"Kbps\" MAX-ACCESS read-write STATUS current DESCRIPTION \"A desired G.Bond port data rate in the upstream direction, in Kbps, to be achieved during initialization, under restrictions placed upon the member BCEs by their respective configuration settings. This object represents a sum of individual BCE upstream data rates, modified to compensate for fragmentation and encapsulation overhead (e.g., for an Ethernet service, the target data rate of 10 Mbps SHALL allow lossless transmission of full-duplex 10-Mbps Ethernet frame stream with minimal inter-frame gap). Note that the target upstream data rate may not be achieved during initialization (e.g., due to unavailability of required BCEs) or the initial bandwidth could deteriorate, so that the actual upstream data rate (gBondPortStatUpDataRate) could be less than gBondPortConfTargetUpDataRate.",
-      "ja": "gBondPortConfTargetUpDataRate OBJECT-TYPE SYNTAX Unsigned32（0 | 1..10000000）UNITS \"Kbps\" MAX-ACCESS read-write STATUS current説明 \"初期化中に達成される、Kbpsでのアップストリーム方向の望ましいG.Bondポートデータレート。それぞれの構成設定によってメンバーBCEに課せられた制限の下で。このオブジェクトは、フラグメント化とカプセル化のオーバーヘッドを補償するように変更された個々のBCEアップストリームデータレートの合計を表します（たとえば、イーサネットサービスの場合、10 Mbpsのターゲットデータレートは許可する必要があります）フレーム間ギャップが最小の全二重10 Mbpsイーサネットフレームストリームの無損失伝送。初期化中にターゲットアップストリームデータレートが達成されない場合があります（たとえば、必要なBCEが利用できないため）。または、初期帯域幅が低下する可能性があります。そのため、実際のアップストリームデータレート（gBondPortStatUpDataRate）は、gBondPortConfTargetUpDataRateよりも低くなる可能性があります。"
+      "indent": 3,
+      "text": "gBondPortConfTargetUpDataRate  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0|1..10000000)\n  UNITS       \"Kbps\"\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A desired G.Bond port data rate in the upstream direction,\n    in Kbps, to be achieved during initialization, under\n    restrictions placed upon the member BCEs by their respective\n    configuration settings.\n    This object represents a sum of individual BCE upstream data\n    rates, modified to compensate for fragmentation and\n    encapsulation overhead (e.g., for an Ethernet service, the\n    target data rate of 10 Mbps SHALL allow lossless transmission\n    of full-duplex 10-Mbps Ethernet frame stream with minimal\n    inter-frame gap).\n    Note that the target upstream data rate may not be achieved\n    during initialization (e.g., due to unavailability of required\n    BCEs) or the initial bandwidth could deteriorate, so that the\n    actual upstream data rate (gBondPortStatUpDataRate) could be less\n    than gBondPortConfTargetUpDataRate.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -982,8 +987,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfTargetDnDataRate OBJECT-TYPE SYNTAX Unsigned32 (0|1..10000000) UNITS \"Kbps\" MAX-ACCESS read-write STATUS current DESCRIPTION \"A desired G.Bond port data rate in the downstream direction, in Kbps, to be achieved during initialization, under restrictions placed upon the member BCEs by their respective configuration settings. This object represents a sum of individual BCE downstream data rates, modified to compensate for fragmentation and encapsulation overhead (e.g., for an Ethernet service, the target data rate of 10 Mbps SHALL allow lossless transmission of full-duplex 10-Mbps Ethernet frame stream with minimal inter-frame gap). Note that the target downstream data rate may not be achieved during initialization (e.g., due to unavailability of required BCEs) or the initial bandwidth could deteriorate, so that the actual downstream data rate (gBondPortStatDnDataRate) could be less than gBondPortConfTargetDnDataRate.",
-      "ja": "gBondPortConfTargetDnDataRate OBJECT-TYPE SYNTAX Unsigned32（0 | 1..10000000）UNITS \"Kbps\" MAX-ACCESS read-write STATUS current説明 \"初期化中に達成される、Kbpsでのダウンストリーム方向の望ましいG.Bondポートデータレート。それぞれの構成設定によってメンバーBCEに課せられた制限の下で。このオブジェクトは、フラグメント化とカプセル化のオーバーヘッドを補償するように変更された個々のBCEダウンストリームデータレートの合計を表します（たとえば、イーサネットサービスの場合、10 Mbpsのターゲットデータレートは許可する必要があります）フレーム間ギャップが最小の全二重10 Mbpsイーサネットフレームストリームの無損失伝送。初期化中にターゲットダウンストリームデータレートが達成されない場合がある（たとえば、必要なBCEが利用できないため）、または初期帯域幅が低下する可能性があることに注意してください。そのため、実際のダウンストリームデータレート（gBondPortStatDnDataRate）は、gBondPortConfTargetDnDataRateよりも低くなる可能性があります。"
+      "text": "gBondPortConfTargetDnDataRate  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0|1..10000000)\n  UNITS       \"Kbps\"\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A desired G.Bond port data rate in the downstream direction,\n    in Kbps, to be achieved during initialization, under\n    restrictions placed upon the member BCEs by their respective\n    configuration settings.\n    This object represents a sum of individual BCE downstream data\n    rates, modified to compensate for fragmentation and\n    encapsulation overhead (e.g., for an Ethernet service, the\n    target data rate of 10 Mbps SHALL allow lossless transmission\n    of full-duplex 10-Mbps Ethernet frame stream with minimal\n    inter-frame gap).\n    Note that the target downstream data rate may not be achieved\n    during initialization (e.g., due to unavailability of required\n    BCEs) or the initial bandwidth could deteriorate, so that the\n    actual downstream data rate (gBondPortStatDnDataRate) could be\n    less than gBondPortConfTargetDnDataRate.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1018,8 +1024,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfThreshLowUpRate OBJECT-TYPE SYNTAX Unsigned32 (1..10000000) UNITS \"Kbps\" MAX-ACCESS read-write STATUS current DESCRIPTION \"This object configures the G.Bond port low upstream rate crossing alarm threshold. When the current value of gBondPortStatUpDataRate for this port reaches/drops below or exceeds this threshold, a gBondLowUpRateCrossing notification MAY be generated if enabled by gBondPortConfLowRateCrossingEnable.",
-      "ja": "gBondPortConfThreshLowUpRate OBJECT-TYPE SYNTAX Unsigned32（1..10000000）UNITS \"Kbps\" MAX-ACCESS read-write STATUS current DESCRIPTION \"このオブジェクトは、G.Bondポートのアップストリームレート超過アラームしきい値を設定します。このポートのgBondPortStatUpDataRateの現在の値このしきい値を下回るか超えると、gBondPortConfLowRateCrossingEnableによって有効化されている場合、gBondLowUpRateCrossing通知が生成される場合があります。"
+      "text": "gBondPortConfThreshLowUpRate  OBJECT-TYPE\n  SYNTAX      Unsigned32 (1..10000000)\n  UNITS       \"Kbps\"\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"This object configures the G.Bond port low upstream rate\n    crossing alarm threshold.  When the current value of\n    gBondPortStatUpDataRate for this port reaches/drops below or\n    exceeds this threshold, a gBondLowUpRateCrossing notification\n    MAY be generated if enabled by\n    gBondPortConfLowRateCrossingEnable.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1034,8 +1041,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfThreshLowDnRate OBJECT-TYPE SYNTAX Unsigned32 (1..10000000) UNITS \"Kbps\" MAX-ACCESS read-write STATUS current DESCRIPTION \"This object configures the G.Bond port low downstream rate crossing alarm threshold. When the current value of gBondPortStatDnDataRate for this port reaches/drops below or exceeds this threshold, a gBondLowDnRateCrossing notification MAY be generated if enabled by gBondPortConfLowRateCrossingEnable.",
-      "ja": "gBondPortConfThreshLowDnRate OBJECT-TYPE SYNTAX Unsigned32（1..10000000）UNITS \"Kbps\" MAX-ACCESS read-write STATUS current説明「このオブジェクトは、G.Bondポートの低ダウンストリームレート超過アラームしきい値を設定します。このポートのgBondPortStatDnDataRateの現在の値このしきい値を下回る、または超える場合は、gBondPortConfLowRateCrossingEnableで有効にすると、gBondLowDnRateCrossing通知が生成される場合があります。"
+      "text": "gBondPortConfThreshLowDnRate  OBJECT-TYPE\n  SYNTAX      Unsigned32 (1..10000000)\n  UNITS       \"Kbps\"\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"This object configures the G.Bond port low downstream rate\n    crossing alarm threshold.  When the current value of\n    gBondPortStatDnDataRate for this port reaches/drops below or\n    exceeds this threshold, a gBondLowDnRateCrossing notification\n    MAY be generated if enabled by\n    gBondPortConfLowRateCrossingEnable.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1050,8 +1058,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfLowRateCrossingEnable OBJECT-TYPE SYNTAX TruthValue MAX-ACCESS read-write STATUS current DESCRIPTION \"Indicates whether gBondLowUpRateCrossing and gBondLowDnRateCrossing notifications should be generated for this interface.",
-      "ja": "gBondPortConfLowRateCrossingEnable OBJECT-TYPE構文TruthValue MAX-ACCESS読み書きステータス現在の説明「このインターフェースに対してgBondLowUpRateCrossingおよびgBondLowDnRateCrossing通知を生成する必要があるかどうかを示します。"
+      "text": "gBondPortConfLowRateCrossingEnable  OBJECT-TYPE\n  SYNTAX      TruthValue\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"Indicates whether gBondLowUpRateCrossing and\n    gBondLowDnRateCrossing notifications should be generated\n    for this interface.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1077,8 +1086,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortConfPmTcaEnable OBJECT-TYPE SYNTAX TruthValue MAX-ACCESS read-write STATUS current DESCRIPTION \"Indicates whether the gBondPerfTca*Crossing set of notifications should be generated for this interface.",
-      "ja": "gBondPortConfPmTcaEnable OBJECT-TYPE構文TruthValue MAX-ACCESS読み取りと書き込みステータス現在の説明「gBondPerfTca * Crossingの一連の通知をこのインターフェイスに対して生成する必要があるかどうかを示します。"
+      "text": "gBondPortConfPmTcaEnable  OBJECT-TYPE\n  SYNTAX      TruthValue\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"Indicates whether the gBondPerfTca*Crossing set of\n    notifications should be generated for this interface.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1111,8 +1121,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortCapSchemesSupported OBJECT-TYPE SYNTAX IANAgBondSchemeList MAX-ACCESS read-only STATUS current DESCRIPTION \"Bonding capability of the G.Bond port (GBS). This is a read-only bitmap of the possible bonding schemes supported by the GBS. The various bit positions are: none(0) - GBS is capable of bonding bypass on a single-BCE G.998.2 GBS g9981(1) - GBS is capable of G.998.1 bonding g9982(2) - GBS is capable of G.998.2 bonding g9983(3) - GBS is capable of G.998.3 bonding",
-      "ja": "gBondPortCapSchemesSupported OBJECT-TYPE構文IANAgBondSchemeList MAX-ACCESS読み取り専用ステータス現在の説明「G.Bondポート（GBS）のボンディング機能。これは、GBSでサポートされる可能なボンディングスキームの読み取り専用ビットマップです。さまざまなビット位置は、 ：none（0）-GBSはシングルBCE G.998.2 GBS g9981（1）でバイパスを結合できます-GBSはG.998.1を結合できますg9982（2）-GBSはG.998.2を結合できますg9983（3 ）-GBSはG.998.3ボンディングに対応"
+      "text": "gBondPortCapSchemesSupported          OBJECT-TYPE\n  SYNTAX      IANAgBondSchemeList\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Bonding capability of the G.Bond port (GBS).  This is a\n    read-only bitmap of the possible bonding schemes supported by\n    the GBS.  The various bit positions are:\n      none(0)       - GBS is capable of bonding bypass on a\n                      single-BCE G.998.2 GBS\n      g9981(1)      - GBS is capable of G.998.1 bonding\n      g9982(2)      - GBS is capable of G.998.2 bonding\n      g9983(3)      - GBS is capable of G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1127,8 +1138,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortCapPeerSchemesSupported OBJECT-TYPE SYNTAX IANAgBondSchemeList MAX-ACCESS read-only STATUS current DESCRIPTION \"Bonding capability of the peer G.Bond port (GBS). This is a read-only bitmap of the possible bonding schemes supported by the link partner GBS. The various bit positions are: none(0) - peer GBS does not support bonding, or the peer unit could not be reached, or peer GBS is capable of bonding bypass on a single-BCE G.998.2 GBS g9981(1) - peer GBS is capable of G.998.1 bonding g9982(2) - peer GBS is capable of G.998.2 bonding g9983(3) - peer GBS is capable of G.998.3 bonding",
-      "ja": "gBondPortCapPeerSchemesSupported OBJECT-TYPE SYNTAX IANAgBondSchemeList MAX-ACCESS read-only STATUS現在の説明「ピアG.Bondポート（GBS）の結合機能。これは、リンクパートナーGBSでサポートされている可能な結合方式の読み取り専用ビットマップです。さまざまなビット位置は次のとおりです：none（0）-ピアGBSがボンディングをサポートしていないか、ピアユニットに到達できなかったか、ピアGBSがシングルBCEでボンディングバイパスに対応しているG.998.2 GBS g9981（1）-ピアGBSがG.998.1ボンディングが可能g9982（2）-ピアGBSはG.998.2ボンディングが可能g9983（3）-ピアGBSはG.998.3ボンディングが可能"
+      "text": "gBondPortCapPeerSchemesSupported  OBJECT-TYPE\n  SYNTAX      IANAgBondSchemeList\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Bonding capability of the peer G.Bond port (GBS).  This is a\n    read-only bitmap of the possible bonding schemes supported by\n    the link partner GBS.  The various bit positions are:\n      none(0)       - peer GBS does not support bonding, or\n                      the peer unit could not be reached, or\n                      peer GBS is capable of bonding bypass on a\n                      single-BCE G.998.2 GBS\n      g9981(1)      - peer GBS is capable of G.998.1 bonding\n      g9982(2)      - peer GBS is capable of G.998.2 bonding\n      g9983(3)      - peer GBS is capable of G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1143,8 +1155,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortCapCapacity OBJECT-TYPE SYNTAX Unsigned32 (1..32) MAX-ACCESS read-only STATUS current DESCRIPTION \"Number of BCEs that can be aggregated by the local GBS. The number of BCEs currently assigned to a particular G.Bond port (gBondPortStatNumBCEs) is never greater than gBondPortCapCapacity.",
-      "ja": "gBondPortCapCapacity OBJECT-TYPE SYNTAX Unsigned32（1..32）MAX-ACCESS read-only STATUS current DESCRIPTION \"Number of BCEs can be aggregated by the local GBS。of the number of BCEs present to a specific G.Bond port（gBondPortStatNumBCEs） gBondPortCapCapacityを超えることはありません。"
+      "text": "gBondPortCapCapacity  OBJECT-TYPE\n  SYNTAX      Unsigned32 (1..32)\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Number of BCEs that can be aggregated by the local GBS.\n    The number of BCEs currently assigned to a particular G.Bond\n    port (gBondPortStatNumBCEs) is never greater than\n    gBondPortCapCapacity.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1154,8 +1167,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortCapPeerCapacity OBJECT-TYPE SYNTAX Unsigned32 (0|1..32) MAX-ACCESS read-only STATUS current DESCRIPTION \"Number of BCEs that can be aggregated by the peer GBS port. A value of 0 is returned when peer Bonding capacity is unknown (peer cannot be reached).",
-      "ja": "gBondPortCapPeerCapacity OBJECT-TYPE SYNTAX Unsigned32（0 | 1..32）MAX-ACCESS read-only STATUS current DESCRIPTION \"Number of BCEs can be aggregated by the peer GBS port。0 of value is returned when peer Bonding capacity is（ピアに到達できません）。"
+      "text": "gBondPortCapPeerCapacity  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0|1..32)\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Number of BCEs that can be aggregated by the peer GBS port.\n    A value of 0 is returned when peer Bonding capacity is unknown\n    (peer cannot be reached).",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1165,8 +1179,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortStatTable OBJECT-TYPE SYNTAX SEQUENCE OF GBondPortStatEntry MAX-ACCESS not-accessible STATUS current DESCRIPTION \"This table provides overall status information of G.Bond ports, complementing the generic status information from the ifTable of the IF-MIB. Additional status information about connected BCEs is available from the relevant line MIBs.",
-      "ja": "gBondPortStatTable OBJECT-TYPE SYNTAX SEQUENCE OF GBondPortStatEntry MAX-ACCESS not-accessible STATUS current DESCRIPTION \"この表は、G.Bondポートの全体的なステータス情報を提供し、IF-MIBのifTableからの一般的なステータス情報を補足します。接続されたBCEに関する追加のステータス情報関連する行のMIBから入手できます。"
+      "text": "gBondPortStatTable OBJECT-TYPE\n  SYNTAX      SEQUENCE OF GBondPortStatEntry\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"This table provides overall status information of G.Bond\n    ports, complementing the generic status information from the\n    ifTable of the IF-MIB.  Additional status information about\n    connected BCEs is available from the relevant line MIBs.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1193,8 +1208,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortStatOperScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-only STATUS current DESCRIPTION \"Current operating bonding scheme of a G.Bond port. The possible values are: none(0) - bonding bypass on a single-BCE G.998.2 GBS g9981(1) - G.998.1 bonding g9982(2) - G.998.2 bonding g9983(3) - G.998.3 bonding",
-      "ja": "gBondPortStatOperScheme OBJECT-TYPE構文IANAgBondScheme MAX-ACCESS読み取り専用ステータス現在の説明「G.Bondポートの現在の動作中のボンディングスキーム。可能な値は次のとおりです。none（0）-単一BCEのボンディングバイパスG.998.2 GBS g9981（ 1）-G.998.1ボンディングg9982（2）-G.998.2ボンディングg9983（3）-G.998.3ボンディング"
+      "text": "gBondPortStatOperScheme  OBJECT-TYPE\n  SYNTAX      IANAgBondScheme\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Current operating bonding scheme of a G.Bond port.\n    The possible values are:\n      none(0)       - bonding bypass on a single-BCE G.998.2 GBS\n      g9981(1)      - G.998.1 bonding\n      g9982(2)      - G.998.2 bonding\n      g9983(3)      - G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1203,9 +1219,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortStatPeerOperScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS read-only STATUS current DESCRIPTION \"Current operating bonding scheme of a G.Bond port link partner. The possible values are: unknown(0) - peer cannot be reached due to the link state or bonding bypass on a single-BCE G.998.2 GBS g9981(1) - G.998.1 bonding g9982(2) - G.998.2 bonding g9983(3) - G.998.3 bonding",
-      "ja": "gBondPortStatPeerOperScheme OBJECT-TYPE SYNTAX IANAgBondScheme MAX-ACCESS読み取り専用ステータス現在の説明「G.Bondポートリンクパートナーの現在の動作中のボンディングスキーム。可能な値は次のとおりです。不明（0）-リンク状態またはボンディングが原因でピアに到達できませんシングルBCEのバイパスG.998.2 GBS g9981（1）-G.998.1ボンディングg9982（2）-G.998.2ボンディングg9983（3）-G.998.3ボンディング"
+      "indent": 3,
+      "text": "gBondPortStatPeerOperScheme  OBJECT-TYPE\n  SYNTAX      IANAgBondScheme\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Current operating bonding scheme of a G.Bond port link partner.\n    The possible values are:\n      unknown(0)    - peer cannot be reached due to the link state or\n                      bonding bypass on a single-BCE G.998.2 GBS\n      g9981(1)      - G.998.1 bonding\n      g9982(2)      - G.998.2 bonding\n      g9983(3)      - G.998.3 bonding",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1215,8 +1232,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortStatUpDataRate OBJECT-TYPE SYNTAX Gauge32 UNITS \"bps\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A current G.Bond port operational data rate in the upstream direction, in bps. This object represents an estimation of the sum of individual BCE upstream data rates, modified to compensate for fragmentation and encapsulation overhead (e.g., for an Ethernet service, the target data rate of 10 Mbps SHALL allow lossless transmission of full-duplex 10-Mbps Ethernet frame stream with minimal inter-frame gap).",
-      "ja": "gBondPortStatUpDataRate OBJECT-TYPE SYNTAX Gauge32 UNITS \"bps\" MAX-ACCESS read-only STATUS current DESCRIPTION \"現在のG.Bondポートのアップストリーム方向の動作データレート（bps）。このオブジェクトは、個々のBCEアップストリームデータの合計の推定を表しますレートは、断片化とカプセル化のオーバーヘッドを補正するように変更されました（たとえば、イーサネットサービスの場合、10 Mbpsのターゲットデータレートは、フレーム間ギャップを最小限に抑えた全二重10 Mbpsイーサネットフレームストリームのロスレス伝送を許可するものとします）"
+      "text": "gBondPortStatUpDataRate  OBJECT-TYPE\n  SYNTAX      Gauge32\n  UNITS       \"bps\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A current G.Bond port operational data rate in the upstream\n    direction, in bps.\n    This object represents an estimation of the sum of individual\n    BCE upstream data rates, modified to compensate for\n    fragmentation and encapsulation overhead (e.g., for an\n    Ethernet service, the target data rate of 10 Mbps SHALL allow\n    lossless transmission of full-duplex 10-Mbps Ethernet frame\n    stream with minimal inter-frame gap).",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1230,9 +1248,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortStatDnDataRate OBJECT-TYPE SYNTAX Gauge32 UNITS \"bps\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A current G.Bond port operational data rate in the downstream direction, in bps. This object represents an estimation of the sum of individual BCE downstream data rates, modified to compensate for fragmentation and encapsulation overhead (e.g., for an Ethernet service, the target data rate of 10 Mbps SHALL allow lossless transmission of full-duplex 10-Mbps Ethernet frame stream with minimal inter-frame gap).",
-      "ja": "gBondPortStatDnDataRate OBJECT-TYPE SYNTAX Gauge32 UNITS \"bps\" MAX-ACCESS read-only STATUS current DESCRIPTION \"現在のG.Bondポートのダウンストリーム方向の動作データレート（bps）。このオブジェクトは、個々のBCEダウンストリームデータの合計の推定を表しますレートは、断片化とカプセル化のオーバーヘッドを補正するように変更されました（たとえば、イーサネットサービスの場合、10 Mbpsのターゲットデータレートは、フレーム間ギャップを最小限に抑えた全二重10 Mbpsイーサネットフレームストリームのロスレス伝送を許可するものとします）。"
+      "indent": 3,
+      "text": "gBondPortStatDnDataRate  OBJECT-TYPE\n  SYNTAX      Gauge32\n  UNITS       \"bps\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A current G.Bond port operational data rate in the downstream\n    direction, in bps.\n    This object represents an estimation of the sum of individual\n    BCE downstream data rates, modified to compensate for\n    fragmentation and encapsulation overhead (e.g., for an\n    Ethernet service, the target data rate of 10 Mbps SHALL allow\n    lossless transmission of full-duplex 10-Mbps Ethernet frame\n    stream with minimal inter-frame gap).",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1253,8 +1272,9 @@
     },
     {
       "indent": 9,
-      "text": "init - The link is initializing, as a result of ifAdminStatus being set to 'up' for a particular BCE or a GBS to which the BCE is connected. ready - At least one BCE in the aggregation group is detecting handshake tones.",
-      "ja": "init-BCEが接続されている特定のBCEまたはGBSに対してifAdminStatusが「up」に設定されているため、リンクが初期化されています。 ready-アグリゲーショングループの少なくとも1つのBCEがハンドシェイクトーンを検出しています。"
+      "text": "init                   - The link is initializing, as a result\n                         of ifAdminStatus being set to 'up'\n                         for a particular BCE or a GBS\n                         to which the BCE is connected.\nready                  - At least one BCE in the aggregation\n                         group is detecting handshake tones.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1281,8 +1301,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortStatNumBCEs OBJECT-TYPE SYNTAX Unsigned32 (0..32) MAX-ACCESS read-only STATUS current DESCRIPTION \"Number of BCEs that are currently aggregated by the local GBS (assigned to the G.Bond port using the ifStackTable). This number is never greater than gBondPortCapCapacity.",
-      "ja": "gBondPortStatNumBCEs OBJECT-TYPE SYNTAX Unsigned32（0..32）MAX-ACCESS read-only STATUS current DESCRIPTION \"現在、ローカルGBSによって集約されているBCEの数（ifStackTableを使用してG.Bondポートに割り当てられています）。この数は決してgBondPortCapCapacityより大きい。"
+      "text": "gBondPortStatNumBCEs  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0..32)\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"Number of BCEs that are currently aggregated by the local GBS\n    (assigned to the G.Bond port using the ifStackTable).\n    This number is never greater than gBondPortCapCapacity.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1319,15 +1340,16 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   GBondPortPmCurEntry ::=\n     SEQUENCE {\n       gBondPortPmCurES                      HCPerfTotalCount,\n       gBondPortPmCurSES                     HCPerfTotalCount,\n       gBondPortPmCurUAS                     HCPerfTotalCount,\n       gBondPortPmCur15MinValidIntervals     HCPerfValidIntervals,\n       gBondPortPmCur15MinInvalidIntervals   HCPerfInvalidIntervals,\n       gBondPortPmCur15MinTimeElapsed        HCPerfTimeElapsed,\n       gBondPortPmCur15MinES                 HCPerfCurrentCount,\n       gBondPortPmCur15MinSES                HCPerfCurrentCount,\n       gBondPortPmCur15MinUAS                HCPerfCurrentCount,\n       gBondPortPmCur1DayValidIntervals      Unsigned32,\n       gBondPortPmCur1DayInvalidIntervals    Unsigned32,\n       gBondPortPmCur1DayTimeElapsed         HCPerfTimeElapsed,\n       gBondPortPmCur1DayES                  HCPerfCurrentCount,\n       gBondPortPmCur1DaySES                 HCPerfCurrentCount,\n       gBondPortPmCur1DayUAS                 HCPerfCurrentCount\n     }",
+      "indent": 3,
+      "text": "GBondPortPmCurEntry ::=\n  SEQUENCE {\n    gBondPortPmCurES                      HCPerfTotalCount,\n    gBondPortPmCurSES                     HCPerfTotalCount,\n    gBondPortPmCurUAS                     HCPerfTotalCount,\n    gBondPortPmCur15MinValidIntervals     HCPerfValidIntervals,\n    gBondPortPmCur15MinInvalidIntervals   HCPerfInvalidIntervals,\n    gBondPortPmCur15MinTimeElapsed        HCPerfTimeElapsed,\n    gBondPortPmCur15MinES                 HCPerfCurrentCount,\n    gBondPortPmCur15MinSES                HCPerfCurrentCount,\n    gBondPortPmCur15MinUAS                HCPerfCurrentCount,\n    gBondPortPmCur1DayValidIntervals      Unsigned32,\n    gBondPortPmCur1DayInvalidIntervals    Unsigned32,\n    gBondPortPmCur1DayTimeElapsed         HCPerfTimeElapsed,\n    gBondPortPmCur1DayES                  HCPerfCurrentCount,\n    gBondPortPmCur1DaySES                 HCPerfCurrentCount,\n    gBondPortPmCur1DayUAS                 HCPerfCurrentCount\n  }",
       "raw": true,
       "ja": ""
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCurES OBJECT-TYPE SYNTAX HCPerfTotalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Errored Seconds (ES) on the GBS since the BTU was last restarted.",
-      "ja": "gBondPortPmCurES OBJECT-TYPE構文HCPerfTotalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"BTUが最後に再起動されてからのGBSのエラー秒数（ES）のカウント。"
+      "text": "gBondPortPmCurES  OBJECT-TYPE\n  SYNTAX      HCPerfTotalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Errored Seconds (ES) on the GBS since the BTU was\n    last restarted.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1342,8 +1364,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCurSES OBJECT-TYPE SYNTAX HCPerfTotalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Severely Errored Seconds (SES) on the GBS since the BTU was last restarted.",
-      "ja": "gBondPortPmCurSES OBJECT-TYPE構文HCPerfTotalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"BTUが最後に再起動されてからのGBSの重大エラー秒数（SES）の数。"
+      "text": "gBondPortPmCurSES  OBJECT-TYPE\n  SYNTAX      HCPerfTotalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Severely Errored Seconds (SES) on the GBS\n    since the BTU was last restarted.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1363,8 +1386,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCurUAS OBJECT-TYPE SYNTAX HCPerfTotalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Unavailable Seconds (UAS) on the GBS since the BTU was last restarted.",
-      "ja": "gBondPortPmCurUAS OBJECT-TYPE構文HCPerfTotalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"BTUが最後に再起動されてからのGBSの使用不可秒（UAS）のカウント。"
+      "text": "gBondPortPmCurUAS  OBJECT-TYPE\n  SYNTAX      HCPerfTotalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Unavailable Seconds (UAS) on the GBS since the BTU\n    was last restarted.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1379,8 +1403,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinValidIntervals OBJECT-TYPE SYNTAX HCPerfValidIntervals MAX-ACCESS read-only STATUS current DESCRIPTION \"A number of 15-minute intervals for which data was collected. The value of this object will be 96 or the maximum number of 15-minute history intervals collected by the implementation, unless the measurement was (re)started recently, in which case the value will be the number of complete 15-minute intervals for which there are at least some data.",
-      "ja": "gBondPortPmCur15MinValidIntervals OBJECT-TYPE構文HCPerfValidIntervals MAX-ACCESS読み取り専用ステータス現在の説明「データが収集された15分の間隔の数。このオブジェクトの値は、96、またはによって収集された15分の履歴間隔の最大数になります。実装。ただし、測定が最近（再）開始された場合を除き、この場合の値は、少なくともいくつかのデータが存在する完全な15分の間隔の数になります。"
+      "text": "gBondPortPmCur15MinValidIntervals  OBJECT-TYPE\n  SYNTAX      HCPerfValidIntervals\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A number of 15-minute intervals for which data was collected.\n    The value of this object will be 96 or the maximum number of\n    15-minute history intervals collected by the implementation,\n    unless the measurement was (re)started recently, in which case\n    the value will be the number of complete 15-minute intervals\n    for which there are at least some data.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1395,8 +1420,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinInvalidIntervals OBJECT-TYPE SYNTAX HCPerfInvalidIntervals MAX-ACCESS read-only STATUS current DESCRIPTION \"A number of 15-minute intervals for which data was not always available. The value will typically be zero, except in cases where the data for some intervals are not available.",
-      "ja": "gBondPortPmCur15MinInvalidIntervals OBJECT-TYPE SYNTAX HCPerfInvalidIntervals MAX-ACCESS read-only STATUS current説明 \"常にデータが利用可能でなかった15分のインターバルの数。一部のインターバルのデータが利用できない場合を除いて、値は通常ゼロです。"
+      "text": "gBondPortPmCur15MinInvalidIntervals  OBJECT-TYPE\n  SYNTAX      HCPerfInvalidIntervals\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A number of 15-minute intervals for which data was not always\n    available.  The value will typically be zero, except in cases\n    where the data for some intervals are not available.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1406,8 +1432,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinTimeElapsed OBJECT-TYPE SYNTAX HCPerfTimeElapsed UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of seconds that have elapsed since the beginning of the current 15-minute performance interval.",
-      "ja": "gBondPortPmCur15MinTimeElapsed OBJECT-TYPE構文HCPerfTimeElapsed UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の15分のパフォーマンス間隔の開始から経過した秒数。"
+      "text": "gBondPortPmCur15MinTimeElapsed  OBJECT-TYPE\n  SYNTAX      HCPerfTimeElapsed\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of seconds that have elapsed since the beginning of the\n    current 15-minute performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1417,8 +1444,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinES OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Errored Seconds (ES) on the GBS in the current 15-minute performance interval.",
-      "ja": "gBondPortPmCur15MinES OBJECT-TYPE構文HCPerfCurrentCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の15分のパフォーマンス間隔でのGBSのエラー秒数（ES）のカウント。"
+      "text": "gBondPortPmCur15MinES  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Errored Seconds (ES) on the GBS in the current\n    15-minute performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1428,8 +1456,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinSES OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Severely Errored Seconds (SES) on the GBS in the current 15-minute performance interval.",
-      "ja": "gBondPortPmCur15MinSES OBJECT-TYPE構文HCPerfCurrentCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の15分のパフォーマンス間隔でのGBSの重大エラー秒数（SES）。"
+      "text": "gBondPortPmCur15MinSES  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Severely Errored Seconds (SES) on the GBS in the\n    current 15-minute performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1439,8 +1468,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur15MinUAS OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Unavailable Seconds (UAS) on the GBS in the current 15-minute performance interval.",
-      "ja": "gBondPortPmCur15MinUAS OBJECT-TYPE構文HCPerfCurrentCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の15分のパフォーマンス間隔でのGBSの使用不可秒（UAS）のカウント。"
+      "text": "gBondPortPmCur15MinUAS  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Unavailable Seconds (UAS) on the GBS in the current\n    15-minute performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1450,8 +1480,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DayValidIntervals OBJECT-TYPE SYNTAX Unsigned32 (0..7) UNITS \"days\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A number of 1-day intervals for which data was collected. The value of this object will be 7 or the maximum number of 1-day history intervals collected by the implementation, unless the measurement was (re)started recently, in which case the value will be the number of complete 1-day intervals for which there are at least some data. In certain cases, it is possible that some intervals are unavailable. In this case, this object reports the maximum interval number for which data is available.",
-      "ja": "gBondPortPmCur1DayValidIntervals OBJECT-TYPE構文Unsigned32（0..7）UNITS \"日\" MAX-ACCESS読み取り専用ステータス現在の説明 \"データが収集された1日間隔の数。このオブジェクトの値は7または最大値になります実装によって収集された1日の履歴間隔の数（最近測定が（再）開始された場合を除く）。この場合、値は、少なくともいくつかのデータがある完全な1日の間隔の数になります。特定のケースでは、一部の間隔が使用できない可能性があります。この場合、このオブジェクトは、データが使用可能な最大間隔数を報告します。"
+      "text": "gBondPortPmCur1DayValidIntervals  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0..7)\n  UNITS       \"days\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A number of 1-day intervals for which data was collected.\n    The value of this object will be 7 or the maximum number of\n    1-day history intervals collected by the implementation, unless\n    the measurement was (re)started recently, in which case the\n    value will be the number of complete 1-day intervals for which\n    there are at least some data.\n    In certain cases, it is possible that some intervals are\n    unavailable.  In this case, this object reports the maximum\n    interval number for which data is available.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1461,8 +1492,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DayInvalidIntervals OBJECT-TYPE SYNTAX Unsigned32 (0..7) UNITS \"days\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A number of 1-day intervals for which data was not always available. The value will typically be zero, except in cases where the data for some intervals are not available.",
-      "ja": "gBondPortPmCur1DayInvalidIntervals OBJECT-TYPE構文Unsigned32（0..7）UNITS \"日\" MAX-ACCESS読み取り専用ステータス現在の説明 \"データが常に利用可能ではなかった1日間隔の数。通常、値はゼロになります。一部の間隔のデータが利用できない場合。"
+      "text": "gBondPortPmCur1DayInvalidIntervals  OBJECT-TYPE\n  SYNTAX      Unsigned32 (0..7)\n  UNITS       \"days\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A number of 1-day intervals for which data was not always\n    available.  The value will typically be zero, except in cases\n    where the data for some intervals are not available.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1472,8 +1504,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DayTimeElapsed OBJECT-TYPE SYNTAX HCPerfTimeElapsed UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of seconds that have elapsed since the beginning of the current 1-day performance interval.",
-      "ja": "gBondPortPmCur1DayTimeElapsed OBJECT-TYPE構文HCPerfTimeElapsed UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の1日のパフォーマンスインターバルの開始から経過した秒数。"
+      "text": "gBondPortPmCur1DayTimeElapsed  OBJECT-TYPE\n  SYNTAX      HCPerfTimeElapsed\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of seconds that have elapsed since the beginning of\n    the current 1-day performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1483,8 +1516,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DayES OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Errored Seconds (ES) on the GBS in the current 1-day performance interval.",
-      "ja": "gBondPortPmCur1DayES OBJECT-TYPE構文HCPerfCurrentCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の1日のパフォーマンス間隔におけるGBSのエラー秒数（ES）のカウント。"
+      "text": "gBondPortPmCur1DayES  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Errored Seconds (ES) on the GBS in the current 1-day\n    performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1499,8 +1533,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DaySES OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Severely Errored Seconds (SES) on the GBS in the current 1-day performance interval.",
-      "ja": "gBondPortPmCur1DaySES OBJECT-TYPE構文HCPerfCurrentCount UNITS「秒」MAX-ACCESS読み取り専用ステータス現在の説明「現在の1日のパフォーマンスインターバルにおけるGBSの重大エラー秒数（SES）の数。"
+      "text": "gBondPortPmCur1DaySES  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Severely Errored Seconds (SES) on the GBS in the\n    current 1-day performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1510,8 +1545,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmCur1DayUAS OBJECT-TYPE SYNTAX HCPerfCurrentCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Unavailable Seconds (UAS) on the GBS in the current 1-day performance interval.",
-      "ja": "gBondPortPmCur1DayUAS OBJECT-TYPE構文HCPerfCurrentCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の1日のパフォーマンス間隔でのGBSの使用不可秒（UAS）のカウント。"
+      "text": "gBondPortPmCur1DayUAS  OBJECT-TYPE\n  SYNTAX      HCPerfCurrentCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Unavailable Seconds (UAS) on the GBS in the current\n    1-day performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1531,8 +1567,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   gBondPortPm15MinEntry OBJECT-TYPE\n     SYNTAX      GBondPortPm15MinEntry\n     MAX-ACCESS  not-accessible\n     STATUS      current\n     DESCRIPTION\n       \"An entry in the G.Bond Port historical 15-minute PM table.\n       Each entry represents Performance Monitoring data for a GBS port,\n       indexed by the ifIndex, collected during a particular 15-minute\n       interval, indexed by the gBondPortPm15MinIntervalIndex.\"\n     INDEX  { ifIndex, gBondPortPm15MinIntervalIndex }\n     ::= { gBondPortPm15MinTable 1 }",
+      "indent": 3,
+      "text": "gBondPortPm15MinEntry OBJECT-TYPE\n  SYNTAX      GBondPortPm15MinEntry\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"An entry in the G.Bond Port historical 15-minute PM table.\n    Each entry represents Performance Monitoring data for a GBS port,\n    indexed by the ifIndex, collected during a particular 15-minute\n    interval, indexed by the gBondPortPm15MinIntervalIndex.\"\n  INDEX  { ifIndex, gBondPortPm15MinIntervalIndex }\n  ::= { gBondPortPm15MinTable 1 }",
       "raw": true,
       "ja": ""
     },
@@ -1544,8 +1580,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm15MinIntervalIndex OBJECT-TYPE SYNTAX Unsigned32 (1..96) MAX-ACCESS not-accessible STATUS current DESCRIPTION \"Performance data interval number. 1 is the most recent previous interval; interval 96 is 24 hours ago. Intervals 2..96 are OPTIONAL.",
-      "ja": "gBondPortPm15MinIntervalIndex OBJECT-TYPE構文Unsigned32（1..96）MAX-ACCESS not-accessibleステータス現在の説明「パフォーマンスデータインターバル番号。1は直前のインターバルです。インターバル96は24時間前です。インターバル2..96はオプションです。"
+      "text": "gBondPortPm15MinIntervalIndex  OBJECT-TYPE\n  SYNTAX      Unsigned32 (1..96)\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"Performance data interval number.  1 is the most recent\n    previous interval; interval 96 is 24 hours ago.\n    Intervals 2..96 are OPTIONAL.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1561,8 +1598,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm15MinIntervalES OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Errored Seconds (ES) on the GBS in the 15-minute performance history interval.",
-      "ja": "gBondPortPm15MinIntervalES OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"15分のパフォーマンス履歴間隔でのGBSのエラー秒数（ES）のカウント。"
+      "text": "gBondPortPm15MinIntervalES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Errored Seconds (ES) on the GBS in the 15-minute\n    performance history interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1572,8 +1610,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm15MinIntervalSES OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Severely Errored Seconds (SES) on the GBS in the 15-minute performance history interval.",
-      "ja": "gBondPortPm15MinIntervalSES OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"15分のパフォーマンス履歴間隔におけるGBSの重大エラー秒数（SES）。"
+      "text": "gBondPortPm15MinIntervalSES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Severely Errored Seconds (SES) on the GBS in the\n    15-minute performance history interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1583,8 +1622,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm15MinIntervalUAS OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Unavailable Seconds (UAS) on the GBS in the current 15-minute performance interval.",
-      "ja": "gBondPortPm15MinIntervalUAS OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の15分のパフォーマンス間隔でのGBSの使用不可秒（UAS）のカウント。"
+      "text": "gBondPortPm15MinIntervalUAS  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Unavailable Seconds (UAS) on the GBS in the current\n    15-minute performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1593,9 +1633,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortPm15MinIntervalValid OBJECT-TYPE SYNTAX TruthValue MAX-ACCESS read-only STATUS current DESCRIPTION \"A read-only object indicating whether or not this history bucket contains valid data. A valid bucket is reported as true(1) and an invalid bucket as false(2). If this history bucket is invalid, the BTU-C MUST NOT produce notifications based upon the value of the counters in this bucket. Note that an implementation may decide not to store invalid history buckets in its database. In such a case, this object is not required, as only valid history buckets are available while invalid history buckets are simply not in the database.",
-      "ja": "gBondPortPm15MinIntervalValid OBJECT-TYPE構文TruthValue MAX-ACCESS読み取り専用ステータス現在の説明「この履歴バケットに有効なデータが含まれているかどうかを示す読み取り専用オブジェクト。有効なバケットはtrue（1）、無効なバケットはfalse（2 ）この履歴バケットが無効な場合、BTU-Cはこのバケットのカウンタの値に基づいて通知を生成してはなりません（MUST NOT）。実装はデータベースに無効な履歴バケットを格納しないことを決定する場合があることに注意してください。このような場合、これは有効な履歴バケットのみが使用可能であり、無効な履歴バケットがデータベースに存在しないため、オブジェクトは必要ありません。"
+      "indent": 3,
+      "text": "gBondPortPm15MinIntervalValid  OBJECT-TYPE\n  SYNTAX      TruthValue\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A read-only object indicating whether or not this history\n    bucket contains valid data.  A valid bucket is reported as\n    true(1) and an invalid bucket as false(2).\n    If this history bucket is invalid, the BTU-C MUST NOT produce\n    notifications based upon the value of the counters in this\n    bucket.\n    Note that an implementation may decide not to store invalid\n    history buckets in its database.  In such a case, this object\n    is not required, as only valid history buckets are available\n    while invalid history buckets are simply not in the database.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1621,15 +1662,16 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   GBondPortPm1DayEntry ::=\n     SEQUENCE {\n       gBondPortPm1DayIntervalIndex          Unsigned32,\n       gBondPortPm1DayIntervalMoniTime       HCPerfTimeElapsed,\n       gBondPortPm1DayIntervalES             HCPerfIntervalCount,\n       gBondPortPm1DayIntervalSES            HCPerfIntervalCount,\n       gBondPortPm1DayIntervalUAS            HCPerfIntervalCount,\n       gBondPortPm1DayIntervalValid          TruthValue\n     }",
+      "indent": 3,
+      "text": "GBondPortPm1DayEntry ::=\n  SEQUENCE {\n    gBondPortPm1DayIntervalIndex          Unsigned32,\n    gBondPortPm1DayIntervalMoniTime       HCPerfTimeElapsed,\n    gBondPortPm1DayIntervalES             HCPerfIntervalCount,\n    gBondPortPm1DayIntervalSES            HCPerfIntervalCount,\n    gBondPortPm1DayIntervalUAS            HCPerfIntervalCount,\n    gBondPortPm1DayIntervalValid          TruthValue\n  }",
       "raw": true,
       "ja": ""
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalIndex OBJECT-TYPE SYNTAX Unsigned32 (1..7) MAX-ACCESS not-accessible STATUS current DESCRIPTION \"Performance data interval number. 1 is the most recent previous interval; interval 7 is 7 days ago. Intervals 2..7 are OPTIONAL.",
-      "ja": "gBondPortPm1DayIntervalIndex OBJECT-TYPE SYNTAX Unsigned32（1..7）MAX-ACCESS not-accessibleステータス現在の説明「パフォーマンスデータインターバル番号。1は直前のインターバルです。インターバル7は7日前です。インターバル2..7はオプションです。"
+      "text": "gBondPortPm1DayIntervalIndex  OBJECT-TYPE\n  SYNTAX      Unsigned32 (1..7)\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"Performance data interval number.  1 is the most recent\n    previous interval; interval 7 is 7 days ago.\n    Intervals 2..7 are OPTIONAL.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1639,8 +1681,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalMoniTime OBJECT-TYPE SYNTAX HCPerfTimeElapsed UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of seconds over which the performance data was actually monitored. This value will be the same as the interval duration (86400 seconds), except in a situation where performance data could not be collected for any reason.",
-      "ja": "gBondPortPm1DayIntervalMoniTime OBJECT-TYPE構文HCPerfTimeElapsed UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"パフォーマンスデータが実際に監視された秒数。この値は、インターバル期間（86400秒）と同じですが、何らかの理由でパフォーマンスデータを収集できなかった状況。"
+      "text": "gBondPortPm1DayIntervalMoniTime  OBJECT-TYPE\n  SYNTAX      HCPerfTimeElapsed\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of seconds over which the performance data was actually\n    monitored.  This value will be the same as the interval duration\n    (86400 seconds), except in a situation where performance data\n    could not be collected for any reason.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1650,8 +1693,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalES OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Errored Seconds (ES) on the GBS in the 1-day performance history interval.",
-      "ja": "gBondPortPm1DayIntervalES OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"1日のパフォーマンス履歴間隔でのGBSのエラー秒数（ES）のカウント。"
+      "text": "gBondPortPm1DayIntervalES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Errored Seconds (ES) on the GBS in the 1-day\n    performance history interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1661,8 +1705,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalSES OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Severely Errored Seconds (SES) on the GBS in the 1-day performance history interval.",
-      "ja": "gBondPortPm1DayIntervalSES OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"1日のパフォーマンス履歴間隔でのGBSの重大エラー秒数（SES）の数。"
+      "text": "gBondPortPm1DayIntervalSES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Severely Errored Seconds (SES) on the GBS in the\n    1-day performance history interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1672,8 +1717,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalUAS OBJECT-TYPE SYNTAX HCPerfIntervalCount UNITS \"seconds\" MAX-ACCESS read-only STATUS current DESCRIPTION \"A count of Unavailable Seconds (UAS) on the GBS in the current 1-day performance interval.",
-      "ja": "gBondPortPm1DayIntervalUAS OBJECT-TYPE構文HCPerfIntervalCount UNITS \"秒\" MAX-ACCESS読み取り専用ステータス現在の説明 \"現在の1日のパフォーマンス間隔でのGBSの使用不可秒（UAS）のカウント。"
+      "text": "gBondPortPm1DayIntervalUAS  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalCount\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A count of Unavailable Seconds (UAS) on the GBS in the current\n    1-day performance interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1683,8 +1729,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPm1DayIntervalValid OBJECT-TYPE SYNTAX TruthValue MAX-ACCESS read-only STATUS current DESCRIPTION \"A read-only object indicating whether or not this history bucket contains valid data. A valid bucket is reported as true(1) and an invalid bucket as false(2). If this history bucket is invalid, the BTU-C MUST NOT produce notifications based upon the value of the counters in this bucket.",
-      "ja": "gBondPortPm1DayIntervalValid OBJECT-TYPE構文TruthValue MAX-ACCESS読み取り専用ステータス現在の説明「この履歴バケットに有効なデータが含まれているかどうかを示す読み取り専用オブジェクト。有効なバケットはtrue（1）、無効なバケットはfalse（2 ）この履歴バケットが無効である場合、BTU-Cはこのバケットのカウンタの値に基づいて通知を生成してはなりません（MUST NOT）。"
+      "text": "gBondPortPm1DayIntervalValid  OBJECT-TYPE\n  SYNTAX      TruthValue\n  MAX-ACCESS  read-only\n  STATUS      current\n  DESCRIPTION\n    \"A read-only object indicating whether or not this history\n    bucket contains valid data.  A valid bucket is reported as\n    true(1) and an invalid bucket as false(2).\n    If this history bucket is invalid, the BTU-C MUST NOT produce\n    notifications based upon the value of the counters in this\n    bucket.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1728,8 +1775,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmTcaProfileThresh15MinES OBJECT-TYPE SYNTAX HCPerfIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Errored Seconds (ES) within any given 15-minute performance data collection interval. If the number of ESs in a particular 15-minute collection interval reaches or exceeds this value, a gBondPmTca15MinESCrossing notification MAY be generated if enabled by gBondPortConfPmTcaEnable. At most one notification can be sent per interval. Setting this attribute to zero (default) effectively disables the gBondPmTca15MinESCrossing notification.",
-      "ja": "gBondPortPmTcaProfileThresh15MinES OBJECT-TYPE構文HCPerfIntervalThreshold UNITS \"秒\" MAX-ACCESS read-createステータス現在の説明 \"所定の15分のパフォーマンスデータ収集間隔内のエラー秒数（ES）の望ましいしきい値。特定の15分の収集間隔がこの値に達するか超える場合、gBondPortConfPmTcaEnableによって有効にされると、gBondPmTca15MinESCrossing通知が生成される場合があります。間隔ごとに最大1つの通知を送信できます。この属性をゼロ（デフォルト）に設定すると、gBondPmTca15MinESCrossing通知が事実上無効になります。"
+      "text": "gBondPortPmTcaProfileThresh15MinES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Errored Seconds (ES)\n    within any given 15-minute performance data collection interval.\n    If the number of ESs in a particular 15-minute collection\n    interval reaches or exceeds this value, a\n    gBondPmTca15MinESCrossing notification MAY be generated if\n    enabled by gBondPortConfPmTcaEnable.\n    At most one notification can be sent per interval.\n    Setting this attribute to zero (default) effectively disables\n    the gBondPmTca15MinESCrossing notification.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1738,9 +1786,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortPmTcaProfileThresh15MinSES OBJECT-TYPE SYNTAX HCPerfIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Severely Errored Seconds (SES) within any given 15-minute performance data collection interval. If the number of SESs in a particular 15-minute collection interval reaches or exceeds this value, a gBondPmTca15MinSESCrossing notification MAY be generated if enabled by gBondPortConfPmTcaEnable. At most one notification can be sent per interval. Setting this attribute to zero (default) effectively disables the gBondPmTca15MinSESCrossing notification.",
-      "ja": "gBondPortPmTcaProfileThresh15MinSES OBJECT-TYPE SYNTAX HCPerfIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"所定の15分のパフォーマンスデータ収集間隔内の重大エラー秒数（SES）の望ましいしきい値。SESの数が特定の15分の収集間隔がこの値に達するか超える場合、gBondPortConfPmTcaEnableによって有効にされると、gBondPmTca15MinSESCrossing通知が生成される場合があります。間隔ごとに最大1つの通知を送信できます。この属性をゼロ（デフォルト）に設定すると、gBondPmTca15MinSESCrossing通知が事実上無効になります。"
+      "indent": 3,
+      "text": "gBondPortPmTcaProfileThresh15MinSES  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Severely Errored Seconds\n    (SES) within any given 15-minute performance data collection\n    interval.\n    If the number of SESs in a particular 15-minute collection\n    interval reaches or exceeds this value, a\n    gBondPmTca15MinSESCrossing notification MAY be generated if\n    enabled by gBondPortConfPmTcaEnable.\n    At most one notification can be sent per interval.\n    Setting this attribute to zero (default) effectively disables\n    the gBondPmTca15MinSESCrossing notification.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1750,8 +1799,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmTcaProfileThresh15MinUAS OBJECT-TYPE SYNTAX HCPerfIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Unavailable Seconds (UAS) within any given 15-minute performance data collection interval. If the number of UASs in a particular 15-minute collection interval reaches or exceeds this value, a gBondPmTca15MinUASCrossing notification MAY be generated if enabled by gBondPortConfPmTcaEnable. At most one notification can be sent per interval. Setting this attribute to zero (default) effectively disables the gBondPmTca15MinUASCrossing notification.",
-      "ja": "gBondPortPmTcaProfileThresh15MinUAS OBJECT-TYPE SYNTAX HCPerfIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current説明「任意の15分のパフォーマンスデータ収集間隔内の使用不可秒数（UAS）の望ましいしきい値。特定の15分の収集間隔がこの値に達するか超える場合、gBondPortConfPmTcaEnableによって有効にされると、gBondPmTca15MinUASCrossing通知が生成される場合があります。間隔ごとに最大1つの通知を送信できます。この属性をゼロ（デフォルト）に設定すると、gBondPmTca15MinUASCrossing通知が事実上無効になります。"
+      "text": "gBondPortPmTcaProfileThresh15MinUAS  OBJECT-TYPE\n  SYNTAX      HCPerfIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Unavailable Seconds (UAS)\n    within any given 15-minute performance data collection interval.\n    If the number of UASs in a particular 15-minute collection\n    interval reaches or exceeds this value, a\n    gBondPmTca15MinUASCrossing notification MAY be generated if\n    enabled by gBondPortConfPmTcaEnable.\n    At most one notification can be sent per interval.\n    Setting this attribute to zero (default) effectively disables\n    the gBondPmTca15MinUASCrossing notification.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1761,8 +1811,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmTcaProfileThresh1DayES OBJECT-TYPE SYNTAX GBondPm1DayIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Errored Seconds (ES) within any given 1-day performance data collection interval.",
-      "ja": "gBondPortPmTcaProfileThresh1DayES OBJECT-TYPE構文GBondPm1DayIntervalThreshold UNITS \"秒\" MAX-ACCESS read-createステータス現在の説明 \"1日のパフォーマンスデータ収集間隔内のエラー秒数（ES）の望ましいしきい値。"
+      "text": "gBondPortPmTcaProfileThresh1DayES  OBJECT-TYPE\n  SYNTAX      GBondPm1DayIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Errored Seconds (ES)\n    within any given 1-day performance data collection interval.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1777,8 +1828,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmTcaProfileThresh1DaySES OBJECT-TYPE SYNTAX GBondPm1DayIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Severely Errored Seconds (SES) within any given 1-day performance data collection interval. If the number of SESs in a particular 1-day collection interval reaches or exceeds this value, a gBondPmTca1DaySESCrossing notification MAY be generated if enabled by gBondPortConfPmTcaEnable. At most one notification can be sent per interval. Setting this attribute to zero (default) effectively disables the gBondPmTca1DaySESCrossing notification.",
-      "ja": "gBondPortPmTcaProfileThresh1DaySES OBJECT-TYPE SYGBAX GBondPm1DayIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"任意の1日のパフォーマンスデータコレクション間隔内の重大エラー秒数（SES）の望ましいしきい値。SESの数が特定の1日の収集間隔がこの値に達するか超える場合、gBondPortConfPmTcaEnableによって有効にされると、gBondPmTca1DaySESCrossing通知が生成される場合があります。間隔ごとに最大1つの通知を送信できます。この属性をゼロ（デフォルト）に設定すると、gBondPmTca1DaySESCrossing通知が事実上無効になります。"
+      "text": "gBondPortPmTcaProfileThresh1DaySES  OBJECT-TYPE\n  SYNTAX      GBondPm1DayIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Severely Errored Seconds\n    (SES) within any given 1-day performance data collection\n    interval.\n    If the number of SESs in a particular 1-day collection interval\n    reaches or exceeds this value, a gBondPmTca1DaySESCrossing\n    notification MAY be generated if enabled by\n    gBondPortConfPmTcaEnable.\n    At most one notification can be sent per interval.\n    Setting this attribute to zero (default) effectively disables\n    the gBondPmTca1DaySESCrossing notification.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1787,9 +1839,10 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": " gBondPortPmTcaProfileThresh1DayUAS OBJECT-TYPE SYNTAX GBondPm1DayIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"A desired threshold for the number of Unavailable Seconds (UAS) within any given 1-day performance data collection interval. If the number of UASs in a particular 1-day collection interval reaches or exceeds this value, a gBondPmTca1DayUASCrossing notification MAY be generated if enabled by gBondPortConfPmTcaEnable. At most one notification can be sent per interval. Setting this attribute to zero (default) effectively disables the gBondPmTca1DayUASCrossing notification.",
-      "ja": "gBondPortPmTcaProfileThresh1DayUAS OBJECT-TYPE構文GBondPm1DayIntervalThreshold UNITS \"seconds\" MAX-ACCESS read-create STATUS current DESCRIPTION \"任意の1日のパフォーマンスデータコレクション間隔内の使用不可秒数（UAS）の望ましいしきい値。特定の1日の収集間隔がこの値に達するか超える場合、gBondPortConfPmTcaEnableによって有効にされると、gBondPmTca1DayUASCrossing通知が生成される場合があります。間隔ごとに最大1つの通知を送信できます。この属性をゼロ（デフォルト）に設定すると、gBondPmTca1DayUASCrossing通知が事実上無効になります。"
+      "indent": 3,
+      "text": "gBondPortPmTcaProfileThresh1DayUAS  OBJECT-TYPE\n  SYNTAX      GBondPm1DayIntervalThreshold\n  UNITS       \"seconds\"\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"A desired threshold for the number of Unavailable Seconds (UAS)\n    within any given 1-day performance data collection interval.\n    If the number of UASs in a particular 1-day collection interval\n    reaches or exceeds this value, a gBondPmTca1DayUASCrossing\n    notification MAY be generated if enabled by\n    gBondPortConfPmTcaEnable.\n    At most one notification can be sent per interval.\n    Setting this attribute to zero (default) effectively disables\n    the gBondPmTca1DayUASCrossing notification.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1799,8 +1852,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondPortPmTcaProfileRowStatus OBJECT-TYPE SYNTAX RowStatus MAX-ACCESS read-create STATUS current DESCRIPTION \"This object controls the creation, modification, or deletion of the associated entry in the gBondPortPmTcaProfileTable per the semantics of RowStatus.",
-      "ja": "gBondPortPmTcaProfileRowStatus OBJECT-TYPE SYNTAX RowStatus MAX-ACCESS read-create STATUS current DESCRIPTION \"このオブジェクトは、RowStatusのセマンティクスに従って、gBondPortPmTcaProfileTableの関連するエントリの作成、変更、または削除を制御します。"
+      "text": "gBondPortPmTcaProfileRowStatus  OBJECT-TYPE\n  SYNTAX      RowStatus\n  MAX-ACCESS  read-create\n  STATUS      current\n  DESCRIPTION\n    \"This object controls the creation, modification, or deletion\n    of the associated entry in the gBondPortPmTcaProfileTable\n    per the semantics of RowStatus.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1820,8 +1874,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondBceConfTable OBJECT-TYPE SYNTAX SEQUENCE OF GBondBceConfEntry MAX-ACCESS not-accessible STATUS current DESCRIPTION \"Table for configuration of G.Bond common aspects for the Bonding Channel Entity (BCE) ports (modems/channels).",
-      "ja": "gBondBceConfTable OBJECT-TYPE SYNTAX SEQUENCE OF GBondBceConfEntry MAX-ACCESS not-accessibleステータス現在の説明「ボンディングチャネルエンティティ（BCE）ポート（モデム/チャネル）のG.Bond共通の構成に関する表。"
+      "text": "gBondBceConfTable OBJECT-TYPE\n  SYNTAX      SEQUENCE OF GBondBceConfEntry\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"Table for configuration of G.Bond common aspects for the\n    Bonding Channel Entity (BCE) ports (modems/channels).",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 5,
@@ -1830,8 +1885,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   gBondBceConfEntry OBJECT-TYPE\n     SYNTAX      GBondBceConfEntry\n     MAX-ACCESS  not-accessible\n     STATUS      current\n     DESCRIPTION\n       \"An entry in the G.Bond BCE Configuration table.\n       Each entry represents common aspects of a G.Bond BCE port\n       indexed by the ifIndex.  Note that a G.Bond BCE port can be\n       stacked below a single GBS port, also indexed by the ifIndex,\n       possibly together with other BCE ports if bonding is enabled.\"\n     INDEX  { ifIndex }\n     ::= { gBondBceConfTable 1 }",
+      "indent": 3,
+      "text": "gBondBceConfEntry OBJECT-TYPE\n  SYNTAX      GBondBceConfEntry\n  MAX-ACCESS  not-accessible\n  STATUS      current\n  DESCRIPTION\n    \"An entry in the G.Bond BCE Configuration table.\n    Each entry represents common aspects of a G.Bond BCE port\n    indexed by the ifIndex.  Note that a G.Bond BCE port can be\n    stacked below a single GBS port, also indexed by the ifIndex,\n    possibly together with other BCE ports if bonding is enabled.\"\n  INDEX  { ifIndex }\n  ::= { gBondBceConfTable 1 }",
       "raw": true,
       "ja": ""
     },
@@ -1843,8 +1898,9 @@
     },
     {
       "indent": 3,
-      "text": "gBondBceConfRemoteDiscoveryCode OBJECT-TYPE SYNTAX PhysAddress (SIZE (0|6)) MAX-ACCESS read-write STATUS current DESCRIPTION \"A remote discovery code of the BCE port at the CO. A 6-octet-long discovery code of the peer GBS connected via the BCE. Reading this object results in a Discovery Get operation. Setting this object to all zeroes results in a Discovery Clear_if_Same operation (the value of gBondPortConfDiscoveryCode at the peer GBS SHALL be the same as gBondPortConfDiscoveryCode of the local GBS associated with the BCE for the operation to succeed). Writing a non-zero value to this object results in a Discovery Set_if_Clear operation. A zero-length octet string SHALL be returned on an attempt to read this object when bonding is not enabled.",
-      "ja": "gBondBceConfRemoteDiscoveryCode OBJECT-TYPE SYNTAX PhysAddress（SIZE（0 | 6））MAX-ACCESS read-write STATUS current DESCRIPTION \"COにあるBCEポートのリモート検出コード。接続されたピアGBSの6オクテット長の検出コードBCE。このオブジェクトを読み取ると、Discovery Getオペレーションが発生します。このオブジェクトをすべてゼロに設定すると、Discovery Clear_if_Sameオペレーションが発生します（ピアGBSのgBondPortConfDiscoveryCodeの値は、このオブジェクトにゼロ以外の値を書き込むと、Discovery Set_if_Clearオペレーションが実行されます。結合が有効になっていない場合、このオブジェクトを読み取ろうとすると、長さがゼロのオクテット文字列が返されます。"
+      "text": "gBondBceConfRemoteDiscoveryCode  OBJECT-TYPE\n  SYNTAX      PhysAddress (SIZE (0|6))\n  MAX-ACCESS  read-write\n  STATUS      current\n  DESCRIPTION\n    \"A remote discovery code of the BCE port at the CO.\n    A 6-octet-long discovery code of the peer GBS connected via\n    the BCE.\n    Reading this object results in a Discovery Get operation.\n    Setting this object to all zeroes results in a Discovery\n    Clear_if_Same operation (the value of gBondPortConfDiscoveryCode\n    at the peer GBS SHALL be the same as gBondPortConfDiscoveryCode\n    of the local GBS associated with the BCE for the operation to\n    succeed).\n    Writing a non-zero value to this object results in a\n    Discovery Set_if_Clear operation.\n    A zero-length octet string SHALL be returned on an attempt to\n    read this object when bonding is not enabled.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 7,
@@ -1920,8 +1976,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   gBondPmCurGroup OBJECT-GROUP\n     OBJECTS {\n       gBondPortPmCurES,\n       gBondPortPmCurSES,\n       gBondPortPmCurUAS,\n       gBondPortPmCur15MinValidIntervals,\n       gBondPortPmCur15MinInvalidIntervals,\n       gBondPortPmCur15MinTimeElapsed,\n       gBondPortPmCur15MinES,\n       gBondPortPmCur15MinSES,\n       gBondPortPmCur15MinUAS,\n       gBondPortPmCur1DayValidIntervals,\n       gBondPortPmCur1DayInvalidIntervals,\n       gBondPortPmCur1DayTimeElapsed,\n       gBondPortPmCur1DayES,\n       gBondPortPmCur1DaySES,\n       gBondPortPmCur1DayUAS\n     }\n     STATUS      current\n     DESCRIPTION\n       \"A collection of objects supporting OPTIONAL current Performance\n       Monitoring information for G.Bond ports.\"\n     ::= { gBondGroups 6 }",
+      "indent": 3,
+      "text": "gBondPmCurGroup OBJECT-GROUP\n  OBJECTS {\n    gBondPortPmCurES,\n    gBondPortPmCurSES,\n    gBondPortPmCurUAS,\n    gBondPortPmCur15MinValidIntervals,\n    gBondPortPmCur15MinInvalidIntervals,\n    gBondPortPmCur15MinTimeElapsed,\n    gBondPortPmCur15MinES,\n    gBondPortPmCur15MinSES,\n    gBondPortPmCur15MinUAS,\n    gBondPortPmCur1DayValidIntervals,\n    gBondPortPmCur1DayInvalidIntervals,\n    gBondPortPmCur1DayTimeElapsed,\n    gBondPortPmCur1DayES,\n    gBondPortPmCur1DaySES,\n    gBondPortPmCur1DayUAS\n  }\n  STATUS      current\n  DESCRIPTION\n    \"A collection of objects supporting OPTIONAL current Performance\n    Monitoring information for G.Bond ports.\"\n  ::= { gBondGroups 6 }",
       "raw": true,
       "ja": ""
     },
@@ -1938,8 +1994,8 @@
       "ja": ""
     },
     {
-      "indent": 0,
-      "text": "   gBondPmTcaConfGroup OBJECT-GROUP\n     OBJECTS {\n       gBondPortConfPmTcaConfProfile,\n       gBondPortConfPmTcaEnable,\n       gBondPortPmTcaProfileThresh15MinES,\n       gBondPortPmTcaProfileThresh15MinSES,\n       gBondPortPmTcaProfileThresh15MinUAS,\n       gBondPortPmTcaProfileThresh1DayES,\n       gBondPortPmTcaProfileThresh1DaySES,\n       gBondPortPmTcaProfileThresh1DayUAS,\n       gBondPortPmTcaProfileRowStatus\n     }\n     STATUS      current\n     DESCRIPTION\n       \"A collection of objects required for configuration of\n       Performance Monitoring Threshold Crossing Alert notifications\n       in G.Bond ports.\"\n     ::= { gBondGroups 9 }",
+      "indent": 3,
+      "text": "gBondPmTcaConfGroup OBJECT-GROUP\n  OBJECTS {\n    gBondPortConfPmTcaConfProfile,\n    gBondPortConfPmTcaEnable,\n    gBondPortPmTcaProfileThresh15MinES,\n    gBondPortPmTcaProfileThresh15MinSES,\n    gBondPortPmTcaProfileThresh15MinUAS,\n    gBondPortPmTcaProfileThresh1DayES,\n    gBondPortPmTcaProfileThresh1DaySES,\n    gBondPortPmTcaProfileThresh1DayUAS,\n    gBondPortPmTcaProfileRowStatus\n  }\n  STATUS      current\n  DESCRIPTION\n    \"A collection of objects required for configuration of\n    Performance Monitoring Threshold Crossing Alert notifications\n    in G.Bond ports.\"\n  ::= { gBondGroups 9 }",
       "raw": true,
       "ja": ""
     },
@@ -2019,8 +2075,9 @@
     },
     {
       "indent": 7,
-      "text": "OBJECT gBondPortCapSchemesSupported SYNTAX IANAgBondSchemeList DESCRIPTION \"Support for all bonding scheme types is not required.",
-      "ja": "オブジェクトgBondPortCapSchemesSupported構文IANAgBondSchemeList説明 \"すべての結合スキームタイプのサポートは必要ありません。"
+      "text": "OBJECT      gBondPortCapSchemesSupported\nSYNTAX      IANAgBondSchemeList\nDESCRIPTION\n  \"Support for all bonding scheme types is not required.",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 9,
@@ -2029,8 +2086,9 @@
     },
     {
       "indent": 7,
-      "text": "OBJECT gBondPortCapPeerSchemesSupported SYNTAX IANAgBondSchemeList DESCRIPTION \"Support for all bonding scheme types is not required. However, at least one value SHALL be supported.\"",
-      "ja": "オブジェクトgBondPortCapPeerSchemesSupported構文IANAgBondSchemeList説明「すべての結合方式タイプのサポートは必要ありません。ただし、少なくとも1つの値をサポートする必要があります。」"
+      "text": "OBJECT      gBondPortCapPeerSchemesSupported\nSYNTAX      IANAgBondSchemeList\nDESCRIPTION\n  \"Support for all bonding scheme types is not required.\n  However, at least one value SHALL be supported.\"",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 0,
@@ -2104,8 +2162,9 @@
     },
     {
       "indent": 6,
-      "text": "Naming Conventions: BCE - Bonding Channel Entity GBS - Generic Bonding Sub-layer",
-      "ja": "命名規則：BCE-ボンディングチャネルエンティティGBS-一般的なボンディングサブレイヤー"
+      "text": "Naming Conventions:\n  BCE   - Bonding Channel Entity\n  GBS   - Generic Bonding Sub-layer",
+      "ja": "",
+      "raw": true
     },
     {
       "indent": 6,
@@ -2223,8 +2282,8 @@
       "ja": "SNMPv3より前のSNMPバージョンには、十分なセキュリティが含まれていませんでした。ネットワーク自体が（たとえばIPsecを使用して）安全であっても、安全なネットワーク上の誰がこのMIBモジュール内のオブジェクトにアクセスしてGET / SET（読み取り/変更/作成/削除）できるかは制御できません。"
     },
     {
-      "indent": 0,
-      "text": "   Implementations SHOULD provide the security features described by the\n   SNMPv3 framework (see [RFC3410]), and implementations claiming\n   compliance to the SNMPv3 standard MUST include full support for\n   authentication and privacy via the User-based Security Model (USM)\n   [RFC3414] with the AES cipher algorithm [RFC3826].  Implementations\n   MAY also provide support for the Transport Security Model (TSM)\n   [RFC5591] in combination with a secure transport such as SSH\n   [RFC5592] or TLS/DTLS [RFC6353].",
+      "indent": 3,
+      "text": "Implementations SHOULD provide the security features described by the\nSNMPv3 framework (see [RFC3410]), and implementations claiming\ncompliance to the SNMPv3 standard MUST include full support for\nauthentication and privacy via the User-based Security Model (USM)\n[RFC3414] with the AES cipher algorithm [RFC3826].  Implementations\nMAY also provide support for the Transport Security Model (TSM)\n[RFC5591] in combination with a secure transport such as SSH\n[RFC5592] or TLS/DTLS [RFC6353].",
       "raw": true,
       "ja": ""
     },
