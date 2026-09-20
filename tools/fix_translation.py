@@ -6,6 +6,10 @@
 #
 #   E001: 訳文中の識別子の表記を、原文の表記に戻す
 #         例) Smlaunchowner -> smLaunchOwner
+#   E009: / + _ = を含む複合識別子を、原文の表記に戻す
+#         例) text / plain -> Text/Plain
+#   E010: 日本語化されたMIMEトップレベル名を含む識別子を原文表記へ戻す
+#         例) 画像/ PNG -> image/png
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -29,7 +33,8 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lint_translation import (  # noqa: E402
-    CAMEL_RE, CAMEL_STOPWORDS, URL_RE, ambiguous_lowers, BULLET_RE,
+    CAMEL_RE, CAMEL_STOPWORDS, COMPOUND_JA_RE, URL_RE, ambiguous_lowers,
+    BULLET_RE, compound_identifier_variants, recoverable_mime_context_identifiers,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -116,6 +121,46 @@ def fix_identifier_case(en, ja):
             new_ja = "".join(rebuilt)
             fixed.append(tok)
 
+    return new_ja, fixed
+
+
+def fix_compound_identifier_format(en, ja):
+    """E009: 一意に復元できる複合識別子を原文表記へ戻す。"""
+    variants = compound_identifier_variants(en)
+    fixed = []
+
+    def replace_segment(segment):
+        def _sub(match):
+            actual = match.group(0)
+            compact = re.sub(r"\s+", "", actual)
+            originals = variants.get(compact.lower())
+            if not originals or actual in originals or len(originals) != 1:
+                return actual
+            original = next(iter(originals))
+            fixed.append((original, actual))
+            return original
+
+        return COMPOUND_JA_RE.sub(_sub, segment)
+
+    # URL・メールアドレスは一字一句維持する。
+    rebuilt = []
+    last = 0
+    for match in URL_RE.finditer(ja):
+        rebuilt.append(replace_segment(ja[last:match.start()]))
+        rebuilt.append(match.group(0))
+        last = match.end()
+    rebuilt.append(replace_segment(ja[last:]))
+    return "".join(rebuilt), fixed
+
+
+def fix_recoverable_mime_identifiers(en, ja):
+    """E010: 一意に位置を決められるMIME関連識別子を原文表記へ戻す。"""
+    new_ja = ja
+    fixed = []
+    for token, actual, pattern in recoverable_mime_context_identifiers(en, new_ja):
+        new_ja, count = pattern.subn(token, new_ja, count=1)
+        if count:
+            fixed.append((token, actual))
     return new_ja, fixed
 
 
@@ -211,6 +256,26 @@ def process_file(path, checks, dry_run, samples, stats):
                 ja = new_ja
                 changed = True
 
+        if "E009" in checks:
+            new_ja, fixed = fix_compound_identifier_format(en, ja)
+            if new_ja != ja:
+                if len(samples["E009"]) < 12:
+                    samples["E009"].append((os.path.basename(path), fixed, ja[:90], new_ja[:90]))
+                stats["E009"] += len(fixed)
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
+        if "E010" in checks:
+            new_ja, fixed = fix_recoverable_mime_identifiers(en, ja)
+            if new_ja != ja:
+                if len(samples["E010"]) < 12:
+                    samples["E010"].append((os.path.basename(path), fixed, ja[:90], new_ja[:90]))
+                stats["E010"] += len(fixed)
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
         if "W006" in checks and c.get("section_title") is True:
             new_ja = fix_taigendome(ja)
             if new_ja and new_ja != ja:
@@ -257,7 +322,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "W005", "W006"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "W005", "W006"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -271,7 +336,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "W005", "W006")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "W005", "W006")}
     files_changed = 0
 
     for path in paths:
@@ -282,6 +347,10 @@ def main():
     print(f"{mode}対象ファイル: {len(paths)}  変更ファイル: {files_changed}")
     if "E001" in checks:
         print(f"  E001 識別子を修正: {stats['E001']} 箇所")
+    if "E009" in checks:
+        print(f"  E009 複合識別子を修正: {stats['E009']} 箇所")
+    if "E010" in checks:
+        print(f"  E010 MIME関連識別子を修正: {stats['E010']} 箇所")
     if "E004" in checks:
         print(f"  E004 raw段落のjaを空に: {stats['E004']} 件")
     if "E007" in checks:
@@ -295,7 +364,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "W005", "W006"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "W005", "W006"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:

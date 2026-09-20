@@ -35,6 +35,9 @@ CHECKS = {
     "W006": "見出しの体言止め違反 (section_titleがですます調)",
     "E007": "タイトルのprefix違反 (title.jaが 'RFC XXXX - ' で始まらない)",
     "E008": "JSONスキーマ違反 (必須フィールドの欠落・型不正)",
+    "E009": "複合識別子の表記破壊 (/ + _ = を含む識別子の空白・大小文字が原文と異なる)",
+    "E010": "MIME関連識別子の翻訳 (原文表記へ一意に復元可能)",
+    "W010": "MIME関連識別子が訳文から消失 (自動復元不可)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -248,6 +251,41 @@ ALL_TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*\b")
 # (例: trustee.ietf.org/license-info が "Trust" や "License" に誤マッチする)
 URL_RE = re.compile(r"(https?://\S+|\b[\w.\-]+@[\w.\-]+\b|\b[\w\-]+\.(?:ietf|org|com|net|edu)\b\S*)")
 
+# MIME型、プロトコル名、構文要素など、区切り記号を含む複合識別子。
+# ハイフンだけを含む語は通常の英単語との区別が難しいため対象外にし、
+# スタイルガイドで空白除去が明記されている / と +、および構文上重要な _ と =
+# のいずれかを含むものだけを決定的に検査する。
+COMPOUND_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9])"
+    r"([A-Za-z0-9](?:[A-Za-z0-9.*]{0,62}[A-Za-z0-9])?"
+    r"(?:[/+_=-][A-Za-z0-9](?:[A-Za-z0-9.*]{0,62}[A-Za-z0-9])?)+)"
+    r"(?![A-Za-z0-9])"
+)
+COMPOUND_JA_RE = re.compile(
+    r"(?<![A-Za-z0-9])"
+    r"([A-Za-z0-9](?:[A-Za-z0-9.*]{0,62}[A-Za-z0-9])?"
+    r"(?:\s*[/+_=-]\s*[A-Za-z0-9](?:[A-Za-z0-9.*]{0,62}[A-Za-z0-9])?)+)"
+    r"(?![A-Za-z0-9])"
+)
+SAFE_COMPOUND_SEPARATORS = frozenset("/+_=")
+
+MIME_TOP_LEVEL_VARIANTS = {
+    "application": ("application", "アプリケーション"),
+    "audio": ("audio", "オーディオ"),
+    "font": ("font", "フォント"),
+    "image": ("image", "画像", "イメージ"),
+    "message": ("message", "メッセージ"),
+    "model": ("model", "モデル"),
+    "multipart": ("multipart", "マルチパート"),
+    "text": ("text", "テキスト"),
+    "video": ("video", "ビデオ"),
+}
+MIME_CONTEXT_RE = re.compile(
+    r"\b(?:MIME|media\s+types?|content[- ]types?|body\s+parts?|"
+    r"payload\s+formats?|registrations?)\b",
+    re.IGNORECASE,
+)
+
 # 識別子として扱わない一般英単語 (CamelCaseだが技術識別子ではないもの)
 CAMEL_STOPWORDS = {
     "IPv4", "IPv6", "IPsec", "IDs", "OKs", "NACKs", "ACKs", "URIs", "URLs",
@@ -347,6 +385,85 @@ def check_identifier_case(en, ja):
         if m:
             problems.append((tok, m.group(0)))
     return problems, unresolvable
+
+
+def compound_identifier_variants(en):
+    """原文の複合識別子を小文字化したキーごとに返す。URL内は対象外。"""
+    variants = defaultdict(set)
+    for token in COMPOUND_TOKEN_RE.findall(URL_RE.sub(" ", en)):
+        if len(token) > 128 or not (set(token) & SAFE_COMPOUND_SEPARATORS):
+            continue
+        variants[token.lower()].add(token)
+    return variants
+
+
+def check_compound_identifier_format(en, ja):
+    """E009: / + _ = を含む複合識別子の空白・大小文字の破壊を検出する。
+
+    空白を除去して大小文字を無視したときに原文と一致し、かつ原文側の表記が
+    一意に決まるものだけを返す。原文内に表記揺れがあるものは誤修正防止のため
+    対象外とする。
+    """
+    variants = compound_identifier_variants(en)
+    problems = []
+    for actual in COMPOUND_JA_RE.findall(URL_RE.sub(" ", ja)):
+        compact = re.sub(r"\s+", "", actual)
+        originals = variants.get(compact.lower())
+        if not originals or actual in originals or len(originals) != 1:
+            continue
+        problems.append((next(iter(originals)), actual))
+    return problems
+
+
+def _flex_identifier_pattern(text):
+    """識別子内の区切り記号の周囲だけ空白を許すパターンを返す。"""
+    return "".join(
+        r"\s*" + re.escape(char) + r"\s*"
+        if char in "+_=-" else re.escape(char)
+        for char in text
+    )
+
+
+def missing_mime_context_identifiers(en, ja):
+    """MIME関連文脈で訳文に原文表記が存在しない識別子を返す。"""
+    if not MIME_CONTEXT_RE.search(en):
+        return []
+    ja_tokens = {
+        re.sub(r"\s+", "", token).lower()
+        for token in COMPOUND_TOKEN_RE.findall(URL_RE.sub(" ", ja))
+    }
+    missing = []
+    seen = set()
+    for token in COMPOUND_TOKEN_RE.findall(URL_RE.sub(" ", en)):
+        key = re.sub(r"\s+", "", token).lower()
+        exact = re.search(
+            r"(?<![A-Za-z0-9])" + re.escape(token) + r"(?![A-Za-z0-9])",
+            ja,
+        )
+        if key in seen or key in ja_tokens or exact or "/" not in token:
+            continue
+        if token.split("/", 1)[0].lower() not in MIME_TOP_LEVEL_VARIANTS:
+            continue
+        seen.add(key)
+        missing.append(token)
+    return missing
+
+
+def recoverable_mime_context_identifiers(en, ja):
+    """日本語化されたトップレベル名を含み、一意に直接復元できる識別子を返す。"""
+    recovered = []
+    for token in missing_mime_context_identifiers(en, ja):
+        top_level, subtype = token.split("/", 1)
+        variants = MIME_TOP_LEVEL_VARIANTS[top_level.lower()]
+        pattern = re.compile(
+            r"(?<![A-Za-z0-9])(?:" + "|".join(map(re.escape, variants)) + r")"
+            r"\s*/\s*" + _flex_identifier_pattern(subtype) + r"(?![A-Za-z0-9])",
+            re.IGNORECASE,
+        )
+        matches = list(pattern.finditer(ja))
+        if len(matches) == 1:
+            recovered.append((token, matches[0].group(0), pattern))
+    return recovered
 
 
 def detect_rfc2119(en):
@@ -475,6 +592,31 @@ def lint_file(path, enabled):
 
         if not en or not ja:
             continue
+
+        # --- 複合識別子 ---
+        # 参考文献など日本語を含まない段落でも、区切り文字や大小文字が壊れて
+        # いれば原文のままではないため、JP_CHAR_REによる除外より先に検査する。
+        if "E009" in enabled:
+            for tok, actual in check_compound_identifier_format(en, ja):
+                findings.append(Finding(
+                    "E009", path, rfc, i,
+                    f"複合識別子 '{tok}' が訳文で '{actual}' になっている", en, ja))
+
+        if "E010" in enabled or "W010" in enabled:
+            recoverable = recoverable_mime_context_identifiers(en, ja)
+            recoverable_tokens = {token.lower() for token, _, _ in recoverable}
+            if "E010" in enabled:
+                for token, actual, _ in recoverable:
+                    findings.append(Finding(
+                        "E010", path, rfc, i,
+                        f"MIME関連識別子 '{token}' が訳文で '{actual}' になっている", en, ja))
+            if "W010" in enabled:
+                for token in missing_mime_context_identifiers(en, ja):
+                    if token.lower() not in recoverable_tokens:
+                        findings.append(Finding(
+                            "W010", path, rfc, i,
+                            f"MIME関連識別子 '{token}' を原文表記へ自動復元できない", en, ja))
+
         if not JP_CHAR_RE.search(ja):
             continue  # 参考文献・著者情報など、原文のまま残すのが正しい段落
 
