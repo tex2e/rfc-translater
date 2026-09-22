@@ -16,9 +16,13 @@ import argparse
 import json
 import random
 import re
+import os
 import subprocess
 import sys
 from collections import Counter, defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lint_translation import check_reference_author_format, fix_url_format, update_reference_section_state
 
 JP_RE = re.compile(r"[ぁ-んァ-ヶ一-龠、。（）「」]")
 TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
@@ -63,7 +67,12 @@ def collect(base="HEAD"):
         if len(oc) != len(cc):
             skipped += 1
             continue
+        in_ref_section = False
         for a, b in zip(oc, cc):
+            en = b.get("text", "") or ""
+            is_title = bool(b.get("section_title"))
+            in_ref_section = update_reference_section_state(in_ref_section, en, is_title)
+
             oj = a.get("ja", "") or ""
             nj = b.get("ja", "") or ""
             if oj == nj:
@@ -72,12 +81,15 @@ def collect(base="HEAD"):
                 kind = "raw"          # raw段落の ja 空化 (E004) は意図的な変更
             elif oj.lower() == nj.lower():
                 kind = "case"
-            elif b.get("section_title"):
+            elif in_ref_section and not is_title and check_reference_author_format(en, oj, in_reference_section=True):
+                kind = "ref_author"   # 参考文献の著者名復元 (E011)
+            elif fix_url_format(en, oj) == nj:
+                kind = "url_format"   # URL表記の修正 (E012)
+            elif is_title:
                 kind = "heading"      # 見出しの体言止め変換 (W006)
             else:
                 kind = "body"         # 本文の文体変換 (W005)
-            rows.append((kind, f.split("/")[-1], b.get("text", "") or "", oj, nj,
-                         bool(b.get("section_title"))))
+            rows.append((kind, f.split("/")[-1], en, oj, nj, is_title))
     p.stdin.close()
     p.wait()
     return rows, len(files), skipped
@@ -95,11 +107,14 @@ def main():
     rew = [r for r in rows if r[0] == "heading"]
     body = [r for r in rows if r[0] == "body"]
     raws = [r for r in rows if r[0] == "raw"]
+    ref_authors = [r for r in rows if r[0] == "ref_author"]
+    url_formats = [r for r in rows if r[0] == "url_format"]
 
     print(f"変更ファイル: {n_files}  (比較不能: {skipped})")
     print(f"変更段落: {len(rows):,}")
     print(f"  大小文字のみ {len(case):,} / 見出し書き換え {len(rew):,} / "
-          f"本文文体 {len(body):,} / raw空化 {len(raws):,}")
+          f"本文文体 {len(body):,} / raw空化 {len(raws):,} / 参考文献著者名 {len(ref_authors):,} / "
+          f"URL表記 {len(url_formats):,}")
 
     fail = 0
 
@@ -175,6 +190,32 @@ def main():
         bad_raw = [r for r in raws if r[4].strip()]
         print(f"  [{'OK' if not bad_raw else 'NG'}] ja が空文字になっていない: {len(bad_raw)}")
         fail += len(bad_raw)
+
+    # --- 参考文献著者名 (E011) ---
+    if ref_authors:
+        print("\n== 参考文献著者名の不変条件 ==")
+        bad_fixed = []
+        for r in ref_authors:
+            expected = check_reference_author_format(r[2], r[3], in_reference_section=True)
+            if not expected or expected[2] != r[4]:
+                bad_fixed.append(r)
+        print(f"  [{'OK' if not bad_fixed else 'NG'}] 期待変換結果との不一致: {len(bad_fixed)}")
+        fail += len(bad_fixed)
+        for r in bad_fixed[:3]:
+            print(f"        {r[1]}\n          旧: {r[3][:70]}\n          新: {r[4][:70]}")
+
+    # --- URL表記 (E012) ---
+    if url_formats:
+        print("\n== URL表記の不変条件 ==")
+        bad_fixed = []
+        for r in url_formats:
+            expected = fix_url_format(r[2], r[3])
+            if expected != r[4]:
+                bad_fixed.append(r)
+        print(f"  [{'OK' if not bad_fixed else 'NG'}] 期待変換結果との不一致: {len(bad_fixed)}")
+        fail += len(bad_fixed)
+        for r in bad_fixed[:3]:
+            print(f"        {r[1]}\n          旧: {r[3][:70]}\n          新: {r[4][:70]}")
 
     # 参考情報 (欠陥ではない)
     ends = Counter()

@@ -2,6 +2,8 @@
 # 翻訳済みJSONからHTMLを生成するためのプログラム
 # ------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import re
 import textwrap
 import markupsafe

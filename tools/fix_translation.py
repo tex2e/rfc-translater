@@ -10,6 +10,10 @@
 #         例) text / plain -> Text/Plain
 #   E010: 日本語化されたMIMEトップレベル名を含む識別子を原文表記へ戻す
 #         例) 画像/ PNG -> image/png
+#   E011: 参考文献エントリの著者名における表記破壊・誤訳を原文表記へ戻す
+#         例) [RFC2119] Bradner、S。、「...」 -> [RFC2119] Bradner, S.、「...」
+#   E012: URL表記破壊 (全角コロンや空白) を半角・正しい形式へ修正する
+#         例) https ：//... -> https://...
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -35,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lint_translation import (  # noqa: E402
     CAMEL_RE, CAMEL_STOPWORDS, COMPOUND_JA_RE, URL_RE, ambiguous_lowers,
     BULLET_RE, compound_identifier_variants, recoverable_mime_context_identifiers,
+    check_reference_author_format, fix_url_format, update_reference_section_state,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -226,9 +231,16 @@ def process_file(path, checks, dry_run, samples, stats):
             stats["E007"] += 1
             changed = True
 
+    in_ref_section = False
     for c in contents:
         if not isinstance(c, dict):
             continue
+
+        en = c.get("text", "") or ""
+        ja = c.get("ja", "") or ""
+        is_title = c.get("section_title") is True
+
+        in_ref_section = update_reference_section_state(in_ref_section, en, is_title)
 
         # --- E004: raw段落に翻訳が入っている ---
         if c.get("raw") is True:
@@ -241,8 +253,6 @@ def process_file(path, checks, dry_run, samples, stats):
                 changed = True
             continue
 
-        en = c.get("text", "") or ""
-        ja = c.get("ja", "") or ""
         if not en or not ja:
             continue
 
@@ -272,6 +282,28 @@ def process_file(path, checks, dry_run, samples, stats):
                 if len(samples["E010"]) < 12:
                     samples["E010"].append((os.path.basename(path), fixed, ja[:90], new_ja[:90]))
                 stats["E010"] += len(fixed)
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
+        if "E011" in checks and in_ref_section and not is_title:
+            ref_issue = check_reference_author_format(en, ja, in_reference_section=True)
+            if ref_issue:
+                en_authors, ja_authors, fixed_ja = ref_issue
+                if fixed_ja != ja:
+                    if len(samples["E011"]) < 12:
+                        samples["E011"].append((os.path.basename(path), [f"{ja_authors} -> {en_authors}"], ja[:90], fixed_ja[:90]))
+                    stats["E011"] += 1
+                    c["ja"] = fixed_ja
+                    ja = fixed_ja
+                    changed = True
+
+        if "E012" in checks:
+            new_ja = fix_url_format(en, ja)
+            if new_ja != ja:
+                if len(samples["E012"]) < 12:
+                    samples["E012"].append((os.path.basename(path), None, ja[:90], new_ja[:90]))
+                stats["E012"] += 1
                 c["ja"] = new_ja
                 ja = new_ja
                 changed = True
@@ -322,7 +354,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "E009", "E010", "W005", "W006"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -336,7 +368,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "W005", "W006")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006")}
     files_changed = 0
 
     for path in paths:
@@ -351,6 +383,10 @@ def main():
         print(f"  E009 複合識別子を修正: {stats['E009']} 箇所")
     if "E010" in checks:
         print(f"  E010 MIME関連識別子を修正: {stats['E010']} 箇所")
+    if "E011" in checks:
+        print(f"  E011 参考文献の著者名を修正: {stats['E011']} 件")
+    if "E012" in checks:
+        print(f"  E012 URL表記を修正: {stats['E012']} 件")
     if "E004" in checks:
         print(f"  E004 raw段落のjaを空に: {stats['E004']} 件")
     if "E007" in checks:
@@ -364,7 +400,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "E009", "E010", "W005", "W006"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:

@@ -38,6 +38,8 @@ CHECKS = {
     "E009": "複合識別子の表記破壊 (/ + _ = を含む識別子の空白・大小文字が原文と異なる)",
     "E010": "MIME関連識別子の翻訳 (原文表記へ一意に復元可能)",
     "W010": "MIME関連識別子が訳文から消失 (自動復元不可)",
+    "E011": "参考文献の著者名表記破壊 (人名のカンマ・ピリオドが「、」「。」になっている、または人名が誤訳されている)",
+    "E012": "URLの表記破壊 (全角コロンや空白が含まれている)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -466,6 +468,196 @@ def recoverable_mime_context_identifiers(en, ja):
     return recovered
 
 
+# ------------------------------------------------------------------------------
+# 参考文献エントリの著者名抽出・検査 (E011)
+# ------------------------------------------------------------------------------
+# 参考文献セクションの開始見出し
+REF_START_RE = re.compile(
+    r"^(?:[0-9A-Za-z.]+\s+)?(?:"
+    r"references?|normative\s+references?|informative\s+references?|"
+    r"non-normative\s+references?|external\s+references?|bibliography|citations?"
+    r")\s*[:.]?\s*$|"
+    r"^(?:参考文献|引用文献|参考引用)\s*$",
+    re.I,
+)
+
+# 参考文献セクションの終了見出し（次のセクション）
+REF_END_RE = re.compile(
+    r"^(?:[0-9A-Za-z.]+\s+)?(?:"
+    r"security\s+considerations?|iana\s+considerations?|author\x27?s?\s+address(?:es)?|"
+    r"acknowledg(?:e?ments?)?|contributors?|editor\x27?s?\s+address(?:es)?|"
+    r"full\s+copyright\s+statement|intellectual\s+property|"
+    r"appendix\s+[a-z0-9.]*|index|"
+    r"著者の連絡先|セキュリティに関する考慮事項|ianaの考慮事項|謝辞"
+    r")\b",
+    re.I,
+)
+
+
+def update_reference_section_state(in_ref, text, is_section_title):
+    """段落を走査しながら参考文献セクションの内外を追跡する"""
+    t = text.strip()
+    if is_section_title:
+        return bool(REF_START_RE.match(t))
+    if len(t) < 80:
+        if REF_START_RE.match(t):
+            return True
+        elif in_ref and REF_END_RE.match(t):
+            return False
+    return in_ref
+
+
+# 原文: [TAG] Authors, "Title" ... または [TAG] Authors. "Title" ...
+REF_EN_PATTERN = re.compile(
+    r"^(\[[A-Za-z0-9\-_.+/ ]+\])[,\s]*"
+    r"((?:(?!\s*[\"“]).)+?)"
+    r"(?:[,.]\s*)([\"“].*)$",
+    re.DOTALL,
+)
+
+# 訳文: [TAG] 著者名 「タイトル」... / "タイトル"...
+REF_JA_PATTERN = re.compile(
+    r"^(\[[^\]]+\])[,\s]*"
+    r"(.*?)"
+    r"(?:[、,.]\s*|\s*)([「\"“].*)$",
+    re.DOTALL,
+)
+
+
+def is_valid_reference_entry(en_authors, en_rest, ja_authors, ja_rest=""):
+    """参考文献エントリの妥当性を厳格に検査し、本文中の言及段落などの誤判定を防ぐ"""
+    en_authors = en_authors.strip()
+    ja_authors = ja_authors.strip()
+
+    # 1. 著者名の長さ制限 (文献エントリの著者名は通常180文字以内、共著者が多くても250文字以内)
+    if len(en_authors) > 250 or len(ja_authors) > 250:
+        return False
+
+    # 2. ja_authors に日本語の助詞・文脈語が含まれている場合は本文
+    # (本物の参考文献の著者名に「は」「を」「が」「に」「では」「として」等が含まれることは絶対にない)
+    if re.search(r"(?:は|を|が|に|へ|で|から|より|では|には|について|において|として|により|によって|とともに)(?:[、\s]|$)", ja_authors):
+        return False
+
+    # 3. 著者名に Section, セクション, RFC 等が含まれている場合は本文言及
+    if re.search(r"\b(?:Section|Appendix|RFC|Page)\b|\[", en_authors, re.I):
+        return False
+    if re.search(r"(?:セクション|章|節|項|ページ|RFC|\[)", ja_authors):
+        return False
+
+    # 4. 著者名の中に文末ピリオド (イニシャルや略語以外) がある場合は通常の英文
+    clean = re.sub(r"\b(?:[A-Z]|Ed|Eds|Jr|Sr|St|approx)\.", "", en_authors)
+    if "." in clean:
+        return False
+
+    # 5. 本文段落特有の動詞・前置詞句・助動詞を含む場合は除外
+    if re.search(r"\b(?:defines?|defined|describes?|described|specif(?:y|ies|ied)|provides?|provided|"
+                 r"uses?|used|discuss(?:es|ed)?|presents?|presented|shows?|showed|contains?|contained|"
+                 r"allows?|allowed|requires?|required|states?|stated|notes?|noted|suggests?|suggested|"
+                 r"makes?|made|replaces?|replaced|considers?|considered|includes?|included|"
+                 r"updates?|updated|indicates?|indicated|clarif(?:y|ies|ied)|extends?|extended|"
+                 r"is|are|was|were|have|has|had|will|would|can|could|should|must|"
+                 r"from the|to the|in the|of the|for the|that|which|into)\b", en_authors, re.I):
+        return False
+
+    # 6. ja_rest の引用符の直後に助詞が続く場合は本文（例: 「タイトル」と定義、など）
+    if ja_rest:
+        clean_rest = ja_rest.strip()
+        if re.search(r'^[「\"“].*?[」\"”][）\)]*\s*(?:と|を|に|は|が|で|から|として|について|という|とする)', clean_rest):
+            return False
+
+    # 7. タイトル以降に書誌情報キーワードが含まれること
+    if not re.search(r"(?:RFC\s*\d+|BCP\s*\d+|STD\s*\d+|DOI|https?://|19\d\d|20\d\d|"
+                     r"Work in Progress|Internet-Draft|Vol\.|pp\.|ISBN|ISSN|IEEE|ANSI|NIST|ISO)", en_rest, re.I):
+        return False
+
+    return True
+
+
+def check_reference_author_format(en, ja, in_reference_section=True):
+    """E011: 参考文献エントリの著者名における表記破壊・誤訳を検出する。
+    復元可能な場合は (en_authors, ja_authors, fixed_ja) を返す。"""
+    if not in_reference_section:
+        return None
+
+    en_s = en.strip()
+    ja_s = ja.strip()
+    if not en_s.startswith("[") or not ja_s.startswith("["):
+        return None
+
+    em = REF_EN_PATTERN.match(en_s)
+    if not em:
+        return None
+    jm = REF_JA_PATTERN.match(ja_s)
+    if not jm:
+        return None
+
+    en_tag = re.sub(r"\s+", " ", em.group(1)).strip()
+    en_authors = re.sub(r"\s+", " ", em.group(2)).strip().lstrip(",").rstrip(",")
+    en_rest = em.group(3).strip()
+    ja_tag = re.sub(r"\s+", " ", jm.group(1)).strip()
+    ja_authors = re.sub(r"\s+", " ", jm.group(2)).strip().lstrip(",").rstrip("、,")
+    ja_rest = jm.group(3).strip()
+
+    if not is_valid_reference_entry(en_authors, en_rest, ja_authors, ja_rest):
+        return None
+
+    if ("、" in ja_authors or "。" in ja_authors or
+            ja_authors != en_authors or ja_tag != en_tag):
+        if ja_rest.startswith("「"):
+            fixed_ja = f"{en_tag} {en_authors}、{ja_rest}"
+        else:
+            fixed_ja = f"{en_tag} {en_authors}, {ja_rest}"
+        fixed_ja = fix_url_format(en, fixed_ja)
+        return en_authors, ja_authors, fixed_ja
+    return None
+
+
+# ------------------------------------------------------------------------------
+# URL表記の抽出・検査・修正 (E012)
+# ------------------------------------------------------------------------------
+URL_ISSUE_RE = re.compile(
+    r"(?:https?|ftps?|tftp|ahttp)[\s　]*：[\s　]*//|"
+    r"(?:https?|ftps?|tftp|ahttp):\s+//|"
+    r"(?:https?|ftps?|tftp|ahttp)\s+://|"
+    r"(?:https?|ftps?|tftp|ahttp)://\s+|"
+    r"<[\s　]+(?:https?|ftps?|tftp|ahttp)://|"
+    r"(?:https?|ftps?|tftp|ahttp)://[^>\s]+[\s　]+>",
+    re.I,
+)
+
+
+def check_url_format(en, ja):
+    """E012: URL内の全角コロンや不正な空白を検出する。"""
+    m = URL_ISSUE_RE.search(ja)
+    if m:
+        return m.group(0)
+    return None
+
+
+def fix_url_format(en, ja):
+    """E012: 全角コロンや空白を含むURL表記を半角・正しい形式に修正する。"""
+    new_ja = ja
+
+    # 1. 原文に <https?://...> が含まれており、訳文側の対応する <...> が壊れている場合、
+    # 原文のURLで直接復元する (最も安全かつ完全。行折り返しの空白は除去して正規化)
+    en_bracket_urls = [re.sub(r"\s+", "", u) for u in re.findall(r"<[a-zA-Z]+://[^>]+>", en)]
+    ja_bracket_matches = list(re.finditer(r"<[\s　]*[a-zA-Z]+[\s　]*[：:][^>]+>", new_ja))
+
+    if len(en_bracket_urls) == len(ja_bracket_matches) and len(en_bracket_urls) > 0:
+        for en_u, jm in reversed(list(zip(en_bracket_urls, ja_bracket_matches))):
+            new_ja = new_ja[:jm.start()] + en_u + new_ja[jm.end():]
+
+    # 2. 残りの全角コロン・空白の正規化
+    new_ja = re.sub(r"(?<![a-zA-Z0-9])(https?|ftps?|tftp|ahttp)[\s　]*[：:][\s　]*//", r"\1://", new_ja, flags=re.I)
+    new_ja = re.sub(r"(?<![a-zA-Z0-9])(https?|ftps?|tftp|ahttp)\s+://", r"\1://", new_ja, flags=re.I)
+    new_ja = re.sub(r"(?<![a-zA-Z0-9])(https?|ftps?|tftp|ahttp):\s+//", r"\1://", new_ja, flags=re.I)
+    new_ja = re.sub(r"((?:https?|ftps?|tftp|ahttp)://)[\s　]+", r"\1", new_ja, flags=re.I)
+    new_ja = re.sub(r"<[\s　]+((?:https?|ftps?|tftp|ahttp)://)", r"<\1", new_ja)
+    new_ja = re.sub(r"((?:https?|ftps?|tftp|ahttp)://[^>\s]+)[\s　]+>", r"\1>", new_ja)
+
+    return new_ja
+
+
 def detect_rfc2119(en):
     """原文に含まれるRFC2119キーワードを検出し、(キーワード, 強度)のリストを返す。
     長いキーワードを優先し、重複カウントを避ける。"""
@@ -571,6 +763,7 @@ def lint_file(path, enabled):
         findings.append(Finding("E008", path, rfc, -1, "contents 配列がない"))
         return findings
 
+    in_ref_section = False
     for i, c in enumerate(contents):
         if not isinstance(c, dict):
             findings.append(Finding("E008", path, rfc, i, "contents要素がオブジェクトでない"))
@@ -579,6 +772,8 @@ def lint_file(path, enabled):
         ja = c.get("ja", "") or ""
         is_raw = c.get("raw") is True
         is_title = c.get("section_title") is True
+
+        in_ref_section = update_reference_section_state(in_ref_section, en, is_title)
 
         if "E008" in enabled and "text" not in c:
             findings.append(Finding("E008", path, rfc, i, "text フィールドがない"))
@@ -616,6 +811,23 @@ def lint_file(path, enabled):
                         findings.append(Finding(
                             "W010", path, rfc, i,
                             f"MIME関連識別子 '{token}' を原文表記へ自動復元できない", en, ja))
+
+        # --- 参考文献の著者名 ---
+        if "E011" in enabled and in_ref_section and not is_title:
+            ref_issue = check_reference_author_format(en, ja, in_reference_section=True)
+            if ref_issue:
+                en_authors, ja_authors, _ = ref_issue
+                findings.append(Finding(
+                    "E011", path, rfc, i,
+                    f"参考文献の著者名表記破壊 ('{en_authors}' が '{ja_authors}' になっている)", en, ja))
+
+        # --- URLの表記破壊 ---
+        if "E012" in enabled:
+            bad_url = check_url_format(en, ja)
+            if bad_url:
+                findings.append(Finding(
+                    "E012", path, rfc, i,
+                    f"URLの表記破壊 ('{bad_url}')", en, ja))
 
         if not JP_CHAR_RE.search(ja):
             continue  # 参考文献・著者情報など、原文のまま残すのが正しい段落
