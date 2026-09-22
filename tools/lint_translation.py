@@ -40,6 +40,7 @@ CHECKS = {
     "W010": "MIME関連識別子が訳文から消失 (自動復元不可)",
     "E011": "参考文献の著者名表記破壊 (人名のカンマ・ピリオドが「、」「。」になっている、または人名が誤訳されている)",
     "E012": "URLの表記破壊 (全角コロンや空白が含まれている)",
+    "E013": "差分指示子の誤訳 (OLD:が「年：」「古い：」、NEW:が「新着：」「新しい：」などになっている)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -634,6 +635,24 @@ def check_url_format(en, ja):
     return None
 
 
+DIFF_INDICATOR_BAD_MAPPINGS = [
+    (re.compile(r"^(?:_|\*|o\s+)?OLD:\s*(?:_)?$"), re.compile(r"^(?:_|\*|o\s+)?(?:年|古い)[：:](?:_)?$")),
+    (re.compile(r"^(?:_|\*|o\s+)?NEW:\s*(?:_)?$"), re.compile(r"^(?:_|\*|o\s+)?(?:新着|新しい)[：:](?:_)?$")),
+    (re.compile(r"^PROPOSED/NEW:\s*$"), re.compile(r"^提案/新規[：:]$")),
+]
+
+
+def check_diff_indicator(en, ja):
+    """E013: 差分指示子 (OLD:/NEW:) の文脈誤訳を検出する。"""
+    en_clean = en.strip()
+    ja_clean = ja.strip()
+    for en_pat, ja_pat in DIFF_INDICATOR_BAD_MAPPINGS:
+        if en_pat.match(en_clean) and ja_pat.match(ja_clean):
+            return f"差分指示子 '{en_clean}' が誤訳 '{ja_clean}' になっている ('旧：' または '新：' にすべき)"
+    return None
+
+
+
 def fix_url_format(en, ja):
     """E012: 全角コロンや空白を含むURL表記を半角・正しい形式に修正する。"""
     new_ja = ja
@@ -828,6 +847,15 @@ def lint_file(path, enabled):
                 findings.append(Finding(
                     "E012", path, rfc, i,
                     f"URLの表記破壊 ('{bad_url}')", en, ja))
+
+        # --- 差分指示子の誤訳 ---
+        if "E013" in enabled:
+            bad_diff = check_diff_indicator(en, ja)
+            if bad_diff:
+                findings.append(Finding(
+                    "E013", path, rfc, i,
+                    bad_diff, en, ja))
+
 
         if not JP_CHAR_RE.search(ja):
             continue  # 参考文献・著者情報など、原文のまま残すのが正しい段落
