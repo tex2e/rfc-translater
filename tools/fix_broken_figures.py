@@ -189,6 +189,15 @@ HIGH_GRAMMAR_CONTEXT = re.compile(
     r'ABNF|BNF|Backus-Naur|formal syntax|syntax specification'
     r'|collected grammar|formal grammar', re.IGNORECASE)
 
+# EAP/TLS/TLV のメッセージシーケンス図。単独の `A -> B` は本文や関数記法にも
+# 現れるため、矢印とプロトコル語の両方を必須にする。図中の注釈は、後段で
+# raw 段落と message-flow 本体に連続している場合にだけ採用する。
+MESSAGE_FLOW_ARROW = re.compile(r'(?:^|\s)<-\s*|->(?:\s|$)')
+MESSAGE_FLOW_PROTOCOL = re.compile(
+    r'\b(?:EAP(?:-[A-Z0-9]+)?|TLS|TLV)\b', re.IGNORECASE)
+MESSAGE_FLOW_NOTE = re.compile(
+    r'^\s*(?://|TLS channel|optional additional)', re.IGNORECASE)
+
 
 def is_incremental_grammar_match(match, block: str = '') -> bool:
     """ABNFの増分選択`=/`を、同記号を説明する通常文と区別する。"""
@@ -300,6 +309,52 @@ def filter_high_confidence_grammar(contents: list[dict], findings: list) -> list
     return sorted(selected, key=lambda finding: finding.index)
 
 
+def message_flow_reason(orig: str):
+    """EAP/TLS/TLVメッセージ図の本体または図中注釈を分類する。"""
+    if MESSAGE_FLOW_ARROW.search(orig) and MESSAGE_FLOW_PROTOCOL.search(orig):
+        return 'message-flow'
+    if MESSAGE_FLOW_NOTE.search(orig):
+        return 'message-flow-note'
+    return None
+
+
+def filter_message_flow_neighbors(contents: list[dict], findings: list) -> list:
+    """raw図に連続するEAP/TLS/TLVメッセージフローだけを選択する。
+
+    raw段落と候補段落からなる連続成分に、矢印を持つmessage-flow本体が最低1件
+    含まれることを要求する。これにより、rawコードに隣接する通常の`//`コメント
+    だけを誤って伝播させない。
+    """
+    candidates = {
+        f.index: f for f in findings
+        if any(reason.startswith('message-flow') for reason in f.reasons)
+    }
+    allowed = {
+        i for i, content in enumerate(contents) if content.get('raw') is True
+    } | set(candidates)
+    selected = []
+    visited = set()
+
+    for start in sorted(allowed):
+        if start in visited:
+            continue
+        component = []
+        pos = start
+        while pos in allowed:
+            component.append(pos)
+            visited.add(pos)
+            pos += 1
+        component_findings = [candidates[pos] for pos in component
+                              if pos in candidates]
+        has_raw_seed = any(contents[pos].get('raw') is True for pos in component)
+        has_message = any('message-flow' in finding.reasons
+                          for finding in component_findings)
+        if has_raw_seed and has_message:
+            selected.extend(component_findings)
+
+    return sorted(selected, key=lambda finding: finding.index)
+
+
 def has_hard_code_signal(orig: str) -> bool:
     """本文の折り返しではありえない、確実なコード・図表の signal を持つか"""
     if any(p.search(orig) for p in HARD_CODE):
@@ -372,7 +427,8 @@ class Finding:
 
 
 def inspect(path: str, num: int, sleep: float = 0.0,
-            restore_raw_layout: bool = False):
+            restore_raw_layout: bool = False,
+            include_message_flow_candidates: bool = False):
     """壊れている段落を検出する。戻り値: (JSONオブジェクト, Findingの配列, 整合率)"""
     with open(path, encoding='utf-8') as f:
         obj = json.load(f)
@@ -417,10 +473,15 @@ def inspect(path: str, num: int, sleep: float = 0.0,
                         c.get('indent'), orig, indent, c.get('ja') or ''))
                 continue
             reasons = detect_reasons(orig)
+            flow_reason = (message_flow_reason(orig)
+                           if include_message_flow_candidates else None)
+            if flow_reason:
+                reasons.append(flow_reason)
             if not reasons:
                 continue
             # 本文の折り返しは対象外。ただし確実なコード signal があれば優先する
-            if is_prose_reflow(orig) and not has_hard_code_signal(orig):
+            if is_prose_reflow(orig) and not has_hard_code_signal(orig) \
+                    and not flow_reason:
                 continue
             findings.append(Finding(i1 + k, reasons, c.get('text') or '',
                                     c.get('indent'), orig, indent, c.get('ja') or ''))
@@ -467,8 +528,12 @@ def main() -> int:
     p.add_argument('--dir', nargs='*', help='対象データディレクトリ (例: 2000 3000)')
     p.add_argument('--all', action='store_true', help='RFC8650未満をすべて対象にする')
     p.add_argument('--apply', action='store_true', help='検出結果をJSONに書き込む')
-    p.add_argument('--high-confidence-grammar', action='store_true',
-                   help='高確度のABNF/BNF構文定義だけを対象にする')
+    focused = p.add_mutually_exclusive_group()
+    focused.add_argument('--high-confidence-grammar', action='store_true',
+                         help='高確度のABNF/BNF構文定義だけを対象にする')
+    focused.add_argument(
+        '--message-flow-neighbors', action='store_true',
+        help='raw図に連続するEAP/TLS/TLVメッセージフローだけを対象にする')
     p.add_argument('--raw-layout', action='store_true',
                    help='raw化済み段落の改行と字下げを原本どおりに復元する')
     p.add_argument('--format', choices=['detail', 'summary', 'json'], default='detail')
@@ -485,8 +550,10 @@ def main() -> int:
     for path, num in target_paths(args):
         try:
             obj, findings, ratio = inspect(
-                path, num, args.sleep, restore_raw_layout=args.raw_layout)
-            if args.raw_layout and not args.high_confidence_grammar:
+                path, num, args.sleep, restore_raw_layout=args.raw_layout,
+                include_message_flow_candidates=args.message_flow_neighbors)
+            if args.raw_layout and not (
+                    args.high_confidence_grammar or args.message_flow_neighbors):
                 findings = [f for f in findings
                             if 'raw-layout' in f.reasons]
             if args.high_confidence_grammar:
@@ -495,6 +562,12 @@ def main() -> int:
                 grammar = [f for f in findings if 'raw-layout' not in f.reasons]
                 findings = raw_layout + filter_high_confidence_grammar(
                     contents, grammar)
+                findings.sort(key=lambda finding: finding.index)
+            if args.message_flow_neighbors:
+                contents = obj.get('contents') or []
+                raw_layout = [f for f in findings if 'raw-layout' in f.reasons]
+                findings = raw_layout + filter_message_flow_neighbors(
+                    contents, findings)
                 findings.sort(key=lambda finding: finding.index)
         except urllib.error.HTTPError as e:
             print(f'[-] RFC{num}: TXT取得失敗 ({e.code})', file=sys.stderr)
