@@ -14,17 +14,7 @@
   <span id="rfc_number" class="hidden">${ctx[RfcJsonElem.NUMBER]}</span>
   <div style="height: 1ex;"></div>
   <div class="jump-to-original-rfc-container">
-    % if is_draft:
-    <a href="https://datatracker.ietf.org/doc/html/${ctx[RfcJsonElem.NUMBER] | h}">
-    % elif RfcHtmlHelper.is_rfc_greater_than_or_equal_to_8650(ctx[RfcJsonElem.NUMBER]):
-    <a href="https://www.rfc-editor.org/rfc/rfc${ctx[RfcJsonElem.NUMBER]}.html">
-    % else:
-    <a href="https://datatracker.ietf.org/doc/html/rfc${ctx[RfcJsonElem.NUMBER]}">
-    % endif
-      <button type="button" class="btn btn-light btn-sm">
-        <span class="jump-to-original-rfc">Orig</span>
-      </button>
-    </a>
+    <a id="orig_link" class="btn btn-light btn-sm jump-to-original-rfc" href="${orig_url | h}" data-orig-url="${orig_url | h}" title="原文を開く（表示中の節へ移動します）">原文</a>
   </div>
   <div class="container">
     <div>
@@ -35,23 +25,14 @@
       % endif
         <h4 class="alert-heading">${ctx[RfcJsonElem.TITLE][RfcJsonElem.Title.TEXT]} 日本語訳</h4>
         <span class="URL">原文URL :
-          % if is_draft:
-          <a href="https://datatracker.ietf.org/doc/html/${ctx[RfcJsonElem.NUMBER] | h}">
-            https://datatracker.ietf.org/doc/html/${ctx[RfcJsonElem.NUMBER] | h}
+          <a href="${orig_url | h}">
+            ${orig_url | h}
           </a>
-          % elif RfcHtmlHelper.is_rfc_greater_than_or_equal_to_8650(ctx[RfcJsonElem.NUMBER]):
-          <a href="https://www.rfc-editor.org/rfc/rfc${ctx[RfcJsonElem.NUMBER]}.html">
-            https://www.rfc-editor.org/rfc/rfc${ctx[RfcJsonElem.NUMBER]}.html
-          </a>
-          % else:
-          <a href="https://datatracker.ietf.org/doc/html/rfc${ctx[RfcJsonElem.NUMBER]}">
-            https://datatracker.ietf.org/doc/html/rfc${ctx[RfcJsonElem.NUMBER]}
-          </a>
-          % endif
         </span><br>
         <span class="title_ja">
           タイトル : <strong>${ctx[RfcJsonElem.TITLE][RfcJsonElem.Title.JA]}</strong></span><br>
         <span class="updated_by">翻訳編集 : ${RfcHtmlHelper.get_updated_by(ctx[RfcJsonElem.UPDATED_BY])}</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
+        <span id="rfc_actions"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -75,38 +56,48 @@
       </div>
     </div>
     % endif
-    % for paragraph in ctx[RfcJsonElem.CONTENTS]:
-    <div class="row">
+    % for i, paragraph in enumerate(ctx[RfcJsonElem.CONTENTS]):
       % if paragraph.get(RfcJsonElem.Contents.RAW) == True:
+    <div class="row" id="${paragraph_ids[i]}">
       <div class="col-sm-12 col-md-12">
-        <pre class="text text-monospace${' toc' if paragraph.get(RfcJsonElem.Contents.TOC) else ''}">
-${RfcHtmlHelper.indent(paragraph[RfcJsonElem.Contents.TEXT], ' ' * paragraph[RfcJsonElem.Contents.INDENT]) | h}
+        % if paragraph.get(RfcJsonElem.Contents.TOC):
+        <pre class="text text-monospace toc">
+${RfcHtmlHelper.render_toc(RfcHtmlHelper.indent(paragraph[RfcJsonElem.Contents.TEXT], ' ' * paragraph[RfcJsonElem.Contents.INDENT]), toc_section_ids, is_draft)}
         </pre>
+        % else:
+        <pre class="text text-monospace">
+${RfcHtmlHelper.link_rfc_refs(RfcHtmlHelper.escape(RfcHtmlHelper.indent(paragraph[RfcJsonElem.Contents.TEXT], ' ' * paragraph[RfcJsonElem.Contents.INDENT])), is_draft)}
+        </pre>
+        % endif
       </div>
+    </div>
       % elif paragraph.get(RfcJsonElem.Contents.SECTION_TITLE) == True:
+    <div class="row sec-row sec-level-${RfcHtmlHelper.section_level(paragraph[RfcJsonElem.Contents.TEXT])}">
       <div class="col-sm-12 col-md-6">
-        <h5 class="text mt-2" id="${RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT])}">
-${paragraph[RfcJsonElem.Contents.TEXT] | h}
+        <h5 class="text mt-2" id="${RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT])}"${' data-section="%s"' % RfcHtmlHelper.section_number(paragraph[RfcJsonElem.Contents.TEXT]) if RfcHtmlHelper.section_number(paragraph[RfcJsonElem.Contents.TEXT]) else ''}>
+${RfcHtmlHelper.link_rfc_refs(RfcHtmlHelper.escape(paragraph[RfcJsonElem.Contents.TEXT]), is_draft)}
         </h5>
       </div>
       <div class="col-sm-12 col-md-6">
         <h5 class="text mt-2">
-${paragraph[RfcJsonElem.Contents.JA] | h}
+${RfcHtmlHelper.link_rfc_refs(RfcHtmlHelper.escape(paragraph[RfcJsonElem.Contents.JA]), is_draft)}
         </h5>
       </div>
-      % else:
-      <div class="col-sm-12 col-md-6">
-        <p class="text indent-${paragraph[RfcJsonElem.Contents.INDENT] | h}">
-${RfcHtmlHelper.my_replace_filter(paragraph[RfcJsonElem.Contents.TEXT])}
-        </p>
-      </div>
-      <div class="col-sm-12 col-md-6">
-        <p class="text indent-${paragraph[RfcJsonElem.Contents.INDENT] | h}">
-${RfcHtmlHelper.my_replace_filter(paragraph[RfcJsonElem.Contents.JA])}
-        </p>
-      </div>
-      % endif
     </div>
+      % else:
+    <div class="row${' front-heading' if RfcHtmlHelper.is_front_heading(paragraph) else ''}" id="${paragraph_ids[i]}">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-${paragraph[RfcJsonElem.Contents.INDENT] | h}${RfcHtmlHelper.bullet_class(paragraph[RfcJsonElem.Contents.TEXT])}">
+${RfcHtmlHelper.render_text(paragraph[RfcJsonElem.Contents.TEXT], is_draft)}
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-${paragraph[RfcJsonElem.Contents.INDENT] | h}${RfcHtmlHelper.bullet_class(paragraph[RfcJsonElem.Contents.JA])}">
+${RfcHtmlHelper.render_text(paragraph[RfcJsonElem.Contents.JA], is_draft)}
+        </p>
+      </div>
+    </div>
+      % endif
     % endfor
   </div>
   <div id="rfc_footer"></div>

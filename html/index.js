@@ -44,16 +44,25 @@ const RFC_STATUS_BADGE_CLASS = {
 };
 
 class RfcUi {
-  // RFCのページ表示時に取得する追加情報のファイル名
+  // RFCのページ表示時に取得する追加情報のファイル（RFC番号の千の位ごとに分割したもの）
+  static FETCH_SHARD_DIR = "data-rfc-list";
+  // 全RFCの追加情報（改訂の流れのグラフを開いたときだけ取得する）
   static FETCH_FILENAME = "data-rfc-list.json";
+  // 誤訳の報告先
+  static ISSUE_URL = "https://github.com/tex2e/rfc-translater/issues/new";
+  // 報告に含める原文・訳文の最大文字数（URLが長くなりすぎないようにする）
+  static ISSUE_TEXT_MAX = 1200;
 
   constructor() {
     this.domRfcDraft = null;
+    this.rfcNumber = null;
   }
 
   dispInit() {
     // RFCがドラフト版かの判定
     this.domRfcDraft = this._isDraft();
+    const domRfcNumber = document.getElementById('rfc_number');
+    this.rfcNumber = domRfcNumber ? domRfcNumber.innerText.trim() : null;
 
     // 編集ページの設定
     const domFooter = this._getFooterHtmlDomElem();
@@ -67,11 +76,14 @@ class RfcUi {
     // ダークモードへの切り替えボタンの表示
     this._dispDarkmodeButton();
 
-    // 文書内のRFCリンク化
-    this._createRfcLink();
-
-    // 文書内の目次リンク化
-    this._createTocLink();
+    if (this.rfcNumber) {
+      // 段落ごとの操作ボタン（リンクのコピー・原文・誤訳の報告）
+      this._setupRowTools();
+      // 原文ボタンのリンク先を、表示中の節に追従させる
+      this._setupOrigLinkTracking();
+      // ヘッダーの操作リンク
+      this._dispActions();
+    }
   }
 
   _isDraft() {
@@ -84,8 +96,7 @@ class RfcUi {
 
   _addEventToShowEditPage() {
     // 画面を4回連続クリックで編集ページへ移動
-    const domRfcNumber = document.getElementById('rfc_number');
-    const rfcNumber = parseInt(domRfcNumber.innerText);
+    const rfcNumber = parseInt(this.rfcNumber);
     window.addEventListener('click', function (evt) {
       if (evt.detail === 4) {
         const result = window.confirm("編集ページに移動します");
@@ -97,30 +108,26 @@ class RfcUi {
   }
 
   _fetchDataRfcListJson() {
-    const httpRequest = new XMLHttpRequest();
-    httpRequest.onreadystatechange = () => {
-      if (httpRequest.readyState === XMLHttpRequest.DONE && httpRequest.status === 200) {
-        const domRfcNumber = document.getElementById('rfc_number');
-        if (!domRfcNumber) {
-          return;
-        }
-        const rfcNumber = parseInt(domRfcNumber.innerText);
-        const data = JSON.parse(httpRequest.responseText);
+    // ドラフト版には廃止・ステータス等の情報がない
+    if (this.domRfcDraft || !this.rfcNumber) {
+      return;
+    }
+    const rfcNumber = parseInt(this.rfcNumber);
+    // 全RFC分（約1MB）ではなく、このRFCを含む千件分だけを取得する
+    const shardUrl = `${RfcUi.FETCH_SHARD_DIR}/${Math.floor(rfcNumber / 1000)}.json`;
+    fetch(shardUrl)
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .catch(() => fetch(RfcUi.FETCH_FILENAME).then(res => res.json()))  // 分割ファイルがない環境向け
+      .then(data => {
         const datum = data[rfcNumber];
-        // console.log(datum);
-
         this._showAlertWhenObsoleted(rfcNumber, datum);
         this._showDate(rfcNumber, datum);
         this._showWg(rfcNumber, datum);
 
-        // RFCの変遷グラフ表示ボタンの設定
-        if (!this.domRfcDraft) {
-          new RfcHistoryGraphUi(rfcNumber, data).setup();
-        }
-      }
-    };
-    httpRequest.open('GET', RfcUi.FETCH_FILENAME);
-    httpRequest.send();
+        // RFCの変遷グラフ表示ボタンの設定（グラフの描画に必要な全RFC分は開いたときに取得する）
+        new RfcHistoryGraphUi(rfcNumber, data).setup();
+      })
+      .catch(err => console.warn('data-rfc-list:', err));
   }
 
   _getAlertHtmlDomElem() {
@@ -155,9 +162,7 @@ class RfcUi {
       if (datum && datum[RfcIndexJsonElem.CURRENT_STATUS]) {
         const domRfcStatus = document.getElementById('rfc_status');
         const status = datum[RfcIndexJsonElem.CURRENT_STATUS];
-        // console.log(status);
         const badge_class = RFC_STATUS_BADGE_CLASS[status];
-        // console.log(badge_class);
 
         domRfcStatus.innerHTML = `<a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-${badge_class}">${status}</a>`;
       }
@@ -187,7 +192,7 @@ class RfcUi {
   _showWg(_rfc_number, datum) {
     // 対象RFCがWorkingGroupによって発行されたRFCの場合、WorkingGroupへのリンクを表示する。
     const domRfcWg = this._getWgHtmlDomElem();
-    if (!this.domRfcDraft && domRfcWg) {
+    if (!this.domRfcDraft && domRfcWg && datum) {
       const wg = datum[RfcIndexJsonElem.WG];
       if (wg) {
         domRfcWg.innerHTML = `<a href="https://datatracker.ietf.org/wg/${wg}/documents/" class="badge badge-primary">${wg}</a>`;
@@ -200,61 +205,231 @@ class RfcUi {
       'Light': '<svg viewBox="0 0 24 24" width="24" height="24" class="lightToggleIcon"><path fill="currentColor" d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"></path></svg>',
       'Dark': '<svg viewBox="0 0 24 24" width="24" height="24" class="darkToggleIcon"><path fill="currentColor" d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"></path></svg>',
     }
+    const root = document.documentElement;
     const themeToggleButton = document.createElement('button');
     const navbarText = document.querySelector('#navbarText .navbar-nav:last-child');
     const buttonToOriginal = navbarText.childNodes[0];
-    let darkMode = false;
-    themeToggleButton.innerHTML = darkModeHTML['Dark'];
+    // 表示中のテーマに合わせて、切り替え先のアイコンと説明を設定する
+    const render = () => {
+      const isDark = root.classList.contains('dark-theme');
+      themeToggleButton.innerHTML = isDark ? darkModeHTML['Light'] : darkModeHTML['Dark'];
+      const label = isDark ? 'ライトテーマに切り替え' : 'ダークテーマに切り替え';
+      themeToggleButton.setAttribute('aria-label', label);
+      themeToggleButton.title = label;
+    };
+    themeToggleButton.type = 'button';
     themeToggleButton.classList.add('btn', 'btn-light', 'btn-sm', 'darkModeToggleIcon');
     themeToggleButton.addEventListener('click', function () {
-      themeToggleButton.innerHTML = (darkMode) ? darkModeHTML['Dark']: darkModeHTML['Light'];
-      darkMode = !darkMode;
-      localStorage.setItem('isDarkMode', darkMode.toString());
-      document.body.classList.toggle('dark-theme');
+      const isDark = root.classList.toggle('dark-theme');
+      try {
+        localStorage.setItem('isDarkMode', isDark.toString());
+      } catch (e) { /* 保存できなくても表示は切り替える */ }
+      render();
     });
+    // 明示的に選んでいないときは、OSの設定の変更に追従する
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    media.addEventListener('change', (evt) => {
+      let saved = null;
+      try { saved = localStorage.getItem('isDarkMode'); } catch (e) { /* 無視 */ }
+      if (saved === null) {
+        root.classList.toggle('dark-theme', evt.matches);
+        render();
+      }
+    });
+    render();
     navbarText.insertBefore(themeToggleButton, buttonToOriginal);
-    // 前回履歴情報からダークモードの設定
-    if (localStorage.getItem('isDarkMode') === 'true') {
-      themeToggleButton.click();
+  }
+
+  // 本文の見出し（英語側。data-section に章節番号を持つ）
+  _getSectionHeadings() {
+    if (!this.sectionHeadings) {
+      this.sectionHeadings = Array.from(document.querySelectorAll('.sec-row h5.text[id]'));
+    }
+    return this.sectionHeadings;
+  }
+
+  // 指定した要素が属する節の見出し（なければ null）
+  _findSectionHeadingOf(elem) {
+    const headings = this._getSectionHeadings();
+    let found = null;
+    for (const h of headings) {
+      if (h.compareDocumentPosition(elem) & Node.DOCUMENT_POSITION_FOLLOWING || h === elem) {
+        found = h;
+      } else {
+        break;
+      }
+    }
+    return found;
+  }
+
+  // 原文の該当節へのURL（"4.1.2" → #section-4.1.2、"A.1" → #appendix-A.1）
+  _getOrigUrl(heading) {
+    const origLink = document.getElementById('orig_link');
+    const base = origLink ? origLink.dataset.origUrl : null;
+    if (!base) {
+      return null;
+    }
+    const section = heading ? heading.dataset.section : null;
+    if (!section) {
+      return base;
+    }
+    const kind = /^\d/.test(section) ? 'section' : 'appendix';
+    return `${base}#${kind}-${section}`;
+  }
+
+  // 原文ボタンのリンク先を、画面上部に表示中の節へ追従させる
+  _setupOrigLinkTracking() {
+    const origLink = document.getElementById('orig_link');
+    const headings = this._getSectionHeadings();
+    if (!origLink || headings.length === 0) {
+      return;
+    }
+    const update = () => {
+      // 画面上端より上にある最後の見出しを二分探索で求める
+      const threshold = 80;
+      let lo = 0, hi = headings.length - 1, current = null;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (headings[mid].getBoundingClientRect().top <= threshold) {
+          current = headings[mid];
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      origLink.href = this._getOrigUrl(current);
+      origLink.title = current
+        ? `原文の「${current.textContent.trim()}」を開く`
+        : '原文を開く';
+    };
+    let scheduled = false;
+    window.addEventListener('scroll', () => {
+      if (!scheduled) {
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; update(); });
+      }
+    }, { passive: true });
+    update();
+  }
+
+  // 段落にマウスを乗せたとき、左側に操作ボタンを表示する
+  _setupRowTools() {
+    const container = document.querySelector('.container');
+    if (!container) {
+      return;
+    }
+    const tools = document.createElement('div');
+    tools.classList.add('row-tools');
+    tools.innerHTML = `
+      <a href="#" class="row-tool-link" title="この段落へのリンクをコピー">リンク</a>
+      <a href="#" class="row-tool-orig" target="_blank" rel="noopener" title="この節の原文を開く">原文</a>
+      <a href="#" class="row-tool-report" target="_blank" rel="noopener" title="この段落の誤訳をGitHubで報告">報告</a>
+    `;
+    let currentRow = null;
+    const show = (row) => {
+      if (row === currentRow) {
+        return;
+      }
+      currentRow = row;
+      const anchorId = this._getRowAnchorId(row);
+      const heading = this._findSectionHeadingOf(row);
+      tools.querySelector('.row-tool-link').href = `#${anchorId}`;
+      tools.querySelector('.row-tool-orig').href = this._getOrigUrl(heading);
+      const report = tools.querySelector('.row-tool-report');
+      report.classList.toggle('hidden', !!this.domRfcDraft);
+      report.href = this._makeIssueUrl(row, anchorId, heading);
+      row.appendChild(tools);
+    };
+    container.addEventListener('mouseover', (evt) => {
+      const row = evt.target.closest('.row[id], .sec-row');
+      if (row) {
+        show(row);
+      }
+    });
+    tools.querySelector('.row-tool-link').addEventListener('click', (evt) => {
+      evt.preventDefault();
+      const anchorId = this._getRowAnchorId(currentRow);
+      const url = `${location.origin}${location.pathname}#${anchorId}`;
+      // replaceState では :target が更新されないため、強調表示はクラスで行う
+      history.replaceState(null, '', `#${anchorId}`);
+      document.querySelectorAll('.rt-highlight').forEach(el => el.classList.remove('rt-highlight'));
+      currentRow.classList.add('rt-highlight');
+      this._copyToClipboard(url);
+    });
+  }
+
+  // 段落（.row[id]）または見出し（h5[id]）のid
+  _getRowAnchorId(row) {
+    if (row.classList.contains('sec-row')) {
+      const h = row.querySelector('h5.text[id]');
+      return h ? h.id : '';
+    }
+    return row.id;
+  }
+
+  _copyToClipboard(text) {
+    const done = () => this._toast('リンクをコピーしました');
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done, () => window.prompt('リンク', text));
+    } else {
+      window.prompt('リンク', text);
     }
   }
 
-  _createRfcLink() {
-    document.querySelectorAll('.row .text').forEach(el => {
-      // "[RFC5280]" から "<a href="./rfc5280.html">[RFC5280]</a>" へ変換
-      // ただし、RFC2220未満は自サイト内に存在しないため、IETFのサイトへのリンクにする
-      el.innerHTML = el.innerHTML.replace(/\[RFC([0-9]+)\]/g, (match, p1) => {
-        if (parseInt(p1) < 2220) {
-          return `<a href="https://datatracker.ietf.org/doc/html/rfc${p1}">[RFC${p1}]</a>`
-        } else if (this.domRfcDraft) {
-          return `<a href="../rfc${p1}.html">[RFC${p1}]</a>`
-        } else {
-          return `<a href="./rfc${p1}.html">[RFC${p1}]</a>`
-        }
-      });
-    })
+  _toast(message) {
+    if (!this.toastElem) {
+      this.toastElem = document.createElement('div');
+      this.toastElem.classList.add('rt-toast');
+      this.toastElem.setAttribute('role', 'status');
+      document.body.appendChild(this.toastElem);
+    }
+    this.toastElem.textContent = message;
+    this.toastElem.classList.add('rt-toast-show');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.toastElem.classList.remove('rt-toast-show'), 1600);
   }
 
-  _createTocLink() {
-    // セクション番号とIDの連想配列の作成
-    const section_dict = {}
-    document.querySelectorAll(".row h5.text[id]").forEach(function (el) {
-      // "6-1-6--Outputs" から "6.1.6." を連想配列のキーとして作成
-      // "Appendix-C--Examples" から "Appendix C." を連想配列のキーとして作成
-      const h5_id_value = el.attributes['id'].value;
-      const h5_id_key = h5_id_value.replace(/--+.+$/, '-').replace(/-/g, '.').replace(/^(Appendix)\./, '$1 ');
-      section_dict[h5_id_key] = h5_id_value;
-    })
-    // 目次判定された文章に対してリンクを貼る
-    document.querySelectorAll('.row .text.toc').forEach(function (el) {
-      // "1.2.3." から "<a href="#1-2-3--Section-Title">1.2.3.</a>" へ変換
-      el.innerHTML = el.innerHTML.replace(/(?<= )((?:[A-Z]\.)?(?:\d+\.)+|Appendix [A-Z]\.)(?= )/g, function(match, p1) {
-        if (p1 in section_dict) {
-          return `<a href="#${section_dict[p1]}">${p1}</a>`
-        }
-        return p1;
-      });
-    })
+  _truncate(text) {
+    text = text.trim().replace(/\n{3,}/g, '\n\n');
+    return text.length > RfcUi.ISSUE_TEXT_MAX ? text.slice(0, RfcUi.ISSUE_TEXT_MAX) + ' …(省略)' : text;
+  }
+
+  // 誤訳報告用のGitHub Issue作成URL（row を省略したときはページ全体への報告）
+  _makeIssueUrl(row, anchorId, heading) {
+    const pageUrl = `${location.origin}${location.pathname}`;
+    const sectionLabel = heading && heading.dataset.section ? ` §${heading.dataset.section}` : '';
+    const lines = [];
+    let title;
+    if (row) {
+      const texts = row.querySelectorAll('.text');
+      const en = texts[0] ? texts[0].innerText : '';
+      const ja = texts[1] ? texts[1].innerText : '';
+      title = `RFC ${this.rfcNumber}${sectionLabel} の翻訳の誤り`;
+      lines.push(`対象: ${pageUrl}#${anchorId}`, '');
+      lines.push('## 原文', '```', this._truncate(en), '```', '');
+      if (ja.trim()) {
+        lines.push('## 現在の訳', '```', this._truncate(ja), '```', '');
+      }
+    } else {
+      title = `RFC ${this.rfcNumber} の翻訳の誤り`;
+      lines.push(`対象: ${pageUrl}`, '');
+    }
+    lines.push('## 問題点・修正案', '');
+    const params = new URLSearchParams({ title: title, body: lines.join('\n') });
+    return `${RfcUi.ISSUE_URL}?${params.toString()}`;
+  }
+
+  // ヘッダーの操作リンク（ページ全体の誤訳報告・編集方法）
+  _dispActions() {
+    const domActions = document.getElementById('rfc_actions');
+    if (!domActions || this.domRfcDraft) {
+      return;
+    }
+    domActions.innerHTML = `
+      <a href="${this._makeIssueUrl(null)}" target="_blank" rel="noopener">誤訳を報告する</a>
+      <a href="https://github.com/tex2e/rfc-translater#翻訳を修正したいときは" target="_blank" rel="noopener">翻訳の修正に参加する</a>
+      <span class="rfc-actions-hint">（段落にマウスを乗せると、段落ごとのリンク・原文・報告ボタンが表示されます）</span>
+    `;
   }
 
 }
@@ -339,6 +514,23 @@ class RfcHistoryGraphUi {
   }
 
   _openDialog() {
+    // ページ表示時は千件分のデータしか取得していないため、系譜を辿る前に全RFC分を取得する
+    if (!this.hasFullData) {
+      if (this.loadingFullData) {
+        return;
+      }
+      this.loadingFullData = true;
+      fetch(RfcUi.FETCH_FILENAME)
+        .then(res => res.json())
+        .then(data => {
+          this.data = data;
+          this.hasFullData = true;
+          this._openDialog();
+        })
+        .catch(err => console.warn('data-rfc-list:', err))
+        .finally(() => { this.loadingFullData = false; });
+      return;
+    }
     if (!this.dialog) {
       this._createDialog();
     }
@@ -1110,91 +1302,140 @@ class RfcListUi {
   static QUERYSELECTOR_RFCLIST_ITEM = "#RFCs.list-group .list-group-item"
   // リストの要素を非表示にするときのCSSクラス
   static CSSCLASS_HIDE = "hidden";
+  // 廃止されたRFCを示すCSSクラス
+  static CSSCLASS_OBSOLETED = "obs";
+  // 日本語タイトル一覧（日本語で検索されたときだけ取得する）
+  static FETCH_TITLE_FILENAME = "data-rfc-title.json";
 
   constructor() {
-    this.rfcSearchIndex = {};
+    // RFC番号 → {el, keywords(英語タイトルの単語), titleJa(日本語タイトル)}
+    this.items = [];
+    this.titlesJa = null;
+    this.loadingTitlesJa = null;
   }
 
   // 初期設定
   setup() {
-    this._createIndex();
-    // console.log("rfcSearchIndex:", this.rfcSearchIndex);
-    const domSearchRfc = document.querySelector('#searchRfc');
-    if (domSearchRfc) {
-      // RFCタイトル検索項目入力時のイベント登録
-      domSearchRfc.addEventListener('input', () => {
-        // 検索文字列が1文字以下のときは、抽出しない
-        if (domSearchRfc.value.length <= 1) {
-          this._renderRfcListAll();
-          return;
-        }
-        // 検索文字列が2文字以上のときは、タイトルに文字列が含まれるものだけ抽出する
-        this._search(domSearchRfc.value?.toLowerCase());
-      });
+    this.domSearch = document.querySelector('#searchRfc');
+    if (!this.domSearch) {
+      return;
     }
-  }
+    this.domStatus = document.querySelector('#filterStatus');
+    this.domHideObsoleted = document.querySelector('#filterHideObsoleted');
+    this.domCount = document.querySelector('#searchCount');
+    this._createIndex();
 
-  // 検索処理
-  _search(searchInput) {
-    // console.log("searchText:", searchInput);
-    const matchedRfcs = this._searchRfcSet(this._normalizeSearchWord(searchInput));
-    this._renderRfcList(matchedRfcs);
+    this.domSearch.addEventListener('input', () => this._update());
+    if (this.domStatus) {
+      this.domStatus.addEventListener('change', () => this._update());
+    }
+    if (this.domHideObsoleted) {
+      this.domHideObsoleted.addEventListener('change', () => this._update());
+    }
+    // Enterで先頭の検索結果（番号が完全一致するRFCがあればそれ）を開く
+    document.querySelector('#searchForm').addEventListener('submit', (evt) => {
+      evt.preventDefault();
+      const target = this._findExactNumber(this.domSearch.value) || this.visibleItems[0];
+      if (target) {
+        window.location.href = target.el.getAttribute('href');
+      }
+    });
+    // ブラウザの「戻る」で入力が復元されたときにも結果を反映する
+    this._update();
   }
 
   // 検索用インデックスの作成
   _createIndex() {
     document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
-      const rfcId = el.attributes["id"].value;
-      const rfcNumber = rfcId.replace(/^RFC/, "");
-      const rfcTitle = el.innerText;
-      const rfcTitleKeywords = rfcTitle.toLowerCase().split(" ").filter(x => !x.match(/^(?:rfc|-)$/)).map(this._normalizeSearchWord)
-      const rfcTitleKeywordSet = new Set(rfcTitleKeywords);
-      this.rfcSearchIndex[rfcNumber] = rfcTitleKeywordSet;
+      const rfcNumber = el.id.replace(/^RFC/, "");
+      const keywords = this._normalize(el.innerText).split(/\s+/)
+        .filter(x => !x.match(/^(?:rfc|-)?$/))
+        .map(x => x.replace(/[-()/:,]/g, ''));
+      this.items.push({ el, rfcNumber, keywords, titleJa: null });
     });
+    this.visibleItems = this.items;
   }
 
-  // インデックスを利用した検索処理
-  _searchRfcSet(searchInput) {
-    const matchedRfcs = [];
-    // 検索ワードをスペース区切りで抽出する（ただし空白は除外）
-    const searchWords = searchInput.split(" ").filter(x => x.length > 0);
-    // 全てのRFCタイトルに対して検索を行う
-    Object.keys(this.rfcSearchIndex).forEach(rfcNumber => {
-      // 複数の検索ワードの全てを含むRFCタイトルのみ抽出する
-      const rfcTitleKeywords = Array.from(this.rfcSearchIndex[rfcNumber]);
-      const matched = searchWords.every(searchWord => {
-        return rfcTitleKeywords.some(keyword => keyword.startsWith(searchWord));
-      })
-      if (matched) {
-        matchedRfcs.push(rfcNumber);
+  // 全角英数字を半角にし、大文字小文字を区別しないようにする
+  _normalize(text) {
+    return text.normalize('NFKC').toLowerCase();
+  }
+
+  _findExactNumber(query) {
+    const m = this._normalize(query).trim().match(/^(?:rfc\s*)?(\d+)$/);
+    return m ? this.items.find(item => item.rfcNumber === String(parseInt(m[1]))) : null;
+  }
+
+  // 検索語と絞り込み条件から表示するRFCを決める
+  _update() {
+    const query = this._normalize(this.domSearch.value).trim();
+    const status = this.domStatus ? this.domStatus.value : '';
+    const hideObsoleted = this.domHideObsoleted ? this.domHideObsoleted.checked : false;
+
+    // 日本語を含むときは日本語タイトルを取得してから検索する
+    const needsJa = /[^\x00-\x7f]/.test(query);
+    if (needsJa && !this.titlesJa) {
+      this._loadTitlesJa().then(() => this._update());
+      return;
+    }
+
+    const matcher = this._makeMatcher(query, needsJa);
+    const visible = [];
+    for (const item of this.items) {
+      const show = matcher(item)
+        && (!status || item.el.dataset.st === status)
+        && (!hideObsoleted || !item.el.classList.contains(RfcListUi.CSSCLASS_OBSOLETED));
+      item.el.classList.toggle(RfcListUi.CSSCLASS_HIDE, !show);
+      if (show) {
+        visible.push(item);
       }
-    });
-    // console.log("matchedRfcs:", matchedRfcs);
-    return new Set(matchedRfcs);
+    }
+    this.visibleItems = visible;
+    if (this.domCount) {
+      this.domCount.textContent = visible.length === this.items.length
+        ? `全${this.items.length.toLocaleString()}件`
+        : `${visible.length.toLocaleString()}件 / 全${this.items.length.toLocaleString()}件`;
+    }
   }
 
-  // 指定したRFC一覧の描画
-  _renderRfcList(rfcNumbers) {
-    document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
-      const rfcId = el.attributes["id"].value;
-      const rfcNumber = rfcId.replace(/^RFC/, "");
-      if (rfcNumbers.has(rfcNumber)) {
-        el.classList.remove(RfcListUi.CSSCLASS_HIDE);
-      } else {
-        el.classList.add(RfcListUi.CSSCLASS_HIDE);
+  _makeMatcher(query, needsJa) {
+    // 番号のみ（"8446", "rfc 84"）のときは番号の前方一致
+    const num = query.match(/^(?:rfc\s*)?(\d+)$/);
+    if (num) {
+      return item => item.rfcNumber.startsWith(num[1]);
+    }
+    // 1文字の英数字では絞り込まない（候補が多すぎるため）
+    if (query.length <= 1 && !needsJa) {
+      return () => true;
+    }
+    const words = query.split(/\s+/).filter(x => x.length > 0);
+    return item => words.every(word => {
+      // 英語タイトルは単語の前方一致、日本語タイトルは部分一致
+      const w = word.replace(/[-()/:,]/g, '');
+      if (w && item.keywords.some(keyword => keyword.startsWith(w))) {
+        return true;
       }
+      const titleJa = this.titlesJa ? this.titlesJa[item.rfcNumber] : null;
+      return !!titleJa && titleJa.includes(word);
     });
   }
 
-  // RFC一覧の描画
-  _renderRfcListAll() {
-    document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
-      el.classList.remove(RfcListUi.CSSCLASS_HIDE);
-    });
-  }
-
-  // 検索キーワードの静音化
-  _normalizeSearchWord(word) {
-    return word.replace(/[-()/:]/, '')
+  _loadTitlesJa() {
+    if (!this.loadingTitlesJa) {
+      this.loadingTitlesJa = fetch(RfcListUi.FETCH_TITLE_FILENAME)
+        .then(res => res.json())
+        .then(data => {
+          const titles = {};
+          for (const [rfcNumber, title] of Object.entries(data)) {
+            titles[rfcNumber] = this._normalize(title);
+          }
+          this.titlesJa = titles;
+        })
+        .catch(err => {
+          console.warn('data-rfc-title:', err);
+          this.titlesJa = {};
+        });
+    }
+    return this.loadingTitlesJa;
   }
 }
