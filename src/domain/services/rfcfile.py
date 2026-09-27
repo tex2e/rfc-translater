@@ -18,6 +18,7 @@ class RfcFile:
     GLOB_HTML_FILE = 'html/rfc*.html'
     GLOB_HTML_DRAFT_FILE = 'html/draft/draft-*.html'
     GLOB_DATA_TRANS_JSON_FILE = 'data/*/rfc*-trans.json'
+    GLOB_DATA_DRAFT_TRANS_JSON_FILE = 'data/draft/draft-*-trans.json'
 
     TEMPLATE_HTML_INDEX = 'templates/index.html'
     TEMPLATE_HTML_RFC = 'templates/rfc.html'
