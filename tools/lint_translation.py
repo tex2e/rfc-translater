@@ -41,7 +41,8 @@ CHECKS = {
     "E011": "参考文献の著者名表記破壊 (人名のカンマ・ピリオドが「、」「。」になっている、または人名が誤訳されている)",
     "E012": "URLの表記破壊 (全角コロンや空白が含まれている)",
     "E013": "差分指示子の誤訳 (OLD:が「年：」「古い：」、NEW:が「新着：」「新しい：」などになっている)",
-    "E014": "RFC2119キーワード注釈の数の不一致 (訳文の (MUST) 等の併記が原文のキーワードと種類・個数で一致しない)",
+    "E014": "RFC2119キーワード注釈の不足 (訳文の (MUST) 等の併記が原文のキーワードより少ない)",
+    "E015": "RFC2119キーワード注釈の過剰 (原文にないキーワードの注釈がある。小文字の should 等に規範性を付加している)",
     "W011": "RFC2119キーワード注釈の欠落 (原文にキーワードがあるのに訳文に (MUST) 等の併記が1つもない)",
 }
 
@@ -788,33 +789,35 @@ def _format_keyword_counts(counts):
 
 
 def check_rfc2119_annotation_count(en, ja):
-    """E014/W011: 訳文の (MUST) 等の注釈が、原文のキーワードと種類・個数で一致するか。
+    """E014/E015/W011: 訳文の (MUST) 等の注釈が、原文のキーワードと種類・個数で一致するか。
     スタイルガイドは全キーワードへの注釈の併記を求めているため、個数の不一致は
-    言い回しの判断を介さずに決定的に判定できる。
+    言い回しの判断を介さずに決定的に判定できる。検出は (コード, 詳細) のリストで返す。
     - 訳文に注釈が1つもない -> W011 (件数が膨大な既存の欠陥。E002/W003の強度判定とは別軸)
-    - 注釈はあるが種類・個数が一致しない -> E014 (付け漏れ・誤った強度の注釈)
+    - 原文のキーワードより注釈が少ない -> E014 (付け漏れ。読者が規範を見落とす)
+    - 原文にないキーワードの注釈がある -> E015 (原文が小文字の should 等なのに (SHOULD) を
+      付けたもの。原文にない規範性を足しており、意味の誤りなので E014 より重い)
+    1つの段落で E014 と E015 が両方出ることがある (例: MUST の注釈を SHOULD と取り違えた)。
     キーワードと注釈がともに1個で種類だけが異なる場合は E002 (注釈不一致) の対象なので
     二重に報告しない。"""
     if re.search(r"2119|8174|BCP ?14\b", en):
-        return None  # BCP 14 の定型文・参照の説明はキーワードを列挙するだけで指示ではない
+        return []  # BCP 14 の定型文・参照の説明はキーワードを列挙するだけで指示ではない
     expected = count_rfc2119_keywords(en)
     if not expected:
-        return None
+        return []
     actual = count_rfc2119_annotations(ja)
     if not actual:
-        return ("W011", f"注釈なし: 原文 {_format_keyword_counts(expected)} に対し訳文に注釈がない")
+        return [("W011", f"注釈なし: 原文 {_format_keyword_counts(expected)} に対し訳文に注釈がない")]
     if actual == expected:
-        return None
+        return []
     if sum(expected.values()) == 1 and sum(actual.values()) == 1:
-        return None  # E002 の「注釈不一致」で報告される
-    # 不足は付け漏れ、過剰は原文にない規範性の付加 (小文字の should 等に (SHOULD) を付けた等)
-    parts = []
+        return []  # E002 の「注釈不一致」で報告される
+    summary = f"原文 {_format_keyword_counts(expected)} / 訳文 {_format_keyword_counts(actual)}"
+    findings = []
     if expected - actual:
-        parts.append(f"不足 {_format_keyword_counts(expected - actual)}")
+        findings.append(("E014", f"注釈の不足 {_format_keyword_counts(expected - actual)}: {summary}"))
     if actual - expected:
-        parts.append(f"過剰 {_format_keyword_counts(actual - expected)}")
-    return ("E014", f"注釈の数の不一致 ({' / '.join(parts)}): 原文 {_format_keyword_counts(expected)} / "
-                    f"訳文 {_format_keyword_counts(actual)}")
+        findings.append(("E015", f"注釈の過剰 {_format_keyword_counts(actual - expected)}: {summary}"))
+    return findings
 
 
 # ------------------------------------------------------------------------------
@@ -949,10 +952,10 @@ def lint_file(path, enabled):
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
         # --- RFC2119 注釈の数 ---
-        if uses_bcp14 and not is_title and ("E014" in enabled or "W011" in enabled):
-            r = check_rfc2119_annotation_count(en, ja)
-            if r and r[0] in enabled:
-                findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+        if uses_bcp14 and not is_title and enabled & {"E014", "E015", "W011"}:
+            for code, detail in check_rfc2119_annotation_count(en, ja):
+                if code in enabled:
+                    findings.append(Finding(code, path, rfc, i, detail, en, ja))
 
         # --- 文体 ---
         if is_title:
