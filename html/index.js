@@ -1547,13 +1547,19 @@ class RfcListUi {
     if (this.domHideObsoleted) {
       this.domHideObsoleted.addEventListener('change', () => this._update());
     }
-    // Enterで先頭の検索結果（番号が完全一致するRFCがあればそれ）を開く
+    // Enterで先頭の検索結果（番号が完全一致するRFCがあればそれ）を開く。
+    // フォームの暗黙の送信はブラウザやIMEによって発生しないことがあるため、Enterを直接扱う。
+    // IMEの変換を確定するEnterでは開かない
+    this.domSearch.addEventListener('keydown', (evt) => {
+      if (evt.key !== 'Enter' || evt.isComposing || evt.keyCode === 229) {
+        return;
+      }
+      evt.preventDefault();
+      this._openFirst();
+    });
     document.querySelector('#searchForm').addEventListener('submit', (evt) => {
       evt.preventDefault();
-      const target = this._findExactNumber(this.domSearch.value) || this.visibleItems[0];
-      if (target) {
-        window.location.href = target.el.getAttribute('href');
-      }
+      this._openFirst();
     });
     // ブラウザの「戻る」で入力が復元されたときにも結果を反映する
     this._update();
@@ -1581,7 +1587,17 @@ class RfcListUi {
     return m ? this.items.find(item => item.rfcNumber === String(parseInt(m[1]))) : null;
   }
 
-  // 検索語と絞り込み条件から表示するRFCを決める
+  // 現在の入力で検索し直してから、先頭の検索結果を開く
+  // （日本語タイトルの取得中に押されたときも、取得後の結果で開く）
+  async _openFirst() {
+    await this._update();
+    const target = this._findExactNumber(this.domSearch.value) || this.visibleItems[0];
+    if (target) {
+      window.location.href = target.el.getAttribute('href');
+    }
+  }
+
+  // 検索語と絞り込み条件から表示するRFCを決める（検索の完了を待てるようにPromiseを返す）
   _update() {
     const query = this._normalize(this.domSearch.value).trim();
     const status = this.domStatus ? this.domStatus.value : '';
@@ -1590,8 +1606,7 @@ class RfcListUi {
     // 日本語を含むときは日本語タイトルを取得してから検索する
     const needsJa = /[^\x00-\x7f]/.test(query);
     if (needsJa && !this.titlesJa) {
-      this._loadTitlesJa().then(() => this._update());
-      return;
+      return this._loadTitlesJa().then(() => this._update());
     }
 
     const matcher = this._makeMatcher(query, needsJa);
@@ -1611,6 +1626,7 @@ class RfcListUi {
         ? `全${this.items.length.toLocaleString()}件`
         : `${visible.length.toLocaleString()}件 / 全${this.items.length.toLocaleString()}件`;
     }
+    return Promise.resolve();
   }
 
   _makeMatcher(query, needsJa) {
