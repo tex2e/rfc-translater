@@ -41,6 +41,8 @@ CHECKS = {
     "E011": "参考文献の著者名表記破壊 (人名のカンマ・ピリオドが「、」「。」になっている、または人名が誤訳されている)",
     "E012": "URLの表記破壊 (全角コロンや空白が含まれている)",
     "E013": "差分指示子の誤訳 (OLD:が「年：」「古い：」、NEW:が「新着：」「新しい：」などになっている)",
+    "E014": "RFC2119キーワード注釈の数の不一致 (訳文の (MUST) 等の併記が原文のキーワードと種類・個数で一致しない)",
+    "W011": "RFC2119キーワード注釈の欠落 (原文にキーワードがあるのに訳文に (MUST) 等の併記が1つもない)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -235,6 +237,19 @@ REFERENTIAL_KEYWORD_RE = re.compile(
     r"\bat the\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
     r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\s+level\b"
 )
+
+# 文書が BCP 14 (RFC 2119 / RFC 8174) を参照しているか。大文字のキーワードが
+# 規範的な意味を持つのは参照している文書だけなので、E014/W011はその文書に限る
+# (参照しない文書では ASN.1 の OPTIONAL 等が一般語として現れる)。
+# 判定基準は RFCページの強調表示 (src/application/usecase/make_html.py) と揃える。
+BCP14_REFERENCE_RE = re.compile(r"RFC ?2119|RFC ?8174|BCP ?14\b")
+
+# 引用符で囲まれたキーワード ("MUST" / 「MUST」)。定型文 (The key words "MUST",
+# "MUST NOT", ... are to be interpreted ...) や用語説明での言及であり、
+# 段落自身の規範的指示ではないため、E014/W011の数え上げから除外する。
+QUOTED_KEYWORD_RE = re.compile(
+    r"[\"'\u201c\u201d\u2018\u2019\u300c]\s*(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)\s*[\"'\u201c\u201d\u2018\u2019\u300d]")
 
 # CamelCase識別子。
 # 「2文字目以降に大文字が現れる」ことを必須にして、単に文頭が大文字なだけの
@@ -753,6 +768,55 @@ def check_rfc2119(en, ja):
     return ("W003", f"強度未表現: 原文 {kw}({expected}) の規範強度が訳文から読み取れない")
 
 
+def count_rfc2119_keywords(en):
+    """原文の規範的なキーワードを数える (キーワード -> 個数)。
+    引用符付きの言及 ("MUST") や冠詞付きの名詞的用法 (a MUST) は段落自身の指示では
+    ないため除外する。"MUST also not" 等は MUST NOT として数える (訳文の注釈と揃える)。"""
+    masked = QUOTED_KEYWORD_RE.sub(" ", en)
+    masked = REFERENTIAL_KEYWORD_RE.sub(" ", masked)
+    return Counter(kw for kw, _ in detect_rfc2119(masked))
+
+
+def count_rfc2119_annotations(ja):
+    """訳文の注釈 (MUST) / （MUST） を数える (キーワード -> 個数)"""
+    return Counter(re.sub(r"\s+", " ", m.group(1)).upper() for m in ANNOTATION_RE.finditer(ja))
+
+
+def _format_keyword_counts(counts):
+    return ", ".join(f"{kw}\u00d7{n}" if n > 1 else kw
+                     for kw, n in sorted(counts.items(), key=lambda x: -x[1])) or "なし"
+
+
+def check_rfc2119_annotation_count(en, ja):
+    """E014/W011: 訳文の (MUST) 等の注釈が、原文のキーワードと種類・個数で一致するか。
+    スタイルガイドは全キーワードへの注釈の併記を求めているため、個数の不一致は
+    言い回しの判断を介さずに決定的に判定できる。
+    - 訳文に注釈が1つもない -> W011 (件数が膨大な既存の欠陥。E002/W003の強度判定とは別軸)
+    - 注釈はあるが種類・個数が一致しない -> E014 (付け漏れ・誤った強度の注釈)
+    キーワードと注釈がともに1個で種類だけが異なる場合は E002 (注釈不一致) の対象なので
+    二重に報告しない。"""
+    if re.search(r"2119|8174|BCP ?14\b", en):
+        return None  # BCP 14 の定型文・参照の説明はキーワードを列挙するだけで指示ではない
+    expected = count_rfc2119_keywords(en)
+    if not expected:
+        return None
+    actual = count_rfc2119_annotations(ja)
+    if not actual:
+        return ("W011", f"注釈なし: 原文 {_format_keyword_counts(expected)} に対し訳文に注釈がない")
+    if actual == expected:
+        return None
+    if sum(expected.values()) == 1 and sum(actual.values()) == 1:
+        return None  # E002 の「注釈不一致」で報告される
+    # 不足は付け漏れ、過剰は原文にない規範性の付加 (小文字の should 等に (SHOULD) を付けた等)
+    parts = []
+    if expected - actual:
+        parts.append(f"不足 {_format_keyword_counts(expected - actual)}")
+    if actual - expected:
+        parts.append(f"過剰 {_format_keyword_counts(actual - expected)}")
+    return ("E014", f"注釈の数の不一致 ({' / '.join(parts)}): 原文 {_format_keyword_counts(expected)} / "
+                    f"訳文 {_format_keyword_counts(actual)}")
+
+
 # ------------------------------------------------------------------------------
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
@@ -781,6 +845,10 @@ def lint_file(path, enabled):
     if not isinstance(contents, list):
         findings.append(Finding("E008", path, rfc, -1, "contents 配列がない"))
         return findings
+
+    # BCP 14 を参照する文書か (E014/W011の対象判定)
+    uses_bcp14 = any(isinstance(c, dict) and BCP14_REFERENCE_RE.search(c.get("text", "") or "")
+                     for c in contents)
 
     in_ref_section = False
     for i, c in enumerate(contents):
@@ -877,6 +945,12 @@ def lint_file(path, enabled):
         # --- RFC2119 ---
         if "E002" in enabled or "W003" in enabled:
             r = check_rfc2119(en, ja)
+            if r and r[0] in enabled:
+                findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+
+        # --- RFC2119 注釈の数 ---
+        if uses_bcp14 and not is_title and ("E014" in enabled or "W011" in enabled):
+            r = check_rfc2119_annotation_count(en, ja)
             if r and r[0] in enabled:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
