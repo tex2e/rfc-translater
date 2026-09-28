@@ -50,6 +50,7 @@ def make_html(rfc: IRfc,
     is_draft = isinstance(rfc, RfcDraft)
     contents = obj[RfcJsonElem.CONTENTS]
     output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft,
+                                       bcp14=RfcHtmlHelper.uses_bcp14(contents),
                                        orig_url=RfcHtmlHelper.get_orig_url(obj[RfcJsonElem.NUMBER], is_draft),
                                        paragraph_ids=RfcHtmlHelper.make_paragraph_ids(contents),
                                        toc_section_ids=RfcHtmlHelper.make_toc_section_ids(contents),
@@ -76,13 +77,44 @@ class RfcHtmlHelper:
         return str(markupsafe.escape(text))
 
     @staticmethod
-    def render_text(text: str, is_draft: bool = False) -> str:
-        """文章をHTMLに変換する（エスケープ、段落内改行、RFC参照のリンク化）"""
-        html = RfcHtmlHelper.link_rfc_refs(RfcHtmlHelper.my_replace_filter(text), is_draft)
+    def render_text(text: str, is_draft: bool = False, bcp14: bool = False) -> str:
+        """文章をHTMLに変換する（エスケープ、段落内改行、規範キーワードの強調、RFC参照のリンク化）"""
+        html = RfcHtmlHelper.my_replace_filter(text)
+        if bcp14:
+            html = RfcHtmlHelper.highlight_keywords(html)
+        html = RfcHtmlHelper.link_rfc_refs(html, is_draft)
         if RfcHtmlHelper.bullet_class(text):
             # 箇条書き記号を固定幅にして、折り返した行の先頭を記号の後ろの文字にそろえる
             html = f'<span class="bullet-mark">{html[0]}</span>{html[1:]}'
         return html
+
+    # RFC 2119 / RFC 8174 (BCP 14) のキーワードと規範強度（長い語から順に照合する）
+    BCP14_KEYWORDS = {
+        'MUST NOT': 'mustnot', 'SHALL NOT': 'mustnot',
+        'SHOULD NOT': 'shouldnot', 'NOT RECOMMENDED': 'shouldnot',
+        'MUST': 'must', 'SHALL': 'must', 'REQUIRED': 'must',
+        'SHOULD': 'should', 'RECOMMENDED': 'should',
+        'MAY': 'may', 'OPTIONAL': 'may',
+    }
+    # 前後が英数字・下線・ハイフンの場合は識別子の一部（例: MUST_STAPLE）とみなして除外する
+    BCP14_PATTERN = re.compile(
+        r'(?<![A-Za-z0-9_-])(MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED'
+        r'|MUST|SHALL|REQUIRED|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z0-9_-])')
+
+    @staticmethod
+    def uses_bcp14(contents: list) -> bool:
+        """文書がRFC 2119 / RFC 8174 (BCP 14) を参照しているか。
+        大文字のキーワードが規範的な意味を持つのは、BCP 14 を参照している文書だけである"""
+        return any(re.search(r'RFC ?2119|RFC ?8174|BCP ?14\b', p[RfcJsonElem.Contents.TEXT])
+                   for p in contents)
+
+    @staticmethod
+    def highlight_keywords(escaped_html: str) -> str:
+        """エスケープ済みの文章中の規範キーワード（英文の MUST、訳文の (MUST) など）を規範強度ごとのクラスで囲む"""
+        def _wrap(m: re.Match) -> str:
+            level = RfcHtmlHelper.BCP14_KEYWORDS[re.sub(r'\s+', ' ', m[1])]
+            return f'<span class="kw kw-{level}">{m[1]}</span>'
+        return RfcHtmlHelper.BCP14_PATTERN.sub(_wrap, escaped_html)
 
     @staticmethod
     def link_rfc_refs(escaped_html: str, is_draft: bool = False) -> str:
