@@ -14,6 +14,11 @@
 #         例) [RFC2119] Bradner、S。、「...」 -> [RFC2119] Bradner, S.、「...」
 #   E012: URL表記破壊 (全角コロンや空白) を半角・正しい形式へ修正する
 #         例) https ：//... -> https://...
+#   W011: RFC2119キーワード注釈の欠落のうち、原文・訳文とも一文でキーワードが1個、
+#         訳文の文末の述語がキーワードの規範強度に合う定型表現のものに注釈を付ける
+#         例) Xを送信しなければなりません。 -> Xを送信しなければなりません (MUST)。
+#         「〜する必要があります」のような強度が曖昧な訳には付けない（欠陥のある訳を
+#         正しいものとして確定させてしまうため）。
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -40,6 +45,8 @@ from lint_translation import (  # noqa: E402
     CAMEL_RE, CAMEL_STOPWORDS, COMPOUND_JA_RE, URL_RE, ambiguous_lowers,
     BULLET_RE, compound_identifier_variants, recoverable_mime_context_identifiers,
     check_reference_author_format, fix_url_format, update_reference_section_state,
+    BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
+    check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -73,6 +80,59 @@ DESU_PATTERNS = [
 
 # 見出し先頭の番号 (「6.1.1. 」「付録A. 」など) は変換対象から外して温存する
 HEADING_NUM_RE = re.compile(r"^((?:付録)?[A-Z0-9]+(?:\.[0-9]+)*\.?\s+)(.*)$", re.S)
+
+
+# --- W011: RFC2119キーワード注釈の付与 ---
+# キーワード -> 規範強度 (注釈の原語は原文の語をそのまま使う。SHALL は (SHALL))
+RFC2119_STRENGTH = {
+    "MUST": "必須", "SHALL": "必須", "REQUIRED": "必須",
+    "MUST NOT": "禁止", "SHALL NOT": "禁止",
+    "SHOULD": "推奨", "RECOMMENDED": "推奨",
+    "SHOULD NOT": "非推奨", "NOT RECOMMENDED": "非推奨",
+    "MAY": "任意", "OPTIONAL": "任意",
+}
+# 規範強度ごとの「文末の述語」。訳文の最後の述語がこれに一致するときだけ注釈を付ける。
+# 文中の一致は見ない (別の節の述語に注釈を付けてしまうため)。
+# 複数の強度に読める述語には付けない。注釈を付けると W011 が消え、言い回しの欠陥が
+# どのチェックにも掛からなくなるため:
+#   「必要があります」: MUST と SHOULD のどちらの訳にも使われている (スタイルガイドの最頻出の欠陥)
+#   「ないでください」: MUST NOT と SHOULD NOT のどちらの訳にも使われている
+ANNOTATABLE_PREDICATES = {
+    "必須": r"(?:なければなりません|ねばなりません|なければならない|必要とします|(?<!ない)ものとします)",
+    "禁止": r"(?:てはなりません|てはいけません|ではなりません|ではいけません|ないものとします)",
+    "推奨": r"(?:べきです|べきである|お勧めします|おすすめします|が望ましいです|推奨されます|推奨します)",
+    "非推奨": r"(?:べきではありません|べきではない|推奨されません|お勧めしません|おすすめしません|望ましくありません)",
+    "任意": r"(?:てもよい|てもよいです|てもかまいません|ても構いません|ことができます|できます|"
+            r"場合があります|任意です|オプションです)",
+}
+
+
+def fix_rfc2119_annotation(en, ja):
+    """W011: 訳文の文末の述語の直後に (MUST) 等の注釈を付ける。付けられないときは None。
+    誤った注釈は規範強度の誤り (E002/E015) を生むため、確実なものだけを対象にする。"""
+    if [code for code, _ in check_rfc2119_annotation_count(en, ja)] != ["W011"]:
+        return None
+    keywords = count_rfc2119_keywords(en)
+    if sum(keywords.values()) != 1:
+        return None
+    keyword = next(iter(keywords))
+    # 原文が一文で、キーワード以外に規範強度に関わる語を含まない
+    # (複数の節があると、訳文の文末の述語がキーワードの訳とは限らない)
+    if (not is_single_sentence(en) or NON_NORMATIVE_NEGATION.search(en)
+            or OTHER_NORMATIVE_WORDS.search(en)):
+        return None
+    # 訳文も一文 (文末以外に句点がない)
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end or not end:
+        return None
+    # 文末の述語がキーワードと同じ強度のときだけ付ける。"MUST be absent" を
+    # 「存在してはいけません」と訳した文のように、原文の否定表現によって述語の
+    # 強度が変わっている場合は一致しないため付けない。
+    m = re.search(ANNOTATABLE_PREDICATES[RFC2119_STRENGTH[keyword]] + r"$", end)
+    if not m:
+        return None
+    return f"{end} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
 
 
 def fix_identifier_case(en, ja):
@@ -231,6 +291,10 @@ def process_file(path, checks, dry_run, samples, stats):
             stats["E007"] += 1
             changed = True
 
+    # W011 は BCP 14 を参照する文書だけが対象 (lint_translation.py と同じ基準)
+    uses_bcp14 = any(isinstance(c, dict) and BCP14_REFERENCE_RE.search(c.get("text", "") or "")
+                     for c in contents)
+
     in_ref_section = False
     for c in contents:
         if not isinstance(c, dict):
@@ -319,6 +383,18 @@ def process_file(path, checks, dry_run, samples, stats):
             elif new_ja is None and re.search(r"(ます|です)。?$", ja):
                 stats["W006_skipped"] += 1
 
+        # --- W011: RFC2119キーワード注釈の付与 ---
+        if ("W011" in checks and uses_bcp14 and not is_title and c.get("raw") is not True
+                and ja):
+            new_ja = fix_rfc2119_annotation(en, ja)
+            if new_ja:
+                if len(samples["W011"]) < 12:
+                    samples["W011"].append((os.path.basename(path), None, ja[-90:], new_ja[-90:]))
+                stats["W011"] += 1
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
         # --- W005: 本文のである調 -> ですます調 ---
         # 見出しは体言止めが正しいので対象外。箇条書きも規約上ですます調の対象外。
         if ("W005" in checks and not c.get("section_title")
@@ -354,7 +430,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -368,7 +444,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011")}
     files_changed = 0
 
     for path in paths:
@@ -393,6 +469,8 @@ def main():
         print(f"  E007 タイトルprefixを付与: {stats['E007']} 件")
     if "W005" in checks:
         print(f"  W005 ですます調に変換: {stats['W005']} 段落")
+    if "W011" in checks:
+        print(f"  W011 RFC2119キーワード注釈を付与: {stats['W011']} 段落")
     if "W006" in checks:
         print(f"  W006 体言止めに変換: {stats['W006']} 件")
         print(f"  W006 変換できず据え置き: {stats['W006_skipped']} 件 (要人手/AI対応)")
@@ -400,7 +478,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:
