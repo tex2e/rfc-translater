@@ -44,10 +44,30 @@ class TestNecessityTranslation(unittest.TestCase):
             fix_necessity_translation("Servers SHOULD include X.", "サーバーはXを含める必要があります（SHOULD）。"),
             "サーバーはXを含めるべきです (SHOULD)。")
 
+    def test_fix_multi_sentence_aligned(self):
+        self.assertEqual(
+            fix_necessity_translation(
+                "The policyIdentifier MUST be globally unique. Possible types of identifiers include:",
+                "policyIdentifierはグローバルに一意である必要があります。可能な識別子のタイプは次のとおりです。"),
+            "policyIdentifierはグローバルに一意でなければなりません (MUST)。可能な識別子のタイプは次のとおりです。")
+        self.assertEqual(
+            fix_necessity_translation(
+                "The server sends the Token back. This message MUST be sent from port PT towards port CT.",
+                "サーバーはトークンを送り返します。このメッセージは、ポートPTからポートCTに送信する必要があります。"),
+            "サーバーはトークンを送り返します。このメッセージは、ポートPTからポートCTに送信しなければなりません (MUST)。")
+
+    def test_fix_multi_sentence_skips_misaligned(self):
+        # 文の数が違う
+        self.assertIsNone(fix_necessity_translation(
+            "A is sent. B MUST be sent. C is fine.",
+            "Aが送信され、Bを送信する必要があります。Cは問題ありません。"))
+        # キーワードの文と「必要があ」の文の位置が違う
+        self.assertIsNone(fix_necessity_translation(
+            "B MUST be sent. C is fine.",
+            "Bが送信されます。Cを確認する必要があります。"))
+
     def test_fix_skips_uncertain(self):
         self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを送る必要があります。"))
-        self.assertIsNone(fix_necessity_translation(
-            "It MUST send X. Y is fine.", "Xを送信する必要があります。Yは問題ありません。"))
         # 文中に既に注釈がある (キーワードの訳は別の節)
         self.assertIsNone(fix_necessity_translation(
             "The router SHALL construct X and return it.",

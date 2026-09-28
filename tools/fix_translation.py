@@ -185,17 +185,29 @@ def to_beki(pre):
     return None
 
 
-def fix_necessity_translation(en, ja):
-    """W012: 一文の段落の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
-    if not check_necessity_translation(en, ja):
-        return None
-    if (not is_single_sentence(en) or OTHER_NORMATIVE_WORDS.search(en)
-            or LOWERCASE_MODAL_RE.search(en)):
-        return None
-    # 「必要があ」が複数あると、どれがキーワードの訳か決まらない
-    if len(re.findall(r"(?<!不)必要があ", ja)) != 1:
-        return None
-    keyword = next(iter(count_rfc2119_keywords(en)))
+def _split_en_sentences(en):
+    """英文を文に分ける。is_single_sentence と同じく略語・頭文字・節番号のピリオドでは分けない。"""
+    masked = re.sub(r"\b(?:e\.g|i\.e|etc|vs|cf|Sec|Fig|No|Dr|Mr|Ms|St|approx)\.",
+                    lambda m: m.group(0).replace(".", "\x00"), en)
+    masked = re.sub(r"\b[A-Z]\.", lambda m: m.group(0).replace(".", "\x00"), masked)
+    masked = re.sub(r"\d+\.\d+", lambda m: m.group(0).replace(".", "\x00"), masked)
+    ends = [m.end() for m in re.finditer(r"[.!?](?=\s|$)", masked)]
+    sentences, last = [], 0
+    for e in ends:
+        sentences.append(en[last:e])
+        last = e
+    if en[last:].strip():
+        sentences.append(en[last:])
+    return [x for x in sentences if x.strip()]
+
+
+def _split_ja_sentences(ja):
+    """訳文を「。」で文に分ける (区切りの「。」と後続の空白は前の文に含める)"""
+    return [x for x in re.findall(r"[^。]*。\s*|[^。]+$", ja) if x.strip()]
+
+
+def _rewrite_necessity_sentence(ja, keyword):
+    """一文の訳文の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
     strength = RFC2119_STRENGTH[keyword]
     body = ja.rstrip()
     end = body[:-1] if body.endswith("。") else body
@@ -217,6 +229,50 @@ def fix_necessity_translation(en, ja):
     if not rewritten:
         return None
     return f"{rewritten} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
+
+
+def _is_clean_keyword_sentence(en):
+    """キーワードの文に、訳文の述語の対応を曖昧にする語がないか"""
+    return not (OTHER_NORMATIVE_WORDS.search(en) or LOWERCASE_MODAL_RE.search(en))
+
+
+def fix_necessity_translation(en, ja):
+    """W012: 文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。
+    一文の段落のほか、原文と訳文の文の数が等しく、キーワードの文と「必要があ」の文が
+    同じ位置にある複数文の段落も、その1文だけを直す。"""
+    if not check_necessity_translation(en, ja):
+        return None
+    # 「必要があ」が複数あると、どれがキーワードの訳か決まらない
+    if len(re.findall(r"(?<!不)必要があ", ja)) != 1:
+        return None
+    keyword = next(iter(count_rfc2119_keywords(en)))
+    ja_body = ja.rstrip()
+    if is_single_sentence(en) and "。" not in (ja_body[:-1] if ja_body.endswith("。") else ja_body):
+        if not _is_clean_keyword_sentence(en):
+            return None
+        return _rewrite_necessity_sentence(ja, keyword)
+
+    # --- 複数文の段落: 文の対応が確実なときだけ、キーワードの1文を直す ---
+    en_sentences = _split_en_sentences(en)
+    ja_sentences = _split_ja_sentences(ja)
+    if len(en_sentences) < 2 or len(en_sentences) != len(ja_sentences):
+        return None
+    # 各文の長さの比が極端なら、文の分け方が原文と訳文でずれている
+    for e, j in zip(en_sentences, ja_sentences):
+        ratio = len(j.strip()) / max(len(e.strip()), 1)
+        if not 0.15 <= ratio <= 1.5:
+            return None
+    en_index = [i for i, e in enumerate(en_sentences) if count_rfc2119_keywords(e)]
+    ja_index = [i for i, j in enumerate(ja_sentences) if re.search(r"(?<!不)必要があ", j)]
+    if len(en_index) != 1 or en_index != ja_index:
+        return None
+    k = en_index[0]
+    if not _is_clean_keyword_sentence(en_sentences[k]):
+        return None
+    rewritten = _rewrite_necessity_sentence(ja_sentences[k], keyword)
+    if not rewritten:
+        return None
+    return "".join(ja_sentences[:k]) + rewritten + "".join(ja_sentences[k + 1:])
 
 
 def fix_identifier_case(en, ja):
