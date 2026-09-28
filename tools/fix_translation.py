@@ -267,7 +267,8 @@ def fix_desumasu(ja):
 def process_file(path, checks, dry_run, samples, stats):
     try:
         with open(path, encoding="utf-8") as f:
-            obj = json.load(f)
+            original_text = f.read()
+        obj = json.loads(original_text)
     except Exception as e:
         print(f"[-] {path}: JSON読み込み失敗 {e}", file=sys.stderr)
         stats["read_error"] += 1
@@ -410,6 +411,9 @@ def process_file(path, checks, dry_run, samples, stats):
     if changed and not dry_run:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, ensure_ascii=False, indent=2)
+            # 手で編集されたファイルには末尾の改行があるものがある。無関係な差分を出さないよう保つ
+            if original_text.endswith("\n"):
+                f.write("\n")
     return changed
 
 
