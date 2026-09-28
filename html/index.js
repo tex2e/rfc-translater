@@ -79,7 +79,9 @@ class RfcUi {
     if (this.rfcNumber) {
       // 段落ごとの操作ボタン（リンクのコピー・原文・誤訳の報告）
       this._setupRowTools();
-      // 原文ボタンのリンク先を、表示中の節に追従させる
+      // 目次と現在の節名の表示。原文ボタンのリンク先も表示中の節に追従させる
+      this.sectionNav = new RfcSectionNavUi();
+      this.sectionNav.setup();
       this._setupOrigLinkTracking();
       // ヘッダーの操作リンク
       this._dispActions();
@@ -282,36 +284,16 @@ class RfcUi {
   // 原文ボタンのリンク先を、画面上部に表示中の節へ追従させる
   _setupOrigLinkTracking() {
     const origLink = document.getElementById('orig_link');
-    const headings = this._getSectionHeadings();
-    if (!origLink || headings.length === 0) {
+    if (!origLink) {
       return;
     }
-    const update = () => {
-      // 画面上端より上にある最後の見出しを二分探索で求める
-      const threshold = 80;
-      let lo = 0, hi = headings.length - 1, current = null;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (headings[mid].getBoundingClientRect().top <= threshold) {
-          current = headings[mid];
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-      origLink.href = this._getOrigUrl(current);
-      origLink.title = current
-        ? `原文の「${current.textContent.trim()}」を開く`
+    this.sectionNav.onChange(entry => {
+      const heading = entry ? entry.heading : null;
+      origLink.href = this._getOrigUrl(heading);
+      origLink.title = heading
+        ? `原文の「${heading.textContent.trim()}」を開く`
         : '原文を開く';
-    };
-    let scheduled = false;
-    window.addEventListener('scroll', () => {
-      if (!scheduled) {
-        scheduled = true;
-        requestAnimationFrame(() => { scheduled = false; update(); });
-      }
-    }, { passive: true });
-    update();
+    });
   }
 
   // 段落にマウスを乗せたとき、左側に操作ボタンを表示する
@@ -468,6 +450,205 @@ class RfcUi {
 
 }
 
+
+// ---------------------------------------------------------------------------
+// html/rfcXXXX.html : 目次と現在の節名の表示
+
+class RfcSectionNavUi {
+  // 画面上端からこの距離より上にある最後の見出しを「表示中の節」とする
+  static CURRENT_THRESHOLD_PX = 72;
+
+  constructor() {
+    this.entries = [];
+    this.current = null;
+    this.listeners = [];
+    this.bar = null;
+    this.dialog = null;
+  }
+
+  setup() {
+    this.entries = this._collectEntries();
+    this._setupScrollTracking();
+    if (this.entries.length === 0) {
+      return;
+    }
+    this._createBar();
+    this._createDialog();
+    this._update();
+  }
+
+  // 表示中の節が変わったときに呼ぶ関数を登録する（登録時にも現在の値で1回呼ぶ）
+  onChange(listener) {
+    this.listeners.push(listener);
+    listener(this.current);
+  }
+
+  // 見出し（章節の見出しと、冒頭の定型見出し）の一覧
+  _collectEntries() {
+    return Array.from(document.querySelectorAll('.sec-row, .row.front-heading')).map(row => {
+      const texts = row.querySelectorAll('.text');
+      const heading = row.classList.contains('sec-row') ? row.querySelector('h5.text[id]') : null;
+      const en = texts[0] ? texts[0].textContent.trim() : '';
+      const ja = texts[1] ? texts[1].textContent.trim() : '';
+      const m = row.className.match(/\bsec-level-(\d)\b/);
+      return {
+        row: row,
+        heading: heading,
+        anchorId: heading ? heading.id : row.id,
+        level: m ? parseInt(m[1]) : 1,
+        en: en,
+        ja: ja || en,
+      };
+    }).filter(entry => entry.anchorId);
+  }
+
+  _setupScrollTracking() {
+    let scheduled = false;
+    const schedule = () => {
+      if (!scheduled) {
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; this._update(); });
+      }
+    };
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+  }
+
+  // 表示中の節を二分探索で求め、変化していれば通知する
+  _update() {
+    let lo = 0, hi = this.entries.length - 1, current = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.entries[mid].row.getBoundingClientRect().top <= RfcSectionNavUi.CURRENT_THRESHOLD_PX) {
+        current = this.entries[mid];
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (this.bar) {
+      this._updateBar(current);
+    }
+    if (current !== this.current) {
+      this.current = current;
+      this.listeners.forEach(listener => listener(current));
+    }
+  }
+
+  // 画面上部に固定表示する「目次ボタン＋現在の節名」
+  _createBar() {
+    const bar = document.createElement('div');
+    bar.classList.add('rfc-section-bar');
+    bar.innerHTML = `
+      <button type="button" class="rfc-section-bar-toc" aria-haspopup="dialog" title="目次を開く">&#9776; 目次</button>
+      <a class="rfc-section-bar-current" href="#"></a>
+    `;
+    bar.querySelector('.rfc-section-bar-toc').addEventListener('click', () => this._openDialog());
+    document.body.appendChild(bar);
+    this.bar = bar;
+    this.barCurrent = bar.querySelector('.rfc-section-bar-current');
+  }
+
+  _updateBar(current) {
+    // ページ冒頭（タイトルや要約が見えている間）は表示しない
+    const container = document.querySelector('.container');
+    const firstRow = this.entries[0].row;
+    const visible = firstRow.getBoundingClientRect().top < window.innerHeight * 0.5 && window.scrollY > 0;
+    this.bar.classList.toggle('rfc-section-bar-show', visible);
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      this.bar.style.left = `${Math.max(rect.left + 15, 8)}px`;
+      this.bar.style.maxWidth = `${Math.max(rect.width - 30, 200)}px`;
+    }
+    if (current !== this.barEntry) {
+      this.barEntry = current;
+      this.barCurrent.textContent = current ? current.ja : '';
+      this.barCurrent.title = current ? current.en : '';
+      this.barCurrent.href = current ? `#${current.anchorId}` : '#';
+    }
+  }
+
+  // 目次（左側から引き出すダイアログ）
+  _createDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.classList.add('rfc-toc-dialog');
+    dialog.setAttribute('aria-label', '目次');
+    dialog.innerHTML = `
+      <div class="rfc-toc-head">
+        <strong>目次</strong>
+        <button type="button" class="rfc-toc-close" title="閉じる" aria-label="閉じる">&times;</button>
+      </div>
+      <input type="search" class="form-control form-control-sm rfc-toc-filter" placeholder="見出しを絞り込む（日本語・英語）" aria-label="見出しを絞り込む">
+      <nav class="rfc-toc-list"></nav>
+    `;
+    const list = dialog.querySelector('.rfc-toc-list');
+    this.entries.forEach(entry => {
+      const a = document.createElement('a');
+      a.href = `#${entry.anchorId}`;
+      a.classList.add('rfc-toc-item', `rfc-toc-level-${entry.level}`);
+      a.textContent = entry.ja;
+      a.title = entry.en;
+      a.dataset.search = `${entry.ja} ${entry.en}`.normalize('NFKC').toLowerCase();
+      entry.tocItem = a;
+      list.appendChild(a);
+    });
+    // 項目を選んだら閉じて移動する（移動はリンクの既定の動作に任せる）
+    list.addEventListener('click', (evt) => {
+      if (evt.target.closest('.rfc-toc-item')) {
+        dialog.close();
+      }
+    });
+    const filter = dialog.querySelector('.rfc-toc-filter');
+    filter.addEventListener('input', () => {
+      const words = filter.value.normalize('NFKC').toLowerCase().split(/\s+/).filter(x => x);
+      this.entries.forEach(entry => {
+        const show = words.every(word => entry.tocItem.dataset.search.includes(word));
+        entry.tocItem.classList.toggle('hidden', !show);
+      });
+    });
+    // 絞り込み中にEnterで先頭の項目へ移動する。
+    // Escは検索欄の「入力の消去」に使われてダイアログに届かないため、明示的に閉じる
+    filter.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape') {
+        evt.preventDefault();
+        dialog.close();
+      } else if (evt.key === 'Enter') {
+        const first = list.querySelector('.rfc-toc-item:not(.hidden)');
+        if (first) {
+          evt.preventDefault();
+          dialog.close();
+          location.hash = first.getAttribute('href');
+        }
+      }
+    });
+    dialog.querySelector('.rfc-toc-close').addEventListener('click', () => dialog.close());
+    // 背景（ダイアログの外側）をクリックしたら閉じる
+    dialog.addEventListener('click', (evt) => {
+      if (evt.target === dialog) {
+        dialog.close();
+      }
+    });
+    document.body.appendChild(dialog);
+    this.dialog = dialog;
+    this.filter = filter;
+  }
+
+  _openDialog() {
+    // 前回の絞り込みを解除し、現在の節を強調する
+    this.filter.value = '';
+    this.entries.forEach(entry => {
+      entry.tocItem.classList.remove('hidden');
+      entry.tocItem.classList.toggle('rfc-toc-current', entry === this.current);
+      entry.tocItem.toggleAttribute('aria-current', entry === this.current);
+    });
+    this.dialog.showModal();
+    this.filter.focus();
+    const target = this.current ? this.current.tocItem : null;
+    if (target && !target.classList.contains('hidden')) {
+      target.scrollIntoView({ block: 'center' });
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // html/rfcXXXX.html : RFCの変遷グラフ
