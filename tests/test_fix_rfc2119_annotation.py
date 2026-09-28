@@ -40,6 +40,12 @@ class TestFixRfc2119Annotation(unittest.TestCase):
         self.assertIsNone(fix_rfc2119_annotation(
             "It MUST do X and MAY do Y.", "Xを行い、Yを行ってもよい。"))
 
+    def test_skips_lowercase_modal(self):
+        # 文末の述語が小文字の must の節の訳である可能性がある
+        self.assertIsNone(fix_rfc2119_annotation(
+            "Clients MAY cache X, but they must discard it after use.",
+            "クライアントはXをキャッシュでき、使用後は破棄しなければなりません。"))
+
     def test_skips_when_already_annotated(self):
         self.assertIsNone(fix_rfc2119_annotation(
             "It MUST send X.", "Xを送信しなければなりません (MUST)。"))

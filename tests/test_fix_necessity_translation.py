@@ -48,6 +48,17 @@ class TestNecessityTranslation(unittest.TestCase):
         self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを送る必要があります。"))
         self.assertIsNone(fix_necessity_translation(
             "It MUST send X. Y is fine.", "Xを送信する必要があります。Yは問題ありません。"))
+        # 文中に既に注釈がある (キーワードの訳は別の節)
+        self.assertIsNone(fix_necessity_translation(
+            "The router SHALL construct X and return it.",
+            "ルーターはXを作成し（SHALL）、それを返す必要があります。"))
+        # 小文字の need/should の節が文末にある
+        self.assertIsNone(fix_necessity_translation(
+            "The header SHOULD be sent, but agents need to be prepared to receive it.",
+            "ヘッダーを送信する必要がありますが、エージェントは受信できるように準備する必要があります。"))
+        self.assertIsNone(fix_necessity_translation(
+            "The service SHOULD be granted, and the request should be deleted.",
+            "サービスを許可し、リクエストを削除する必要があります。"))
         # 種類の違う注釈が付いているものは触らない
         self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを送信する必要があります (SHOULD)。"))
 

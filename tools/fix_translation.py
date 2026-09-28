@@ -52,7 +52,7 @@ from lint_translation import (  # noqa: E402
     check_reference_author_format, fix_url_format, update_reference_section_state,
     BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
     check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
-    check_necessity_translation,
+    check_necessity_translation, ANNOTATION_RE,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -87,6 +87,12 @@ DESU_PATTERNS = [
 # 見出し先頭の番号 (「6.1.1. 」「付録A. 」など) は変換対象から外して温存する
 HEADING_NUM_RE = re.compile(r"^((?:付録)?[A-Z0-9]+(?:\.[0-9]+)*\.?\s+)(.*)$", re.S)
 
+
+# 原文の小文字の法助動詞・必要の表現。キーワードと同じ文にあると、訳文の文末の述語が
+# キーワードではなくこれらの訳である可能性があり、そこに注釈を付けると原文にない規範性を
+# 足してしまう (例: "The header SHOULD be sent, but agents need to be prepared ..." の
+# 「準備する必要があります」は need の訳)。W011/W012 の修正はこの文を対象外にする。
+LOWERCASE_MODAL_RE = re.compile(r"\b(?:must|shall|should|may|need(?:s|ed)?|have to|has to|ought)\b")
 
 # --- W011: RFC2119キーワード注釈の付与 ---
 # キーワード -> 規範強度 (注釈の原語は原文の語をそのまま使う。SHALL は (SHALL))
@@ -125,7 +131,7 @@ def fix_rfc2119_annotation(en, ja):
     # 原文が一文で、キーワード以外に規範強度に関わる語を含まない
     # (複数の節があると、訳文の文末の述語がキーワードの訳とは限らない)
     if (not is_single_sentence(en) or NON_NORMATIVE_NEGATION.search(en)
-            or OTHER_NORMATIVE_WORDS.search(en)):
+            or OTHER_NORMATIVE_WORDS.search(en) or LOWERCASE_MODAL_RE.search(en)):
         return None
     # 訳文も一文 (文末以外に句点がない)
     body = ja.rstrip()
@@ -183,7 +189,11 @@ def fix_necessity_translation(en, ja):
     """W012: 一文の段落の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
     if not check_necessity_translation(en, ja):
         return None
-    if not is_single_sentence(en) or OTHER_NORMATIVE_WORDS.search(en):
+    if (not is_single_sentence(en) or OTHER_NORMATIVE_WORDS.search(en)
+            or LOWERCASE_MODAL_RE.search(en)):
+        return None
+    # 「必要があ」が複数あると、どれがキーワードの訳か決まらない
+    if len(re.findall(r"(?<!不)必要があ", ja)) != 1:
         return None
     keyword = next(iter(count_rfc2119_keywords(en)))
     strength = RFC2119_STRENGTH[keyword]
@@ -191,12 +201,15 @@ def fix_necessity_translation(en, ja):
     end = body[:-1] if body.endswith("。") else body
     if "。" in end:
         return None
-    # 既に注釈が付いている場合は外してから直し、付け直す (種類が違う注釈は触らない)
+    # 既に注釈が付いている場合は外してから直し、付け直す (種類が違う注釈は触らない)。
+    # 文末以外に注釈があるときは、キーワードの訳が文中の別の節なので対象外
     m = re.fullmatch(r"(.*?)\s*[（(]\s*([A-Z ]+?)\s*[）)]", end)
     if m:
         if re.sub(r"\s+", " ", m.group(2)) != keyword:
             return None
         end = m.group(1)
+    if ANNOTATION_RE.search(end):
+        return None
     m = re.fullmatch(r"(.*)必要があります", end)
     if not m:
         return None
