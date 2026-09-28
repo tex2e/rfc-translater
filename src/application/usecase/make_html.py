@@ -53,6 +53,7 @@ def make_html(rfc: IRfc,
                                        bcp14=RfcHtmlHelper.uses_bcp14(contents),
                                        orig_url=RfcHtmlHelper.get_orig_url(obj[RfcJsonElem.NUMBER], is_draft),
                                        paragraph_ids=RfcHtmlHelper.make_paragraph_ids(contents),
+                                       rule_start=RfcHtmlHelper.rule_start_index(contents),
                                        toc_section_ids=RfcHtmlHelper.make_toc_section_ids(contents),
                                        RfcJsonElem=RfcJsonElem, RfcHtmlHelper=RfcHtmlHelper)
 
@@ -170,6 +171,27 @@ class RfcHtmlHelper:
         """冒頭の定型見出し（Abstract など）か。JSONの構造は変えずに表示だけ見出しにする"""
         return (paragraph.get(RfcJsonElem.Contents.INDENT, 0) == 0
                 and paragraph[RfcJsonElem.Contents.TEXT].strip().lower() in RfcHtmlHelper.FRONT_HEADINGS)
+
+    @staticmethod
+    def rule_start_index(contents: list) -> int:
+        """見出しの上に区切り線を付け始める段落の番号。
+        タイトル（見出し扱いのものを含む）と Abstract の上には線を付けない。
+        Abstract が最初の定型見出しでないときは、最初の見出しの上だけ線を付けない"""
+        for i, p in enumerate(contents):
+            if p.get(RfcJsonElem.Contents.RAW):
+                continue
+            text = p[RfcJsonElem.Contents.TEXT].strip()
+            if text.lower() == 'abstract':
+                return i + 1
+            # 他の定型見出しや番号付きの章が先に来たら、冒頭の Abstract はない
+            if RfcHtmlHelper.is_front_heading(p) or (
+                    p.get(RfcJsonElem.Contents.SECTION_TITLE) and RfcHtmlHelper.section_number(text)):
+                break
+        for i, p in enumerate(contents):
+            if not p.get(RfcJsonElem.Contents.RAW) and (
+                    p.get(RfcJsonElem.Contents.SECTION_TITLE) or RfcHtmlHelper.is_front_heading(p)):
+                return i + 1
+        return 0
 
     @staticmethod
     def bullet_class(text: str) -> str:
