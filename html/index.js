@@ -83,10 +83,6 @@ class RfcUi {
       this.sectionNav = new RfcSectionNavUi();
       this.sectionNav.setup();
       this._setupOrigLinkTracking();
-      // ヘッダーの操作リンク
-      this._dispActions();
-      // 規範キーワードの凡例と強調表示の切り替え
-      this._dispKeywordLegend();
     }
   }
 
@@ -378,74 +374,23 @@ class RfcUi {
     return text.length > RfcUi.ISSUE_TEXT_MAX ? text.slice(0, RfcUi.ISSUE_TEXT_MAX) + ' …(省略)' : text;
   }
 
-  // 誤訳報告用のGitHub Issue作成URL（row を省略したときはページ全体への報告）
+  // 段落の誤訳報告用のGitHub Issue作成URL
   _makeIssueUrl(row, anchorId, heading) {
     const pageUrl = `${location.origin}${location.pathname}`;
     const sectionLabel = heading && heading.dataset.section ? ` §${heading.dataset.section}` : '';
+    const texts = row.querySelectorAll('.text');
+    const en = texts[0] ? texts[0].innerText : '';
+    const ja = texts[1] ? texts[1].innerText : '';
+    const title = `RFC ${this.rfcNumber}${sectionLabel} の翻訳の誤り`;
     const lines = [];
-    let title;
-    if (row) {
-      const texts = row.querySelectorAll('.text');
-      const en = texts[0] ? texts[0].innerText : '';
-      const ja = texts[1] ? texts[1].innerText : '';
-      title = `RFC ${this.rfcNumber}${sectionLabel} の翻訳の誤り`;
-      lines.push(`対象: ${pageUrl}#${anchorId}`, '');
-      lines.push('## 原文', '```', this._truncate(en), '```', '');
-      if (ja.trim()) {
-        lines.push('## 現在の訳', '```', this._truncate(ja), '```', '');
-      }
-    } else {
-      title = `RFC ${this.rfcNumber} の翻訳の誤り`;
-      lines.push(`対象: ${pageUrl}`, '');
+    lines.push(`対象: ${pageUrl}#${anchorId}`, '');
+    lines.push('## 原文', '```', this._truncate(en), '```', '');
+    if (ja.trim()) {
+      lines.push('## 現在の訳', '```', this._truncate(ja), '```', '');
     }
     lines.push('## 問題点・修正案', '');
     const params = new URLSearchParams({ title: title, body: lines.join('\n') });
     return `${RfcUi.ISSUE_URL}?${params.toString()}`;
-  }
-
-  // 規範キーワード（RFC 2119 / RFC 8174）の凡例と、強調表示の切り替えボタン
-  _dispKeywordLegend() {
-    const domKeywords = document.getElementById('rfc_keywords');
-    if (!domKeywords || !document.querySelector('.row .kw')) {
-      return;
-    }
-    const root = document.documentElement;
-    domKeywords.innerHTML = `
-      <span>規範キーワード :</span>
-      <span class="kw kw-must" title="必須（MUST / SHALL / REQUIRED）">MUST</span>
-      <span class="kw kw-mustnot" title="禁止（MUST NOT / SHALL NOT）">MUST NOT</span>
-      <span class="kw kw-should" title="推奨（SHOULD / RECOMMENDED）">SHOULD</span>
-      <span class="kw kw-shouldnot" title="非推奨（SHOULD NOT / NOT RECOMMENDED）">SHOULD NOT</span>
-      <span class="kw kw-may" title="任意（MAY / OPTIONAL）">MAY</span>
-      <button type="button" class="btn btn-light btn-sm rfc-keywords-toggle"></button>
-    `;
-    const button = domKeywords.querySelector('.rfc-keywords-toggle');
-    const render = () => {
-      const isOff = root.classList.contains('kw-off');
-      button.textContent = isOff ? '強調する' : '強調しない';
-      button.setAttribute('aria-pressed', String(!isOff));
-    };
-    button.addEventListener('click', () => {
-      const isOff = root.classList.toggle('kw-off');
-      try {
-        localStorage.setItem('isKeywordHighlight', String(!isOff));
-      } catch (e) { /* 保存できなくても表示は切り替える */ }
-      render();
-    });
-    render();
-  }
-
-  // ヘッダーの操作リンク（ページ全体の誤訳報告・編集方法）
-  _dispActions() {
-    const domActions = document.getElementById('rfc_actions');
-    if (!domActions || this.domRfcDraft) {
-      return;
-    }
-    domActions.innerHTML = `
-      <a href="${this._makeIssueUrl(null)}" target="_blank" rel="noopener">誤訳を報告する</a>
-      <a href="https://github.com/tex2e/rfc-translater#翻訳を修正したいときは" target="_blank" rel="noopener">翻訳の修正に参加する</a>
-      <span class="rfc-actions-hint">（段落にマウスを乗せると、段落ごとのリンク・原文・報告ボタンが表示されます）</span>
-    `;
   }
 
 }
