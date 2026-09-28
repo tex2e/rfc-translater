@@ -19,6 +19,11 @@
 #         例) Xを送信しなければなりません。 -> Xを送信しなければなりません (MUST)。
 #         「〜する必要があります」のような強度が曖昧な訳には付けない（欠陥のある訳を
 #         正しいものとして確定させてしまうため）。
+#   W012: MUST/SHOULD を「〜する必要があります」で訳した一文の段落を、スタイルガイドの訳語へ直す
+#         例) Xを送信する必要があります。 -> Xを送信しなければなりません (MUST)。
+#             Xを含める必要があります。   -> Xを含めるべきです (SHOULD)。
+#         MUST は動詞の活用を変えるため、活用の型が確定できるものだけを対象にする
+#         (漢字の直後の「る」は五段/一段を区別できないので対象外)。
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -47,6 +52,7 @@ from lint_translation import (  # noqa: E402
     check_reference_author_format, fix_url_format, update_reference_section_state,
     BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
     check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
+    check_necessity_translation,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -133,6 +139,71 @@ def fix_rfc2119_annotation(en, ja):
     if not m:
         return None
     return f"{end} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
+
+
+# --- W012: 「必要があります」の言い換え ---
+_I_ROW = "いきしちにひみりぎじぢびぴ"
+_E_ROW = "えけせてねへめれげぜでべぺ"
+_GODAN_A = {"う": "わ", "く": "か", "ぐ": "が", "す": "さ", "つ": "た", "ぬ": "な", "ぶ": "ば", "む": "ま"}
+_HIRAGANA = re.compile(r"[ぁ-ゖ]")
+
+
+def to_nakereba(pre):
+    """動詞の辞書形で終わる文字列を「〜なければなりません」の形にする。型が決まらなければ None。"""
+    if pre.endswith("する"):
+        return pre[:-2] + "しなければなりません"
+    if pre.endswith("である"):
+        return pre[:-3] + "でなければなりません"
+    if pre.endswith(("ない", "ある", "くる", "来る")):
+        return None  # 否定・「ある」・カ変は対象外
+    if pre.endswith("る") and len(pre) >= 2:
+        before = pre[-2]
+        if before in _I_ROW or before in _E_ROW:
+            return pre[:-1] + "なければなりません"          # 一段動詞 (含める、用いる、できる)
+        if _HIRAGANA.match(before):
+            return pre[:-1] + "らなければなりません"        # 五段動詞 (なる、かかる)
+        return None  # 漢字 + る (送る/着る など) は五段か一段か決まらない
+    if pre and pre[-1] in _GODAN_A and len(pre) >= 2:
+        return pre[:-1] + _GODAN_A[pre[-1]] + "なければなりません"  # 五段動詞 (使う、示す)
+    return None
+
+
+def to_beki(pre):
+    """動詞の辞書形で終わる文字列を「〜べきです」の形にする。否定形は対象外。"""
+    if pre.endswith("ない") or not pre:
+        return None
+    if pre.endswith("する"):
+        return pre[:-2] + "すべきです"
+    if pre[-1] in "うくぐすつぬぶむる":
+        return pre + "べきです"
+    return None
+
+
+def fix_necessity_translation(en, ja):
+    """W012: 一文の段落の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
+    if not check_necessity_translation(en, ja):
+        return None
+    if not is_single_sentence(en) or OTHER_NORMATIVE_WORDS.search(en):
+        return None
+    keyword = next(iter(count_rfc2119_keywords(en)))
+    strength = RFC2119_STRENGTH[keyword]
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end:
+        return None
+    # 既に注釈が付いている場合は外してから直し、付け直す (種類が違う注釈は触らない)
+    m = re.fullmatch(r"(.*?)\s*[（(]\s*([A-Z ]+?)\s*[）)]", end)
+    if m:
+        if re.sub(r"\s+", " ", m.group(2)) != keyword:
+            return None
+        end = m.group(1)
+    m = re.fullmatch(r"(.*)必要があります", end)
+    if not m:
+        return None
+    rewritten = (to_nakereba if strength == "必須" else to_beki)(m.group(1))
+    if not rewritten:
+        return None
+    return f"{rewritten} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
 
 
 def fix_identifier_case(en, ja):
@@ -292,7 +363,7 @@ def process_file(path, checks, dry_run, samples, stats):
             stats["E007"] += 1
             changed = True
 
-    # W011 は BCP 14 を参照する文書だけが対象 (lint_translation.py と同じ基準)
+    # W011/W012 は BCP 14 を参照する文書だけが対象 (lint_translation.py と同じ基準)
     uses_bcp14 = any(isinstance(c, dict) and BCP14_REFERENCE_RE.search(c.get("text", "") or "")
                      for c in contents)
 
@@ -384,6 +455,18 @@ def process_file(path, checks, dry_run, samples, stats):
             elif new_ja is None and re.search(r"(ます|です)。?$", ja):
                 stats["W006_skipped"] += 1
 
+        # --- W012: 「必要があります」の言い換え (W011 より先に行う) ---
+        if ("W012" in checks and uses_bcp14 and not is_title and c.get("raw") is not True
+                and ja):
+            new_ja = fix_necessity_translation(en, ja)
+            if new_ja:
+                if len(samples["W012"]) < 12:
+                    samples["W012"].append((os.path.basename(path), None, ja[-90:], new_ja[-90:]))
+                stats["W012"] += 1
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
         # --- W011: RFC2119キーワード注釈の付与 ---
         if ("W011" in checks and uses_bcp14 and not is_title and c.get("raw") is not True
                 and ja):
@@ -434,7 +517,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -448,7 +531,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012")}
     files_changed = 0
 
     for path in paths:
@@ -473,6 +556,8 @@ def main():
         print(f"  E007 タイトルprefixを付与: {stats['E007']} 件")
     if "W005" in checks:
         print(f"  W005 ですます調に変換: {stats['W005']} 段落")
+    if "W012" in checks:
+        print(f"  W012 「必要があります」を訳語に修正: {stats['W012']} 段落")
     if "W011" in checks:
         print(f"  W011 RFC2119キーワード注釈を付与: {stats['W011']} 段落")
     if "W006" in checks:
@@ -482,7 +567,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:
