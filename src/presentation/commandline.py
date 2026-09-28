@@ -9,6 +9,7 @@ from ..domain.services.rfcutils import RfcUtils
 from ..application.usecase.fetch_rfc import fetch_rfc
 from ..application.usecase.trans_rfc import trans_rfc, trans_test
 from ..application.usecase.make_html import make_html
+from ..application.usecase.make_html_all import make_html_all
 from ..application.usecase.make_index import make_index, make_index_draft
 from ..application.usecase.make_title_json import make_title_json
 from ..application.usecase.fetch_index import diff_remote_and_local_index
@@ -38,6 +39,8 @@ def main():
                     help='Only translate (ex. --rfc 8446 --trans)')
     ap.add_argument('--make', action='store_true',
                     help='Only make HTML (ex. --rfc 8446 --make)')
+    ap.add_argument('--make-all', action='store_true',
+                    help='Remake all HTML (RFCs, drafts and index pages) (ex. --make-all)')
     ap.add_argument('--make-json', action='store_true',
                     help='Make JSON from HTML (ex. --make-json --rfc 8446)')
     ap.add_argument('--make-index', action='store_true',
@@ -98,7 +101,20 @@ def main():
             print("[+] 正常終了 %s (%s)" % (sys.argv[0], RfcUtils.get_now()))
             return
 
-    if args.make_index:
+    if args.make_all:
+        # 本文中のRFCへのリンク先は生成時に決まるため、翻訳を追加したら全ページを作り直す
+        print("[*] 全RFC・全DraftのHTMLの作成")
+        make_html_all()
+        print("[*] トップページ(index.html)の作成")
+        make_index(IndexHtmlFileRepository(),
+                   RfcHtmlFileRepository())
+        print("[*] RFCの日本語タイトル一覧(data-rfc-title.json)の作成")
+        make_title_json(RfcTitleJsonFileRepository(),
+                        RfcJsonTransFileRepository())
+        print("[*] draft/index.htmlの作成")
+        make_index_draft(IndexDraftHtmlFileRepository(),
+                         RfcHtmlFileRepository())
+    elif args.make_index:
         print("[*] トップページ(index.html)の作成")
         make_index(IndexHtmlFileRepository(),
                    RfcHtmlFileRepository())
