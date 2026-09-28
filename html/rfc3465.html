@@ -7,13 +7,17 @@
   <meta name="description" content="RFC 3465は、TCPプロトコルの輻輳制御において、単にパケット数ではなく、実際に送信が確認された「バイト数」に基づいてウィンドウサイズを拡大する手法「Appropriate Byte Counting (ABC)」を定義しています。遅延ACKなどの受信側の挙動による不適切なウィンドウ拡大（スロースタート時の過剰な加速）を抑制し、ネットワークへの負荷を最適化する手順を規定しています。特に大きなパケットサイズを用いる現代のネットワークにおいて、TCPの輻輳制御をより公平かつロバストに動作させることを目的としています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 3465 - Appropriate Byte Counting (ABC) を用いた TCP 輻輳制御</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -190,12 +195,12 @@ Much of the language in this document is taken from <a href="./rfc2581.html">[RF
     <div class="row" id="top-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -322,7 +327,7 @@ RFC 2581は、転送の混雑回避段階で、往復時間（RTT）ごとにCWN
     <div class="row" id="2-2-Slow-Start-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-RFC 2581 states that the sender increments the congestion window by at most, 1*SMSS bytes for each arriving acknowledgment during slow start. This document proposes that a TCP sender SHOULD increase cwnd by the number of previously unacknowledged bytes ACKed by each incoming acknowledgment, provided the increase is not more than L bytes. Choosing the limit on the increase, L, is discussed in the next subsection. When the number of previously unacknowledged bytes ACKed is less than or equal to 1*SMSS bytes, or L is less than or equal to 1*SMSS bytes, this proposal is no more aggressive (and possibly less aggressive) than allowed by RFC 2581. However, increasing cwnd by more than 1*SMSS bytes in response to a single ACK is more aggressive than allowed by RFC 2581. The more aggressive version of the slow start algorithm still falls within the spirit of the principles outlined in [Jac88] (i.e., of no more than doubling the cwnd per RTT), and this document proposes ABC for experimentation in shared networks, provided an appropriate limit is applied (see next section).
+RFC 2581 states that the sender increments the congestion window by at most, 1*SMSS bytes for each arriving acknowledgment during slow start. This document proposes that a TCP sender <span class="kw kw-should">SHOULD</span> increase cwnd by the number of previously unacknowledged bytes ACKed by each incoming acknowledgment, provided the increase is not more than L bytes. Choosing the limit on the increase, L, is discussed in the next subsection. When the number of previously unacknowledged bytes ACKed is less than or equal to 1*SMSS bytes, or L is less than or equal to 1*SMSS bytes, this proposal is no more aggressive (and possibly less aggressive) than allowed by RFC 2581. However, increasing cwnd by more than 1*SMSS bytes in response to a single ACK is more aggressive than allowed by RFC 2581. The more aggressive version of the slow start algorithm still falls within the spirit of the principles outlined in [Jac88] (i.e., of no more than doubling the cwnd per RTT), and this document proposes ABC for experimentation in shared networks, provided an appropriate limit is applied (see next section).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -346,7 +351,7 @@ RFC 2581は、送信者が輻輳ウィンドウをせいぜい増加させてい
     <div class="row" id="2-3-Choosing-the-Limit-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The limit, L, chosen for the cwnd increase during slow start, controls the aggressiveness of the algorithm. Choosing L=1*SMSS bytes provides behavior that is no more aggressive than allowed by RFC 2581. However, ABC with L=1*SMSS bytes is more conservative in a number of key ways (as discussed in the next section) and therefore, this document suggests that even though with L=1*SMSS bytes TCP stacks will see little performance change, ABC SHOULD be used.
+The limit, L, chosen for the cwnd increase during slow start, controls the aggressiveness of the algorithm. Choosing L=1*SMSS bytes provides behavior that is no more aggressive than allowed by RFC 2581. However, ABC with L=1*SMSS bytes is more conservative in a number of key ways (as discussed in the next section) and therefore, this document suggests that even though with L=1*SMSS bytes TCP stacks will see little performance change, ABC <span class="kw kw-should">SHOULD</span> be used.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -370,7 +375,7 @@ A very large L could potentially lead to large line-rate bursts of traffic in th
     <div class="row" id="2-3-Choosing-the-Limit-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document specifies that TCP implementations MAY use L=2*SMSS bytes and MUST NOT use L &gt; 2*SMSS bytes. This choice balances between being conservative (L=1*SMSS bytes) and being potentially very aggressive. In addition, L=2*SMSS bytes exactly balances the negative impact of the delayed ACK algorithm (as discussed in more detail in section 3.2). Note that when L=2*SMSS bytes cwnd growth is roughly the same as the case when the standard algorithms are used in conjunction with a receiver that transmits an ACK for each incoming segment [All98] (assuming no or small amounts of ACK loss in both cases).
+This document specifies that TCP implementations <span class="kw kw-may">MAY</span> use L=2*SMSS bytes and <span class="kw kw-mustnot">MUST NOT</span> use L &gt; 2*SMSS bytes. This choice balances between being conservative (L=1*SMSS bytes) and being potentially very aggressive. In addition, L=2*SMSS bytes exactly balances the negative impact of the delayed ACK algorithm (as discussed in more detail in section 3.2). Note that when L=2*SMSS bytes cwnd growth is roughly the same as the case when the standard algorithms are used in conjunction with a receiver that transmits an ACK for each incoming segment [All98] (assuming no or small amounts of ACK loss in both cases).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -382,7 +387,7 @@ This document specifies that TCP implementations MAY use L=2*SMSS bytes and MUST
     <div class="row" id="2-3-Choosing-the-Limit-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The exception to the above suggestion is during a slow start phase that follows a retransmission timeout (RTO). In this situation, a TCP MUST use L=1*SMSS as specified in RFC 2581 since ACKs for large amounts of previously unacknowledged data are common during this phase of a transfer. These ACKs do not necessarily indicate how much data has left the network in the last RTT, and therefore ABC cannot accurately determine how much to increase cwnd. As an example, say segment N is dropped by the network, and segments N+1 and N+2 arrive successfully at the receiver. The sender will receive only two duplicate ACKs and therefore must rely on the retransmission timer (RTO) to detect the loss. When the RTO expires, segment N is retransmitted. The ACK sent in response to the retransmission will be for segment N+2. However, this ACK does not indicate that three segments have left the network in the last RTT, but rather only a single segment left the network. Therefore, the appropriate cwnd increment is at most 1*SMSS bytes.
+The exception to the above suggestion is during a slow start phase that follows a retransmission timeout (RTO). In this situation, a TCP <span class="kw kw-must">MUST</span> use L=1*SMSS as specified in RFC 2581 since ACKs for large amounts of previously unacknowledged data are common during this phase of a transfer. These ACKs do not necessarily indicate how much data has left the network in the last RTT, and therefore ABC cannot accurately determine how much to increase cwnd. As an example, say segment N is dropped by the network, and segments N+1 and N+2 arrive successfully at the receiver. The sender will receive only two duplicate ACKs and therefore must rely on the retransmission timer (RTO) to detect the loss. When the RTO expires, segment N is retransmitted. The ACK sent in response to the retransmission will be for segment N+2. However, this ACK does not indicate that three segments have left the network in the last RTT, but rather only a single segment left the network. Therefore, the appropriate cwnd increment is at most 1*SMSS bytes.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -490,7 +495,7 @@ Congestion Window Validation (CWV) <a href="./rfc2861.html">[RFC2861]</a> addres
     <div class="row" id="3-2-Mitigate-the-Impact-of-Delayed-ACKs-and-Lost-ACKs-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Delayed ACKs [RFC1122,RFC2581] allow a TCP receiver to refrain from sending an ACK for each incoming segment. However, a receiver SHOULD send an ACK for every second full-sized segment that arrives. Furthermore, a receiver MUST NOT withhold an ACK for more than 500 ms. By reducing the number of ACKs sent to the data originator the receiver is slowing the growth of the congestion window under an ACK counting system. Using ABC with L=2*SMSS bytes can roughly negate the negative impact imposed by delayed ACKs by allowing cwnd to be increased for ACKs that are withheld by the receiver. This allows the congestion window to grow in a manner similar to the case when the receiver ACKs each incoming segment, but without adding extra traffic to the network. Simulation studies have shown increased throughput when a TCP sender uses ABC when compared to the standard ACK counting algorithm [All99], especially for short transfers that never leave the initial slow start period.
+Delayed ACKs [RFC1122,RFC2581] allow a TCP receiver to refrain from sending an ACK for each incoming segment. However, a receiver <span class="kw kw-should">SHOULD</span> send an ACK for every second full-sized segment that arrives. Furthermore, a receiver <span class="kw kw-mustnot">MUST NOT</span> withhold an ACK for more than 500 ms. By reducing the number of ACKs sent to the data originator the receiver is slowing the growth of the congestion window under an ACK counting system. Using ABC with L=2*SMSS bytes can roughly negate the negative impact imposed by delayed ACKs by allowing cwnd to be increased for ACKs that are withheld by the receiver. This allows the congestion window to grow in a manner similar to the case when the receiver ACKs each incoming segment, but without adding extra traffic to the network. Simulation studies have shown increased throughput when a TCP sender uses ABC when compared to the standard ACK counting algorithm [All99], especially for short transfers that never leave the initial slow start period.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -502,7 +507,7 @@ Delayed ACKs [RFC1122,RFC2581] allow a TCP receiver to refrain from sending an A
     <div class="row" id="3-2-Mitigate-the-Impact-of-Delayed-ACKs-and-Lost-ACKs-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that delayed ACKs should not be an issue during slow start-based loss recovery, as RFC 2581 recommends that receivers should not delay ACKs that cover out-of-order segments. Therefore, as discussed above, ABC with L &gt; 1*SMSS bytes is inappropriate for such slow start based loss recovery and MUST NOT be used.
+Note that delayed ACKs should not be an issue during slow start-based loss recovery, as RFC 2581 recommends that receivers should not delay ACKs that cover out-of-order segments. Therefore, as discussed above, ABC with L &gt; 1*SMSS bytes is inappropriate for such slow start based loss recovery and <span class="kw kw-mustnot">MUST NOT</span> be used.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -514,7 +519,7 @@ RFC 2581は、順序外セグメントをカバーするACKを遅らせること
     <div class="row" id="3-2-Mitigate-the-Impact-of-Delayed-ACKs-and-Lost-ACKs-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note: In the case when an entire window of data is lost, a TCP receiver will likely generate delayed ACKs and an L &gt; 1*SMSS bytes would be safe. However, detecting this scenario is difficult. Therefore to keep ABC conservative, this document mandates that L MUST NOT be &gt; 1*SMSS bytes in any slow start-based loss recovery.
+Note: In the case when an entire window of data is lost, a TCP receiver will likely generate delayed ACKs and an L &gt; 1*SMSS bytes would be safe. However, detecting this scenario is difficult. Therefore to keep ABC conservative, this document mandates that L <span class="kw kw-mustnot">MUST NOT</span> be &gt; 1*SMSS bytes in any slow start-based loss recovery.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

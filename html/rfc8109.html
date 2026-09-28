@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、DNSリゾルバが起動時にルートサーバーの最新リストを取得する「プライミング（Priming）」プロセスの詳細な手順を定義しています。ルートヒントファイルに基づき、すべてのルートサーバーのA/AAAAレコードを取得するためのクエリ方法、信頼の起点の確立、および得られた情報のキャッシュ管理ルールを規定し、インターネット名前解決の基盤となるリゾルバの正確な初期化を保証します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8109 - プライミングクエリを用いたDNSリゾルバの初期化</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -273,12 +278,12 @@ This document describes the steps needed for this common implementation choice. 
     <div class="row" id="1--Introduction-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -369,7 +374,7 @@ The list of root server operators and the domain name associated with each one h
     <div class="row" id="3--Priming-Queries-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A priming query is a DNS query used to get the root server information in a resolver. It has a QNAME of &#34;.&#34; and a QTYPE of NS, and is sent to one of the addresses in the configuration for the recursive resolver. The priming query can be sent over either UDP or TCP. If the query is sent over UDP, the source port SHOULD be randomly selected (see <a href="./rfc5452.html">[RFC5452]</a>). The Recursion Desired (RD) bit MAY be set to 0 or 1, although the meaning of it being set to 1 is undefined for priming queries.
+A priming query is a DNS query used to get the root server information in a resolver. It has a QNAME of &#34;.&#34; and a QTYPE of NS, and is sent to one of the addresses in the configuration for the recursive resolver. The priming query can be sent over either UDP or TCP. If the query is sent over UDP, the source port <span class="kw kw-should">SHOULD</span> be randomly selected (see <a href="./rfc5452.html">[RFC5452]</a>). The Recursion Desired (RD) bit <span class="kw kw-may">MAY</span> be set to 0 or 1, although the meaning of it being set to 1 is undefined for priming queries.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -381,12 +386,12 @@ A priming query is a DNS query used to get the root server information in a reso
     <div class="row" id="3--Priming-Queries-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The recursive resolver SHOULD use EDNS(0) <a href="./rfc6891.html">[RFC6891]</a> for priming queries and SHOULD announce and handle a reassembly size of at least 1024 octets <a href="./rfc3226.html">[RFC3226]</a>. Doing so allows responses that cover the size of a full priming response (see Section 4.2) for the current set of root servers. See Section 3.3 for discussion of setting the DNSSEC OK (DO) bit (defined in <a href="./rfc4033.html">[RFC4033]</a>).
+The recursive resolver <span class="kw kw-should">SHOULD</span> use EDNS(0) <a href="./rfc6891.html">[RFC6891]</a> for priming queries and <span class="kw kw-should">SHOULD</span> announce and handle a reassembly size of at least 1024 octets <a href="./rfc3226.html">[RFC3226]</a>. Doing so allows responses that cover the size of a full priming response (see Section 4.2) for the current set of root servers. See Section 3.3 for discussion of setting the DNSSEC OK (DO) bit (defined in <a href="./rfc4033.html">[RFC4033]</a>).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-再帰リゾルバは、クエリのプライミングにEDNS（0）<a href="./rfc6891.html">[RFC6891]</a>を使用する必要があり（SHOULD）、少なくとも1024オクテットの再構成サイズを通知して処理する必要があります<a href="./rfc3226.html">[RFC3226]</a>。そうすることで、ルートサーバーの現在のセットに対する完全なプライミング応答（4.2項を参照）のサイズをカバーする応答が可能になります。 DNSSEC OK（DO）ビット（<a href="./rfc4033.html">[RFC4033]</a>で定義）の設定については、セクション3.3を参照してください。
+再帰リゾルバは、クエリのプライミングにEDNS（0）<a href="./rfc6891.html">[RFC6891]</a>を使用する必要があり（<span class="kw kw-should">SHOULD</span>）、少なくとも1024オクテットの再構成サイズを通知して処理する必要があります<a href="./rfc3226.html">[RFC3226]</a>。そうすることで、ルートサーバーの現在のセットに対する完全なプライミング応答（4.2項を参照）のサイズをカバーする応答が可能になります。 DNSSEC OK（DO）ビット（<a href="./rfc4033.html">[RFC4033]</a>で定義）の設定については、セクション3.3を参照してください。
         </p>
       </div>
     </div>
@@ -405,12 +410,12 @@ The recursive resolver SHOULD use EDNS(0) <a href="./rfc6891.html">[RFC6891]</a>
     <div class="row" id="3-1--Repeating-Priming-Queries-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The recursive resolver SHOULD send a priming query only when it is needed, such as when the resolver starts with an empty cache and when the NS RRset for the root zone has expired. Because the NS records for the root are not special, the recursive resolver expires those NS records according to their TTL values. (Note that a recursive resolver MAY pre-fetch the NS RRset before it expires.)
+The recursive resolver <span class="kw kw-should">SHOULD</span> send a priming query only when it is needed, such as when the resolver starts with an empty cache and when the NS RRset for the root zone has expired. Because the NS records for the root are not special, the recursive resolver expires those NS records according to their TTL values. (Note that a recursive resolver <span class="kw kw-may">MAY</span> pre-fetch the NS RRset before it expires.)
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-再帰リゾルバは、リゾルバが空のキャッシュで開始したときや、ルートゾーンのNS RRsetが期限切れになったときなど、必要なときにのみプライミングクエリを送信する必要があります（SHOULD）。ルートのNSレコードは特別ではないため、再帰リゾルバはそれらのNSレコードをTTL値に従って期限切れにします。 （再帰リゾルバは、期限切れになる前にNS RRsetをプリフェッチしてもよいことに注意してください。）
+再帰リゾルバは、リゾルバが空のキャッシュで開始したときや、ルートゾーンのNS RRsetが期限切れになったときなど、必要なときにのみプライミングクエリを送信する必要があります（<span class="kw kw-should">SHOULD</span>）。ルートのNSレコードは特別ではないため、再帰リゾルバはそれらのNSレコードをTTL値に従って期限切れにします。 （再帰リゾルバは、期限切れになる前にNS RRsetをプリフェッチしてもよいことに注意してください。）
         </p>
       </div>
     </div>
@@ -441,19 +446,19 @@ If a priming query does not get a response, the recursive resolver needs to retr
     <div class="row" id="3-2--Target-Selection-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In order to spread the load across all the root server domain names, the recursive resolver SHOULD select the target for a priming query randomly from the list of addresses. The recursive resolver might choose either IPv4 or IPv6 addresses based on its knowledge of whether the system on which it is running has adequate connectivity on either type of address.
+In order to spread the load across all the root server domain names, the recursive resolver <span class="kw kw-should">SHOULD</span> select the target for a priming query randomly from the list of addresses. The recursive resolver might choose either IPv4 or IPv6 addresses based on its knowledge of whether the system on which it is running has adequate connectivity on either type of address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-すべてのルートサーバードメイン名に負荷を分散するために、再帰リゾルバーは、プライミングクエリのターゲットをアドレスのリストからランダムに選択する必要があります（SHOULD）。再帰リゾルバーは、それが実行されているシステムがどちらのタイプのアドレスにも適切な接続を持っているかどうかの知識に基づいて、IPv4またはIPv6アドレスを選択する場合があります。
+すべてのルートサーバードメイン名に負荷を分散するために、再帰リゾルバーは、プライミングクエリのターゲットをアドレスのリストからランダムに選択する必要があります（<span class="kw kw-should">SHOULD</span>）。再帰リゾルバーは、それが実行されているシステムがどちらのタイプのアドレスにも適切な接続を持っているかどうかの知識に基づいて、IPv4またはIPv6アドレスを選択する場合があります。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Target-Selection-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that this recommended method is not the only way to choose from the list in a recursive resolver&#39;s configuration. Two other common methods include picking the first from the list, and remembering which address in the list gave the fastest response earlier and using that one. There are probably other methods in use today. However, the random method listed above SHOULD be used for priming.
+Note that this recommended method is not the only way to choose from the list in a recursive resolver&#39;s configuration. Two other common methods include picking the first from the list, and remembering which address in the list gave the fastest response earlier and using that one. There are probably other methods in use today. However, the random method listed above <span class="kw kw-should">SHOULD</span> be used for priming.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -477,12 +482,12 @@ Note that this recommended method is not the only way to choose from the list in
     <div class="row" id="3-3--DNSSEC-with-Priming-Queries-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The resolver MAY set the DNSSEC OK (DO) bit. At the time of publication, there is little use to performing DNSSEC validation on the priming query. Currently, all root name server names end in &#34;root-servers.net&#34; and the AAAA and A RRsets for the root server names reside in the &#34;root-servers.net&#34; zone. All root servers are also authoritative for this zone, allowing priming responses to include the appropriate root name server A and AAAA RRsets. But, because the &#34;root-servers.net&#34; zone is not currently signed, these RRsets cannot be validated.
+The resolver <span class="kw kw-may">MAY</span> set the DNSSEC OK (DO) bit. At the time of publication, there is little use to performing DNSSEC validation on the priming query. Currently, all root name server names end in &#34;root-servers.net&#34; and the AAAA and A RRsets for the root server names reside in the &#34;root-servers.net&#34; zone. All root servers are also authoritative for this zone, allowing priming responses to include the appropriate root name server A and AAAA RRsets. But, because the &#34;root-servers.net&#34; zone is not currently signed, these RRsets cannot be validated.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-リゾルバーはDNSSEC OK（DO）ビットを設定してもよい（MAY）。公開の時点では、プライミングクエリでDNSSEC検証を実行することはほとんどありません。現在、すべてのルートネームサーバー名は「root-servers.net」で終わり、ルートサーバー名のAAAAおよびA RRsetは「root-servers.net」ゾーンにあります。すべてのルートサーバーもこのゾーンに対して権限があり、プライミング応答に適切なルートネームサーバーAおよびAAAA RRsetを含めることができます。ただし、「root-servers.net」ゾーンは現在署名されていないため、これらのRRsetは検証できません。
+リゾルバーはDNSSEC OK（DO）ビットを設定してもよい（<span class="kw kw-may">MAY</span>）。公開の時点では、プライミングクエリでDNSSEC検証を実行することはほとんどありません。現在、すべてのルートネームサーバー名は「root-servers.net」で終わり、ルートサーバー名のAAAAおよびA RRsetは「root-servers.net」ゾーンにあります。すべてのルートサーバーもこのゾーンに対して権限があり、プライミング応答に適切なルートネームサーバーAおよびAAAA RRsetを含めることができます。ただし、「root-servers.net」ゾーンは現在署名されていないため、これらのRRsetは検証できません。
         </p>
       </div>
     </div>
@@ -561,12 +566,12 @@ The priming response is expected to have an RCODE of NOERROR, and to have the Au
     <div class="row" id="4-1--Expected-Properties-of-the-Priming-Response-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Resolver software SHOULD treat the response to the priming query as a normal DNS response, just as it would use any other data fed to its cache. Resolver software SHOULD NOT expect exactly 13 NS RRs because, historically, some root servers have returned fewer.
+Resolver software <span class="kw kw-should">SHOULD</span> treat the response to the priming query as a normal DNS response, just as it would use any other data fed to its cache. Resolver software <span class="kw kw-shouldnot">SHOULD NOT</span> expect exactly 13 NS RRs because, historically, some root servers have returned fewer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-リゾルバソフトウェアは、プライミングクエリへの応答を、キャッシュに供給される他のデータを使用するのと同じように、通常のDNS応答として扱う必要があります（SHOULD）。リゾルバーソフトウェアは、13のNS RRを期待すべきではありません。
+リゾルバソフトウェアは、プライミングクエリへの応答を、キャッシュに供給される他のデータを使用するのと同じように、通常のDNS応答として扱う必要があります（<span class="kw kw-should">SHOULD</span>）。リゾルバーソフトウェアは、13のNS RRを期待すべきではありません。
         </p>
       </div>
     </div>

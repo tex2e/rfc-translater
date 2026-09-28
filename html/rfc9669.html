@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、Linuxカーネル等で広く利用されている実行環境「eBPF」の命令セットアーキテクチャ（ISA）を公式に定義しています。レジスタ構成、命令フォーマット、算術演算、およびメモリアクセスの仕様を厳密に規定することで、OSのカーネル空間や特権コンテキストにおいて、信頼されていないプログラムを安全かつ効率的に実行するための標準的な基盤を提供します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 9669 - BPF命令セットアーキテクチャ（ISA）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -310,12 +315,12 @@ As a historical note, BPF originally stood for Berkeley Packet Filter, but now t
     <div class="row" id="2--Documentation-Conventions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -662,7 +667,7 @@ Sign extend an 8-bit number A to a 16-bit number B on a big-endian platform:
     <div class="row" id="2-4--Conformance-Groups-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An implementation does not need to support all instructions specified in this document (e.g., deprecated instructions). Instead, a number of conformance groups are specified. An implementation MUST support the base32 conformance group and MAY support additional conformance groups, where supporting a conformance group means it MUST support all instructions in that conformance group.
+An implementation does not need to support all instructions specified in this document (e.g., deprecated instructions). Instead, a number of conformance groups are specified. An implementation <span class="kw kw-must">MUST</span> support the base32 conformance group and <span class="kw kw-may">MAY</span> support additional conformance groups, where supporting a conformance group means it <span class="kw kw-must">MUST</span> support all instructions in that conformance group.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1227,7 +1232,7 @@ For example:
     <div class="row" id="3-1--Basic-Instruction-Encoding-p26">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that most instructions do not use all of the fields. Unused fields SHALL be cleared to zero.
+Note that most instructions do not use all of the fields. Unused fields <span class="kw kw-must">SHALL</span> be cleared to zero.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1855,7 +1860,7 @@ For signed operations (SDIV and SMOD), for ALU, &#39;imm&#39; is interpreted as 
     <div class="row" id="4-1--Arithmetic-Instructions-p18">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that there are varying definitions of the signed modulo operation when the dividend or divisor are negative, where implementations often vary by language such that Python, Ruby, etc. differ from C, Go, Java, etc. This specification requires that signed modulo MUST use truncated division (where -13 % 3 == -1) as implemented in C, Go, etc.:
+Note that there are varying definitions of the signed modulo operation when the dividend or divisor are negative, where implementations often vary by language such that Python, Ruby, etc. differ from C, Go, Java, etc. This specification requires that signed modulo <span class="kw kw-must">MUST</span> use truncated division (where -13 % 3 == -1) as implemented in C, Go, etc.:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2003,7 +2008,7 @@ The byte swap instructions operate on the destination register only and do not u
     <div class="row" id="4-2--Byte-Swap-Instructions-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-For ALU, the 1-bit source operand field in the opcode is used to select what byte order the operation converts from or to. For ALU64, the 1-bit source operand field in the opcode is reserved and MUST be set to 0.
+For ALU, the 1-bit source operand field in the opcode is used to select what byte order the operation converts from or to. For ALU64, the 1-bit source operand field in the opcode is reserved and <span class="kw kw-must">MUST</span> be set to 0.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3233,7 +3238,7 @@ Platform variables are memory regions, identified by integer ids, exposed by the
     <div class="row" id="5-5--Legacy-BPF-Packet-Access-Instructions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-BPF previously introduced special instructions for access to packet data that were carried over from classic BPF. These instructions used an instruction class of LD, a size modifier of W, H, or B, and a mode modifier of ABS or IND. The &#39;dst_reg&#39; and &#39;offset&#39; fields were set to zero, and &#39;src_reg&#39; was set to zero for ABS. However, these instructions are deprecated and SHOULD no longer be used. All legacy packet access instructions belong to the &#34;packet&#34; conformance group.
+BPF previously introduced special instructions for access to packet data that were carried over from classic BPF. These instructions used an instruction class of LD, a size modifier of W, H, or B, and a mode modifier of ABS or IND. The &#39;dst_reg&#39; and &#39;offset&#39; fields were set to zero, and &#39;src_reg&#39; was set to zero for ABS. However, these instructions are deprecated and <span class="kw kw-should">SHOULD</span> no longer be used. All legacy packet access instructions belong to the &#34;packet&#34; conformance group.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

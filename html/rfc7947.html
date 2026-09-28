@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、インターネットエクスチェンジ（IXP）において多数の参加者間のBGPピアリングを簡素化する「IXPルートサーバー」の技術仕様を定義しています。ルートサーバーが自身のAS番号をASパスに追加せずに経路を仲介する動作、および参加者ごとの柔軟なルーティングポリシー適用を実現するためのメッセージ処理規則を規定し、IXPにおける効率的なトラフィック交換を支えます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 7947 - インターネットエクスチェンジBGPルートサーバー</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -333,12 +338,12 @@ The term &#34;route server&#34; is often used in a different context to describe
     <div class="row" id="1-1--Notational-Conventions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -381,12 +386,12 @@ A route server uses BGP <a href="./rfc4271.html">[RFC4271]</a> to broker network
     <div class="row" id="2-1--Client-UPDATE-Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A route server MUST accept all UPDATE messages received from each of its clients for inclusion in its Adj-RIB-In. These UPDATE messages MAY be omitted from the route server&#39;s Loc-RIB or Loc-RIBs, due to filters configured for the purpose of implementing routing policy. The route server SHOULD perform one or more BGP Decision Processes to select routes for subsequent advertisement to its clients, taking into account possible configuration to provide multiple Network Layer Reachability Information (NLRI) paths to a particular client as described in Section 2.3.2.2 or multiple Loc-RIBs as described in Section 2.3.2.1. The route server SHOULD forward UPDATE messages from its Loc-RIB or Loc-RIBs to its clients as determined by local policy.
+A route server <span class="kw kw-must">MUST</span> accept all UPDATE messages received from each of its clients for inclusion in its Adj-RIB-In. These UPDATE messages <span class="kw kw-may">MAY</span> be omitted from the route server&#39;s Loc-RIB or Loc-RIBs, due to filters configured for the purpose of implementing routing policy. The route server <span class="kw kw-should">SHOULD</span> perform one or more BGP Decision Processes to select routes for subsequent advertisement to its clients, taking into account possible configuration to provide multiple Network Layer Reachability Information (NLRI) paths to a particular client as described in Section 2.3.2.2 or multiple Loc-RIBs as described in Section 2.3.2.1. The route server <span class="kw kw-should">SHOULD</span> forward UPDATE messages from its Loc-RIB or Loc-RIBs to its clients as determined by local policy.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ルートサーバーは、各クライアントから受信したすべてのUPDATEメッセージを受け入れて、Adj-RIB-Inに含める必要があります。これらのUPDATEメッセージは、ルーティングポリシーを実装する目的で構成されたフィルターにより、ルートサーバーのLoc-RIBまたはLoc-RIBから省略される場合があります。ルートサーバーは、セクション2.3.2.2または複数で説明されているように、特定のクライアントに複数のネットワーク層到達可能性情報（NLRI）パスを提供するために可能な構成を考慮して、クライアントへの後続のアドバタイズメントのルートを選択するために1つ以上のBGP決定プロセスを実行する必要がありますセクション2.3.2.1で説明されているLoc-RIB。ルートサーバーは、ローカルポリシーで決定されたLoc-RIBまたはLoc-RIBからクライアントにUPDATEメッセージを転送する必要があります（SHOULD）。
+ルートサーバーは、各クライアントから受信したすべてのUPDATEメッセージを受け入れて、Adj-RIB-Inに含める必要があります。これらのUPDATEメッセージは、ルーティングポリシーを実装する目的で構成されたフィルターにより、ルートサーバーのLoc-RIBまたはLoc-RIBから省略される場合があります。ルートサーバーは、セクション2.3.2.2または複数で説明されているように、特定のクライアントに複数のネットワーク層到達可能性情報（NLRI）パスを提供するために可能な構成を考慮して、クライアントへの後続のアドバタイズメントのルートを選択するために1つ以上のBGP決定プロセスを実行する必要がありますセクション2.3.2.1で説明されているLoc-RIB。ルートサーバーは、ローカルポリシーで決定されたLoc-RIBまたはLoc-RIBからクライアントにUPDATEメッセージを転送する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -405,12 +410,12 @@ A route server MUST accept all UPDATE messages received from each of its clients
     <div class="row" id="2-2--Attribute-Transparency-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As a route server primarily performs a brokering service, modification of attributes could cause route server clients to alter their BGP Decision Process for received prefix reachability information, thereby changing the intended routing policies of exchange participants. Therefore, contrary to what is specified in Section 5 of <a href="./rfc4271.html">[RFC4271]</a>, route servers SHOULD NOT by default (unless explicitly configured) update well-known BGP attributes received from route server clients before redistributing them to their other route server clients. Optional recognized and unrecognized BGP attributes, whether transitive or non-transitive, SHOULD NOT be updated by the route server (unless enforced by local IXP operator configuration) and SHOULD be passed on to other route server clients.
+As a route server primarily performs a brokering service, modification of attributes could cause route server clients to alter their BGP Decision Process for received prefix reachability information, thereby changing the intended routing policies of exchange participants. Therefore, contrary to what is specified in Section 5 of <a href="./rfc4271.html">[RFC4271]</a>, route servers <span class="kw kw-shouldnot">SHOULD NOT</span> by default (unless explicitly configured) update well-known BGP attributes received from route server clients before redistributing them to their other route server clients. Optional recognized and unrecognized BGP attributes, whether transitive or non-transitive, <span class="kw kw-shouldnot">SHOULD NOT</span> be updated by the route server (unless enforced by local IXP operator configuration) and <span class="kw kw-should">SHOULD</span> be passed on to other route server clients.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ルートサーバーは主にブローカリングサービスを実行するため、属性を変更すると、ルートサーバークライアントは受信したプレフィックス到達可能性情報のBGP決定プロセスを変更し、それによって交換参加者の目的のルーティングポリシーを変更できます。したがって、<a href="./rfc4271.html">[RFC4271]</a>のセクション5で指定されている内容とは異なり、ルートサーバーは、デフォルトで（明示的に構成されていない限り）ルートサーバークライアントから受信した既知のBGP属性を更新してから、他のルートサーバークライアントに再配布する必要があります（SHOULD NOT）。オプションの認識および非認識BGP属性は、推移的であろうと非推移的であろうと、（ローカルIXPオペレーター構成によって実施されない限り）ルートサーバーによって更新されるべきではなく（SHOULD NOT）、他のルートサーバークライアントに渡されるべきです（SHOULD）。
+ルートサーバーは主にブローカリングサービスを実行するため、属性を変更すると、ルートサーバークライアントは受信したプレフィックス到達可能性情報のBGP決定プロセスを変更し、それによって交換参加者の目的のルーティングポリシーを変更できます。したがって、<a href="./rfc4271.html">[RFC4271]</a>のセクション5で指定されている内容とは異なり、ルートサーバーは、デフォルトで（明示的に構成されていない限り）ルートサーバークライアントから受信した既知のBGP属性を更新してから、他のルートサーバークライアントに再配布する必要があります（<span class="kw kw-shouldnot">SHOULD NOT</span>）。オプションの認識および非認識BGP属性は、推移的であろうと非推移的であろうと、（ローカルIXPオペレーター構成によって実施されない限り）ルートサーバーによって更新されるべきではなく（<span class="kw kw-shouldnot">SHOULD NOT</span>）、他のルートサーバークライアントに渡されるべきです（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -429,12 +434,12 @@ As a route server primarily performs a brokering service, modification of attrib
     <div class="row" id="2-2-1--NEXTHOP-Attribute-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The NEXT_HOP is a well-known mandatory BGP attribute that defines the IP address of the router used as the next hop to the destinations listed in the NLRI field of the UPDATE message. As the route server does not participate in the actual routing of traffic, the NEXT_HOP attribute MUST be passed unmodified to the route server clients, similar to the &#34;third-party&#34; next-hop feature described in Section 5.1.3. of <a href="./rfc4271.html">[RFC4271]</a>.
+The NEXT_HOP is a well-known mandatory BGP attribute that defines the IP address of the router used as the next hop to the destinations listed in the NLRI field of the UPDATE message. As the route server does not participate in the actual routing of traffic, the NEXT_HOP attribute <span class="kw kw-must">MUST</span> be passed unmodified to the route server clients, similar to the &#34;third-party&#34; next-hop feature described in Section 5.1.3. of <a href="./rfc4271.html">[RFC4271]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-NEXT_HOPは、UPDATEメッセージのNLRIフィールドにリストされている宛先へのネクストホップとして使用されるルーターのIPアドレスを定義する、周知の必須（well-known mandatory）BGP属性です。ルートサーバーはトラフィックの実際のルーティングには参加しないため、<a href="./rfc4271.html">[RFC4271]</a> のセクション5.1.3で説明されている「サードパーティ」ネクストホップ機能と同様に、NEXT_HOP属性を変更せずにルートサーバークライアントに渡さなければなりません (MUST)。
+NEXT_HOPは、UPDATEメッセージのNLRIフィールドにリストされている宛先へのネクストホップとして使用されるルーターのIPアドレスを定義する、周知の必須（well-known mandatory）BGP属性です。ルートサーバーはトラフィックの実際のルーティングには参加しないため、<a href="./rfc4271.html">[RFC4271]</a> のセクション5.1.3で説明されている「サードパーティ」ネクストホップ機能と同様に、NEXT_HOP属性を変更せずにルートサーバークライアントに渡さなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -477,12 +482,12 @@ AS_PATHは、UPDATEメッセージで伝達されるルーティング情報が�
     <div class="row" id="2-2-2-1--Route-Server-ASPATH-Management-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As a route server does not participate in the process of forwarding data between client routers, and because modification of the AS_PATH attribute could affect the route server client BGP Decision Process, the route server SHOULD NOT prepend its own AS number to the AS_PATH segment nor modify the AS_PATH segment in any other way. This differs from the behavior specified in Section 5.1.2 of <a href="./rfc4271.html">[RFC4271]</a>, which requires that the BGP speaker prepends its own AS number as the last element of the AS_PATH segment. This is a recommendation rather than a requirement solely to provide backwards compatibility with legacy route server client implementations that do not yet support the requirements specified in Section 2.2.2.2.
+As a route server does not participate in the process of forwarding data between client routers, and because modification of the AS_PATH attribute could affect the route server client BGP Decision Process, the route server <span class="kw kw-shouldnot">SHOULD NOT</span> prepend its own AS number to the AS_PATH segment nor modify the AS_PATH segment in any other way. This differs from the behavior specified in Section 5.1.2 of <a href="./rfc4271.html">[RFC4271]</a>, which requires that the BGP speaker prepends its own AS number as the last element of the AS_PATH segment. This is a recommendation rather than a requirement solely to provide backwards compatibility with legacy route server client implementations that do not yet support the requirements specified in Section 2.2.2.2.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ルートサーバーはクライアントルーター間でデータを転送するプロセスに参加しないため、AS_PATH属性の変更はルートサーバークライアントのBGP決定プロセスに影響を与える可能性があるため、ルートサーバーはAS_PATHセグメントに独自のAS番号を付加したり変更したりしないでください（SHOULD NOT）他の方法でAS_PATHセグメント。これは、<a href="./rfc4271.html">[RFC4271]</a>のセクション5.1.2で指定されている動作とは異なります。この動作では、BGPスピーカーがAS_PATHセグメントの最後の要素として独自のAS番号を付加する必要があります。これは、2.2.2.2で指定された要件をまだサポートしていないレガシールートサーバークライアントの実装との下位互換性を提供するためだけの要件ではなく、推奨事項です。
+ルートサーバーはクライアントルーター間でデータを転送するプロセスに参加しないため、AS_PATH属性の変更はルートサーバークライアントのBGP決定プロセスに影響を与える可能性があるため、ルートサーバーはAS_PATHセグメントに独自のAS番号を付加したり変更したりしないでください（<span class="kw kw-shouldnot">SHOULD NOT</span>）他の方法でAS_PATHセグメント。これは、<a href="./rfc4271.html">[RFC4271]</a>のセクション5.1.2で指定されている動作とは異なります。この動作では、BGPスピーカーがAS_PATHセグメントの最後の要素として独自のAS番号を付加する必要があります。これは、2.2.2.2で指定された要件をまだサポートしていないレガシールートサーバークライアントの実装との下位互換性を提供するためだけの要件ではなく、推奨事項です。
         </p>
       </div>
     </div>
@@ -501,7 +506,7 @@ As a route server does not participate in the process of forwarding data between
     <div class="row" id="2-2-2-2--Route-Server-client-ASPATH-Management-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In contrast to what is recommended in Section 6.3 of <a href="./rfc4271.html">[RFC4271]</a>, route server clients need to be able to accept UPDATE messages where the leftmost AS in the AS_PATH attribute is not equal to the AS number of the route server that sent the UPDATE message. If the route server client BGP system has implemented a check for this, the BGP implementation MUST allow this check to be disabled and SHOULD allow the check to be disabled on a per-peer basis.
+In contrast to what is recommended in Section 6.3 of <a href="./rfc4271.html">[RFC4271]</a>, route server clients need to be able to accept UPDATE messages where the leftmost AS in the AS_PATH attribute is not equal to the AS number of the route server that sent the UPDATE message. If the route server client BGP system has implemented a check for this, the BGP implementation <span class="kw kw-must">MUST</span> allow this check to be disabled and <span class="kw kw-should">SHOULD</span> allow the check to be disabled on a per-peer basis.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -525,12 +530,12 @@ In contrast to what is recommended in Section 6.3 of <a href="./rfc4271.html">[
     <div class="row" id="2-2-3--MULTIEXITDISC-Attribute-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MULTI_EXIT_DISC is an optional non-transitive attribute intended to be used on external (inter-AS) links to discriminate among multiple exit or entry points to the same neighboring AS. Contrary to Section 5.1.4 of <a href="./rfc4271.html">[RFC4271]</a>, if applied to an NLRI UPDATE sent to a route server, this attribute SHOULD be propagated to other route server clients, and the route server SHOULD NOT modify its value.
+MULTI_EXIT_DISC is an optional non-transitive attribute intended to be used on external (inter-AS) links to discriminate among multiple exit or entry points to the same neighboring AS. Contrary to Section 5.1.4 of <a href="./rfc4271.html">[RFC4271]</a>, if applied to an NLRI UPDATE sent to a route server, this attribute <span class="kw kw-should">SHOULD</span> be propagated to other route server clients, and the route server <span class="kw kw-shouldnot">SHOULD NOT</span> modify its value.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MULTI_EXIT_DISCは、同じ隣接ASへの複数の出口またはエントリポイントを区別するために外部（AS間）リンクで使用することを目的としたオプションの非推移的な属性です。 <a href="./rfc4271.html">[RFC4271]</a>のセクション5.1.4とは異なり、ルートサーバーに送信されるNLRI UPDATEに適用される場合、この属性は他のルートサーバークライアントに伝達される必要があり（SHOULD）、ルートサーバーはその値を変更してはなりません（SHOULD NOT）。
+MULTI_EXIT_DISCは、同じ隣接ASへの複数の出口またはエントリポイントを区別するために外部（AS間）リンクで使用することを目的としたオプションの非推移的な属性です。 <a href="./rfc4271.html">[RFC4271]</a>のセクション5.1.4とは異なり、ルートサーバーに送信されるNLRI UPDATEに適用される場合、この属性は他のルートサーバークライアントに伝達される必要があり（<span class="kw kw-should">SHOULD</span>）、ルートサーバーはその値を変更してはなりません（<span class="kw kw-shouldnot">SHOULD NOT</span>）。
         </p>
       </div>
     </div>
@@ -549,7 +554,7 @@ MULTI_EXIT_DISCは、同じ隣接ASへの複数の出口またはエントリポ
     <div class="row" id="2-2-4--Communities-Attributes-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The BGP Communities <a href="https://datatracker.ietf.org/doc/html/rfc1997">[RFC1997]</a> and Extended Communities <a href="./rfc4360.html">[RFC4360]</a> attributes are intended for labeling information carried in BGP UPDATE messages. Transitive as well as non-transitive Communities attributes applied to an NLRI UPDATE sent to a route server SHOULD NOT be modified, processed, or removed, except as defined by local policy. If a Communities attribute is intended for processing by the route server itself, as determined by local policy, it MAY be modified or removed.
+ The BGP Communities <a href="https://datatracker.ietf.org/doc/html/rfc1997">[RFC1997]</a> and Extended Communities <a href="./rfc4360.html">[RFC4360]</a> attributes are intended for labeling information carried in BGP UPDATE messages. Transitive as well as non-transitive Communities attributes applied to an NLRI UPDATE sent to a route server <span class="kw kw-shouldnot">SHOULD NOT</span> be modified, processed, or removed, except as defined by local policy. If a Communities attribute is intended for processing by the route server itself, as determined by local policy, it <span class="kw kw-may">MAY</span> be modified or removed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -940,12 +945,12 @@ The path-hiding problem outlined in Section 2.3.1 can be used in certain circums
     <div class="row" id="3--Security-Considerations-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The AS_PATH check described in Section 2.2.2 is normally enabled in order to check for malformed AS paths. If this check is disabled, the route server client loses the ability to check incoming UPDATE messages for certain categories of problems. This could potentially cause corrupted BGP UPDATE messages to be propagated where they might not be propagated if the check were enabled. Regardless of any problems relating to malformed UPDATE messages, this check is also used to detect BGP loops; removing the check could potentially cause routing loops to be formed. Consequently, this check SHOULD NOT be disabled by IXP participants unless it is needed to establish BGP sessions with a route server and, if possible, should only be disabled for peers that are route servers.
+The AS_PATH check described in Section 2.2.2 is normally enabled in order to check for malformed AS paths. If this check is disabled, the route server client loses the ability to check incoming UPDATE messages for certain categories of problems. This could potentially cause corrupted BGP UPDATE messages to be propagated where they might not be propagated if the check were enabled. Regardless of any problems relating to malformed UPDATE messages, this check is also used to detect BGP loops; removing the check could potentially cause routing loops to be formed. Consequently, this check <span class="kw kw-shouldnot">SHOULD NOT</span> be disabled by IXP participants unless it is needed to establish BGP sessions with a route server and, if possible, should only be disabled for peers that are route servers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-セクション2.2.2で説明されているAS_PATHチェックは、不正なASパスをチェックするために通常有効になっています。このチェックが無効になっている場合、ルートサーバークライアントは、特定のカテゴリの問題について着信UPDATEメッセージをチェックする機能を失います。これにより、チェックが有効になっている場合、破損したBGP UPDATEメッセージが伝搬されずに伝搬されない可能性があります。不正なUPDATEメッセージに関連する問題に関係なく、このチェックはBGPループの検出にも使用されます。チェックを削除すると、ルーティングループが形成される可能性があります。したがって、ルートサーバーとのBGPセッションを確立する必要がある場合を除き、このチェックはIXP参加者によって無効にしてはならず（SHOULD NOT）、可能であれば、ルートサーバーであるピアに対してのみ無効にする必要があります。
+セクション2.2.2で説明されているAS_PATHチェックは、不正なASパスをチェックするために通常有効になっています。このチェックが無効になっている場合、ルートサーバークライアントは、特定のカテゴリの問題について着信UPDATEメッセージをチェックする機能を失います。これにより、チェックが有効になっている場合、破損したBGP UPDATEメッセージが伝搬されずに伝搬されない可能性があります。不正なUPDATEメッセージに関連する問題に関係なく、このチェックはBGPループの検出にも使用されます。チェックを削除すると、ルーティングループが形成される可能性があります。したがって、ルートサーバーとのBGPセッションを確立する必要がある場合を除き、このチェックはIXP参加者によって無効にしてはならず（<span class="kw kw-shouldnot">SHOULD NOT</span>）、可能であれば、ルートサーバーであるピアに対してのみ無効にする必要があります。
         </p>
       </div>
     </div>

@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、IPv6とIPv4のどちらが優先されるべきかを動的に判断して接続を高速化する「Happy Eyeballs」アルゴリズムの第2バージョン（v2）を定義しています（RFC 6555を廃止・更新）。ホスト名解決の並列実行、IPv6接続試行の開始タイミング（タイマー）の最適化、およびアドレスの優先順位付けに関する改良を規定し、デュアルスタック環境においてユーザーが遅延を感じることなく常に最適なプロトコルで接続できる環境を実現します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8305 - Happy Eyeballsバージョン2：並行性を用いた接続性の向上</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -307,12 +312,12 @@ The Happy Eyeballs algorithm of racing connections to resolved addresses has sev
     <div class="row" id="1-1--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -415,7 +420,7 @@ Note that this document assumes that the preference policy for the host destinat
     <div class="row" id="3--Hostname-Resolution-Query-Handling-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a client has both IPv4 and IPv6 connectivity and is trying to establish a connection with a named host, it needs to send out both AAAA and A DNS queries. Both queries SHOULD be made as soon after one another as possible, with the AAAA query made first and immediately followed by the A query.
+When a client has both IPv4 and IPv6 connectivity and is trying to establish a connection with a named host, it needs to send out both AAAA and A DNS queries. Both queries <span class="kw kw-should">SHOULD</span> be made as soon after one another as possible, with the AAAA query made first and immediately followed by the A query.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -427,24 +432,24 @@ When a client has both IPv4 and IPv6 connectivity and is trying to establish a c
     <div class="row" id="3--Hostname-Resolution-Query-Handling-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Implementations SHOULD NOT wait for both families of answers to return before attempting connection establishment. If one query fails to return or takes significantly longer to return, waiting for the second address family can significantly delay the connection establishment of the first one. Therefore, the client SHOULD treat DNS resolution as asynchronous. Note that if the platform does not offer an asynchronous DNS API, this behavior can be simulated by making two separate synchronous queries on different threads, one per address family.
+Implementations <span class="kw kw-shouldnot">SHOULD NOT</span> wait for both families of answers to return before attempting connection establishment. If one query fails to return or takes significantly longer to return, waiting for the second address family can significantly delay the connection establishment of the first one. Therefore, the client <span class="kw kw-should">SHOULD</span> treat DNS resolution as asynchronous. Note that if the platform does not offer an asynchronous DNS API, this behavior can be simulated by making two separate synchronous queries on different threads, one per address family.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-実装は、接続の確立を試みる前に、両方のファミリーの応答が戻るのを待ってはなりません。 1つのクエリが返らないか、返るのにかなり時間がかかる場合、2番目のアドレスファミリを待機すると、最初のクエリの接続確立が大幅に遅れることがあります。したがって、クライアントはDNS解決を非同期として扱う必要があります（SHOULD）。プラットフォームが非同期DNS APIを提供しない場合、この動作は、アドレスファミリごとに1つずつ、異なるスレッドで2つの別個の同期クエリを実行することによってシミュレートできます。
+実装は、接続の確立を試みる前に、両方のファミリーの応答が戻るのを待ってはなりません。 1つのクエリが返らないか、返るのにかなり時間がかかる場合、2番目のアドレスファミリを待機すると、最初のクエリの接続確立が大幅に遅れることがあります。したがって、クライアントはDNS解決を非同期として扱う必要があります（<span class="kw kw-should">SHOULD</span>）。プラットフォームが非同期DNS APIを提供しない場合、この動作は、アドレスファミリごとに1つずつ、異なるスレッドで2つの別個の同期クエリを実行することによってシミュレートできます。
         </p>
       </div>
     </div>
     <div class="row" id="3--Hostname-Resolution-Query-Handling-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The algorithm proceeds as follows: if a positive AAAA response (a response with at least one valid AAAA record) is received first, the first IPv6 connection attempt is immediately started. If a positive A response is received first due to reordering, the client SHOULD wait a short time for the AAAA response to ensure that preference is given to IPv6 (it is common for the AAAA response to follow the A response by a few milliseconds). This delay will be referred to as the &#34;Resolution Delay&#34;. The recommended value for the Resolution Delay is 50 milliseconds. If a positive AAAA response is received within the Resolution Delay period, the client immediately starts the IPv6 connection attempt. If a negative AAAA response (no error, no data) is received within the Resolution Delay period or the AAAA response has not been received by the end of the Resolution Delay period, the client SHOULD proceed to sorting addresses (see Section 4) and staggered connection attempts (see Section 5) using any IPv4 addresses returned so far. If the AAAA response arrives while these connection attempts are in progress but before any connection has been established, then the newly received IPv6 addresses are incorporated into the list of available candidate addresses (see Section 6) and the process of connection attempts will continue with the IPv6 addresses added, until one connection is established.
+ The algorithm proceeds as follows: if a positive AAAA response (a response with at least one valid AAAA record) is received first, the first IPv6 connection attempt is immediately started. If a positive A response is received first due to reordering, the client <span class="kw kw-should">SHOULD</span> wait a short time for the AAAA response to ensure that preference is given to IPv6 (it is common for the AAAA response to follow the A response by a few milliseconds). This delay will be referred to as the &#34;Resolution Delay&#34;. The recommended value for the Resolution Delay is 50 milliseconds. If a positive AAAA response is received within the Resolution Delay period, the client immediately starts the IPv6 connection attempt. If a negative AAAA response (no error, no data) is received within the Resolution Delay period or the AAAA response has not been received by the end of the Resolution Delay period, the client <span class="kw kw-should">SHOULD</span> proceed to sorting addresses (see Section 4) and staggered connection attempts (see Section 5) using any IPv4 addresses returned so far. If the AAAA response arrives while these connection attempts are in progress but before any connection has been established, then the newly received IPv6 addresses are incorporated into the list of available candidate addresses (see Section 6) and the process of connection attempts will continue with the IPv6 addresses added, until one connection is established.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-アルゴリズムは次のように進行します。肯定のAAAA応答（少なくとも1つの有効なAAAAレコードのある応答）が最初に受信された場合、最初のIPv6接続の試行がすぐに開始されます。並べ替えにより最初に肯定的なA応答が受信された場合、クライアントは、AAAA応答がIPv6に優先されることを保証するために、しばらく待つ必要があります（AAAA応答がA応答に数ミリ秒続くことが一般的です）。この遅延は、「解決遅延」と呼ばれます。解決遅延の推奨値は50ミリ秒です。解決遅延期間内に正のAAAA応答が受信されると、クライアントはすぐにIPv6接続の試行を開始します。解決遅延期間内に否定のAAAA応答（エラーなし、データなし）が受信された場合、または解決遅延期間の終わりまでにAAAA応答が受信されなかった場合、クライアントはアドレスのソート（セクション4を参照）に進み、時間差をとる必要があります（SHOULD）。これまでに返されたIPv4アドレスを使用した接続試行（セクション5を参照）。これらの接続試行の進行中に接続が確立される前にAAAA応答が到着した場合、新しく受信されたIPv6アドレスが使用可能な候補アドレスのリストに組み込まれ（セクション6を参照）、接続試行のプロセスは1つの接続が確立されるまで、IPv6アドレスが追加されます。
+アルゴリズムは次のように進行します。肯定のAAAA応答（少なくとも1つの有効なAAAAレコードのある応答）が最初に受信された場合、最初のIPv6接続の試行がすぐに開始されます。並べ替えにより最初に肯定的なA応答が受信された場合、クライアントは、AAAA応答がIPv6に優先されることを保証するために、しばらく待つ必要があります（AAAA応答がA応答に数ミリ秒続くことが一般的です）。この遅延は、「解決遅延」と呼ばれます。解決遅延の推奨値は50ミリ秒です。解決遅延期間内に正のAAAA応答が受信されると、クライアントはすぐにIPv6接続の試行を開始します。解決遅延期間内に否定のAAAA応答（エラーなし、データなし）が受信された場合、または解決遅延期間の終わりまでにAAAA応答が受信されなかった場合、クライアントはアドレスのソート（セクション4を参照）に進み、時間差をとる必要があります（<span class="kw kw-should">SHOULD</span>）。これまでに返されたIPv4アドレスを使用した接続試行（セクション5を参照）。これらの接続試行の進行中に接続が確立される前にAAAA応答が到着した場合、新しく受信されたIPv6アドレスが使用可能な候補アドレスのリストに組み込まれ（セクション6を参照）、接続試行のプロセスは1つの接続が確立されるまで、IPv6アドレスが追加されます。
         </p>
       </div>
     </div>
@@ -463,7 +468,7 @@ Implementations SHOULD NOT wait for both families of answers to return before at
     <div class="row" id="3-1--Handling-Multiple-DNS-Server-Addresses-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If multiple DNS server addresses are configured for the current network, the client may have the option of sending its DNS queries over IPv4 or IPv6. In keeping with the Happy Eyeballs approach, queries SHOULD be sent over IPv6 first (note that this is not referring to the sending of AAAA or A queries, but rather the address of the DNS server itself and IP version used to transport DNS messages). If DNS queries sent to the IPv6 address do not receive responses, that address may be marked as penalized and queries can be sent to other DNS server addresses.
+If multiple DNS server addresses are configured for the current network, the client may have the option of sending its DNS queries over IPv4 or IPv6. In keeping with the Happy Eyeballs approach, queries <span class="kw kw-should">SHOULD</span> be sent over IPv6 first (note that this is not referring to the sending of AAAA or A queries, but rather the address of the DNS server itself and IP version used to transport DNS messages). If DNS queries sent to the IPv6 address do not receive responses, that address may be marked as penalized and queries can be sent to other DNS server addresses.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -487,12 +492,12 @@ As native IPv6 deployments become more prevalent and IPv4 addresses are exhauste
     <div class="row" id="3-1--Handling-Multiple-DNS-Server-Addresses-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Client systems SHOULD NOT have an explicit limit to the number of DNS servers that can be configured, either manually or by the network. If such a limit is required by hardware limitations, the client SHOULD use at least one address from each address family from the available list.
+Client systems <span class="kw kw-shouldnot">SHOULD NOT</span> have an explicit limit to the number of DNS servers that can be configured, either manually or by the network. If such a limit is required by hardware limitations, the client <span class="kw kw-should">SHOULD</span> use at least one address from each address family from the available list.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-クライアントシステムは、手動またはネットワークで構成できるDNSサーバーの数に明示的な制限を設定しないでください。ハードウェアの制限によってそのような制限が必要な場合、クライアントは、使用可能なリストの各アドレスファミリから少なくとも1つのアドレスを使用する必要があります（SHOULD）。
+クライアントシステムは、手動またはネットワークで構成できるDNSサーバーの数に明示的な制限を設定しないでください。ハードウェアの制限によってそのような制限が必要な場合、クライアントは、使用可能なリストの各アドレスファミリから少なくとも1つのアドレスを使用する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -523,7 +528,7 @@ Before attempting to connect to any of the resolved destination addresses, the c
     <div class="row" id="4--Sorting-Addresses-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-First, the client MUST sort the addresses received up to this point using Destination Address Selection (<a href="./rfc6724.html">[RFC6724]</a>, Section 6).
+First, the client <span class="kw kw-must">MUST</span> sort the addresses received up to this point using Destination Address Selection (<a href="./rfc6724.html">[RFC6724]</a>, Section 6).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -535,24 +540,24 @@ First, the client MUST sort the addresses received up to this point using Destin
     <div class="row" id="4--Sorting-Addresses-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the client is stateful and has a history of expected round-trip times (RTTs) for the routes to access each address, it SHOULD add a Destination Address Selection rule between rules 8 and 9 that prefers addresses with lower RTTs. If the client keeps track of which addresses it used in the past, it SHOULD add another Destination Address Selection rule between the RTT rule and rule 9, which prefers used addresses over unused ones. This helps servers that use the client&#39;s IP address during authentication, as is the case for TCP Fast Open <a href="./rfc7413.html">[RFC7413]</a> and some Hypertext Transport Protocol (HTTP) cookies. This historical data MUST NOT be used across different network interfaces and SHOULD be flushed whenever a device changes the network to which it is attached.
+If the client is stateful and has a history of expected round-trip times (RTTs) for the routes to access each address, it <span class="kw kw-should">SHOULD</span> add a Destination Address Selection rule between rules 8 and 9 that prefers addresses with lower RTTs. If the client keeps track of which addresses it used in the past, it <span class="kw kw-should">SHOULD</span> add another Destination Address Selection rule between the RTT rule and rule 9, which prefers used addresses over unused ones. This helps servers that use the client&#39;s IP address during authentication, as is the case for TCP Fast Open <a href="./rfc7413.html">[RFC7413]</a> and some Hypertext Transport Protocol (HTTP) cookies. This historical data <span class="kw kw-mustnot">MUST NOT</span> be used across different network interfaces and <span class="kw kw-should">SHOULD</span> be flushed whenever a device changes the network to which it is attached.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-クライアントがステートフルで、ルートが各アドレスにアクセスするために予想されるラウンドトリップ時間（RTT）の履歴がある場合、RTTがより低いアドレスを優先するルール8と9の間に宛先アドレス選択ルールを追加する必要があります。クライアントが過去に使用したアドレスを追跡している場合は、RTTルールとルール9の間に別の宛先アドレス選択ルールを追加してください。これにより、未使用のアドレスよりも使用されているアドレスが優先されます。これは、TCP Fast Open <a href="./rfc7413.html">[RFC7413]</a>および一部のハイパーテキストトランスポートプロトコル（HTTP）Cookieの場合と同様に、認証中にクライアントのIPアドレスを使用するサーバーに役立ちます。この履歴データは、異なるネットワークインターフェイス間で使用してはならず（MUST NOT）、デバイスが接続されているネットワークをデバイスが変更するたびにフラッシュする必要があります（SHOULD）。
+クライアントがステートフルで、ルートが各アドレスにアクセスするために予想されるラウンドトリップ時間（RTT）の履歴がある場合、RTTがより低いアドレスを優先するルール8と9の間に宛先アドレス選択ルールを追加する必要があります。クライアントが過去に使用したアドレスを追跡している場合は、RTTルールとルール9の間に別の宛先アドレス選択ルールを追加してください。これにより、未使用のアドレスよりも使用されているアドレスが優先されます。これは、TCP Fast Open <a href="./rfc7413.html">[RFC7413]</a>および一部のハイパーテキストトランスポートプロトコル（HTTP）Cookieの場合と同様に、認証中にクライアントのIPアドレスを使用するサーバーに役立ちます。この履歴データは、異なるネットワークインターフェイス間で使用してはならず（<span class="kw kw-mustnot">MUST NOT</span>）、デバイスが接続されているネットワークをデバイスが変更するたびにフラッシュする必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="4--Sorting-Addresses-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Next, the client SHOULD modify the ordered list to interleave address families. Whichever address family is first in the list should be followed by an address of the other address family; that is, if the first address in the sorted list is IPv6, then the first IPv4 address should be moved up in the list to be second in the list. An implementation MAY want to favor one address family more by allowing multiple addresses of that family to be attempted before trying the other family. The number of contiguous addresses of the first address family will be referred to as the &#34;First Address Family Count&#34; and can be a configurable value. This is performed to avoid waiting through a long list of addresses from a given address family if connectivity over that address family is impaired.
+Next, the client <span class="kw kw-should">SHOULD</span> modify the ordered list to interleave address families. Whichever address family is first in the list should be followed by an address of the other address family; that is, if the first address in the sorted list is IPv6, then the first IPv4 address should be moved up in the list to be second in the list. An implementation <span class="kw kw-may">MAY</span> want to favor one address family more by allowing multiple addresses of that family to be attempted before trying the other family. The number of contiguous addresses of the first address family will be referred to as the &#34;First Address Family Count&#34; and can be a configurable value. This is performed to avoid waiting through a long list of addresses from a given address family if connectivity over that address family is impaired.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-次に、クライアントはアドレスファミリをインターリーブするように順序付きリストを変更する必要があります（SHOULD）。リストの最初にあるアドレスファミリの後には、他のアドレスファミリのアドレスが続く必要があります。つまり、並べ替えられたリストの最初のアドレスがIPv6の場合、最初のIPv4アドレスをリストの上位に移動して、リストの2番目にする必要があります。実装は、他のファミリを試行する前に、そのファミリの複数のアドレスを試行できるようにすることで、1つのアドレスファミリをより優先する場合があります。最初のアドレスファミリの連続したアドレスの数は、「最初のアドレスファミリカウント」と呼ばれ、設定可能な値にすることができます。これは、そのアドレスファミリを介した接続が損なわれている場合に、特定のアドレスファミリからの長いアドレスリストを待機しないようにするために実行されます。
+次に、クライアントはアドレスファミリをインターリーブするように順序付きリストを変更する必要があります（<span class="kw kw-should">SHOULD</span>）。リストの最初にあるアドレスファミリの後には、他のアドレスファミリのアドレスが続く必要があります。つまり、並べ替えられたリストの最初のアドレスがIPv6の場合、最初のIPv4アドレスをリストの上位に移動して、リストの2番目にする必要があります。実装は、他のファミリを試行する前に、そのファミリの複数のアドレスを試行できるようにすることで、1つのアドレスファミリをより優先する場合があります。最初のアドレスファミリの連続したアドレスの数は、「最初のアドレスファミリカウント」と呼ばれ、設定可能な値にすることができます。これは、そのアドレスファミリを介した接続が損なわれている場合に、特定のアドレスファミリからの長いアドレスリストを待機しないようにするために実行されます。
         </p>
       </div>
     </div>
@@ -583,12 +588,12 @@ Note that the address selection described in this section only applies to destin
     <div class="row" id="5--Connection-Attempts-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once the list of addresses received up to this point has been constructed, the client will attempt to make connections. In order to avoid unreasonable network load, connection attempts SHOULD NOT be made simultaneously. Instead, one connection attempt to a single address is started first, followed by the others in the list, one at a time. Starting a new connection attempt does not affect previous attempts, as multiple connection attempts may occur in parallel. Once one of the connection attempts succeeds (generally when the TCP handshake completes), all other connections attempts that have not yet succeeded SHOULD be canceled. Any address that was not yet attempted as a connection SHOULD be ignored. At that time, the asynchronous DNS query MAY be canceled as new addresses will not be used for this connection. However, the DNS client resolver SHOULD still process DNS replies from the network for a short period of time (recommended to be 1 second), as they will populate the DNS cache and can be used for subsequent connections.
+Once the list of addresses received up to this point has been constructed, the client will attempt to make connections. In order to avoid unreasonable network load, connection attempts <span class="kw kw-shouldnot">SHOULD NOT</span> be made simultaneously. Instead, one connection attempt to a single address is started first, followed by the others in the list, one at a time. Starting a new connection attempt does not affect previous attempts, as multiple connection attempts may occur in parallel. Once one of the connection attempts succeeds (generally when the TCP handshake completes), all other connections attempts that have not yet succeeded <span class="kw kw-should">SHOULD</span> be canceled. Any address that was not yet attempted as a connection <span class="kw kw-should">SHOULD</span> be ignored. At that time, the asynchronous DNS query <span class="kw kw-may">MAY</span> be canceled as new addresses will not be used for this connection. However, the DNS client resolver <span class="kw kw-should">SHOULD</span> still process DNS replies from the network for a short period of time (recommended to be 1 second), as they will populate the DNS cache and can be used for subsequent connections.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この時点までに受信したアドレスのリストが作成されると、クライアントは接続を試みます。不当なネットワーク負荷を回避するために、接続試行を同時に行うべきではありません。代わりに、単一のアドレスへの1つの接続試行が最初に開始され、リスト内の他の接続が1つずつ続きます。複数の接続試行が並行して発生する可能性があるため、新しい接続試行を開始しても以前の試行には影響しません。接続試行の1つが成功すると（通常はTCPハンドシェイクが完了したとき）、まだ成功していない他のすべての接続試行をキャンセルする必要があります（SHOULD）。接続としてまだ試行されていないアドレスは無視してください。そのとき、新しいアドレスはこの接続に使用されないため、非同期DNSクエリはキャンセルされる場合があります。ただし、DNSクライアントリゾルバは、ネットワークからのDNS応答を短時間（1秒にすることをお勧めします）処理します。これは、DNSキャッシュにデータが入力され、後続の接続に使用できるためです。
+この時点までに受信したアドレスのリストが作成されると、クライアントは接続を試みます。不当なネットワーク負荷を回避するために、接続試行を同時に行うべきではありません。代わりに、単一のアドレスへの1つの接続試行が最初に開始され、リスト内の他の接続が1つずつ続きます。複数の接続試行が並行して発生する可能性があるため、新しい接続試行を開始しても以前の試行には影響しません。接続試行の1つが成功すると（通常はTCPハンドシェイクが完了したとき）、まだ成功していない他のすべての接続試行をキャンセルする必要があります（<span class="kw kw-should">SHOULD</span>）。接続としてまだ試行されていないアドレスは無視してください。そのとき、新しいアドレスはこの接続に使用されないため、非同期DNSクエリはキャンセルされる場合があります。ただし、DNSクライアントリゾルバは、ネットワークからのDNS応答を短時間（1秒にすることをお勧めします）処理します。これは、DNSキャッシュにデータが入力され、後続の接続に使用できるためです。
         </p>
       </div>
     </div>
@@ -607,12 +612,12 @@ A simple implementation can have a fixed delay for how long to wait before start
     <div class="row" id="5--Connection-Attempts-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Connection Attempt Delay MUST have a lower bound, especially if it is computed using historical data. More specifically, a subsequent connection MUST NOT be started within 10 milliseconds of the previous attempt. The recommended minimum value is 100 milliseconds, which is referred to as the &#34;Minimum Connection Attempt Delay&#34;. This minimum value is required to avoid congestion collapse in the presence of high packet-loss rates. The Connection Attempt Delay SHOULD have an upper bound, referred to as the &#34;Maximum Connection Attempt Delay&#34;. The current recommended value is 2 seconds.
+The Connection Attempt Delay <span class="kw kw-must">MUST</span> have a lower bound, especially if it is computed using historical data. More specifically, a subsequent connection <span class="kw kw-mustnot">MUST NOT</span> be started within 10 milliseconds of the previous attempt. The recommended minimum value is 100 milliseconds, which is referred to as the &#34;Minimum Connection Attempt Delay&#34;. This minimum value is required to avoid congestion collapse in the presence of high packet-loss rates. The Connection Attempt Delay <span class="kw kw-should">SHOULD</span> have an upper bound, referred to as the &#34;Maximum Connection Attempt Delay&#34;. The current recommended value is 2 seconds.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-接続試行遅延には、特に履歴データを使用して計算される場合は、下限がある必要があります。より具体的には、前の試行から10ミリ秒以内に後続の接続を開始してはなりません（MUST NOT）。推奨される最小値は100ミリ秒で、これは「最小接続試行遅延」と呼ばれます。この最小値は、パケット損失率が高い場合に輻輳が崩壊しないようにするために必要です。接続試行遅延には、「最大接続試行遅延」と呼ばれる上限があります。現在の推奨値は2秒です。
+接続試行遅延には、特に履歴データを使用して計算される場合は、下限がある必要があります。より具体的には、前の試行から10ミリ秒以内に後続の接続を開始してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。推奨される最小値は100ミリ秒で、これは「最小接続試行遅延」と呼ばれます。この最小値は、パケット損失率が高い場合に輻輳が崩壊しないようにするために必要です。接続試行遅延には、「最大接続試行遅延」と呼ばれる上限があります。現在の推奨値は2秒です。
         </p>
       </div>
     </div>
@@ -643,12 +648,12 @@ If, during the course of connection establishment, the DNS answers change by eit
     <div class="row" id="6--DNS-Answer-Changes-during-Happy-Eyeballs-Connection-Setup-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If an address is removed from the list that already had a connection attempt started, the connection attempt SHOULD NOT be canceled, but rather be allowed to continue. If the removed address had not yet had a connection attempt started, it SHOULD be removed from the list of addresses to try.
+If an address is removed from the list that already had a connection attempt started, the connection attempt <span class="kw kw-shouldnot">SHOULD NOT</span> be canceled, but rather be allowed to continue. If the removed address had not yet had a connection attempt started, it <span class="kw kw-should">SHOULD</span> be removed from the list of addresses to try.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-既に接続試行が開始されているリストからアドレスが削除された場合、接続試行はキャンセルされるべきではなく、続行することが許可されるべきです（SHOULD NOT）。削除されたアドレスがまだ接続試行を開始していない場合は、試行するアドレスのリストから削除する必要があります（SHOULD）。
+既に接続試行が開始されているリストからアドレスが削除された場合、接続試行はキャンセルされるべきではなく、続行することが許可されるべきです（<span class="kw kw-shouldnot">SHOULD NOT</span>）。削除されたアドレスがまだ接続試行を開始していない場合は、試行するアドレスのリストから削除する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -679,24 +684,24 @@ If an address is added to the list, it should be sorted into the list of address
     <div class="row" id="7--Supporting-IPv6-Only-Networks-with-NAT64-and-DNS64-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-While many IPv6 transition protocols have been standardized and deployed, most are transparent to client devices. The combined use of NAT64 <a href="./rfc6146.html">[RFC6146]</a> and DNS64 <a href="./rfc6147.html">[RFC6147]</a> is a popular solution that is being deployed and requires changes in client devices. One possible way to handle these networks is for the client device networking stack to implement 464XLAT <a href="./rfc6877.html">[RFC6877]</a>. 464XLAT has the advantage of not requiring changes to user space software; however, it requires per-packet translation if the application is using IPv4 literals and does not encourage client application software to support native IPv6. On platforms that do not support 464XLAT, the Happy Eyeballs engine SHOULD follow the recommendations in this section to properly support IPv6-only networks with NAT64 and DNS64.
+While many IPv6 transition protocols have been standardized and deployed, most are transparent to client devices. The combined use of NAT64 <a href="./rfc6146.html">[RFC6146]</a> and DNS64 <a href="./rfc6147.html">[RFC6147]</a> is a popular solution that is being deployed and requires changes in client devices. One possible way to handle these networks is for the client device networking stack to implement 464XLAT <a href="./rfc6877.html">[RFC6877]</a>. 464XLAT has the advantage of not requiring changes to user space software; however, it requires per-packet translation if the application is using IPv4 literals and does not encourage client application software to support native IPv6. On platforms that do not support 464XLAT, the Happy Eyeballs engine <span class="kw kw-should">SHOULD</span> follow the recommendations in this section to properly support IPv6-only networks with NAT64 and DNS64.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-多くのIPv6移行プロトコルが標準化および導入されていますが、ほとんどはクライアントデバイスに対して透過的です。 NAT64 <a href="./rfc6146.html">[RFC6146]</a>とDNS64 <a href="./rfc6147.html">[RFC6147]</a>を組み合わせて使用​​することは、展開されている一般的なソリューションであり、クライアントデバイスでの変更が必要です。これらのネットワークを処理する1つの可能な方法は、クライアントデバイスのネットワークスタックが464XLAT <a href="./rfc6877.html">[RFC6877]</a>を実装することです。 464XLATには、ユーザー空間ソフトウェアを変更する必要がないという利点があります。ただし、アプリケーションがIPv4リテラルを使用している場合は、パケットごとの変換が必要であり、クライアントアプリケーションソフトウェアがネイティブIPv6をサポートすることは推奨されません。 464XLATをサポートしないプラットフォームでは、Happy Eyeballsエンジンは、NAT64およびDNS64でIPv6のみのネットワークを適切にサポートするために、このセクションの推奨に従う必要があります（SHOULD）。
+多くのIPv6移行プロトコルが標準化および導入されていますが、ほとんどはクライアントデバイスに対して透過的です。 NAT64 <a href="./rfc6146.html">[RFC6146]</a>とDNS64 <a href="./rfc6147.html">[RFC6147]</a>を組み合わせて使用​​することは、展開されている一般的なソリューションであり、クライアントデバイスでの変更が必要です。これらのネットワークを処理する1つの可能な方法は、クライアントデバイスのネットワークスタックが464XLAT <a href="./rfc6877.html">[RFC6877]</a>を実装することです。 464XLATには、ユーザー空間ソフトウェアを変更する必要がないという利点があります。ただし、アプリケーションがIPv4リテラルを使用している場合は、パケットごとの変換が必要であり、クライアントアプリケーションソフトウェアがネイティブIPv6をサポートすることは推奨されません。 464XLATをサポートしないプラットフォームでは、Happy Eyeballsエンジンは、NAT64およびDNS64でIPv6のみのネットワークを適切にサポートするために、このセクションの推奨に従う必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="7--Supporting-IPv6-Only-Networks-with-NAT64-and-DNS64-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The features described in this section SHOULD only be enabled when the host detects one of these networks. A simple heuristic to achieve that is to check if the network offers routable IPv6 addressing, does not offer routable IPv4 addressing, and offers a DNS resolver address.
+The features described in this section <span class="kw kw-should">SHOULD</span> only be enabled when the host detects one of these networks. A simple heuristic to achieve that is to check if the network offers routable IPv6 addressing, does not offer routable IPv4 addressing, and offers a DNS resolver address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このセクションで説明する機能は、ホストがこれらのネットワークの1つを検出した場合にのみ有効にする必要があります（SHOULD）。そのための簡単なヒューリスティックは、ネットワークがルーティング可能なIPv6アドレッシングを提供し、ルーティング可能なIPv4アドレッシングを提供せず、DNSリゾルバーアドレスを提供するかどうかを確認することです。
+このセクションで説明する機能は、ホストがこれらのネットワークの1つを検出した場合にのみ有効にする必要があります（<span class="kw kw-should">SHOULD</span>）。そのための簡単なヒューリスティックは、ネットワークがルーティング可能なIPv6アドレッシングを提供し、ルーティング可能なIPv4アドレッシングを提供せず、DNSリゾルバーアドレスを提供するかどうかを確認することです。
         </p>
       </div>
     </div>
@@ -907,7 +912,7 @@ Happy Eyeballsで使用するためにクライアントのデフォルトとし
     <div class="row" id="8--Summary-of-Configurable-Values-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">o</span> Minimum Connection Attempt Delay (Section 5): The minimum time to wait between connection attempts. Recommended to be 100 milliseconds. MUST NOT be less than 10 milliseconds.
+<span class="bullet-mark">o</span> Minimum Connection Attempt Delay (Section 5): The minimum time to wait between connection attempts. Recommended to be 100 milliseconds. <span class="kw kw-mustnot">MUST NOT</span> be less than 10 milliseconds.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -943,12 +948,12 @@ Happy Eyeballsで使用するためにクライアントのデフォルトとし
     <div class="row" id="8--Summary-of-Configurable-Values-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The delay values described in this section were determined empirically by measuring the timing of connections on a very wide set of production devices. They were picked to reduce wait times noticed by users while minimizing load on the network. As time passes, it is expected that the properties of networks will evolve. For that reason, it is expected that these values will change over time. Implementors should feel welcome to use different values without changing this specification. Since IPv6 issues are expected to be less common, the delays SHOULD be increased with time as client software is updated.
+The delay values described in this section were determined empirically by measuring the timing of connections on a very wide set of production devices. They were picked to reduce wait times noticed by users while minimizing load on the network. As time passes, it is expected that the properties of networks will evolve. For that reason, it is expected that these values will change over time. Implementors should feel welcome to use different values without changing this specification. Since IPv6 issues are expected to be less common, the delays <span class="kw kw-should">SHOULD</span> be increased with time as client software is updated.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このセクションで説明する遅延値は、非常に幅広い製品デバイスの接続のタイミングを測定することにより、経験的に決定されました。これらは、ネットワークの負荷を最小限に抑えながら、ユーザーが気づく待機時間を減らすために選ばれました。時間の経過とともに、ネットワークの特性が進化することが予想されます。そのため、これらの値は時間の経過とともに変化することが予想されます。実装者は、この仕様を変更することなく、さまざまな値を使用することを歓迎します。 IPv6の問題はあまり一般的ではないと予想されるため、クライアントソフトウェアが更新されるにつれて、遅延は時間とともに増加する必要があります（SHOULD）。
+このセクションで説明する遅延値は、非常に幅広い製品デバイスの接続のタイミングを測定することにより、経験的に決定されました。これらは、ネットワークの負荷を最小限に抑えながら、ユーザーが気づく待機時間を減らすために選ばれました。時間の経過とともに、ネットワークの特性が進化することが予想されます。そのため、これらの値は時間の経過とともに変化することが予想されます。実装者は、この仕様を変更することなく、さまざまな値を使用することを歓迎します。 IPv6の問題はあまり一般的ではないと予想されるため、クライアントソフトウェアが更新されるにつれて、遅延は時間とともに増加する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>

@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、RPC-over-RDMAトランスポート（RFC 8166）において、サーバー側からクライアントに対してもRPCを呼び出す「双方向（Bidirectional）」通信をサポートするための拡張機能を定義しています。NFSv4のコールバックなどの機能をRDMA環境で効率的に実現するために、リバース方向のRPCメッセージを既存のRDMA接続上でどのようにカプセル化し、リソースを管理すべきかを規定しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8167 - RPC-over-RDMAトランスポート上の双方向リモートプロシージャコール</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -293,12 +298,12 @@ The remainder of this document assumes familiarity with the terminology and conc
     <div class="row" id="1--Introduction-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -593,12 +598,12 @@ During bidirectional operation, forward- and reverse-direction XIDs are typicall
     <div class="row" id="2-4-1--XID-Generation-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Therefore, a forward-direction Requester MAY use the same XID value at the same time as a reverse-direction Requester on the same transport connection. Though such concurrent requests use the same XID value, they represent distinct ONC RPC transactions.
+Therefore, a forward-direction Requester <span class="kw kw-may">MAY</span> use the same XID value at the same time as a reverse-direction Requester on the same transport connection. Though such concurrent requests use the same XID value, they represent distinct ONC RPC transactions.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-したがって、順方向リクエスターは、同じトランスポート接続で逆方向リクエスターと同時に同じXID値を使用できます（MAY）。このような同時要求は同じXID値を使用しますが、それらは別個のONC RPCトランザクションを表します。
+したがって、順方向リクエスターは、同じトランスポート接続で逆方向リクエスターと同時に同じXID値を使用できます（<span class="kw kw-may">MAY</span>）。このような同時要求は同じXID値を使用しますが、それらは別個のONC RPCトランザクションを表します。
         </p>
       </div>
     </div>
@@ -857,7 +862,7 @@ The forward-direction credit value retains the same meaning whether or not there
     <div class="row" id="4-1--Reverse-Direction-Credits-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The reverse-direction credit value is the number of RPC requests the reverse-direction Responder (the ONC RPC client) is prepared to receive concurrently. The reverse-direction credit value MAY be different than the forward-direction credit value.
+The reverse-direction credit value is the number of RPC requests the reverse-direction Responder (the ONC RPC client) is prepared to receive concurrently. The reverse-direction credit value <span class="kw kw-may">MAY</span> be different than the forward-direction credit value.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -881,12 +886,12 @@ During bidirectional operation, each receiver has to decide whether an incoming 
     <div class="row" id="4-1--Reverse-Direction-Credits-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When message direction is not fully determined by context (e.g., suggested by the definition of the RPC-over-RDMA version that is in use) or by an accompanying RPC message payload with a call direction field, it is not possible for the receiver to tell with certainty whether the header credit value is a request or grant. In such cases, the receiver MUST ignore the header&#39;s credit value.
+When message direction is not fully determined by context (e.g., suggested by the definition of the RPC-over-RDMA version that is in use) or by an accompanying RPC message payload with a call direction field, it is not possible for the receiver to tell with certainty whether the header credit value is a request or grant. In such cases, the receiver <span class="kw kw-must">MUST</span> ignore the header&#39;s credit value.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-メッセージの方向がコンテキスト（たとえば、使用中のRPC-over-RDMAバージョンの定義で提案されている）または呼び出し方向フィールドを伴う付随するRPCメッセージペイロードによって完全に決定されていない場合、受信者は次のことを行うことができません。ヘッダーのクレジット値がリクエストであるか付与であるかを確実に伝えます。そのような場合、受信者はヘッダーのクレジット値を無視しなければなりません（MUST）。
+メッセージの方向がコンテキスト（たとえば、使用中のRPC-over-RDMAバージョンの定義で提案されている）または呼び出し方向フィールドを伴う付随するRPCメッセージペイロードによって完全に決定されていない場合、受信者は次のことを行うことができません。ヘッダーのクレジット値がリクエストであるか付与であるかを確実に伝えます。そのような場合、受信者はヘッダーのクレジット値を無視しなければなりません（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
@@ -1097,7 +1102,7 @@ To form a reverse-direction RPC-over-RDMA Call message, an ONC RPC service endpo
     <div class="row" id="5-1--Sending-a-Call-in-the-Reverse-Direction-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The rdma_vers field MUST contain the same value in reverse- and forward-direction Call messages on the same connection.
+The rdma_vers field <span class="kw kw-must">MUST</span> contain the same value in reverse- and forward-direction Call messages on the same connection.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1121,7 +1126,7 @@ The number of requested reverse-direction credits is placed in the rdma_credit f
     <div class="row" id="5-1--Sending-a-Call-in-the-Reverse-Direction-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Whether presented inline or as a separate chunk, the ONC RPC Call header MUST start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header&#39;s msg_type field MUST contain the value CALL.
+Whether presented inline or as a separate chunk, the ONC RPC Call header <span class="kw kw-must">MUST</span> start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header&#39;s msg_type field <span class="kw kw-must">MUST</span> contain the value CALL.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1157,7 +1162,7 @@ To form a reverse-direction RPC-over-RDMA Reply message, an ONC RPC client endpo
     <div class="row" id="5-2--Sending-a-Reply-in-the-Reverse-Direction-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The rdma_vers field MUST contain the same value in a reverse-direction Reply message as in the matching Call message.
+The rdma_vers field <span class="kw kw-must">MUST</span> contain the same value in a reverse-direction Reply message as in the matching Call message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1181,7 +1186,7 @@ The number of granted reverse-direction credits is placed in the rdma_credit fie
     <div class="row" id="5-2--Sending-a-Reply-in-the-Reverse-Direction-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Whether presented inline or as a separate chunk, the ONC RPC Reply header MUST start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header&#39;s msg_type field MUST contain the value REPLY.
+Whether presented inline or as a separate chunk, the ONC RPC Reply header <span class="kw kw-must">MUST</span> start with the same XID value that is present in the RPC-over-RDMA header, and the RPC header&#39;s msg_type field <span class="kw kw-must">MUST</span> contain the value REPLY.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1217,7 +1222,7 @@ A &#34;chunk&#34; refers to a portion of a message&#39;s Payload stream that is 
     <div class="row" id="5-3--Using-Chunks-in-Reverse-Direction-Operations-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Chunks MAY be used in the reverse direction. They operate the same way as in the forward direction.
+Chunks <span class="kw kw-may">MAY</span> be used in the reverse direction. They operate the same way as in the forward direction.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1265,7 +1270,7 @@ When chunks are not implemented, RPC messages in the reverse direction are alway
     <div class="row" id="5-3--Using-Chunks-in-Reverse-Direction-Operations-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a reverse-direction requester provides a non-empty chunk list to a Responder that does not support chunks, the Responder MUST reply with an RDMA_ERROR message with rdma_err field set to ERR_CHUNK.
+If a reverse-direction requester provides a non-empty chunk list to a Responder that does not support chunks, the Responder <span class="kw kw-must">MUST</span> reply with an RDMA_ERROR message with rdma_err field set to ERR_CHUNK.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1337,7 +1342,7 @@ ONC RPCクライアントピアに実行する作業がない場合、トラン�
     <div class="row" id="5-4--Reverse-Direction-Retransmission-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Therefore, forward-direction Requesters SHOULD maintain a transport connection as long as there is the possibility that the connection peer can send reverse-direction requests. For example, while an NFS version 4.1 client has open delegated files or active pNFS layouts, it maintains one or more transport connections to enable the NFS server to perform callback operations.
+Therefore, forward-direction Requesters <span class="kw kw-should">SHOULD</span> maintain a transport connection as long as there is the possibility that the connection peer can send reverse-direction requests. For example, while an NFS version 4.1 client has open delegated files or active pNFS layouts, it maintains one or more transport connections to enable the NFS server to perform callback operations.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1397,12 +1402,12 @@ When dealing with the possibility that the remote peer has no transport-level su
     <div class="row" id="6--In-the-Absence-of-Support-for-Reverse-Direction-Operation-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Therefore, a ULP MUST NOT perform reverse-direction ONC RPC operations until the peer has indicated it is prepared to handle them. A description of ULP mechanisms used for this indication is outside the scope of this document.
+Therefore, a ULP <span class="kw kw-mustnot">MUST NOT</span> perform reverse-direction ONC RPC operations until the peer has indicated it is prepared to handle them. A description of ULP mechanisms used for this indication is outside the scope of this document.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-したがって、ULPは、ピアがそれらを処理する準備ができていることを示すまで、逆方向のONC RPC操作を実行してはなりません（MUST NOT）。この表示に使用されるULPメカニズムの説明は、このドキュメントの範囲外です。
+したがって、ULPは、ピアがそれらを処理する準備ができていることを示すまで、逆方向のONC RPC操作を実行してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。この表示に使用されるULPメカニズムの説明は、このドキュメントの範囲外です。
         </p>
       </div>
     </div>

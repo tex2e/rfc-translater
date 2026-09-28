@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、SCTP（Stream Control Transmission Protocol）において、マルチホーミング環境下での障害検知と切り替えを高速化する「SCTP-PF (Potentially Failed)」アルゴリズムを規定しています。リンクの状態を「稼働中」か「故障」かの二択ではなく、一時的なエラー発生時に「故障の可能性あり（PF）」という中間状態を導入することで、完全にタイムアウトする前に代替パスへの送信を開始し、通信の中断を最小限に抑えます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 7829 - SCTP-PF：ストリーム制御伝送プロトコルのための高速フェイルオーバアルゴリズム</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -375,12 +380,12 @@ A brief description of the motivation for the introduction of the PF state, incl
     <div class="row" id="2--Conventions-and-Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -471,7 +476,7 @@ SCTP-PF操作は次のように指定されます。
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-1. The sender maintains a new tunable SCTP Protocol Parameter called PotentiallyFailed.Max.Retrans (PFMR). The PFMR defines the new intermediate PF threshold on the destination address error counter. When this threshold is exceeded, the destination address is classified as PF. The RECOMMENDED value of PFMR is 0. If PFMR is set to be greater than or equal to PMR, the resulting PF threshold will be so high that the destination address will reach the inactive state before it can be classified as PF.
+1. The sender maintains a new tunable SCTP Protocol Parameter called PotentiallyFailed.Max.Retrans (PFMR). The PFMR defines the new intermediate PF threshold on the destination address error counter. When this threshold is exceeded, the destination address is classified as PF. The <span class="kw kw-should">RECOMMENDED</span> value of PFMR is 0. If PFMR is set to be greater than or equal to PMR, the resulting PF threshold will be so high that the destination address will reach the inactive state before it can be classified as PF.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -483,7 +488,7 @@ SCTP-PF操作は次のように指定されます。
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. The error counter of an active destination address is incremented or cleared as specified in <a href="./rfc4960.html">[RFC4960]</a>. This means that the error counter of the destination address in active state will be incremented each time the Timer T3 retransmission (T3-rtx) timer expires, or each time a HEARTBEAT chunk is sent when idle and not acknowledged within an RTO. When the value in the destination address error counter exceeds PFMR, the endpoint MUST mark the destination address as in the PF state.
+2. The error counter of an active destination address is incremented or cleared as specified in <a href="./rfc4960.html">[RFC4960]</a>. This means that the error counter of the destination address in active state will be incremented each time the Timer T3 retransmission (T3-rtx) timer expires, or each time a HEARTBEAT chunk is sent when idle and not acknowledged within an RTO. When the value in the destination address error counter exceeds PFMR, the endpoint <span class="kw kw-must">MUST</span> mark the destination address as in the PF state.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -495,19 +500,19 @@ SCTP-PF操作は次のように指定されます。
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. An SCTP-PF sender SHOULD NOT send data to destination addresses in PF state when alternative destination addresses in active state are available. Specifically, this means that:
+3. An SCTP-PF sender <span class="kw kw-shouldnot">SHOULD NOT</span> send data to destination addresses in PF state when alternative destination addresses in active state are available. Specifically, this means that:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. SCTP-PF送信者は、アクティブ状態の代替宛先アドレスが使用可能な場合、PF状態の宛先アドレスにデータを送信してはなりません（SHOULD NOT）。具体的には、これは次のことを意味します。
+3. SCTP-PF送信者は、アクティブ状態の代替宛先アドレスが使用可能な場合、PF状態の宛先アドレスにデータを送信してはなりません（<span class="kw kw-shouldnot">SHOULD NOT</span>）。具体的には、これは次のことを意味します。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-i. When there is outbound data to send and the destination address presently used for data transmission is in PF state, the sender SHOULD choose a destination address in active state, if one exists, and use this destination address for data transmission.
+i. When there is outbound data to send and the destination address presently used for data transmission is in PF state, the sender <span class="kw kw-should">SHOULD</span> choose a destination address in active state, if one exists, and use this destination address for data transmission.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -519,24 +524,24 @@ i. 送信する送信データがあり、データ送信に現在使用され�
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-ii. As specified in Section 6.4.1 of <a href="./rfc4960.html">[RFC4960]</a>, when the sender retransmits data that has timed out, they should attempt to pick a new destination address for data retransmission. In this case, the sender SHOULD choose an alternate destination transport address in active state, if one exists.
+ii. As specified in Section 6.4.1 of <a href="./rfc4960.html">[RFC4960]</a>, when the sender retransmits data that has timed out, they should attempt to pick a new destination address for data retransmission. In this case, the sender <span class="kw kw-should">SHOULD</span> choose an alternate destination transport address in active state, if one exists.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-ii。 <a href="./rfc4960.html">[RFC4960]</a>のセクション6.4.1で指定されているように、送信者はタイムアウトしたデータを再送信するときに、データ再送信用に新しい宛先アドレスを選択する必要があります。この場合、送信者は、アクティブな状態の代替宛先トランスポートアドレスが存在する場合、それを選択する必要があります（SHOULD）。
+ii。 <a href="./rfc4960.html">[RFC4960]</a>のセクション6.4.1で指定されているように、送信者はタイムアウトしたデータを再送信するときに、データ再送信用に新しい宛先アドレスを選択する必要があります。この場合、送信者は、アクティブな状態の代替宛先トランスポートアドレスが存在する場合、それを選択する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-iii. When there is outbound data to send and the SCTP user explicitly requests to send data to a destination address in PF state, the sender SHOULD send the data to an alternate destination address in active state if one exists.
+iii. When there is outbound data to send and the SCTP user explicitly requests to send data to a destination address in PF state, the sender <span class="kw kw-should">SHOULD</span> send the data to an alternate destination address in active state if one exists.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-iii。送信する送信データがあり、SCTPユーザーがPF状態の宛先アドレスにデータを送信することを明示的に要求する場合、送信者は、アクティブ状態の代替宛先アドレスが存在する場合は、そのデータを代替宛先アドレスに送信する必要があります（SHOULD）。
+iii。送信する送信データがあり、SCTPユーザーがPF状態の宛先アドレスにデータを送信することを明示的に要求する場合、送信者は、アクティブ状態の代替宛先アドレスが存在する場合は、そのデータを代替宛先アドレスに送信する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -591,36 +596,36 @@ Rules for picking the most divergent source-destination pair are an implementati
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-In all cases, the sender MUST NOT change the state of the chosen destination address, whether this state be active or PF, and it MUST NOT clear the error counter of the destination address as a result of choosing the destination address for data transmission.
+In all cases, the sender <span class="kw kw-mustnot">MUST NOT</span> change the state of the chosen destination address, whether this state be active or PF, and it <span class="kw kw-mustnot">MUST NOT</span> clear the error counter of the destination address as a result of choosing the destination address for data transmission.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-すべての場合において、送信者は、この状態がアクティブかPFかにかかわらず、選択された宛先アドレスの状態を変更してはならず（MUST NOT）、データ送信の宛先アドレスを選択した結果として、宛先アドレスのエラーカウンターをクリアしてはなりません（MUST NOT）。
+すべての場合において、送信者は、この状態がアクティブかPFかにかかわらず、選択された宛先アドレスの状態を変更してはならず（<span class="kw kw-mustnot">MUST NOT</span>）、データ送信の宛先アドレスを選択した結果として、宛先アドレスのエラーカウンターをクリアしてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-4. When the destination addresses are all in PF state, or some are in PF state and some in inactive state, the sender MUST choose one destination address in PF state and SHOULD transmit or retransmit data to this destination address using the following rules:
+4. When the destination addresses are all in PF state, or some are in PF state and some in inactive state, the sender <span class="kw kw-must">MUST</span> choose one destination address in PF state and <span class="kw kw-should">SHOULD</span> transmit or retransmit data to this destination address using the following rules:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-4. 宛先アドレスがすべてPF状態の場合、または一部がPF状態で一部が非アクティブ状態の場合、送信者はPF状態の宛先アドレスを1つ選択し、次のルールを使用してこの宛先アドレスにデータを送信または再送信する必要があります（SHOULD）。
+4. 宛先アドレスがすべてPF状態の場合、または一部がPF状態で一部が非アクティブ状態の場合、送信者はPF状態の宛先アドレスを1つ選択し、次のルールを使用してこの宛先アドレスにデータを送信または再送信する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-i. The sender SHOULD choose the destination in PF state with the lowest error count (fewest consecutive timeouts) for data transmission and transmit or retransmit data to this destination.
+i. The sender <span class="kw kw-should">SHOULD</span> choose the destination in PF state with the lowest error count (fewest consecutive timeouts) for data transmission and transmit or retransmit data to this destination.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-i. 送信者は、データ送信のためにエラー数が最も少ない（連続したタイムアウトが最も少ない）PF状態の宛先を選択し、この宛先にデータを送信または再送信する必要があります（SHOULD）。
+i. 送信者は、データ送信のためにエラー数が最も少ない（連続したタイムアウトが最も少ない）PF状態の宛先を選択し、この宛先にデータを送信または再送信する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -639,31 +644,31 @@ ii。同じエラー数のPF状態の宛先アドレスが複数ある場合、�
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p16">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-The sender MUST NOT change the state and the error counter of any destination addresses as the result of the selection.
+The sender <span class="kw kw-mustnot">MUST NOT</span> change the state and the error counter of any destination addresses as the result of the selection.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-8">
-送信者は、選択の結果として、宛先アドレスの状態とエラーカウンターを変更してはなりません（MUST NOT）。
+送信者は、選択の結果として、宛先アドレスの状態とエラーカウンターを変更してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p17">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- 5. The HB.Interval of the Path Heartbeat function of <a href="./rfc4960.html">[RFC4960]</a> MUST be ignored for destination addresses in PF state. Instead, HEARTBEAT chunks are sent to destination addresses in PF state once per RTO. HEARTBEAT chunks SHOULD be sent to destination addresses in PF state, but the sending of HEARTBEATs MUST honor whether or not the Path Heartbeat function (Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a>) is enabled for the destination address. That is, if the Path Heartbeat function is disabled for the destination address in question, HEARTBEATs MUST NOT be sent. Note that when the Path Heartbeat function is disabled, it may take longer to transition a destination address in PF state back to active state.
+ 5. The HB.Interval of the Path Heartbeat function of <a href="./rfc4960.html">[RFC4960]</a> <span class="kw kw-must">MUST</span> be ignored for destination addresses in PF state. Instead, HEARTBEAT chunks are sent to destination addresses in PF state once per RTO. HEARTBEAT chunks <span class="kw kw-should">SHOULD</span> be sent to destination addresses in PF state, but the sending of HEARTBEATs <span class="kw kw-must">MUST</span> honor whether or not the Path Heartbeat function (Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a>) is enabled for the destination address. That is, if the Path Heartbeat function is disabled for the destination address in question, HEARTBEATs <span class="kw kw-mustnot">MUST NOT</span> be sent. Note that when the Path Heartbeat function is disabled, it may take longer to transition a destination address in PF state back to active state.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-5. <a href="./rfc4960.html">[RFC4960]</a>のパスハートビート機能のHB.Intervalは、PF状態の宛先アドレスでは無視する必要があります。代わりに、HEARTBEATチャンクは、RTOごとに1回、PF状態の宛先アドレスに送信されます。 HEARTBEATチャンクはPF状態の宛先アドレスに送信する必要があります（SHOULD）。ただし、HEARTBEATの送信では、宛先アドレスに対してパスハートビート機能（<a href="./rfc4960.html">[RFC4960]</a>のセクション8.3）が有効かどうかを尊重する必要があります。つまり、問題の宛先アドレスに対してパスハートビート機能が無効になっている場合、ハートビートを送信してはなりません。パスハートビート機能が無効になっている場合、PF状態の宛先アドレスをアクティブ状態に戻すのに時間がかかることがあります。
+5. <a href="./rfc4960.html">[RFC4960]</a>のパスハートビート機能のHB.Intervalは、PF状態の宛先アドレスでは無視する必要があります。代わりに、HEARTBEATチャンクは、RTOごとに1回、PF状態の宛先アドレスに送信されます。 HEARTBEATチャンクはPF状態の宛先アドレスに送信する必要があります（<span class="kw kw-should">SHOULD</span>）。ただし、HEARTBEATの送信では、宛先アドレスに対してパスハートビート機能（<a href="./rfc4960.html">[RFC4960]</a>のセクション8.3）が有効かどうかを尊重する必要があります。つまり、問題の宛先アドレスに対してパスハートビート機能が無効になっている場合、ハートビートを送信してはなりません。パスハートビート機能が無効になっている場合、PF状態の宛先アドレスをアクティブ状態に戻すのに時間がかかることがあります。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p18">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-6. HEARTBEATs are sent when a destination address reaches the PF state. When a HEARTBEAT chunk is not acknowledged within the RTO, the sender increments the error counter and exponentially backs off the RTO value. If the error counter is less than PMR, the sender transmits another packet containing the HEARTBEAT chunk immediately after timeout expiration on the previous HEARTBEAT. When data is being transmitted to a destination address in the PF state, the transmission of a HEARTBEAT chunk MAY be omitted in the case where the receipt of a Selective Acknowledgment (SACK) of the data or a T3-rtx timer expiration on the data can provide equivalent information, such as the case where the data chunk has been transmitted to a single destination address only. Likewise, the timeout of a HEARTBEAT chunk MAY be ignored if data is outstanding towards the destination address.
+6. HEARTBEATs are sent when a destination address reaches the PF state. When a HEARTBEAT chunk is not acknowledged within the RTO, the sender increments the error counter and exponentially backs off the RTO value. If the error counter is less than PMR, the sender transmits another packet containing the HEARTBEAT chunk immediately after timeout expiration on the previous HEARTBEAT. When data is being transmitted to a destination address in the PF state, the transmission of a HEARTBEAT chunk <span class="kw kw-may">MAY</span> be omitted in the case where the receipt of a Selective Acknowledgment (SACK) of the data or a T3-rtx timer expiration on the data can provide equivalent information, such as the case where the data chunk has been transmitted to a single destination address only. Likewise, the timeout of a HEARTBEAT chunk <span class="kw kw-may">MAY</span> be ignored if data is outstanding towards the destination address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -675,43 +680,43 @@ The sender MUST NOT change the state and the error counter of any destination ad
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p19">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-7. When the sender receives a HEARTBEAT ACK from a HEARTBEAT sent to a destination address in PF state, the sender SHOULD clear the error counter of the destination address and transition the destination address back to active state. However, there may be a situation where HEARTBEAT chunks can go through while DATA chunks cannot. Hence, in a situation where a HEARTBEAT ACK arrives while there is data outstanding towards the destination address to which the HEARTBEAT was sent, then an implementation MAY choose to not have the HEARTBEAT ACK reset the error counter, but have the error counter reset await the fate of the outstanding data transmission. This situation can happen when data is sent to a destination address in PF state. When the sender resumes data transmission on a destination address after a transition of the destination address from PF to active state, it MUST do this following the prescriptions of Section 7.2 of <a href="./rfc4960.html">[RFC4960]</a>.
+7. When the sender receives a HEARTBEAT ACK from a HEARTBEAT sent to a destination address in PF state, the sender <span class="kw kw-should">SHOULD</span> clear the error counter of the destination address and transition the destination address back to active state. However, there may be a situation where HEARTBEAT chunks can go through while DATA chunks cannot. Hence, in a situation where a HEARTBEAT ACK arrives while there is data outstanding towards the destination address to which the HEARTBEAT was sent, then an implementation <span class="kw kw-may">MAY</span> choose to not have the HEARTBEAT ACK reset the error counter, but have the error counter reset await the fate of the outstanding data transmission. This situation can happen when data is sent to a destination address in PF state. When the sender resumes data transmission on a destination address after a transition of the destination address from PF to active state, it <span class="kw kw-must">MUST</span> do this following the prescriptions of Section 7.2 of <a href="./rfc4960.html">[RFC4960]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-7. 送信者がPF状態の宛先アドレスに送信されたHEARTBEATからHEARTBEAT ACKを受信すると、送信者は宛先アドレスのエラーカウンターをクリアし、宛先アドレスをアクティブ状態に戻す必要があります（SHOULD）。ただし、HEARTBEATチャンクは通過できるが、DATAチャンクは通過できない状況がある可能性があります。したがって、HEARTBEATが送信された宛先アドレスに未処理のデータがある間にHEARTBEAT ACKが到着する状況では、実装はHEARTBEAT ACKがエラーカウンターをリセットしないように選択できますが、エラーカウンターは卓越したデータ伝送の運命。この状況は、データがPF状態の宛先アドレスに送信されたときに発生する可能性があります。送信者が宛先アドレスをPFからアクティブ状態に移行した後、宛先アドレスでのデータ送信を再開する場合、<a href="./rfc4960.html">[RFC4960]</a>のセクション7.2の規定に従ってこれを実行する必要があります。
+7. 送信者がPF状態の宛先アドレスに送信されたHEARTBEATからHEARTBEAT ACKを受信すると、送信者は宛先アドレスのエラーカウンターをクリアし、宛先アドレスをアクティブ状態に戻す必要があります（<span class="kw kw-should">SHOULD</span>）。ただし、HEARTBEATチャンクは通過できるが、DATAチャンクは通過できない状況がある可能性があります。したがって、HEARTBEATが送信された宛先アドレスに未処理のデータがある間にHEARTBEAT ACKが到着する状況では、実装はHEARTBEAT ACKがエラーカウンターをリセットしないように選択できますが、エラーカウンターは卓越したデータ伝送の運命。この状況は、データがPF状態の宛先アドレスに送信されたときに発生する可能性があります。送信者が宛先アドレスをPFからアクティブ状態に移行した後、宛先アドレスでのデータ送信を再開する場合、<a href="./rfc4960.html">[RFC4960]</a>のセクション7.2の規定に従ってこれを実行する必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p20">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- 8. Additional PMR - PFMR consecutive timeouts on a destination address in PF state confirm the path failure, upon which the destination address transitions to the inactive state. As described in <a href="./rfc4960.html">[RFC4960]</a>, the sender SHOULD (i) notify the Upper Layer Protocol (ULP) about this state transition, and (ii) transmit HEARTBEAT chunks to the inactive destination address at a lower HB.Interval frequency as described in Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a> (when the Path Heartbeat function is enabled for the destination address).
+ 8. Additional PMR - PFMR consecutive timeouts on a destination address in PF state confirm the path failure, upon which the destination address transitions to the inactive state. As described in <a href="./rfc4960.html">[RFC4960]</a>, the sender <span class="kw kw-should">SHOULD</span> (i) notify the Upper Layer Protocol (ULP) about this state transition, and (ii) transmit HEARTBEAT chunks to the inactive destination address at a lower HB.Interval frequency as described in Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a> (when the Path Heartbeat function is enabled for the destination address).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-8.追加のPMR-PF状態の宛先アドレスでのPFMR連続タイムアウトにより、パスの障害が確認され、宛先のアドレスが非アクティブ状態に移行します。 <a href="./rfc4960.html">[RFC4960]</a>で説明されているように、送信者は（i）この状態遷移について上位層プロトコル（ULP）に通知し、（ii）セクション8.3で説明されているように、より低いHB.Interval頻度でHEARTBEATチャンクを非アクティブな宛先アドレスに送信する必要があります（SHOULD）。 <a href="./rfc4960.html">[RFC4960]</a>の（宛先アドレスに対してパスハートビート機能が有効になっている場合）。
+8.追加のPMR-PF状態の宛先アドレスでのPFMR連続タイムアウトにより、パスの障害が確認され、宛先のアドレスが非アクティブ状態に移行します。 <a href="./rfc4960.html">[RFC4960]</a>で説明されているように、送信者は（i）この状態遷移について上位層プロトコル（ULP）に通知し、（ii）セクション8.3で説明されているように、より低いHB.Interval頻度でHEARTBEATチャンクを非アクティブな宛先アドレスに送信する必要があります（<span class="kw kw-should">SHOULD</span>）。 <a href="./rfc4960.html">[RFC4960]</a>の（宛先アドレスに対してパスハートビート機能が有効になっている場合）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p21">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-9. Acknowledgments for chunks that have been transmitted to multiple destinations (i.e., a chunk that has been retransmitted to a different destination address than the destination address to which the chunk was first transmitted) SHOULD NOT clear the error count for an inactive destination address and SHOULD NOT move a destination address in PF state back to active state, since a sender cannot disambiguate whether the ACK was for the original transmission or the retransmission(s). An SCTP sender MAY clear the error counter and move a destination address back to active state by information other than acknowledgments, when it can uniquely determine which destination, among multiple destination addresses, the chunk reached. This document makes no reference to what such information could consist of, nor how such information could be obtained.
+9. Acknowledgments for chunks that have been transmitted to multiple destinations (i.e., a chunk that has been retransmitted to a different destination address than the destination address to which the chunk was first transmitted) <span class="kw kw-shouldnot">SHOULD NOT</span> clear the error count for an inactive destination address and <span class="kw kw-shouldnot">SHOULD NOT</span> move a destination address in PF state back to active state, since a sender cannot disambiguate whether the ACK was for the original transmission or the retransmission(s). An SCTP sender <span class="kw kw-may">MAY</span> clear the error counter and move a destination address back to active state by information other than acknowledgments, when it can uniquely determine which destination, among multiple destination addresses, the chunk reached. This document makes no reference to what such information could consist of, nor how such information could be obtained.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-9. 複数の宛先に送信されたチャンクの確認応答（つまり、チャンクが最初に送信された宛先アドレスとは異なる宛先アドレスに再送信されたチャンク）は、非アクティブな宛先アドレスのエラーカウントをクリアしてはならず（SHOULD NOT）、送信者はACKが元の送信用か再送信用かを明確にすることができないため、PF状態の宛先アドレスをアクティブ状態に戻します。複数の宛先アドレスの中でチャンクが到達した宛先を一意に判別できる場合、SCTP送信者はエラーカウンターをクリアし、確認応答以外の情報によって宛先アドレスをアクティブ状態に戻すことができます。このドキュメントでは、そのような情報の構成要素や、そのような情報を取得する方法については言及していません。
+9. 複数の宛先に送信されたチャンクの確認応答（つまり、チャンクが最初に送信された宛先アドレスとは異なる宛先アドレスに再送信されたチャンク）は、非アクティブな宛先アドレスのエラーカウントをクリアしてはならず（<span class="kw kw-shouldnot">SHOULD NOT</span>）、送信者はACKが元の送信用か再送信用かを明確にすることができないため、PF状態の宛先アドレスをアクティブ状態に戻します。複数の宛先アドレスの中でチャンクが到達した宛先を一意に判別できる場合、SCTP送信者はエラーカウンターをクリアし、確認応答以外の情報によって宛先アドレスをアクティブ状態に戻すことができます。このドキュメントでは、そのような情報の構成要素や、そのような情報を取得する方法については言及していません。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p22">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-10. Acknowledgments for data chunks that have been transmitted to one destination address only MUST clear the error counter for the destination address and MUST transition a destination address in PF state back to active state. This situation can happen when new data is sent to a destination address in the PF state. It can also happen in situations where the destination address is in the PF state due to the occurrence of a spurious T3-rtx timer and acknowledgments start to arrive for data sent prior to occurrence of the spurious T3-rtx and data has not yet been retransmitted towards other destinations. This document does not specify special handling for detection of, or reaction to, spurious T3-rtx timeouts, e.g., for special operation vis-a-vis the congestion control handling or data retransmission operation towards a destination address that undergoes a transition from active to PF to active state due to a spurious T3-rtx timeout. But it is noted that this is an area that would benefit from additional attention, experimentation, and specification for single-homed SCTP as well as for multihomed SCTP protocol operation.
+10. Acknowledgments for data chunks that have been transmitted to one destination address only <span class="kw kw-must">MUST</span> clear the error counter for the destination address and <span class="kw kw-must">MUST</span> transition a destination address in PF state back to active state. This situation can happen when new data is sent to a destination address in the PF state. It can also happen in situations where the destination address is in the PF state due to the occurrence of a spurious T3-rtx timer and acknowledgments start to arrive for data sent prior to occurrence of the spurious T3-rtx and data has not yet been retransmitted towards other destinations. This document does not specify special handling for detection of, or reaction to, spurious T3-rtx timeouts, e.g., for special operation vis-a-vis the congestion control handling or data retransmission operation towards a destination address that undergoes a transition from active to PF to active state due to a spurious T3-rtx timeout. But it is noted that this is an area that would benefit from additional attention, experimentation, and specification for single-homed SCTP as well as for multihomed SCTP protocol operation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -735,12 +740,12 @@ The sender MUST NOT change the state and the error counter of any destination ad
     <div class="row" id="3-2--Specification-of-the-SCTP-PF-Procedures-p24">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- 12. The SCTP stack SHOULD expose the PF state of its destination addresses to the ULP as well as provide the means to notify the ULP of state transitions of its destination addresses from active to PF, and vice versa. However, it is recommended that an SCTP stack implementing SCTP-PF also allows for the ULP to be kept ignorant of the PF state of its destinations and the associated state transitions, thus allowing for retention of the simpler state transition model of <a href="./rfc4960.html">[RFC4960]</a> in the ULP. For this reason, it is recommended that an SCTP stack implementing SCTP-PF also provide the ULP with the means to suppress exposure of the PF state and the associated state transitions.
+ 12. The SCTP stack <span class="kw kw-should">SHOULD</span> expose the PF state of its destination addresses to the ULP as well as provide the means to notify the ULP of state transitions of its destination addresses from active to PF, and vice versa. However, it is recommended that an SCTP stack implementing SCTP-PF also allows for the ULP to be kept ignorant of the PF state of its destinations and the associated state transitions, thus allowing for retention of the simpler state transition model of <a href="./rfc4960.html">[RFC4960]</a> in the ULP. For this reason, it is recommended that an SCTP stack implementing SCTP-PF also provide the ULP with the means to suppress exposure of the PF state and the associated state transitions.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-12. SCTPスタックは、宛先アドレスのPF状態をULPに公開するだけでなく、宛先アドレスのアクティブからPFへの、およびその逆の状態遷移をULPに通知する手段を提供する必要があります（SHOULD）。ただし、SCTP-PFを実装するSCTPスタックでは、ULPがその宛先のPF状態と関連する状態遷移を知らないようにして、<a href="./rfc4960.html">[RFC4960]</a>のより単純な状態遷移モデルを保持できるようにすることをお勧めします。 ULP。このため、SCTP-PFを実装するSCTPスタックがULPに、PF状態の公開と関連する状態遷移を抑制する手段を提供することをお勧めします。
+12. SCTPスタックは、宛先アドレスのPF状態をULPに公開するだけでなく、宛先アドレスのアクティブからPFへの、およびその逆の状態遷移をULPに通知する手段を提供する必要があります（<span class="kw kw-should">SHOULD</span>）。ただし、SCTP-PFを実装するSCTPスタックでは、ULPがその宛先のPF状態と関連する状態遷移を知らないようにして、<a href="./rfc4960.html">[RFC4960]</a>のより単純な状態遷移モデルを保持できるようにすることをお勧めします。 ULP。このため、SCTP-PFを実装するSCTPスタックがULPに、PF状態の公開と関連する状態遷移を抑制する手段を提供することをお勧めします。
         </p>
       </div>
     </div>
@@ -759,7 +764,7 @@ The sender MUST NOT change the state and the error counter of any destination ad
     <div class="row" id="4--Dormant-State-Operation-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In a situation with complete disruption of the communication in between the SCTP endpoints, the aggressive HEARTBEAT transmissions of SCTP-PF on destination addresses in PF state may make the association enter dormant state faster than a standard SCTP implementation of <a href="./rfc4960.html">[RFC4960]</a> given the same setting of PMR and AMR. For example, an SCTP association with two destination addresses would typically reach dormant state in half the time of an SCTP implementation of <a href="./rfc4960.html">[RFC4960]</a> in such situations. This is because an SCTP PF sender will send HEARTBEATs and data retransmissions in parallel with RTO intervals when there are multiple destinations addresses in PF state. This argument presumes that RTO &lt;&lt; HB.Interval of <a href="./rfc4960.html">[RFC4960]</a>. With the design goal that SCTP-PF shall provide the same level of disruption tolerance as a standard SCTP implementation with the same PMR and AMR setting, we prescribe that an SCTP-PF implementation SHOULD operate as described in Section 4.1 during dormant state.
+In a situation with complete disruption of the communication in between the SCTP endpoints, the aggressive HEARTBEAT transmissions of SCTP-PF on destination addresses in PF state may make the association enter dormant state faster than a standard SCTP implementation of <a href="./rfc4960.html">[RFC4960]</a> given the same setting of PMR and AMR. For example, an SCTP association with two destination addresses would typically reach dormant state in half the time of an SCTP implementation of <a href="./rfc4960.html">[RFC4960]</a> in such situations. This is because an SCTP PF sender will send HEARTBEATs and data retransmissions in parallel with RTO intervals when there are multiple destinations addresses in PF state. This argument presumes that RTO &lt;&lt; HB.Interval of <a href="./rfc4960.html">[RFC4960]</a>. With the design goal that SCTP-PF shall provide the same level of disruption tolerance as a standard SCTP implementation with the same PMR and AMR setting, we prescribe that an SCTP-PF implementation <span class="kw kw-should">SHOULD</span> operate as described in Section 4.1 during dormant state.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -771,7 +776,7 @@ SCTPエンドポイント間の通信が完全に中断している状況では�
     <div class="row" id="4--Dormant-State-Operation-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An SCTP-PF implementation MAY choose a different dormant state operation than the one described in Section 4.1 provided that the solution chosen does not decrease the fault tolerance of the SCTP-PF operation.
+An SCTP-PF implementation <span class="kw kw-may">MAY</span> choose a different dormant state operation than the one described in Section 4.1 provided that the solution chosen does not decrease the fault tolerance of the SCTP-PF operation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -783,12 +788,12 @@ SCTP-PF実装は、選択されたソリューションがSCTP-PF操作のフォ
     <div class="row" id="4--Dormant-State-Operation-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The prescription below for SCTP-PF dormant state handling MUST NOT be coupled to the value of the PFMR, but solely to the activation of SCTP-PF logic in an SCTP implementation.
+The prescription below for SCTP-PF dormant state handling <span class="kw kw-mustnot">MUST NOT</span> be coupled to the value of the PFMR, but solely to the activation of SCTP-PF logic in an SCTP implementation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-以下のSCTP-PF休止状態処理の処方は、PFMRの値に結合してはならず、SCTP実装でのSCTP-PFロジックのアクティブ化のみに結合してはなりません（MUST NOT）。
+以下のSCTP-PF休止状態処理の処方は、PFMRの値に結合してはならず、SCTP実装でのSCTP-PFロジックのアクティブ化のみに結合してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
@@ -819,7 +824,7 @@ It is noted that the below dormant state operation can also provide enhanced dis
     <div class="row" id="4-1--SCTP-Dormant-State-Procedure-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-1. When the destination addresses are all in inactive state and data is available for transfer, the sender MUST choose one destination and transmit data to this destination address.
+1. When the destination addresses are all in inactive state and data is available for transfer, the sender <span class="kw kw-must">MUST</span> choose one destination and transmit data to this destination address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -831,7 +836,7 @@ It is noted that the below dormant state operation can also provide enhanced dis
     <div class="row" id="4-1--SCTP-Dormant-State-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. The sender MUST NOT change the state of the chosen destination address (it remains in inactive state) and MUST NOT clear the error counter of the destination address as a result of choosing the destination address for data transmission.
+2. The sender <span class="kw kw-mustnot">MUST NOT</span> change the state of the chosen destination address (it remains in inactive state) and <span class="kw kw-mustnot">MUST NOT</span> clear the error counter of the destination address as a result of choosing the destination address for data transmission.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -843,12 +848,12 @@ It is noted that the below dormant state operation can also provide enhanced dis
     <div class="row" id="4-1--SCTP-Dormant-State-Procedure-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. The sender SHOULD choose the destination in inactive state with the lowest error count (fewest consecutive timeouts) for data transmission. When there are multiple destinations with the same error count in inactive state, the sender SHOULD attempt to pick the most divergent source -- destination pair from the last source -- destination pair where failure was observed. Rules for picking the most divergent source-destination pair are an implementation decision and are not specified within this document. To support differentiation of inactive destination addresses based on their error count, SCTP will need to allow for incrementing of the destination address error counters up to some reasonable limit above PMR+1, thus changing the prescriptions of Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a> in this respect. The exact limit to apply is not specified in this document, but it is considered reasonable enough to require that the limit be an order of magnitude higher than the PMR value. A sender MAY choose to deploy other strategies than the strategy defined here. The strategy to prioritize the last active destination address, i.e., the destination address with the fewest error counts is optimal when some paths are permanently inactive, but suboptimal when path instability is transient.
+3. The sender <span class="kw kw-should">SHOULD</span> choose the destination in inactive state with the lowest error count (fewest consecutive timeouts) for data transmission. When there are multiple destinations with the same error count in inactive state, the sender <span class="kw kw-should">SHOULD</span> attempt to pick the most divergent source -- destination pair from the last source -- destination pair where failure was observed. Rules for picking the most divergent source-destination pair are an implementation decision and are not specified within this document. To support differentiation of inactive destination addresses based on their error count, SCTP will need to allow for incrementing of the destination address error counters up to some reasonable limit above PMR+1, thus changing the prescriptions of Section 8.3 of <a href="./rfc4960.html">[RFC4960]</a> in this respect. The exact limit to apply is not specified in this document, but it is considered reasonable enough to require that the limit be an order of magnitude higher than the PMR value. A sender <span class="kw kw-may">MAY</span> choose to deploy other strategies than the strategy defined here. The strategy to prioritize the last active destination address, i.e., the destination address with the fewest error counts is optimal when some paths are permanently inactive, but suboptimal when path instability is transient.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. 送信者は、データ送信のためにエラー数が最も少ない（連続したタイムアウトが最も少ない）非アクティブ状態の宛先を選択する必要があります（SHOULD）。非アクティブ状態で同じエラーカウントの宛先が複数ある場合、送信者は、最も発散した送信元-最後の送信元からの宛先ペア-障害が観察された宛先ペアを選択する必要があります（SHOULD）。最も異なる送信元と宛先のペアを選択するためのルールは実装の決定であり、このドキュメントでは指定されていません。エラー数に基づく非アクティブな宛先アドレスの区別をサポートするには、SCTPは、PMR+1を超える適切な制限まで宛先アドレスエラーカウンターをインクリメントできるようにする必要があります。したがって、この点に関して<a href="./rfc4960.html">[RFC4960]</a>のセクション8.3の規定を変更します。 。適用する正確な制限はこのドキュメントでは指定されていませんが、PMR値よりも1桁高い制限を要求するのに十分な妥当性があると見なされています。送信者は、ここで定義された戦略以外の戦略を展開することを選択できます（MAY）。最後のアクティブな宛先アドレス、つまりエラー数が最も少ない宛先アドレスを優先する方法は、一部のパスが永続的に非アクティブである場合は最適ですが、パスの不安定性が一時的である場合は最適ではありません。
+3. 送信者は、データ送信のためにエラー数が最も少ない（連続したタイムアウトが最も少ない）非アクティブ状態の宛先を選択する必要があります（<span class="kw kw-should">SHOULD</span>）。非アクティブ状態で同じエラーカウントの宛先が複数ある場合、送信者は、最も発散した送信元-最後の送信元からの宛先ペア-障害が観察された宛先ペアを選択する必要があります（<span class="kw kw-should">SHOULD</span>）。最も異なる送信元と宛先のペアを選択するためのルールは実装の決定であり、このドキュメントでは指定されていません。エラー数に基づく非アクティブな宛先アドレスの区別をサポートするには、SCTPは、PMR+1を超える適切な制限まで宛先アドレスエラーカウンターをインクリメントできるようにする必要があります。したがって、この点に関して<a href="./rfc4960.html">[RFC4960]</a>のセクション8.3の規定を変更します。 。適用する正確な制限はこのドキュメントでは指定されていませんが、PMR値よりも1桁高い制限を要求するのに十分な妥当性があると見なされています。送信者は、ここで定義された戦略以外の戦略を展開することを選択できます（<span class="kw kw-may">MAY</span>）。最後のアクティブな宛先アドレス、つまりエラー数が最も少ない宛先アドレスを優先する方法は、一部のパスが永続的に非アクティブである場合は最適ですが、パスの不安定性が一時的である場合は最適ではありません。
         </p>
       </div>
     </div>
@@ -891,7 +896,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-1. The sender maintains a new tunable parameter, called Primary.Switchover.Max.Retrans (PSMR). For SCTP-PF implementations, the PSMR MUST be set greater than or equal to the PFMR value. For implementations of <a href="./rfc4960.html">[RFC4960]</a>, the PSMR MUST be set greater than or equal to the PMR value. Implementations MUST reject any other values of PSMR.
+1. The sender maintains a new tunable parameter, called Primary.Switchover.Max.Retrans (PSMR). For SCTP-PF implementations, the PSMR <span class="kw kw-must">MUST</span> be set greater than or equal to the PFMR value. For implementations of <a href="./rfc4960.html">[RFC4960]</a>, the PSMR <span class="kw kw-must">MUST</span> be set greater than or equal to the PMR value. Implementations <span class="kw kw-must">MUST</span> reject any other values of PSMR.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -903,7 +908,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. When the path error counter on a set primary path exceeds PSMR, the SCTP implementation MUST autonomously select and set a new primary path.
+2. When the path error counter on a set primary path exceeds PSMR, the SCTP implementation <span class="kw kw-must">MUST</span> autonomously select and set a new primary path.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -915,7 +920,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. The primary path selected by the SCTP implementation MUST be the path that, at the given time, would be chosen for data transfer. A previously failed primary path can be used as a data transfer path as per normal path selection when the present data transfer path fails.
+3. The primary path selected by the SCTP implementation <span class="kw kw-must">MUST</span> be the path that, at the given time, would be chosen for data transfer. A previously failed primary path can be used as a data transfer path as per normal path selection when the present data transfer path fails.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -927,7 +932,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-4. For SCTP-PF, the recommended value of PSMR is PFMR when Primary Path Switchover operation mode is used. This means that no forced switchback to a previously failed primary path is performed. An SCTP-PF implementation of Primary Path Switchover MUST support the setting of PSMR = PFMR. An SCTP-PF implementation of Primary Path Switchover MAY support setting of PSMR &gt; PFMR.
+4. For SCTP-PF, the recommended value of PSMR is PFMR when Primary Path Switchover operation mode is used. This means that no forced switchback to a previously failed primary path is performed. An SCTP-PF implementation of Primary Path Switchover <span class="kw kw-must">MUST</span> support the setting of PSMR = PFMR. An SCTP-PF implementation of Primary Path Switchover <span class="kw kw-may">MAY</span> support setting of PSMR &gt; PFMR.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -939,7 +944,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-5. For standard SCTP, the recommended value of PSMR is PMR when Primary Path Switchover is used. This means that no forced switchback to a previously failed primary path is performed. A standard SCTP implementation of Primary Path Switchover MUST support the setting of PSMR = PMR. A standard SCTP implementation of Primary Path Switchover MAY support larger settings of PSMR &gt; PMR.
+5. For standard SCTP, the recommended value of PSMR is PMR when Primary Path Switchover is used. This means that no forced switchback to a previously failed primary path is performed. A standard SCTP implementation of Primary Path Switchover <span class="kw kw-must">MUST</span> support the setting of PSMR = PMR. A standard SCTP implementation of Primary Path Switchover <span class="kw kw-may">MAY</span> support larger settings of PSMR &gt; PMR.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -951,7 +956,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-6. It MUST be possible to disable the Primary Path Switchover operation and obtain the standard switchback operation of <a href="./rfc4960.html">[RFC4960]</a>.
+6. It <span class="kw kw-must">MUST</span> be possible to disable the Primary Path Switchover operation and obtain the standard switchback operation of <a href="./rfc4960.html">[RFC4960]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -963,7 +968,7 @@ The Primary Path Switchover operation requires only sender-side changes. The det
     <div class="row" id="5--Primary-Path-Switchover-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The manner of switchover operation that is most optimal in a given scenario depends on the relative quality of a set primary path versus the quality of alternative paths available as well as on the extent to which it is desired for the mode of operation to enforce traffic distribution over a number of network paths. That is, load distribution of traffic from multiple SCTP associations may be enforced by distribution of the set primary paths with the switchback operation of <a href="./rfc4960.html">[RFC4960]</a>. However, as switchback behavior of <a href="./rfc4960.html">[RFC4960]</a> is suboptimal in certain situations, especially in scenarios where a number of equally good paths are available, an SCTP implementation MAY support also, as alternative behavior, the Primary Path Switchover mode of operation and MAY enable it based on applications&#39; requests.
+ The manner of switchover operation that is most optimal in a given scenario depends on the relative quality of a set primary path versus the quality of alternative paths available as well as on the extent to which it is desired for the mode of operation to enforce traffic distribution over a number of network paths. That is, load distribution of traffic from multiple SCTP associations may be enforced by distribution of the set primary paths with the switchback operation of <a href="./rfc4960.html">[RFC4960]</a>. However, as switchback behavior of <a href="./rfc4960.html">[RFC4960]</a> is suboptimal in certain situations, especially in scenarios where a number of equally good paths are available, an SCTP implementation <span class="kw kw-may">MAY</span> support also, as alternative behavior, the Primary Path Switchover mode of operation and <span class="kw kw-may">MAY</span> enable it based on applications&#39; requests.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1011,7 +1016,7 @@ This document does not alter the value recommendation for the SCTP Protocol Para
     <div class="row" id="6--Suggested-SCTP-Protocol-Parameter-Values-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The following protocol parameter is RECOMMENDED:
+The following protocol parameter is <span class="kw kw-should">RECOMMENDED</span>:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1724,12 +1729,12 @@ In addition, smaller Path.Max.Retrans values also affect the Association.Max.Ret
     <div class="row" id="A-1--Reduce-PMR-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Otherwise, the SCTP sender considers its peer reachable even when all destinations are INACTIVE. To avoid this dormant state operation, standard SCTP implementation SHOULD reduce Association.Max.Retrans accordingly whenever it reduces Path.Max.Retrans. However, smaller Association.Max.Retrans value decreases the fault tolerance of SCTP as it increases the chances of association termination during minor congestion events.
+Otherwise, the SCTP sender considers its peer reachable even when all destinations are INACTIVE. To avoid this dormant state operation, standard SCTP implementation <span class="kw kw-should">SHOULD</span> reduce Association.Max.Retrans accordingly whenever it reduces Path.Max.Retrans. However, smaller Association.Max.Retrans value decreases the fault tolerance of SCTP as it increases the chances of association termination during minor congestion events.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-そうでない場合、SCTP送信側は、すべての宛先が非アクティブであっても、ピアが到達可能であると見なします。この休止状態の操作を回避するために、標準のSCTP実装は、Path.Max.Retransを削減するたびにAssociation.Max.Retransを適宜削減する必要があります（SHOULD）。ただし、Association.Max.Retransの値を小さくすると、軽度の輻輳イベント中にアソシエーションが終了する可能性が高くなるため、SCTPのフォールトトレランスが低下します。
+そうでない場合、SCTP送信側は、すべての宛先が非アクティブであっても、ピアが到達可能であると見なします。この休止状態の操作を回避するために、標準のSCTP実装は、Path.Max.Retransを削減するたびにAssociation.Max.Retransを適宜削減する必要があります（<span class="kw kw-should">SHOULD</span>）。ただし、Association.Max.Retransの値を小さくすると、軽度の輻輳イベント中にアソシエーションが終了する可能性が高くなるため、SCTPのフォールトトレランスが低下します。
         </p>
       </div>
     </div>

@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、IPマルチキャストの配信経路を追跡・診断するための主要ツール「Mtrace」の第2バージョン（v2）の仕様を規定しています。受信側から送信元へ向かって経路を辿るためのメッセージ形式、ルータでの処理ルール、およびIGMP/MLDとの連携手順を定義し、IPv4/IPv6両対応の標準的なマルチキャストトラブルシューティング手段を確立しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8487 - Mtraceバージョン2：IPマルチキャストのためのTraceroute機能</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -523,12 +528,12 @@ This document describes the base specification of Mtrace2 that can serve as a ba
     <div class="row" id="2--Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 [1] [7] when, and only when, they appear in all capitals, as shown here. The key words indicate requirement levels for compliant Mtrace2 implementations.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 [1] [7] when, and only when, they appear in all capitals, as shown here. The key words indicate requirement levels for compliant Mtrace2 implementations.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 [1] [7] で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 [1] [7] で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -679,19 +684,19 @@ This section describes the details of the packet formats for Mtrace2 messages.
     <div class="row" id="3--Packet-Formats-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-All Mtrace2 messages are encoded in the Type/Length/Value (TLV) format (see Section 3.1). The first TLV of a message is a message header TLV specifying the type of message and additional context information required for processing of the message and for parsing of subsequent TLVs in the message. Subsequent TLVs in a message, referred to as Blocks, are appended after the header TLV to provide additional information associated with the message. If an implementation receives an unknown TLV Type for any TLV in a message, it SHOULD ignore and silently discard the entire packet. If the length of a TLV exceeds the available space in the containing packet, the implementation MUST ignore and silently discard the TLV and any remaining portion of the containing packet.
+All Mtrace2 messages are encoded in the Type/Length/Value (TLV) format (see Section 3.1). The first TLV of a message is a message header TLV specifying the type of message and additional context information required for processing of the message and for parsing of subsequent TLVs in the message. Subsequent TLVs in a message, referred to as Blocks, are appended after the header TLV to provide additional information associated with the message. If an implementation receives an unknown TLV Type for any TLV in a message, it <span class="kw kw-should">SHOULD</span> ignore and silently discard the entire packet. If the length of a TLV exceeds the available space in the containing packet, the implementation <span class="kw kw-must">MUST</span> ignore and silently discard the TLV and any remaining portion of the containing packet.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-すべてのMtrace2メッセージは、タイプ/長さ/値（TLV）形式でエンコードされます（セクション3.1を参照）。メッセージの最初のTLVは、メッセージのタイプを指定するメッセージヘッダーTLVと、メッセージの処理およびメッセージ内の後続のTLVの解析に必要な追加のコンテキスト情報です。ブロックと呼ばれるメッセージ内の後続のTLVは、ヘッダーTLVの後に追加され、メッセージに関連付けられた追加情報を提供します。実装がメッセージ内の任意のTLVの不明なTLVタイプを受信した場合、パケット全体を無視して静かに破棄する必要があります（SHOULD）。 TLVの長さが含まれているパケットで利用可能なスペースを超える場合、実装はTLVと含まれているパケットの残りの部分を無視し、黙って破棄しなければなりません（MUST）。
+すべてのMtrace2メッセージは、タイプ/長さ/値（TLV）形式でエンコードされます（セクション3.1を参照）。メッセージの最初のTLVは、メッセージのタイプを指定するメッセージヘッダーTLVと、メッセージの処理およびメッセージ内の後続のTLVの解析に必要な追加のコンテキスト情報です。ブロックと呼ばれるメッセージ内の後続のTLVは、ヘッダーTLVの後に追加され、メッセージに関連付けられた追加情報を提供します。実装がメッセージ内の任意のTLVの不明なTLVタイプを受信した場合、パケット全体を無視して静かに破棄する必要があります（<span class="kw kw-should">SHOULD</span>）。 TLVの長さが含まれているパケットで利用可能なスペースを超える場合、実装はTLVと含まれているパケットの残りの部分を無視し、黙って破棄しなければなりません（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3--Packet-Formats-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-All Mtrace2 messages are UDP packets. For IPv4, Mtrace2 Query/Request/Reply messages MUST NOT be fragmented. Therefore, Mtrace2 clients and LHRs/RPs MUST set the IP header do-not-fragment (DF) bit for all Mtrace2 messages. For IPv6, the packet size for the Mtrace2 messages MUST NOT exceed 1280 bytes, which is the smallest Maximum Transmission Unit (MTU) for an IPv6 interface [8]. The source port is uniquely selected by the local host operating system. The destination port is the IANA-reserved Mtrace2 port number (see Section 8). All Mtrace2 messages MUST have a valid UDP checksum.
+All Mtrace2 messages are UDP packets. For IPv4, Mtrace2 Query/Request/Reply messages <span class="kw kw-mustnot">MUST NOT</span> be fragmented. Therefore, Mtrace2 clients and LHRs/RPs <span class="kw kw-must">MUST</span> set the IP header do-not-fragment (DF) bit for all Mtrace2 messages. For IPv6, the packet size for the Mtrace2 messages <span class="kw kw-mustnot">MUST NOT</span> exceed 1280 bytes, which is the smallest Maximum Transmission Unit (MTU) for an IPv6 interface [8]. The source port is uniquely selected by the local host operating system. The destination port is the IANA-reserved Mtrace2 port number (see Section 8). All Mtrace2 messages <span class="kw kw-must">MUST</span> have a valid UDP checksum.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -703,7 +708,7 @@ All Mtrace2 messages are UDP packets. For IPv4, Mtrace2 Query/Request/Reply mess
     <div class="row" id="3--Packet-Formats-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Additionally, Mtrace2 supports both IPv4 and IPv6, but not when mixed. For example, if an Mtrace2 Query or Request message arrives as an IPv4 packet, all addresses specified in the Mtrace2 messages MUST be IPv4 as well. The same rule applies to IPv6 Mtrace2 messages.
+Additionally, Mtrace2 supports both IPv4 and IPv6, but not when mixed. For example, if an Mtrace2 Query or Request message arrives as an IPv4 packet, all addresses specified in the Mtrace2 messages <span class="kw kw-must">MUST</span> be IPv4 as well. The same rule applies to IPv6 Mtrace2 messages.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -774,7 +779,7 @@ Length: 16 bits
     <div class="row" id="3-1--Mtrace2-TLV-Format-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-Length of Type, Length, and Value fields in octets. Minimum length required is 4 octets. The length MUST be a multiple of 4 octets. The maximum TLV length is not defined; however, the entire Mtrace2 packet length MUST NOT exceed the available MTU.
+Length of Type, Length, and Value fields in octets. Minimum length required is 4 octets. The length <span class="kw kw-must">MUST</span> be a multiple of 4 octets. The maximum TLV length is not defined; however, the entire Mtrace2 packet length <span class="kw kw-mustnot">MUST NOT</span> exceed the available MTU.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -798,7 +803,7 @@ Value: variable length
     <div class="row" id="3-1--Mtrace2-TLV-Format-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-The format is based on the Type value. The length of the Value field is the Length field minus 3. All reserved fields in the Value field MUST be transmitted as zeros and ignored on receipt.
+The format is based on the Type value. The length of the Value field is the Length field minus 3. All reserved fields in the Value field <span class="kw kw-must">MUST</span> be transmitted as zeros and ignored on receipt.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -849,7 +854,7 @@ The following TLV Types are defined:
     <div class="row" id="3-2--Defined-TLVs-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Each Mtrace2 message MUST begin with either a Query, a Request, or a Reply TLV. The first TLV determines the type of each Mtrace2 message. Following a Query TLV, there can be a sequence of optional Extended Query Blocks. In the case of a Request or a Reply TLV, it is then followed by a sequence of Standard Response Blocks, each from a multicast router on the path towards the source or the RP. In the case where more information is needed, a Standard Response Block can be followed by one or multiple Augmented Response Blocks.
+Each Mtrace2 message <span class="kw kw-must">MUST</span> begin with either a Query, a Request, or a Reply TLV. The first TLV determines the type of each Mtrace2 message. Following a Query TLV, there can be a sequence of optional Extended Query Blocks. In the case of a Request or a Reply TLV, it is then followed by a sequence of Standard Response Blocks, each from a multicast router on the path towards the source or the RP. In the case where more information is needed, a Standard Response Block can be followed by one or multiple Augmented Response Blocks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -885,12 +890,12 @@ We will describe each message type in detail in the next few sections.
     <div class="row" id="3-2-1--Mtrace2-Query-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Query is originated by an Mtrace2 client, which sends an Mtrace2 Query message to the LHR. The LHR modifies only the Type field of the Query TLV (to turn it into a &#34;Request&#34;) before appending a Standard Response Block and forwarding it upstream. The LHR and intermediate routers handling the Mtrace2 message when tracing upstream MUST NOT modify any other fields within the Query/Request TLV. Additionally, intermediate routers handling the message after the LHR has converted the Query into a Request MUST NOT modify the Type field of the Request TLV. If the actual number of hops is not known, an Mtrace2 client could send an initial Query message with a large # Hops (e.g., 0xff), in order to try to trace the full path.
+An Mtrace2 Query is originated by an Mtrace2 client, which sends an Mtrace2 Query message to the LHR. The LHR modifies only the Type field of the Query TLV (to turn it into a &#34;Request&#34;) before appending a Standard Response Block and forwarding it upstream. The LHR and intermediate routers handling the Mtrace2 message when tracing upstream <span class="kw kw-mustnot">MUST NOT</span> modify any other fields within the Query/Request TLV. Additionally, intermediate routers handling the message after the LHR has converted the Query into a Request <span class="kw kw-mustnot">MUST NOT</span> modify the Type field of the Request TLV. If the actual number of hops is not known, an Mtrace2 client could send an initial Query message with a large # Hops (e.g., 0xff), in order to try to trace the full path.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2クエリは、Mtrace2クエリメッセージをLHRに送信するMtrace2クライアントによって発信されます。 LHRは、標準応答ブロックを追加して上流に転送する前に、（それを「要求」に変えるために）クエリTLVのタイプフィールドのみを変更します。アップストリームをトレースするときにMtrace2メッセージを処理するLHRおよび中間ルーターは、クエリ/リクエストTLV内の他のフィールドを変更してはなりません。さらに、LHRがクエリを要求に変換した後にメッセージを処理する中間ルーターは、要求TLVのタイプフィールドを変更してはなりません（MUST NOT）。実際のホップ数がわからない場合、Mtrace2クライアントは、完全なパスのトレースを試みるために、大きな＃ホップ（0xffなど）を含む初期クエリメッセージを送信できます。
+Mtrace2クエリは、Mtrace2クエリメッセージをLHRに送信するMtrace2クライアントによって発信されます。 LHRは、標準応答ブロックを追加して上流に転送する前に、（それを「要求」に変えるために）クエリTLVのタイプフィールドのみを変更します。アップストリームをトレースするときにMtrace2メッセージを処理するLHRおよび中間ルーターは、クエリ/リクエストTLV内の他のフィールドを変更してはなりません。さらに、LHRがクエリを要求に変換した後にメッセージを処理する中間ルーターは、要求TLVのタイプフィールドを変更してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。実際のホップ数がわからない場合、Mtrace2クライアントは、完全なパスのトレースを試みるために、大きな＃ホップ（0xffなど）を含む初期クエリメッセージを送信できます。
         </p>
       </div>
     </div>
@@ -934,7 +939,7 @@ Mtrace2クエリメッセージは次のように表示されます。
     <div class="row" id="3-2-1--Mtrace2-Query-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Length: 16 bits The Length field MUST be either 20 (i.e., 8 + 3 * 4 (IPv4 addresses)) or 56 (i.e., 8 + 3 * 16 (IPv6 addresses)); if the length is 20, then IPv4 addresses MUST be assumed, and if the length is 56, then IPv6 addresses MUST be assumed.
+Length: 16 bits The Length field <span class="kw kw-must">MUST</span> be either 20 (i.e., 8 + 3 * 4 (IPv4 addresses)) or 56 (i.e., 8 + 3 * 16 (IPv6 addresses)); if the length is 20, then IPv4 addresses <span class="kw kw-must">MUST</span> be assumed, and if the length is 56, then IPv6 addresses <span class="kw kw-must">MUST</span> be assumed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -946,12 +951,12 @@ Length: 16 bits The Length field MUST be either 20 (i.e., 8 + 3 * 4 (IPv4 addres
     <div class="row" id="3-2-1--Mtrace2-Query-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-# Hops: 8 bits This field specifies the maximum number of hops that the Mtrace2 client wants to trace. If there are some error conditions in the middle of the path that prevent an Mtrace2 Reply from being received by the client, the client MAY issue another Mtrace2 Query with a lower number of hops until it receives a Reply.
+# Hops: 8 bits This field specifies the maximum number of hops that the Mtrace2 client wants to trace. If there are some error conditions in the middle of the path that prevent an Mtrace2 Reply from being received by the client, the client <span class="kw kw-may">MAY</span> issue another Mtrace2 Query with a lower number of hops until it receives a Reply.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-＃ホップ：8ビットこのフィールドは、Mtrace2クライアントがトレースするホップの最大数を指定します。パスの途中にMtrace2応答がクライアントに受信されないエラー条件がある場合、クライアントは、応答を受信するまで、ホップ数が少ない別のMtrace2クエリを発行できます（MAY）。
+＃ホップ：8ビットこのフィールドは、Mtrace2クライアントがトレースするホップの最大数を指定します。パスの途中にMtrace2応答がクライアントに受信されないエラー条件がある場合、クライアントは、応答を受信するまで、ホップ数が少ない別のMtrace2クエリを発行できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
@@ -1030,7 +1035,7 @@ s-2：ソース固有の情報が必要ない場合は、IPv4の場合はすべ�
     <div class="row" id="3-2-1--Mtrace2-Query-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-Note that it is invalid to have a source-group combination of (s-2, m-2). If a router receives such combination in an Mtrace2 Query, it MUST silently discard the Query.
+Note that it is invalid to have a source-group combination of (s-2, m-2). If a router receives such combination in an Mtrace2 Query, it <span class="kw kw-must">MUST</span> silently discard the Query.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1042,7 +1047,7 @@ Note that it is invalid to have a source-group combination of (s-2, m-2). If a r
     <div class="row" id="3-2-1--Mtrace2-Query-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2 Client Address: 32 bits or 128 bits This field specifies the Mtrace2 client&#39;s IPv4 address or IPv6 global address. This address MUST be a valid unicast address; therefore, it MUST NOT be all ones or an unspecified address. The Mtrace2 Reply will be sent to this address.
+Mtrace2 Client Address: 32 bits or 128 bits This field specifies the Mtrace2 client&#39;s IPv4 address or IPv6 global address. This address <span class="kw kw-must">MUST</span> be a valid unicast address; therefore, it <span class="kw kw-mustnot">MUST NOT</span> be all ones or an unspecified address. The Mtrace2 Reply will be sent to this address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1221,7 +1226,7 @@ This section describes the message format of an IPv4 Mtrace2 Standard Response B
     <div class="row" id="3-2-4--IPv4-Mtrace2-Standard-Response-Block-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MBZ: 8 bits This field MUST be zeroed on transmission and ignored on reception.
+MBZ: 8 bits This field <span class="kw kw-must">MUST</span> be zeroed on transmission and ignored on reception.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1325,7 +1330,7 @@ Outgoing Interface Address：32ビットこのフィールドは、ソースま�
     <div class="row" id="3-2-4--IPv4-Mtrace2-Standard-Response-Block-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Upstream Router Address: 32 bits This field specifies the address of the upstream router from which this router expects packets from this source. This MAY be a multicast group (e.g., ALL-[protocol]-ROUTERS group) if the upstream router is not known because of the workings of the multicast routing protocol. However, it MUST be 0 if the Incoming Interface address is unknown or unnumbered.
+Upstream Router Address: 32 bits This field specifies the address of the upstream router from which this router expects packets from this source. This <span class="kw kw-may">MAY</span> be a multicast group (e.g., ALL-[protocol]-ROUTERS group) if the upstream router is not known because of the workings of the multicast routing protocol. However, it <span class="kw kw-must">MUST</span> be 0 if the Incoming Interface address is unknown or unnumbered.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1558,7 +1563,7 @@ This section describes the message format of an IPv6 Mtrace2 Standard Response B
     <div class="row" id="3-2-5--IPv6-Mtrace2-Standard-Response-Block-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MBZ: 8 bits This field MUST be zeroed on transmission and ignored on reception.
+MBZ: 8 bits This field <span class="kw kw-must">MUST</span> be zeroed on transmission and ignored on reception.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1606,7 +1611,7 @@ Outgoing Interface ID: 32 bits This field specifies the interface ID to which pa
     <div class="row" id="3-2-5--IPv6-Mtrace2-Standard-Response-Block-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Local Address: 128 bits This field specifies a global IPv6 address that uniquely identifies the router. A unique local unicast address [12] SHOULD NOT be used unless the router is only assigned link-local and unique local addresses. If the router is only assigned link-local addresses, its link-local address can be specified in this field.
+Local Address: 128 bits This field specifies a global IPv6 address that uniquely identifies the router. A unique local unicast address [12] <span class="kw kw-shouldnot">SHOULD NOT</span> be used unless the router is only assigned link-local and unique local addresses. If the router is only assigned link-local addresses, its link-local address can be specified in this field.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1726,7 +1731,7 @@ IPv4と同じ定義。
     <div class="row" id="3-2-5--IPv6-Mtrace2-Standard-Response-Block-p17">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MBZ 2: 15 bits This field MUST be zeroed on transmission and ignored on reception.
+MBZ 2: 15 bits This field <span class="kw kw-must">MUST</span> be zeroed on transmission and ignored on reception.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1823,7 +1828,7 @@ Augmented Response Blockは、診断情報（セクション7を参照）やプ�
     <div class="row" id="3-2-6--Mtrace2-Augmented-Response-Block-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MBZ: 8 bits This field MUST be zeroed on transmission and ignored on reception.
+MBZ: 8 bits This field <span class="kw kw-must">MUST</span> be zeroed on transmission and ignored on reception.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1965,7 +1970,7 @@ Mtrace2拡張クエリブロックのTypeフィールドは0x06であり、次�
     <div class="row" id="3-2-7--Mtrace2-Extended-Query-Block-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-MBZ: 7 bits This field MUST be zeroed on transmission and ignored on reception.
+MBZ: 7 bits This field <span class="kw kw-must">MUST</span> be zeroed on transmission and ignored on reception.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1977,7 +1982,7 @@ MBZ：7ビットこのフィールドは送信時にゼロに設定され、受�
     <div class="row" id="3-2-7--Mtrace2-Extended-Query-Block-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-T-bit (Transitive Attribute): 1 bit If the TLV Type is unrecognized by the receiving router, then this TLV is either discarded or forwarded along with the Query, depending on the value of this bit. If this bit is set, then the router MUST forward this TLV. If this bit is clear, the router MUST send an Mtrace2 Reply with an UNKNOWN_QUERY error.
+T-bit (Transitive Attribute): 1 bit If the TLV Type is unrecognized by the receiving router, then this TLV is either discarded or forwarded along with the Query, depending on the value of this bit. If this bit is set, then the router <span class="kw kw-must">MUST</span> forward this TLV. If this bit is clear, the router <span class="kw kw-must">MUST</span> send an Mtrace2 Reply with an UNKNOWN_QUERY error.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2073,19 +2078,19 @@ Mtrace2クエリメッセージは、応答ブロックが入力されていな�
     <div class="row" id="4-1-1--Query-Packet-Verification-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Upon receiving an Mtrace2 Query message, a router MUST examine whether the Multicast Address and the Source Address are a valid combination as specified in Section 3.2.1, and whether the Mtrace2 Client Address is a valid IP unicast address. If either one is invalid, the Query MUST be silently ignored.
+Upon receiving an Mtrace2 Query message, a router <span class="kw kw-must">MUST</span> examine whether the Multicast Address and the Source Address are a valid combination as specified in Section 3.2.1, and whether the Mtrace2 Client Address is a valid IP unicast address. If either one is invalid, the Query <span class="kw kw-must">MUST</span> be silently ignored.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2クエリメッセージを受信すると、ルーターは、マルチキャストアドレスとソースアドレスがセクション3.2.1で指定された有効な組み合わせであるかどうか、およびMtrace2クライアントアドレスが有効なIPユニキャストアドレスであるかどうかを検査する必要があります。どちらかが無効な場合、クエリは黙って無視されなければなりません（MUST）。
+Mtrace2クエリメッセージを受信すると、ルーターは、マルチキャストアドレスとソースアドレスがセクション3.2.1で指定された有効な組み合わせであるかどうか、およびMtrace2クライアントアドレスが有効なIPユニキャストアドレスであるかどうかを検査する必要があります。どちらかが無効な場合、クエリは黙って無視されなければなりません（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="4-1-1--Query-Packet-Verification-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2 supports a non-local client to the LHR/RP. A router MUST, however, support a mechanism to drop Queries from clients beyond a specified administrative boundary. The potential approaches are described in Section 9.2.
+Mtrace2 supports a non-local client to the LHR/RP. A router <span class="kw kw-must">MUST</span>, however, support a mechanism to drop Queries from clients beyond a specified administrative boundary. The potential approaches are described in Section 9.2.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2109,19 +2114,19 @@ In the case where a local LHR client is required, the router must then examine t
     <div class="row" id="4-1-1--Query-Packet-Verification-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the router determines that it is not the proper LHR/RP, or it cannot make that determination, it does one of two things depending on whether the Query was received via multicast or unicast. If the Query was received via multicast, then it MUST be silently discarded. If it was received via unicast, the router turns the Query into a Reply message by changing the TLV Type to 0x03 and appending a Standard Response Block with a Forwarding Code of WRONG_LAST_HOP. The rest of the fields in the Standard Response Block MUST be zeroed. The router then sends the Reply message to the Mtrace2 Client Address on the Client Port # as specified in the Mtrace2 Query.
+If the router determines that it is not the proper LHR/RP, or it cannot make that determination, it does one of two things depending on whether the Query was received via multicast or unicast. If the Query was received via multicast, then it <span class="kw kw-must">MUST</span> be silently discarded. If it was received via unicast, the router turns the Query into a Reply message by changing the TLV Type to 0x03 and appending a Standard Response Block with a Forwarding Code of WRONG_LAST_HOP. The rest of the fields in the Standard Response Block <span class="kw kw-must">MUST</span> be zeroed. The router then sends the Reply message to the Mtrace2 Client Address on the Client Port # as specified in the Mtrace2 Query.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ルーターが適切なLHR/RPではないと判断した場合、またはその判断ができない場合、ルーターは、クエリがマルチキャストとユニキャストのどちらを介して受信されたかに応じて、2つのことのいずれかを行います。クエリがマルチキャストを介して受信された場合、それは黙って破棄されなければならない（MUST）。ユニキャスト経由で受信された場合、ルーターはTLVタイプを0x03に変更し、WRONG_LAST_HOPの転送コードを含む標準応答ブロックを追加することにより、クエリを応答メッセージに変換します。標準応答ブロックの残りのフィールドはゼロにする必要があります。次に、ルータは、Mtrace2クエリで指定されたクライアントポート番号のMtrace2クライアントアドレスに応答メッセージを送信します。
+ルーターが適切なLHR/RPではないと判断した場合、またはその判断ができない場合、ルーターは、クエリがマルチキャストとユニキャストのどちらを介して受信されたかに応じて、2つのことのいずれかを行います。クエリがマルチキャストを介して受信された場合、それは黙って破棄されなければならない（<span class="kw kw-must">MUST</span>）。ユニキャスト経由で受信された場合、ルーターはTLVタイプを0x03に変更し、WRONG_LAST_HOPの転送コードを含む標準応答ブロックを追加することにより、クエリを応答メッセージに変換します。標準応答ブロックの残りのフィールドはゼロにする必要があります。次に、ルータは、Mtrace2クエリで指定されたクライアントポート番号のMtrace2クライアントアドレスに応答メッセージを送信します。
         </p>
       </div>
     </div>
     <div class="row" id="4-1-1--Query-Packet-Verification-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Duplicate Query messages as identified by the tuple (Mtrace2 Client Address, Query ID) SHOULD be ignored. This MAY be implemented using a cache of previously processed Queries keyed by the Mtrace2 Client Address and Query ID pair. The duration of the cached entries is implementation specific. Duplicate Request messages MUST NOT be ignored in this manner.
+Duplicate Query messages as identified by the tuple (Mtrace2 Client Address, Query ID) <span class="kw kw-should">SHOULD</span> be ignored. This <span class="kw kw-may">MAY</span> be implemented using a cache of previously processed Queries keyed by the Mtrace2 Client Address and Query ID pair. The duration of the cached entries is implementation specific. Duplicate Request messages <span class="kw kw-mustnot">MUST NOT</span> be ignored in this manner.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2193,19 +2198,19 @@ Mtrace2要求は、TLVタイプ0x02を使用するMtrace2メッセージです�
     <div class="row" id="4-2-1--Request-Packet-Verification-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the Mtrace2 Request does not come from an adjacent router, or if the Request is not addressed to this router, or if the Request is addressed to a multicast group that is not a link-scoped group (i.e., 224.0.0.0/24 for IPv4 and FFx2::/16 for IPv6 [2]), it MUST be silently ignored. The Generalized TTL Security Mechanism (GTSM) [13] SHOULD be used by the router to determine whether the router is adjacent or not. Source verification specified in Section 9.2 is also considered.
+If the Mtrace2 Request does not come from an adjacent router, or if the Request is not addressed to this router, or if the Request is addressed to a multicast group that is not a link-scoped group (i.e., 224.0.0.0/24 for IPv4 and FFx2::/16 for IPv6 [2]), it <span class="kw kw-must">MUST</span> be silently ignored. The Generalized TTL Security Mechanism (GTSM) [13] <span class="kw kw-should">SHOULD</span> be used by the router to determine whether the router is adjacent or not. Source verification specified in Section 9.2 is also considered.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2要求が隣接ルーターから送信されていない場合、または要求がこのルーターにアドレス指定されていない場合、または要求がリンクスコープグループではないマルチキャストグループ（224.0.0.0/24 for IPv4およびFFx2 :: / 16 for IPv6 [2]）、黙って無視する必要があります。一般化されたTTLセキュリティメカニズム（GTSM）[13]は、ルーターが隣接しているかどうかを判断するために使用する必要があります（SHOULD）。セクション9.2で指定されたソース検証も考慮されます。
+Mtrace2要求が隣接ルーターから送信されていない場合、または要求がこのルーターにアドレス指定されていない場合、または要求がリンクスコープグループではないマルチキャストグループ（224.0.0.0/24 for IPv4およびFFx2 :: / 16 for IPv6 [2]）、黙って無視する必要があります。一般化されたTTLセキュリティメカニズム（GTSM）[13]は、ルーターが隣接しているかどうかを判断するために使用する必要があります（<span class="kw kw-should">SHOULD</span>）。セクション9.2で指定されたソース検証も考慮されます。
         </p>
       </div>
     </div>
     <div class="row" id="4-2-1--Request-Packet-Verification-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the sum of the number of the Standard Response Blocks in the received Mtrace2 Request and the value of the Augmented Response Type of 0x01, if any, is equal or more than the # Hops in the Mtrace2 Request, it MUST be silently ignored.
+If the sum of the number of the Standard Response Blocks in the received Mtrace2 Request and the value of the Augmented Response Type of 0x01, if any, is equal or more than the # Hops in the Mtrace2 Request, it <span class="kw kw-must">MUST</span> be silently ignored.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2445,12 +2450,12 @@ This section describes how an Mtrace2 Request should be forwarded.
     <div class="row" id="4-3-1--Destination-Address-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the upstream router for the Mtrace2 Request is known for this Request, the Mtrace2 Request is sent to that router. If the Incoming Interface is known but the upstream router is not, the Mtrace2 Request is sent to an appropriate multicast address on the Incoming Interface. The multicast address SHOULD depend on the multicast routing protocol in use, such as ALL-[protocol]-ROUTERS group. It MUST be a link-scoped group (i.e., 224.0.0.0/24 for IPv4 and FF02::/16 for IPv6) and MUST NOT be the all-systems multicast group (224.0.0.1) for IPv4 and All Nodes Address (FF02::1) for IPv6. It MAY also be the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6 if the routing protocol in use does not define a more appropriate multicast address.
+If the upstream router for the Mtrace2 Request is known for this Request, the Mtrace2 Request is sent to that router. If the Incoming Interface is known but the upstream router is not, the Mtrace2 Request is sent to an appropriate multicast address on the Incoming Interface. The multicast address <span class="kw kw-should">SHOULD</span> depend on the multicast routing protocol in use, such as ALL-[protocol]-ROUTERS group. It <span class="kw kw-must">MUST</span> be a link-scoped group (i.e., 224.0.0.0/24 for IPv4 and FF02::/16 for IPv6) and <span class="kw kw-mustnot">MUST NOT</span> be the all-systems multicast group (224.0.0.1) for IPv4 and All Nodes Address (FF02::1) for IPv6. It <span class="kw kw-may">MAY</span> also be the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6 if the routing protocol in use does not define a more appropriate multicast address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2要求の上流ルーターがこの要求で認識されている場合、Mtrace2要求がそのルーターに送信されます。着信インターフェイスは既知であるが、上流ルーターが不明の場合、Mtrace2要求は着信インターフェイス上の適切なマルチキャストアドレスに送信されます。マルチキャストアドレスは、ALL- [protocol] -ROUTERSグループなど、使用中のマルチキャストルーティングプロトコルに依存する必要があります（SHOULD）。リンクスコープのグループ（IPv4の場合は224.0.0.0/24、IPv6の場合はFF02 :: / 16）である必要があり、IPv4およびすべてのノードアドレス（FF02の場合）は全システムマルチキャストグループ（224.0.0.1）であってはなりません:: 1）IPv6の場合。また、使用中のルーティングプロトコルがより適切なマルチキャストアドレスを定義していない場合は、IPv4の全ルーターマルチキャストグループ（224.0.0.2）またはIPv6の全ルーターアドレス（FF02 :: 2）にすることもできます。
+Mtrace2要求の上流ルーターがこの要求で認識されている場合、Mtrace2要求がそのルーターに送信されます。着信インターフェイスは既知であるが、上流ルーターが不明の場合、Mtrace2要求は着信インターフェイス上の適切なマルチキャストアドレスに送信されます。マルチキャストアドレスは、ALL- [protocol] -ROUTERSグループなど、使用中のマルチキャストルーティングプロトコルに依存する必要があります（<span class="kw kw-should">SHOULD</span>）。リンクスコープのグループ（IPv4の場合は224.0.0.0/24、IPv6の場合はFF02 :: / 16）である必要があり、IPv4およびすべてのノードアドレス（FF02の場合）は全システムマルチキャストグループ（224.0.0.1）であってはなりません:: 1）IPv6の場合。また、使用中のルーティングプロトコルがより適切なマルチキャストアドレスを定義していない場合は、IPv4の全ルーターマルチキャストグループ（224.0.0.2）またはIPv6の全ルーターアドレス（FF02 :: 2）にすることもできます。
         </p>
       </div>
     </div>
@@ -2493,7 +2498,7 @@ Mtrace2要求は、着信インターフェイスのアドレスとともに送�
     <div class="row" id="4-3-3--Appending-Standard-Response-Block-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Request MUST be sent upstream towards the source or the RP after appending a Standard Response Block to the end of the received Mtrace2 Request. The Standard Response Block includes the multicast states and statistics information of the router described in Section 3.2.4.
+An Mtrace2 Request <span class="kw kw-must">MUST</span> be sent upstream towards the source or the RP after appending a Standard Response Block to the end of the received Mtrace2 Request. The Standard Response Block includes the multicast states and statistics information of the router described in Section 3.2.4.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2505,7 +2510,7 @@ An Mtrace2 Request MUST be sent upstream towards the source or the RP after appe
     <div class="row" id="4-3-3--Appending-Standard-Response-Block-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If appending the Standard Response Block would make the Mtrace2 Request packet longer than the MTU of the Incoming Interface, or, in the case of IPv6, longer than 1280 bytes, the router MUST change the Forwarding Code in the last Standard Response Block of the received Mtrace2 Request into NO_SPACE. The router then turns the Request into a Reply and sends the Reply as described in Section 4.4.
+If appending the Standard Response Block would make the Mtrace2 Request packet longer than the MTU of the Incoming Interface, or, in the case of IPv6, longer than 1280 bytes, the router <span class="kw kw-must">MUST</span> change the Forwarding Code in the last Standard Response Block of the received Mtrace2 Request into NO_SPACE. The router then turns the Request into a Reply and sends the Reply as described in Section 4.4.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2541,7 +2546,7 @@ The router will continue with a new Request by copying the old Request, excludin
     <div class="row" id="4-4--Sending-Mtrace2-Reply-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Reply MUST be returned to the client by a router if any of the following conditions occur:
+An Mtrace2 Reply <span class="kw kw-must">MUST</span> be returned to the client by a router if any of the following conditions occur:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2601,7 +2606,7 @@ An Mtrace2 Reply MUST be returned to the client by a router if any of the follow
     <div class="row" id="4-4-1--Destination-Address-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Reply MUST be sent to the address specified in the Mtrace2 Client Address field in the Mtrace2 Request.
+An Mtrace2 Reply <span class="kw kw-must">MUST</span> be sent to the address specified in the Mtrace2 Client Address field in the Mtrace2 Request.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2625,12 +2630,12 @@ Mtrace2応答は、Mtrace2要求のMtrace2クライアントアドレスフィ�
     <div class="row" id="4-4-2--Source-Address-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Reply SHOULD be sent with the address of the router&#39;s Outgoing Interface. However, if the Outgoing Interface address is unnumbered, the router can use one of its numbered interface addresses as the source address.
+An Mtrace2 Reply <span class="kw kw-should">SHOULD</span> be sent with the address of the router&#39;s Outgoing Interface. However, if the Outgoing Interface address is unnumbered, the router can use one of its numbered interface addresses as the source address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2応答は、ルーターの送信インターフェイスのアドレスとともに送信する必要があります（SHOULD）。ただし、発信インターフェイスアドレスが番号付けされていない場合、ルータは番号付けされたインターフェイスアドレスの1つを送信元アドレスとして使用できます。
+Mtrace2応答は、ルーターの送信インターフェイスのアドレスとともに送信する必要があります（<span class="kw kw-should">SHOULD</span>）。ただし、発信インターフェイスアドレスが番号付けされていない場合、ルータは番号付けされたインターフェイスアドレスの1つを送信元アドレスとして使用できます。
         </p>
       </div>
     </div>
@@ -2649,7 +2654,7 @@ Mtrace2応答は、ルーターの送信インターフェイスのアドレス�
     <div class="row" id="4-4-3--Appending-Standard-Response-Block-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Reply MUST be sent with the prepared Standard Response Block appended at the end of the received Mtrace2 Request except in the case of NO_SPACE Forwarding Code.
+An Mtrace2 Reply <span class="kw kw-must">MUST</span> be sent with the prepared Standard Response Block appended at the end of the received Mtrace2 Request except in the case of NO_SPACE Forwarding Code.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2745,7 +2750,7 @@ The new Mtrace2 Query message is then sent to the upstream router or to an appro
     <div class="row" id="4-5--Proxying-Mtrace2-Query-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the gateway receives an Mtrace2 Reply whose Query ID matches the one in the original Mtrace2 header, it MUST relay the Mtrace2 Reply back to the Mtrace2 client by replacing the Reply&#39;s header with the original Mtrace2 header. If the gateway does not receive the corresponding Mtrace2 Reply within the [Mtrace Reply Timeout] period (see Section 5.8.4), then it silently discards the original Mtrace2 Query or Request message and terminates the trace.
+When the gateway receives an Mtrace2 Reply whose Query ID matches the one in the original Mtrace2 header, it <span class="kw kw-must">MUST</span> relay the Mtrace2 Reply back to the Mtrace2 client by replacing the Reply&#39;s header with the original Mtrace2 header. If the gateway does not receive the corresponding Mtrace2 Reply within the [Mtrace Reply Timeout] period (see Section 5.8.4), then it silently discards the original Mtrace2 Query or Request message and terminates the trace.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2841,7 +2846,7 @@ Mtrace2クライアントは、対象のLHRにクエリを送信することに�
     <div class="row" id="5-1-1--Destination-Address-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If an Mtrace2 client knows the proper LHR, it unicasts an Mtrace2 Query packet to that router; otherwise, it MAY send the Mtrace2 Query packet to the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6. This will ensure that the packet is received by the LHR on the subnet.
+If an Mtrace2 client knows the proper LHR, it unicasts an Mtrace2 Query packet to that router; otherwise, it <span class="kw kw-may">MAY</span> send the Mtrace2 Query packet to the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6. This will ensure that the packet is received by the LHR on the subnet.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2877,7 +2882,7 @@ LHRの決定については、セクション5.4も参照してください。
     <div class="row" id="5-1-2--Source-Address-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 Query MUST be sent with the client&#39;s interface address, which is the Mtrace2 Client Address.
+An Mtrace2 Query <span class="kw kw-must">MUST</span> be sent with the client&#39;s interface address, which is the Mtrace2 Client Address.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2901,12 +2906,12 @@ Mtrace2クエリは、Mtrace2クライアントアドレスであるクライア
     <div class="row" id="5-2--Determining-the-Path-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 client could send an initial Query message with a large # Hops, in order to try to trace the full path. If this attempt fails, one strategy is to perform a linear search (as the traditional unicast traceroute program does); set the # Hops field to 1 and try to get a Reply, then 2, and so on. If no Reply is received at a certain hop, this hop is identified as the probable cause of forwarding failures on the path. Nevertheless, the sender may attempt to continue tracing past the non-responding hop by further increasing the hop count in the hope that further hops may respond. Each of these attempts MUST NOT be initiated before the previous attempt has terminated either because of successful reception of a Reply or because the [Mtrace Reply Timeout] timeout has occurred.
+An Mtrace2 client could send an initial Query message with a large # Hops, in order to try to trace the full path. If this attempt fails, one strategy is to perform a linear search (as the traditional unicast traceroute program does); set the # Hops field to 1 and try to get a Reply, then 2, and so on. If no Reply is received at a certain hop, this hop is identified as the probable cause of forwarding failures on the path. Nevertheless, the sender may attempt to continue tracing past the non-responding hop by further increasing the hop count in the hope that further hops may respond. Each of these attempts <span class="kw kw-mustnot">MUST NOT</span> be initiated before the previous attempt has terminated either because of successful reception of a Reply or because the [Mtrace Reply Timeout] timeout has occurred.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2クライアントは、フルパスを追跡するために、大きな＃ホップを含む最初のクエリメッセージを送信できます。この試みが失敗した場合の1つの戦略は、（従来のユニキャストtracerouteプログラムと同様に）線形検索を実行することです。 ＃Hopsフィールドを1に設定し、返信を取得してから2を取得します。特定のホップで応答が受信されない場合、このホップは、パス上の転送エラーの推定原因として識別されます。それにもかかわらず、送信者は、さらにホップが応答することを期待してホップカウントをさらに増やすことにより、応答しないホップを超えて追跡を継続しようとする場合があります。応答の受信が成功したため、または[Mtrace Reply Timeout]タイムアウトが発生したため、前の試行が終了する前に、これらの試行を開始してはなりません（MUST NOT）。
+Mtrace2クライアントは、フルパスを追跡するために、大きな＃ホップを含む最初のクエリメッセージを送信できます。この試みが失敗した場合の1つの戦略は、（従来のユニキャストtracerouteプログラムと同様に）線形検索を実行することです。 ＃Hopsフィールドを1に設定し、返信を取得してから2を取得します。特定のホップで応答が受信されない場合、このホップは、パス上の転送エラーの推定原因として識別されます。それにもかかわらず、送信者は、さらにホップが応答することを期待してホップカウントをさらに増やすことにより、応答しないホップを超えて追跡を継続しようとする場合があります。応答の受信が成功したため、または[Mtrace Reply Timeout]タイムアウトが発生したため、前の試行が終了する前に、これらの試行を開始してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
@@ -2961,7 +2966,7 @@ After a client has determined that it has traced the whole path or as much as it
     <div class="row" id="5-4--Last-Hop-Router-LHR-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Mtrace2 client may not know which is the last-hop router, or that router may be behind a firewall that blocks unicast packets but passes multicast packets. In these cases, the Mtrace2 Request should be multicasted to the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6. All routers except the correct last-hop router SHOULD ignore any Mtrace2 Request received via multicast.
+The Mtrace2 client may not know which is the last-hop router, or that router may be behind a firewall that blocks unicast packets but passes multicast packets. In these cases, the Mtrace2 Request should be multicasted to the all-routers multicast group (224.0.0.2) for IPv4 or All Routers Address (FF02::2) for IPv6. All routers except the correct last-hop router <span class="kw kw-should">SHOULD</span> ignore any Mtrace2 Request received via multicast.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3189,7 +3194,7 @@ This document defines the [Mtrace Reply Timeout] value, which is used to time ou
     <div class="row" id="5-9--Continuing-after-an-Error-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the NO_SPACE error occurs, as described in Section 4.2, a router will send back an Mtrace2 Reply to the Mtrace2 client and continue with a new Request (see Section 4.3.3). In this case, the Mtrace2 client may receive multiple Mtrace2 Replies from different routers along the path. When this happens, the client MUST treat them as a single Mtrace2 Reply message by collating the Augmented Response Blocks of subsequent Replies sharing the same Query ID, sequencing each cluster of Augmented Response Blocks based on the order in which they are received.
+When the NO_SPACE error occurs, as described in Section 4.2, a router will send back an Mtrace2 Reply to the Mtrace2 client and continue with a new Request (see Section 4.3.3). In this case, the Mtrace2 client may receive multiple Mtrace2 Replies from different routers along the path. When this happens, the client <span class="kw kw-must">MUST</span> treat them as a single Mtrace2 Reply message by collating the Augmented Response Blocks of subsequent Replies sharing the same Query ID, sequencing each cluster of Augmented Response Blocks based on the order in which they are received.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3669,7 +3674,7 @@ This section addresses some of the security considerations related to Mtrace2.
     <div class="row" id="9-1--Addresses-in-Mtrace2-Header-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An Mtrace2 header includes three addresses: a source address, a multicast address, and an Mtrace2 Client Address. These addresses MUST be congruent with the definition defined in Section 3.2.1, and forwarding Mtrace2 messages that have invalid addresses MUST be prohibited. For instance, if the Mtrace2 Client Address specified in an Mtrace2 header is a multicast address, then a router that receives the Mtrace2 message MUST silently discard it.
+An Mtrace2 header includes three addresses: a source address, a multicast address, and an Mtrace2 Client Address. These addresses <span class="kw kw-must">MUST</span> be congruent with the definition defined in Section 3.2.1, and forwarding Mtrace2 messages that have invalid addresses <span class="kw kw-must">MUST</span> be prohibited. For instance, if the Mtrace2 Client Address specified in an Mtrace2 header is a multicast address, then a router that receives the Mtrace2 message <span class="kw kw-must">MUST</span> silently discard it.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3693,12 +3698,12 @@ Mtrace2ヘッダーには、送信元アドレス、マルチキャストアド�
     <div class="row" id="9-2--Verification-of-Clients-and-Peers-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A router providing Mtrace2 functionality MUST support a source-verification mechanism to drop Queries from clients and Requests from peer router or client addresses that are unauthorized or that are beyond a specified administrative boundary. This verification could, for example, be specified via a list of allowed/disallowed clients and peer addresses or subnets for a given Mtrace2 message type sent to the Mtrace2 protocol port. If a Query or Request is received from an unauthorized address or one beyond the specified administrative boundary, the Query/Request MUST NOT be processed. The router MAY, however, perform rate-limited logging of such events.
+A router providing Mtrace2 functionality <span class="kw kw-must">MUST</span> support a source-verification mechanism to drop Queries from clients and Requests from peer router or client addresses that are unauthorized or that are beyond a specified administrative boundary. This verification could, for example, be specified via a list of allowed/disallowed clients and peer addresses or subnets for a given Mtrace2 message type sent to the Mtrace2 protocol port. If a Query or Request is received from an unauthorized address or one beyond the specified administrative boundary, the Query/Request <span class="kw kw-mustnot">MUST NOT</span> be processed. The router <span class="kw kw-may">MAY</span>, however, perform rate-limited logging of such events.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Mtrace2機能を提供するルーターは、ソース検証メカニズムをサポートして、クライアントからのクエリと、承認されていないか、指定された管理境界を超えているピアルーターまたはクライアントアドレスからの要求をドロップする必要があります。この検証は、たとえば、Mtrace2プロトコルポートに送信された特定のMtrace2メッセージタイプの許可/禁止クライアントとピアアドレスまたはサブネットのリストを介して指定できます。許可されていないアドレスまたは指定された管理境界を超えたアドレスからクエリまたはリクエストを受信した場合、クエリ/リクエストを処理してはならない（MUST NOT）。しかしながら、ルータはそのようなイベントのレート制限されたロギングを実行するかもしれません。
+Mtrace2機能を提供するルーターは、ソース検証メカニズムをサポートして、クライアントからのクエリと、承認されていないか、指定された管理境界を超えているピアルーターまたはクライアントアドレスからの要求をドロップする必要があります。この検証は、たとえば、Mtrace2プロトコルポートに送信された特定のMtrace2メッセージタイプの許可/禁止クライアントとピアアドレスまたはサブネットのリストを介して指定できます。許可されていないアドレスまたは指定された管理境界を超えたアドレスからクエリまたはリクエストを受信した場合、クエリ/リクエストを処理してはならない（<span class="kw kw-mustnot">MUST NOT</span>）。しかしながら、ルータはそのようなイベントのレート制限されたロギングを実行するかもしれません。
         </p>
       </div>
     </div>
@@ -3741,7 +3746,7 @@ Note that the following vulnerabilities cannot be covered by the source verifica
     <div class="row" id="9-2--Verification-of-Clients-and-Peers-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">o</span> A malicious application running on a trusted server or router could send packets that might cause an amplification problem. It is beyond the scope of this document to protect against a DoS attack launched from the same host that is the target of the attack or from another &#34;on path&#34; host, but this is not a likely threat scenario. In addition, routers on the path MAY rate-limit the packets as specified in Sections 9.5 and 9.6.
+<span class="bullet-mark">o</span> A malicious application running on a trusted server or router could send packets that might cause an amplification problem. It is beyond the scope of this document to protect against a DoS attack launched from the same host that is the target of the attack or from another &#34;on path&#34; host, but this is not a likely threat scenario. In addition, routers on the path <span class="kw kw-may">MAY</span> rate-limit the packets as specified in Sections 9.5 and 9.6.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3813,7 +3818,7 @@ Mtrace2を使用すると、どのソースがどのグループにどのレー�
     <div class="row" id="9-5--Limiting-QueryRequest-Rates-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A router may limit Mtrace2 Queries and Requests by ignoring some of the consecutive messages. The router MAY randomly ignore the received messages to minimize the processing overhead, i.e., to keep fairness in processing Queries or prevent traffic amplification. The rate limit is left to the router&#39;s implementation.
+A router may limit Mtrace2 Queries and Requests by ignoring some of the consecutive messages. The router <span class="kw kw-may">MAY</span> randomly ignore the received messages to minimize the processing overhead, i.e., to keep fairness in processing Queries or prevent traffic amplification. The rate limit is left to the router&#39;s implementation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3837,7 +3842,7 @@ A router may limit Mtrace2 Queries and Requests by ignoring some of the consecut
     <div class="row" id="9-6--Limiting-Reply-Rates-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The proxying and NO_SPACE behaviors may result in one Query returning multiple Reply messages. In order to prevent abuse, the routers in the traced path MAY need to rate-limit the Replies. The rate-limit function is left to the router&#39;s implementation.
+The proxying and NO_SPACE behaviors may result in one Query returning multiple Reply messages. In order to prevent abuse, the routers in the traced path <span class="kw kw-may">MAY</span> need to rate-limit the Replies. The rate-limit function is left to the router&#39;s implementation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3909,12 +3914,12 @@ Mtrace2クエリの結果、Mtrace2要求メッセージとMtrace2応答メッ�
     <div class="row" id="9-7-2--Amplification-Attack-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In addition, for a router running a PIM protocol (PIM-SM, PIM-DM, PIM - Source-Specific Multicast (PIM-SSM), or Bidirectional PIM), the router SHOULD drop any Mtrace2 Request or Reply message that is received from an IP address that does not correspond to an authenticated PIM neighbor on the interface from which the packet is received. The intent of this text is to prevent non-router endpoints from injecting Request messages. Implementations of non-PIM protocols SHOULD employ some other mechanism to prevent this attack.
+In addition, for a router running a PIM protocol (PIM-SM, PIM-DM, PIM - Source-Specific Multicast (PIM-SSM), or Bidirectional PIM), the router <span class="kw kw-should">SHOULD</span> drop any Mtrace2 Request or Reply message that is received from an IP address that does not correspond to an authenticated PIM neighbor on the interface from which the packet is received. The intent of this text is to prevent non-router endpoints from injecting Request messages. Implementations of non-PIM protocols <span class="kw kw-should">SHOULD</span> employ some other mechanism to prevent this attack.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-さらに、PIMプロトコル（PIM-SM、PIM-DM、PIM-Source-Specific Multicast（PIM-SSM）、または双方向PIM）を実行しているルーターの場合、ルーターは、から受信したMtrace2要求または応答メッセージをすべてドロップする必要があります（SHOULD）。パケットの受信元であるインターフェース上の認証済みPIMネイバーに対応しないIPアドレス。このテキストの目的は、ルーター以外のエンドポイントが要求メッセージを挿入しないようにすることです。非PIMプロトコルの実装では、この攻撃を防ぐために他のメカニズムを採用する必要があります（SHOULD）。
+さらに、PIMプロトコル（PIM-SM、PIM-DM、PIM-Source-Specific Multicast（PIM-SSM）、または双方向PIM）を実行しているルーターの場合、ルーターは、から受信したMtrace2要求または応答メッセージをすべてドロップする必要があります（<span class="kw kw-should">SHOULD</span>）。パケットの受信元であるインターフェース上の認証済みPIMネイバーに対応しないIPアドレス。このテキストの目的は、ルーター以外のエンドポイントが要求メッセージを挿入しないようにすることです。非PIMプロトコルの実装では、この攻撃を防ぐために他のメカニズムを採用する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>

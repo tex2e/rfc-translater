@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、TCPの開始フェーズ（スロースタート）を最適化し、パケット損失を抑えつつ高速に帯域を利用するためのアルゴリズム「HyStart++」を定義しています。往復時間（RTT）の微小な増大を検知してネットワークの混雑予兆を察知し、オーバーシュート（過剰送信）による大量ドロップが発生する前に送信レートを緩やかに調整することで、現代の高速ネットワークにおける通信開始時の安定性と効率を向上させます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 9406 - HyStart++：TCPのための修正スロースタート</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -298,12 +303,12 @@ While this document describes HyStart++ for TCP, it can also be used for other t
     <div class="row" id="2--Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -418,7 +423,7 @@ CONGESTION WINDOW (cwnd):
     <div class="row" id="3--Definitions-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-12">
-A TCP state variable that limits the amount of data a TCP can send. At any given time, a TCP MUST NOT send data with a sequence number higher than the sum of the highest acknowledged sequence number and the minimum of the cwnd and rwnd.
+A TCP state variable that limits the amount of data a TCP can send. At any given time, a TCP <span class="kw kw-mustnot">MUST NOT</span> send data with a sequence number higher than the sum of the highest acknowledged sequence number and the minimum of the cwnd and rwnd.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -791,7 +796,7 @@ If loss or Explicit Congestion Notification (ECN) marking is observed at any tim
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-It is RECOMMENDED that a HyStart++ implementation use the following constants:
+It is <span class="kw kw-should">RECOMMENDED</span> that a HyStart++ implementation use the following constants:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -816,7 +821,7 @@ HyStart実装では、次の定数を使用することをお勧めします。
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-These constants have been determined with lab measurements and real-world deployments. An implementation MAY tune them for different network characteristics.
+These constants have been determined with lab measurements and real-world deployments. An implementation <span class="kw kw-may">MAY</span> tune them for different network characteristics.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -852,7 +857,7 @@ MIN_RTT_DIVISORは、遅延しきい値を計算するためのRTTのほんの�
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-While all TCP implementations are REQUIRED to take at least one RTT sample each round, implementations of HyStart++ are RECOMMENDED to take at least N_RTT_SAMPLE RTT samples. Using lower values of N_RTT_SAMPLE will lower the accuracy of the measured RTT for the round; higher values will improve accuracy at the cost of more processing.
+While all TCP implementations are <span class="kw kw-must">REQUIRED</span> to take at least one RTT sample each round, implementations of HyStart++ are <span class="kw kw-should">RECOMMENDED</span> to take at least N_RTT_SAMPLE RTT samples. Using lower values of N_RTT_SAMPLE will lower the accuracy of the measured RTT for the round; higher values will improve accuracy at the cost of more processing.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -864,7 +869,7 @@ While all TCP implementations are REQUIRED to take at least one RTT sample each 
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The minimum value of CSS_GROWTH_DIVISOR MUST be at least 2. A value of 1 results in the same aggressive behavior as regular slow start. Values larger than 4 will cause the algorithm to be less aggressive and maybe less performant.
+The minimum value of CSS_GROWTH_DIVISOR <span class="kw kw-must">MUST</span> be at least 2. A value of 1 results in the same aggressive behavior as regular slow start. Values larger than 4 will cause the algorithm to be less aggressive and maybe less performant.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -888,7 +893,7 @@ CSS_ROUNDSの値が少ない場合は、ジッターの検出を見逃し、値�
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Packet pacing [ASA00] is a possible mechanism to avoid large bursts and their associated harm. A paced TCP implementation SHOULD use L = infinity. Burst concerns are mitigated by pacing, and this setting allows for optimal cwnd growth on modern networks.
+Packet pacing [ASA00] is a possible mechanism to avoid large bursts and their associated harm. A paced TCP implementation <span class="kw kw-should">SHOULD</span> use L = infinity. Burst concerns are mitigated by pacing, and this setting allows for optimal cwnd growth on modern networks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -912,7 +917,7 @@ For TCP implementations that pace to mitigate burst concerns, L values smaller t
     <div class="row" id="4-3--Tuning-Constants-and-Other-Considerations-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An implementation SHOULD use HyStart++ only for the initial slow start (when the ssthresh is at its initial value of arbitrarily high per <a href="./rfc5681.html">[RFC5681]</a>) and fall back to using standard slow start for the remainder of the connection lifetime. This is acceptable because subsequent slow starts will use the discovered ssthresh value to exit slow start and avoid the overshoot problem. An implementation MAY use HyStart++ to grow the restart window <a href="./rfc5681.html">[RFC5681]</a> after a long idle period.
+An implementation <span class="kw kw-should">SHOULD</span> use HyStart++ only for the initial slow start (when the ssthresh is at its initial value of arbitrarily high per <a href="./rfc5681.html">[RFC5681]</a>) and fall back to using standard slow start for the remainder of the connection lifetime. This is acceptable because subsequent slow starts will use the discovered ssthresh value to exit slow start and avoid the overshoot problem. An implementation <span class="kw kw-may">MAY</span> use HyStart++ to grow the restart window <a href="./rfc5681.html">[RFC5681]</a> after a long idle period.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

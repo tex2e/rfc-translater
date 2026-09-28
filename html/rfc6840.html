@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、DNSSEC（DNS Security Extensions）の仕様を明確化し、実装時の曖昧さを解消するための補足事項をまとめています（RFC 4033/4034/4035を更新）。信頼の連鎖（Trust Anchor）の扱い、ワイルドカードの検証、NSEC/NSEC3の処理、および異なるアルゴリズムが混在する環境での振る舞いなど、DNSSECを正しく実装・運用するための重要な注意点を提示しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 6840 - DNSセキュリティ（DNSSEC）に関する明確化と実装上の注意</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -359,12 +364,12 @@ DNSSECの明確化と変更は、重要度に応じて分類されています�
     <div class="row" id="1-2--Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -431,7 +436,7 @@ This section lists some documents that are now considered core DNSSEC protocol d
     <div class="row" id="2-1--NSEC3-Support-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that the algorithm identifiers defined in <a href="./rfc5155.html">[RFC5155]</a> (DSA-NSEC3- SHA1 and RSASHA1-NSEC3-SHA1) and <a href="./rfc5702.html">[RFC5702]</a> (RSASHA256 and RSASHA512) signal that a zone might be using NSEC3, rather than NSEC. The zone may be using either, and validators supporting these algorithms MUST support both NSEC3 and NSEC responses.
+Note that the algorithm identifiers defined in <a href="./rfc5155.html">[RFC5155]</a> (DSA-NSEC3- SHA1 and RSASHA1-NSEC3-SHA1) and <a href="./rfc5702.html">[RFC5702]</a> (RSASHA256 and RSASHA512) signal that a zone might be using NSEC3, rather than NSEC. The zone may be using either, and validators supporting these algorithms <span class="kw kw-must">MUST</span> support both NSEC3 and NSEC responses.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -503,12 +508,12 @@ Both <a href="./rfc4509.html">[RFC4509]</a> and <a href="./rfc5702.html">[RFC570
     <div class="row" id="3-1--Implement-a-BAD-Cache-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Section 4.7 of <a href="./rfc4035.html">[RFC4035]</a> permits security-aware resolvers to implement a BAD cache. That guidance has changed: security-aware resolvers SHOULD implement a BAD cache as described in <a href="./rfc4035.html">[RFC4035]</a>.
+Section 4.7 of <a href="./rfc4035.html">[RFC4035]</a> permits security-aware resolvers to implement a BAD cache. That guidance has changed: security-aware resolvers <span class="kw kw-should">SHOULD</span> implement a BAD cache as described in <a href="./rfc4035.html">[RFC4035]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-<a href="./rfc4035.html">[RFC4035]</a>のセクション4.7では、セキュリティ認識リゾルバーがBADキャッシュを実装できるようになっています。そのガイダンスが変更されました。セキュリティ対応のリゾルバは、<a href="./rfc4035.html">[RFC4035]</a>で説明されているように、BADキャッシュを実装する必要があります（SHOULD）。
+<a href="./rfc4035.html">[RFC4035]</a>のセクション4.7では、セキュリティ認識リゾルバーがBADキャッシュを実装できるようになっています。そのガイダンスが変更されました。セキュリティ対応のリゾルバは、<a href="./rfc4035.html">[RFC4035]</a>で説明されているように、BADキャッシュを実装する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -611,7 +616,7 @@ An &#34;ancestor delegation&#34; NSEC RR (or NSEC3 RR) is one with:
     <div class="row" id="4-1--Clarifications-on-Nonexistence-Proofs-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Ancestor delegation NSEC or NSEC3 RRs MUST NOT be used to assume nonexistence of any RRs below that zone cut, which include all RRs at that (original) owner name other than DS RRs, and all RRs below that owner name regardless of type.
+Ancestor delegation NSEC or NSEC3 RRs <span class="kw kw-mustnot">MUST NOT</span> be used to assume nonexistence of any RRs below that zone cut, which include all RRs at that (original) owner name other than DS RRs, and all RRs below that owner name regardless of type.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -623,12 +628,12 @@ Ancestor delegation NSEC or NSEC3 RRs MUST NOT be used to assume nonexistence of
     <div class="row" id="4-1--Clarifications-on-Nonexistence-Proofs-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Similarly, the algorithm would also allow an NSEC RR at the same owner name as a DNAME RR, or an NSEC3 RR at the same original owner name as a DNAME, to prove the nonexistence of names beneath that DNAME. An NSEC or NSEC3 RR with the DNAME bit set MUST NOT be used to assume the nonexistence of any subdomain of that NSEC/NSEC3 RR&#39;s (original) owner name.
+Similarly, the algorithm would also allow an NSEC RR at the same owner name as a DNAME RR, or an NSEC3 RR at the same original owner name as a DNAME, to prove the nonexistence of names beneath that DNAME. An NSEC or NSEC3 RR with the DNAME bit set <span class="kw kw-mustnot">MUST NOT</span> be used to assume the nonexistence of any subdomain of that NSEC/NSEC3 RR&#39;s (original) owner name.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-同様に、アルゴリズムは、DNAME RRと同じ所有者名のNSEC RR、またはDNAMEと同じ元の所有者名のNSEC3 RRを許可して、そのDNAMEの下に名前が存在しないことを証明します。 DNAMEビットが設定されたNSECまたはNSEC3 RRを使用して、そのNSEC/NSEC3 RRの（元の）所有者名のサブドメインが存在しないと仮定してはなりません（MUST NOT）。
+同様に、アルゴリズムは、DNAME RRと同じ所有者名のNSEC RR、またはDNAMEと同じ元の所有者名のNSEC3 RRを許可して、そのDNAMEの下に名前が存在しないことを証明します。 DNAMEビットが設定されたNSECまたはNSEC3 RRを使用して、そのNSEC/NSEC3 RRの（元の）所有者名のサブドメインが存在しないと仮定してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
@@ -659,7 +664,7 @@ Similarly, the algorithm would also allow an NSEC RR at the same owner name as a
     <div class="row" id="4-2--Validating-Responses-to-an-ANY-Query-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When validating a response to QTYPE=*, all received RRsets that match QNAME and QCLASS MUST be validated. If any of those RRsets fail validation, the answer is considered Bogus. If there are no RRsets matching QNAME and QCLASS, that fact MUST be validated according to the rules in Section 5.4 of <a href="./rfc4035.html">[RFC4035]</a> (as clarified in this document). To be clear, a validator must not expect to receive all records at the QNAME in response to QTYPE=*.
+When validating a response to QTYPE=*, all received RRsets that match QNAME and QCLASS <span class="kw kw-must">MUST</span> be validated. If any of those RRsets fail validation, the answer is considered Bogus. If there are no RRsets matching QNAME and QCLASS, that fact <span class="kw kw-must">MUST</span> be validated according to the rules in Section 5.4 of <a href="./rfc4035.html">[RFC4035]</a> (as clarified in this document). To be clear, a validator must not expect to receive all records at the QNAME in response to QTYPE=*.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -683,7 +688,7 @@ QTYPE = *への応答を検証するとき、QNAMEおよびQCLASSに一致する
     <div class="row" id="4-3--Check-for-CNAME-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Section 5 of <a href="./rfc4035.html">[RFC4035]</a> says nothing explicit about validating responses based on (or that should be based on) CNAMEs. When validating a NOERROR/NODATA response, validators MUST check the CNAME bit in the matching NSEC or NSEC3 RR&#39;s type bitmap in addition to the bit for the query type.
+Section 5 of <a href="./rfc4035.html">[RFC4035]</a> says nothing explicit about validating responses based on (or that should be based on) CNAMEs. When validating a NOERROR/NODATA response, validators <span class="kw kw-must">MUST</span> check the CNAME bit in the matching NSEC or NSEC3 RR&#39;s type bitmap in addition to the bit for the query type.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -719,7 +724,7 @@ Without this check, an attacker could successfully transform a positive CNAME re
     <div class="row" id="4-4--Insecure-Delegation-Proofs-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a> specifies that a validator, when proving a delegation is not secure, needs to check for the absence of the DS and SOA bits in the NSEC (or NSEC3) type bitmap. The validator also MUST check for the presence of the NS bit in the matching NSEC (or NSEC3) RR (proving that there is, indeed, a delegation), or alternately make sure that the delegation is covered by an NSEC3 RR with the Opt-Out flag set.
+Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a> specifies that a validator, when proving a delegation is not secure, needs to check for the absence of the DS and SOA bits in the NSEC (or NSEC3) type bitmap. The validator also <span class="kw kw-must">MUST</span> check for the presence of the NS bit in the matching NSEC (or NSEC3) RR (proving that there is, indeed, a delegation), or alternately make sure that the delegation is covered by an NSEC3 RR with the Opt-Out flag set.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -815,7 +820,7 @@ Section 6.2 of <a href="./rfc4034.html">[RFC4034]</a> also erroneously lists HI
     <div class="row" id="5-2--Unknown-DS-Message-Digest-Algorithms-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a> includes rules for how to handle delegations to zones that are signed with entirely unsupported public key algorithms, as indicated by the key algorithms shown in those zones&#39; DS RRsets. It does not explicitly address how to handle DS records that use unsupported message digest algorithms. In brief, DS records using unknown or unsupported message digest algorithms MUST be treated the same way as DS records referring to DNSKEY RRs of unknown or unsupported public key algorithms.
+Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a> includes rules for how to handle delegations to zones that are signed with entirely unsupported public key algorithms, as indicated by the key algorithms shown in those zones&#39; DS RRsets. It does not explicitly address how to handle DS records that use unsupported message digest algorithms. In brief, DS records using unknown or unsupported message digest algorithms <span class="kw kw-must">MUST</span> be treated the same way as DS records referring to DNSKEY RRs of unknown or unsupported public key algorithms.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -911,7 +916,7 @@ If no private algorithms appear in the DS RRset, or if any supported algorithm a
     <div class="row" id="5-3--Private-Algorithms-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the remaining cases, the security status of the zone depends on whether or not the resolver supports any of the private algorithms in use (provided that these DS records use supported message digest algorithms, as discussed in Section 5.2 of this document). In these cases, the resolver MUST retrieve the corresponding DNSKEY for each private algorithm DS record and examine the public key field to determine the algorithm in use. The security-aware resolver MUST ensure that the hash of the DNSKEY RR&#39;s owner name and RDATA matches the digest in the DS RR as described in Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a>, authenticating the DNSKEY. If all of the retrieved and authenticated DNSKEY RRs use unknown or unsupported private algorithms, then the zone is treated as if it were unsigned.
+In the remaining cases, the security status of the zone depends on whether or not the resolver supports any of the private algorithms in use (provided that these DS records use supported message digest algorithms, as discussed in Section 5.2 of this document). In these cases, the resolver <span class="kw kw-must">MUST</span> retrieve the corresponding DNSKEY for each private algorithm DS record and examine the public key field to determine the algorithm in use. The security-aware resolver <span class="kw kw-must">MUST</span> ensure that the hash of the DNSKEY RR&#39;s owner name and RDATA matches the digest in the DS RR as described in Section 5.2 of <a href="./rfc4035.html">[RFC4035]</a>, authenticating the DNSKEY. If all of the retrieved and authenticated DNSKEY RRs use unknown or unsupported private algorithms, then the zone is treated as if it were unsigned.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -971,7 +976,7 @@ When multiple RRSIGs cover a given RRset, Section 5.3.3 of <a href="./rfc4035.h
     <div class="row" id="5-4--Caution-about-Local-Policy-and-Multiple-RRSIGs-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document specifies that a resolver SHOULD accept any valid RRSIG as sufficient, and only determine that an RRset is Bogus if all RRSIGs fail validation.
+This document specifies that a resolver <span class="kw kw-should">SHOULD</span> accept any valid RRSIG as sufficient, and only determine that an RRset is Bogus if all RRSIGs fail validation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1031,7 +1036,7 @@ Appendix B.1 of <a href="./rfc4034.html">[RFC4034]</a> incorrectly defines the 
     <div class="row" id="5-6--Setting-the-DO-Bit-on-Replies-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As stated in Section 3 of <a href="./rfc3225.html">[RFC3225]</a>, the DNSSEC OK (DO) bit of the query MUST be copied in the response. However, in order to interoperate with implementations that ignore this rule on sending, resolvers MUST ignore the DO bit in responses.
+As stated in Section 3 of <a href="./rfc3225.html">[RFC3225]</a>, the DNSSEC OK (DO) bit of the query <span class="kw kw-must">MUST</span> be copied in the response. However, in order to interoperate with implementations that ignore this rule on sending, resolvers <span class="kw kw-must">MUST</span> ignore the DO bit in responses.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1091,7 +1096,7 @@ This document defines setting the AD bit in a query as a signal indicating that 
     <div class="row" id="5-8--Setting-the-AD-Bit-on-Replies-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Section 3.2.3 of <a href="./rfc4035.html">[RFC4035]</a> describes under which conditions a validating resolver should set or clear the AD bit in a response. In order to interoperate with legacy stub resolvers and middleboxes that neither understand nor ignore the AD bit, validating resolvers SHOULD only set the AD bit when a response both meets the conditions listed in Section 3.2.3 of <a href="./rfc4035.html">[RFC4035]</a>, and the request contained either a set DO bit or a set AD bit.
+Section 3.2.3 of <a href="./rfc4035.html">[RFC4035]</a> describes under which conditions a validating resolver should set or clear the AD bit in a response. In order to interoperate with legacy stub resolvers and middleboxes that neither understand nor ignore the AD bit, validating resolvers <span class="kw kw-should">SHOULD</span> only set the AD bit when a response both meets the conditions listed in Section 3.2.3 of <a href="./rfc4035.html">[RFC4035]</a>, and the request contained either a set DO bit or a set AD bit.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1115,19 +1120,19 @@ Section 3.2.3 of <a href="./rfc4035.html">[RFC4035]</a> describes under which c
     <div class="row" id="5-9--Always-Set-the-CD-Bit-on-Queries-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When processing a request with the Checking Disabled (CD) bit set, a resolver SHOULD attempt to return all response data, even data that has failed DNSSEC validation. Section 3.2.2 of <a href="./rfc4035.html">[RFC4035]</a> requires a resolver processing a request with the CD bit set to set the CD bit on its upstream queries.
+When processing a request with the Checking Disabled (CD) bit set, a resolver <span class="kw kw-should">SHOULD</span> attempt to return all response data, even data that has failed DNSSEC validation. Section 3.2.2 of <a href="./rfc4035.html">[RFC4035]</a> requires a resolver processing a request with the CD bit set to set the CD bit on its upstream queries.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Checking Disabled（CD）ビットが設定された要求を処理する場合、リゾルバーは、DNSSEC検証に失敗したデータも含めて、すべての応答データを返そうとします（SHOULD）。 <a href="./rfc4035.html">[RFC4035]</a>のセクション3.2.2では、リゾルバがCDビットを設定してリクエストを処理し、上流のクエリにCDビットを設定する必要があります。
+Checking Disabled（CD）ビットが設定された要求を処理する場合、リゾルバーは、DNSSEC検証に失敗したデータも含めて、すべての応答データを返そうとします（<span class="kw kw-should">SHOULD</span>）。 <a href="./rfc4035.html">[RFC4035]</a>のセクション3.2.2では、リゾルバがCDビットを設定してリクエストを処理し、上流のクエリにCDビットを設定する必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="5-9--Always-Set-the-CD-Bit-on-Queries-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document further specifies that validating resolvers SHOULD set the CD bit on every upstream query. This is regardless of whether the CD bit was set on the incoming query or whether it has a trust anchor at or above the QNAME.
+This document further specifies that validating resolvers <span class="kw kw-should">SHOULD</span> set the CD bit on every upstream query. This is regardless of whether the CD bit was set on the incoming query or whether it has a trust anchor at or above the QNAME.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1259,7 +1264,7 @@ DS RRsetおよびDNSKEY RRsetは、ゾーンの署名に使用されるアルゴ
     <div class="row" id="5-11--Mandatory-Algorithm-Rules-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- A signed zone MUST include a DNSKEY for each algorithm present in the zone&#39;s DS RRset and expected trust anchors for the zone. The zone MUST also be signed with each algorithm (though not each key) present in the DNSKEY RRset. It is possible to add algorithms at the DNSKEY that aren&#39;t in the DS record, but not vice versa. If more than one key of the same algorithm is in the DNSKEY RRset, it is sufficient to sign each RRset with any subset of these DNSKEYs. It is acceptable to sign some RRsets with one subset of keys (or key) and other RRsets with a different subset, so long as at least one DNSKEY of each algorithm is used to sign each RRset. Likewise, if there are DS records for multiple keys of the same algorithm, any subset of those may appear in the DNSKEY RRset.
+ A signed zone <span class="kw kw-must">MUST</span> include a DNSKEY for each algorithm present in the zone&#39;s DS RRset and expected trust anchors for the zone. The zone <span class="kw kw-must">MUST</span> also be signed with each algorithm (though not each key) present in the DNSKEY RRset. It is possible to add algorithms at the DNSKEY that aren&#39;t in the DS record, but not vice versa. If more than one key of the same algorithm is in the DNSKEY RRset, it is sufficient to sign each RRset with any subset of these DNSKEYs. It is acceptable to sign some RRsets with one subset of keys (or key) and other RRsets with a different subset, so long as at least one DNSKEY of each algorithm is used to sign each RRset. Likewise, if there are DS records for multiple keys of the same algorithm, any subset of those may appear in the DNSKEY RRset.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1271,12 +1276,12 @@ DS RRsetおよびDNSKEY RRsetは、ゾーンの署名に使用されるアルゴ
     <div class="row" id="5-11--Mandatory-Algorithm-Rules-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This requirement applies to servers, not validators. Validators SHOULD accept any single valid path. They SHOULD NOT insist that all algorithms signaled in the DS RRset work, and they MUST NOT insist that all algorithms signaled in the DNSKEY RRset work. A validator MAY have a configuration option to perform a signature completeness test to support troubleshooting.
+This requirement applies to servers, not validators. Validators <span class="kw kw-should">SHOULD</span> accept any single valid path. They <span class="kw kw-shouldnot">SHOULD NOT</span> insist that all algorithms signaled in the DS RRset work, and they <span class="kw kw-mustnot">MUST NOT</span> insist that all algorithms signaled in the DNSKEY RRset work. A validator <span class="kw kw-may">MAY</span> have a configuration option to perform a signature completeness test to support troubleshooting.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この要件は、バリデーターではなくサーバーに適用されます。バリデーターは単一の有効なパスを受け入れる必要があります。彼らは、DS RRsetで通知されたすべてのアルゴリズムが機能することを主張してはならず、DNSKEY RRsetで通知されたすべてのアルゴリズムが機能することを主張してはなりません（MUST NOT）。バリデーターは、トラブルシューティングをサポートするために、署名の完全性テストを実行するための構成オプションを持つ場合があります。
+この要件は、バリデーターではなくサーバーに適用されます。バリデーターは単一の有効なパスを受け入れる必要があります。彼らは、DS RRsetで通知されたすべてのアルゴリズムが機能することを主張してはならず、DNSKEY RRsetで通知されたすべてのアルゴリズムが機能することを主張してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。バリデーターは、トラブルシューティングをサポートするために、署名の完全性テストを実行するための構成オプションを持つ場合があります。
         </p>
       </div>
     </div>
@@ -1295,7 +1300,7 @@ This requirement applies to servers, not validators. Validators SHOULD accept an
     <div class="row" id="5-12--Ignore-Extra-Signatures-from-Unknown-Keys-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Validating resolvers MUST disregard RRSIGs in a zone that do not (currently) have a corresponding DNSKEY in the zone. Similarly, a validating resolver MUST disregard RRSIGs with algorithm types that don&#39;t exist in the DNSKEY RRset.
+Validating resolvers <span class="kw kw-must">MUST</span> disregard RRSIGs in a zone that do not (currently) have a corresponding DNSKEY in the zone. Similarly, a validating resolver <span class="kw kw-must">MUST</span> disregard RRSIGs with algorithm types that don&#39;t exist in the DNSKEY RRset.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1451,7 +1456,7 @@ An NSEC3 record that matches an Empty Non-Terminal effectively has no type assoc
     <div class="row" id="6-4--Errors-in-RFC-5155-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-Blocks with no types present MUST NOT be included.
+Blocks with no types present <span class="kw kw-mustnot">MUST NOT</span> be included.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2021,7 +2026,7 @@ Model 2: &#34;never set when receiving CD=0&#34;
     <div class="row" id="Appendix-B--Discussion-of-Setting-the-CD-Bit-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This model is so named because it sets CD=0 on upstream queries for all received CD=0 queries, even if it has a covering trust anchor. The general philosophy represented by this table is that more than one resolver may take responsibility for validating a QNAME and that a validation failure for a QNAME by any resolver in the chain is a validation failure for the query. Using this model is NOT RECOMMENDED.
+This model is so named because it sets CD=0 on upstream queries for all received CD=0 queries, even if it has a covering trust anchor. The general philosophy represented by this table is that more than one resolver may take responsibility for validating a QNAME and that a validation failure for a QNAME by any resolver in the chain is a validation failure for the query. Using this model is <span class="kw kw-shouldnot">NOT RECOMMENDED</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2065,7 +2070,7 @@ Model 3: &#34;sometimes set&#34;
     <div class="row" id="Appendix-B--Discussion-of-Setting-the-CD-Bit-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- This model is so named because it sets the CD bit on upstream queries triggered by received CD=0 queries, based on whether the validator has a trust anchor configured that covers the query. If there is no covering trust anchor, the resolver clears the CD bit in the upstream query. If there is a covering trust anchor, the resolver sets CD=1 and performs validation itself. The general philosophy represented by this table is that a resolver should try and validate QNAMEs for which it has trust anchors and should not preclude validation by other resolvers for QNAMEs for which it does not have covering trust anchors. Using this model is NOT RECOMMENDED.
+ This model is so named because it sets the CD bit on upstream queries triggered by received CD=0 queries, based on whether the validator has a trust anchor configured that covers the query. If there is no covering trust anchor, the resolver clears the CD bit in the upstream query. If there is a covering trust anchor, the resolver sets CD=1 and performs validation itself. The general philosophy represented by this table is that a resolver should try and validate QNAMEs for which it has trust anchors and should not preclude validation by other resolvers for QNAMEs for which it does not have covering trust anchors. Using this model is <span class="kw kw-shouldnot">NOT RECOMMENDED</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

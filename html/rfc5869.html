@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、HMACに基づいた鍵導出関数「HKDF (Extract-and-Expand KDF)」の仕様を定義しています。初期鍵材料から高エントロピーなマスター鍵を抽出する「Extract」フェーズと、そこから特定の長さの鍵を生成する「Expand」フェーズの2段階プロセスを規定しており、TLS 1.3等の現代の暗号プロトコルにおいて、安全かつ効率的に複数の暗号鍵を導出するためのデファクトスタンダードとなっています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 5869 - HMACベースの抽出および展開鍵導出関数（HKDF）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成＆有志による翻訳・編集</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -336,12 +341,12 @@ When the message is composed of several elements we use concatenation (denoted |
     <div class="row" id="2-1--Notation-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in [KEYWORDS].
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in [KEYWORDS].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、[KEYWORDS] で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、[KEYWORDS] で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -646,24 +651,24 @@ While the &#39;info&#39; value is optional in the definition of HKDF, it is ofte
     <div class="row" id="3-3--To-Skip-or-not-to-Skip-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In some applications, the input key material IKM may already be present as a cryptographically strong key (for example, the premaster secret in TLS RSA cipher suites would be a pseudorandom string, except for the first two octets). In this case, one can skip the extract part and use IKM directly to key HMAC in the expand step. On the other hand, applications may still use the extract part for the sake of compatibility with the general case. In particular, if IKM is random (or pseudorandom) but longer than an HMAC key, the extract step can serve to output a suitable HMAC key (in the case of HMAC this shortening via the extractor is not strictly necessary since HMAC is defined to work with long keys too). Note, however, that if the IKM is a Diffie-Hellman value, as in the case of TLS with Diffie-Hellman, then the extract part SHOULD NOT be skipped. Doing so would result in using the Diffie-Hellman value g^{xy} itself (which is NOT a uniformly random or pseudorandom string) as the key PRK for HMAC. Instead, HKDF should apply the extract step to g^{xy} (preferably with a salt value) and use the resultant PRK as a key to HMAC in the expansion part.
+In some applications, the input key material IKM may already be present as a cryptographically strong key (for example, the premaster secret in TLS RSA cipher suites would be a pseudorandom string, except for the first two octets). In this case, one can skip the extract part and use IKM directly to key HMAC in the expand step. On the other hand, applications may still use the extract part for the sake of compatibility with the general case. In particular, if IKM is random (or pseudorandom) but longer than an HMAC key, the extract step can serve to output a suitable HMAC key (in the case of HMAC this shortening via the extractor is not strictly necessary since HMAC is defined to work with long keys too). Note, however, that if the IKM is a Diffie-Hellman value, as in the case of TLS with Diffie-Hellman, then the extract part <span class="kw kw-shouldnot">SHOULD NOT</span> be skipped. Doing so would result in using the Diffie-Hellman value g^{xy} itself (which is NOT a uniformly random or pseudorandom string) as the key PRK for HMAC. Instead, HKDF should apply the extract step to g^{xy} (preferably with a salt value) and use the resultant PRK as a key to HMAC in the expansion part.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-一部のアプリケーションでは、入力キーマテリアルIKMがすでに暗号学的に強力な鍵として存在している場合があります（たとえば、TLS RSA暗号スイートのプリマスターシークレットは、最初の2オクテットを除いて擬似ランダム文字列になります）。この場合、抽出部分をスキップし、展開ステップでHMACの鍵としてIKMを直接使用できます。一方、アプリケーションは、一般的なケースとの互換性のために、引き続き抽出部分を使用する場合があります。特に、IKMがランダム（または擬似ランダム）であるがHMAC鍵よりも長い場合、抽出ステップは適切なHMAC鍵を出力するのに役立ちます（HMACの場合、HMACは長い鍵でも動作するように定義されているため、抽出器によるこの短縮は厳密には必要ありません）。ただし、Diffie-Hellmanを使用したTLSの場合のように、IKMがDiffie-Hellman値である場合、抽出部分をスキップすべきではありません（SHOULD NOT）。そうすることで、Diffie-Hellman値 g^{xy} 自体（均一にランダムまたは擬似ランダム文字列ではありません）をHMACの鍵PRKとして使用することになります。代わりに、HKDFは抽出ステップを g^{xy} に適用し（できればソルト値を使用して）、得られたPRKを展開部分のHMACの鍵として使用する必要があります。
+一部のアプリケーションでは、入力キーマテリアルIKMがすでに暗号学的に強力な鍵として存在している場合があります（たとえば、TLS RSA暗号スイートのプリマスターシークレットは、最初の2オクテットを除いて擬似ランダム文字列になります）。この場合、抽出部分をスキップし、展開ステップでHMACの鍵としてIKMを直接使用できます。一方、アプリケーションは、一般的なケースとの互換性のために、引き続き抽出部分を使用する場合があります。特に、IKMがランダム（または擬似ランダム）であるがHMAC鍵よりも長い場合、抽出ステップは適切なHMAC鍵を出力するのに役立ちます（HMACの場合、HMACは長い鍵でも動作するように定義されているため、抽出器によるこの短縮は厳密には必要ありません）。ただし、Diffie-Hellmanを使用したTLSの場合のように、IKMがDiffie-Hellman値である場合、抽出部分をスキップすべきではありません（<span class="kw kw-shouldnot">SHOULD NOT</span>）。そうすることで、Diffie-Hellman値 g^{xy} 自体（均一にランダムまたは擬似ランダム文字列ではありません）をHMACの鍵PRKとして使用することになります。代わりに、HKDFは抽出ステップを g^{xy} に適用し（できればソルト値を使用して）、得られたPRKを展開部分のHMACの鍵として使用する必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="3-3--To-Skip-or-not-to-Skip-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the case where the amount of required key bits, L, is no more than HashLen, one could use PRK directly as the OKM. This, however, is NOT RECOMMENDED, especially because it would omit the use of &#39;info&#39; as part of the derivation process (and adding &#39;info&#39; as an input to the extract step is not advisable -- see [HKDF-paper]).
+In the case where the amount of required key bits, L, is no more than HashLen, one could use PRK directly as the OKM. This, however, is <span class="kw kw-shouldnot">NOT RECOMMENDED</span>, especially because it would omit the use of &#39;info&#39; as part of the derivation process (and adding &#39;info&#39; as an input to the extract step is not advisable -- see [HKDF-paper]).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-必要な鍵ビットの量LがHashLen以下の場合、PRKをOKMとして直接使用できます。ただし、これは推奨されません（NOT RECOMMENDED）。特に、導出プロセスの一部として「info」の使用を省略するためです（また、抽出ステップへの入力として「info」を追加することはお勧めできません。[HKDF-paper]を参照）。
+必要な鍵ビットの量LがHashLen以下の場合、PRKをOKMとして直接使用できます。ただし、これは推奨されません（<span class="kw kw-shouldnot">NOT RECOMMENDED</span>）。特に、導出プロセスの一部として「info」の使用を省略するためです（また、抽出ステップへの入力として「info」を追加することはお勧めできません。[HKDF-paper]を参照）。
         </p>
       </div>
     </div>

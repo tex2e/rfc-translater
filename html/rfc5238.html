@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、データグラム輻輳制御プロトコル DCCP (Datagram Congestion Control Protocol) 上で、DTLS (Datagram TLS) を動作させるための仕様を定義しています。DCCPの持つ輻輳制御機能を活かしつつ、メディアストリーミング等の信頼性のないデータ転送に対してEnd-to-Endのセキュリティを付与するためのカプセル化手順と手順を規定しており、セキュアかつ効率的なリアルタイム通信を実現します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 5238 - Datagram Congestion Control Protocol (DCCP) 上での Datagram Transport Layer Security (DTLS)</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -248,12 +253,12 @@ DTLSとDCCPの組み合わせにより、DCCPを使用するアプリケーシ�
     <div class="row" id="2--Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -272,12 +277,12 @@ The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL
     <div class="row" id="3--DTLS-over-DCCP-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The approach here is very straightforward -- DTLS records are transmitted in the Application Data fields of DCCP-Data and DCCP-DataAck packets (in the rest of the document assume that &#34;DCCP-Data packet&#34; means &#34;DCCP-Data or DCCP-DataAck packet&#34;). Multiple DTLS records MAY be sent in one DCCP-Data packet, as long as the resulting packet is within the Path Maximum Transfer Unit (PMTU) currently in force for normal data packets, if fragmentation is not allowed (the Don&#39;t Fragment (DF) bit is set for IPv4 or no fragmentation extension headers are being used for IPv6), or within the current DCCP maximum packet size if fragmentation is allowed (see Section 3.5 for more information on PMTU Discovery). A single DTLS record MUST be fully contained in a single DCCP-Data packet; it MUST NOT be split over multiple packets.
+The approach here is very straightforward -- DTLS records are transmitted in the Application Data fields of DCCP-Data and DCCP-DataAck packets (in the rest of the document assume that &#34;DCCP-Data packet&#34; means &#34;DCCP-Data or DCCP-DataAck packet&#34;). Multiple DTLS records <span class="kw kw-may">MAY</span> be sent in one DCCP-Data packet, as long as the resulting packet is within the Path Maximum Transfer Unit (PMTU) currently in force for normal data packets, if fragmentation is not allowed (the Don&#39;t Fragment (DF) bit is set for IPv4 or no fragmentation extension headers are being used for IPv6), or within the current DCCP maximum packet size if fragmentation is allowed (see Section 3.5 for more information on PMTU Discovery). A single DTLS record <span class="kw kw-must">MUST</span> be fully contained in a single DCCP-Data packet; it <span class="kw kw-mustnot">MUST NOT</span> be split over multiple packets.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ここでのアプローチは非常に簡単です。DTLSレコードは、DCCP-DataおよびDCCP-DataAckパケットのアプリケーションデータフィールドで送信されます（このドキュメントの残りの部分では、「DCCP-Dataパケット」は「DCCP-DataまたはDCCP-DataAckを意味するものと想定しています）パケット&#34;）。フラグメント化が許可されていない場合（Do n&#39;t Fragment（DF）は、結果のパケットが通常のデータパケットに対して現在有効なパス最大転送ユニット（PMTU）内にある限り、複数のDTLSレコードを1つのDCCP-Dataパケットで送信できます（MAY）。 ）IPv4にビットが設定されているか、IPv6にフラグメンテーション拡張ヘッダーが使用されていない）、またはフラグメンテーションが許可されている場合は現在のDCCP最大パケットサイズ内（PMTU Discoveryの詳細については、セクション3.5を参照）。単一のDTLSレコードは、単一のDCCP-Dataパケットに完全に含まれている必要があります。複数のパケットに分割することはできません。
+ここでのアプローチは非常に簡単です。DTLSレコードは、DCCP-DataおよびDCCP-DataAckパケットのアプリケーションデータフィールドで送信されます（このドキュメントの残りの部分では、「DCCP-Dataパケット」は「DCCP-DataまたはDCCP-DataAckを意味するものと想定しています）パケット&#34;）。フラグメント化が許可されていない場合（Do n&#39;t Fragment（DF）は、結果のパケットが通常のデータパケットに対して現在有効なパス最大転送ユニット（PMTU）内にある限り、複数のDTLSレコードを1つのDCCP-Dataパケットで送信できます（<span class="kw kw-may">MAY</span>）。 ）IPv4にビットが設定されているか、IPv6にフラグメンテーション拡張ヘッダーが使用されていない）、またはフラグメンテーションが許可されている場合は現在のDCCP最大パケットサイズ内（PMTU Discoveryの詳細については、セクション3.5を参照）。単一のDTLSレコードは、単一のDCCP-Dataパケットに完全に含まれている必要があります。複数のパケットに分割することはできません。
         </p>
       </div>
     </div>
@@ -332,12 +337,12 @@ UDPとは異なり、DCCPは接続指向であり、DCCP-DataおよびDCCP-DataA
     <div class="row" id="3-2--DCCP-and-DTLS-Connection-Handshakes-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-However, the DCCP handshake packets DCCP-Request and DCCP-Response have Application Data fields and can carry user data during the DCCP handshake, and this creates the opportunity to perform the handshakes partially in parallel. DTLS client implementations MAY choose to transmit one or more DTLS records (typically containing DTLS handshake messages or parts of them) in the DCCP-Request packet. A DTLS server implementation MAY choose to process these records as usual, and if it has one or more DTLS records to send as a response (typically containing DTLS handshake messages or parts of them), it MAY include those records in the DCCP-Response packet. DTLS servers MAY also choose to delay the response until the DCCP handshake completes and then send the DTLS response in a DCCP-Data packet.
+However, the DCCP handshake packets DCCP-Request and DCCP-Response have Application Data fields and can carry user data during the DCCP handshake, and this creates the opportunity to perform the handshakes partially in parallel. DTLS client implementations <span class="kw kw-may">MAY</span> choose to transmit one or more DTLS records (typically containing DTLS handshake messages or parts of them) in the DCCP-Request packet. A DTLS server implementation <span class="kw kw-may">MAY</span> choose to process these records as usual, and if it has one or more DTLS records to send as a response (typically containing DTLS handshake messages or parts of them), it <span class="kw kw-may">MAY</span> include those records in the DCCP-Response packet. DTLS servers <span class="kw kw-may">MAY</span> also choose to delay the response until the DCCP handshake completes and then send the DTLS response in a DCCP-Data packet.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ただし、DCCPハンドシェイクパケットDCCP-RequestおよびDCCP-Responseにはアプリケーションデータフィールドがあり、DCCPハンドシェイク中にユーザーデータを伝送できるため、ハンドシェイクを部分的に並行して実行する機会が生まれます。 DTLSクライアント実装は、DCCP要求パケットで1つ以上のDTLSレコード（通常はDTLSハンドシェイクメッセージまたはその一部を含む）を送信することを選択できます（MAY）。 DTLSサーバーの実装は、これらのレコードを通常どおり処理することを選択できます。また、応答として送信する1つ以上のDTLSレコードがある場合（通常、DTLSハンドシェイクメッセージまたはそれらの一部を含む）、DCCP応答パケットにそれらのレコードを含めることができます（MAY） 。 DTLSサーバーは、DCCPハンドシェイクが完了するまで応答を遅らせ、DCCP-DataパケットでDTLS応答を送信することも選択できます（MAY）。
+ただし、DCCPハンドシェイクパケットDCCP-RequestおよびDCCP-Responseにはアプリケーションデータフィールドがあり、DCCPハンドシェイク中にユーザーデータを伝送できるため、ハンドシェイクを部分的に並行して実行する機会が生まれます。 DTLSクライアント実装は、DCCP要求パケットで1つ以上のDTLSレコード（通常はDTLSハンドシェイクメッセージまたはその一部を含む）を送信することを選択できます（<span class="kw kw-may">MAY</span>）。 DTLSサーバーの実装は、これらのレコードを通常どおり処理することを選択できます。また、応答として送信する1つ以上のDTLSレコードがある場合（通常、DTLSハンドシェイクメッセージまたはそれらの一部を含む）、DCCP応答パケットにそれらのレコードを含めることができます（<span class="kw kw-may">MAY</span>） 。 DTLSサーバーは、DCCPハンドシェイクが完了するまで応答を遅らせ、DCCP-DataパケットでDTLS応答を送信することも選択できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
@@ -392,7 +397,7 @@ DCCPとDTLSは、ハンドシェイクメッセージの再送信に同様の戦
     <div class="row" id="3-2--DCCP-and-DTLS-Connection-Handshakes-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Therefore, if DTLS records are sent in a DCCP-Request packet, and the DCCP-Request or DCCP-Response message is lost, the DCCP and DTLS handshakes could be timing out on similar schedules. The DCCP-Request packets will be retransmitted on timeout, but the DTLS records cannot be retransmitted until the DCCP handshake completes (there is no possibility of adding new Application Data to a DCCP-Request retransmission). In order to avoid multiple DTLS retransmissions queuing up before the first retransmission can be sent, DTLS over DCCP MUST wait until the completion of the DCCP handshake before restarting its DTLS handshake retransmission timer.
+Therefore, if DTLS records are sent in a DCCP-Request packet, and the DCCP-Request or DCCP-Response message is lost, the DCCP and DTLS handshakes could be timing out on similar schedules. The DCCP-Request packets will be retransmitted on timeout, but the DTLS records cannot be retransmitted until the DCCP handshake completes (there is no possibility of adding new Application Data to a DCCP-Request retransmission). In order to avoid multiple DTLS retransmissions queuing up before the first retransmission can be sent, DTLS over DCCP <span class="kw kw-must">MUST</span> wait until the completion of the DCCP handshake before restarting its DTLS handshake retransmission timer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -464,7 +469,7 @@ As stated in <a href="./rfc4347.html">[RFC4347]</a>, &#34;mishandling of the [re
     <div class="row" id="3-3--Effects-of-DCCP-Congestion-Control-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS over DCCP implementations SHOULD take steps to avoid retransmitting a request that has been queued but not yet actually transmitted by DCCP, when the underlying DCCP implementation can provide this information. For example, DTLS could delay starting the retransmission timer until DCCP indicates the message has been transferred from DCCP to the IP layer.
+DTLS over DCCP implementations <span class="kw kw-should">SHOULD</span> take steps to avoid retransmitting a request that has been queued but not yet actually transmitted by DCCP, when the underlying DCCP implementation can provide this information. For example, DTLS could delay starting the retransmission timer until DCCP indicates the message has been transferred from DCCP to the IP layer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -560,7 +565,7 @@ Note that it is possible for an application to start a DCCP connection by transf
     <div class="row" id="3-4--Relationships-between-DTLS-SessionsConnections-and-DCCP-Connections-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Many DTLS Application Programming Interfaces (APIs) do not prevent an application from sending a mix of encrypted and clear packets over the same transport connection. Applications MUST NOT send unprotected data on a DCCP connection while it is also carrying a DTLS connection, since this presents a vulnerability to packet insertion attacks.
+Many DTLS Application Programming Interfaces (APIs) do not prevent an application from sending a mix of encrypted and clear packets over the same transport connection. Applications <span class="kw kw-mustnot">MUST NOT</span> send unprotected data on a DCCP connection while it is also carrying a DTLS connection, since this presents a vulnerability to packet insertion attacks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -572,12 +577,12 @@ Many DTLS Application Programming Interfaces (APIs) do not prevent an applicatio
     <div class="row" id="3-4--Relationships-between-DTLS-SessionsConnections-and-DCCP-Connections-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Many DTLS APIs also allow an application to start multiple DTLS connections over one transport connection in series, with the termination of one DTLS connection followed by the start of another. Processing a DTLS handshake is relatively CPU intensive. An application that uses this strategy is open to an attacker that repeatedly starts and immediately stops sessions. Therefore, applications that use this strategy SHOULD limit the potential burden on the system by some means. For example, the application could enforce a minimum time of 1 second between session initiations.
+Many DTLS APIs also allow an application to start multiple DTLS connections over one transport connection in series, with the termination of one DTLS connection followed by the start of another. Processing a DTLS handshake is relatively CPU intensive. An application that uses this strategy is open to an attacker that repeatedly starts and immediately stops sessions. Therefore, applications that use this strategy <span class="kw kw-should">SHOULD</span> limit the potential burden on the system by some means. For example, the application could enforce a minimum time of 1 second between session initiations.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-多くのDTLS APIでは、アプリケーションが1つのトランスポート接続を介して複数のDTLS接続を連続して開始することもできます。1つのDTLS接続が終了してから別の接続が開始されます。 DTLSハンドシェイクの処理は、比較的CPUに負荷がかかります。この戦略を使用するアプリケーションは、セッションを繰り返し開始してすぐに停止する攻撃者に開かれています。したがって、この戦略を使用するアプリケーションは、何らかの方法でシステムの潜在的な負担を制限する必要があります（SHOULD）。たとえば、アプリケーションは、セッション開始間の最小時間を1秒にすることができます。
+多くのDTLS APIでは、アプリケーションが1つのトランスポート接続を介して複数のDTLS接続を連続して開始することもできます。1つのDTLS接続が終了してから別の接続が開始されます。 DTLSハンドシェイクの処理は、比較的CPUに負荷がかかります。この戦略を使用するアプリケーションは、セッションを繰り返し開始してすぐに停止する攻撃者に開かれています。したがって、この戦略を使用するアプリケーションは、何らかの方法でシステムの潜在的な負担を制限する必要があります（<span class="kw kw-should">SHOULD</span>）。たとえば、アプリケーションは、セッション開始間の最小時間を1秒にすることができます。
         </p>
       </div>
     </div>
@@ -608,48 +613,48 @@ Each DTLS record must fit within a single DCCP-Data packet. DCCP packets are nor
     <div class="row" id="3-5--PMTU-Discovery-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS also normally uses the DF bit and performs PMTU Discovery on its own, using an algorithm that is strongly similar to the one used by DCCP. A DTLS over DCCP implementation MAY use the DCCP-managed value for PMTU and not perform PMTU Discovery on its own. However, implementations that choose to use the DCCP-managed PMTU value SHOULD continue to follow the procedures of Section 4.1.1.1 of <a href="./rfc4347.html">[RFC4347]</a> with regard to fragmenting handshake messages during handshake retransmissions. Alternatively, a DTLS over DCCP implementation MAY choose to use its own PMTU Discovery calculations, as specified in <a href="./rfc4347.html">[RFC4347]</a>, but MUST NOT use a value greater than the value determined by DCCP.
+DTLS also normally uses the DF bit and performs PMTU Discovery on its own, using an algorithm that is strongly similar to the one used by DCCP. A DTLS over DCCP implementation <span class="kw kw-may">MAY</span> use the DCCP-managed value for PMTU and not perform PMTU Discovery on its own. However, implementations that choose to use the DCCP-managed PMTU value <span class="kw kw-should">SHOULD</span> continue to follow the procedures of Section 4.1.1.1 of <a href="./rfc4347.html">[RFC4347]</a> with regard to fragmenting handshake messages during handshake retransmissions. Alternatively, a DTLS over DCCP implementation <span class="kw kw-may">MAY</span> choose to use its own PMTU Discovery calculations, as specified in <a href="./rfc4347.html">[RFC4347]</a>, but <span class="kw kw-mustnot">MUST NOT</span> use a value greater than the value determined by DCCP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-また、DTLSは通常、DFビットを使用し、DCCPで使用されるアルゴリズムと非常によく似たアルゴリズムを使用して、それ自体でPMTU検出を実行します。 DTLS over DCCPの実装では、PMTUにDCCP管理の値を使用しても、PMTU Discoveryを単独で実行することはできません。ただし、DCCP管理のPMTU値の使用を選択する実装は、ハンドシェイク再送信中のハンドシェイクメッセージの断片化に関して、<a href="./rfc4347.html">[RFC4347]</a>のセクション4.1.1.1の手順に従う必要があります（SHOULD）。あるいは、DTLS over DCCP実装は、<a href="./rfc4347.html">[RFC4347]</a>で指定されているように、独自のPMTU Discovery計算を使用することを選択できますが、DCCPによって決定された値より大きい値を使用してはなりません。
+また、DTLSは通常、DFビットを使用し、DCCPで使用されるアルゴリズムと非常によく似たアルゴリズムを使用して、それ自体でPMTU検出を実行します。 DTLS over DCCPの実装では、PMTUにDCCP管理の値を使用しても、PMTU Discoveryを単独で実行することはできません。ただし、DCCP管理のPMTU値の使用を選択する実装は、ハンドシェイク再送信中のハンドシェイクメッセージの断片化に関して、<a href="./rfc4347.html">[RFC4347]</a>のセクション4.1.1.1の手順に従う必要があります（<span class="kw kw-should">SHOULD</span>）。あるいは、DTLS over DCCP実装は、<a href="./rfc4347.html">[RFC4347]</a>で指定されているように、独自のPMTU Discovery計算を使用することを選択できますが、DCCPによって決定された値より大きい値を使用してはなりません。
         </p>
       </div>
     </div>
     <div class="row" id="3-5--PMTU-Discovery-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS implementations normally allow applications to reset the PMTU estimate back to the initial state. When that happens, DTLS over DCCP implementations SHOULD also reset the DCCP PMTU estimation.
+DTLS implementations normally allow applications to reset the PMTU estimate back to the initial state. When that happens, DTLS over DCCP implementations <span class="kw kw-should">SHOULD</span> also reset the DCCP PMTU estimation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS実装では、通常、アプリケーションでPMTU推定値を初期状態にリセットできます。その場合、DCCP over DCCP実装は、DCCP PMTU推定もリセットする必要があります（SHOULD）。
+DTLS実装では、通常、アプリケーションでPMTU推定値を初期状態にリセットできます。その場合、DCCP over DCCP実装は、DCCP PMTU推定もリセットする必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-5--PMTU-Discovery-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS implementations also sometimes allow applications to control the use of the DF bit (when running over IPv4) or the use of fragmentation extension headers (when running over IPv6). DTLS over DCCP implementations SHOULD control the use of the DF bit or fragmentation extension headers by DCCP in concert with the application&#39;s indications, when the DCCP implementation supports this. Note that DCCP implementations are not required to support sending fragmentable packets.
+DTLS implementations also sometimes allow applications to control the use of the DF bit (when running over IPv4) or the use of fragmentation extension headers (when running over IPv6). DTLS over DCCP implementations <span class="kw kw-should">SHOULD</span> control the use of the DF bit or fragmentation extension headers by DCCP in concert with the application&#39;s indications, when the DCCP implementation supports this. Note that DCCP implementations are not required to support sending fragmentable packets.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLS実装では、アプリケーションがDFビットの使用（IPv4で実行されている場合）またはフラグメンテーション拡張ヘッダーの使用（IPv6で実行されている場合）を制御できる場合もあります。 DCCP over DCCP実装は、DCCP実装がこれをサポートしている場合、アプリケーションの指示と連携して、DCCPによるDFビットまたはフラグメンテーション拡張ヘッダーの使用を制御する必要があります（SHOULD）。フラグメント化可能なパケットの送信をサポートするために、DCCP実装は必要ないことに注意してください。
+DTLS実装では、アプリケーションがDFビットの使用（IPv4で実行されている場合）またはフラグメンテーション拡張ヘッダーの使用（IPv6で実行されている場合）を制御できる場合もあります。 DCCP over DCCP実装は、DCCP実装がこれをサポートしている場合、アプリケーションの指示と連携して、DCCPによるDFビットまたはフラグメンテーション拡張ヘッダーの使用を制御する必要があります（<span class="kw kw-should">SHOULD</span>）。フラグメント化可能なパケットの送信をサポートするために、DCCP実装は必要ないことに注意してください。
         </p>
       </div>
     </div>
     <div class="row" id="3-5--PMTU-Discovery-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that the DCCP Maximum Packet Size (MPS in <a href="./rfc4340.html">[RFC4340]</a>) is bounded by the current congestion control state (Congestion Control Maximum Packet Size, CCMPS in <a href="./rfc4340.html">[RFC4340]</a>). Even when the DF bit is not set and DCCP packets may then be fragmented, the MPS may be less than the 65,535 bytes normally used in UDP. It is also possible for the DCCP CCMPS, and thus the MPS, to vary over time as congestion conditions change. DTLS over DCCP implementations MUST NOT use a DTLS record size that is greater than the DCCP MPS currently in force.
+Note that the DCCP Maximum Packet Size (MPS in <a href="./rfc4340.html">[RFC4340]</a>) is bounded by the current congestion control state (Congestion Control Maximum Packet Size, CCMPS in <a href="./rfc4340.html">[RFC4340]</a>). Even when the DF bit is not set and DCCP packets may then be fragmented, the MPS may be less than the 65,535 bytes normally used in UDP. It is also possible for the DCCP CCMPS, and thus the MPS, to vary over time as congestion conditions change. DTLS over DCCP implementations <span class="kw kw-mustnot">MUST NOT</span> use a DTLS record size that is greater than the DCCP MPS currently in force.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DCCPの最大パケットサイズ（<a href="./rfc4340.html">[RFC4340]</a>のMPS）は、現在の輻輳制御状態（<a href="./rfc4340.html">[RFC4340]</a>の輻輳制御最大パケットサイズ、CCMPS）によって制限されることに注意してください。 DFビットが設定されておらず、DCCPパケットがフラグメント化される場合でも、MPSは、UDPで通常使用される65,535バイト未満になる場合があります。また、DCCP CCMPS、つまりMPSは、輻輳状態の変化に応じて時間とともに変化する可能性があります。 DTLS over DCCP実装は、現在有効なDCCP MPSよりも大きいDTLSレコードサイズを使用してはなりません（MUST NOT）。
+DCCPの最大パケットサイズ（<a href="./rfc4340.html">[RFC4340]</a>のMPS）は、現在の輻輳制御状態（<a href="./rfc4340.html">[RFC4340]</a>の輻輳制御最大パケットサイズ、CCMPS）によって制限されることに注意してください。 DFビットが設定されておらず、DCCPパケットがフラグメント化される場合でも、MPSは、UDPで通常使用される65,535バイト未満になる場合があります。また、DCCP CCMPS、つまりMPSは、輻輳状態の変化に応じて時間とともに変化する可能性があります。 DTLS over DCCP実装は、現在有効なDCCP MPSよりも大きいDTLSレコードサイズを使用してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
@@ -680,12 +685,12 @@ DCCP接続ハンドシェイクには、「クライアントアプリケーシ�
     <div class="row" id="3-6--DCCP-Service-Codes-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- It is expected that many middleboxes will give different privileges to applications running DTLS over DCCP versus just DCCP. Therefore, applications that use DTLS over DCCP sometimes and just DCCP other times SHOULD register and use different Service Codes for each mode of operation. Applications that use both DCCP and DTLS over DCCP MAY choose to listen for incoming connections on the same DCCP port and distinguish the mode of the request by the offered Service Code.
+ It is expected that many middleboxes will give different privileges to applications running DTLS over DCCP versus just DCCP. Therefore, applications that use DTLS over DCCP sometimes and just DCCP other times <span class="kw kw-should">SHOULD</span> register and use different Service Codes for each mode of operation. Applications that use both DCCP and DTLS over DCCP <span class="kw kw-may">MAY</span> choose to listen for incoming connections on the same DCCP port and distinguish the mode of the request by the offered Service Code.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-多くのミドルボックスは、DCCPだけでなく、DCCPを介してDTLSを実行するアプリケーションに異なる特権を与えると予想されます。したがって、DCCP over DCCPを使用するアプリケーションや、DCCPだけを使用するアプリケーションは、動作モードごとに異なるサービスコードを登録して使用する必要があります（SHOULD）。 DCCPおよびDTLS over DCCPの両方を使用するアプリケーションは、同じDCCPポートで着信接続をリッスンし、提供されたサービスコードによって要求のモードを区別することを選択できます（MAY）。
+多くのミドルボックスは、DCCPだけでなく、DCCPを介してDTLSを実行するアプリケーションに異なる特権を与えると予想されます。したがって、DCCP over DCCPを使用するアプリケーションや、DCCPだけを使用するアプリケーションは、動作モードごとに異なるサービスコードを登録して使用する必要があります（<span class="kw kw-should">SHOULD</span>）。 DCCPおよびDTLS over DCCPの両方を使用するアプリケーションは、同じDCCPポートで着信接続をリッスンし、提供されたサービスコードによって要求のモードを区別することを選択できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
@@ -740,12 +745,12 @@ Therefore, in the absence of a revision to this document, this document is assum
     <div class="row" id="3-7--New-Versions-of-DTLS-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-It is RECOMMENDED that an application migrating to a new version of DTLS keep the same DCCP Service Code used for the old version and allow DTLS to provide the version negotiation support. If a new version of DTLS provides significant new capabilities to the application that could change the behavior of middleboxes with regard to the application, an application developer MAY register a new Service Code.
+It is <span class="kw kw-should">RECOMMENDED</span> that an application migrating to a new version of DTLS keep the same DCCP Service Code used for the old version and allow DTLS to provide the version negotiation support. If a new version of DTLS provides significant new capabilities to the application that could change the behavior of middleboxes with regard to the application, an application developer <span class="kw kw-may">MAY</span> register a new Service Code.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DTLSの新しいバージョンに移行するアプリケーションは、古いバージョンに使用されているのと同じDCCPサービスコードを維持し、DTLSがバージョンネゴシエーションサポートを提供できるようにすることをお勧めします。 DTLSの新しいバージョンが、アプリケーションに関するミドルボックスの動作を変更する可能性のある重要な新機能をアプリケーションに提供する場合、アプリケーション開発者は新しいサービスコードを登録できます（MAY）。
+DTLSの新しいバージョンに移行するアプリケーションは、古いバージョンに使用されているのと同じDCCPサービスコードを維持し、DTLSがバージョンネゴシエーションサポートを提供できるようにすることをお勧めします。 DTLSの新しいバージョンが、アプリケーションに関するミドルボックスの動作を変更する可能性のある重要な新機能をアプリケーションに提供する場合、アプリケーション開発者は新しいサービスコードを登録できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>

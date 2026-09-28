@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、BGPsecにおいてルータが署名に使用する秘密鍵を管理するための「ルータキーイング」の要件と運用モデルを規定しています。鍵の生成場所（ルータ内部、あるいは中央の管理サーバー）、署名処理のパフォーマンス要件、および鍵の侵害時の無効化手順などを整理し、セキュアなルーティングプロトコルの実装における鍵管理の設計指針を提供しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8635 - BGPsecのルーターキーイング</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -357,12 +362,12 @@ Useful References: <a href="./rfc8205.html">[RFC8205]</a> describes the details 
     <div class="row" id="2--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -477,7 +482,7 @@ A number of options exist for the operator&#39;s management station to exchange 
     <div class="row" id="4--Exchange-Certificates-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Despite the fact that certificates are integrity-protected and do not necessarily need additional protection, transports that also provide integrity protection are RECOMMENDED.
+Despite the fact that certificates are integrity-protected and do not necessarily need additional protection, transports that also provide integrity protection are <span class="kw kw-should">RECOMMENDED</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -525,7 +530,7 @@ The operator configures the Autonomous System (AS) number to be used in the gene
     <div class="row" id="5--Setup-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The operator configures or extracts from the router the BGP Identifier <a href="./rfc6286.html">[RFC6286]</a> to be used in the generated router certificate. In the case where the operator has chosen not to use unique per-router certificates, a BGP Identifier of 0 MAY be used.
+The operator configures or extracts from the router the BGP Identifier <a href="./rfc6286.html">[RFC6286]</a> to be used in the generated router certificate. In the case where the operator has chosen not to use unique per-router certificates, a BGP Identifier of 0 <span class="kw kw-may">MAY</span> be used.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -717,7 +722,7 @@ The operator then creates and signs the PKCS#10 certification request with the p
     <div class="row" id="6-2-1--Using-PKCS8-to-Transfer-Private-Keys-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A private key can be encapsulated in a PKCS#8 Asymmetric Key Package <a href="./rfc5958.html">[RFC5958]</a> and SHOULD be further encapsulated in Cryptographic Message Syntax (CMS) SignedData <a href="./rfc5652.html">[RFC5652]</a> and signed with the operator&#39;s End Entity (EE) private key.
+A private key can be encapsulated in a PKCS#8 Asymmetric Key Package <a href="./rfc5958.html">[RFC5958]</a> and <span class="kw kw-should">SHOULD</span> be further encapsulated in Cryptographic Message Syntax (CMS) SignedData <a href="./rfc5652.html">[RFC5652]</a> and signed with the operator&#39;s End Entity (EE) private key.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -729,12 +734,12 @@ A private key can be encapsulated in a PKCS#8 Asymmetric Key Package <a href="./
     <div class="row" id="6-2-1--Using-PKCS8-to-Transfer-Private-Keys-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The router SHOULD verify the signature of the encapsulated PKCS#8 to ensure the returned private key did in fact come from the operator, but this requires that the operator also provision via the CLI or include in the SignedData the RPKI CA certificate and relevant operators&#39; EE certificate(s). The router SHOULD inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.
+ The router <span class="kw kw-should">SHOULD</span> verify the signature of the encapsulated PKCS#8 to ensure the returned private key did in fact come from the operator, but this requires that the operator also provision via the CLI or include in the SignedData the RPKI CA certificate and relevant operators&#39; EE certificate(s). The router <span class="kw kw-should">SHOULD</span> inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-ルーターはカプセル化されたPKCS＃8の署名を検証して、返された秘密鍵が実際にオペレーターからのものであることを確認する必要がありますが、これにはオペレーターがCLIを介してプロビジョニングするか、SignedDataにRPKI CA証明書と関連オペレーターを含める必要がありますEE証明書。ルーターは、署名がトラストアンカーに対して有効かどうかをオペレーターに通知する必要があります（SHOULD）。この通知メカニズムは範囲外です。
+ルーターはカプセル化されたPKCS＃8の署名を検証して、返された秘密鍵が実際にオペレーターからのものであることを確認する必要がありますが、これにはオペレーターがCLIを介してプロビジョニングするか、SignedDataにRPKI CA証明書と関連オペレーターを含める必要がありますEE証明書。ルーターは、署名がトラストアンカーに対して有効かどうかをオペレーターに通知する必要があります（<span class="kw kw-should">SHOULD</span>）。この通知メカニズムは範囲外です。
         </p>
       </div>
     </div>
@@ -789,7 +794,7 @@ CAはキーを認証した後、次の2つのことを行います。
     <div class="row" id="7--Send-PKCS10-and-Receive-PKCS7-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. Returns the certificate to the operator&#39;s management station, packaged in a PKCS#7 certs-only message, using the corresponding method by which it received the certificate request. It SHOULD include the certificate chain below the TA Certificate so that the router can validate the router certificate.
+2. Returns the certificate to the operator&#39;s management station, packaged in a PKCS#7 certs-only message, using the corresponding method by which it received the certificate request. It <span class="kw kw-should">SHOULD</span> include the certificate chain below the TA Certificate so that the router can validate the router certificate.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -801,7 +806,7 @@ CAはキーを認証した後、次の2つのことを行います。
     <div class="row" id="7--Send-PKCS10-and-Receive-PKCS7-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the operator-driven method, the operator SHOULD extract the certificate from the PKCS#7 certs-only message and verify that the public key the operator holds corresponds to the returned public key in the PKCS#7 certs-only message. If the operator saved the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the operator has not saved the PKCS#10, it can check this correspondence by regenerating the public key from the private key and then verifying that the regenerated public key matches the public key returned in the certificate.
+In the operator-driven method, the operator <span class="kw kw-should">SHOULD</span> extract the certificate from the PKCS#7 certs-only message and verify that the public key the operator holds corresponds to the returned public key in the PKCS#7 certs-only message. If the operator saved the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the operator has not saved the PKCS#10, it can check this correspondence by regenerating the public key from the private key and then verifying that the regenerated public key matches the public key returned in the certificate.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -849,24 +854,24 @@ The operator provisions the PKCS#7 certs-only message into the router over the p
     <div class="row" id="8--Install-Certificate-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The router SHOULD extract the certificate from the PKCS#7 certs-only message and verify that the public key corresponds to the stored private key. If the router stored the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the router did not store the PKCS#10, it can check this correspondence by generating a signature on any data and then verifying the signature using the returned certificate. The router SHOULD inform the operator whether it successfully received the certificate and whether or not the keys correspond; the mechanism is out of scope.
+ The router <span class="kw kw-should">SHOULD</span> extract the certificate from the PKCS#7 certs-only message and verify that the public key corresponds to the stored private key. If the router stored the PKCS#10, it can check this correspondence by comparing the public key in the CSR to the public key in the returned certificate. If the router did not store the PKCS#10, it can check this correspondence by generating a signature on any data and then verifying the signature using the returned certificate. The router <span class="kw kw-should">SHOULD</span> inform the operator whether it successfully received the certificate and whether or not the keys correspond; the mechanism is out of scope.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-ルータは、PKCS＃7証明書のみのメッセージから証明書を抽出して、公開鍵が保存されている秘密鍵に対応していることを確認する必要があります（SHOULD）。ルータがPKCS＃10を保存している場合、CSRの公開鍵と返された証明書の公開鍵を比較することで、この対応を確認できます。ルータがPKCS＃10を保存しなかった場合、データに署名を生成し、返された証明書を使用して署名を検証することで、この対応を確認できます。ルーターは、証明書を正常に受信したかどうか、およびキーが対応しているかどうかをオペレーターに通知する必要があります（SHOULD）。メカニズムは範囲外です。
+ルータは、PKCS＃7証明書のみのメッセージから証明書を抽出して、公開鍵が保存されている秘密鍵に対応していることを確認する必要があります（<span class="kw kw-should">SHOULD</span>）。ルータがPKCS＃10を保存している場合、CSRの公開鍵と返された証明書の公開鍵を比較することで、この対応を確認できます。ルータがPKCS＃10を保存しなかった場合、データに署名を生成し、返された証明書を使用して署名を検証することで、この対応を確認できます。ルーターは、証明書を正常に受信したかどうか、およびキーが対応しているかどうかをオペレーターに通知する必要があります（<span class="kw kw-should">SHOULD</span>）。メカニズムは範囲外です。
         </p>
       </div>
     </div>
     <div class="row" id="8--Install-Certificate-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The router SHOULD also verify that the returned certificate validates back to the installed TA Certificate, i.e., the entire chain from the installed TA Certificate through subordinate CAs to the BGPsec certificate validate. To perform this verification, the CA certificate chain needs to be returned along with the router&#39;s certificate in the PKCS#7 certs-only message. The router SHOULD inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.
+The router <span class="kw kw-should">SHOULD</span> also verify that the returned certificate validates back to the installed TA Certificate, i.e., the entire chain from the installed TA Certificate through subordinate CAs to the BGPsec certificate validate. To perform this verification, the CA certificate chain needs to be returned along with the router&#39;s certificate in the PKCS#7 certs-only message. The router <span class="kw kw-should">SHOULD</span> inform the operator whether or not the signature validates to a trust anchor; this notification mechanism is out of scope.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ルーターはまた、返された証明書がインストールされたTA証明書に検証されることを確認する必要があります。この検証を実行するには、PKCS＃7証明書のみのメッセージでCA証明書チェーンをルーターの証明書と共に返す必要があります。ルーターは、署名がトラストアンカーに対して有効かどうかをオペレーターに通知する必要があります（SHOULD）。この通知メカニズムは範囲外です。
+ルーターはまた、返された証明書がインストールされたTA証明書に検証されることを確認する必要があります。この検証を実行するには、PKCS＃7証明書のみのメッセージでCA証明書チェーンをルーターの証明書と共に返す必要があります。ルーターは、署名がトラストアンカーに対して有効かどうかをオペレーターに通知する必要があります（<span class="kw kw-should">SHOULD</span>）。この通知メカニズムは範囲外です。
         </p>
       </div>
     </div>
@@ -945,7 +950,7 @@ The operator&#39;s burden shifts here to include:
     <div class="row" id="9--Advanced-Deployment-Scenarios-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. Ensuring the cryptographic chain of custody from the manufacturer. For the preinstalled key material, the operator needs guarantees that either no one has accessed the private key or an authenticated log of those who have accessed it MUST be provided to the operator.
+3. Ensuring the cryptographic chain of custody from the manufacturer. For the preinstalled key material, the operator needs guarantees that either no one has accessed the private key or an authenticated log of those who have accessed it <span class="kw kw-must">MUST</span> be provided to the operator.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -957,19 +962,19 @@ The operator&#39;s burden shifts here to include:
     <div class="row" id="9--Advanced-Deployment-Scenarios-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once configured, the operator can begin the process of enrolling the router. Because the router is communicating directly with the CA, there is no need for the operator to retrieve the PKCS#10 certification request from the router as in Section 6 or return the PKCS#7 certs-only message to the router as in Section 7. Note that the checks performed by the router in Section 8 (namely, extracting the certificate from the PKCS#7 certs-only message, verifying that the public key corresponds to the private key, and verifying that the returned certificate validated back to an installed trust anchor) SHOULD be performed. Likewise, the router SHOULD notify the operator if any of these fail, but this notification mechanism is out of scope.
+Once configured, the operator can begin the process of enrolling the router. Because the router is communicating directly with the CA, there is no need for the operator to retrieve the PKCS#10 certification request from the router as in Section 6 or return the PKCS#7 certs-only message to the router as in Section 7. Note that the checks performed by the router in Section 8 (namely, extracting the certificate from the PKCS#7 certs-only message, verifying that the public key corresponds to the private key, and verifying that the returned certificate validated back to an installed trust anchor) <span class="kw kw-should">SHOULD</span> be performed. Likewise, the router <span class="kw kw-should">SHOULD</span> notify the operator if any of these fail, but this notification mechanism is out of scope.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-設定が完了すると、オペレーターはルーターの登録プロセスを開始できます。ルータはCAと直接通信しているため、オペレータは、セクション6のようにルータからPKCS＃10証明書要求を取得したり、セクション7のようにPKCS＃7証明書のみのメッセージをルータに返す必要はありません。セクション8でルーターによって実行されるチェック（つまり、PKCS＃7証明書のみのメッセージから証明書を抽出し、公開鍵が秘密鍵に対応していることを確認し、返された証明書がインストールされた信頼に対して検証されたことを確認する）に注意してください。 anchor）実行する必要があります。同様に、ルーターはこれらのいずれかが失敗した場合にオペレーターに通知する必要があります（SHOULD）が、この通知メカニズムは範囲外です。
+設定が完了すると、オペレーターはルーターの登録プロセスを開始できます。ルータはCAと直接通信しているため、オペレータは、セクション6のようにルータからPKCS＃10証明書要求を取得したり、セクション7のようにPKCS＃7証明書のみのメッセージをルータに返す必要はありません。セクション8でルーターによって実行されるチェック（つまり、PKCS＃7証明書のみのメッセージから証明書を抽出し、公開鍵が秘密鍵に対応していることを確認し、返された証明書がインストールされた信頼に対して検証されたことを確認する）に注意してください。 anchor）実行する必要があります。同様に、ルーターはこれらのいずれかが失敗した場合にオペレーターに通知する必要があります（<span class="kw kw-should">SHOULD</span>）が、この通知メカニズムは範囲外です。
         </p>
       </div>
     </div>
     <div class="row" id="9--Advanced-Deployment-Scenarios-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a router is so configured, the communication with the CA SHOULD be automatically re-established by the router at future times to renew the certificate automatically when necessary (see Section 10). This further reduces the tasks required of the operator.
+When a router is so configured, the communication with the CA <span class="kw kw-should">SHOULD</span> be automatically re-established by the router at future times to renew the certificate automatically when necessary (see Section 10). This further reduces the tasks required of the operator.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1245,19 +1250,19 @@ At the time of writing, routers often generate private keys for uses such as Sec
     <div class="row" id="10-4--Router-Replacement-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To allow operators to quickly replace routers without requiring update and distribution of the corresponding public keys in the RPKI, routers SHOULD allow the private BGPsec key to be inserted via a protected channel, e.g., SSH, NETCONF (see <a href="./rfc6470.html">[RFC6470]</a>), and SNMP.
+To allow operators to quickly replace routers without requiring update and distribution of the corresponding public keys in the RPKI, routers <span class="kw kw-should">SHOULD</span> allow the private BGPsec key to be inserted via a protected channel, e.g., SSH, NETCONF (see <a href="./rfc6470.html">[RFC6470]</a>), and SNMP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-オペレーターがRPKIの対応する公開鍵の更新と配布を必要とせずに迅速にルーターを交換できるようにするには、ルーターは、SSH、NETCONF（<a href="./rfc6470.html">[RFC6470]</a>を参照）、SNMPなどの保護されたチャネルを介してプライベートBGPsec鍵を挿入できるようにする必要があります（SHOULD）。 。
+オペレーターがRPKIの対応する公開鍵の更新と配布を必要とせずに迅速にルーターを交換できるようにするには、ルーターは、SSH、NETCONF（<a href="./rfc6470.html">[RFC6470]</a>を参照）、SNMPなどの保護されたチャネルを介してプライベートBGPsec鍵を挿入できるようにする必要があります（<span class="kw kw-should">SHOULD</span>）。 。
         </p>
       </div>
     </div>
     <div class="row" id="10-4--Router-Replacement-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This lets the operator escrow the old private key via the mechanism used for operator-driven keys (see Section 6.2), such that it can be reinserted into a replacement router. The router MAY allow the private key to be exported via the protected channel after key generation, but this SHOULD be paired with functionality that sets the newly generated key into a permanent non-exportable state to ensure that it is not exported at a future time by unauthorized operations.
+This lets the operator escrow the old private key via the mechanism used for operator-driven keys (see Section 6.2), such that it can be reinserted into a replacement router. The router <span class="kw kw-may">MAY</span> allow the private key to be exported via the protected channel after key generation, but this <span class="kw kw-should">SHOULD</span> be paired with functionality that sets the newly generated key into a permanent non-exportable state to ensure that it is not exported at a future time by unauthorized operations.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1305,7 +1310,7 @@ This document defines no protocols. So, in some sense, it introduces no new secu
     <div class="row" id="11--Security-Considerations-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">o</span> Public-private key pair generation: Mistakes here are, for all practical purposes, catastrophic because PKIs rely on the pairing of a difficult-to-generate public-private key pair with a signer; all key pairs MUST be generated from a good source of non-deterministic random input <a href="./rfc4086.html">[RFC4086]</a>.
+<span class="bullet-mark">o</span> Public-private key pair generation: Mistakes here are, for all practical purposes, catastrophic because PKIs rely on the pairing of a difficult-to-generate public-private key pair with a signer; all key pairs <span class="kw kw-must">MUST</span> be generated from a good source of non-deterministic random input <a href="./rfc4086.html">[RFC4086]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1317,7 +1322,7 @@ This document defines no protocols. So, in some sense, it introduces no new secu
     <div class="row" id="11--Security-Considerations-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">o</span> Private key protection at rest: Mistakes here are, for all, practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; all private keys MUST be protected when at rest in a secure fashion. Obviously, how each router protects private keys is implementation specific. Likewise, the local storage format for the private key is just that: a local matter.
+<span class="bullet-mark">o</span> Private key protection at rest: Mistakes here are, for all, practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; all private keys <span class="kw kw-must">MUST</span> be protected when at rest in a secure fashion. Obviously, how each router protects private keys is implementation specific. Likewise, the local storage format for the private key is just that: a local matter.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1329,7 +1334,7 @@ This document defines no protocols. So, in some sense, it introduces no new secu
     <div class="row" id="11--Security-Considerations-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- o Private key protection in transit: Mistakes here are, for all practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; therefore, transport security is strongly RECOMMENDED. The level of security provided by the transport layer&#39;s security mechanism SHOULD be at least as good as the strength of the BGPsec key; there&#39;s no point in spending time and energy to generate an excellent public-private key pair and then transmit the private key in the clear or with a known-to-be-broken algorithm, as it just undermines trust that the private key has been kept private. Additionally, operators SHOULD ensure the transport security mechanism is up to date, in order to address all known implementation bugs.
+ o Private key protection in transit: Mistakes here are, for all practical purposes, catastrophic because disclosure of the private key allows another entity to masquerade as (i.e., impersonate) the signer; therefore, transport security is strongly <span class="kw kw-should">RECOMMENDED</span>. The level of security provided by the transport layer&#39;s security mechanism <span class="kw kw-should">SHOULD</span> be at least as good as the strength of the BGPsec key; there&#39;s no point in spending time and energy to generate an excellent public-private key pair and then transmit the private key in the clear or with a known-to-be-broken algorithm, as it just undermines trust that the private key has been kept private. Additionally, operators <span class="kw kw-should">SHOULD</span> ensure the transport security mechanism is up to date, in order to address all known implementation bugs.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1341,7 +1346,7 @@ o送信中の秘密鍵の保護：ここでの間違いは、秘密鍵の開示�
     <div class="row" id="11--Security-Considerations-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Though the CA&#39;s certificate is installed on the router and used to verify that the returned certificate is in fact signed by the CA, the revocation status of the CA&#39;s certificate is rarely checked as the router may not have global connectivity or CRL-aware software. The operator MUST ensure that the installed CA certificate is valid.
+Though the CA&#39;s certificate is installed on the router and used to verify that the returned certificate is in fact signed by the CA, the revocation status of the CA&#39;s certificate is rarely checked as the router may not have global connectivity or CRL-aware software. The operator <span class="kw kw-must">MUST</span> ensure that the installed CA certificate is valid.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

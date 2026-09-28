@@ -7,13 +7,17 @@
   <meta name="description" content="HTTP/1.1において、サーバーの確認を待たずに新しいプロトコルのデータを送信する「楽観的な移行」が引き起こすセキュリティリスクについて解説しています。移行リクエストが拒否された場合に、後続のデータが意図しないHTTPリクエストとして解釈されるリクエスト密輸（Request Smuggling）などの攻撃手法とその対策を詳述しています。RFC 9112および9298を更新し、プロキシクライアントやサーバーに対して接続のクローズや応答待機などの新たな義務を課すことで、通信の安全性を強化しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 9931 - HTTP/1.1 での楽観的なプロトコル移行に関するセキュリティ上の考慮事項</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -340,12 +345,12 @@ Updates to [HTTP/1.1] and [CONNECT-UDP], including new normative requirements, a
     <div class="row" id="2--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメント内のキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「NOT RECOMMENDED」、「MAY」、および「OPTIONAL」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように解釈されます。
+このドキュメント内のキーワード「<span class="kw kw-must">MUST</span>」、「<span class="kw kw-mustnot">MUST NOT</span>」、「<span class="kw kw-must">REQUIRED</span>」、「<span class="kw kw-must">SHALL</span>」、「<span class="kw kw-mustnot">SHALL NOT</span>」、「<span class="kw kw-should">SHOULD</span>」、「<span class="kw kw-shouldnot">SHOULD NOT</span>」、「<span class="kw kw-should">RECOMMENDED</span>」、「<span class="kw kw-shouldnot">NOT RECOMMENDED</span>」、「<span class="kw kw-may">MAY</span>」、および「<span class="kw kw-may">OPTIONAL</span>」は、ここに示すようにすべて大文字で表示されている場合にのみ、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように解釈されます。
         </p>
       </div>
     </div>
@@ -412,12 +417,12 @@ Both of these mechanisms also permit the server to reject the request. For examp
     <div class="row" id="3--Background-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-A server MAY ignore a received Upgrade header field if it wishes to continue using the current protocol on that connection.
+A server <span class="kw kw-may">MAY</span> ignore a received Upgrade header field if it wishes to continue using the current protocol on that connection.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-サーバーは、その接続上で現在のプロトコルの使用を継続したい場合、受信した Upgrade ヘッダー フィールドを無視してもよい (MAY)。
+サーバーは、その接続上で現在のプロトコルの使用を継続したい場合、受信した Upgrade ヘッダー フィールドを無視してもよい (<span class="kw kw-may">MAY</span>)。
         </p>
       </div>
     </div>
@@ -436,12 +441,12 @@ and Section 9.3.6 of [HTTP] says:
     <div class="row" id="3--Background-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-A server MUST reject a CONNECT request that targets an empty or invalid port number, typically by responding with a 400 (Bad Request) status code.
+A server <span class="kw kw-must">MUST</span> reject a CONNECT request that targets an empty or invalid port number, typically by responding with a 400 (Bad Request) status code.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-サーバーは、空または無効なポート番号をターゲットとする CONNECT リクエストを、通常は 400 (Bad Request) ステータス コードで応答することによって拒否しなければなりません (MUST)。
+サーバーは、空または無効なポート番号をターゲットとする CONNECT リクエストを、通常は 400 (Bad Request) ステータス コードで応答することによって拒否しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -880,12 +885,12 @@ Section 4.1 of [WEBSOCKET] says:
     <div class="row" id="6-2--WebSocketwebsocket-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-Once the client&#39;s opening handshake has been sent, the client MUST wait for a response from the server before sending any further data.
+Once the client&#39;s opening handshake has been sent, the client <span class="kw kw-must">MUST</span> wait for a response from the server before sending any further data.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-クライアントのオープニング ハンドシェイクが送信された後、クライアントはさらにデータを送信する前にサーバーからの応答を待機しなければなりません (MUST)。
+クライアントのオープニング ハンドシェイクが送信された後、クライアントはさらにデータを送信する前にサーバーからの応答を待機しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -928,12 +933,12 @@ Section 5 of [CONNECT-UDP] says:
     <div class="row" id="6-3--connect-udp-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-A client MAY optimistically start sending UDP packets in HTTP Datagrams before receiving the response to its UDP proxying request.
+A client <span class="kw kw-may">MAY</span> optimistically start sending UDP packets in HTTP Datagrams before receiving the response to its UDP proxying request.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-クライアントは、UDP プロキシ要求に対する応答を受信する前に、楽観的に HTTP データグラムで UDP パケットの送信を開始してもよい(MAY)。
+クライアントは、UDP プロキシ要求に対する応答を受信する前に、楽観的に HTTP データグラムで UDP パケットの送信を開始してもよい(<span class="kw kw-may">MAY</span>)。
         </p>
       </div>
     </div>
@@ -952,12 +957,12 @@ However, in HTTP/1.1, this &#34;proxying request&#34; is an HTTP Upgrade request
     <div class="row" id="6-3--connect-udp-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-A client MAY optimistically start sending UDP packets in HTTP Datagrams before receiving the response to its UDP proxying request but only if the HTTP version in use is HTTP/2 or later. Clients MUST NOT send UDP packets optimistically in HTTP/1.x due to the risk of Request Smuggling attacks.
+A client <span class="kw kw-may">MAY</span> optimistically start sending UDP packets in HTTP Datagrams before receiving the response to its UDP proxying request but only if the HTTP version in use is HTTP/2 or later. Clients <span class="kw kw-mustnot">MUST NOT</span> send UDP packets optimistically in HTTP/1.x due to the risk of Request Smuggling attacks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-クライアントは、使用中の HTTP バージョンが HTTP/2 以降である場合に限り、UDP プロキシ要求に対する応答を受信する前に、楽観的に HTTP データグラムで UDP パケットの送信を開始してもよい(MAY)。Request Smuggling 攻撃のリスクがあるため、クライアントは HTTP/1.x で UDP パケットを楽観的に送信してはなりません (MUST NOT)。
+クライアントは、使用中の HTTP バージョンが HTTP/2 以降である場合に限り、UDP プロキシ要求に対する応答を受信する前に、楽観的に HTTP データグラムで UDP パケットの送信を開始してもよい(<span class="kw kw-may">MAY</span>)。Request Smuggling 攻撃のリスクがあるため、クライアントは HTTP/1.x で UDP パケットを楽観的に送信してはなりません (<span class="kw kw-mustnot">MUST NOT</span>)。
         </p>
       </div>
     </div>
@@ -1132,7 +1137,7 @@ This document updates [HTTP/1.1] to include the remaining text of this section. 
     <div class="row" id="8--Requirements-for-HTTP-CONNECT-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Proxy clients that send CONNECT requests on behalf of untrusted TCP clients MUST do one or both of the following:
+Proxy clients that send CONNECT requests on behalf of untrusted TCP clients <span class="kw kw-must">MUST</span> do one or both of the following:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1180,12 +1185,12 @@ Proxy clients that don&#39;t implement at least one of these two behaviors are v
     <div class="row" id="8--Requirements-for-HTTP-CONNECT-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-At the time of writing, some proxy clients are believed to be vulnerable as described. As a mitigation, proxy servers MUST close the underlying connection when rejecting a CONNECT request without processing any further requests on that connection. This requirement applies whether or not the request includes a &#34;close&#34; connection option.
+At the time of writing, some proxy clients are believed to be vulnerable as described. As a mitigation, proxy servers <span class="kw kw-must">MUST</span> close the underlying connection when rejecting a CONNECT request without processing any further requests on that connection. This requirement applies whether or not the request includes a &#34;close&#34; connection option.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この記事の執筆時点では、一部のプロキシ クライアントには前述の脆弱性があると考えられています。As a mitigation, proxy servers MUST close the underlying connection when rejecting a CONNECT request without processing any further requests on that connection.この要件は、リクエストに「閉じる」接続オプションが含まれているかどうかに関係なく適用されます。
+この記事の執筆時点では、一部のプロキシ クライアントには前述の脆弱性があると考えられています。As a mitigation, proxy servers <span class="kw kw-must">MUST</span> close the underlying connection when rejecting a CONNECT request without processing any further requests on that connection.この要件は、リクエストに「閉じる」接続オプションが含まれているかどうかに関係なく適用されます。
         </p>
       </div>
     </div>
@@ -1204,12 +1209,12 @@ Note that this mitigation will frequently cause slower connection establishment 
     <div class="row" id="8--Requirements-for-HTTP-CONNECT-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As a performance optimization, proxy servers MAY disable this mitigation if the client is known to wait for a 2xx (Successful) response before forwarding untrusted TCP payload data (i.e., complying with item 1 above). Proxy servers can identify compliant clients using the request&#39;s User-Agent header field and the user agent vendor&#39;s documentation regarding its compliance.
+As a performance optimization, proxy servers <span class="kw kw-may">MAY</span> disable this mitigation if the client is known to wait for a 2xx (Successful) response before forwarding untrusted TCP payload data (i.e., complying with item 1 above). Proxy servers can identify compliant clients using the request&#39;s User-Agent header field and the user agent vendor&#39;s documentation regarding its compliance.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-パフォーマンスの最適化として、クライアントが信頼できない TCP ペイロード データを転送する前に 2xx (成功) 応答を待つことがわかっている場合 (つまり、上記の項目 1 に準拠している場合)、プロキシ サーバーはこの軽減策を無効にしてもよい(MAY)。プロキシ サーバーは、リクエストの User-Agent ヘッダー フィールドとその準拠に関するユーザー エージェント ベンダーのドキュメントを使用して、準拠しているクライアントを識別できます。
+パフォーマンスの最適化として、クライアントが信頼できない TCP ペイロード データを転送する前に 2xx (成功) 応答を待つことがわかっている場合 (つまり、上記の項目 1 に準拠している場合)、プロキシ サーバーはこの軽減策を無効にしてもよい(<span class="kw kw-may">MAY</span>)。プロキシ サーバーは、リクエストの User-Agent ヘッダー フィールドとその準拠に関するユーザー エージェント ベンダーのドキュメントを使用して、準拠しているクライアントを識別できます。
         </p>
       </div>
     </div>

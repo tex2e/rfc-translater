@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、ステートフルPCE（RFC 8231）において、PCEとPCC（ルータ）間のLSP状態の同期を効率化する最適化手法を定義しています。差分同期、状態の永続化、およびセッション再確立時の高速なリカバリ手順を規定することで、大規模ネットワークにおいて同期に伴う制御メッセージのオーバーヘッドを削減し、システムの応答性を高めます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8232 - ステートフルPCEのためのラベルスイッチパス（LSP）状態同期手順の最適化</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -375,12 +380,12 @@ PCEPの初期化フェーズ中に、各同期最適化機能のサポートが�
     <div class="row" id="1-1--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -507,7 +512,7 @@ PCEPセッションの再起動後、状態の同期は常に必要なわけで�
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-State Synchronization MAY be skipped following a PCEP session restart if the state of both PCEP peers did not change during the period prior to session re-initialization. To be able to make this determination, state must be exchanged and maintained by both PCE and PCC during normal operation. This is accomplished by keeping track of the changes to the LSP-DB, using a version tracking field called the LSP-DB Version Number.
+State Synchronization <span class="kw kw-may">MAY</span> be skipped following a PCEP session restart if the state of both PCEP peers did not change during the period prior to session re-initialization. To be able to make this determination, state must be exchanged and maintained by both PCE and PCC during normal operation. This is accomplished by keeping track of the changes to the LSP-DB, using a version tracking field called the LSP-DB Version Number.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -519,7 +524,7 @@ State Synchronization MAY be skipped following a PCEP session restart if the sta
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The INCLUDE-DB-VERSION (S) bit in the STATEFUL-PCE-CAPABILITY TLV (Section 7) is advertised on a PCEP session during session startup to indicate that the LSP-DB Version Number is to be included when the LSPs are reported to the PCE. The LSP-DB Version Number, carried in LSP-DB-VERSION TLV (see Section 3.3.1), is owned by a PCC, and it MUST be incremented by 1 for each successive change in the PCC&#39;s LSP-DB. The LSP-DB Version Number MUST start at 1 and may wrap around.
+The INCLUDE-DB-VERSION (S) bit in the STATEFUL-PCE-CAPABILITY TLV (Section 7) is advertised on a PCEP session during session startup to indicate that the LSP-DB Version Number is to be included when the LSPs are reported to the PCE. The LSP-DB Version Number, carried in LSP-DB-VERSION TLV (see Section 3.3.1), is owned by a PCC, and it <span class="kw kw-must">MUST</span> be incremented by 1 for each successive change in the PCC&#39;s LSP-DB. The LSP-DB Version Number <span class="kw kw-must">MUST</span> start at 1 and may wrap around.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -531,7 +536,7 @@ STATEFUL-PCE-CAPABILITY TLV（セクション7）のINCLUDE-DB-VERSION（S）ビ
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Values 0 and 0xFFFFFFFFFFFFFFFF are reserved. If either of the two values are used during LSP State (re)Synchronization, the PCE speaker receiving this value MUST send back a PCEP Error (PCErr) with Error-type=20 and Error-value=6 &#39;Received an invalid LSP-DB Version Number&#39;, and close the PCEP session. Operations that trigger a change to the local LSP-DB include a change in the LSP operational state, delegation of an LSP, removal or setup of an LSP, or change in any of the LSP attributes that would trigger a report to the PCE.
+Values 0 and 0xFFFFFFFFFFFFFFFF are reserved. If either of the two values are used during LSP State (re)Synchronization, the PCE speaker receiving this value <span class="kw kw-must">MUST</span> send back a PCEP Error (PCErr) with Error-type=20 and Error-value=6 &#39;Received an invalid LSP-DB Version Number&#39;, and close the PCEP session. Operations that trigger a change to the local LSP-DB include a change in the LSP operational state, delegation of an LSP, removal or setup of an LSP, or change in any of the LSP attributes that would trigger a report to the PCE.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -543,7 +548,7 @@ Values 0 and 0xFFFFFFFFFFFFFFFF are reserved. If either of the two values are us
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the include LSP-DB version capability is enabled, a PCC MUST increment its LSP-DB Version Number when the &#39;Redelegation Timeout Interval&#39; timer expires (see <a href="./rfc8231.html">[RFC8231]</a> for the use of the Redelegation Timeout Interval).
+If the include LSP-DB version capability is enabled, a PCC <span class="kw kw-must">MUST</span> increment its LSP-DB Version Number when the &#39;Redelegation Timeout Interval&#39; timer expires (see <a href="./rfc8231.html">[RFC8231]</a> for the use of the Redelegation Timeout Interval).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -555,31 +560,31 @@ LSP-DBバージョンを含める機能が有効になっている場合、PCC�
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If both PCEP speakers set the S flag in the OPEN object&#39;s STATEFUL-PCE-CAPABILITY TLV to 1, the PCC MUST include the LSP-DB-VERSION TLV in each LSP object of the Path Computation LSP State Report (PCRpt) message. If the LSP-DB-VERSION TLV is missing in a PCRpt message, the PCE will generate an error with Error-type=6 (Mandatory Object missing) and Error-value=12 &#39;LSP-DB-VERSION TLV missing&#39;, and close the session. If the include LSP-DB version capability has not been enabled on a PCEP session, the PCC SHOULD NOT include the LSP-DB-VERSION TLV in the LSP Object, and the PCE MUST ignore it, were it to receive one.
+If both PCEP speakers set the S flag in the OPEN object&#39;s STATEFUL-PCE-CAPABILITY TLV to 1, the PCC <span class="kw kw-must">MUST</span> include the LSP-DB-VERSION TLV in each LSP object of the Path Computation LSP State Report (PCRpt) message. If the LSP-DB-VERSION TLV is missing in a PCRpt message, the PCE will generate an error with Error-type=6 (Mandatory Object missing) and Error-value=12 &#39;LSP-DB-VERSION TLV missing&#39;, and close the session. If the include LSP-DB version capability has not been enabled on a PCEP session, the PCC <span class="kw kw-shouldnot">SHOULD NOT</span> include the LSP-DB-VERSION TLV in the LSP Object, and the PCE <span class="kw kw-must">MUST</span> ignore it, were it to receive one.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-両方のPCEPスピーカーがOPENオブジェクトのSTATEFUL-PCE-CAPABILITY TLVのSフラグを1に設定した場合、PCCはパス計算LSP状態レポート（PCRpt）メッセージの各LSPオブジェクトにLSP-DB-VERSION TLVを含める必要があります。 LSP-DB-VERSION TLVがPCRptメッセージにない場合、PCEはError-type=6（Mandatory Object missing）およびError-value=12 &#39;LSP-DB-VERSION TLV missing&#39;のエラーを生成し、閉じます。セッション。 PCSPセッションでLSP-DBバージョンのインクルード機能が有効になっていない場合、PCCはLSPオブジェクトにLSP-DB-VERSION TLVを含めるべきではなく（SHOULD NOT）、PCEはそれを受信する場合は無視する必要があります（MUST）。
+両方のPCEPスピーカーがOPENオブジェクトのSTATEFUL-PCE-CAPABILITY TLVのSフラグを1に設定した場合、PCCはパス計算LSP状態レポート（PCRpt）メッセージの各LSPオブジェクトにLSP-DB-VERSION TLVを含める必要があります。 LSP-DB-VERSION TLVがPCRptメッセージにない場合、PCEはError-type=6（Mandatory Object missing）およびError-value=12 &#39;LSP-DB-VERSION TLV missing&#39;のエラーを生成し、閉じます。セッション。 PCSPセッションでLSP-DBバージョンのインクルード機能が有効になっていない場合、PCCはLSPオブジェクトにLSP-DB-VERSION TLVを含めるべきではなく（<span class="kw kw-shouldnot">SHOULD NOT</span>）、PCEはそれを受信する場合は無視する必要があります（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a PCE&#39;s LSP-DB survived the restart of a PCEP session, the PCE will include the LSP-DB-VERSION TLV in its OPEN object, and the TLV will contain the last LSP-DB Version Number received on an LSP State Report from the PCC in the previous PCEP session. If a PCC&#39;s LSP-DB survived the restart of a PCEP session, the PCC will include the LSP-DB-VERSION TLV in its OPEN object, and the TLV will contain the latest LSP-DB Version Number. If a PCEP speaker&#39;s LSP-DB did not survive the restart of a PCEP session or at startup when the database is empty, the PCEP speaker MUST NOT include the LSP-DB-VERSION TLV in the OPEN object.
+If a PCE&#39;s LSP-DB survived the restart of a PCEP session, the PCE will include the LSP-DB-VERSION TLV in its OPEN object, and the TLV will contain the last LSP-DB Version Number received on an LSP State Report from the PCC in the previous PCEP session. If a PCC&#39;s LSP-DB survived the restart of a PCEP session, the PCC will include the LSP-DB-VERSION TLV in its OPEN object, and the TLV will contain the latest LSP-DB Version Number. If a PCEP speaker&#39;s LSP-DB did not survive the restart of a PCEP session or at startup when the database is empty, the PCEP speaker <span class="kw kw-mustnot">MUST NOT</span> include the LSP-DB-VERSION TLV in the OPEN object.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCEのLSP-DBがPCEPセッションの再開後も存続した場合、PCEはLSP-DB-VERSION TLVをOPENオブジェクトに含め、TLVはLSP状態レポートで受信した最後のLSP-DBバージョン番号を含みます。前のPCEPセッションのPCC。 PCCのLSP-DBがPCEPセッションの再開後も存続した場合、PCCはLSP-DB-VERSION TLVをOPENオブジェクトに含め、TLVには最新のLSP-DBバージョン番号が含まれます。 PCEPスピーカーのLSP-DBがPCEPセッションの再起動後、またはデータベースが空の起動時に存続しなかった場合、PCEPスピーカーはLSP-DB-VERSION TLVをOPENオブジェクトに含めてはなりません（MUST NOT）。
+PCEのLSP-DBがPCEPセッションの再開後も存続した場合、PCEはLSP-DB-VERSION TLVをOPENオブジェクトに含め、TLVはLSP状態レポートで受信した最後のLSP-DBバージョン番号を含みます。前のPCEPセッションのPCC。 PCCのLSP-DBがPCEPセッションの再開後も存続した場合、PCCはLSP-DB-VERSION TLVをOPENオブジェクトに含め、TLVには最新のLSP-DBバージョン番号が含まれます。 PCEPスピーカーのLSP-DBがPCEPセッションの再起動後、またはデータベースが空の起動時に存続しなかった場合、PCEPスピーカーはLSP-DB-VERSION TLVをOPENオブジェクトに含めてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- If both PCEP speakers include the LSP-DB-VERSION TLV in the OPEN object and the TLV values match, the PCC MAY skip State Synchronization, and the PCE does not wait for the end-of-synchronization marker <a href="./rfc8231.html">[RFC8231]</a>. Otherwise, the PCC MUST perform full State Synchronization (see <a href="./rfc8231.html">[RFC8231]</a>) or incremental State Synchronization (see Section 4 if this capability is advertised) to the stateful PCE. In other words, if the incremental State Synchronization capability is not advertised by the peers, based on the LSP-DB Version Number match, either the State Synchronization is skipped or a full State Synchronization is performed. If the PCC attempts to skip State Synchronization, by setting the SYNC flag to 0 and PLSP-ID to a non-zero value on the first LSP State Report from the PCC as per <a href="./rfc8231.html">[RFC8231]</a>, the PCE MUST send back a PCErr with Error-type=20 and Error-value=2 &#39;LSP-DB version mismatch&#39;, and close the PCEP session.
+ If both PCEP speakers include the LSP-DB-VERSION TLV in the OPEN object and the TLV values match, the PCC <span class="kw kw-may">MAY</span> skip State Synchronization, and the PCE does not wait for the end-of-synchronization marker <a href="./rfc8231.html">[RFC8231]</a>. Otherwise, the PCC <span class="kw kw-must">MUST</span> perform full State Synchronization (see <a href="./rfc8231.html">[RFC8231]</a>) or incremental State Synchronization (see Section 4 if this capability is advertised) to the stateful PCE. In other words, if the incremental State Synchronization capability is not advertised by the peers, based on the LSP-DB Version Number match, either the State Synchronization is skipped or a full State Synchronization is performed. If the PCC attempts to skip State Synchronization, by setting the SYNC flag to 0 and PLSP-ID to a non-zero value on the first LSP State Report from the PCC as per <a href="./rfc8231.html">[RFC8231]</a>, the PCE <span class="kw kw-must">MUST</span> send back a PCErr with Error-type=20 and Error-value=2 &#39;LSP-DB version mismatch&#39;, and close the PCEP session.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -591,7 +596,7 @@ PCEのLSP-DBがPCEPセッションの再開後も存続した場合、PCEはLSP-
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If State Synchronization is required, then prior to completing the initialization phase, the PCE MUST mark any LSPs in the LSP-DB that were previously reported by the PCC as stale. When the PCC reports an LSP during State Synchronization, if the LSP already exists in the LSP-DB, the PCE MUST update the LSP-DB and clear the stale marker from the LSP. When it has finished State Synchronization, the PCC MUST immediately send an end-of-synchronization marker. The end-of-synchronization marker is a PCRpt message with an LSP object containing a PLSP-ID of 0 and with the SYNC flag set to 0 <a href="./rfc8231.html">[RFC8231]</a>. The LSP-DB-VERSION TLV MUST be included in this PCRpt message. On receiving this state report, the PCE MUST purge any LSPs from the LSP-DB that are still marked as stale.
+If State Synchronization is required, then prior to completing the initialization phase, the PCE <span class="kw kw-must">MUST</span> mark any LSPs in the LSP-DB that were previously reported by the PCC as stale. When the PCC reports an LSP during State Synchronization, if the LSP already exists in the LSP-DB, the PCE <span class="kw kw-must">MUST</span> update the LSP-DB and clear the stale marker from the LSP. When it has finished State Synchronization, the PCC <span class="kw kw-must">MUST</span> immediately send an end-of-synchronization marker. The end-of-synchronization marker is a PCRpt message with an LSP object containing a PLSP-ID of 0 and with the SYNC flag set to 0 <a href="./rfc8231.html">[RFC8231]</a>. The LSP-DB-VERSION TLV <span class="kw kw-must">MUST</span> be included in this PCRpt message. On receiving this state report, the PCE <span class="kw kw-must">MUST</span> purge any LSPs from the LSP-DB that are still marked as stale.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -603,19 +608,19 @@ If State Synchronization is required, then prior to completing the initializatio
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that a PCE/PCC MAY force State Synchronization by not including the LSP-DB-VERSION TLV in its OPEN object.
+Note that a PCE/PCC <span class="kw kw-may">MAY</span> force State Synchronization by not including the LSP-DB-VERSION TLV in its OPEN object.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCE/PCCは、そのOPENオブジェクトにLSP-DB-VERSION TLVを含めないことで、状態同期を強制してもよい (MAY) ことに注意してください。
+PCE/PCCは、そのOPENオブジェクトにLSP-DB-VERSION TLVを含めないことで、状態同期を強制してもよい (<span class="kw kw-may">MAY</span>) ことに注意してください。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--State-Synchronization-Avoidance-Procedure-p10">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Since a PCE does not make changes to the LSP-DB Version Number, a PCC should never encounter this TLV in a message from the PCE (other than the OPEN message). A PCC SHOULD ignore the LSP-DB-VERSION TLV, were it to receive one from a PCE.
+Since a PCE does not make changes to the LSP-DB Version Number, a PCC should never encounter this TLV in a message from the PCE (other than the OPEN message). A PCC <span class="kw kw-should">SHOULD</span> ignore the LSP-DB-VERSION TLV, were it to receive one from a PCE.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -892,7 +897,7 @@ A new INCLUDE-DB-VERSION (S) bit is added in the stateful capabilities TLV (see 
     <div class="row" id="3-3-1--LSP-DB-Version-Number-TLV-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The LSP-DB Version Number (LSP-DB-VERSION) TLV is an optional TLV that MAY be included in the OPEN object and the LSP object.
+The LSP-DB Version Number (LSP-DB-VERSION) TLV is an optional TLV that <span class="kw kw-may">MAY</span> be included in the OPEN object and the LSP object.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -904,12 +909,12 @@ LSP-DBバージョン番号（LSP-DB-VERSION）TLVは、OPENオブジェクト�
     <div class="row" id="3-3-1--LSP-DB-Version-Number-TLV-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This TLV is included in the LSP object in the PCRpt message to indicate the LSP-DB version at the PCC. This TLV SHOULD NOT be included in other PCEP messages (Path Computation Update Request (PCUpd), Path Computation Request (PCReq), and Path Computation Reply (PCRep)) and MUST be ignored if received.
+This TLV is included in the LSP object in the PCRpt message to indicate the LSP-DB version at the PCC. This TLV <span class="kw kw-shouldnot">SHOULD NOT</span> be included in other PCEP messages (Path Computation Update Request (PCUpd), Path Computation Request (PCReq), and Path Computation Reply (PCRep)) and <span class="kw kw-must">MUST</span> be ignored if received.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このTLVはPCRptメッセージのLSPオブジェクトに含まれ、PCCでのLSP-DBバージョンを示します。このTLVは、他のPCEPメッセージ（パス計算更新要求（PCUpd）、パス計算要求（PCReq）、およびパス計算応答（PCRep））に含めるべきではなく（SHOULD NOT）、受け取った場合は無視する必要があります。
+このTLVはPCRptメッセージのLSPオブジェクトに含まれ、PCCでのLSP-DBバージョンを示します。このTLVは、他のPCEPメッセージ（パス計算更新要求（PCUpd）、パス計算要求（PCReq）、およびパス計算応答（PCRep））に含めるべきではなく（<span class="kw kw-shouldnot">SHOULD NOT</span>）、受け取った場合は無視する必要があります。
         </p>
       </div>
     </div>
@@ -978,7 +983,7 @@ TLVのタイプは23で、8オクテットの固定長です。この値には�
     <div class="row" id="3-3-2--Speaker-Entity-Identifier-TLV-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Speaker Entity Identifier TLV (SPEAKER-ENTITY-ID) is an optional TLV that MAY be included in the OPEN object when a PCEP speaker wishes to determine if State Synchronization can be skipped when a PCEP session is restarted. It contains a unique identifier for the node that does not change during the lifetime of the PCEP speaker. It identifies the PCEP speaker to its peers even if the speaker&#39;s IP address is changed.
+The Speaker Entity Identifier TLV (SPEAKER-ENTITY-ID) is an optional TLV that <span class="kw kw-may">MAY</span> be included in the OPEN object when a PCEP speaker wishes to determine if State Synchronization can be skipped when a PCEP session is restarted. It contains a unique identifier for the node that does not change during the lifetime of the PCEP speaker. It identifies the PCEP speaker to its peers even if the speaker&#39;s IP address is changed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -990,7 +995,7 @@ Speaker Entity Identifier TLV（SPEAKER-ENTITY-ID）はオプションのTLVで�
     <div class="row" id="3-3-2--Speaker-Entity-Identifier-TLV-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In case of a remote peer IP address change, a PCEP speaker would learn the Speaker Entity Identifier on receiving the open message, but it MAY have already sent its open message without realizing that it is a known PCEP peer. In such a case, either a full synchronization is done or the PCEP session is terminated. This may be a local policy decision. The new IP address is associated with the Speaker Entity Identifier for the future either way. In the latter case when the PCEP session is re-established, it would be correctly associated with the Speaker Entity Identifier and not be considered as an unknown peer.
+In case of a remote peer IP address change, a PCEP speaker would learn the Speaker Entity Identifier on receiving the open message, but it <span class="kw kw-may">MAY</span> have already sent its open message without realizing that it is a known PCEP peer. In such a case, either a full synchronization is done or the PCEP session is terminated. This may be a local policy decision. The new IP address is associated with the Speaker Entity Identifier for the future either way. In the latter case when the PCEP session is re-established, it would be correctly associated with the Speaker Entity Identifier and not be considered as an unknown peer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1041,12 +1046,12 @@ Figure 5: SPEAKER-ENTITY-ID TLV Format
     <div class="row" id="3-3-2--Speaker-Entity-Identifier-TLV-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The type of the TLV is 24, and it has a variable length, which MUST be greater than 0. The value is padded to a 4-octet alignment. The padding is not included in the Length field. The value contains the Speaker Entity Identifier (an identifier of the PCEP speaker transmitting this TLV). This identifier is required to be unique within its scope of visibility, which is usually limited to a single domain. It MAY be configured by the operator. Alternatively, it can be derived automatically from a suitably stable unique identifier, such as a Media Access Control (MAC) address, serial number, Traffic Engineering Router ID, or similar. In the case of inter-domain connections, the speaker SHOULD prefix its usual identifier with the domain identifier of its residence, such as an Autonomous System number, an IGP area identifier, or similar to make sure it remains unique.
+ The type of the TLV is 24, and it has a variable length, which <span class="kw kw-must">MUST</span> be greater than 0. The value is padded to a 4-octet alignment. The padding is not included in the Length field. The value contains the Speaker Entity Identifier (an identifier of the PCEP speaker transmitting this TLV). This identifier is required to be unique within its scope of visibility, which is usually limited to a single domain. It <span class="kw kw-may">MAY</span> be configured by the operator. Alternatively, it can be derived automatically from a suitably stable unique identifier, such as a Media Access Control (MAC) address, serial number, Traffic Engineering Router ID, or similar. In the case of inter-domain connections, the speaker <span class="kw kw-should">SHOULD</span> prefix its usual identifier with the domain identifier of its residence, such as an Autonomous System number, an IGP area identifier, or similar to make sure it remains unique.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-TLVのタイプは24で、可変長であり、0より大きい必要があります。値は、4オクテットアライメントになるように埋め込まれます。パディングは[長さ]フィールドには含まれません。値には、Speaker Entity Identifier（このTLVを送信するPCEPスピーカーの識別子）が含まれます。この識別子は、可視性の範囲内で一意である必要があります。これは通常、単一のドメインに限定されます。これは、オペレーターが構成できます。または、メディアアクセスコントロール（MAC）アドレス、シリアル番号、トラフィックエンジニアリングルーターIDなど、適切に安定した一意の識別子から自動的に取得することもできます。ドメイン間接続の場合、スピーカーは、通常の識別子の前に、自律システム番号、IGPエリア識別子などの固有のドメイン識別子を付加して、一意であることを確認する必要があります（SHOULD）。
+TLVのタイプは24で、可変長であり、0より大きい必要があります。値は、4オクテットアライメントになるように埋め込まれます。パディングは[長さ]フィールドには含まれません。値には、Speaker Entity Identifier（このTLVを送信するPCEPスピーカーの識別子）が含まれます。この識別子は、可視性の範囲内で一意である必要があります。これは通常、単一のドメインに限定されます。これは、オペレーターが構成できます。または、メディアアクセスコントロール（MAC）アドレス、シリアル番号、トラフィックエンジニアリングルーターIDなど、適切に安定した一意の識別子から自動的に取得することもできます。ドメイン間接続の場合、スピーカーは、通常の識別子の前に、自律システム番号、IGPエリア識別子などの固有のドメイン識別子を付加して、一意であることを確認する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1065,19 +1070,19 @@ The relationship between this identifier and entities in the Traffic Engineering
     <div class="row" id="3-3-2--Speaker-Entity-Identifier-TLV-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-From a manageability point of view, a PCE or PCC implementation SHOULD allow the operator to configure this Speaker Entity Identifier.
+From a manageability point of view, a PCE or PCC implementation <span class="kw kw-should">SHOULD</span> allow the operator to configure this Speaker Entity Identifier.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-管理性の観点から、PCEまたはPCC実装では、オペレーターがこのスピーカーエンティティ識別子を構成できるようにする必要があります（SHOULD）。
+管理性の観点から、PCEまたはPCC実装では、オペレーターがこのスピーカーエンティティ識別子を構成できるようにする必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-3-2--Speaker-Entity-Identifier-TLV-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a PCEP speaker receives the SPEAKER-ENTITY-ID on a new PCEP session, that matches with an existing alive PCEP session, the PCEP speaker MUST send a PCErr with Error-type=20 and Error-value=7 &#39;Received an invalid Speaker Entity Identifier&#39;, and close the PCEP session.
+If a PCEP speaker receives the SPEAKER-ENTITY-ID on a new PCEP session, that matches with an existing alive PCEP session, the PCEP speaker <span class="kw kw-must">MUST</span> send a PCErr with Error-type=20 and Error-value=7 &#39;Received an invalid Speaker Entity Identifier&#39;, and close the PCEP session.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1230,12 +1235,12 @@ An incremental (Delta) LSP-DB State Synchronization is described in this section
     <div class="row" id="4-2--Incremental-Synchronization-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If both PCEP speakers include the LSP-DB-VERSION TLV in the OPEN object and the LSP-DB-VERSION TLV values match, the PCC MAY skip State Synchronization. Otherwise, the PCC MUST perform State Synchronization. Incremental State Synchronization capability is advertised on a PCEP session during session startup using the DELTA-LSP-SYNC-CAPABILITY (D) bit in the capabilities TLV (see Section 7). Instead of dumping full LSP-DB to the stateful PCE again, the PCC synchronizes the delta (changes) as described in Figure 7 when the D and S flags are set to 1 by both the PCC and PCE. Other combinations of D and S flags set by the PCC and PCE result in full LSP-DB synchronization procedures as described in <a href="./rfc8231.html">[RFC8231]</a>. By setting the D flag to zero in the OPEN message, a PCEP speaker can skip the incremental synchronization optimization, resulting in a full LSP-DB synchronization.
+If both PCEP speakers include the LSP-DB-VERSION TLV in the OPEN object and the LSP-DB-VERSION TLV values match, the PCC <span class="kw kw-may">MAY</span> skip State Synchronization. Otherwise, the PCC <span class="kw kw-must">MUST</span> perform State Synchronization. Incremental State Synchronization capability is advertised on a PCEP session during session startup using the DELTA-LSP-SYNC-CAPABILITY (D) bit in the capabilities TLV (see Section 7). Instead of dumping full LSP-DB to the stateful PCE again, the PCC synchronizes the delta (changes) as described in Figure 7 when the D and S flags are set to 1 by both the PCC and PCE. Other combinations of D and S flags set by the PCC and PCE result in full LSP-DB synchronization procedures as described in <a href="./rfc8231.html">[RFC8231]</a>. By setting the D flag to zero in the OPEN message, a PCEP speaker can skip the incremental synchronization optimization, resulting in a full LSP-DB synchronization.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-両方のPCEPスピーカーがOPENオブジェクトにLSP-DB-VERSION TLVを含み、LSP-DB-VERSION TLV値が一致する場合、PCCは状態同期をスキップできます（MAY）。それ以外の場合、PCCは状態同期を実行する必要があります。 Incremental State Synchronization機能は、機能TLVのDELTA-LSP-SYNC-CAPABILITY（D）ビットを使用して、セッションの起動中にPCEPセッションでアドバタイズされます（セクション7を参照）。完全なLSP-DBを再度ステートフルPCEにダンプする代わりに、PCCは、PCCとPCEの両方によってDフラグとSフラグが1に設定されている場合、図7で説明されているようにデルタ（変更）を同期します。 <a href="./rfc8231.html">[RFC8231]</a>で説明されているように、PCCとPCEによって設定されるDフラグとSフラグの他の組み合わせは、完全なLSP-DB同期手順になります。 OPENメッセージでDフラグをゼロに設定することにより、PCEPスピーカーは増分同期の最適化をスキップして、完全なLSP-DB同期を実現できます。
+両方のPCEPスピーカーがOPENオブジェクトにLSP-DB-VERSION TLVを含み、LSP-DB-VERSION TLV値が一致する場合、PCCは状態同期をスキップできます（<span class="kw kw-may">MAY</span>）。それ以外の場合、PCCは状態同期を実行する必要があります。 Incremental State Synchronization機能は、機能TLVのDELTA-LSP-SYNC-CAPABILITY（D）ビットを使用して、セッションの起動中にPCEPセッションでアドバタイズされます（セクション7を参照）。完全なLSP-DBを再度ステートフルPCEにダンプする代わりに、PCCは、PCCとPCEの両方によってDフラグとSフラグが1に設定されている場合、図7で説明されているようにデルタ（変更）を同期します。 <a href="./rfc8231.html">[RFC8231]</a>で説明されているように、PCCとPCEによって設定されるDフラグとSフラグの他の組み合わせは、完全なLSP-DB同期手順になります。 OPENメッセージでDフラグをゼロに設定することにより、PCEPスピーカーは増分同期の最適化をスキップして、完全なLSP-DB同期を実現できます。
         </p>
       </div>
     </div>
@@ -1300,7 +1305,7 @@ As per Section 3, the LSP-DB Version Number is incremented each time a change is
     <div class="row" id="4-2--Incremental-Synchronization-Procedure-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- In order to carry out incremental State Synchronization, it is not necessary for a PCC to store a complete history of LSP-DB change for all time, but remember the LSP state changes (including LSP modification, setup, and deletion) that the PCE did not get to process during the session down. Note that, a PCC would be unaware that a particular LSP report has been processed by the PCE before the session to the PCE went down. So a PCC implementation MAY choose to store the LSP-DB Version Number with each LSP at the time its status changed, so that when a session is re-established, an incremental synchronization can be attempted based on the PCE&#39;s last LSP-DB Version Number. For an LSP that is deleted at the PCC, the PCC implementation would need to remember the deleted LSP in some way to make sure this could be reported as part of incremental synchronization later. The PCC would discard this information based on a local policy or when it determines that this information is no longer needed with sufficient confidence. In the example shown in Figure 7, the PCC needs to store the LSP state changes that happened between DB Versions 43 to 46 and synchronize these changes, when performing incremental LSP state update.
+ In order to carry out incremental State Synchronization, it is not necessary for a PCC to store a complete history of LSP-DB change for all time, but remember the LSP state changes (including LSP modification, setup, and deletion) that the PCE did not get to process during the session down. Note that, a PCC would be unaware that a particular LSP report has been processed by the PCE before the session to the PCE went down. So a PCC implementation <span class="kw kw-may">MAY</span> choose to store the LSP-DB Version Number with each LSP at the time its status changed, so that when a session is re-established, an incremental synchronization can be attempted based on the PCE&#39;s last LSP-DB Version Number. For an LSP that is deleted at the PCC, the PCC implementation would need to remember the deleted LSP in some way to make sure this could be reported as part of incremental synchronization later. The PCC would discard this information based on a local policy or when it determines that this information is no longer needed with sufficient confidence. In the example shown in Figure 7, the PCC needs to store the LSP state changes that happened between DB Versions 43 to 46 and synchronize these changes, when performing incremental LSP state update.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1312,12 +1317,12 @@ As per Section 3, the LSP-DB Version Number is incremented each time a change is
     <div class="row" id="4-2--Incremental-Synchronization-Procedure-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a PCC finds out it does not have sufficient information to complete incremental synchronization after advertising incremental LSP State Synchronization capability, it MUST send a PCErr with Error-type=20 and Error-value=5 &#39;A PCC indicates to a PCE that it can not complete the State Synchronization&#39; (defined in <a href="./rfc8231.html">[RFC8231]</a>), and terminate the session. The PCC SHOULD re-establish the session with the D bit set to 0 in the OPEN message.
+If a PCC finds out it does not have sufficient information to complete incremental synchronization after advertising incremental LSP State Synchronization capability, it <span class="kw kw-must">MUST</span> send a PCErr with Error-type=20 and Error-value=5 &#39;A PCC indicates to a PCE that it can not complete the State Synchronization&#39; (defined in <a href="./rfc8231.html">[RFC8231]</a>), and terminate the session. The PCC <span class="kw kw-should">SHOULD</span> re-establish the session with the D bit set to 0 in the OPEN message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCCが、インクリメンタルLSP状態同期機能をアドバタイズした後にインクリメンタル同期を完了するのに十分な情報がないことを検出した場合、PCCはError-type=20およびError-value=5のPCErrを送信する必要があります。 （<a href="./rfc8231.html">[RFC8231]</a>で定義されている）状態同期を完了せず、セッションを終了します。 PCCは、OPENメッセージでDビットを0に設定してセッションを再確立する必要があります（SHOULD）。
+PCCが、インクリメンタルLSP状態同期機能をアドバタイズした後にインクリメンタル同期を完了するのに十分な情報がないことを検出した場合、PCCはError-type=20およびError-value=5のPCErrを送信する必要があります。 （<a href="./rfc8231.html">[RFC8231]</a>で定義されている）状態同期を完了せず、セッションを終了します。 PCCは、OPENメッセージでDビットを0に設定してセッションを再確立する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1396,12 +1401,12 @@ PCEによってトリガーされる初期状態同期のサポートは、STATE
     <div class="row" id="5-2--PCE-Triggered-Initial-State-Synchronization-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In order to allow a stateful PCE to control the LSP-DB synchronization after establishing a PCEP session, both PCEP speakers MUST set the F bit to 1 in the OPEN message. If the LSP-DB-VERSION TLV is included by both PCEP speakers and the TLV value matches, the State Synchronization can be skipped as described in Section 3.2. If the TLV is not included or the LSP-DB Version is mismatched, the PCE can trigger the State Synchronization process by sending a PCUpd message with PLSP-ID = 0 and SYNC = 1. The PCUpd message SHOULD include an empty Explicit Route Object (ERO) (with no ERO sub-object and object length of 4) as its intended path and SHOULD NOT include the optional objects for its attributes for any parameter update. The PCC MUST ignore such an update when the SYNC flag is set. If the TRIGGERED-INITIAL-SYNC capability is not advertised by a PCE and the PCC receives a PCUpd with the SYNC flag set to 1, the PCC MUST send a PCErr with the SRP-ID-number of the PCUpd, Error-type=20, and Error-value=4 &#39;Attempt to trigger a synchronization when the PCE triggered synchronization capability has not been advertised&#39; (see Section 8.1). If the TRIGGERED-INITIAL-SYNC capability is advertised by a PCE and the PCC, the PCC MUST NOT trigger State Synchronization on its own. If the PCE receives a PCRpt message before the PCE has triggered the State Synchronization, the PCE MUST send a PCErr with Error-type=20 and Error-value=3 &#39;Attempt to trigger synchronization before PCE trigger&#39; (see Section 8.1).
+In order to allow a stateful PCE to control the LSP-DB synchronization after establishing a PCEP session, both PCEP speakers <span class="kw kw-must">MUST</span> set the F bit to 1 in the OPEN message. If the LSP-DB-VERSION TLV is included by both PCEP speakers and the TLV value matches, the State Synchronization can be skipped as described in Section 3.2. If the TLV is not included or the LSP-DB Version is mismatched, the PCE can trigger the State Synchronization process by sending a PCUpd message with PLSP-ID = 0 and SYNC = 1. The PCUpd message <span class="kw kw-should">SHOULD</span> include an empty Explicit Route Object (ERO) (with no ERO sub-object and object length of 4) as its intended path and <span class="kw kw-shouldnot">SHOULD NOT</span> include the optional objects for its attributes for any parameter update. The PCC <span class="kw kw-must">MUST</span> ignore such an update when the SYNC flag is set. If the TRIGGERED-INITIAL-SYNC capability is not advertised by a PCE and the PCC receives a PCUpd with the SYNC flag set to 1, the PCC <span class="kw kw-must">MUST</span> send a PCErr with the SRP-ID-number of the PCUpd, Error-type=20, and Error-value=4 &#39;Attempt to trigger a synchronization when the PCE triggered synchronization capability has not been advertised&#39; (see Section 8.1). If the TRIGGERED-INITIAL-SYNC capability is advertised by a PCE and the PCC, the PCC <span class="kw kw-mustnot">MUST NOT</span> trigger State Synchronization on its own. If the PCE receives a PCRpt message before the PCE has triggered the State Synchronization, the PCE <span class="kw kw-must">MUST</span> send a PCErr with Error-type=20 and Error-value=3 &#39;Attempt to trigger synchronization before PCE trigger&#39; (see Section 8.1).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCEPセッションの確立後にステートフルPCEがLSP-DB同期を制御できるようにするには、両方のPCEPスピーカーがOPENメッセージのFビットを1に設定する必要があります。 LSP-DB-VERSION TLVが両方のPCEPスピーカーに含まれていて、TLV値が一致している場合、セクション3.2で説明されているように、状態同期をスキップできます。 TLVが含まれていないか、LSP-DBバージョンが一致しない場合、PCEは、PLSP-ID = 0およびSYNC = 1のPCUpdメッセージを送信することにより、状態同期プロセスをトリガーできます。PCUpdメッセージには、空の明示的ルートオブジェクト（ ERO）（EROサブオブジェクトがなく、オブジェクト長が4である）を目的のパスとして使用し、パラメーターの更新の属性にオプションのオブジェクトを含めないでください。 PCCは、SYNCフラグが設定されている場合、そのような更新を無視する必要があります。 TRIGGERED-INITIAL-SYNC機能がPCEによってアドバタイズされておらず、PCCがSYNCフラグが1に設定されたPCUpdを受信する場合、PCCはPCUpdのSRP-ID-number、Error-type=20でPCErrを送信する必要があります。 、およびError-value=4 &#39;PCEトリガー同期機能がアドバタイズされていないときに同期をトリガーする試み&#39;（セクション8.1を参照）。 TRIGGERED-INITIAL-SYNC機能がPCEおよびPCCによって通知される場合、PCCはそれ自体で状態同期をトリガーしてはなりません（MUST NOT）。 PCEが状態同期をトリガーする前にPCEがPCRptメッセージを受信する場合、PCEはError-type=20およびError-value=3 &#39;PCEトリガーの前に同期をトリガーする試み&#39;（セクション8.1を参照）でPCErrを送信する必要があります。
+PCEPセッションの確立後にステートフルPCEがLSP-DB同期を制御できるようにするには、両方のPCEPスピーカーがOPENメッセージのFビットを1に設定する必要があります。 LSP-DB-VERSION TLVが両方のPCEPスピーカーに含まれていて、TLV値が一致している場合、セクション3.2で説明されているように、状態同期をスキップできます。 TLVが含まれていないか、LSP-DBバージョンが一致しない場合、PCEは、PLSP-ID = 0およびSYNC = 1のPCUpdメッセージを送信することにより、状態同期プロセスをトリガーできます。PCUpdメッセージには、空の明示的ルートオブジェクト（ ERO）（EROサブオブジェクトがなく、オブジェクト長が4である）を目的のパスとして使用し、パラメーターの更新の属性にオプションのオブジェクトを含めないでください。 PCCは、SYNCフラグが設定されている場合、そのような更新を無視する必要があります。 TRIGGERED-INITIAL-SYNC機能がPCEによってアドバタイズされておらず、PCCがSYNCフラグが1に設定されたPCUpdを受信する場合、PCCはPCUpdのSRP-ID-number、Error-type=20でPCErrを送信する必要があります。 、およびError-value=4 &#39;PCEトリガー同期機能がアドバタイズされていないときに同期をトリガーする試み&#39;（セクション8.1を参照）。 TRIGGERED-INITIAL-SYNC機能がPCEおよびPCCによって通知される場合、PCCはそれ自体で状態同期をトリガーしてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。 PCEが状態同期をトリガーする前にPCEがPCRptメッセージを受信する場合、PCEはError-type=20およびError-value=3 &#39;PCEトリガーの前に同期をトリガーする試み&#39;（セクション8.1を参照）でPCErrを送信する必要があります。
         </p>
       </div>
     </div>
@@ -1504,7 +1509,7 @@ PCEトリガー状態の再同期のサポートは、STATEFUL-PCE-CAPABILITY TL
     <div class="row" id="6-2--PCE-Triggered-State-Resynchronization-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To trigger resynchronization for an LSP, the PCE sends a Path Computation State Update (PCUpd) for the LSP, with the SYNC flag in the LSP object set to 1. The PCE SHOULD NOT include any parameter updates for the LSP, and the PCC MUST ignore such an update when the SYNC flag is set. The PCC MUST respond with a PCRpt message with the LSP state, SYNC flag set to 0 and MUST include the SRP-ID-number of the PCUpd message that triggered the resynchronization. If the PCC cannot find the LSP in its database, PCC MUST also set the R (remove) flag <a href="./rfc8231.html">[RFC8231]</a> in the LSP object in the PCRpt message.
+To trigger resynchronization for an LSP, the PCE sends a Path Computation State Update (PCUpd) for the LSP, with the SYNC flag in the LSP object set to 1. The PCE <span class="kw kw-shouldnot">SHOULD NOT</span> include any parameter updates for the LSP, and the PCC <span class="kw kw-must">MUST</span> ignore such an update when the SYNC flag is set. The PCC <span class="kw kw-must">MUST</span> respond with a PCRpt message with the LSP state, SYNC flag set to 0 and <span class="kw kw-must">MUST</span> include the SRP-ID-number of the PCUpd message that triggered the resynchronization. If the PCC cannot find the LSP in its database, PCC <span class="kw kw-must">MUST</span> also set the R (remove) flag <a href="./rfc8231.html">[RFC8231]</a> in the LSP object in the PCRpt message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1516,19 +1521,19 @@ LSPの再同期をトリガーするために、PCEはLSPオブジェクトのSY
     <div class="row" id="6-2--PCE-Triggered-State-Resynchronization-Procedure-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The PCE can also trigger resynchronization of the entire LSP-DB. The PCE MUST first mark all LSPs in the LSP-DB that were previously reported by the PCC as stale, and then send a PCUpd with an LSP object containing a PLSP-ID of 0 and with the SYNC flag set to 1. The PCUpd message MUST include an empty ERO (with no ERO sub-object and object length of 4) as its intended path and SHOULD NOT include the optional objects for its attributes for any parameter update. The PCC MUST ignore such update if the SYNC flag is set. This PCUpd message is the trigger for the PCC to enter the synchronization phase as described in <a href="./rfc8231.html">[RFC8231]</a> and start sending PCRpt messages. After the receipt of the end-of-synchronization marker, the PCE will purge LSPs that were not refreshed. The SRP-ID-number of the PCUpd that triggered the resynchronization SHOULD be included in each of the PCRpt messages. If the PCC cannot resynchronize the entire LSP-DB, the PCC MUST respond with a PCErr message with Error-type=20 and Error-value=5 &#39;cannot complete the State Synchronization&#39; <a href="./rfc8231.html">[RFC8231]</a>, and it MAY terminate the session. The PCE MUST remove the stale mark for the LSPs that were previously reported by the PCC. Based on the local policy, the PCE MAY reattempt synchronization at a later time.
+The PCE can also trigger resynchronization of the entire LSP-DB. The PCE <span class="kw kw-must">MUST</span> first mark all LSPs in the LSP-DB that were previously reported by the PCC as stale, and then send a PCUpd with an LSP object containing a PLSP-ID of 0 and with the SYNC flag set to 1. The PCUpd message <span class="kw kw-must">MUST</span> include an empty ERO (with no ERO sub-object and object length of 4) as its intended path and <span class="kw kw-shouldnot">SHOULD NOT</span> include the optional objects for its attributes for any parameter update. The PCC <span class="kw kw-must">MUST</span> ignore such update if the SYNC flag is set. This PCUpd message is the trigger for the PCC to enter the synchronization phase as described in <a href="./rfc8231.html">[RFC8231]</a> and start sending PCRpt messages. After the receipt of the end-of-synchronization marker, the PCE will purge LSPs that were not refreshed. The SRP-ID-number of the PCUpd that triggered the resynchronization <span class="kw kw-should">SHOULD</span> be included in each of the PCRpt messages. If the PCC cannot resynchronize the entire LSP-DB, the PCC <span class="kw kw-must">MUST</span> respond with a PCErr message with Error-type=20 and Error-value=5 &#39;cannot complete the State Synchronization&#39; <a href="./rfc8231.html">[RFC8231]</a>, and it <span class="kw kw-may">MAY</span> terminate the session. The PCE <span class="kw kw-must">MUST</span> remove the stale mark for the LSPs that were previously reported by the PCC. Based on the local policy, the PCE <span class="kw kw-may">MAY</span> reattempt synchronization at a later time.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCEは、LSP-DB全体の再同期もトリガーできます。 PCEはまず、以前にPCCによって失効として報告されたLSP-DB内のすべてのLSPをマークし、次に、PLSP-IDが0で、SYNCフラグが1に設定されたLSPオブジェクトを使用してPCUpdを送信する必要があります。PCUpdメッセージ意図したパスとして空のERO（EROサブオブジェクトなし、オブジェクト長4）を含めなければならず（MUST）、パラメータ更新の属性にオプションのオブジェクトを含めてはなりません（SHOULD NOT）。 PCCは、SYNCフラグが設定されている場合、そのような更新を無視する必要があります。このPCUpdメッセージは、PCCが<a href="./rfc8231.html">[RFC8231]</a>で説明されている同期フェーズに入り、PCRptメッセージの送信を開始するためのトリガーです。同期終了マーカーの受信後、PCEは更新されなかったLSPを削除します。再同期をトリガーしたPCUpdのSRP-ID-numberは、各PCRptメッセージに含まれる必要があります（SHOULD）。 PCCがLSP-DB全体を再同期できない場合、PCCはPCErrメッセージでError-type=20およびError-value=5で応答する必要があります（「状態の同期を完了できません」<a href="./rfc8231.html">[RFC8231]</a>）。セッションを終了できます（MAY）。 PCEは、以前にPCCによって報告されたLSPの古いマークを削除する必要があります。ローカルポリシーに基づいて、PCEは後で同期を再試行する場合があります。
+PCEは、LSP-DB全体の再同期もトリガーできます。 PCEはまず、以前にPCCによって失効として報告されたLSP-DB内のすべてのLSPをマークし、次に、PLSP-IDが0で、SYNCフラグが1に設定されたLSPオブジェクトを使用してPCUpdを送信する必要があります。PCUpdメッセージ意図したパスとして空のERO（EROサブオブジェクトなし、オブジェクト長4）を含めなければならず（<span class="kw kw-must">MUST</span>）、パラメータ更新の属性にオプションのオブジェクトを含めてはなりません（<span class="kw kw-shouldnot">SHOULD NOT</span>）。 PCCは、SYNCフラグが設定されている場合、そのような更新を無視する必要があります。このPCUpdメッセージは、PCCが<a href="./rfc8231.html">[RFC8231]</a>で説明されている同期フェーズに入り、PCRptメッセージの送信を開始するためのトリガーです。同期終了マーカーの受信後、PCEは更新されなかったLSPを削除します。再同期をトリガーしたPCUpdのSRP-ID-numberは、各PCRptメッセージに含まれる必要があります（<span class="kw kw-should">SHOULD</span>）。 PCCがLSP-DB全体を再同期できない場合、PCCはPCErrメッセージでError-type=20およびError-value=5で応答する必要があります（「状態の同期を完了できません」<a href="./rfc8231.html">[RFC8231]</a>）。セッションを終了できます（<span class="kw kw-may">MAY</span>）。 PCEは、以前にPCCによって報告されたLSPの古いマークを削除する必要があります。ローカルポリシーに基づいて、PCEは後で同期を再試行する場合があります。
         </p>
       </div>
     </div>
     <div class="row" id="6-2--PCE-Triggered-State-Resynchronization-Procedure-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the TRIGGERED-RESYNC capability is not advertised by a PCE and the PCC receives a PCUpd with the SYNC flag set to 1, it MUST send a PCErr with the SRP-ID-number of the PCUpd, Error-type=20, and Error-value=4 &#39;Attempt to trigger a synchronization when the PCE triggered synchronization capability has not been advertised&#39; (see Section 8.1).
+If the TRIGGERED-RESYNC capability is not advertised by a PCE and the PCC receives a PCUpd with the SYNC flag set to 1, it <span class="kw kw-must">MUST</span> send a PCErr with the SRP-ID-number of the PCUpd, Error-type=20, and Error-value=4 &#39;Attempt to trigger a synchronization when the PCE triggered synchronization capability has not been advertised&#39; (see Section 8.1).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1636,12 +1641,12 @@ Dビット（DELTA-LSP-SYNC-CAPABILITY）がPCEPスピーカーによって1に�
     <div class="row" id="7--Advertising-Support-of-Synchronization-Optimizations-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the F bit (TRIGGERED-INITIAL-SYNC) is set to 1 by both PCEP speakers, the PCE SHOULD trigger initial (first) State Synchronization. See Section 5.2 for details.
+If the F bit (TRIGGERED-INITIAL-SYNC) is set to 1 by both PCEP speakers, the PCE <span class="kw kw-should">SHOULD</span> trigger initial (first) State Synchronization. See Section 5.2 for details.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-両方のPCEPスピーカーによってFビット（TRIGGERED-INITIAL-SYNC）が1に設定されている場合、PCEは初期（最初の）状態同期をトリガーする必要があります（SHOULD）。詳細については、セクション5.2を参照してください。
+両方のPCEPスピーカーによってFビット（TRIGGERED-INITIAL-SYNC）が1に設定されている場合、PCEは初期（最初の）状態同期をトリガーする必要があります（<span class="kw kw-should">SHOULD</span>）。詳細については、セクション5.2を参照してください。
         </p>
       </div>
     </div>
@@ -1919,12 +1924,12 @@ All manageability requirements and considerations listed in <a href="./rfc5440.h
     <div class="row" id="9-1--Control-of-Function-and-Policy-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A PCE or PCC implementation MUST allow configuring the State Synchronization optimization capabilities as described in this document. The implementation SHOULD also allow the operator to configure the Speaker Entity Identifier (Section 3.3.2). Further, the operator SHOULD be to be allowed to trigger the resynchronization procedures as per Section 6.2.
+A PCE or PCC implementation <span class="kw kw-must">MUST</span> allow configuring the State Synchronization optimization capabilities as described in this document. The implementation <span class="kw kw-should">SHOULD</span> also allow the operator to configure the Speaker Entity Identifier (Section 3.3.2). Further, the operator <span class="kw kw-should">SHOULD</span> be to be allowed to trigger the resynchronization procedures as per Section 6.2.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PCEまたはPCC実装では、このドキュメントで説明されているように、状態同期最適化機能の構成を許可する必要があります。実装は、オペレーターが話者エンティティ識別子を構成することも許可する必要があります（セクション3.3.2）。さらに、オペレーターは、セクション6.2に従って再同期手順をトリガーできるようにする必要があります（SHOULD）。
+PCEまたはPCC実装では、このドキュメントで説明されているように、状態同期最適化機能の構成を許可する必要があります。実装は、オペレーターが話者エンティティ識別子を構成することも許可する必要があります（セクション3.3.2）。さらに、オペレーターは、セクション6.2に従って再同期手順をトリガーできるようにする必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1943,12 +1948,12 @@ PCEまたはPCC実装では、このドキュメントで説明されている�
     <div class="row" id="9-2--Information-and-Data-Models-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An implementation SHOULD allow the operator to view the stateful capabilities advertised by each peer and the current synchronization status with each peer. To serve this purpose, the PCEP YANG module [PCEP-YANG] can be extended to include advertised stateful capabilities and synchronization status.
+An implementation <span class="kw kw-should">SHOULD</span> allow the operator to view the stateful capabilities advertised by each peer and the current synchronization status with each peer. To serve this purpose, the PCEP YANG module [PCEP-YANG] can be extended to include advertised stateful capabilities and synchronization status.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-実装は、オペレーターが各ピアによってアドバタイズされたステートフル機能と各ピアとの現在の同期ステータスを表示できるようにする必要があります（SHOULD）。この目的を果たすために、PCEP YANGモジュール[PCEP-YANG]を拡張して、アドバタイズされたステートフル機能と同期ステータスを含めることができます。
+実装は、オペレーターが各ピアによってアドバタイズされたステートフル機能と各ピアとの現在の同期ステータスを表示できるようにする必要があります（<span class="kw kw-should">SHOULD</span>）。この目的を果たすために、PCEP YANGモジュール[PCEP-YANG]を拡張して、アドバタイズされたステートフル機能と同期ステータスを含めることができます。
         </p>
       </div>
     </div>
@@ -2075,7 +2080,7 @@ The State Synchronization optimizations described in this document can result in
     <div class="row" id="10--Security-Considerations-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The security considerations listed in <a href="./rfc8231.html">[RFC8231]</a> apply to this document as well. However, this document also introduces some new attack vectors. An attacker could spoof the SPEAKER-ENTITY-ID and pretend to be another PCEP speaker. An attacker may flood the PCC with triggered resynchronization requests at a rate that exceeds the PCC&#39;s ability to process them by either spoofing messages or compromising the PCE itself. The PCC can respond with a PCErr message as described in Section 6.2 and terminate the session. Thus, securing the PCEP session using Transport Layer Security (TLS) [PCEPS], as per the recommendations and best current practices in <a href="./rfc7525.html">[RFC7525]</a>, is RECOMMENDED. An administrator could also expose the Speaker Entity Identifier as part of the certificate, for the peer identity verification.
+The security considerations listed in <a href="./rfc8231.html">[RFC8231]</a> apply to this document as well. However, this document also introduces some new attack vectors. An attacker could spoof the SPEAKER-ENTITY-ID and pretend to be another PCEP speaker. An attacker may flood the PCC with triggered resynchronization requests at a rate that exceeds the PCC&#39;s ability to process them by either spoofing messages or compromising the PCE itself. The PCC can respond with a PCErr message as described in Section 6.2 and terminate the session. Thus, securing the PCEP session using Transport Layer Security (TLS) [PCEPS], as per the recommendations and best current practices in <a href="./rfc7525.html">[RFC7525]</a>, is <span class="kw kw-should">RECOMMENDED</span>. An administrator could also expose the Speaker Entity Identifier as part of the certificate, for the peer identity verification.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

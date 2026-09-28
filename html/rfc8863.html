@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、ICE（Interactive Connectivity Establishment）において、特定のネットワーク条件下で発生する接続確立のデッドロック（PAC: Patiently Awaiting Connectivity）を解消するための改善案を提示しています。双方が互いのパケットを待ち続けて接続が失敗するシナリオを分析し、タイマーの調整や特定の接続チェック手順を導入することで、複雑なNAT/ファイアウォール環境におけるICEの成功率を向上させる手法を解説しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8863 - 対話型接続確立：接続を辛抱強く待つ（ICE PAC）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -319,12 +324,12 @@ This specification updates <a href="./rfc8445.html">[RFC8445]</a> and <a href=".
     <div class="row" id="2--Conventions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -499,7 +504,7 @@ In this situation, the checklist at the peer agent may contain only failed pairs
     <div class="row" id="4--Update-to-RFC-8445-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In order to avoid the problem raised by this document, the ICE agent needs to wait enough time to allow peer-reflexive candidates to be discovered. Accordingly, when a full ICE implementation begins its ICE processing, as described in <a href="./rfc8445.html">[RFC8445]</a>, Section 6.1, it MUST set a timer, henceforth known as the &#34;PAC timer&#34; (Patiently Awaiting Connectivity), to ensure that ICE will run for a minimum amount of time before determining failure.
+In order to avoid the problem raised by this document, the ICE agent needs to wait enough time to allow peer-reflexive candidates to be discovered. Accordingly, when a full ICE implementation begins its ICE processing, as described in <a href="./rfc8445.html">[RFC8445]</a>, Section 6.1, it <span class="kw kw-must">MUST</span> set a timer, henceforth known as the &#34;PAC timer&#34; (Patiently Awaiting Connectivity), to ensure that ICE will run for a minimum amount of time before determining failure.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -523,7 +528,7 @@ Specifically, the ICE agent will start its timer once it believes ICE connectivi
     <div class="row" id="4--Update-to-RFC-8445-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The RECOMMENDED duration for the PAC timer is equal to the agent&#39;s connectivity check transaction timeout, including all retransmissions. When using default values for retransmission timeout (RTO) and Rc, this amounts to 39.5 seconds, as explained in <a href="./rfc5389.html">[RFC5389]</a>, Section 7.2.1. This timeout value is chosen to roughly coincide with the maximum possible duration of ICE connectivity checks from the remote peer, which, if successful, could create peer-reflexive candidates. Because the ICE agent doesn&#39;t know the exact number of candidate pairs and pacing interval in use by the remote side, this timeout value is simply a guess, albeit an educated one. Regardless, for this particular problem, the desired benefits will be realized as long as the agent waits some reasonable amount of time, and, as usual, the application is in the best position to determine what is reasonable for its scenario.
+The <span class="kw kw-should">RECOMMENDED</span> duration for the PAC timer is equal to the agent&#39;s connectivity check transaction timeout, including all retransmissions. When using default values for retransmission timeout (RTO) and Rc, this amounts to 39.5 seconds, as explained in <a href="./rfc5389.html">[RFC5389]</a>, Section 7.2.1. This timeout value is chosen to roughly coincide with the maximum possible duration of ICE connectivity checks from the remote peer, which, if successful, could create peer-reflexive candidates. Because the ICE agent doesn&#39;t know the exact number of candidate pairs and pacing interval in use by the remote side, this timeout value is simply a guess, albeit an educated one. Regardless, for this particular problem, the desired benefits will be realized as long as the agent waits some reasonable amount of time, and, as usual, the application is in the best position to determine what is reasonable for its scenario.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -535,7 +540,7 @@ PACタイマーの推奨期間は、すべての再送信を含め、エージ�
     <div class="row" id="4--Update-to-RFC-8445-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-While the timer is still running, the ICE agent MUST NOT update a checklist state from Running to Failed, even if there are no pairs left in the checklist to check. As a result, the ICE agent will not remove any data streams or set the state of the ICE session to Failed as long as the timer is running.
+While the timer is still running, the ICE agent <span class="kw kw-mustnot">MUST NOT</span> update a checklist state from Running to Failed, even if there are no pairs left in the checklist to check. As a result, the ICE agent will not remove any data streams or set the state of the ICE session to Failed as long as the timer is running.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -547,7 +552,7 @@ While the timer is still running, the ICE agent MUST NOT update a checklist stat
     <div class="row" id="4--Update-to-RFC-8445-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the timer period eventually elapses, the ICE agent MUST resume typical ICE processing, including setting the state of any checklists to Failed if they have no pairs left to check and handling any consequences as indicated in <a href="./rfc8445.html">[RFC8445]</a>, Section 8.1.2. Naturally, if there are no such checklists, no action is necessary.
+When the timer period eventually elapses, the ICE agent <span class="kw kw-must">MUST</span> resume typical ICE processing, including setting the state of any checklists to Failed if they have no pairs left to check and handling any consequences as indicated in <a href="./rfc8445.html">[RFC8445]</a>, Section 8.1.2. Naturally, if there are no such checklists, no action is necessary.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -571,7 +576,7 @@ One consequence of this behavior is that in cases where ICE should fail, e.g., w
     <div class="row" id="4--Update-to-RFC-8445-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note also that the PAC timer is potentially relevant to the ICE nomination procedure described in <a href="./rfc8445.html">[RFC8445]</a>, Section 8.1.1. That specification does not define a minimum duration for ICE processing prior to nomination of a candidate pair, but in order to select the best candidate pair, ICE needs to run for enough time in order to allow peer-reflexive candidates to be discovered and checked, as noted above. Accordingly, the controlling ICE agent SHOULD wait a sufficient amount of time before nominating candidate pairs, and it MAY use the PAC timer to do so. As always, the controlling ICE agent retains full discretion and MAY decide, based on its own criteria, to nominate pairs prior to the PAC timer period elapsing.
+Note also that the PAC timer is potentially relevant to the ICE nomination procedure described in <a href="./rfc8445.html">[RFC8445]</a>, Section 8.1.1. That specification does not define a minimum duration for ICE processing prior to nomination of a candidate pair, but in order to select the best candidate pair, ICE needs to run for enough time in order to allow peer-reflexive candidates to be discovered and checked, as noted above. Accordingly, the controlling ICE agent <span class="kw kw-should">SHOULD</span> wait a sufficient amount of time before nominating candidate pairs, and it <span class="kw kw-may">MAY</span> use the PAC timer to do so. As always, the controlling ICE agent retains full discretion and <span class="kw kw-may">MAY</span> decide, based on its own criteria, to nominate pairs prior to the PAC timer period elapsing.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -607,7 +612,7 @@ Trickle Ice <a href="./rfc8838.html">[RFC8838]</a>も同様の問題を考慮し
     <div class="row" id="5--Update-to-RFC-8838-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-However, for the same reasons described above, the ICE agent may discover peer-reflexive candidates after it has received the end-of-candidates indication, and so the solution proposed by this document MUST still be used even when the ICE agent is using Trickle ICE.
+However, for the same reasons described above, the ICE agent may discover peer-reflexive candidates after it has received the end-of-candidates indication, and so the solution proposed by this document <span class="kw kw-must">MUST</span> still be used even when the ICE agent is using Trickle ICE.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -619,7 +624,7 @@ However, for the same reasons described above, the ICE agent may discover peer-r
     <div class="row" id="5--Update-to-RFC-8838-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note also that sending an end-of-candidates indication is only a SHOULD-strength requirement, which means that ICE agents will need to implement a backup mechanism to decide when all candidates have been received, typically a timer. Accordingly, ICE agents MAY use the PAC timer to also serve as an end-of-candidates fallback.
+Note also that sending an end-of-candidates indication is only a SHOULD-strength requirement, which means that ICE agents will need to implement a backup mechanism to decide when all candidates have been received, typically a timer. Accordingly, ICE agents <span class="kw kw-may">MAY</span> use the PAC timer to also serve as an end-of-candidates fallback.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

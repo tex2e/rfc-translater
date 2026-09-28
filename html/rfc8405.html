@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、リンク状態IGP（OSPFやIS-IS）において、トポロジ変更時の経路計算（SPF）を効率的に行うための標準的なバックオフ遅延アルゴリズムを定義しています。頻繁な変更が発生した際に計算回数を抑えてCPU負荷を軽減しつつ、単発の変更に対しては迅速に反応するための動的なタイマー制御を規定し、マルチベンダ環境におけるルーティング収束の安定性と一貫性を向上させます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8405 - リンク状態IGPのための最短パス優先（SPF）バックオフ遅延アルゴリズム</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -342,12 +347,12 @@ This document specifies a standard algorithm to allow multi-vendor networks to h
     <div class="row" id="1-1--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -522,7 +527,7 @@ TIME_TO_LEARN_INTERVAL：これは、単一のコンポーネントの障害（�
     <div class="row" id="3--Definitions-and-Parameters-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-HOLDDOWN_INTERVAL: The time required with no received IGP event before considering the IGP to be stable again and allowing the SPF_DELAY to be restored to INITIAL_SPF_DELAY, e.g., a HOLDDOWN_INTERVAL of 3 seconds. The HOLDDOWN_INTERVAL MUST be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.
+HOLDDOWN_INTERVAL: The time required with no received IGP event before considering the IGP to be stable again and allowing the SPF_DELAY to be restored to INITIAL_SPF_DELAY, e.g., a HOLDDOWN_INTERVAL of 3 seconds. The HOLDDOWN_INTERVAL <span class="kw kw-must">MUST</span> be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1313,24 +1318,24 @@ Actions on event 9:
     <div class="row" id="6--Parameters-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-All the parameters MUST be configurable at the protocol instance level. They MAY be configurable on a per IGP LSDB basis (e.g., IS-IS level, OSPF area, or IS-IS Level 1 area). All the delays (INITIAL_SPF_DELAY, SHORT_SPF_DELAY, LONG_SPF_DELAY, TIME_TO_LEARN_INTERVAL, and HOLDDOWN_INTERVAL) SHOULD be configurable with a granularity of a millisecond. They MUST be configurable with a granularity of at least a tenth of a second. The configurable range for all the parameters SHOULD be from 0 milliseconds to at least 6000 milliseconds. The HOLDDOWN_INTERVAL MUST be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.
+All the parameters <span class="kw kw-must">MUST</span> be configurable at the protocol instance level. They <span class="kw kw-may">MAY</span> be configurable on a per IGP LSDB basis (e.g., IS-IS level, OSPF area, or IS-IS Level 1 area). All the delays (INITIAL_SPF_DELAY, SHORT_SPF_DELAY, LONG_SPF_DELAY, TIME_TO_LEARN_INTERVAL, and HOLDDOWN_INTERVAL) <span class="kw kw-should">SHOULD</span> be configurable with a granularity of a millisecond. They <span class="kw kw-must">MUST</span> be configurable with a granularity of at least a tenth of a second. The configurable range for all the parameters <span class="kw kw-should">SHOULD</span> be from 0 milliseconds to at least 6000 milliseconds. The HOLDDOWN_INTERVAL <span class="kw kw-must">MUST</span> be defaulted or configured to be longer than the TIME_TO_LEARN_INTERVAL.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-すべてのパラメータは、プロトコルインスタンスレベルで設定可能である必要があります。それらは、IGP LSDBごとに構成できます（例：IS-ISレベル、OSPFエリア、またはIS-ISレベル1エリア）。すべての遅延（INITIAL_SPF_DELAY、SHORT_SPF_DELAY、LONG_SPF_DELAY、TIME_TO_LEARN_INTERVAL、およびHOLDDOWN_INTERVAL）は、ミリ秒の粒度で構成可能である必要があります。少なくとも10分の1秒の粒度で構成可能でなければなりません。すべてのパラメーターの構成可能な範囲は、0ミリ秒から少なくとも6000ミリ秒にする必要があります（SHOULD）。 HOLDDOWN_INTERVALはデフォルトにするか、TIME_TO_LEARN_INTERVALよりも長くなるように構成する必要があります。
+すべてのパラメータは、プロトコルインスタンスレベルで設定可能である必要があります。それらは、IGP LSDBごとに構成できます（例：IS-ISレベル、OSPFエリア、またはIS-ISレベル1エリア）。すべての遅延（INITIAL_SPF_DELAY、SHORT_SPF_DELAY、LONG_SPF_DELAY、TIME_TO_LEARN_INTERVAL、およびHOLDDOWN_INTERVAL）は、ミリ秒の粒度で構成可能である必要があります。少なくとも10分の1秒の粒度で構成可能でなければなりません。すべてのパラメーターの構成可能な範囲は、0ミリ秒から少なくとも6000ミリ秒にする必要があります（<span class="kw kw-should">SHOULD</span>）。 HOLDDOWN_INTERVALはデフォルトにするか、TIME_TO_LEARN_INTERVALよりも長くなるように構成する必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="6--Parameters-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If this SPF Back-Off algorithm is enabled by default, then in order to have consistent SPF delays between implementations with default configuration, the following default values SHOULD be implemented:
+If this SPF Back-Off algorithm is enabled by default, then in order to have consistent SPF delays between implementations with default configuration, the following default values <span class="kw kw-should">SHOULD</span> be implemented:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このSPFバックオフアルゴリズムがデフォルトで有効になっている場合、デフォルト構成の実装間で一貫したSPF遅延を実現するには、次のデフォルト値を実装する必要があります（SHOULD）。
+このSPFバックオフアルゴリズムがデフォルトで有効になっている場合、デフォルト構成の実装間で一貫したSPF遅延を実現するには、次のデフォルト値を実装する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1348,7 +1353,7 @@ If this SPF Back-Off algorithm is enabled by default, then in order to have cons
     <div class="row" id="6--Parameters-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In order to satisfy the goals stated in Section 2, operators are RECOMMENDED to configure delay intervals such that INITIAL_SPF_DELAY &lt;= SHORT_SPF_DELAY and SHORT_SPF_DELAY &lt;= LONG_SPF_DELAY.
+In order to satisfy the goals stated in Section 2, operators are <span class="kw kw-should">RECOMMENDED</span> to configure delay intervals such that INITIAL_SPF_DELAY &lt;= SHORT_SPF_DELAY and SHORT_SPF_DELAY &lt;= LONG_SPF_DELAY.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1360,7 +1365,7 @@ In order to satisfy the goals stated in Section 2, operators are RECOMMENDED to 
     <div class="row" id="6--Parameters-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- When setting (default) values, one should consider the customers and their application requirements, the computational power of the routers, the size of the network as determined primarily by the number of IP prefixes advertised in the IGP, the frequency and number of IGP events, and the number of protocol reactions/computations triggered by IGP SPF computation (e.g., BGP, Path Computation Element Communication Protocol (PCEP), Traffic Engineering Constrained SPF (CSPF), and Fast Reroute computations). Note that some or all of these factors may change over the life of the network. In case of doubt, it&#39;s RECOMMENDED that timer intervals should be chosen conservatively (i.e., longer timer values).
+ When setting (default) values, one should consider the customers and their application requirements, the computational power of the routers, the size of the network as determined primarily by the number of IP prefixes advertised in the IGP, the frequency and number of IGP events, and the number of protocol reactions/computations triggered by IGP SPF computation (e.g., BGP, Path Computation Element Communication Protocol (PCEP), Traffic Engineering Constrained SPF (CSPF), and Fast Reroute computations). Note that some or all of these factors may change over the life of the network. In case of doubt, it&#39;s <span class="kw kw-should">RECOMMENDED</span> that timer intervals should be chosen conservatively (i.e., longer timer values).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1372,7 +1377,7 @@ In order to satisfy the goals stated in Section 2, operators are RECOMMENDED to 
     <div class="row" id="6--Parameters-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-For the standard algorithm to be effective in mitigating micro-loops, it is RECOMMENDED that all routers in the IGP domain, or at least all the routers in the same area/level, have exactly the same configured values.
+For the standard algorithm to be effective in mitigating micro-loops, it is <span class="kw kw-should">RECOMMENDED</span> that all routers in the IGP domain, or at least all the routers in the same area/level, have exactly the same configured values.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1396,7 +1401,7 @@ For the standard algorithm to be effective in mitigating micro-loops, it is RECO
     <div class="row" id="7--Partial-Deployment-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In general, the SPF Back-Off Delay algorithm is only effective in mitigating micro-loops if it is deployed with the same parameters on all routers in the IGP domain or, at least, all routers in an IGP area/level. The impact of partial deployment is dependent on the particular event, the topology, and the algorithm(s) used on other routers in the IGP area/level. In cases where the previous SPF Back-Off Delay algorithm was implemented uniformly, partial deployment will increase the frequency and duration of micro-loops. Hence, it is RECOMMENDED that all routers in the IGP domain, or at least within the same area/level, be migrated to the SPF algorithm described herein at roughly the same time.
+In general, the SPF Back-Off Delay algorithm is only effective in mitigating micro-loops if it is deployed with the same parameters on all routers in the IGP domain or, at least, all routers in an IGP area/level. The impact of partial deployment is dependent on the particular event, the topology, and the algorithm(s) used on other routers in the IGP area/level. In cases where the previous SPF Back-Off Delay algorithm was implemented uniformly, partial deployment will increase the frequency and duration of micro-loops. Hence, it is <span class="kw kw-should">RECOMMENDED</span> that all routers in the IGP domain, or at least within the same area/level, be migrated to the SPF algorithm described herein at roughly the same time.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

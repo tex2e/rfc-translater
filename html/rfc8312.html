@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、Linuxなどで広く採用されているTCP輻輳制御アルゴリズム「CUBIC」の仕様を定義しています。従来のTCP（NewReno）が苦手とする高速かつ長距離（高帯域遅延積）のネットワークにおいて、ウィンドウサイズを3次関数（Cubic function）に基づいて動的に調整することで、帯域を迅速かつ公平に利用し、高いパフォーマンスを実現するためのアルゴリズムを詳細に解説しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8312 - 高速長距離ネットワーク用のCUBIC</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -339,12 +344,12 @@ In the following sections, we first briefly explain the design principles of CUB
     <div class="row" id="2--Conventions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -685,12 +690,12 @@ TCPフレンドリ領域は、[FHP00]で説明されている分析に従って�
     <div class="row" id="4-2--TCP-Friendly-Region-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- Based on the above analysis, CUBIC uses Eq. 4 to estimate the window size W_est of AIMD(alpha_aimd, beta_aimd) with alpha_aimd=3*(1-beta_cubic)/(1+beta_cubic) and beta_aimd=beta_cubic, which achieves the same average window size as Standard TCP. When receiving an ACK in congestion avoidance (cwnd could be greater than or less than W_max), CUBIC checks whether W_cubic(t) is less than W_est(t). If so, CUBIC is in the TCP-friendly region and cwnd SHOULD be set to W_est(t) at each reception of an ACK.
+ Based on the above analysis, CUBIC uses Eq. 4 to estimate the window size W_est of AIMD(alpha_aimd, beta_aimd) with alpha_aimd=3*(1-beta_cubic)/(1+beta_cubic) and beta_aimd=beta_cubic, which achieves the same average window size as Standard TCP. When receiving an ACK in congestion avoidance (cwnd could be greater than or less than W_max), CUBIC checks whether W_cubic(t) is less than W_est(t). If so, CUBIC is in the TCP-friendly region and cwnd <span class="kw kw-should">SHOULD</span> be set to W_est(t) at each reception of an ACK.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-上記の分析に基づいて、CUBICは式を使用します。標準のTCPと同じ平均ウィンドウサイズを実現するalpha_aimd=3 *（1-beta_cubic）/（1+beta_cubic）およびbeta_aimd=beta_cubicを使用してAIMD（alpha_aimd、beta_aimd）のウィンドウサイズW_estを推定するには、4と入力します。輻輳回避でACKを受信すると（cwndはW_maxより大きいか小さい場合があります）、CUBICはW_cubic（t）がW_est（t）より小さいかどうかをチェックします。その場合、CUBICはTCPフレンドリ領域にあり、ACKを受信するたびにcwndをW_est（t）に設定する必要があります（SHOULD）。
+上記の分析に基づいて、CUBICは式を使用します。標準のTCPと同じ平均ウィンドウサイズを実現するalpha_aimd=3 *（1-beta_cubic）/（1+beta_cubic）およびbeta_aimd=beta_cubicを使用してAIMD（alpha_aimd、beta_aimd）のウィンドウサイズW_estを推定するには、4と入力します。輻輳回避でACKを受信すると（cwndはW_maxより大きいか小さい場合があります）、CUBICはW_cubic（t）がW_est（t）より小さいかどうかをチェックします。その場合、CUBICはTCPフレンドリ領域にあり、ACKを受信するたびにcwndをW_est（t）に設定する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -717,7 +722,7 @@ TCPフレンドリ領域は、[FHP00]で説明されている分析に従って�
     <div class="row" id="4-3--Concave-Region-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friendly region and cwnd is less than W_max, then CUBIC is in the concave region. In this region, cwnd MUST be incremented by (W_cubic(t+RTT) - cwnd)/cwnd for each received ACK, where W_cubic(t+RTT) is calculated using Eq. 1.
+When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friendly region and cwnd is less than W_max, then CUBIC is in the concave region. In this region, cwnd <span class="kw kw-must">MUST</span> be incremented by (W_cubic(t+RTT) - cwnd)/cwnd for each received ACK, where W_cubic(t+RTT) is calculated using Eq. 1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -741,7 +746,7 @@ When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friend
     <div class="row" id="4-4--Convex-Region-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friendly region and cwnd is larger than or equal to W_max, then CUBIC is in the convex region. The convex region indicates that the network conditions might have been perturbed since the last congestion event, possibly implying more available bandwidth after some flow departures. Since the Internet is highly asynchronous, some amount of perturbation is always possible without causing a major change in available bandwidth. In this region, CUBIC is being very careful by very slowly increasing its window size. The convex profile ensures that the window increases very slowly at the beginning and gradually increases its increase rate. We also call this region the &#34;maximum probing phase&#34; since CUBIC is searching for a new W_max. In this region, cwnd MUST be incremented by (W_cubic(t+RTT) - cwnd)/cwnd for each received ACK, where W_cubic(t+RTT) is calculated using Eq. 1.
+When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friendly region and cwnd is larger than or equal to W_max, then CUBIC is in the convex region. The convex region indicates that the network conditions might have been perturbed since the last congestion event, possibly implying more available bandwidth after some flow departures. Since the Internet is highly asynchronous, some amount of perturbation is always possible without causing a major change in available bandwidth. In this region, CUBIC is being very careful by very slowly increasing its window size. The convex profile ensures that the window increases very slowly at the beginning and gradually increases its increase rate. We also call this region the &#34;maximum probing phase&#34; since CUBIC is searching for a new W_max. In this region, cwnd <span class="kw kw-must">MUST</span> be incremented by (W_cubic(t+RTT) - cwnd)/cwnd for each received ACK, where W_cubic(t+RTT) is calculated using Eq. 1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -765,12 +770,12 @@ When receiving an ACK in congestion avoidance, if CUBIC is not in the TCP-friend
     <div class="row" id="4-5--Multiplicative-Decrease-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a packet loss is detected by duplicate ACKs or a network congestion is detected by ECN-Echo ACKs, CUBIC updates its W_max, cwnd, and ssthresh as follows. Parameter beta_cubic SHOULD be set to 0.7.
+When a packet loss is detected by duplicate ACKs or a network congestion is detected by ECN-Echo ACKs, CUBIC updates its W_max, cwnd, and ssthresh as follows. Parameter beta_cubic <span class="kw kw-should">SHOULD</span> be set to 0.7.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-重複したACKによってパケット損失が検出された場合、またはECN-Echo ACKによってネットワークの輻輳が検出された場合、CUBICはそのW_max、cwnd、およびssthreshを次のように更新します。パラメータbeta_cubicは0.7に設定する必要があります（SHOULD）。
+重複したACKによってパケット損失が検出された場合、またはECN-Echo ACKによってネットワークの輻輳が検出された場合、CUBICはそのW_max、cwnd、およびssthreshを次のように更新します。パラメータbeta_cubicは0.7に設定する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -811,7 +816,7 @@ beta_cubicを0.5より大きい値に設定すると、収束が遅くなりま�
     <div class="row" id="4-6--Fast-Convergence-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To improve the convergence speed of CUBIC, we add a heuristic in CUBIC. When a new flow joins the network, existing flows in the network need to give up some of their bandwidth to allow the new flow some room for growth if the existing flows have been using all the bandwidth of the network. To speed up this bandwidth release by existing flows, the following mechanism called &#34;fast convergence&#34; SHOULD be implemented.
+To improve the convergence speed of CUBIC, we add a heuristic in CUBIC. When a new flow joins the network, existing flows in the network need to give up some of their bandwidth to allow the new flow some room for growth if the existing flows have been using all the bandwidth of the network. To speed up this bandwidth release by existing flows, the following mechanism called &#34;fast convergence&#34; <span class="kw kw-should">SHOULD</span> be implemented.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -859,12 +864,12 @@ At a congestion event, if the current value of W_max is less than W_last_max, th
     <div class="row" id="4-6--Fast-Convergence-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The fast convergence is designed for network environments with multiple CUBIC flows. In network environments with only a single CUBIC flow and without any other traffic, the fast convergence SHOULD be disabled.
+The fast convergence is designed for network environments with multiple CUBIC flows. In network environments with only a single CUBIC flow and without any other traffic, the fast convergence <span class="kw kw-should">SHOULD</span> be disabled.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-高速コンバージェンスは、複数のCUBICフローがあるネットワーク環境向けに設計されています。 CUBICフローが1つだけで他のトラフィックがないネットワーク環境では、高速コンバージェンスを無効にする必要があります（SHOULD）。
+高速コンバージェンスは、複数のCUBICフローがあるネットワーク環境向けに設計されています。 CUBICフローが1つだけで他のトラフィックがないネットワーク環境では、高速コンバージェンスを無効にする必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -919,7 +924,7 @@ During the first congestion avoidance after a timeout, CUBIC increases its conge
     <div class="row" id="4-8--Slow-Start-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-CUBIC MUST employ a slow-start algorithm, when the cwnd is no more than ssthresh. Among the slow-start algorithms, CUBIC MAY choose the standard TCP slow start <a href="./rfc5681.html">[RFC5681]</a> in general networks, or the limited slow start <a href="./rfc3742.html">[RFC3742]</a> or hybrid slow start [HR08] for fast and long-distance networks.
+CUBIC <span class="kw kw-must">MUST</span> employ a slow-start algorithm, when the cwnd is no more than ssthresh. Among the slow-start algorithms, CUBIC <span class="kw kw-may">MAY</span> choose the standard TCP slow start <a href="./rfc5681.html">[RFC5681]</a> in general networks, or the limited slow start <a href="./rfc3742.html">[RFC3742]</a> or hybrid slow start [HR08] for fast and long-distance networks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1186,7 +1191,7 @@ Both tables show that CUBIC with any of these three C values is more friendly to
     <div class="row" id="5-1--Fairness-to-Standard-TCP-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-We can see that C determines the aggressiveness of CUBIC in competing with other congestion control algorithms for bandwidth. CUBIC is more friendly to Standard TCP, if the value of C is lower. However, we do not recommend setting C to a very low value like 0.04, since CUBIC with a low C cannot efficiently use the bandwidth in long RTT and high-bandwidth networks. Based on these observations and our experiments, we find C=0.4 gives a good balance between TCP-friendliness and aggressiveness of window increase. Therefore, C SHOULD be set to 0.4. With C set to 0.4, Eq. 6 is reduced to:
+We can see that C determines the aggressiveness of CUBIC in competing with other congestion control algorithms for bandwidth. CUBIC is more friendly to Standard TCP, if the value of C is lower. However, we do not recommend setting C to a very low value like 0.04, since CUBIC with a low C cannot efficiently use the bandwidth in long RTT and high-bandwidth networks. Based on these observations and our experiments, we find C=0.4 gives a good balance between TCP-friendliness and aggressiveness of window increase. Therefore, C <span class="kw kw-should">SHOULD</span> be set to 0.4. With C set to 0.4, Eq. 6 is reduced to:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1448,7 +1453,7 @@ This is not considered in the current CUBIC.
     <div class="row" id="5-8--Behavior-for-Application-Limited-Flows-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-CUBIC does not raise its congestion window size if the flow is currently limited by the application instead of the congestion window. In case of long periods when cwnd has not been updated due to the application rate limit, such as idle periods, t in Eq. 1 MUST NOT include these periods; otherwise, W_cubic(t) might be very high after restarting from these periods.
+CUBIC does not raise its congestion window size if the flow is currently limited by the application instead of the congestion window. In case of long periods when cwnd has not been updated due to the application rate limit, such as idle periods, t in Eq. 1 <span class="kw kw-mustnot">MUST NOT</span> include these periods; otherwise, W_cubic(t) might be very high after restarting from these periods.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

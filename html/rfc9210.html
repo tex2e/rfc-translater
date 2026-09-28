@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、DNSプロトコルのトランスポート層としてTCPを使用する際の運用要件を定義したベストカレントプラクティス（BCP 235）です。RFC 7766の実装要件を補完し、コネクションの維持管理、タイムアウトの設定、およびファイアウォールの透過性といった運用上の課題に対する具体的な推奨事項をまとめることで、大規模パケットや暗号化を伴う現代のDNS通信の安定性を向上させます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 9210 - TCP上のDNSトランスポート - 運用要件</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -322,7 +327,7 @@ Table of Contents
     <div class="row" id="1--Introduction-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS messages are delivered using UDP or TCP communications. While most DNS transactions are carried over UDP, some operators have been led to believe that any DNS-over-TCP traffic is unwanted or unnecessary for general DNS operation. When DNS over TCP has been restricted, a variety of communication failures and debugging challenges often arise. As DNS and new naming system features have evolved, TCP as a transport has become increasingly important for the correct and safe operation of an Internet DNS. Reflecting modern usage, the DNS standards declare that support for TCP is a required part of the DNS implementation specifications <a href="./rfc7766.html">[RFC7766]</a>. This document is the equivalent of formal requirements for the operational community, encouraging system administrators, network engineers, and security staff to ensure DNS-over-TCP communications support is on par with DNS-over-UDP communications. It updates <a href="https://datatracker.ietf.org/doc/html/rfc1123">[RFC1123]</a>, Section 6.1.3.2 to clarify that all DNS resolvers and recursive servers MUST support and service both TCP and UDP queries and also updates <a href="https://datatracker.ietf.org/doc/html/rfc1536">[RFC1536]</a> to remove the misconception that TCP is only useful for zone transfers.
+DNS messages are delivered using UDP or TCP communications. While most DNS transactions are carried over UDP, some operators have been led to believe that any DNS-over-TCP traffic is unwanted or unnecessary for general DNS operation. When DNS over TCP has been restricted, a variety of communication failures and debugging challenges often arise. As DNS and new naming system features have evolved, TCP as a transport has become increasingly important for the correct and safe operation of an Internet DNS. Reflecting modern usage, the DNS standards declare that support for TCP is a required part of the DNS implementation specifications <a href="./rfc7766.html">[RFC7766]</a>. This document is the equivalent of formal requirements for the operational community, encouraging system administrators, network engineers, and security staff to ensure DNS-over-TCP communications support is on par with DNS-over-UDP communications. It updates <a href="https://datatracker.ietf.org/doc/html/rfc1123">[RFC1123]</a>, Section 6.1.3.2 to clarify that all DNS resolvers and recursive servers <span class="kw kw-must">MUST</span> support and service both TCP and UDP queries and also updates <a href="https://datatracker.ietf.org/doc/html/rfc1536">[RFC1536]</a> to remove the misconception that TCP is only useful for zone transfers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -346,12 +351,12 @@ DNSメッセージは、UDPまたはTCP通信を使用して配信されます�
     <div class="row" id="1-1--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -430,7 +435,7 @@ Another early, important, and influential document, <a href="https://datatracker
     <div class="row" id="2-1--Uneven-Transport-Usage-and-Preference-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| DNS resolvers and recursive servers MUST support UDP, and SHOULD | support TCP, for sending (non-zone-transfer) queries.
+| DNS resolvers and recursive servers <span class="kw kw-must">MUST</span> support UDP, and <span class="kw kw-should">SHOULD</span> | support TCP, for sending (non-zone-transfer) queries.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -454,12 +459,12 @@ and it further stipulates that:
     <div class="row" id="2-1--Uneven-Transport-Usage-and-Preference-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| A name server MAY limit the resources it devotes to TCP queries, but it SHOULD NOT refuse to service a TCP query just because it would have succeeded with UDP.
+| A name server <span class="kw kw-may">MAY</span> limit the resources it devotes to TCP queries, but it <span class="kw kw-shouldnot">SHOULD NOT</span> refuse to service a TCP query just because it would have succeeded with UDP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-|  ネームサーバーは、TCPクエリに割り当てるリソースを制限してもよい (MAY)ものとしますが、UDPなら成功したはずだという理由だけでTCPクエリへのサービス提供を拒否すべきではありません (SHOULD NOT)。
+|  ネームサーバーは、TCPクエリに割り当てるリソースを制限してもよい (<span class="kw kw-may">MAY</span>)ものとしますが、UDPなら成功したはずだという理由だけでTCPクエリへのサービス提供を拒否すべきではありません (<span class="kw kw-shouldnot">SHOULD NOT</span>)。
         </p>
       </div>
     </div>
@@ -847,12 +852,12 @@ OLD:
     <div class="row" id="3--DNS-over-TCP-Requirements-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| DNS resolvers and recursive servers MUST support UDP, and SHOULD | support TCP, for sending (non-zone-transfer) queries.
+| DNS resolvers and recursive servers <span class="kw kw-must">MUST</span> support UDP, and <span class="kw kw-should">SHOULD</span> | support TCP, for sending (non-zone-transfer) queries.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| DNSリゾルバと再帰サーバーはUDPをサポートしなければならず (MUST)、（非ゾーン転送）クエリを送信するためのTCPをサポートすべきです (SHOULD)。
+| DNSリゾルバと再帰サーバーはUDPをサポートしなければならず (<span class="kw kw-must">MUST</span>)、（非ゾーン転送）クエリを送信するためのTCPをサポートすべきです (<span class="kw kw-should">SHOULD</span>)。
         </p>
       </div>
     </div>
@@ -871,12 +876,12 @@ NEW:
     <div class="row" id="3--DNS-over-TCP-Requirements-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| All DNS resolvers and servers MUST support and service both UDP | and TCP queries.
+| All DNS resolvers and servers <span class="kw kw-must">MUST</span> support and service both UDP | and TCP queries.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| すべてのDNSリゾルバとサーバーは、UDPおよびTCPクエリの両方をサポートし、サービスを提供しなければなりません (MUST)。
+| すべてのDNSリゾルバとサーバーは、UDPおよびTCPクエリの両方をサポートし、サービスを提供しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -895,7 +900,7 @@ Note that:
     <div class="row" id="3--DNS-over-TCP-Requirements-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">*</span> DNS servers (including forwarders) MUST support and service TCP for receiving queries so that clients can reliably receive responses that are larger than what either side considers too large for UDP.
+<span class="bullet-mark">*</span> DNS servers (including forwarders) <span class="kw kw-must">MUST</span> support and service TCP for receiving queries so that clients can reliably receive responses that are larger than what either side considers too large for UDP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -907,7 +912,7 @@ Note that:
     <div class="row" id="3--DNS-over-TCP-Requirements-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3 bullet">
-<span class="bullet-mark">*</span> DNS clients MUST support TCP for sending queries so that they can retry truncated UDP responses as necessary.
+<span class="bullet-mark">*</span> DNS clients <span class="kw kw-must">MUST</span> support TCP for sending queries so that they can retry truncated UDP responses as necessary.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -943,14 +948,14 @@ OLD:
     <div class="row" id="3--DNS-over-TCP-Requirements-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-|  A name server MAY limit the resources it devotes to TCP queries,
-|  but it SHOULD NOT refuse to service a TCP query just because it
+|  A name server <span class="kw kw-may">MAY</span> limit the resources it devotes to TCP queries,
+|  but it <span class="kw kw-shouldnot">SHOULD NOT</span> refuse to service a TCP query just because it
 |  would have succeeded with UDP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| ネームサーバーはTCPクエリに割り当てるリソースを制限してもよい (MAY) が、UDPであれば成功したであろうという理由だけでTCPクエリのサービスを拒否すべきではありません (SHOULD NOT)。
+| ネームサーバーはTCPクエリに割り当てるリソースを制限してもよい (<span class="kw kw-may">MAY</span>) が、UDPであれば成功したであろうという理由だけでTCPクエリのサービスを拒否すべきではありません (<span class="kw kw-shouldnot">SHOULD NOT</span>)。
         </p>
       </div>
     </div>
@@ -969,14 +974,14 @@ NEW:
     <div class="row" id="3--DNS-over-TCP-Requirements-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-|  A name server MAY limit the resources it devotes to queries, but
-|  it MUST NOT refuse to service a query just because it would have
+|  A name server <span class="kw kw-may">MAY</span> limit the resources it devotes to queries, but
+|  it <span class="kw kw-mustnot">MUST NOT</span> refuse to service a query just because it would have
 |  succeeded with another transport protocol.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-| ネームサーバーはクエリに割り当てるリソースを制限してもよい (MAY) が、別のトランスポートプロトコルであれば成功したであろうという理由だけでクエリのサービスを拒否してはなりません (MUST NOT)。
+| ネームサーバーはクエリに割り当てるリソースを制限してもよい (<span class="kw kw-may">MAY</span>) が、別のトランスポートプロトコルであれば成功したであろうという理由だけでクエリのサービスを拒否してはなりません (<span class="kw kw-mustnot">MUST NOT</span>)。
         </p>
       </div>
     </div>
@@ -1045,7 +1050,7 @@ NEW:
     <div class="row" id="3--DNS-over-TCP-Requirements-p20">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The filtering of DNS over TCP is harmful in the general case. DNS resolver and server operators MUST support and provide DNS service over both UDP and TCP transports. Likewise, network operators MUST allow DNS service over both UDP and TCP transports. It is acknowledged that DNS-over-TCP service can pose operational challenges that are not present when running DNS over UDP alone, and vice versa. However, the potential damage incurred by prohibiting DNS-over-TCP service is more detrimental to the continued utility and success of the DNS than when its usage is allowed.
+The filtering of DNS over TCP is harmful in the general case. DNS resolver and server operators <span class="kw kw-must">MUST</span> support and provide DNS service over both UDP and TCP transports. Likewise, network operators <span class="kw kw-must">MUST</span> allow DNS service over both UDP and TCP transports. It is acknowledged that DNS-over-TCP service can pose operational challenges that are not present when running DNS over UDP alone, and vice versa. However, the potential damage incurred by prohibiting DNS-over-TCP service is more detrimental to the continued utility and success of the DNS than when its usage is allowed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1093,7 +1098,7 @@ This section describes measures that systems and applications can take to optimi
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Resolvers and other DNS clients should be aware that some servers might not be reachable over TCP. For this reason, clients MAY track and limit the number of TCP connections and connection attempts to a single server. Reachability problems can be caused by network elements close to the server, close to the client, or anywhere along the path between them. Mobile clients that cache connection failures MAY do so on a per-network basis or MAY clear such a cache upon change of network.
+Resolvers and other DNS clients should be aware that some servers might not be reachable over TCP. For this reason, clients <span class="kw kw-may">MAY</span> track and limit the number of TCP connections and connection attempts to a single server. Reachability problems can be caused by network elements close to the server, close to the client, or anywhere along the path between them. Mobile clients that cache connection failures <span class="kw kw-may">MAY</span> do so on a per-network basis or <span class="kw kw-may">MAY</span> clear such a cache upon change of network.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1105,7 +1110,7 @@ Resolvers and other DNS clients should be aware that some servers might not be r
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Additionally, DNS clients MAY enforce a short timeout on unestablished connections rather than rely on the host operating system&#39;s TCP connection timeout, which is often around 60-120 seconds (i.e., due to an initial retransmission timeout of 1 second, the exponential back-off rules of <a href="./rfc6298.html">[RFC6298]</a>, and a limit of six retries as is the default in Linux).
+Additionally, DNS clients <span class="kw kw-may">MAY</span> enforce a short timeout on unestablished connections rather than rely on the host operating system&#39;s TCP connection timeout, which is often around 60-120 seconds (i.e., due to an initial retransmission timeout of 1 second, the exponential back-off rules of <a href="./rfc6298.html">[RFC6298]</a>, and a limit of six retries as is the default in Linux).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1129,7 +1134,7 @@ SYNフラッディング攻撃は、TCPサーバープロセス<a href="./rfc498
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Services not intended for use by the public Internet, such as most recursive name servers, SHOULD be protected with access controls. Ideally, these controls are placed in the network, well before any unwanted TCP packets can reach the DNS server host or application. If this is not possible, the controls can be placed in the application itself. In some situations (e.g., attacks), it may be necessary to deploy access controls for DNS services that should otherwise be globally reachable. See also <a href="./rfc5358.html">[RFC5358]</a>.
+Services not intended for use by the public Internet, such as most recursive name servers, <span class="kw kw-should">SHOULD</span> be protected with access controls. Ideally, these controls are placed in the network, well before any unwanted TCP packets can reach the DNS server host or application. If this is not possible, the controls can be placed in the application itself. In some situations (e.g., attacks), it may be necessary to deploy access controls for DNS services that should otherwise be globally reachable. See also <a href="./rfc5358.html">[RFC5358]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1153,7 +1158,7 @@ FreeBSDおよびNetBSDオペレーティングシステムには、完全で有�
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Per <a href="./rfc7766.html">[RFC7766]</a>, applications and administrators are advised to remember that TCP MAY be used before sending any UDP queries. Networks and applications MUST NOT be configured to refuse TCP queries that were not preceded by a UDP query.
+Per <a href="./rfc7766.html">[RFC7766]</a>, applications and administrators are advised to remember that TCP <span class="kw kw-may">MAY</span> be used before sending any UDP queries. Networks and applications <span class="kw kw-mustnot">MUST NOT</span> be configured to refuse TCP queries that were not preceded by a UDP query.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1165,7 +1170,7 @@ Per <a href="./rfc7766.html">[RFC7766]</a>, applications and administrators are 
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-TCP Fast Open (TFO) <a href="./rfc7413.html">[RFC7413]</a> allows TCP clients to shorten the handshake for subsequent connections to the same server. TFO saves one round-trip time in the connection setup. DNS servers SHOULD enable TFO when possible. Furthermore, DNS servers clustered behind a single service address (e.g., anycast or load balancing) SHOULD either use the same TFO server key on all instances or disable TFO for all members of the cluster.
+TCP Fast Open (TFO) <a href="./rfc7413.html">[RFC7413]</a> allows TCP clients to shorten the handshake for subsequent connections to the same server. TFO saves one round-trip time in the connection setup. DNS servers <span class="kw kw-should">SHOULD</span> enable TFO when possible. Furthermore, DNS servers clustered behind a single service address (e.g., anycast or load balancing) <span class="kw kw-should">SHOULD</span> either use the same TFO server key on all instances or disable TFO for all members of the cluster.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1177,7 +1182,7 @@ TCP Fast Open（TFO）<a href="./rfc7413.html">[RFC7413]</a>は、TCPクライ�
     <div class="row" id="4-1--Connection-Establishment-and-Admission-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS clients MAY also enable TFO. At the time of this writing, it is not implemented or is disabled by default on some operating systems. [WIKIPEDIA_TFO] describes applications and operating systems that support TFO.
+DNS clients <span class="kw kw-may">MAY</span> also enable TFO. At the time of this writing, it is not implemented or is disabled by default on some operating systems. [WIKIPEDIA_TFO] describes applications and operating systems that support TFO.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1201,7 +1206,7 @@ DNSクライアントはTFOも可能になる可能性があります。この�
     <div class="row" id="4-2--Connection-Management-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Since host memory for TCP state is a finite resource, DNS clients and servers SHOULD actively manage their connections. Applications that do not actively manage their connections can encounter resource exhaustion leading to denial of service. For DNS, as in other protocols, there is a trade-off between keeping connections open for potential future use and the need to free up resources for new connections that will arrive.
+Since host memory for TCP state is a finite resource, DNS clients and servers <span class="kw kw-should">SHOULD</span> actively manage their connections. Applications that do not actively manage their connections can encounter resource exhaustion leading to denial of service. For DNS, as in other protocols, there is a trade-off between keeping connections open for potential future use and the need to free up resources for new connections that will arrive.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1213,7 +1218,7 @@ TCP状態のホストメモリは有限リソースであるため、DNSクラ�
     <div class="row" id="4-2--Connection-Management-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Operators of DNS server software SHOULD be aware that operating system and application vendors MAY impose a limit on the total number of established connections. These limits may be designed to protect against DDoS attacks or performance degradation. Operators SHOULD understand how to increase these limits if necessary and the consequences of doing so. Limits imposed by the application SHOULD be lower than limits imposed by the operating system so that the application can apply its own policy to connection management, such as closing the oldest idle connections first.
+Operators of DNS server software <span class="kw kw-should">SHOULD</span> be aware that operating system and application vendors <span class="kw kw-may">MAY</span> impose a limit on the total number of established connections. These limits may be designed to protect against DDoS attacks or performance degradation. Operators <span class="kw kw-should">SHOULD</span> understand how to increase these limits if necessary and the consequences of doing so. Limits imposed by the application <span class="kw kw-should">SHOULD</span> be lower than limits imposed by the operating system so that the application can apply its own policy to connection management, such as closing the oldest idle connections first.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1225,7 +1230,7 @@ DNSサーバソフトウェアの演算子は、オペレーティングシス�
     <div class="row" id="4-2--Connection-Management-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS server software MAY provide a configurable limit on the number of established connections per source IP address or subnet. This can be used to ensure that a single or small set of users cannot consume all TCP resources and deny service to other users. Note, however, that if this limit is enabled, it possibly limits client performance while leaving some TCP resources unutilized. Operators SHOULD be aware of these trade-offs and ensure this limit, if configured, is set appropriately based on the number and diversity of their users and whether users connect from unique IP addresses or through a shared Network Address Translator (NAT) <a href="./rfc3022.html">[RFC3022]</a>.
+DNS server software <span class="kw kw-may">MAY</span> provide a configurable limit on the number of established connections per source IP address or subnet. This can be used to ensure that a single or small set of users cannot consume all TCP resources and deny service to other users. Note, however, that if this limit is enabled, it possibly limits client performance while leaving some TCP resources unutilized. Operators <span class="kw kw-should">SHOULD</span> be aware of these trade-offs and ensure this limit, if configured, is set appropriately based on the number and diversity of their users and whether users connect from unique IP addresses or through a shared Network Address Translator (NAT) <a href="./rfc3022.html">[RFC3022]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1237,7 +1242,7 @@ DNSサーバーソフトウェアは、送信元IPアドレスまたはサブネ
     <div class="row" id="4-2--Connection-Management-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS server software SHOULD provide a configurable timeout for idle TCP connections. This can be used to free up resources for new connections and to ensure that idle connections are eventually closed. At the same time, it possibly limits client performance while leaving some TCP resources unutilized. For very busy name servers, this might be set to a low value, such as a few seconds. For less busy servers, it might be set to a higher value, such as tens of seconds. DNS clients and servers SHOULD signal their timeout values using the edns-tcp-keepalive EDNS(0) option <a href="./rfc7828.html">[RFC7828]</a>.
+DNS server software <span class="kw kw-should">SHOULD</span> provide a configurable timeout for idle TCP connections. This can be used to free up resources for new connections and to ensure that idle connections are eventually closed. At the same time, it possibly limits client performance while leaving some TCP resources unutilized. For very busy name servers, this might be set to a low value, such as a few seconds. For less busy servers, it might be set to a higher value, such as tens of seconds. DNS clients and servers <span class="kw kw-should">SHOULD</span> signal their timeout values using the edns-tcp-keepalive EDNS(0) option <a href="./rfc7828.html">[RFC7828]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1249,7 +1254,7 @@ DNSサーバーソフトウェアは、アイドルTCP接続のための設定�
     <div class="row" id="4-2--Connection-Management-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS server software MAY provide a configurable limit on the number of transactions per TCP connection. This can help protect against unfair connection use (e.g., not releasing connection slots to other clients) and network evasion attacks.
+DNS server software <span class="kw kw-may">MAY</span> provide a configurable limit on the number of transactions per TCP connection. This can help protect against unfair connection use (e.g., not releasing connection slots to other clients) and network evasion attacks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1261,7 +1266,7 @@ DNSサーバーソフトウェアは、TCP接続ごとのトランザクショ�
     <div class="row" id="4-2--Connection-Management-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Similarly, DNS server software MAY provide a configurable limit on the total duration of a TCP connection. This can help protect against unfair connection use, slow read attacks, and network evasion attacks.
+Similarly, DNS server software <span class="kw kw-may">MAY</span> provide a configurable limit on the total duration of a TCP connection. This can help protect against unfair connection use, slow read attacks, and network evasion attacks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1309,12 +1314,12 @@ The TCP peer that initiates a connection close retains the socket in the TIME_WA
     <div class="row" id="4-3--Connection-Termination-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-On systems where large numbers of sockets in TIME_WAIT are observed (as either a client or a server) and are affecting an application&#39;s performance, it may be tempting to tune local TCP parameters. For example, the Linux kernel has a &#34;sysctl&#34; parameter named net.ipv4.tcp_tw_reuse, which allows connections in the TIME_WAIT state to be reused in specific circumstances. Note, however, that this affects only outgoing (client) connections and has no impact on servers. In most cases, it is NOT RECOMMENDED to change parameters related to the TIME_WAIT state. It should only be done by those with detailed knowledge of both TCP and the affected application.
+On systems where large numbers of sockets in TIME_WAIT are observed (as either a client or a server) and are affecting an application&#39;s performance, it may be tempting to tune local TCP parameters. For example, the Linux kernel has a &#34;sysctl&#34; parameter named net.ipv4.tcp_tw_reuse, which allows connections in the TIME_WAIT state to be reused in specific circumstances. Note, however, that this affects only outgoing (client) connections and has no impact on servers. In most cases, it is <span class="kw kw-shouldnot">NOT RECOMMENDED</span> to change parameters related to the TIME_WAIT state. It should only be done by those with detailed knowledge of both TCP and the affected application.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-TIME_WAIT状態のソケットが（クライアントまたはサーバーのいずれかとして）多数観察され、アプリケーションの性能に影響を与えているシステムでは、ローカルTCPパラメータを調整したくなる場合があります。例えば、Linuxカーネルには「net.ipv4.tcp_tw_reuse」という名前のsysctlパラメータがあり、特定の状況下でTIME_WAIT状態の接続を再利用できるようにします。ただし、これは送信（クライアント）接続にのみ影響し、サーバーには何の影響もないことに注意してください。ほとんどの場合、TIME_WAIT状態に関連するパラメータを変更することは推奨されません (NOT RECOMMENDED)。これは、TCPと影響を受けるアプリケーションの双方に関する詳細な知識を持つ者のみが行うべきです。
+TIME_WAIT状態のソケットが（クライアントまたはサーバーのいずれかとして）多数観察され、アプリケーションの性能に影響を与えているシステムでは、ローカルTCPパラメータを調整したくなる場合があります。例えば、Linuxカーネルには「net.ipv4.tcp_tw_reuse」という名前のsysctlパラメータがあり、特定の状況下でTIME_WAIT状態の接続を再利用できるようにします。ただし、これは送信（クライアント）接続にのみ影響し、サーバーには何の影響もないことに注意してください。ほとんどの場合、TIME_WAIT状態に関連するパラメータを変更することは推奨されません (<span class="kw kw-shouldnot">NOT RECOMMENDED</span>)。これは、TCPと影響を受けるアプリケーションの双方に関する詳細な知識を持つ者のみが行うべきです。
         </p>
       </div>
     </div>
@@ -1369,7 +1374,7 @@ TLSの使用は、DNSクライアントとサーバー上のより強い運用�
     <div class="row" id="4-5--Defaults-and-Recommended-Limits-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A survey of features and defaults was conducted for popular open-source DNS server implementations at the time of writing. This section documents those defaults and makes recommendations for configurable limits that can be used in the absence of any other information. Any recommended values in this document are only intended as a starting point for administrators that are unsure of what sorts of limits might be reasonable. Operators SHOULD use application-specific monitoring, system logs, and system monitoring tools to gauge whether their service is operating within or exceeding these limits and adjust accordingly.
+A survey of features and defaults was conducted for popular open-source DNS server implementations at the time of writing. This section documents those defaults and makes recommendations for configurable limits that can be used in the absence of any other information. Any recommended values in this document are only intended as a starting point for administrators that are unsure of what sorts of limits might be reasonable. Operators <span class="kw kw-should">SHOULD</span> use application-specific monitoring, system logs, and system monitoring tools to gauge whether their service is operating within or exceeding these limits and adjust accordingly.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1561,7 +1566,7 @@ However, during the year-long postponement of the KSK rollover, there were no re
     <div class="row" id="6--Logging-and-Monitoring-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Developers of applications that log or monitor DNS SHOULD NOT ignore TCP due to the perception that it is rarely used or is hard to process. Operators SHOULD ensure that their monitoring and logging applications properly capture DNS messages over TCP. Otherwise, attacks, exfiltration attempts, and normal traffic may go undetected.
+Developers of applications that log or monitor DNS <span class="kw kw-shouldnot">SHOULD NOT</span> ignore TCP due to the perception that it is rarely used or is hard to process. Operators <span class="kw kw-should">SHOULD</span> ensure that their monitoring and logging applications properly capture DNS messages over TCP. Otherwise, attacks, exfiltration attempts, and normal traffic may go undetected.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1573,7 +1578,7 @@ DNSをログまたは監視するアプリケーションの開発者は、そ�
     <div class="row" id="6--Logging-and-Monitoring-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DNS messages over TCP are in no way guaranteed to arrive in single segments. In fact, a clever attacker might attempt to hide certain messages by forcing them over very small TCP segments. Applications that capture network packets (e.g., with libpcap [libpcap]) SHOULD implement and perform full TCP stream reassembly and analyze the reassembled stream instead of the individual packets. Otherwise, they are vulnerable to network evasion attacks [phrack]. Furthermore, such applications need to protect themselves from resource exhaustion attacks by limiting the amount of memory allocated to tracking unacknowledged connection state data. dnscap [dnscap] is an open-source example of a DNS logging program that implements TCP stream reassembly.
+DNS messages over TCP are in no way guaranteed to arrive in single segments. In fact, a clever attacker might attempt to hide certain messages by forcing them over very small TCP segments. Applications that capture network packets (e.g., with libpcap [libpcap]) <span class="kw kw-should">SHOULD</span> implement and perform full TCP stream reassembly and analyze the reassembled stream instead of the individual packets. Otherwise, they are vulnerable to network evasion attacks [phrack]. Furthermore, such applications need to protect themselves from resource exhaustion attacks by limiting the amount of memory allocated to tracking unacknowledged connection state data. dnscap [dnscap] is an open-source example of a DNS logging program that implements TCP stream reassembly.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1585,7 +1590,7 @@ TCPを介したDNSメッセージは、単一セグメントに到着するこ�
     <div class="row" id="6--Logging-and-Monitoring-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Developers SHOULD also keep in mind connection reuse, query pipelining, and out-of-order responses when building and testing DNS monitoring applications.
+Developers <span class="kw kw-should">SHOULD</span> also keep in mind connection reuse, query pipelining, and out-of-order responses when building and testing DNS monitoring applications.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3133,7 +3138,7 @@ A.12. RFC 5625  -  DNSプロキシの実装ガイドライン
     <div class="row" id="A-12--RFC-5625---DNS-Proxy-Implementation-Guidelines-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Best Current Practice document <a href="./rfc5625.html">[RFC5625]</a> provides DNS proxy implementation guidance including the mandate that a proxy &#34;MUST [...] be prepared to receive and forward queries over TCP&#34; even though it suggests that, historically, TCP transport has not been strictly mandatory in stub resolvers or recursive servers.
+The Best Current Practice document <a href="./rfc5625.html">[RFC5625]</a> provides DNS proxy implementation guidance including the mandate that a proxy &#34;<span class="kw kw-must">MUST</span> [...] be prepared to receive and forward queries over TCP&#34; even though it suggests that, historically, TCP transport has not been strictly mandatory in stub resolvers or recursive servers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3205,7 +3210,7 @@ A.15. RFC 6762  - マルチキャストDNS
     <div class="row" id="A-15--RFC-6762---Multicast-DNS-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the Proposed Standard <a href="./rfc6762.html">[RFC6762]</a>, the TC bit is deemed to have essentially the same meaning as described in the original DNS specifications. That is, if a response with the TC bit set is received, &#34;[...] the querier SHOULD reissue its query using TCP in order to receive the larger response.&#34;
+In the Proposed Standard <a href="./rfc6762.html">[RFC6762]</a>, the TC bit is deemed to have essentially the same meaning as described in the original DNS specifications. That is, if a response with the TC bit set is received, &#34;[...] the querier <span class="kw kw-should">SHOULD</span> reissue its query using TCP in order to receive the larger response.&#34;
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3301,7 +3306,7 @@ A.19. RFC 7720  -  DNSルートネームサービスプロトコルと展開要�
     <div class="row" id="A-18--RFC-7477---Child-to-Parent-Synchronization-in-DNS-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Best Current Practice document <a href="./rfc7720.html">[RFC7720]</a> declares that root name service &#34;MUST support UDP <a href="https://datatracker.ietf.org/doc/html/rfc768">[RFC0768]</a> and TCP <a href="https://datatracker.ietf.org/doc/html/rfc793">[RFC0793]</a> transport of DNS queries and responses.&#34;
+The Best Current Practice document <a href="./rfc7720.html">[RFC7720]</a> declares that root name service &#34;<span class="kw kw-must">MUST</span> support UDP <a href="https://datatracker.ietf.org/doc/html/rfc768">[RFC0768]</a> and TCP <a href="https://datatracker.ietf.org/doc/html/rfc793">[RFC0793]</a> transport of DNS queries and responses.&#34;
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3469,7 +3474,7 @@ A.26. RFC 8094  -  DNS上のデータグラムトランスポート層セキュ�
     <div class="row" id="A-26--RFC-8094---DNS-over-Datagram-Transport-Layer-Security-DTLS-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Experimental specification <a href="./rfc8094.html">[RFC8094]</a> details a protocol that uses a datagram transport (UDP) but stipulates that &#34;DNS clients and servers that implement DNS over DTLS MUST also implement DNS over TLS in order to provide privacy for clients that desire Strict Privacy [...].&#34; This requirement implies DNS over TCP must be supported in case the message size is larger than the path MTU.
+The Experimental specification <a href="./rfc8094.html">[RFC8094]</a> details a protocol that uses a datagram transport (UDP) but stipulates that &#34;DNS clients and servers that implement DNS over DTLS <span class="kw kw-must">MUST</span> also implement DNS over TLS in order to provide privacy for clients that desire Strict Privacy [...].&#34; This requirement implies DNS over TCP must be supported in case the message size is larger than the path MTU.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3493,7 +3498,7 @@ A.27. RFC 8162  -  SECURE DNSの使用証明書をS/MIMEのドメイン名に関
     <div class="row" id="A-26--RFC-8094---DNS-over-Datagram-Transport-Layer-Security-DTLS-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The Experimental specification <a href="./rfc8162.html">[RFC8162]</a> describes a technique to authenticate user X.509 certificates in an S/MIME system via the DNS. The document points out that the new experimental resource record types are expected to carry large payloads, resulting in the suggestion that &#34;applications SHOULD use TCP -- not UDP -- to perform queries for the SMIMEA resource record.&#34;
+The Experimental specification <a href="./rfc8162.html">[RFC8162]</a> describes a technique to authenticate user X.509 certificates in an S/MIME system via the DNS. The document points out that the new experimental resource record types are expected to carry large payloads, resulting in the suggestion that &#34;applications <span class="kw kw-should">SHOULD</span> use TCP -- not UDP -- to perform queries for the SMIMEA resource record.&#34;
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

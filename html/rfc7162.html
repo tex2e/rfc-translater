@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、IMAPにおいてメッセージのフラグ変更やメールボックスの状態を高速に再同期するための「CONDSTORE」および「QRESYNC」拡張機能を定義しています（RFC 4551/5162を廃止・集約）。修正シーケンス番号（MODSEQ）を利用することで、クライアントが前回の同期以降に変更されたデータのみを効率的に取得できるようにし、大量のメッセージを持つメールボックスの同期時間を劇的に短縮します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 7162 - IMAP拡張：フラグ変更の高速再同期（CONDSTORE）およびメールボックスの高速再同期（QRESYNC）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -434,12 +439,12 @@ QRESYNC拡張機能については、セクション3.2で詳しく説明しま�
     <div class="row" id="2--Requirements-Notation-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -542,7 +547,7 @@ Understanding of the IMAP message sequence numbers and UIDs (see Section 2.3.1 
     <div class="row" id="3-1--CONDSTORE-Extension-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- An IMAP server that supports CONDSTORE MUST associate a positive unsigned 63-bit (*) value, called a mod-sequence, with every IMAP message. This is an opaque value updated by the server whenever a metadata item is modified. The server MUST guarantee that each STORE command performed on the same mailbox (including simultaneous stores to different metadata items from different connections) will get a different mod-sequence value. Also, for any two successful STORE operations performed in the same session on the same mailbox, the mod-sequence of the second completed operation MUST be greater than the mod-sequence of the first completed operation. Note that the latter rule disallows the direct use of the system clock as a mod-sequence because if system time changes (e.g., an NTP [NTP] client adjusting the time), the next generated value might be less than the previous one.
+ An IMAP server that supports CONDSTORE <span class="kw kw-must">MUST</span> associate a positive unsigned 63-bit (*) value, called a mod-sequence, with every IMAP message. This is an opaque value updated by the server whenever a metadata item is modified. The server <span class="kw kw-must">MUST</span> guarantee that each STORE command performed on the same mailbox (including simultaneous stores to different metadata items from different connections) will get a different mod-sequence value. Also, for any two successful STORE operations performed in the same session on the same mailbox, the mod-sequence of the second completed operation <span class="kw kw-must">MUST</span> be greater than the mod-sequence of the first completed operation. Note that the latter rule disallows the direct use of the system clock as a mod-sequence because if system time changes (e.g., an NTP [NTP] client adjusting the time), the next generated value might be less than the previous one.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -578,12 +583,12 @@ These rules allow a client to list all metadata changes since a well-known point
     <div class="row" id="3-1--CONDSTORE-Extension-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In particular, mod-sequences allow a client that supports the CONDSTORE extension to determine if a message metadata has changed since some known moment. Whenever the state of a flag changes (i.e., the flag is added where previously it wasn&#39;t set, or the flag is removed where previously it was set), the value of the modification sequence for the message MUST be updated. Setting a flag that is already set, or clearing a flag that is not set, SHOULD NOT change the mod-sequence.
+In particular, mod-sequences allow a client that supports the CONDSTORE extension to determine if a message metadata has changed since some known moment. Whenever the state of a flag changes (i.e., the flag is added where previously it wasn&#39;t set, or the flag is removed where previously it was set), the value of the modification sequence for the message <span class="kw kw-must">MUST</span> be updated. Setting a flag that is already set, or clearing a flag that is not set, <span class="kw kw-shouldnot">SHOULD NOT</span> change the mod-sequence.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-特に、mod-sequencesにより、CONDSTORE拡張をサポートするクライアントは、既知の瞬間以降にメッセージメタデータが変更されたかどうかを判断できます。フラグの状態が変化するたびに（つまり、以前に設定されていなかった場所にフラグが追加されるか、以前に設定された場所にフラグが削除される）、メッセージの変更シーケンスの値を更新する必要があります。すでに設定されているフラグを設定するか、設定されていないフラグをクリアする場合は、mod-sequenceを変更してはなりません（SHOULD NOT）。
+特に、mod-sequencesにより、CONDSTORE拡張をサポートするクライアントは、既知の瞬間以降にメッセージメタデータが変更されたかどうかを判断できます。フラグの状態が変化するたびに（つまり、以前に設定されていなかった場所にフラグが追加されるか、以前に設定された場所にフラグが削除される）、メッセージの変更シーケンスの値を更新する必要があります。すでに設定されているフラグを設定するか、設定されていないフラグをクリアする場合は、mod-sequenceを変更してはなりません（<span class="kw kw-shouldnot">SHOULD NOT</span>）。
         </p>
       </div>
     </div>
@@ -602,12 +607,12 @@ When a message is appended to a mailbox (via the IMAP APPEND command, COPY to th
     <div class="row" id="3-1--CONDSTORE-Extension-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The server MAY store separate (per-message) modification sequence values for different metadata items. If the server does so, per-message mod-sequence is the highest mod-sequence of all metadata items accessible to the currently logged-in user for the specified message.
+The server <span class="kw kw-may">MAY</span> store separate (per-message) modification sequence values for different metadata items. If the server does so, per-message mod-sequence is the highest mod-sequence of all metadata items accessible to the currently logged-in user for the specified message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-サーバーは、異なるメタデータアイテムに対して個別の（メッセージごとの）修正シーケンス値を格納できます（MAY）。サーバーがそうする場合、メッセージごとのmod-sequenceは、指定されたメッセージの現在ログインしているユーザーがアクセスできるすべてのメタデータ項目の最も高いmod-sequenceです。
+サーバーは、異なるメタデータアイテムに対して個別の（メッセージごとの）修正シーケンス値を格納できます（<span class="kw kw-may">MAY</span>）。サーバーがそうする場合、メッセージごとのmod-sequenceは、指定されたメッセージの現在ログインしているユーザーがアクセスできるすべてのメタデータ項目の最も高いmod-sequenceです。
         </p>
       </div>
     </div>
@@ -830,7 +835,7 @@ CONDSTORE拡張をサポートするクライアントは、「CONDSTORE有効�
     <div class="row" id="3-1--CONDSTORE-Extension-p25">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- Once a client issues a CONDSTORE enabling command, it has announced itself as a &#34;CONDSTORE-aware client&#34;. The server MUST then include mod-sequence data in all subsequent untagged FETCH responses (until the connection is closed), whether they were caused by a regular STORE, a STORE with an UNCHANGEDSINCE modifier, or an external agent.
+ Once a client issues a CONDSTORE enabling command, it has announced itself as a &#34;CONDSTORE-aware client&#34;. The server <span class="kw kw-must">MUST</span> then include mod-sequence data in all subsequent untagged FETCH responses (until the connection is closed), whether they were caused by a regular STORE, a STORE with an UNCHANGEDSINCE modifier, or an external agent.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -842,7 +847,7 @@ CONDSTORE拡張をサポートするクライアントは、「CONDSTORE有効�
     <div class="row" id="3-1--CONDSTORE-Extension-p26">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A future extension to this document may extend the list of CONDSTORE enabling commands. A first CONDSTORE enabling command executed in the session with a mailbox selected MUST cause the server to return HIGHESTMODSEQ (Section 3.1.2.1) for the mailbox (if any is selected), unless the server has sent a NOMODSEQ (Section 3.1.2.2) response code when the currently selected mailbox was selected.
+A future extension to this document may extend the list of CONDSTORE enabling commands. A first CONDSTORE enabling command executed in the session with a mailbox selected <span class="kw kw-must">MUST</span> cause the server to return HIGHESTMODSEQ (Section 3.1.2.1) for the mailbox (if any is selected), unless the server has sent a NOMODSEQ (Section 3.1.2.2) response code when the currently selected mailbox was selected.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -890,7 +895,7 @@ The Conditional STORE extension is present in any IMAP4 implementation that retu
     <div class="row" id="3-1-2--New-OK-Untagged-Responses-for-SELECT-and-EXAMINE-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document adds two new response codes: HIGHESTMODSEQ and NOMODSEQ. One of these two response codes MUST be returned in an OK untagged response for any successful SELECT/EXAMINE command issued after a CONDSTORE enabling command.
+This document adds two new response codes: HIGHESTMODSEQ and NOMODSEQ. One of these two response codes <span class="kw kw-must">MUST</span> be returned in an OK untagged response for any successful SELECT/EXAMINE command issued after a CONDSTORE enabling command.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -902,12 +907,12 @@ This document adds two new response codes: HIGHESTMODSEQ and NOMODSEQ. One of th
     <div class="row" id="3-1-2--New-OK-Untagged-Responses-for-SELECT-and-EXAMINE-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When opening a mailbox, the server must check if the mailbox supports the persistent storage of mod-sequences. If the mailbox supports the persistent storage of mod-sequences and the mailbox open operation succeeds, the server MUST send an OK untagged response, including the HIGHESTMODSEQ response code. If the persistent storage for the mailbox is not supported, the server MUST send an OK untagged response, including the NOMODSEQ response code instead.
+When opening a mailbox, the server must check if the mailbox supports the persistent storage of mod-sequences. If the mailbox supports the persistent storage of mod-sequences and the mailbox open operation succeeds, the server <span class="kw kw-must">MUST</span> send an OK untagged response, including the HIGHESTMODSEQ response code. If the persistent storage for the mailbox is not supported, the server <span class="kw kw-must">MUST</span> send an OK untagged response, including the NOMODSEQ response code instead.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-メールボックスを開くとき、サーバーはメールボックスがmodシーケンスの永続的なストレージをサポートしているかどうかを確認する必要があります。メールボックスがmodシーケンスの永続的なストレージをサポートし、メールボックスのオープン操作が成功した場合、サーバーはHIGHESTMODSEQ応答コードを含むOKタグなし応答を送信しなければなりません（MUST）。メールボックスの永続的なストレージがサポートされていない場合、サーバーは、NOMODSEQ応答コードを含むOKタグなし応答を送信する必要があります。
+メールボックスを開くとき、サーバーはメールボックスがmodシーケンスの永続的なストレージをサポートしているかどうかを確認する必要があります。メールボックスがmodシーケンスの永続的なストレージをサポートし、メールボックスのオープン操作が成功した場合、サーバーはHIGHESTMODSEQ応答コードを含むOKタグなし応答を送信しなければなりません（<span class="kw kw-must">MUST</span>）。メールボックスの永続的なストレージがサポートされていない場合、サーバーは、NOMODSEQ応答コードを含むOKタグなし応答を送信する必要があります。
         </p>
       </div>
     </div>
@@ -926,7 +931,7 @@ When opening a mailbox, the server must check if the mailbox supports the persis
     <div class="row" id="3-1-2-1--HIGHESTMODSEQ-Response-Code-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document adds a new response code that is returned in an OK untagged response for the SELECT and EXAMINE commands. Once a CONDSTORE enabling command is issued, a server supporting the persistent storage of mod-sequences for the mailbox MUST send an OK untagged response, including the HIGHESTMODSEQ response code with every successful SELECT or EXAMINE command:
+This document adds a new response code that is returned in an OK untagged response for the SELECT and EXAMINE commands. Once a CONDSTORE enabling command is issued, a server supporting the persistent storage of mod-sequences for the mailbox <span class="kw kw-must">MUST</span> send an OK untagged response, including the HIGHESTMODSEQ response code with every successful SELECT or EXAMINE command:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -974,12 +979,12 @@ Note that some existing CONDSTORE servers don&#39;t start tracking mod-sequences
     <div class="row" id="3-1-2-1--HIGHESTMODSEQ-Response-Code-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A disconnected client can use the value of HIGHESTMODSEQ to check if it has to refetch metadata from the server. If the UIDVALIDITY value has changed for the selected mailbox, the client MUST delete the cached value of HIGHESTMODSEQ. If UIDVALIDITY for the mailbox is the same, and if the HIGHESTMODSEQ value stored in the client&#39;s cache is less than the value returned by the server, then some metadata items on the server have changed since the last synchronization, and the client needs to update its cache. The client MAY use SEARCH MODSEQ (Section 3.1.5) to find out exactly which metadata items have changed. Alternatively, the client MAY issue FETCH with the CHANGEDSINCE modifier (Section 3.1.4.1) in order to fetch data for all messages that have metadata items changed since some known modification sequence.
+A disconnected client can use the value of HIGHESTMODSEQ to check if it has to refetch metadata from the server. If the UIDVALIDITY value has changed for the selected mailbox, the client <span class="kw kw-must">MUST</span> delete the cached value of HIGHESTMODSEQ. If UIDVALIDITY for the mailbox is the same, and if the HIGHESTMODSEQ value stored in the client&#39;s cache is less than the value returned by the server, then some metadata items on the server have changed since the last synchronization, and the client needs to update its cache. The client <span class="kw kw-may">MAY</span> use SEARCH MODSEQ (Section 3.1.5) to find out exactly which metadata items have changed. Alternatively, the client <span class="kw kw-may">MAY</span> issue FETCH with the CHANGEDSINCE modifier (Section 3.1.4.1) in order to fetch data for all messages that have metadata items changed since some known modification sequence.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-切断されたクライアントは、HIGHESTMODSEQの値を使用して、サーバーからメタデータを再フェッチする必要があるかどうかを確認できます。選択したメールボックスのUIDVALIDITY値が変更された場合、クライアントはHIGHESTMODSEQのキャッシュされた値を削除する必要があります。メールボックスのUIDVALIDITYが同じで、クライアントのキャッシュに格納されているHIGHESTMODSEQ値がサーバーから返された値よりも小さい場合、サーバー上の一部のメタデータアイテムが最後の同期以降に変更されており、クライアントはその更新を行う必要があります。キャッシュ。クライアントは、SEARCH MODSEQ（セクション3.1.5）を使用して、変更されたメタデータ項目を正確に見つけることができます（MAY）。あるいは、クライアントは、既知の変更シーケンス以降にメタデータ項目が変更されたすべてのメッセージのデータをフェッチするために、CHANGEDSINCE修飾子（セクション3.1.4.1）を使用してFETCHを発行できます（MAY）。
+切断されたクライアントは、HIGHESTMODSEQの値を使用して、サーバーからメタデータを再フェッチする必要があるかどうかを確認できます。選択したメールボックスのUIDVALIDITY値が変更された場合、クライアントはHIGHESTMODSEQのキャッシュされた値を削除する必要があります。メールボックスのUIDVALIDITYが同じで、クライアントのキャッシュに格納されているHIGHESTMODSEQ値がサーバーから返された値よりも小さい場合、サーバー上の一部のメタデータアイテムが最後の同期以降に変更されており、クライアントはその更新を行う必要があります。キャッシュ。クライアントは、SEARCH MODSEQ（セクション3.1.5）を使用して、変更されたメタデータ項目を正確に見つけることができます（<span class="kw kw-may">MAY</span>）。あるいは、クライアントは、既知の変更シーケンス以降にメタデータ項目が変更されたすべてのメッセージのデータをフェッチするために、CHANGEDSINCE修飾子（セクション3.1.4.1）を使用してFETCHを発行できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
@@ -1026,7 +1031,7 @@ Example 1
     <div class="row" id="3-1-2-2--NOMODSEQ-Response-Code-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once a CONDSTORE enabling command is issued, a server that doesn&#39;t support the persistent storage of mod-sequences for the mailbox MUST send an OK untagged response, including the NOMODSEQ response code with every successful SELECT or EXAMINE command. Note that some existing CONDSTORE servers don&#39;t return NOMODSEQ until after a CONDSTORE enabling command is issued. Because of that, a client wishing to receive HIGHESTMODSEQ/NOMODSEQ information must first send a CONDSTORE enabling command, for example, by using SELECT/EXAMINE with the CONDSTORE parameter (see Section 3.1.8).
+Once a CONDSTORE enabling command is issued, a server that doesn&#39;t support the persistent storage of mod-sequences for the mailbox <span class="kw kw-must">MUST</span> send an OK untagged response, including the NOMODSEQ response code with every successful SELECT or EXAMINE command. Note that some existing CONDSTORE servers don&#39;t return NOMODSEQ until after a CONDSTORE enabling command is issued. Because of that, a client wishing to receive HIGHESTMODSEQ/NOMODSEQ information must first send a CONDSTORE enabling command, for example, by using SELECT/EXAMINE with the CONDSTORE parameter (see Section 3.1.8).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1038,7 +1043,7 @@ CONDSTORE有効化コマンドが発行されると、メールボックスのmo
     <div class="row" id="3-1-2-2--NOMODSEQ-Response-Code-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A server that returned the NOMODSEQ response code for a mailbox MUST reject (with a tagged BAD response) any of the following commands while the mailbox remains selected:
+A server that returned the NOMODSEQ response code for a mailbox <span class="kw kw-must">MUST</span> reject (with a tagged BAD response) any of the following commands while the mailbox remains selected:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1151,7 +1156,7 @@ UNCHANGEDSINCE &lt;mod-sequence&gt;
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-For each message specified in the message set, the server performs the following. If the mod-sequence of every metadata item of the message affected by the STORE/UID STORE is equal to or less than the specified UNCHANGEDSINCE value, then the requested operation (as described by the message data item) is performed. If the operation is successful, the server MUST update the mod-sequence attribute of the message. An untagged FETCH response MUST be sent, even if the .SILENT suffix is specified, and the response MUST include the MODSEQ message data item. This is required to update the client&#39;s cache with the correct mod-sequence values. See Section 3.1.4.2 for more details.
+For each message specified in the message set, the server performs the following. If the mod-sequence of every metadata item of the message affected by the STORE/UID STORE is equal to or less than the specified UNCHANGEDSINCE value, then the requested operation (as described by the message data item) is performed. If the operation is successful, the server <span class="kw kw-must">MUST</span> update the mod-sequence attribute of the message. An untagged FETCH response <span class="kw kw-must">MUST</span> be sent, even if the .SILENT suffix is specified, and the response <span class="kw kw-must">MUST</span> include the MODSEQ message data item. This is required to update the client&#39;s cache with the correct mod-sequence values. See Section 3.1.4.2 for more details.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1163,24 +1168,24 @@ For each message specified in the message set, the server performs the following
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- However, if the mod-sequence of any metadata item of the message is greater than the specified UNCHANGEDSINCE value, then the requested operation MUST NOT be performed. In this case, the mod-sequence attribute of the message is not updated, and the message number (or unique identifier in the case of the UID STORE command) is added to the list of messages that failed the UNCHANGEDSINCE test.
+ However, if the mod-sequence of any metadata item of the message is greater than the specified UNCHANGEDSINCE value, then the requested operation <span class="kw kw-mustnot">MUST NOT</span> be performed. In this case, the mod-sequence attribute of the message is not updated, and the message number (or unique identifier in the case of the UID STORE command) is added to the list of messages that failed the UNCHANGEDSINCE test.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-ただし、メッセージのメタデータ項目のmod-sequenceが指定されたUNCHANGEDSINCE値より大きい場合、要求された操作を実行してはなりません（MUST NOT）。この場合、メッセージのmod-sequence属性は更新されず、メッセージ番号（またはUID STOREコマンドの場合は一意の識別子）がUNCHANGEDSINCEテストに失敗したメッセージのリストに追加されます。
+ただし、メッセージのメタデータ項目のmod-sequenceが指定されたUNCHANGEDSINCE値より大きい場合、要求された操作を実行してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。この場合、メッセージのmod-sequence属性は更新されず、メッセージ番号（またはUID STOREコマンドの場合は一意の識別子）がUNCHANGEDSINCEテストに失敗したメッセージのリストに追加されます。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the server finishes performing the operation on all the messages in the message set, it checks for a non-empty list of messages that failed the UNCHANGEDSINCE test. If this list is non-empty, the server MUST return in the tagged response a MODIFIED response code. The MODIFIED response code includes the message set (for STORE) or set of UIDs (for UID STORE) of all messages that failed the UNCHANGEDSINCE test.
+When the server finishes performing the operation on all the messages in the message set, it checks for a non-empty list of messages that failed the UNCHANGEDSINCE test. If this list is non-empty, the server <span class="kw kw-must">MUST</span> return in the tagged response a MODIFIED response code. The MODIFIED response code includes the message set (for STORE) or set of UIDs (for UID STORE) of all messages that failed the UNCHANGEDSINCE test.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-サーバーは、メッセージセット内のすべてのメッセージに対する操作の実行を完了すると、UNCHANGEDSINCEテストに失敗したメッセージの空でないリストをチェックします。このリストが空でない場合、サーバーはタグ付き応答でMODIFIED応答コードを返さなければなりません（MUST）。 MODIFIED応答コードには、UNCHANGEDSINCEテストに失敗したすべてのメッセージのメッセージセット（STOREの場合）またはUIDのセット（UID STOREの場合）が含まれます。
+サーバーは、メッセージセット内のすべてのメッセージに対する操作の実行を完了すると、UNCHANGEDSINCEテストに失敗したメッセージの空でないリストをチェックします。このリストが空でない場合、サーバーはタグ付き応答でMODIFIED応答コードを返さなければなりません（<span class="kw kw-must">MUST</span>）。 MODIFIED応答コードには、UNCHANGEDSINCEテストに失敗したすべてのメッセージのメッセージセット（STOREの場合）またはUIDのセット（UID STOREの場合）が含まれます。
         </p>
       </div>
     </div>
@@ -1314,7 +1319,7 @@ Example 6
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p17">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Same as above, but the server follows the SHOULD recommendation in Section 6.4.6 of <a href="./rfc3501.html">[RFC3501]</a>.
+Same as above, but the server follows the <span class="kw kw-should">SHOULD</span> recommendation in Section 6.4.6 of <a href="./rfc3501.html">[RFC3501]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1338,7 +1343,7 @@ Same as above, but the server follows the SHOULD recommendation in Section 6.4.
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p19">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Use of UNCHANGEDSINCE with a modification sequence of 0 always fails if the metadata item exists. A system flag MUST always be considered existent, whether it was set or not.
+Use of UNCHANGEDSINCE with a modification sequence of 0 always fails if the metadata item exists. A system flag <span class="kw kw-must">MUST</span> always be considered existent, whether it was set or not.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1395,19 +1400,19 @@ Example 8
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p24">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note: A client trying to make an atomic change to the state of a particular metadata item (or a set of metadata items) MUST be prepared to deal with the case when the server returns the MODIFIED response code if the state of the metadata item being watched hasn&#39;t changed (but the state of some other metadata item has). This is necessary because some servers don&#39;t store separate mod-sequences for different metadata items. However, a server implementation SHOULD avoid generating spurious MODIFIED responses for +FLAGS/-FLAGS STORE operations, even when the server stores a single mod-sequence per message. Section 3.1.12 describes how this can be achieved.
+Note: A client trying to make an atomic change to the state of a particular metadata item (or a set of metadata items) <span class="kw kw-must">MUST</span> be prepared to deal with the case when the server returns the MODIFIED response code if the state of the metadata item being watched hasn&#39;t changed (but the state of some other metadata item has). This is necessary because some servers don&#39;t store separate mod-sequences for different metadata items. However, a server implementation <span class="kw kw-should">SHOULD</span> avoid generating spurious MODIFIED responses for +FLAGS/-FLAGS STORE operations, even when the server stores a single mod-sequence per message. Section 3.1.12 describes how this can be achieved.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-注：特定のメタデータアイテム（またはメタデータアイテムのセット）の状態をアトミックに変更しようとするクライアントは、メタデータアイテムの状態が変更されている場合にサーバーがMODIFIED応答コードを返す場合に対処する準備が必要です。監視は変更されていません（ただし、他の一部のメタデータ項目の状態は変更されています）。一部のサーバーは、異なるメタデータアイテムに個別のmodシーケンスを格納しないため、これが必要です。ただし、サーバー実装では、サーバーがメッセージごとに単一のmodシーケンスを格納する場合でも、+ FLAGS / -FLAGS STORE操作に対して誤ったMODIFIED応答を生成しないようにする必要があります（SHOULD）。セクション3.1.12では、これを実現する方法について説明しています。
+注：特定のメタデータアイテム（またはメタデータアイテムのセット）の状態をアトミックに変更しようとするクライアントは、メタデータアイテムの状態が変更されている場合にサーバーがMODIFIED応答コードを返す場合に対処する準備が必要です。監視は変更されていません（ただし、他の一部のメタデータ項目の状態は変更されています）。一部のサーバーは、異なるメタデータアイテムに個別のmodシーケンスを格納しないため、これが必要です。ただし、サーバー実装では、サーバーがメッセージごとに単一のmodシーケンスを格納する場合でも、+ FLAGS / -FLAGS STORE操作に対して誤ったMODIFIED応答を生成しないようにする必要があります（<span class="kw kw-should">SHOULD</span>）。セクション3.1.12では、これを実現する方法について説明しています。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p25">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- Unless the server has included an unsolicited FETCH to update the client&#39;s knowledge about messages that have failed the UNCHANGEDSINCE test, upon receipt of the MODIFIED response code, the client SHOULD try to figure out if the required metadata items have indeed changed by issuing the FETCH or NOOP command. It is RECOMMENDED that the server avoids the need for the client to do that by sending an unsolicited FETCH response (see Examples 9 and 10).
+ Unless the server has included an unsolicited FETCH to update the client&#39;s knowledge about messages that have failed the UNCHANGEDSINCE test, upon receipt of the MODIFIED response code, the client <span class="kw kw-should">SHOULD</span> try to figure out if the required metadata items have indeed changed by issuing the FETCH or NOOP command. It is <span class="kw kw-should">RECOMMENDED</span> that the server avoids the need for the client to do that by sending an unsolicited FETCH response (see Examples 9 and 10).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1419,12 +1424,12 @@ UNCHANGEDSINCEテストに失敗したメッセージに関するクライアン
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p26">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the required metadata items haven&#39;t changed, the client SHOULD retry the command with the new mod-sequence. The client needs to allow for a reasonable number of retries (at least 2).
+If the required metadata items haven&#39;t changed, the client <span class="kw kw-should">SHOULD</span> retry the command with the new mod-sequence. The client needs to allow for a reasonable number of retries (at least 2).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-必要なメタデータアイテムが変更されていない場合、クライアントは新しいmod-sequenceでコマンドを再試行する必要があります（SHOULD）。クライアントは、妥当な数の再試行（少なくとも2回）を許可する必要があります。
+必要なメタデータアイテムが変更されていない場合、クライアントは新しいmod-sequenceでコマンドを再試行する必要があります（<span class="kw kw-should">SHOULD</span>）。クライアントは、妥当な数の再試行（少なくとも2回）を許可する必要があります。
         </p>
       </div>
     </div>
@@ -1728,12 +1733,12 @@ Example 11
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p52">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note: If a message is specified multiple times in the message set, and the server doesn&#39;t internally eliminate duplicates from the message set, it MUST NOT fail the conditional STORE operation for the second (or subsequent) occurrence of the message if the operation completed successfully for the first occurrence. For example, if the client specifies:
+Note: If a message is specified multiple times in the message set, and the server doesn&#39;t internally eliminate duplicates from the message set, it <span class="kw kw-mustnot">MUST NOT</span> fail the conditional STORE operation for the second (or subsequent) occurrence of the message if the operation completed successfully for the first occurrence. For example, if the client specifies:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-注：メッセージがメッセージセットで複数回指定され、サーバーがメッセージセットから重複を内部的に排除しない場合、メッセージの2番目（以降）の発生に対する条件付きSTORE操作は失敗ししてはなりません (MUST NOT)最初の発生で正常に完了しました。たとえば、クライアントが次のように指定したとします。
+注：メッセージがメッセージセットで複数回指定され、サーバーがメッセージセットから重複を内部的に排除しない場合、メッセージの2番目（以降）の発生に対する条件付きSTORE操作は失敗ししてはなりません (<span class="kw kw-mustnot">MUST NOT</span>)最初の発生で正常に完了しました。たとえば、クライアントが次のように指定したとします。
         </p>
       </div>
     </div>
@@ -1776,7 +1781,7 @@ As specified in Section 3.1, once the client specifies the UNCHANGEDSINCE modifi
     <div class="row" id="3-1-3--STORE-and-UID-STORE-Commands-p56">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This document also changes the behavior of the server when it has performed a STORE or UID STORE command and the UNCHANGEDSINCE modifier is not specified. If the operation is successful for a message, the server MUST update the mod-sequence attribute of the message. The server is REQUIRED to include the mod-sequence value whenever it decides to send the unsolicited FETCH response to all CONDSTORE-aware clients that have opened the mailbox containing the message.
+This document also changes the behavior of the server when it has performed a STORE or UID STORE command and the UNCHANGEDSINCE modifier is not specified. If the operation is successful for a message, the server <span class="kw kw-must">MUST</span> update the mod-sequence attribute of the message. The server is <span class="kw kw-must">REQUIRED</span> to include the mod-sequence value whenever it decides to send the unsolicited FETCH response to all CONDSTORE-aware clients that have opened the mailbox containing the message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2010,12 +2015,12 @@ Example 13
     <div class="row" id="3-1-4-2--MODSEQ-Message-Data-Item-in-FETCH-Command-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Servers that only support the CONDSTORE extension (and not QRESYNC) SHOULD comply with requirements from Section 3.2.4.
+Servers that only support the CONDSTORE extension (and not QRESYNC) <span class="kw kw-should">SHOULD</span> comply with requirements from Section 3.2.4.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-CONDSTORE拡張のみをサポートする（QRESYNCではない）サーバーは、セクション3.2.4の要件に準拠する必要があります（SHOULD）。
+CONDSTORE拡張のみをサポートする（QRESYNCではない）サーバーは、セクション3.2.4の要件に準拠する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -2283,7 +2288,7 @@ SEARCH（またはUID SEARCH）コマンドのMODSEQ基準を使用すると、�
     <div class="row" id="3-1-5--MODSEQ-Search-Criterion-in-SEARCH-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-Messages that have modification values that are equal to or greater than &lt;mod-sequence-valzer&gt;. This allows a client, for example, to find out which messages contain metadata items that have changed since the last time it updated its disconnected cache. The client may also specify &lt;entry-name&gt; (name of the metadata item) and &lt;entry-type-req&gt; (type of metadata item) before &lt;mod-sequence-valzer&gt;. &lt;entry-type-req&gt; can be one of &#34;shared&#34;, &#34;priv&#34; (private), or &#34;all&#34;. The last means that the server MUST use the biggest value among &#34;priv&#34; and &#34;shared&#34; mod-sequences for the metadata item. If the server doesn&#39;t store separate mod-sequences for different metadata items, it MUST ignore &lt;entry-name&gt; and &lt;entry-type-req&gt;. Otherwise, the server should use them to narrow down the search.
+Messages that have modification values that are equal to or greater than &lt;mod-sequence-valzer&gt;. This allows a client, for example, to find out which messages contain metadata items that have changed since the last time it updated its disconnected cache. The client may also specify &lt;entry-name&gt; (name of the metadata item) and &lt;entry-type-req&gt; (type of metadata item) before &lt;mod-sequence-valzer&gt;. &lt;entry-type-req&gt; can be one of &#34;shared&#34;, &#34;priv&#34; (private), or &#34;all&#34;. The last means that the server <span class="kw kw-must">MUST</span> use the biggest value among &#34;priv&#34; and &#34;shared&#34; mod-sequences for the metadata item. If the server doesn&#39;t store separate mod-sequences for different metadata items, it <span class="kw kw-must">MUST</span> ignore &lt;entry-name&gt; and &lt;entry-type-req&gt;. Otherwise, the server should use them to narrow down the search.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2307,7 +2312,7 @@ For a flag &lt;flagname&gt;, the corresponding &lt;entry-name&gt; has the form &
     <div class="row" id="3-1-5--MODSEQ-Search-Criterion-in-SEARCH-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the client specifies a MODSEQ criterion in a SEARCH (or UID SEARCH) command and the server returns a non-empty SEARCH result, the server MUST also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See also Section 3.1.6. Note that other IMAP extensions such as ESEARCH <a href="./rfc4731.html">[RFC4731]</a> can override this requirement (see Section 3.1.10 for more details.)
+If the client specifies a MODSEQ criterion in a SEARCH (or UID SEARCH) command and the server returns a non-empty SEARCH result, the server <span class="kw kw-must">MUST</span> also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See also Section 3.1.6. Note that other IMAP extensions such as ESEARCH <a href="./rfc4731.html">[RFC4731]</a> can override this requirement (see Section 3.1.10 for more details.)
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2409,7 +2414,7 @@ This document extends the syntax of the untagged SEARCH response to include the 
     <div class="row" id="3-1-6--Modified-SEARCH-Untagged-Response-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a client specifies a MODSEQ criterion in a SEARCH (or UID SEARCH) command and the server returns a non-empty SEARCH result, the server MUST also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See Section 3.1.5 for examples.
+If a client specifies a MODSEQ criterion in a SEARCH (or UID SEARCH) command and the server returns a non-empty SEARCH result, the server <span class="kw kw-must">MUST</span> also append (to the end of the untagged SEARCH response) the highest mod-sequence for all messages being returned. See Section 3.1.5 for examples.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2445,12 +2450,12 @@ This document defines a new status data item:
     <div class="row" id="3-1-7--HIGHESTMODSEQ-Status-Data-Items-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-HIGHESTMODSEQ: The highest mod-sequence value of all messages in the mailbox. This is the same value that is returned by the server in the HIGHESTMODSEQ response code in an OK untagged response (see Section 3.1.2.1). If the server doesn&#39;t support the persistent storage of mod-sequences for the mailbox (see Section 3.1.2.2), the server MUST return 0 as the value of the HIGHESTMODSEQ status data item.
+HIGHESTMODSEQ: The highest mod-sequence value of all messages in the mailbox. This is the same value that is returned by the server in the HIGHESTMODSEQ response code in an OK untagged response (see Section 3.1.2.1). If the server doesn&#39;t support the persistent storage of mod-sequences for the mailbox (see Section 3.1.2.2), the server <span class="kw kw-must">MUST</span> return 0 as the value of the HIGHESTMODSEQ status data item.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-HIGHESTMODSEQ：メールボックス内のすべてのメッセージの最も高いmod-sequence値。これは、タグなしのOK応答のHIGHESTMODSEQ応答コードでサーバーから返される値と同じです（セクション3.1.2.1を参照）。サーバーがメールボックスのmodシーケンスの永続的なストレージをサポートしていない場合（セクション3.1.2.2を参照）、サーバーはHIGHESTMODSEQステータスデータ項目の値として0を返さなければなりません（MUST）。
+HIGHESTMODSEQ：メールボックス内のすべてのメッセージの最も高いmod-sequence値。これは、タグなしのOK応答のHIGHESTMODSEQ応答コードでサーバーから返される値と同じです（セクション3.1.2.1を参照）。サーバーがメールボックスのmodシーケンスの永続的なストレージをサポートしていない場合（セクション3.1.2.2を参照）、サーバーはHIGHESTMODSEQステータスデータ項目の値として0を返さなければなりません（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
@@ -2491,7 +2496,7 @@ Example 17
     <div class="row" id="3-1-8--CONDSTORE-Parameter-to-SELECT-and-EXAMINE-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The CONDSTORE extension defines a single optional select parameter, &#34;CONDSTORE&#34;, which tells the server that it MUST include the MODSEQ FETCH response data items in all subsequent unsolicited FETCH responses.
+The CONDSTORE extension defines a single optional select parameter, &#34;CONDSTORE&#34;, which tells the server that it <span class="kw kw-must">MUST</span> include the MODSEQ FETCH response data items in all subsequent unsolicited FETCH responses.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2591,7 +2596,7 @@ This document extends the syntax of the untagged SORT response to include the hi
     <div class="row" id="3-1-9--Interaction-with-IMAP-SORT-and-THREAD-Extensions-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a client specifies a MODSEQ criterion in a SORT (or UID SORT) command and the server returns a non-empty SORT result, the server MUST also append (to the end of the untagged SORT response) the highest mod-sequence for all messages being returned. Note that other IMAP extensions such as ESORT <a href="./rfc5267.html">[RFC5267]</a> can override this requirement (see Section 3.1.10 for more details.)
+If a client specifies a MODSEQ criterion in a SORT (or UID SORT) command and the server returns a non-empty SORT result, the server <span class="kw kw-must">MUST</span> also append (to the end of the untagged SORT response) the highest mod-sequence for all messages being returned. Note that other IMAP extensions such as ESORT <a href="./rfc5267.html">[RFC5267]</a> can override this requirement (see Section 3.1.10 for more details.)
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2627,7 +2632,7 @@ MODSEQ検索基準を含むTHREADコマンドは、<a href="./rfc5256.html">[RFC
     <div class="row" id="3-1-10--Interaction-with-IMAP-ESORT-and-ESEARCH-Extensions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a client specifies a MODSEQ criterion in an extended SEARCH (or extended UID SEARCH) <a href="./rfc4731.html">[RFC4731]</a> command and the server returns a non-empty SEARCH result, the server MUST return the ESEARCH response containing the MODSEQ result option as defined in Section 3.2 of <a href="./rfc4731.html">[RFC4731]</a>.
+If a client specifies a MODSEQ criterion in an extended SEARCH (or extended UID SEARCH) <a href="./rfc4731.html">[RFC4731]</a> command and the server returns a non-empty SEARCH result, the server <span class="kw kw-must">MUST</span> return the ESEARCH response containing the MODSEQ result option as defined in Section 3.2 of <a href="./rfc4731.html">[RFC4731]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2660,12 +2665,12 @@ Example 19
     <div class="row" id="3-1-10--Interaction-with-IMAP-ESORT-and-ESEARCH-Extensions-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If a client specifies a MODSEQ criterion in an extended SORT (or extended UID SORT) <a href="./rfc5267.html">[RFC5267]</a> command and the server returns a non-empty SORT result, the server MUST return the ESEARCH response containing the MODSEQ result option defined in Section 3.2 of <a href="./rfc4731.html">[RFC4731]</a>.
+If a client specifies a MODSEQ criterion in an extended SORT (or extended UID SORT) <a href="./rfc5267.html">[RFC5267]</a> command and the server returns a non-empty SORT result, the server <span class="kw kw-must">MUST</span> return the ESEARCH response containing the MODSEQ result option defined in Section 3.2 of <a href="./rfc4731.html">[RFC4731]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-クライアントが拡張SORT（または拡張UID SORT）<a href="./rfc5267.html">[RFC5267]</a>コマンドでMODSEQ基準を指定し、サーバーが空ではないSORT結果を返す場合、サーバーは、セクション3.2で定義されたMODSEQ結果オプションを含むESEARCH応答を返さなければなりません（MUST）。 RFC4731]。
+クライアントが拡張SORT（または拡張UID SORT）<a href="./rfc5267.html">[RFC5267]</a>コマンドでMODSEQ基準を指定し、サーバーが空ではないSORT結果を返す場合、サーバーは、セクション3.2で定義されたMODSEQ結果オプションを含むESEARCH応答を返さなければなりません（<span class="kw kw-must">MUST</span>）。 RFC4731]。
         </p>
       </div>
     </div>
@@ -2717,7 +2722,7 @@ Server implementations should follow the following rule, which applies to any su
     <div class="row" id="3-1-11--Additional-Quality-of-Implementation-Issues-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-6">
-Adding the flag when it is already present or removing it when it is not present SHOULD NOT change the mod-sequence.
+Adding the flag when it is already present or removing it when it is not present <span class="kw kw-shouldnot">SHOULD NOT</span> change the mod-sequence.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2741,12 +2746,12 @@ This will prevent spurious client synchronization requests.
     <div class="row" id="3-1-11--Additional-Quality-of-Implementation-Issues-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-However, note that client implementers MUST NOT rely on this server behavior. A client can&#39;t distinguish between the case when a server has violated the SHOULD mentioned above and when one or more clients set and unset (or unset and set) the flag in another session.
+However, note that client implementers <span class="kw kw-mustnot">MUST NOT</span> rely on this server behavior. A client can&#39;t distinguish between the case when a server has violated the <span class="kw kw-should">SHOULD</span> mentioned above and when one or more clients set and unset (or unset and set) the flag in another session.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ただし、クライアントの実装者はこのサーバーの動作に依存してはならないことに注意してください。クライアントは、サーバーが上記のSHOULDに違反した場合と、1つ以上のクライアントが別のセッションでフラグを設定および設定解除（または設定解除と設定）した場合を区別できません。
+ただし、クライアントの実装者はこのサーバーの動作に依存してはならないことに注意してください。クライアントは、サーバーが上記の<span class="kw kw-should">SHOULD</span>に違反した場合と、1つ以上のクライアントが別のセッションでフラグを設定および設定解除（または設定解除と設定）した場合を区別できません。
         </p>
       </div>
     </div>
@@ -2981,19 +2986,19 @@ CONDSTORE拡張に指定されたすべてのプロトコルの変更と要件�
     <div class="row" id="3-2--QRESYNC-Extension-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The QRESYNC extension puts additional requirements on a server implementing the CONDSTORE extension. Each mailbox that supports persistent storage of mod-sequences, i.e., for which the server would send a HIGHESTMODSEQ untagged OK response code on a successful SELECT/EXAMINE, MUST increment the per-mailbox mod-sequence when one or more messages are expunged due to EXPUNGE, UID EXPUNGE, CLOSE, or MOVE <a href="./rfc6851.html">[RFC6851]</a>; the server MUST associate the incremented mod-sequence with the UIDs of the expunged messages. Additionally, if the server also supports the IMAP METADATA extension <a href="./rfc5464.html">[RFC5464]</a>, it MUST increment the per-mailbox mod-sequence when SETMETADATA successfully changes an annotation on the corresponding mailbox.
+The QRESYNC extension puts additional requirements on a server implementing the CONDSTORE extension. Each mailbox that supports persistent storage of mod-sequences, i.e., for which the server would send a HIGHESTMODSEQ untagged OK response code on a successful SELECT/EXAMINE, <span class="kw kw-must">MUST</span> increment the per-mailbox mod-sequence when one or more messages are expunged due to EXPUNGE, UID EXPUNGE, CLOSE, or MOVE <a href="./rfc6851.html">[RFC6851]</a>; the server <span class="kw kw-must">MUST</span> associate the incremented mod-sequence with the UIDs of the expunged messages. Additionally, if the server also supports the IMAP METADATA extension <a href="./rfc5464.html">[RFC5464]</a>, it <span class="kw kw-must">MUST</span> increment the per-mailbox mod-sequence when SETMETADATA successfully changes an annotation on the corresponding mailbox.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-QRESYNC拡張機能は、CONDSTORE拡張機能を実装するサーバーに追加の要件を課します。 mod-sequencesの永続的なストレージをサポートする各メールボックス、つまり、サーバーがSELECT/EXAMINEの成功時にHIGHESTMODSEQのタグなしOK応答コードを送信する場合、1つ以上のメッセージが削除された場合、メールボックスごとのmod-sequenceをインクリメントする必要があります。 EXPUNGE、UID EXPUNGE、CLOSE、またはMOVE <a href="./rfc6851.html">[RFC6851]</a>;サーバーは、インクリメントされたmodシーケンスを消去されたメッセージのUIDに関連付けなければなりません（MUST）。さらに、サーバーがIMAP METADATA拡張<a href="./rfc5464.html">[RFC5464]</a>もサポートしている場合、SETMETADATAが対応するメールボックスの注釈を正常に変更すると、メールボックスごとのmodシーケンスをインクリメントする必要があります。
+QRESYNC拡張機能は、CONDSTORE拡張機能を実装するサーバーに追加の要件を課します。 mod-sequencesの永続的なストレージをサポートする各メールボックス、つまり、サーバーがSELECT/EXAMINEの成功時にHIGHESTMODSEQのタグなしOK応答コードを送信する場合、1つ以上のメッセージが削除された場合、メールボックスごとのmod-sequenceをインクリメントする必要があります。 EXPUNGE、UID EXPUNGE、CLOSE、またはMOVE <a href="./rfc6851.html">[RFC6851]</a>;サーバーは、インクリメントされたmodシーケンスを消去されたメッセージのUIDに関連付けなければなりません（<span class="kw kw-must">MUST</span>）。さらに、サーバーがIMAP METADATA拡張<a href="./rfc5464.html">[RFC5464]</a>もサポートしている場合、SETMETADATAが対応するメールボックスの注釈を正常に変更すると、メールボックスごとのmodシーケンスをインクリメントする必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="3-2--QRESYNC-Extension-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- A server implementing QRESYNC MUST send untagged events to a client in a way that the client doesn&#39;t lose any changes in case of connectivity loss. In particular, this means that if the server sends MODSEQ FETCH data items while EXPUNGE (or VANISHED) replies with lower mod-sequences being delayed, the server MUST send the HIGHESTMODSEQ response code with a lower value than the EXPUNGE&#39;s mod-sequence. See the example in Section 6.
+ A server implementing QRESYNC <span class="kw kw-must">MUST</span> send untagged events to a client in a way that the client doesn&#39;t lose any changes in case of connectivity loss. In particular, this means that if the server sends MODSEQ FETCH data items while EXPUNGE (or VANISHED) replies with lower mod-sequences being delayed, the server <span class="kw kw-must">MUST</span> send the HIGHESTMODSEQ response code with a lower value than the EXPUNGE&#39;s mod-sequence. See the example in Section 6.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3065,12 +3070,12 @@ IMAP4サーバーがCAPABILITYコマンドでサポートされている機能�
     <div class="row" id="3-2-2--Advertising-Support-for-QRESYNC-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-For compatibility with clients that only support the CONDSTORE IMAP extension, servers SHOULD also advertise &#34;CONDSTORE&#34; in the CAPABILITY response.
+For compatibility with clients that only support the CONDSTORE IMAP extension, servers <span class="kw kw-should">SHOULD</span> also advertise &#34;CONDSTORE&#34; in the CAPABILITY response.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-CONDSTORE IMAP拡張のみをサポートするクライアントとの互換性のために、サーバーはCAPABILITY応答で「CONDSTORE」も通知する必要があります（SHOULD）。
+CONDSTORE IMAP拡張のみをサポートするクライアントとの互換性のために、サーバーはCAPABILITY応答で「CONDSTORE」も通知する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -3089,7 +3094,7 @@ CONDSTORE IMAP拡張のみをサポートするクライアントとの互換性
     <div class="row" id="3-2-3--Use-of-ENABLE-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Servers supporting QRESYNC MUST implement and advertise support for the ENABLE <a href="./rfc5161.html">[RFC5161]</a> IMAP extension. Also, the presence of the &#34;QRESYNC&#34; capability implies support for the CONDSTORE IMAP extension even if the &#34;CONDSTORE&#34; capability isn&#39;t advertised. A server compliant with this specification is REQUIRED to support &#34;ENABLE QRESYNC&#34; and &#34;ENABLE QRESYNC CONDSTORE&#34; (which are &#34;CONDSTORE enabling commands&#34;, see Section 3.1, and have identical results). Note that the order of parameters is not significant, but there is no requirement for a compliant server to support &#34;ENABLE CONDSTORE&#34; by itself. The &#34;ENABLE QRESYNC&#34;/&#34;ENABLE QRESYNC CONDSTORE&#34; command also tells the server that it MUST start sending VANISHED responses (see
+Servers supporting QRESYNC <span class="kw kw-must">MUST</span> implement and advertise support for the ENABLE <a href="./rfc5161.html">[RFC5161]</a> IMAP extension. Also, the presence of the &#34;QRESYNC&#34; capability implies support for the CONDSTORE IMAP extension even if the &#34;CONDSTORE&#34; capability isn&#39;t advertised. A server compliant with this specification is <span class="kw kw-must">REQUIRED</span> to support &#34;ENABLE QRESYNC&#34; and &#34;ENABLE QRESYNC CONDSTORE&#34; (which are &#34;CONDSTORE enabling commands&#34;, see Section 3.1, and have identical results). Note that the order of parameters is not significant, but there is no requirement for a compliant server to support &#34;ENABLE CONDSTORE&#34; by itself. The &#34;ENABLE QRESYNC&#34;/&#34;ENABLE QRESYNC CONDSTORE&#34; command also tells the server that it <span class="kw kw-must">MUST</span> start sending VANISHED responses (see
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3113,7 +3118,7 @@ Section 3.2.10) instead of EXPUNGE responses for all mailboxes for which the ser
     <div class="row" id="3-2-3--Use-of-ENABLE-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A client making use of QRESYNC MUST issue &#34;ENABLE QRESYNC&#34; once it is authenticated. A server MUST respond with a tagged BAD response if the QRESYNC parameter to the SELECT/EXAMINE command or the VANISHED UID FETCH modifier is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34;, or the server has not positively responded (in the current connection) to that command with the untagged ENABLED response containing QRESYNC.
+A client making use of QRESYNC <span class="kw kw-must">MUST</span> issue &#34;ENABLE QRESYNC&#34; once it is authenticated. A server <span class="kw kw-must">MUST</span> respond with a tagged BAD response if the QRESYNC parameter to the SELECT/EXAMINE command or the VANISHED UID FETCH modifier is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34;, or the server has not positively responded (in the current connection) to that command with the untagged ENABLED response containing QRESYNC.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3137,7 +3142,7 @@ QRESYNCを使用するクライアントは、認証されると「ENABLE QRESYN
     <div class="row" id="3-2-4--Additional-Requirements-on-QRESYNC-Servers-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once a CONDSTORE enabling command is issued by the client, the server MUST automatically include both UID and mod-sequence data in all subsequent untagged FETCH responses (until the connection is closed), whether they were caused by a regular STORE/UID STORE, a STORE/UID STORE with an UNCHANGEDSINCE modifier, a FETCH/UID FETCH that implicitly set the \Seen flag, or an external agent. Note that this rule doesn&#39;t affect untagged FETCH responses caused by a FETCH command that doesn&#39;t include UID and/or a MODSEQ FETCH data item (and doesn&#39;t implicitly set the \Seen flag) or UID FETCH without the MODSEQ FETCH data item.
+Once a CONDSTORE enabling command is issued by the client, the server <span class="kw kw-must">MUST</span> automatically include both UID and mod-sequence data in all subsequent untagged FETCH responses (until the connection is closed), whether they were caused by a regular STORE/UID STORE, a STORE/UID STORE with an UNCHANGEDSINCE modifier, a FETCH/UID FETCH that implicitly set the \Seen flag, or an external agent. Note that this rule doesn&#39;t affect untagged FETCH responses caused by a FETCH command that doesn&#39;t include UID and/or a MODSEQ FETCH data item (and doesn&#39;t implicitly set the \Seen flag) or UID FETCH without the MODSEQ FETCH data item.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3221,7 +3226,7 @@ SELECT/EXAMINEコマンドへのクイック再同期パラメーターには、
     <div class="row" id="3-2-5--QRESYNC-Parameter-to-SELECTEXAMINE-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A server MUST respond with a tagged BAD response if the Quick Resynchronization parameter to the SELECT/EXAMINE command is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34; in the current connection, or the server has not positively responded to that command with the untagged ENABLED response containing QRESYNC.
+A server <span class="kw kw-must">MUST</span> respond with a tagged BAD response if the Quick Resynchronization parameter to the SELECT/EXAMINE command is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34; in the current connection, or the server has not positively responded to that command with the untagged ENABLED response containing QRESYNC.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3233,7 +3238,7 @@ SELECT/EXAMINEコマンドへのクイック再同期パラメーターが指定
     <div class="row" id="3-2-5--QRESYNC-Parameter-to-SELECTEXAMINE-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- Before opening the specified mailbox, the server verifies all arguments for syntactic validity. If any parameter is not syntactically valid, the server returns the tagged BAD response, and the mailbox remains unselected. Once the check is done, the server opens the mailbox as if no SELECT/EXAMINE parameters are specified (this is subject to the processing of other parameters as defined in other extensions). In particular, this means that the server MUST send all untagged responses as specified in Sections 6.3.1 and 6.3.2 of <a href="./rfc3501.html">[RFC3501]</a>.
+ Before opening the specified mailbox, the server verifies all arguments for syntactic validity. If any parameter is not syntactically valid, the server returns the tagged BAD response, and the mailbox remains unselected. Once the check is done, the server opens the mailbox as if no SELECT/EXAMINE parameters are specified (this is subject to the processing of other parameters as defined in other extensions). In particular, this means that the server <span class="kw kw-must">MUST</span> send all untagged responses as specified in Sections 6.3.1 and 6.3.2 of <a href="./rfc3501.html">[RFC3501]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3245,7 +3250,7 @@ SELECT/EXAMINEコマンドへのクイック再同期パラメーターが指定
     <div class="row" id="3-2-5--QRESYNC-Parameter-to-SELECTEXAMINE-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-After that, the server checks the UIDVALIDITY value provided by the client. If the provided UIDVALIDITY doesn&#39;t match the UIDVALIDITY for the mailbox being opened, then the server MUST ignore the remaining parameters and behave as if no dynamic message data changed. The client can discover this situation by comparing the UIDVALIDITY value returned by the server. This behavior allows the client not to synchronize the mailbox or decide on the best synchronization strategy.
+After that, the server checks the UIDVALIDITY value provided by the client. If the provided UIDVALIDITY doesn&#39;t match the UIDVALIDITY for the mailbox being opened, then the server <span class="kw kw-must">MUST</span> ignore the remaining parameters and behave as if no dynamic message data changed. The client can discover this situation by comparing the UIDVALIDITY value returned by the server. This behavior allows the client not to synchronize the mailbox or decide on the best synchronization strategy.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3312,7 +3317,7 @@ Remaining parameters are described in the following subsections.
     <div class="row" id="3-2-5-1--Modification-Sequence-and-UID-Parameters-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A server that doesn&#39;t support the persistent storage of mod-sequences for the mailbox MUST send an OK untagged response including the NOMODSEQ response code with every successful SELECT or EXAMINE command (see Section 3.1.2.2). Such a server doesn&#39;t need to remember mod-sequences for expunged messages in the mailbox. It MUST ignore the remaining parameters and behave as if no dynamic message data changed.
+A server that doesn&#39;t support the persistent storage of mod-sequences for the mailbox <span class="kw kw-must">MUST</span> send an OK untagged response including the NOMODSEQ response code with every successful SELECT or EXAMINE command (see Section 3.1.2.2). Such a server doesn&#39;t need to remember mod-sequences for expunged messages in the mailbox. It <span class="kw kw-must">MUST</span> ignore the remaining parameters and behave as if no dynamic message data changed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3336,7 +3341,7 @@ If the provided UIDVALIDITY matches that of the selected mailbox, the server the
     <div class="row" id="3-2-5-1--Modification-Sequence-and-UID-Parameters-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The server sends the client any pending flag changes (using FETCH responses that MUST contain UIDs) and expunges those that have occurred in this mailbox since the provided modification sequence.
+The server sends the client any pending flag changes (using FETCH responses that <span class="kw kw-must">MUST</span> contain UIDs) and expunges those that have occurred in this mailbox since the provided modification sequence.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3448,7 +3453,7 @@ In the above example, flag information for UID 42 is not returned, presumably be
     <div class="row" id="3-2-5-2--Message-Sequence-Match-Data-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A client MAY provide a parenthesized list of a message sequence set and the corresponding UID sets. Both MUST be provided in ascending order. The server uses this data to restrict the range for which it provides expunged message information.
+A client <span class="kw kw-may">MAY</span> provide a parenthesized list of a message sequence set and the corresponding UID sets. Both <span class="kw kw-must">MUST</span> be provided in ascending order. The server uses this data to restrict the range for which it provides expunged message information.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3606,7 +3611,7 @@ Example:
     <div class="row" id="3-2-6--VANISHED-UID-FETCH-Modifier-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that the VANISHED UID FETCH modifier is NOT allowed with a FETCH command. The server MUST return a tagged BAD response if this response is specified as a modifier to the FETCH command.
+Note that the VANISHED UID FETCH modifier is NOT allowed with a FETCH command. The server <span class="kw kw-must">MUST</span> return a tagged BAD response if this response is specified as a modifier to the FETCH command.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3618,7 +3623,7 @@ VANISHED UID FETCH修飾子はFETCHコマンドでは使用できないことに
     <div class="row" id="3-2-6--VANISHED-UID-FETCH-Modifier-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A server MUST respond with a tagged BAD response if the VANISHED UID FETCH modifier is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34; in the current connection.
+A server <span class="kw kw-must">MUST</span> respond with a tagged BAD response if the VANISHED UID FETCH modifier is specified and the client hasn&#39;t issued &#34;ENABLE QRESYNC&#34; in the current connection.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3630,7 +3635,7 @@ VANISHED UID FETCH修飾子が指定されており、クライアントが現�
     <div class="row" id="3-2-6--VANISHED-UID-FETCH-Modifier-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The VANISHED UID FETCH modifier MUST only be specified together with the CHANGEDSINCE UID FETCH modifier. If the VANISHED UID FETCH modifier is used without the CHANGEDSINCE UID FETCH modifier, the server MUST respond with a tagged BAD response.
+The VANISHED UID FETCH modifier <span class="kw kw-must">MUST</span> only be specified together with the CHANGEDSINCE UID FETCH modifier. If the VANISHED UID FETCH modifier is used without the CHANGEDSINCE UID FETCH modifier, the server <span class="kw kw-must">MUST</span> respond with a tagged BAD response.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3642,7 +3647,7 @@ VANISHED UID FETCH修飾子は、CHANGEDSINCE UID FETCH修飾子と一緒にの�
     <div class="row" id="3-2-6--VANISHED-UID-FETCH-Modifier-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The VANISHED UID FETCH modifier instructs the server to report those messages from the UID set parameter that have been expunged and whose associated mod-sequence is larger than the specified mod-sequence. That is, the client requests to be informed of messages from the specified set that were expunged since the specified mod-sequence. Note that the mod-sequence(s) associated with these messages was updated when the messages were expunged (as described above). The expunged messages are reported using the VANISHED (EARLIER) response as described in Section 3.2.10.1. Any VANISHED (EARLIER) responses MUST be returned before any FETCH responses, otherwise the client might get confused about how message numbers map to UIDs.
+The VANISHED UID FETCH modifier instructs the server to report those messages from the UID set parameter that have been expunged and whose associated mod-sequence is larger than the specified mod-sequence. That is, the client requests to be informed of messages from the specified set that were expunged since the specified mod-sequence. Note that the mod-sequence(s) associated with these messages was updated when the messages were expunged (as described above). The expunged messages are reported using the VANISHED (EARLIER) response as described in Section 3.2.10.1. Any VANISHED (EARLIER) responses <span class="kw kw-must">MUST</span> be returned before any FETCH responses, otherwise the client might get confused about how message numbers map to UIDs.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3654,7 +3659,7 @@ VANISHED UID FETCH修飾子は、消去され、関連するmod-sequenceが指�
     <div class="row" id="3-2-6--VANISHED-UID-FETCH-Modifier-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note: A server that receives a mod-sequence smaller than &lt;minmodseq&gt;, where &lt;minmodseq&gt; is the value of the smallest expunged mod-sequence it remembers minus one, MUST behave as if it was requested to report all expunged messages from the provided UID set parameter.
+Note: A server that receives a mod-sequence smaller than &lt;minmodseq&gt;, where &lt;minmodseq&gt; is the value of the smallest expunged mod-sequence it remembers minus one, <span class="kw kw-must">MUST</span> behave as if it was requested to report all expunged messages from the provided UID set parameter.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3791,7 +3796,7 @@ EXPUNGEコマンドは、現在選択されているメールボックスから�
     <div class="row" id="3-2-7--EXPUNGE-Command-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- If the server is capable of storing modification sequences for the selected mailbox, it MUST increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the EXPUNGE command. For each permanently removed message, the server MUST remember the incremented mod-sequence and corresponding UID. If at least one message got expunged and QRESYNC was enabled, the server MUST send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response.
+ If the server is capable of storing modification sequences for the selected mailbox, it <span class="kw kw-must">MUST</span> increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the EXPUNGE command. For each permanently removed message, the server <span class="kw kw-must">MUST</span> remember the incremented mod-sequence and corresponding UID. If at least one message got expunged and QRESYNC was enabled, the server <span class="kw kw-must">MUST</span> send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3932,7 +3937,7 @@ CLOSEコマンドは、現在選択されているメールボックスから\ D
     <div class="row" id="3-2-8--CLOSE-Command-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the server is capable of storing modification sequences for the selected mailbox, it MUST increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the CLOSE command. For each permanently removed message, the server MUST remember the incremented mod-sequence and corresponding UID. The server MUST NOT send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response, as this might cause loss of synchronization on the client.
+If the server is capable of storing modification sequences for the selected mailbox, it <span class="kw kw-must">MUST</span> increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the CLOSE command. For each permanently removed message, the server <span class="kw kw-must">MUST</span> remember the incremented mod-sequence and corresponding UID. The server <span class="kw kw-mustnot">MUST NOT</span> send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response, as this might cause loss of synchronization on the client.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4049,7 +4054,7 @@ OKをクライアントに返す前に、削除されたメッセージは、VAN
     <div class="row" id="3-2-9--UID-EXPUNGE-Command-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If the server is capable of storing modification sequences for the selected mailbox, it MUST increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the UID EXPUNGE command. For each permanently removed message, the server MUST remember the incremented mod-sequence and corresponding UID. If at least one message got expunged and QRESYNC was enabled, the server MUST send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response.
+If the server is capable of storing modification sequences for the selected mailbox, it <span class="kw kw-must">MUST</span> increment the per-mailbox mod-sequence if at least one message was permanently removed due to the execution of the UID EXPUNGE command. For each permanently removed message, the server <span class="kw kw-must">MUST</span> remember the incremented mod-sequence and corresponding UID. If at least one message got expunged and QRESYNC was enabled, the server <span class="kw kw-must">MUST</span> send the updated per-mailbox modification sequence using the HIGHESTMODSEQ response code (see Section 3.1.2.1) in the tagged OK response.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4108,7 +4113,7 @@ VANISHED応答は、指定されたUIDがメールボックスから完全に削
     <div class="row" id="3-2-10--VANISHED-Response-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The VANISHED response has the same restrictions on when it can be sent as does the EXPUNGE response (see below). Once a client has issued &#34;ENABLE QRESYNC&#34; (and the server has positively responded to that command with the untagged ENABLED response containing QRESYNC), the server MUST use the VANISHED response without the EARLIER tag instead of the EXPUNGE response for all mailboxes that don&#39;t return NOMODSEQ when selected. The server continues using VANISHED in lieu of EXPUNGE for the duration of the connection. In particular, this affects the EXPUNGE <a href="./rfc3501.html">[RFC3501]</a> and UID EXPUNGE [UIDPLUS] commands, as well as messages expunged in other connections. Such a VANISHED response MUST NOT contain the EARLIER tag.
+The VANISHED response has the same restrictions on when it can be sent as does the EXPUNGE response (see below). Once a client has issued &#34;ENABLE QRESYNC&#34; (and the server has positively responded to that command with the untagged ENABLED response containing QRESYNC), the server <span class="kw kw-must">MUST</span> use the VANISHED response without the EARLIER tag instead of the EXPUNGE response for all mailboxes that don&#39;t return NOMODSEQ when selected. The server continues using VANISHED in lieu of EXPUNGE for the duration of the connection. In particular, this affects the EXPUNGE <a href="./rfc3501.html">[RFC3501]</a> and UID EXPUNGE [UIDPLUS] commands, as well as messages expunged in other connections. Such a VANISHED response <span class="kw kw-mustnot">MUST NOT</span> contain the EARLIER tag.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4132,12 +4137,12 @@ VANISHED応答には2つの形式があります。最初のフォームにはEA
     <div class="row" id="3-2-10--VANISHED-Response-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Because clients handle the two different forms of the VANISHED response differently, servers MUST NOT combine them. Messages are reported in VANISHED responses with or without the EARLIER tag, as appropriate to the cause, and, if necessary, two VANISHED responses are sent (one with EARLIER and one without).
+Because clients handle the two different forms of the VANISHED response differently, servers <span class="kw kw-mustnot">MUST NOT</span> combine them. Messages are reported in VANISHED responses with or without the EARLIER tag, as appropriate to the cause, and, if necessary, two VANISHED responses are sent (one with EARLIER and one without).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-クライアントはVANISHED応答の2つの異なる形式を異なる方法で処理するため、サーバーはそれらを組み合わせてはなりません（MUST NOT）。メッセージは、原因に応じて、EARLIERタグの有無にかかわらずVANISHED応答で報告され、必要に応じて、2つのVANISHED応答が送信されます（1つはEARLIERあり、もう1つはなし）。
+クライアントはVANISHED応答の2つの異なる形式を異なる方法で処理するため、サーバーはそれらを組み合わせてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。メッセージは、原因に応じて、EARLIERタグの有無にかかわらずVANISHED応答で報告され、必要に応じて、2つのVANISHED応答が送信されます（1つはEARLIERあり、もう1つはなし）。
         </p>
       </div>
     </div>
@@ -4180,12 +4185,12 @@ UIDのリスト
     <div class="row" id="3-2-10-1--VANISHED-EARLIER-Response-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The VANISHED (EARLIER) response is caused by a UID FETCH (VANISHED) or a SELECT/EXAMINE (QRESYNC) command. This response is sent if the UID set parameter to the UID FETCH (VANISHED) command includes UIDs of messages that are no longer in the mailbox. When the client sees a VANISHED EARLIER response, it MUST NOT decrement message sequence numbers for each successive message in the mailbox.
+The VANISHED (EARLIER) response is caused by a UID FETCH (VANISHED) or a SELECT/EXAMINE (QRESYNC) command. This response is sent if the UID set parameter to the UID FETCH (VANISHED) command includes UIDs of messages that are no longer in the mailbox. When the client sees a VANISHED EARLIER response, it <span class="kw kw-mustnot">MUST NOT</span> decrement message sequence numbers for each successive message in the mailbox.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-VANISHED（EARLIER）応答は、UID FETCH（VANISHED）またはSELECT/EXAMINE（QRESYNC）コマンドが原因で発生します。この応答は、UID FETCH（VANISHED）コマンドのUIDセットパラメータに、メールボックスに存在しなくなったメッセージのUIDが含まれている場合に送信されます。クライアントがVANISHED EARLIER応答を受け取った場合、メールボックス内の連続するメッセージごとにメッセージシーケンス番号をデクリメントしてはなりません（MUST NOT）。
+VANISHED（EARLIER）応答は、UID FETCH（VANISHED）またはSELECT/EXAMINE（QRESYNC）コマンドが原因で発生します。この応答は、UID FETCH（VANISHED）コマンドのUIDセットパラメータに、メールボックスに存在しなくなったメッセージのUIDが含まれている場合に送信されます。クライアントがVANISHED EARLIER応答を受け取った場合、メールボックス内の連続するメッセージごとにメッセージシーケンス番号をデクリメントしてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
@@ -4216,7 +4221,7 @@ Contents: list of UIDs
     <div class="row" id="3-2-10-2--VANISHED-Response-without-the-EARLIER-Tag-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once a client has issued &#34;ENABLE QRESYNC&#34; (and the server has positively responded to that command with the untagged ENABLED response containing QRESYNC), the server MUST use the VANISHED response without the EARLIER tag instead of the EXPUNGE response for all mailboxes that don&#39;t return NOMODSEQ when selected. The server continues using VANISHED in lieu of EXPUNGE for the duration of the connection. In particular, this affects the EXPUNGE <a href="./rfc3501.html">[RFC3501]</a> and UID EXPUNGE [UIDPLUS] commands, as well as messages expunged in other connections. Such a VANISHED response MUST NOT contain the EARLIER tag.
+Once a client has issued &#34;ENABLE QRESYNC&#34; (and the server has positively responded to that command with the untagged ENABLED response containing QRESYNC), the server <span class="kw kw-must">MUST</span> use the VANISHED response without the EARLIER tag instead of the EXPUNGE response for all mailboxes that don&#39;t return NOMODSEQ when selected. The server continues using VANISHED in lieu of EXPUNGE for the duration of the connection. In particular, this affects the EXPUNGE <a href="./rfc3501.html">[RFC3501]</a> and UID EXPUNGE [UIDPLUS] commands, as well as messages expunged in other connections. Such a VANISHED response <span class="kw kw-mustnot">MUST NOT</span> contain the EARLIER tag.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4240,19 +4245,19 @@ VANISHED（EARLIER）とは異なり、この応答はメールボックス内�
     <div class="row" id="3-2-10-2--VANISHED-Response-without-the-EARLIER-Tag-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A VANISHED response without the EARLIER tag MUST refer only to messages that are visible to the client in the current session at the time the VANISHED response is sent. That is, servers MUST NOT send UIDs for previously expunged messages or messages that were not announced to the client via EXISTS. This means that each UID listed in a VANISHED response results in the client decrementing the message count by one. This is required to prevent a possible race condition where new arrivals for which the UID is not yet known by the client are immediately expunged.
+A VANISHED response without the EARLIER tag <span class="kw kw-must">MUST</span> refer only to messages that are visible to the client in the current session at the time the VANISHED response is sent. That is, servers <span class="kw kw-mustnot">MUST NOT</span> send UIDs for previously expunged messages or messages that were not announced to the client via EXISTS. This means that each UID listed in a VANISHED response results in the client decrementing the message count by one. This is required to prevent a possible race condition where new arrivals for which the UID is not yet known by the client are immediately expunged.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-EARLIERタグのないVANISHED応答は、VANISHED応答の送信時に現在のセッションでクライアントに表示されるメッセージのみを参照する必要があります。つまり、サーバーは、以前に消去されたメッセージまたはEXISTSを介してクライアントにアナウンスされなかったメッセージのUIDを送信してはなりません（MUST NOT）。つまり、VANISHED応答にリストされている各UIDにより、クライアントはメッセージカウントを1つ減らします。これは、クライアントがUIDをまだ認識していない新しい到着がすぐに消去される可能性のある競合状態を防ぐために必要です。
+EARLIERタグのないVANISHED応答は、VANISHED応答の送信時に現在のセッションでクライアントに表示されるメッセージのみを参照する必要があります。つまり、サーバーは、以前に消去されたメッセージまたはEXISTSを介してクライアントにアナウンスされなかったメッセージのUIDを送信してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。つまり、VANISHED応答にリストされている各UIDにより、クライアントはメッセージカウントを1つ減らします。これは、クライアントがUIDをまだ認識していない新しい到着がすぐに消去される可能性のある競合状態を防ぐために必要です。
         </p>
       </div>
     </div>
     <div class="row" id="3-2-10-2--VANISHED-Response-without-the-EARLIER-Tag-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A VANISHED response MUST NOT be sent when no command is in progress, nor while responding to a FETCH, STORE, or SEARCH command. This rule is necessary to prevent a loss of synchronization of message sequence numbers between the client and server. A command is not &#34;in progress&#34; until the complete command has been received; in particular, a command is not &#34;in progress&#34; during the negotiation of command continuation.
+A VANISHED response <span class="kw kw-mustnot">MUST NOT</span> be sent when no command is in progress, nor while responding to a FETCH, STORE, or SEARCH command. This rule is necessary to prevent a loss of synchronization of message sequence numbers between the client and server. A command is not &#34;in progress&#34; until the complete command has been received; in particular, a command is not &#34;in progress&#34; during the negotiation of command continuation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4264,19 +4269,19 @@ A VANISHED response MUST NOT be sent when no command is in progress, nor while r
     <div class="row" id="3-2-10-2--VANISHED-Response-without-the-EARLIER-Tag-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note: UID FETCH, UID STORE, and UID SEARCH are different commands from FETCH, STORE, and SEARCH. A VANISHED response MAY be sent during a UID command. However, the VANISHED response MUST NOT be sent during a UID SEARCH command that contains message numbers in the search criteria.
+Note: UID FETCH, UID STORE, and UID SEARCH are different commands from FETCH, STORE, and SEARCH. A VANISHED response <span class="kw kw-may">MAY</span> be sent during a UID command. However, the VANISHED response <span class="kw kw-mustnot">MUST NOT</span> be sent during a UID SEARCH command that contains message numbers in the search criteria.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-注：UID FETCH、UID STORE、およびUID SEARCHは、FETCH、STORE、およびSEARCHとは異なるコマンドです。 UIDコマンドの実行中に、VANISHED応答が送信される場合があります。ただし、検索条件にメッセージ番号を含むUID SEARCHコマンドの実行中は、VANISHED応答を送信してはなりません（MUST NOT）。
+注：UID FETCH、UID STORE、およびUID SEARCHは、FETCH、STORE、およびSEARCHとは異なるコマンドです。 UIDコマンドの実行中に、VANISHED応答が送信される場合があります。ただし、検索条件にメッセージ番号を含むUID SEARCHコマンドの実行中は、VANISHED応答を送信してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-2-10-2--VANISHED-Response-without-the-EARLIER-Tag-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The update from the VANISHED response MUST be recorded by the client.
+The update from the VANISHED response <span class="kw kw-must">MUST</span> be recorded by the client.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4421,7 +4426,7 @@ However, any of these UIDs can easily be referenced by the VANISHED (EARLIER) re
     <div class="row" id="3-2-11--CLOSED-Response-Code-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The CLOSED response code has no parameters. A server implementing the extension defined in this document MUST return the CLOSED response code when the currently selected mailbox is closed implicitly using the SELECT/EXAMINE command on another mailbox. The CLOSED response code serves as a boundary between responses for the previously opened mailbox (which was closed) and the newly selected mailbox; all responses before the CLOSED response code relate to the mailbox that was closed, and all subsequent responses relate to the newly opened mailbox.
+The CLOSED response code has no parameters. A server implementing the extension defined in this document <span class="kw kw-must">MUST</span> return the CLOSED response code when the currently selected mailbox is closed implicitly using the SELECT/EXAMINE command on another mailbox. The CLOSED response code serves as a boundary between responses for the previously opened mailbox (which was closed) and the newly selected mailbox; all responses before the CLOSED response code relate to the mailbox that was closed, and all subsequent responses relate to the newly opened mailbox.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4697,7 +4702,7 @@ If the client provides the message sequence match data, this can heavily reduce 
     <div class="row" id="5-3--Additional-State-Required-on-the-Server-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Also, note that if the UIDVALIDITY of the mailbox changes or if the mailbox is deleted, then any state associated with expunged messages doesn&#39;t need to be preserved and SHOULD be deleted.
+Also, note that if the UIDVALIDITY of the mailbox changes or if the mailbox is deleted, then any state associated with expunged messages doesn&#39;t need to be preserved and <span class="kw kw-should">SHOULD</span> be deleted.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4733,19 +4738,19 @@ This section updates the description of optimized synchronization in Section 6.1
     <div class="row" id="6--Updated-Synchronization-Sequence-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An advanced disconnected mail client SHOULD use the QRESYNC extension when it is supported by the server and SHOULD use CONDSTORE if it is supported and QRESYNC is not. The client uses the value from the HIGHESTMODSEQ OK response code received on the mailbox opening to determine if it needs to resynchronize. Once the synchronization is complete, it MUST cache the received value (unless the mailbox UIDVALIDITY value has changed; see below). The client MUST update its copy of the HIGHESTMODSEQ value whenever the server sends a subsequent HIGHESTMODSEQ OK response code.
+An advanced disconnected mail client <span class="kw kw-should">SHOULD</span> use the QRESYNC extension when it is supported by the server and <span class="kw kw-should">SHOULD</span> use CONDSTORE if it is supported and QRESYNC is not. The client uses the value from the HIGHESTMODSEQ OK response code received on the mailbox opening to determine if it needs to resynchronize. Once the synchronization is complete, it <span class="kw kw-must">MUST</span> cache the received value (unless the mailbox UIDVALIDITY value has changed; see below). The client <span class="kw kw-must">MUST</span> update its copy of the HIGHESTMODSEQ value whenever the server sends a subsequent HIGHESTMODSEQ OK response code.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-高度な切断メールクライアントは、サーバーでサポートされている場合はQRESYNC拡張機能を使用する必要があり（SHOULD）、サポートされているがQRESYNCがサポートされていない場合はCONDSTOREを使用する必要があります（SHOULD）。クライアントは、メールボックスの開口部で受信したHIGHESTMODSEQ OK応答コードの値を使用して、再同期する必要があるかどうかを判断します。同期が完了すると、受信した値をキャッシュする必要があります（メールボックスのUIDVALIDITY値が変更されていない限り、以下を参照してください）。サーバーが後続のHIGHESTMODSEQ OK応答コードを送信するたびに、クライアントはHIGHESTMODSEQ値のコピーを更新する必要があります。
+高度な切断メールクライアントは、サーバーでサポートされている場合はQRESYNC拡張機能を使用する必要があり（<span class="kw kw-should">SHOULD</span>）、サポートされているがQRESYNCがサポートされていない場合はCONDSTOREを使用する必要があります（<span class="kw kw-should">SHOULD</span>）。クライアントは、メールボックスの開口部で受信したHIGHESTMODSEQ OK応答コードの値を使用して、再同期する必要があるかどうかを判断します。同期が完了すると、受信した値をキャッシュする必要があります（メールボックスのUIDVALIDITY値が変更されていない限り、以下を参照してください）。サーバーが後続のHIGHESTMODSEQ OK応答コードを送信するたびに、クライアントはHIGHESTMODSEQ値のコピーを更新する必要があります。
         </p>
       </div>
     </div>
     <div class="row" id="6--Updated-Synchronization-Sequence-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- After completing a full synchronization, the client MUST also take note of any unsolicited MODSEQ FETCH data items and HIGHESTMODSEQ response codes received from the server. Whenever the client receives a tagged response to a command, it checks the received unsolicited responses to calculate the new HIGHESTMODSEQ value. If the HIGHESTMODSEQ response code is received, the client MUST use it even if it has seen higher mod-sequences. Otherwise, the client calculates the highest value among all MODSEQ FETCH data items received since the last tagged response. If this value is bigger than the client&#39;s copy of the HIGHESTMODSEQ value, then the client MUST use this value as its new HIGHESTMODSEQ value.
+ After completing a full synchronization, the client <span class="kw kw-must">MUST</span> also take note of any unsolicited MODSEQ FETCH data items and HIGHESTMODSEQ response codes received from the server. Whenever the client receives a tagged response to a command, it checks the received unsolicited responses to calculate the new HIGHESTMODSEQ value. If the HIGHESTMODSEQ response code is received, the client <span class="kw kw-must">MUST</span> use it even if it has seen higher mod-sequences. Otherwise, the client calculates the highest value among all MODSEQ FETCH data items received since the last tagged response. If this value is bigger than the client&#39;s copy of the HIGHESTMODSEQ value, then the client <span class="kw kw-must">MUST</span> use this value as its new HIGHESTMODSEQ value.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4834,7 +4839,7 @@ SELECT/EXAMINEコマンドが成功した場合、クライアントは[IMAP-DIS
     <div class="row" id="6--Updated-Synchronization-Sequence-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If upon a successful SELECT/EXAMINE (QRESYNC) command the client receives a NOMODSEQ OK untagged response (instead of the HIGHESTMODSEQ response code), it MUST remove the last known HIGHESTMODSEQ value from its cache and follow the more general instructions in Section 3 of the [IMAP-DISC].
+If upon a successful SELECT/EXAMINE (QRESYNC) command the client receives a NOMODSEQ OK untagged response (instead of the HIGHESTMODSEQ response code), it <span class="kw kw-must">MUST</span> remove the last known HIGHESTMODSEQ value from its cache and follow the more general instructions in Section 3 of the [IMAP-DISC].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4894,7 +4899,7 @@ d) 「サーバーからクライアントへの同期」-同期が必要なメ�
     <div class="row" id="6--Updated-Synchronization-Sequence-p16">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-If the UIDVALIDITY value returned by the server differs, the client MUST:
+If the UIDVALIDITY value returned by the server differs, the client <span class="kw kw-must">MUST</span>:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5061,7 +5066,7 @@ Non-terminals referenced but not defined below are as defined by <a href="./rfc5
     <div class="row" id="7--Formal-Syntax-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Except as noted otherwise, all alphabetic characters are case-insensitive. The use of upper- or lower-case characters to define token strings is for editorial clarity only. Implementations MUST accept these strings in a case-insensitive fashion.
+Except as noted otherwise, all alphabetic characters are case-insensitive. The use of upper- or lower-case characters to define token strings is for editorial clarity only. Implementations <span class="kw kw-must">MUST</span> accept these strings in a case-insensitive fashion.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5903,12 +5908,12 @@ ENABLE QRESYNC CONDSTOREとENABLE CONDSTORE QRESYNCは同等であることを�
     <div class="row" id="Appendix-B--Changes-since-RFC-5162-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Changed the requirement to return VANISHED from SHOULD to MUST as per the mailing list discussion. The only exception is for mailboxes that return the NOMODSEQ response code when they are selected.
+Changed the requirement to return VANISHED from <span class="kw kw-should">SHOULD</span> to <span class="kw kw-must">MUST</span> as per the mailing list discussion. The only exception is for mailboxes that return the NOMODSEQ response code when they are selected.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-メーリングリストのディスカッションに従って、VANISHEDをSHOULDからMUSTに戻す要件を変更しました。唯一の例外は、メールボックスが選択されたときにNOMODSEQ応答コードを返すメールボックスです。
+メーリングリストのディスカッションに従って、VANISHEDを<span class="kw kw-should">SHOULD</span>から<span class="kw kw-must">MUST</span>に戻す要件を変更しました。唯一の例外は、メールボックスが選択されたときにNOMODSEQ応答コードを返すメールボックスです。
         </p>
       </div>
     </div>
@@ -5956,7 +5961,7 @@ Clarified some text and made some requirements normative. Also, corrected a coup
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-一部のテキストを明確にし、いくつかの要件を規範化しました。また、いくつかのSHOULDを必須に修正しました。
+一部のテキストを明確にし、いくつかの要件を規範化しました。また、いくつかの<span class="kw kw-should">SHOULD</span>を必須に修正しました。
         </p>
       </div>
     </div>

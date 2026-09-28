@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、P2P（ピアツーピア）でストリーミング配信を行うための「PPSPP (Peer-to-Peer Streaming Peer Protocol)」の仕様を規定しています。コンテンツをチャンク（断片）に分割し、複数のピアから効率的に並列ダウンロードするためのシグナリング、メッセージ整合性の確認（Merkle Tree等）、およびNAT越えの手順を定義し、大規模なライブ・オンデマンド配信をスケーラブルに実現します。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 7574 - ピアツーピア・ストリーミング・ピアプロトコル（PPSPP）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -496,12 +501,12 @@ PPSPPの設計は、BitTorrent [BITTORRENT]をコンテンツのストリーミ�
     <div class="row" id="1-2--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -988,19 +993,19 @@ To leave a swarm in a graceful way, Peer A sends a specific HANDSHAKE message to
     <div class="row" id="3--Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-No error codes or responses are used in the protocol; absence of any response indicates an error. Invalid messages are discarded, and further communication with the peer SHOULD be stopped. The rationale is that it is sufficient to classify peers as either good or bad and only use the good ones. A good peer is a peer that responds with chunks; a peer that does not respond, or does not respond in time is classified as bad. The idea is that, in PPSPP, the content is available from multiple sources (unlike HTTP), so a peer should not invest too much effort in trying to obtain it from a particular source. This classification in good or bad allows a peer to deal with slow, crashed, and (silent) malicious peers.
+No error codes or responses are used in the protocol; absence of any response indicates an error. Invalid messages are discarded, and further communication with the peer <span class="kw kw-should">SHOULD</span> be stopped. The rationale is that it is sufficient to classify peers as either good or bad and only use the good ones. A good peer is a peer that responds with chunks; a peer that does not respond, or does not respond in time is classified as bad. The idea is that, in PPSPP, the content is available from multiple sources (unlike HTTP), so a peer should not invest too much effort in trying to obtain it from a particular source. This classification in good or bad allows a peer to deal with slow, crashed, and (silent) malicious peers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-プロトコルではエラーコードや応答は使用されません。応答がない場合はエラーを示します。無効なメッセージは破棄され、ピアとの以降の通信は停止する必要があります（SHOULD）。理論的根拠は、ピアを良好または不良のいずれかに分類し、良好なもののみを使用することで十分であるということです。良いピアとは、チャンクで応答するピアです。応答しない、または時間内に応答しないピアは、不良として分類されます。 PPSPPでは、コンテンツは（HTTPとは異なり）複数のソースから利用できるため、ピアは特定のソースからコンテンツを取得しようとすることに多大な労力を費やすべきではありません。この良いか悪いかの分類により、ピアは低速で、クラッシュした、（サイレント）悪意のあるピアに対処できます。
+プロトコルではエラーコードや応答は使用されません。応答がない場合はエラーを示します。無効なメッセージは破棄され、ピアとの以降の通信は停止する必要があります（<span class="kw kw-should">SHOULD</span>）。理論的根拠は、ピアを良好または不良のいずれかに分類し、良好なもののみを使用することで十分であるということです。良いピアとは、チャンクで応答するピアです。応答しない、または時間内に応答しないピアは、不良として分類されます。 PPSPPでは、コンテンツは（HTTPとは異なり）複数のソースから利用できるため、ピアは特定のソースからコンテンツを取得しようとすることに多大な労力を費やすべきではありません。この良いか悪いかの分類により、ピアは低速で、クラッシュした、（サイレント）悪意のあるピアに対処できます。
         </p>
       </div>
     </div>
     <div class="row" id="3--Messages-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Multiple messages MUST be multiplexed into a single datagram for transmission. Messages in a single datagram MUST be processed in the strict order in which they appear in the datagram. If an invalid message is found in a datagram, the remaining messages MUST be discarded.
+Multiple messages <span class="kw kw-must">MUST</span> be multiplexed into a single datagram for transmission. Messages in a single datagram <span class="kw kw-must">MUST</span> be processed in the strict order in which they appear in the datagram. If an invalid message is found in a datagram, the remaining messages <span class="kw kw-must">MUST</span> be discarded.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1132,7 +1137,7 @@ This document assumes the swarm metadata is obtained from a trusted source. In a
     <div class="row" id="3-1--HANDSHAKE-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The payload of the HANDSHAKE message contains a sequence of protocol options. The protocol options encode the swarm metadata just described to enable an end-to-end check to see whether the peers are in the right swarm. Additionally, the options encode a number of per-peer configuration parameters. The complete set of protocol options are specified in Section 7. The HANDSHAKE message also contains a channel ID for multiplexing communication and security (see Sections 3.11 and 12.1). A HANDSHAKE message MUST always be the first message in a datagram.
+The payload of the HANDSHAKE message contains a sequence of protocol options. The protocol options encode the swarm metadata just described to enable an end-to-end check to see whether the peers are in the right swarm. Additionally, the options encode a number of per-peer configuration parameters. The complete set of protocol options are specified in Section 7. The HANDSHAKE message also contains a channel ID for multiplexing communication and security (see Sections 3.11 and 12.1). A HANDSHAKE message <span class="kw kw-must">MUST</span> always be the first message in a datagram.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1168,7 +1173,7 @@ Swarm SでピアPeer Pが別のピアPeer Qと通信を開始するためのハ�
     <div class="row" id="3-1-1--Handshake-Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-1. The first datagram the initiating Peer P sends to Peer Q MUST start with a HANDSHAKE message. This HANDSHAKE message MUST contain:
+1. The first datagram the initiating Peer P sends to Peer Q <span class="kw kw-must">MUST</span> start with a HANDSHAKE message. This HANDSHAKE message <span class="kw kw-must">MUST</span> contain:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1192,7 +1197,7 @@ Swarm SでピアPeer Pが別のピアPeer Qと通信を開始するためのハ�
     <div class="row" id="3-1-1--Handshake-Procedure-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7 bullet">
-<span class="bullet-mark">*</span> The metadata of Swarm S, encoded as protocol options, as specified in Section 7. In particular, the initiating Peer P MUST include the swarm ID.
+<span class="bullet-mark">*</span> The metadata of Swarm S, encoded as protocol options, as specified in Section 7. In particular, the initiating Peer P <span class="kw kw-must">MUST</span> include the swarm ID.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1216,7 +1221,7 @@ Swarm SでピアPeer Pが別のピアPeer Qと通信を開始するためのハ�
     <div class="row" id="3-1-1--Handshake-Procedure-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-This first datagram MUST be prefixed with the (destination) channel ID 0; see Section 3.11. Hence, the datagram contains two channel IDs: the destination channel ID prefixed to the datagram and the channel ID chanP included in the HANDSHAKE message inside the datagram. This datagram MAY also contain some minor additional payload, e.g., HAVE messages to indicate Peer P&#39;s current progress, but it MUST NOT include any heavy payload (defined in Section 1.3), such as a DATA message. Allowing minor
+This first datagram <span class="kw kw-must">MUST</span> be prefixed with the (destination) channel ID 0; see Section 3.11. Hence, the datagram contains two channel IDs: the destination channel ID prefixed to the datagram and the channel ID chanP included in the HANDSHAKE message inside the datagram. This datagram <span class="kw kw-may">MAY</span> also contain some minor additional payload, e.g., HAVE messages to indicate Peer P&#39;s current progress, but it <span class="kw kw-mustnot">MUST NOT</span> include any heavy payload (defined in Section 1.3), such as a DATA message. Allowing minor
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1240,7 +1245,7 @@ payload minimizes the number of initialization round trips, thus improving time-
     <div class="row" id="3-1-1--Handshake-Procedure-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. The receiving Peer Q checks the HANDSHAKE message from Peer P. If any check by Peer Q fails, or if Peers P and Q are not in the same swarm, Peer Q MUST NOT send a HANDSHAKE (or any other) message back, as the message from Peer P may have been spoofed (see Section 12.1). Otherwise, if Peer Q is interested in communicating with Peer P, Peer Q MUST send a datagram to Peer P that starts with a HANDSHAKE message. This reply HANDSHAKE MUST contain:
+2. The receiving Peer Q checks the HANDSHAKE message from Peer P. If any check by Peer Q fails, or if Peers P and Q are not in the same swarm, Peer Q <span class="kw kw-mustnot">MUST NOT</span> send a HANDSHAKE (or any other) message back, as the message from Peer P may have been spoofed (see Section 12.1). Otherwise, if Peer Q is interested in communicating with Peer P, Peer Q <span class="kw kw-must">MUST</span> send a datagram to Peer P that starts with a HANDSHAKE message. This reply HANDSHAKE <span class="kw kw-must">MUST</span> contain:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1264,7 +1269,7 @@ payload minimizes the number of initialization round trips, thus improving time-
     <div class="row" id="3-1-1--Handshake-Procedure-p10">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7 bullet">
-<span class="bullet-mark">*</span> The metadata of Swarm S, encoded as protocol options, as specified in Section 7. In particular, the responding Peer Q MAY include the swarm ID.
+<span class="bullet-mark">*</span> The metadata of Swarm S, encoded as protocol options, as specified in Section 7. In particular, the responding Peer Q <span class="kw kw-may">MAY</span> include the swarm ID.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1288,31 +1293,31 @@ payload minimizes the number of initialization round trips, thus improving time-
     <div class="row" id="3-1-1--Handshake-Procedure-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-This reply datagram MUST be prefixed with the channel ID chanP sent by Peer P in the first HANDSHAKE message (see Section 3.11). This reply datagram MAY also contain some minor additional payload, e.g., HAVE messages to indicate Peer Q&#39;s current progress, or REQUEST messages (see Section 3.7), but it MUST NOT include any heavy payload.
+This reply datagram <span class="kw kw-must">MUST</span> be prefixed with the channel ID chanP sent by Peer P in the first HANDSHAKE message (see Section 3.11). This reply datagram <span class="kw kw-may">MAY</span> also contain some minor additional payload, e.g., HAVE messages to indicate Peer Q&#39;s current progress, or REQUEST messages (see Section 3.7), but it <span class="kw kw-mustnot">MUST NOT</span> include any heavy payload.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-この応答データグラムには、最初のHANDSHAKEメッセージでピアPから送信されたチャネルID chanPをプレフィックスとして付ける必要があります（セクション3.11を参照）。この応答データグラムには、ピアQの現在の進行状況を示すHAVEメッセージ、またはREQUESTメッセージ（セクション3.7を参照）などのマイナーな追加ペイロードも含まれる場合がありますが、重いペイロードを含めてはなりません（MUST NOT）。
+この応答データグラムには、最初のHANDSHAKEメッセージでピアPから送信されたチャネルID chanPをプレフィックスとして付ける必要があります（セクション3.11を参照）。この応答データグラムには、ピアQの現在の進行状況を示すHAVEメッセージ、またはREQUESTメッセージ（セクション3.7を参照）などのマイナーな追加ペイロードも含まれる場合がありますが、重いペイロードを含めてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-1--Handshake-Procedure-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. The initiating Peer P checks the reply datagram from Peer Q. If the reply datagram is not prefixed with (destination) channel ID chanP, Peer P MUST discard the datagram. Peer P SHOULD continue to process datagrams from Peer Q that do meet this requirement. This check prevents interference by spoofing, see Section 12.1. If Peer P&#39;s channel ID is echoed correctly, the initiator Peer P knows that the addressed Peer Q really responds.
+3. The initiating Peer P checks the reply datagram from Peer Q. If the reply datagram is not prefixed with (destination) channel ID chanP, Peer P <span class="kw kw-must">MUST</span> discard the datagram. Peer P <span class="kw kw-should">SHOULD</span> continue to process datagrams from Peer Q that do meet this requirement. This check prevents interference by spoofing, see Section 12.1. If Peer P&#39;s channel ID is echoed correctly, the initiator Peer P knows that the addressed Peer Q really responds.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-3. 開始ピアPは、ピアQからの応答データグラムをチェックします。応答データグラムの前に（宛先）チャネルID chanPが付いていない場合、ピアPはデータグラムを破棄する必要があります。ピアPは、この要件を満たしているピアQからのデータグラムを引き続き処理する必要があります（SHOULD）。このチェックは、なりすましによる干渉を防ぎます。セクション12.1を参照してください。ピアPのチャネルIDが正しくエコーされる場合、イニシエーターピアPは、アドレス指定されたピアQが実際に応答することを認識しています。
+3. 開始ピアPは、ピアQからの応答データグラムをチェックします。応答データグラムの前に（宛先）チャネルID chanPが付いていない場合、ピアPはデータグラムを破棄する必要があります。ピアPは、この要件を満たしているピアQからのデータグラムを引き続き処理する必要があります（<span class="kw kw-should">SHOULD</span>）。このチェックは、なりすましによる干渉を防ぎます。セクション12.1を参照してください。ピアPのチャネルIDが正しくエコーされる場合、イニシエーターピアPは、アドレス指定されたピアQが実際に応答することを認識しています。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-1--Handshake-Procedure-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-4. Next, Peer P checks the HANDSHAKE message in the datagram from Peer Q. If any check by Peer P fails, or Peer P is no longer interested in communicating with Peer Q, Peer P MAY send a HANDSHAKE message to inform Peer Q it will cease communication. This closing HANDSHAKE message MUST contain an all zeros channel ID and a list of protocol options. The list MUST either be empty or contain the maximum version number Peer P supports, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1.
+4. Next, Peer P checks the HANDSHAKE message in the datagram from Peer Q. If any check by Peer P fails, or Peer P is no longer interested in communicating with Peer Q, Peer P <span class="kw kw-may">MAY</span> send a HANDSHAKE message to inform Peer Q it will cease communication. This closing HANDSHAKE message <span class="kw kw-must">MUST</span> contain an all zeros channel ID and a list of protocol options. The list <span class="kw kw-must">MUST</span> either be empty or contain the maximum version number Peer P supports, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1324,7 +1329,7 @@ This reply datagram MUST be prefixed with the channel ID chanP sent by Peer P in
     <div class="row" id="3-1-1--Handshake-Procedure-p15">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-The datagram containing this closing HANDSHAKE message MUST be prefixed with the (destination) channel ID chanQ. Peer P MAY also simply cease communication.
+The datagram containing this closing HANDSHAKE message <span class="kw kw-must">MUST</span> be prefixed with the (destination) channel ID chanQ. Peer P <span class="kw kw-may">MAY</span> also simply cease communication.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1336,48 +1341,48 @@ The datagram containing this closing HANDSHAKE message MUST be prefixed with the
     <div class="row" id="3-1-1--Handshake-Procedure-p16">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-5. If the addressed peer, Peer Q, does not respond to initiating Peer P&#39;s first datagram, Peer P MAY resend that datagram until Peer Q is considered dead, according to the rules specified in Section 3.12.
+5. If the addressed peer, Peer Q, does not respond to initiating Peer P&#39;s first datagram, Peer P <span class="kw kw-may">MAY</span> resend that datagram until Peer Q is considered dead, according to the rules specified in Section 3.12.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-5. アドレス指定されたピア、ピアQがピアPの最初のデータグラムの開始に応答しない場合、ピアPは、セクション3.12で指定されたルールに従って、ピアQがデッドと見なされるまでそのデータグラムを再送信できます（MAY）。
+5. アドレス指定されたピア、ピアQがピアPの最初のデータグラムの開始に応答しない場合、ピアPは、セクション3.12で指定されたルールに従って、ピアQがデッドと見なされるまでそのデータグラムを再送信できます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-1--Handshake-Procedure-p17">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-6. If the reply datagram by Peer Q does pass the checks by Peer P, and Peer P wants to continue interacting with Peer Q, Peer P can now send REQUEST, PEX_REQ, and other messages to Peer Q. Datagrams carrying these messages MUST be prefixed with the channel ID chanQ sent by Peer Q. More specifically, because Peer P knows that Peer Q really responds, Peer P MAY start sending Peer Q messages with heavy payload. That means that Peer P MAY start responding to any REQUEST messages that Peer Q may have sent in this first reply datagram with DATA messages. Hence, transfer of chunks can start soon in PPSPP.
+6. If the reply datagram by Peer Q does pass the checks by Peer P, and Peer P wants to continue interacting with Peer Q, Peer P can now send REQUEST, PEX_REQ, and other messages to Peer Q. Datagrams carrying these messages <span class="kw kw-must">MUST</span> be prefixed with the channel ID chanQ sent by Peer Q. More specifically, because Peer P knows that Peer Q really responds, Peer P <span class="kw kw-may">MAY</span> start sending Peer Q messages with heavy payload. That means that Peer P <span class="kw kw-may">MAY</span> start responding to any REQUEST messages that Peer Q may have sent in this first reply datagram with DATA messages. Hence, transfer of chunks can start soon in PPSPP.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-6. ピアQによる応答データグラムがピアPによるチェックに合格し、ピアPがピアQとの対話を継続したい場合、ピアPはREQUEST、PEX_REQ、およびその他のメッセージをピアQに送信できます。これらのメッセージを運ぶデータグラムの前により具体的には、Peer PはPeer Qが実際に応答することを知っているので、Peer Pは重いペイロードのあるPeer Qメッセージの送信を開始できます（MAY）。これは、ピアPが、ピアQがDATAメッセージを含むこの最初の応答データグラムで送信した可能性のあるすべてのREQUESTメッセージに応答し始める可能性があることを意味します。したがって、PPPSPではチャンクの転送がすぐに開始されます。
+6. ピアQによる応答データグラムがピアPによるチェックに合格し、ピアPがピアQとの対話を継続したい場合、ピアPはREQUEST、PEX_REQ、およびその他のメッセージをピアQに送信できます。これらのメッセージを運ぶデータグラムの前により具体的には、Peer PはPeer Qが実際に応答することを知っているので、Peer Pは重いペイロードのあるPeer Qメッセージの送信を開始できます（<span class="kw kw-may">MAY</span>）。これは、ピアPが、ピアQがDATAメッセージを含むこの最初の応答データグラムで送信した可能性のあるすべてのREQUESTメッセージに応答し始める可能性があることを意味します。したがって、PPPSPではチャンクの転送がすぐに開始されます。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-1--Handshake-Procedure-p18">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-7. If Peer Q receives any datagram (apparently) from Peer P that does not contain channel ID chanQ, Peer Q MUST discard the datagram but SHOULD continue to process datagrams from Peer P that do meet this requirement. Once Peer Q receives a datagram from Peer P that does contain the channel ID chanQ, Peer Q knows that Peer P really received its reply datagram, and the three-way handshake and channel establishment is complete. Peer Q MAY now also start sending messages with heavy payload to Peer P.
+7. If Peer Q receives any datagram (apparently) from Peer P that does not contain channel ID chanQ, Peer Q <span class="kw kw-must">MUST</span> discard the datagram but <span class="kw kw-should">SHOULD</span> continue to process datagrams from Peer P that do meet this requirement. Once Peer Q receives a datagram from Peer P that does contain the channel ID chanQ, Peer Q knows that Peer P really received its reply datagram, and the three-way handshake and channel establishment is complete. Peer Q <span class="kw kw-may">MAY</span> now also start sending messages with heavy payload to Peer P.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-7. ピアQがチャネルID chanQを含まないデータグラムをピアPから（明らかに）受信した場合、ピアQはデータグラムを破棄する必要がありますが、この要件を満たすピアPからのデータグラムの処理を続行する必要があります（SHOULD）。ピアQがチャネルID chanQを含むデータグラムをピアPから受信すると、ピアQはピアPが実際に応答データグラムを受信したことを認識し、3ウェイハンドシェイクとチャネルの確立が完了します。ピアQは、ペイロードが重いメッセージをピアPに送信することもできるようになりました。
+7. ピアQがチャネルID chanQを含まないデータグラムをピアPから（明らかに）受信した場合、ピアQはデータグラムを破棄する必要がありますが、この要件を満たすピアPからのデータグラムの処理を続行する必要があります（<span class="kw kw-should">SHOULD</span>）。ピアQがチャネルID chanQを含むデータグラムをピアPから受信すると、ピアQはピアPが実際に応答データグラムを受信したことを認識し、3ウェイハンドシェイクとチャネルの確立が完了します。ピアQは、ペイロードが重いメッセージをピアPに送信することもできるようになりました。
         </p>
       </div>
     </div>
     <div class="row" id="3-1-1--Handshake-Procedure-p19">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-8. If Peer P decides it no longer wants to communicate with Peer Q, or vice versa, the peer SHOULD send a closing HANDSHAKE message to the other, as described above.
+8. If Peer P decides it no longer wants to communicate with Peer Q, or vice versa, the peer <span class="kw kw-should">SHOULD</span> send a closing HANDSHAKE message to the other, as described above.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-8. ピアPがピアQとの通信をもう必要としないと決定した場合、またはその逆の場合、ピアは、上記のように、クローズHANDSHAKEメッセージを他方に送信する必要があります（SHOULD）。
+8. ピアPがピアQとの通信をもう必要としないと決定した場合、またはその逆の場合、ピアは、上記のように、クローズHANDSHAKEメッセージを他方に送信する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1408,7 +1413,7 @@ HAVEメッセージは、ピアがダウンロードできるチャンクを伝�
     <div class="row" id="3-2--HAVE-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- In particular, whenever a receiving Peer P has successfully checked the integrity of a chunk, or interval of chunks, it MUST send a HAVE message to all peers Q1..Qn it wants to allow to download those chunks. A policy in Peer P determines when the HAVE is sent. Peer P may send it directly, or Peer P may wait either until it has other data to send to Peer Qi or until it has received and checked multiple chunks. The policy will depend on how urgent it is to distribute this information to the other peers. This urgency is generally determined in turn by the chunk picking policy (see Section 9.1). In general, the HAVE messages can be piggybacked onto other messages. Peers that do not receive HAVE messages are effectively prevented from downloading the newly available chunks; hence, the HAVE message can be used as a method of choking.
+ In particular, whenever a receiving Peer P has successfully checked the integrity of a chunk, or interval of chunks, it <span class="kw kw-must">MUST</span> send a HAVE message to all peers Q1..Qn it wants to allow to download those chunks. A policy in Peer P determines when the HAVE is sent. Peer P may send it directly, or Peer P may wait either until it has other data to send to Peer Qi or until it has received and checked multiple chunks. The policy will depend on how urgent it is to distribute this information to the other peers. This urgency is generally determined in turn by the chunk picking policy (see Section 9.1). In general, the HAVE messages can be piggybacked onto other messages. Peers that do not receive HAVE messages are effectively prevented from downloading the newly available chunks; hence, the HAVE message can be used as a method of choking.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1420,12 +1425,12 @@ HAVEメッセージは、ピアがダウンロードできるチャンクを伝�
     <div class="row" id="3-2--HAVE-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The HAVE message MUST contain the chunk specification of the received and verified chunks. A receiving peer MUST NOT send a HAVE message to peers for which the handshake procedure is still incomplete, see Section 12.1. A peer SHOULD NOT send a HAVE message to peers that have the complete content already (e.g., in video-on-demand scenarios).
+The HAVE message <span class="kw kw-must">MUST</span> contain the chunk specification of the received and verified chunks. A receiving peer <span class="kw kw-mustnot">MUST NOT</span> send a HAVE message to peers for which the handshake procedure is still incomplete, see Section 12.1. A peer <span class="kw kw-shouldnot">SHOULD NOT</span> send a HAVE message to peers that have the complete content already (e.g., in video-on-demand scenarios).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-HAVEメッセージには、受信および検証されたチャンクのチャンク仕様が含まれている必要があります。受信側のピアは、ハンドシェイク手順がまだ完了していないピアにHAVEメッセージを送信してはなりません（セクション12.1を参照）。ピアは、完全なコンテンツをすでに持っているピアにHAVEメッセージを送信してはなりません（SHOULD NOT）（たとえば、ビデオオンデマンドシナリオの場合）。
+HAVEメッセージには、受信および検証されたチャンクのチャンク仕様が含まれている必要があります。受信側のピアは、ハンドシェイク手順がまだ完了していないピアにHAVEメッセージを送信してはなりません（セクション12.1を参照）。ピアは、完全なコンテンツをすでに持っているピアにHAVEメッセージを送信してはなりません（<span class="kw kw-shouldnot">SHOULD NOT</span>）（たとえば、ビデオオンデマンドシナリオの場合）。
         </p>
       </div>
     </div>
@@ -1444,12 +1449,12 @@ HAVEメッセージには、受信および検証されたチャンクのチャ�
     <div class="row" id="3-3--DATA-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The DATA message is used to transfer chunks of content. The DATA message MUST contain the chunk ID of the chunk and chunk itself. A peer MAY send the DATA messages for multiple chunks in the same datagram. The DATA message MAY contain additional information if needed by the specific congestion control mechanism used. At present, PPSPP uses LEDBAT <a href="./rfc6817.html">[RFC6817]</a> for congestion control, which requires the current system time to be sent along with the DATA message, so the current system time MUST be included.
+The DATA message is used to transfer chunks of content. The DATA message <span class="kw kw-must">MUST</span> contain the chunk ID of the chunk and chunk itself. A peer <span class="kw kw-may">MAY</span> send the DATA messages for multiple chunks in the same datagram. The DATA message <span class="kw kw-may">MAY</span> contain additional information if needed by the specific congestion control mechanism used. At present, PPSPP uses LEDBAT <a href="./rfc6817.html">[RFC6817]</a> for congestion control, which requires the current system time to be sent along with the DATA message, so the current system time <span class="kw kw-must">MUST</span> be included.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-DATAメッセージは、コンテンツのチャンクを転送するために使用されます。 DATAメッセージには、チャンクのチャンクIDとチャンク自体が含まれている必要があります。ピアは、同じデータグラム内の複数のチャンクのDATAメッセージを送信できます（MAY）。使用される特定の輻輳制御メカニズムで必要な場合、DATAメッセージに追加情報が含まれる場合があります。現在、PPSPPは輻輳制御にLEDBAT <a href="./rfc6817.html">[RFC6817]</a>を使用しており、現在のシステム時刻をDATAメッセージと共に送信する必要があるため、現在のシステム時刻を含める必要があります。
+DATAメッセージは、コンテンツのチャンクを転送するために使用されます。 DATAメッセージには、チャンクのチャンクIDとチャンク自体が含まれている必要があります。ピアは、同じデータグラム内の複数のチャンクのDATAメッセージを送信できます（<span class="kw kw-may">MAY</span>）。使用される特定の輻輳制御メカニズムで必要な場合、DATAメッセージに追加情報が含まれる場合があります。現在、PPSPPは輻輳制御にLEDBAT <a href="./rfc6817.html">[RFC6817]</a>を使用しており、現在のシステム時刻をDATAメッセージと共に送信する必要があるため、現在のシステム時刻を含める必要があります。
         </p>
       </div>
     </div>
@@ -1468,7 +1473,7 @@ DATAメッセージは、コンテンツのチャンクを転送するために�
     <div class="row" id="3-4--ACK-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ACK messages MUST be sent to acknowledge received chunks if PPSPP is run over an unreliable transport protocol. ACK messages MAY be sent if a reliable transport protocol is used. In the former case, a receiving peer that has successfully checked the integrity of a chunk, or interval of chunks C, MUST send an ACK message containing a chunk specification for C. As LEDBAT is used, an ACK message MUST contain the one-way delay, computed from the peer&#39;s current system time received in the DATA message. A peer MAY delay sending ACK messages as defined in the LEDBAT specification <a href="./rfc6817.html">[RFC6817]</a>.
+ACK messages <span class="kw kw-must">MUST</span> be sent to acknowledge received chunks if PPSPP is run over an unreliable transport protocol. ACK messages <span class="kw kw-may">MAY</span> be sent if a reliable transport protocol is used. In the former case, a receiving peer that has successfully checked the integrity of a chunk, or interval of chunks C, <span class="kw kw-must">MUST</span> send an ACK message containing a chunk specification for C. As LEDBAT is used, an ACK message <span class="kw kw-must">MUST</span> contain the one-way delay, computed from the peer&#39;s current system time received in the DATA message. A peer <span class="kw kw-may">MAY</span> delay sending ACK messages as defined in the LEDBAT specification <a href="./rfc6817.html">[RFC6817]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1492,7 +1497,7 @@ PPSPPが信頼できないトランスポートプロトコルで実行されて
     <div class="row" id="3-5--INTEGRITY-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The INTEGRITY message carries information required by the receiver to verify the integrity of a chunk. Its payload depends on the content integrity protection scheme used. When the Merkle Hash Tree scheme is used, an INTEGRITY message MUST contain a cryptographic hash of a subtree of the Merkle hash tree and the chunk specification that identifies the subtree.
+The INTEGRITY message carries information required by the receiver to verify the integrity of a chunk. Its payload depends on the content integrity protection scheme used. When the Merkle Hash Tree scheme is used, an INTEGRITY message <span class="kw kw-must">MUST</span> contain a cryptographic hash of a subtree of the Merkle hash tree and the chunk specification that identifies the subtree.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1564,19 +1569,19 @@ While bulk download protocols normally do explicit requests for certain ranges o
     <div class="row" id="3-7--REQUEST-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The REQUEST message is used to request one or more chunks from another peer. A REQUEST message MUST contain the specification of the chunks the requester wants to download. A peer receiving a REQUEST message MAY send out the requested chunks (by means of DATA messages). When Peer Q receives multiple REQUESTs from the same Peer P, Peer Q SHOULD process the REQUESTs in the order received. Multiple REQUEST messages MAY be sent in one datagram, for example, when a peer wants to request several rare chunks at once.
+The REQUEST message is used to request one or more chunks from another peer. A REQUEST message <span class="kw kw-must">MUST</span> contain the specification of the chunks the requester wants to download. A peer receiving a REQUEST message <span class="kw kw-may">MAY</span> send out the requested chunks (by means of DATA messages). When Peer Q receives multiple REQUESTs from the same Peer P, Peer Q <span class="kw kw-should">SHOULD</span> process the REQUESTs in the order received. Multiple REQUEST messages <span class="kw kw-may">MAY</span> be sent in one datagram, for example, when a peer wants to request several rare chunks at once.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-REQUESTメッセージは、別のピアに1つ以上のチャンクを要求するために使用されます。 REQUESTメッセージには、リクエスターがダウンロードしたいチャンクの仕様が含まれている必要があります。 REQUESTメッセージを受信するピアは、（DATAメッセージを使用して）要求されたチャンクを送信できます（MAY）。ピアQが同じピアPから複数の要求を受信すると、ピアQは受信した順序で要求を処理する必要があります（SHOULD）。たとえば、ピアがいくつかのまれなチャンクを一度に要求したい場合など、複数のREQUESTメッセージを1つのデータグラムで送信できます。
+REQUESTメッセージは、別のピアに1つ以上のチャンクを要求するために使用されます。 REQUESTメッセージには、リクエスターがダウンロードしたいチャンクの仕様が含まれている必要があります。 REQUESTメッセージを受信するピアは、（DATAメッセージを使用して）要求されたチャンクを送信できます（<span class="kw kw-may">MAY</span>）。ピアQが同じピアPから複数の要求を受信すると、ピアQは受信した順序で要求を処理する必要があります（<span class="kw kw-should">SHOULD</span>）。たとえば、ピアがいくつかのまれなチャンクを一度に要求したい場合など、複数のREQUESTメッセージを1つのデータグラムで送信できます。
         </p>
       </div>
     </div>
     <div class="row" id="3-7--REQUEST-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When live streaming via a push model, a peer receiving REQUESTs also MAY send some other chunks in case it runs out of requests or for some other reason. In that case, the only purpose of REQUEST messages is to provide hints and coordinate peers to avoid unnecessary data retransmission.
+When live streaming via a push model, a peer receiving REQUESTs also <span class="kw kw-may">MAY</span> send some other chunks in case it runs out of requests or for some other reason. In that case, the only purpose of REQUEST messages is to provide hints and coordinate peers to avoid unnecessary data retransmission.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1600,12 +1605,12 @@ When live streaming via a push model, a peer receiving REQUESTs also MAY send so
     <div class="row" id="3-8--CANCEL-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- When downloading on-demand or live streaming content, a peer can request urgent data from multiple peers to increase the probability of it being delivered on time. In particular, when the specific chunk picking algorithm (see Section 9.1), detects that a request for urgent data might not be served on time, a request for the same data can be sent to a different peer. When a Peer P decides to request urgent data from a Peer Q, Peer P SHOULD send a CANCEL message to all the peers to which the data has been previously requested. The CANCEL message contains the specification of the chunks Peer P no longer wants to request. In addition, when Peer Q receives a HAVE message for the urgent data from Peer P, Peer Q MUST also cancel the previous REQUEST(s) from Peer P. In other words, the HAVE message acts as an implicit CANCEL.
+ When downloading on-demand or live streaming content, a peer can request urgent data from multiple peers to increase the probability of it being delivered on time. In particular, when the specific chunk picking algorithm (see Section 9.1), detects that a request for urgent data might not be served on time, a request for the same data can be sent to a different peer. When a Peer P decides to request urgent data from a Peer Q, Peer P <span class="kw kw-should">SHOULD</span> send a CANCEL message to all the peers to which the data has been previously requested. The CANCEL message contains the specification of the chunks Peer P no longer wants to request. In addition, when Peer Q receives a HAVE message for the urgent data from Peer P, Peer Q <span class="kw kw-must">MUST</span> also cancel the previous REQUEST(s) from Peer P. In other words, the HAVE message acts as an implicit CANCEL.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-オンデマンドまたはライブストリーミングコンテンツをダウンロードするとき、ピアは複数のピアに緊急データを要求して、時間どおりに配信される確率を高めることができます。特に、特定のチャンクピッキングアルゴリズム（セクション9.1を参照）が、緊急データの要求が時間どおりに処理されない可能性があることを検出すると、同じデータの要求を別のピアに送信できます。ピアPがピアQに緊急データを要求することを決定した場合、ピアPは、データが以前に要求されたすべてのピアにCANCELメッセージを送信する必要があります（SHOULD）。 CANCELメッセージには、ピアPが要求したくないチャンクの仕様が含まれています。さらに、ピアQがピアPから緊急データのHAVEメッセージを受信すると、ピアQはピアPからの以前の要求もキャンセルする必要があります。つまり、HAVEメッセージは暗黙的なキャンセルとして機能します。
+オンデマンドまたはライブストリーミングコンテンツをダウンロードするとき、ピアは複数のピアに緊急データを要求して、時間どおりに配信される確率を高めることができます。特に、特定のチャンクピッキングアルゴリズム（セクション9.1を参照）が、緊急データの要求が時間どおりに処理されない可能性があることを検出すると、同じデータの要求を別のピアに送信できます。ピアPがピアQに緊急データを要求することを決定した場合、ピアPは、データが以前に要求されたすべてのピアにCANCELメッセージを送信する必要があります（<span class="kw kw-should">SHOULD</span>）。 CANCELメッセージには、ピアPが要求したくないチャンクの仕様が含まれています。さらに、ピアQがピアPから緊急データのHAVEメッセージを受信すると、ピアQはピアPからの以前の要求もキャンセルする必要があります。つまり、HAVEメッセージは暗黙的なキャンセルとして機能します。
         </p>
       </div>
     </div>
@@ -1624,12 +1629,12 @@ When live streaming via a push model, a peer receiving REQUESTs also MAY send so
     <div class="row" id="3-9--CHOKE-and-UNCHOKE-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Peer A can send a CHOKE message to Peer B to signal it will no longer be responding to REQUEST messages from Peer B, for example, because Peer A&#39;s upload capacity is exhausted. Peer A MAY send a subsequent UNCHOKE message to signal that it will respond to new REQUESTs from Peer B again (Peer A SHOULD discard old requests). When Peer B receives a CHOKE message from Peer A, it MUST NOT send new REQUEST messages and it cannot expect answers to any outstanding ones, as the transfer of chunks is choked. When Peer B is choked but receives a HAVE message from Peer A, it is not automatically unchoked and MUST NOT send any new REQUEST messages. The CHOKE and UNCHOKE messages are informational as responding to REQUESTs is OPTIONAL, see Section 3.7.
+Peer A can send a CHOKE message to Peer B to signal it will no longer be responding to REQUEST messages from Peer B, for example, because Peer A&#39;s upload capacity is exhausted. Peer A <span class="kw kw-may">MAY</span> send a subsequent UNCHOKE message to signal that it will respond to new REQUESTs from Peer B again (Peer A <span class="kw kw-should">SHOULD</span> discard old requests). When Peer B receives a CHOKE message from Peer A, it <span class="kw kw-mustnot">MUST NOT</span> send new REQUEST messages and it cannot expect answers to any outstanding ones, as the transfer of chunks is choked. When Peer B is choked but receives a HAVE message from Peer A, it is not automatically unchoked and <span class="kw kw-mustnot">MUST NOT</span> send any new REQUEST messages. The CHOKE and UNCHOKE messages are informational as responding to REQUESTs is <span class="kw kw-may">OPTIONAL</span>, see Section 3.7.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ピアAはCHOKEメッセージをピアBに送信して、ピアBからのREQUESTメッセージに応答しないことを通知できます。たとえば、ピアAのアップロード容量がなくなったためです。ピアAは、後続のUNCHOKEメッセージを送信して、ピアBからの新しい要求に再度応答することを通知できます（ピアAは古い要求を破棄する必要があります）。ピアBがピアAからCHOKEメッセージを受信すると、チャンクの転送が制限されるため、新しいREQUESTメッセージを送信してはならず、未解決のメッセージに対する応答を期待することはできません。ピアBがチョークされているがピアAからHAVEメッセージを受信した場合、それは自動的にチョークされず、新しいREQUESTメッセージを送信してはならない（MUST NOT）。リクエストへの応答はオプションであるため、CHOKEおよびUNCHOKEメッセージは情報メッセージです。セクション3.7を参照してください。
+ピアAはCHOKEメッセージをピアBに送信して、ピアBからのREQUESTメッセージに応答しないことを通知できます。たとえば、ピアAのアップロード容量がなくなったためです。ピアAは、後続のUNCHOKEメッセージを送信して、ピアBからの新しい要求に再度応答することを通知できます（ピアAは古い要求を破棄する必要があります）。ピアBがピアAからCHOKEメッセージを受信すると、チャンクの転送が制限されるため、新しいREQUESTメッセージを送信してはならず、未解決のメッセージに対する応答を期待することはできません。ピアBがチョークされているがピアAからHAVEメッセージを受信した場合、それは自動的にチョークされず、新しいREQUESTメッセージを送信してはならない（<span class="kw kw-mustnot">MUST NOT</span>）。リクエストへの応答はオプションであるため、CHOKEおよびUNCHOKEメッセージは情報メッセージです。セクション3.7を参照してください。
         </p>
       </div>
     </div>
@@ -1672,12 +1677,12 @@ Peer Exchange (PEX) messages are common in many peer-to-peer protocols. They all
     <div class="row" id="3-10-1--PEXREQ-and-PEXRES-Messages-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP supports peer-address exchange on the Internet and in benign private networks as an OPTIONAL feature (not mandatory to implement) under certain conditions. The general mechanism works as follows. To obtain some peer addresses, a Peer A MAY send a PEX_REQ message to Peer B. Peer B MAY respond with one or more PEX_REScert messages. Logically, a PEX_REScert reply message contains the address of a single peer Ci. Peer B MUST have exchanged messages with Peer Ci in the last 60 seconds to guarantee liveliness. Upon receipt, Peer A may contact any or none of the returned peers Ci. Alternatively, peers MAY ignore PEX_REQ and PEX_REScert messages if uninterested in obtaining new peers or because of security considerations (rate limiting) or any other reason. The PEX messages can be used to construct a dedicated tracker peer.
+PPSPP supports peer-address exchange on the Internet and in benign private networks as an <span class="kw kw-may">OPTIONAL</span> feature (not mandatory to implement) under certain conditions. The general mechanism works as follows. To obtain some peer addresses, a Peer A <span class="kw kw-may">MAY</span> send a PEX_REQ message to Peer B. Peer B <span class="kw kw-may">MAY</span> respond with one or more PEX_REScert messages. Logically, a PEX_REScert reply message contains the address of a single peer Ci. Peer B <span class="kw kw-must">MUST</span> have exchanged messages with Peer Ci in the last 60 seconds to guarantee liveliness. Upon receipt, Peer A may contact any or none of the returned peers Ci. Alternatively, peers <span class="kw kw-may">MAY</span> ignore PEX_REQ and PEX_REScert messages if uninterested in obtaining new peers or because of security considerations (rate limiting) or any other reason. The PEX messages can be used to construct a dedicated tracker peer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPPは、特定の条件下でのオプション機能（実装は必須ではない）として、インターネットおよび無害なプライベートネットワークでのピアアドレス交換をサポートします。一般的なメカニズムは次のように機能します。一部のピアアドレスを取得するには、ピアAがPEX_REQメッセージをピアBに送信してもよい（MAY）。ピアBは、1つ以上のPEX_REScertメッセージで応答してもよい（MAY）。論理的には、PEX_REScert応答メッセージには、単一のピアCiのアドレスが含まれています。ピアBは、生存を保証するために、過去60秒間にピアCiとメッセージを交換する必要があります。受信すると、ピアAは、返されたピアCiのいずれかに連絡することも、まったく連絡しないこともあります。あるいは、ピアは、新しいピアの取得に関心がない場合、またはセキュリティの考慮事項（レート制限）またはその他の理由により、PEX_REQおよびPEX_REScertメッセージを無視する場合があります。 PEXメッセージを使用して、専用のトラッカーピアを構築できます。
+PPSPPは、特定の条件下でのオプション機能（実装は必須ではない）として、インターネットおよび無害なプライベートネットワークでのピアアドレス交換をサポートします。一般的なメカニズムは次のように機能します。一部のピアアドレスを取得するには、ピアAがPEX_REQメッセージをピアBに送信してもよい（<span class="kw kw-may">MAY</span>）。ピアBは、1つ以上のPEX_REScertメッセージで応答してもよい（<span class="kw kw-may">MAY</span>）。論理的には、PEX_REScert応答メッセージには、単一のピアCiのアドレスが含まれています。ピアBは、生存を保証するために、過去60秒間にピアCiとメッセージを交換する必要があります。受信すると、ピアAは、返されたピアCiのいずれかに連絡することも、まったく連絡しないこともあります。あるいは、ピアは、新しいピアの取得に関心がない場合、またはセキュリティの考慮事項（レート制限）またはその他の理由により、PEX_REQおよびPEX_REScertメッセージを無視する場合があります。 PEXメッセージを使用して、専用のトラッカーピアを構築できます。
         </p>
       </div>
     </div>
@@ -1744,7 +1749,7 @@ Several designs are possible for the security environment for these membership c
     <div class="row" id="3-10-1--PEXREQ-and-PEXRES-Messages-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In a hostile environment, such as the Internet, peers must also ensure that they do not end up interacting only with malicious peers when using the peer-address exchange feature. To this extent, peers MUST ensure that part of their connections are to peers whose addresses came from a trusted and secured tracker (see Section 12.2.3).
+In a hostile environment, such as the Internet, peers must also ensure that they do not end up interacting only with malicious peers when using the peer-address exchange feature. To this extent, peers <span class="kw kw-must">MUST</span> ensure that part of their connections are to peers whose addresses came from a trusted and secured tracker (see Section 12.2.3).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1756,7 +1761,7 @@ In a hostile environment, such as the Internet, peers must also ensure that they
     <div class="row" id="3-10-1--PEXREQ-and-PEXRES-Messages-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In addition to the PEX_REScert, there are two other PEX reply messages. The PEX_RESv4 message contains a single IPv4 address and port. The PEX_RESv6 message contains a single IPv6 address and port. They MUST only be used in a benign environment, such as a private network, as they provide no guarantees that the host addressed actually participates in a PPSPP swarm.
+In addition to the PEX_REScert, there are two other PEX reply messages. The PEX_RESv4 message contains a single IPv4 address and port. The PEX_RESv6 message contains a single IPv6 address and port. They <span class="kw kw-must">MUST</span> only be used in a benign environment, such as a private network, as they provide no guarantees that the host addressed actually participates in a PPSPP swarm.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1792,7 +1797,7 @@ PPSPP実装がピアのリストを取得すると（PEXを介して、中央ト
     <div class="row" id="3-11--Channels-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-It is increasingly complex for peers to enable communication between each other due to NATs and firewalls. Therefore, PPSPP uses a multiplexing scheme, called channels, to allow multiple swarms to use the same transport address. Channels loosely correspond to TCP connections and each channel belongs to a single swarm, as illustrated in Figure 1. As with TCP connections, a channel is identified by a unique identifier local to the peer at each end of the connection (cf. TCP port), which MUST be randomly chosen. In other words, the two peers connected by a channel use different IDs to denote the same channel. The IDs are different and random for security reasons, see Section 12.1.
+It is increasingly complex for peers to enable communication between each other due to NATs and firewalls. Therefore, PPSPP uses a multiplexing scheme, called channels, to allow multiple swarms to use the same transport address. Channels loosely correspond to TCP connections and each channel belongs to a single swarm, as illustrated in Figure 1. As with TCP connections, a channel is identified by a unique identifier local to the peer at each end of the connection (cf. TCP port), which <span class="kw kw-must">MUST</span> be randomly chosen. In other words, the two peers connected by a channel use different IDs to denote the same channel. The IDs are different and random for security reasons, see Section 12.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1877,7 +1882,7 @@ Figure 1
     <div class="row" id="3-12--Keep-Alive-Signaling-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- A peer SHOULD send a &#34;keep alive&#34; message periodically to each peer it is interested in, but has no other messages to send to them at present. The goal of the keep alives is to keep a signaling channel open to peers that are of interest. Which peers those are is determined by a policy that decides which peers are of interest now and in the near future. This document does not prescribe a policy, but examples of interesting peers are (a) peers that have chunks on offer that this client needs or (b) peers that currently do not have interesting chunks on offer (because they are still downloading themselves, or in live streaming) but gave good performance in the past. When these peers have new chunks to offer, the peer that kept a signaling channel open can use them again. Periodically sending &#34;keep alive&#34; messages prevents other peers declaring the peer dead. A guideline for declaring a peer dead when using UDP consists of a three minute delay since that last packet has been received from that peer and at least three datagrams having been sent to that peer during the same period. When a peer is declared dead, the channel to it is closed, no more messages will be sent to that peer and the local administration about the peer is discarded. Busy servers can force idle clients to disconnect by not sending keep alives. PPSPP does not define an explicit message type for &#34;keep alive&#34; messages. In the PPSP-over-UDP encapsulation they are implemented as simple datagrams consisting of a four-byte channel ID only, see Sections 8.3 and 8.4.
+ A peer <span class="kw kw-should">SHOULD</span> send a &#34;keep alive&#34; message periodically to each peer it is interested in, but has no other messages to send to them at present. The goal of the keep alives is to keep a signaling channel open to peers that are of interest. Which peers those are is determined by a policy that decides which peers are of interest now and in the near future. This document does not prescribe a policy, but examples of interesting peers are (a) peers that have chunks on offer that this client needs or (b) peers that currently do not have interesting chunks on offer (because they are still downloading themselves, or in live streaming) but gave good performance in the past. When these peers have new chunks to offer, the peer that kept a signaling channel open can use them again. Periodically sending &#34;keep alive&#34; messages prevents other peers declaring the peer dead. A guideline for declaring a peer dead when using UDP consists of a three minute delay since that last packet has been received from that peer and at least three datagrams having been sent to that peer during the same period. When a peer is declared dead, the channel to it is closed, no more messages will be sent to that peer and the local administration about the peer is discarded. Busy servers can force idle clients to disconnect by not sending keep alives. PPSPP does not define an explicit message type for &#34;keep alive&#34; messages. In the PPSP-over-UDP encapsulation they are implemented as simple datagrams consisting of a four-byte channel ID only, see Sections 8.3 and 8.4.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1913,7 +1918,7 @@ PPSSPPは、さまざまなチャンクアドレス指定方法を使用でき�
     <div class="row" id="4--Chunk-Addressing-Schemes-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-All peers in a swarm MUST use the same chunk addressing method.
+All peers in a swarm <span class="kw kw-must">MUST</span> use the same chunk addressing method.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1961,7 +1966,7 @@ A chunk specification consists of a single (start specification,end specificatio
     <div class="row" id="4-1-1--Chunk-Ranges-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The start and end specification are both chunk identifiers. Chunk identifiers are 32-bit or 64-bit unsigned integers. A PPSPP peer MUST support this scheme.
+The start and end specification are both chunk identifiers. Chunk identifiers are 32-bit or 64-bit unsigned integers. A PPSPP peer <span class="kw kw-must">MUST</span> support this scheme.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1998,7 +2003,7 @@ The start and end specification are both chunk identifiers. Chunk identifiers ar
     <div class="row" id="4-1-2--Byte-Ranges-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The start and end specification are 64-bit byte offsets in the content. The support for this scheme is OPTIONAL.
+The start and end specification are 64-bit byte offsets in the content. The support for this scheme is <span class="kw kw-may">OPTIONAL</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2039,7 +2044,7 @@ The start and end specification are 64-bit byte offsets in the content. The supp
     <div class="row" id="4-2--Bin-Numbers-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP introduces a novel method of addressing chunks of content called &#34;bin numbers&#34; (or &#34;bins&#34; for short). Bin numbers allow the addressing of a binary interval of data using a single integer. This reduces the amount of state that needs to be recorded per peer and the space needed to denote intervals on the wire, making the protocol lightweight. In general, this numbering system allows PPSPP to work with simpler data structures, e.g., to use arrays instead of binary trees, thus reducing complexity. The support for this scheme is OPTIONAL.
+PPSPP introduces a novel method of addressing chunks of content called &#34;bin numbers&#34; (or &#34;bins&#34; for short). Bin numbers allow the addressing of a binary interval of data using a single integer. This reduces the amount of state that needs to be recorded per peer and the space needed to denote intervals on the wire, making the protocol lightweight. In general, this numbering system allows PPSPP to work with simpler data structures, e.g., to use arrays instead of binary trees, thus reducing complexity. The support for this scheme is <span class="kw kw-may">OPTIONAL</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2195,7 +2200,7 @@ When bin numbering is used, the ID of a chunk is its corresponding (leaf) bin nu
     <div class="row" id="4-3-1--In-HAVE-Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- When a receiving peer has successfully checked the integrity of a chunk or interval of chunks, it MUST send a HAVE message to all peers it wants to allow download of those chunk(s) from. The ability to withhold HAVE messages allows them to be used as a method of choking. The HAVE message MUST contain the chunk specification of the biggest complete interval of all chunks the receiver has received and checked so far that fully includes the interval of chunks just received. So the chunk specification MUST denote at least the interval received, but the receiver is supposed to aggregate and acknowledge bigger intervals, when possible.
+ When a receiving peer has successfully checked the integrity of a chunk or interval of chunks, it <span class="kw kw-must">MUST</span> send a HAVE message to all peers it wants to allow download of those chunk(s) from. The ability to withhold HAVE messages allows them to be used as a method of choking. The HAVE message <span class="kw kw-must">MUST</span> contain the chunk specification of the biggest complete interval of all chunks the receiver has received and checked so far that fully includes the interval of chunks just received. So the chunk specification <span class="kw kw-must">MUST</span> denote at least the interval received, but the receiver is supposed to aggregate and acknowledge bigger intervals, when possible.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2231,7 +2236,7 @@ Implementation note:
     <div class="row" id="4-3-1--In-HAVE-Messages-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-To record which chunks a peer has in the state that an implementation keeps for each peer, an implementation MAY use the efficient &#34;binmap&#34; data structure, which is a hybrid of a bitmap and a binary tree, discussed in detail in [BINMAP].
+To record which chunks a peer has in the state that an implementation keeps for each peer, an implementation <span class="kw kw-may">MAY</span> use the efficient &#34;binmap&#34; data structure, which is a hybrid of a bitmap and a binary tree, discussed in detail in [BINMAP].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2255,7 +2260,7 @@ To record which chunks a peer has in the state that an implementation keeps for 
     <div class="row" id="4-3-2--In-ACK-Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP peers MUST use ACK messages to acknowledge received chunks if an unreliable transport protocol is used. When a receiving peer has successfully checked the integrity of a chunk or interval of chunks C, it MUST send an ACK message containing the chunk specification of its biggest, complete interval covering C to the sending peer (see HAVE).
+PPSPP peers <span class="kw kw-must">MUST</span> use ACK messages to acknowledge received chunks if an unreliable transport protocol is used. When a receiving peer has successfully checked the integrity of a chunk or interval of chunks C, it <span class="kw kw-must">MUST</span> send an ACK message containing the chunk specification of its biggest, complete interval covering C to the sending peer (see HAVE).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2291,7 +2296,7 @@ PPSPPは、ピアツーピアネットワークを介して配信されている
     <div class="row" id="5--Content-Integrity-Protection-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-For static content, PPSPP currently defines one method for protecting integrity, called the Merkle Hash Tree scheme. If PPSPP operates over the Internet, this scheme MUST be used. If PPSPP operates in a benign environment, this scheme MAY be used. So the scheme is mandatory to implement, to satisfy the requirement of strong security for an IETF protocol <a href="./rfc3365.html">[RFC3365]</a>. An extended version of the scheme is used to efficiently protect dynamically generated content (live streams), as explained below and in Section 6.1.
+For static content, PPSPP currently defines one method for protecting integrity, called the Merkle Hash Tree scheme. If PPSPP operates over the Internet, this scheme <span class="kw kw-must">MUST</span> be used. If PPSPP operates in a benign environment, this scheme <span class="kw kw-may">MAY</span> be used. So the scheme is mandatory to implement, to satisfy the requirement of strong security for an IETF protocol <a href="./rfc3365.html">[RFC3365]</a>. An extended version of the scheme is used to efficiently protect dynamically generated content (live streams), as explained below and in Section 6.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2413,7 +2418,7 @@ Figure 3
     <div class="row" id="5-2--Content-Integrity-Verification-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Assuming a peer receives the root hash of the content it wants to download from a trusted source, it can check the integrity of any chunk of that content it receives as follows. It first calculates the hash of the chunk it received, for example, chunk C4 in the previous figure. Along with this chunk, it MUST receive the hashes required to check the integrity of that chunk. In principle, these are the hash of the chunk&#39;s sibling (C5) and that of its &#34;uncles&#34;. A chunk&#39;s uncles are the sibling Y of its parent X, and the uncle of that Y, recursively until the root is reached. For chunk C4, the uncles are nodes 13 and 3 and the sibling is 10; all marked with a * in the figure. Using this information, the peer recalculates the root hash of the tree and compares it to the root hash it received from the trusted source. If they match, the chunk of content has been positively verified to be the requested part of the content. Otherwise, the sending peer sent either the wrong content or the wrong sibling or uncle hashes. For simplicity, the set of sibling and uncle hashes is collectively referred to as the &#34;uncle hashes&#34;.
+Assuming a peer receives the root hash of the content it wants to download from a trusted source, it can check the integrity of any chunk of that content it receives as follows. It first calculates the hash of the chunk it received, for example, chunk C4 in the previous figure. Along with this chunk, it <span class="kw kw-must">MUST</span> receive the hashes required to check the integrity of that chunk. In principle, these are the hash of the chunk&#39;s sibling (C5) and that of its &#34;uncles&#34;. A chunk&#39;s uncles are the sibling Y of its parent X, and the uncle of that Y, recursively until the root is reached. For chunk C4, the uncles are nodes 13 and 3 and the sibling is 10; all marked with a * in the figure. Using this information, the peer recalculates the root hash of the tree and compares it to the root hash it received from the trusted source. If they match, the chunk of content has been positively verified to be the requested part of the content. Otherwise, the sending peer sent either the wrong content or the wrong sibling or uncle hashes. For simplicity, the set of sibling and uncle hashes is collectively referred to as the &#34;uncle hashes&#34;.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2449,24 +2454,24 @@ In the case of live streaming, the tree of chunks grows dynamically and the root
     <div class="row" id="5-3--The-Atomic-Datagram-Principle-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As explained above, a datagram consists of a sequence of messages. Ideally, every datagram sent must be independent of other datagrams: each datagram SHOULD be processed separately, and a loss of one datagram must not disrupt the flow of datagrams between two peers. Thus, as a datagram carries zero or more messages, both messages and message interdependencies SHOULD NOT span over multiple datagrams.
+As explained above, a datagram consists of a sequence of messages. Ideally, every datagram sent must be independent of other datagrams: each datagram <span class="kw kw-should">SHOULD</span> be processed separately, and a loss of one datagram must not disrupt the flow of datagrams between two peers. Thus, as a datagram carries zero or more messages, both messages and message interdependencies <span class="kw kw-shouldnot">SHOULD NOT</span> span over multiple datagrams.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-上記で説明したように、データグラムは一連のメッセージで構成されます。理想的には、送信されるすべてのデータグラムは他のデータグラムから独立している必要があります。各データグラムは個別に処理する必要があり（SHOULD）、1つのデータグラムの損失が2つのピア間のデータグラムのフローを妨害してはなりません。したがって、データグラムがゼロ以上のメッセージを運ぶので、メッセージとメッセージの相互依存性の両方は、複数のデータグラムにまたがってはなりません。
+上記で説明したように、データグラムは一連のメッセージで構成されます。理想的には、送信されるすべてのデータグラムは他のデータグラムから独立している必要があります。各データグラムは個別に処理する必要があり（<span class="kw kw-should">SHOULD</span>）、1つのデータグラムの損失が2つのピア間のデータグラムのフローを妨害してはなりません。したがって、データグラムがゼロ以上のメッセージを運ぶので、メッセージとメッセージの相互依存性の両方は、複数のデータグラムにまたがってはなりません。
         </p>
       </div>
     </div>
     <div class="row" id="5-3--The-Atomic-Datagram-Principle-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This principle implies that as any chunk is verified using its uncle hashes, the necessary hashes SHOULD be put into the same datagram as the chunk&#39;s data. If this is not possible because of a limitation on datagram size, the necessary hashes MUST be sent first in one or more datagrams. As a general rule, if some additional data is still missing to process a message within a datagram, the message SHOULD be dropped.
+This principle implies that as any chunk is verified using its uncle hashes, the necessary hashes <span class="kw kw-should">SHOULD</span> be put into the same datagram as the chunk&#39;s data. If this is not possible because of a limitation on datagram size, the necessary hashes <span class="kw kw-must">MUST</span> be sent first in one or more datagrams. As a general rule, if some additional data is still missing to process a message within a datagram, the message <span class="kw kw-should">SHOULD</span> be dropped.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この原則は、任意のチャンクがその叔父のハッシュを使用して検証されるため、必要なハッシュをチャンクのデータと同じデータグラムに入れる必要があることを意味します。データグラムサイズの制限によりこれが不可能な場合は、必要なハッシュを1つ以上のデータグラムで最初に送信する必要があります。一般的なルールとして、データグラム内のメッセージを処理するために追加のデータがまだ不足している場合は、メッセージを削除する必要があります（SHOULD）。
+この原則は、任意のチャンクがその叔父のハッシュを使用して検証されるため、必要なハッシュをチャンクのデータと同じデータグラムに入れる必要があることを意味します。データグラムサイズの制限によりこれが不可能な場合は、必要なハッシュを1つ以上のデータグラムで最初に送信する必要があります。一般的なルールとして、データグラム内のメッセージを処理するために追加のデータがまだ不足している場合は、メッセージを削除する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -2485,19 +2490,19 @@ The hashes necessary to verify a chunk are, in principle, its sibling&#39;s hash
     <div class="row" id="5-3--The-Atomic-Datagram-Principle-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The sender MAY optimistically skip hashes that were sent out in previous, still-unacknowledged datagrams. It is an optimization trade-off between redundant hash transmission and the possibility of collateral data loss in the case in which some necessary hashes were lost in the network so some delivered data cannot be verified and thus had to be dropped. In either case, the receiver builds the Merkle hash tree on-demand, incrementally, starting from the root hash, and uses it for data validation.
+The sender <span class="kw kw-may">MAY</span> optimistically skip hashes that were sent out in previous, still-unacknowledged datagrams. It is an optimization trade-off between redundant hash transmission and the possibility of collateral data loss in the case in which some necessary hashes were lost in the network so some delivered data cannot be verified and thus had to be dropped. In either case, the receiver builds the Merkle hash tree on-demand, incrementally, starting from the root hash, and uses it for data validation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-送信者は、以前の未確認のデータグラムで送信されたハッシュを楽観的にスキップしてもよい（MAY）。これは、ネットワークで必要なハッシュが失われたために配信されたデータの一部を検証できず、ドロップする必要があった場合に、冗長ハッシュ送信と付随的なデータ損失の可能性との間の最適化のトレードオフです。どちらの場合でも、受信者はルートハッシュから始めて、オンデマンドで段階的にマークルハッシュツリーを構築し、データ検証に使用します。
+送信者は、以前の未確認のデータグラムで送信されたハッシュを楽観的にスキップしてもよい（<span class="kw kw-may">MAY</span>）。これは、ネットワークで必要なハッシュが失われたために配信されたデータの一部を検証できず、ドロップする必要があった場合に、冗長ハッシュ送信と付随的なデータ損失の可能性との間の最適化のトレードオフです。どちらの場合でも、受信者はルートハッシュから始めて、オンデマンドで段階的にマークルハッシュツリーを構築し、データ検証に使用します。
         </p>
       </div>
     </div>
     <div class="row" id="5-3--The-Atomic-Datagram-Principle-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In short, the sender MUST put into the datagram the hashes he believes are necessary for the receiver to verify the chunk. The receiver MUST remember all the hashes it needs to verify missing chunks that it still wants to download. Note that the latter implies that a hardware-limited receiver MAY forget some hashes if it does not plan to announce possession of these chunks to others (i.e., does not plan to send HAVE messages.)
+In short, the sender <span class="kw kw-must">MUST</span> put into the datagram the hashes he believes are necessary for the receiver to verify the chunk. The receiver <span class="kw kw-must">MUST</span> remember all the hashes it needs to verify missing chunks that it still wants to download. Note that the latter implies that a hardware-limited receiver <span class="kw kw-may">MAY</span> forget some hashes if it does not plan to announce possession of these chunks to others (i.e., does not plan to send HAVE messages.)
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2521,7 +2526,7 @@ In short, the sender MUST put into the datagram the hashes he believes are neces
     <div class="row" id="5-4--INTEGRITY-Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Concretely, a peer that wants to send a chunk of content creates a datagram that MUST consist of a list of INTEGRITY messages followed by a DATA message. If the INTEGRITY messages and DATA message cannot be put into a single datagram because of a limitation on datagram size, the INTEGRITY messages MUST be sent first in one or more datagrams. The list of INTEGRITY messages sent MUST contain an INTEGRITY message for each hash the receiver misses for integrity checking. An INTEGRITY message for a hash MUST contain the chunk specification corresponding to the node ID of the hash and the hash data itself. The chunk specification corresponding to a node ID is defined as the range of chunks formed by the leaves of the subtree rooted at the node. For example, node 3 in Figure 3 denotes chunks 0, 2, 4, and 6, so the chunk specification should denote that interval. The list of INTEGRITY messages MUST be sorted in order of the tree height of the nodes, descending (the leaves are at height 0). The DATA message MUST contain the chunk specification of the chunk and the chunk itself. A peer MAY send the required messages for multiple chunks in the same datagram, depending on the encapsulation.
+Concretely, a peer that wants to send a chunk of content creates a datagram that <span class="kw kw-must">MUST</span> consist of a list of INTEGRITY messages followed by a DATA message. If the INTEGRITY messages and DATA message cannot be put into a single datagram because of a limitation on datagram size, the INTEGRITY messages <span class="kw kw-must">MUST</span> be sent first in one or more datagrams. The list of INTEGRITY messages sent <span class="kw kw-must">MUST</span> contain an INTEGRITY message for each hash the receiver misses for integrity checking. An INTEGRITY message for a hash <span class="kw kw-must">MUST</span> contain the chunk specification corresponding to the node ID of the hash and the hash data itself. The chunk specification corresponding to a node ID is defined as the range of chunks formed by the leaves of the subtree rooted at the node. For example, node 3 in Figure 3 denotes chunks 0, 2, 4, and 6, so the chunk specification should denote that interval. The list of INTEGRITY messages <span class="kw kw-must">MUST</span> be sorted in order of the tree height of the nodes, descending (the leaves are at height 0). The DATA message <span class="kw kw-must">MUST</span> contain the chunk specification of the chunk and the chunk itself. A peer <span class="kw kw-may">MAY</span> send the required messages for multiple chunks in the same datagram, depending on the encapsulation.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2655,7 +2660,7 @@ So the number of hashes sent in total (7) is less than the total number of hashe
     <div class="row" id="5-6--Automatic-Detection-of-Content-Size-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In PPSPP, the size of a static content file, such as a video file, can be reliably and automatically derived from information received from the network when fixed-size chunks are used. As a result, it is not necessary to include the size of the content file as the metadata of the content for such files. Implementations of PPSPP MAY use this automatic detection feature. Note this feature is the only feature of PPSPP that requires that a fixed-size chunk is used. This feature builds on the Merkle hash tree and the trusted root hash as swarm ID as follows.
+In PPSPP, the size of a static content file, such as a video file, can be reliably and automatically derived from information received from the network when fixed-size chunks are used. As a result, it is not necessary to include the size of the content file as the metadata of the content for such files. Implementations of PPSPP <span class="kw kw-may">MAY</span> use this automatic detection feature. Note this feature is the only feature of PPSPP that requires that a fixed-size chunk is used. This feature builds on the Merkle hash tree and the trusted root hash as swarm ID as follows.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2848,7 +2853,7 @@ Finally, once Peer B has obtained the number of chunks in the content, it can de
     <div class="row" id="5-6-2--Procedure-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A PPSPP implementation that wants to use automatic size detection MUST operate as follows. When Peer A sends a DATA message for the first time to Peer B, Peer A MUST first send all the peak hashes for the content, in INTEGRITY messages, unless Peer B has already signaled that it knows the peak hashes by having acknowledged any chunk. If they are needed, the peak hashes MUST be sent as an extra list of uncle hashes for the chunk, before the list of actual uncle hashes of the chunk as described in Section 5.3. The receiver, Peer B, MUST check the peak hashes against the root hash to determine the approximate content size. To obtain the definite content size, Peer B MUST download the last chunk of the content from any peer that offers it.
+A PPSPP implementation that wants to use automatic size detection <span class="kw kw-must">MUST</span> operate as follows. When Peer A sends a DATA message for the first time to Peer B, Peer A <span class="kw kw-must">MUST</span> first send all the peak hashes for the content, in INTEGRITY messages, unless Peer B has already signaled that it knows the peak hashes by having acknowledged any chunk. If they are needed, the peak hashes <span class="kw kw-must">MUST</span> be sent as an extra list of uncle hashes for the chunk, before the list of actual uncle hashes of the chunk as described in Section 5.3. The receiver, Peer B, <span class="kw kw-must">MUST</span> check the peak hashes against the root hash to determine the approximate content size. To obtain the definite content size, Peer B <span class="kw kw-must">MUST</span> download the last chunk of the content from any peer that offers it.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2920,7 +2925,7 @@ For live streaming, PPSPP supports two methods for a peer to authenticate the co
     <div class="row" id="6-1--Content-Authentication-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the &#34;Sign All&#34; method, the live injector signs each chunk of content using a private key. Upon receiving the chunk, peers check the signature using the corresponding public key obtained from a trusted source. Support for this method is OPTIONAL.
+In the &#34;Sign All&#34; method, the live injector signs each chunk of content using a private key. Upon receiving the chunk, peers check the signature using the corresponding public key obtained from a trusted source. Support for this method is <span class="kw kw-may">OPTIONAL</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2932,7 +2937,7 @@ In the &#34;Sign All&#34; method, the live injector signs each chunk of content 
     <div class="row" id="6-1--Content-Authentication-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the &#34;Unified Merkle Tree&#34; method, PPSPP combines the Merkle Hash Tree scheme for static content with signatures to unify the video-on-demand and live streaming scenarios. The use of Merkle hash trees reduces the number of signing and verification operations, hence providing a similar signature amortization to the approach described in [SIGMCAST]. If PPSPP operates over the Internet, the &#34;Unified Merkle Tree&#34; method MUST be used. If the protocol operates in a benign environment, the &#34;Unified Merkle Tree&#34; method MAY be used. So this method is mandatory to implement.
+In the &#34;Unified Merkle Tree&#34; method, PPSPP combines the Merkle Hash Tree scheme for static content with signatures to unify the video-on-demand and live streaming scenarios. The use of Merkle hash trees reduces the number of signing and verification operations, hence providing a similar signature amortization to the approach described in [SIGMCAST]. If PPSPP operates over the Internet, the &#34;Unified Merkle Tree&#34; method <span class="kw kw-must">MUST</span> be used. If the protocol operates in a benign environment, the &#34;Unified Merkle Tree&#34; method <span class="kw kw-may">MAY</span> be used. So this method is mandatory to implement.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3005,7 +3010,7 @@ In the &#34;Sign All&#34; method, the live injector signs each chunk of content 
     <div class="row" id="6-1-1--Sign-All-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer that wants to send a chunk of content creates a datagram that MUST contain a SIGNED_INTEGRITY message with the chunk&#39;s signature, followed by a DATA message with the actual chunk. If the SIGNED_INTEGRITY message and DATA message cannot be contained into a single datagram, because of a limitation on datagram size, the SIGNED_INTEGRITY message MUST be sent first in a separate datagram. The SIGNED_INTEGRITY message consists of the chunk specification, the timestamp, and the digital signature.
+A peer that wants to send a chunk of content creates a datagram that <span class="kw kw-must">MUST</span> contain a SIGNED_INTEGRITY message with the chunk&#39;s signature, followed by a DATA message with the actual chunk. If the SIGNED_INTEGRITY message and DATA message cannot be contained into a single datagram, because of a limitation on datagram size, the SIGNED_INTEGRITY message <span class="kw kw-must">MUST</span> be sent first in a separate datagram. The SIGNED_INTEGRITY message consists of the chunk specification, the timestamp, and the digital signature.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3216,7 +3221,7 @@ Upon receipt, Peer P verifies the signature of the munro and expands its view of
     <div class="row" id="6-1-2-1--Signed-Munro-Hashes-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This procedure requires just one signing operation for every NCHUNKS_PER_SIG chunks created, and one verification operation for every NCHUNKS_PER_SIG received, making it much cheaper than &#34;Sign All&#34;. A receiving peer does additionally need to check one or more hashes per chunk via the Merkle Hash Tree scheme, but this has less hardware requirements than a signature verification for every chunk. This approach is similar to signature amortization via Merkle Tree Chaining [SIGMCAST]. The downside of this scheme is in an increased latency. A peer cannot download the new chunks until the injector has computed the signature and announced the subtree. A peer MUST check the signature before forwarding the chunks to other peers [POLLIVE].
+This procedure requires just one signing operation for every NCHUNKS_PER_SIG chunks created, and one verification operation for every NCHUNKS_PER_SIG received, making it much cheaper than &#34;Sign All&#34;. A receiving peer does additionally need to check one or more hashes per chunk via the Merkle Hash Tree scheme, but this has less hardware requirements than a signature verification for every chunk. This approach is similar to signature amortization via Merkle Tree Chaining [SIGMCAST]. The downside of this scheme is in an increased latency. A peer cannot download the new chunks until the injector has computed the signature and announced the subtree. A peer <span class="kw kw-must">MUST</span> check the signature before forwarding the chunks to other peers [POLLIVE].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3228,7 +3233,7 @@ This procedure requires just one signing operation for every NCHUNKS_PER_SIG chu
     <div class="row" id="6-1-2-1--Signed-Munro-Hashes-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The number of chunks per signature NCHUNKS_PER_SIG MUST be a fixed power of 2 for simplicity. NCHUNKS_PER_SIG MUST be larger than 1 for performance reasons. There are two related factors to consider when choosing a value for NCHUNKS_PER_SIG. First, the allowed CPU load on clients due to signature verifications, given the expected bitrate of the stream. To achieve a low CPU load in a high bitrate stream, NCHUNKS_PER_SIG should be high. Second, the effect on latency, which increases when NCHUNKS_PER_SIG gets higher, as just discussed. Note how the procedure does not preclude the use of variable-size chunks.
+The number of chunks per signature NCHUNKS_PER_SIG <span class="kw kw-must">MUST</span> be a fixed power of 2 for simplicity. NCHUNKS_PER_SIG <span class="kw kw-must">MUST</span> be larger than 1 for performance reasons. There are two related factors to consider when choosing a value for NCHUNKS_PER_SIG. First, the allowed CPU load on clients due to signature verifications, given the expected bitrate of the stream. To achieve a low CPU load in a high bitrate stream, NCHUNKS_PER_SIG should be high. Second, the effect on latency, which increases when NCHUNKS_PER_SIG gets higher, as just discussed. Note how the procedure does not preclude the use of variable-size chunks.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3288,19 +3293,19 @@ The digital signature algorithm used is determined by the Live Signature Algorit
     <div class="row" id="6-1-2-3--Procedure-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Formally, the injector MUST NOT send a HAVE message for chunks in the new subtree until it has computed the signed munro hash for that subtree.
+Formally, the injector <span class="kw kw-mustnot">MUST NOT</span> send a HAVE message for chunks in the new subtree until it has computed the signed munro hash for that subtree.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-正式には、インジェクタは、新しいサブツリーの署名付きmunroハッシュを計算するまで、新しいサブツリーのチャンクにHAVEメッセージを送信してはなりません（MUST NOT）。
+正式には、インジェクタは、新しいサブツリーの署名付きmunroハッシュを計算するまで、新しいサブツリーのチャンクにHAVEメッセージを送信してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="6-1-2-3--Procedure-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When Peer B requests a chunk C from Peer A (either the injector or another peer), and Peer A decides to reply, it must do so as follows. First, Peer A MUST send an INTEGRITY message with the chunk specification for the munro of chunk C and the munro&#39;s hash, followed by a SIGNED_INTEGRITY message with the chunk specification for the munro, timestamp, and its signature in a single datagram, unless Peer B indicated earlier in the exchange that it already possess a chunk with the same corresponding munro (by means of HAVE or ACK messages). Following these two messages (if any), Peer A MUST send the necessary missing uncles hashes needed for verifying the chunk against its munro hash, and the chunk itself, as described in Section 5.4, sharing datagrams if possible.
+When Peer B requests a chunk C from Peer A (either the injector or another peer), and Peer A decides to reply, it must do so as follows. First, Peer A <span class="kw kw-must">MUST</span> send an INTEGRITY message with the chunk specification for the munro of chunk C and the munro&#39;s hash, followed by a SIGNED_INTEGRITY message with the chunk specification for the munro, timestamp, and its signature in a single datagram, unless Peer B indicated earlier in the exchange that it already possess a chunk with the same corresponding munro (by means of HAVE or ACK messages). Following these two messages (if any), Peer A <span class="kw kw-must">MUST</span> send the necessary missing uncles hashes needed for verifying the chunk against its munro hash, and the chunk itself, as described in Section 5.4, sharing datagrams if possible.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3348,24 +3353,24 @@ PPSPPでは、ピアAがピアBとのチャネルを開始すると、ピアAが
     <div class="row" id="6-1-2-4--Secure-Tune-In-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- In the Unified Merkle Tree scheme, Peer A MUST send its rightmost signed munro hash to Peer B in the third datagram, and in any subsequent datagrams to Peer B, until Peer B indicates that it possess a chunk with the same corresponding munro or a more recent munro (by means of a HAVE or ACK message). Peer B may already have indicated this fact by means of HAVE messages in the second datagram. Conversely, when Peer B sends the fourth datagram or any subsequent datagram to Peer A, Peer B MUST send its rightmost signed munro hash, unless Peer A indicated knowledge of it or more recent munros. The rightmost signed munro hash of a peer is defined as the munro hash signed by the injector of the rightmost subtree of width NCHUNKS_PER_SIG chunks in the peer&#39;s Merkle hash tree. Peer A MUST NOT send the signed munro hash in the first datagram of the HANDSHAKE procedure and Peer B MUST NOT send it in the second datagram as it is considered heavy payload.
+ In the Unified Merkle Tree scheme, Peer A <span class="kw kw-must">MUST</span> send its rightmost signed munro hash to Peer B in the third datagram, and in any subsequent datagrams to Peer B, until Peer B indicates that it possess a chunk with the same corresponding munro or a more recent munro (by means of a HAVE or ACK message). Peer B may already have indicated this fact by means of HAVE messages in the second datagram. Conversely, when Peer B sends the fourth datagram or any subsequent datagram to Peer A, Peer B <span class="kw kw-must">MUST</span> send its rightmost signed munro hash, unless Peer A indicated knowledge of it or more recent munros. The rightmost signed munro hash of a peer is defined as the munro hash signed by the injector of the rightmost subtree of width NCHUNKS_PER_SIG chunks in the peer&#39;s Merkle hash tree. Peer A <span class="kw kw-mustnot">MUST NOT</span> send the signed munro hash in the first datagram of the HANDSHAKE procedure and Peer B <span class="kw kw-mustnot">MUST NOT</span> send it in the second datagram as it is considered heavy payload.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-統合されたマークルツリースキームでは、ピアAは、3番目のデータグラムで右端の署名されたマンロハッシュをピアBに送信し、ピアBが同じ対応するマンロ以上のチャンクを持つことをピアBが示すまで、ピアBに送信する必要があります最近のmunro（HAVEまたはACKメッセージによる）。ピアBは、2番目のデータグラムのHAVEメッセージによってこの事実をすでに示している可能性があります。逆に、ピアBが4番目のデータグラムまたは後続のデータグラムをピアAに送信する場合、ピアAがそれまたはそれより最近のマンロの知識を示さない限り、ピアBは右端の署名されたマンロハッシュを送信する必要があります。ピアの右端の署名済みmunroハッシュは、ピアのMerkleハッシュツリー内の幅NCHUNKS_PER_SIGチャンクの右端のサブツリーのインジェクターによって署名されたmunroハッシュとして定義されます。ピアAはHANDSHAKEプロシージャの最初のデータグラムで署名されたmunroハッシュを送信してはならず（MUST）、ピアBは2番目のデータグラムでそれを送信してはなりません。
+統合されたマークルツリースキームでは、ピアAは、3番目のデータグラムで右端の署名されたマンロハッシュをピアBに送信し、ピアBが同じ対応するマンロ以上のチャンクを持つことをピアBが示すまで、ピアBに送信する必要があります最近のmunro（HAVEまたはACKメッセージによる）。ピアBは、2番目のデータグラムのHAVEメッセージによってこの事実をすでに示している可能性があります。逆に、ピアBが4番目のデータグラムまたは後続のデータグラムをピアAに送信する場合、ピアAがそれまたはそれより最近のマンロの知識を示さない限り、ピアBは右端の署名されたマンロハッシュを送信する必要があります。ピアの右端の署名済みmunroハッシュは、ピアのMerkleハッシュツリー内の幅NCHUNKS_PER_SIGチャンクの右端のサブツリーのインジェクターによって署名されたmunroハッシュとして定義されます。ピアAはHANDSHAKEプロシージャの最初のデータグラムで署名されたmunroハッシュを送信してはならず（<span class="kw kw-must">MUST</span>）、ピアBは2番目のデータグラムでそれを送信してはなりません。
         </p>
       </div>
     </div>
     <div class="row" id="6-1-2-4--Secure-Tune-In-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a peer receives a SIGNED_INTEGRITY message with a signed munro hash but the timestamp is too old, the peer MUST discard the message. Otherwise, it SHOULD use the signed munro to update its hash tree and pick a tune-in in the live stream. A peer may use the information from multiple peers to pick the tune-in point.
+When a peer receives a SIGNED_INTEGRITY message with a signed munro hash but the timestamp is too old, the peer <span class="kw kw-must">MUST</span> discard the message. Otherwise, it <span class="kw kw-should">SHOULD</span> use the signed munro to update its hash tree and pick a tune-in in the live stream. A peer may use the information from multiple peers to pick the tune-in point.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ピアが、署名されたmunroハッシュを含むSIGNED_INTEGRITYメッセージを受信したが、タイムスタンプが古すぎる場合、ピアはメッセージを破棄する必要があります。それ以外の場合は、署名されたmunroを使用してハッシュツリーを更新し、ライブストリームでチューンインを選択する必要があります（SHOULD）。ピアは、複数のピアからの情報を使用して、チューニングポイントを選択できます。
+ピアが、署名されたmunroハッシュを含むSIGNED_INTEGRITYメッセージを受信したが、タイムスタンプが古すぎる場合、ピアはメッセージを破棄する必要があります。それ以外の場合は、署名されたmunroを使用してハッシュツリーを更新し、ライブストリームでチューンインを選択する必要があります（<span class="kw kw-should">SHOULD</span>）。ピアは、複数のピアからの情報を使用して、チューニングポイントを選択できます。
         </p>
       </div>
     </div>
@@ -3396,12 +3401,12 @@ As a live broadcast progresses, a peer may want to discard the chunks that it al
     <div class="row" id="6-2--Forgetting-Chunks-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP provides a simple solution for peers to stay up to date with the chunk availability of a discarding peer. A discarding peer in a live stream MUST enable the Live Discard Window protocol option, specifying how many chunks/bytes it caches before the last chunk/byte it advertised as being available (see Section 7.9). Its peers SHOULD apply this number as a sliding window filter over the peer&#39;s chunk availability as conveyed via its HAVE messages.
+PPSPP provides a simple solution for peers to stay up to date with the chunk availability of a discarding peer. A discarding peer in a live stream <span class="kw kw-must">MUST</span> enable the Live Discard Window protocol option, specifying how many chunks/bytes it caches before the last chunk/byte it advertised as being available (see Section 7.9). Its peers <span class="kw kw-should">SHOULD</span> apply this number as a sliding window filter over the peer&#39;s chunk availability as conveyed via its HAVE messages.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPPは、ピアが破棄ピアのチャンクの可用性を最新に保つためのシンプルなソリューションを提供します。ライブストリームの破棄ピアは、ライブ破棄ウィンドウプロトコルオプションを有効にして、使用可能として通知された最後のチャンク/バイトの前にキャッシュするチャンク/バイトの数を指定する必要があります（セクション7.9を参照）。そのピアは、HAVEメッセージを介して伝達されるピアのチャンクの可用性に対するスライディングウィンドウフィルターとしてこの数を適用する必要があります（SHOULD）。
+PPSPPは、ピアが破棄ピアのチャンクの可用性を最新に保つためのシンプルなソリューションを提供します。ライブストリームの破棄ピアは、ライブ破棄ウィンドウプロトコルオプションを有効にして、使用可能として通知された最後のチャンク/バイトの前にキャッシュするチャンク/バイトの数を指定する必要があります（セクション7.9を参照）。そのピアは、HAVEメッセージを介して伝達されるピアのチャンクの可用性に対するスライディングウィンドウフィルターとしてこの数を適用する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -3432,7 +3437,7 @@ Three factors are important when deciding for an appropriate value for this opti
     <div class="row" id="7--Protocol-Options-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The HANDSHAKE message in PPSPP can contain the following protocol options. Unless stated otherwise, a protocol option consists of an 8-bit code followed by an 8-bit value. Larger values are all encoded big-endian. Each protocol option is explained in the following subsections. The list of protocol options MUST be sorted on code value (ascending) in a HANDSHAKE message.
+ The HANDSHAKE message in PPSPP can contain the following protocol options. Unless stated otherwise, a protocol option consists of an 8-bit code followed by an 8-bit value. Larger values are all encoded big-endian. Each protocol option is explained in the following subsections. The list of protocol options <span class="kw kw-must">MUST</span> be sorted on code value (ascending) in a HANDSHAKE message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3490,7 +3495,7 @@ Table 2: PPSPP Options
     <div class="row" id="7-1--End-Option-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer MUST conclude the list of protocol options with the end option. Subsequent octets should be considered protocol messages. The code for the end option is 255, and unlike others, it has no value octet, so the option&#39;s length is 1 octet.
+A peer <span class="kw kw-must">MUST</span> conclude the list of protocol options with the end option. Subsequent octets should be considered protocol messages. The code for the end option is 255, and unlike others, it has no value octet, so the option&#39;s length is 1 octet.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3524,7 +3529,7 @@ A peer MUST conclude the list of protocol options with the end option. Subsequen
     <div class="row" id="7-2--Version-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer MUST include the maximum version of the PPSPP it supports as the first protocol option in the list. The code for this option is 0. Defined values are listed in Table 3.
+A peer <span class="kw kw-must">MUST</span> include the maximum version of the PPSPP it supports as the first protocol option in the list. The code for this option is 0. Defined values are listed in Table 3.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3584,7 +3589,7 @@ Table 3: PPSPP Version Numbers
     <div class="row" id="7-3--Minimum-Version-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a peer initiates the handshake, it MUST include the minimum version of the PPSPP it supports in the list of protocol options, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1, strategy 5. The code for this option is 1. Defined values are listed in Table 3.
+When a peer initiates the handshake, it <span class="kw kw-must">MUST</span> include the minimum version of the PPSPP it supports in the list of protocol options, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1, strategy 5. The code for this option is 1. Defined values are listed in Table 3.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3619,12 +3624,12 @@ When a peer initiates the handshake, it MUST include the minimum version of the 
     <div class="row" id="7-4--Swarm-Identifier-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a peer initiates the handshake, it MUST include a single swarm identifier option. If the peer is not the initiator, it MAY include a swarm identifier option, as an end-to-end check. This option has the following structure:
+When a peer initiates the handshake, it <span class="kw kw-must">MUST</span> include a single swarm identifier option. If the peer is not the initiator, it <span class="kw kw-may">MAY</span> include a swarm identifier option, as an end-to-end check. This option has the following structure:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ピアがハンドシェイクを開始するとき、単一のスウォーム識別子オプションを含める必要があります。ピアがイニシエータでない場合、エンドツーエンドのチェックとして、スウォーム識別子オプションを含めることができます（MAY）。このオプションの構造は次のとおりです。
+ピアがハンドシェイクを開始するとき、単一のスウォーム識別子オプションを含める必要があります。ピアがイニシエータでない場合、エンドツーエンドのチェックとして、スウォーム識別子オプションを含めることができます（<span class="kw kw-may">MAY</span>）。このオプションの構造は次のとおりです。
         </p>
       </div>
     </div>
@@ -3680,7 +3685,7 @@ Each PPSPP peer knows the IDs of the swarms it joins, so this information can be
     <div class="row" id="7-5--Content-Integrity-Protection-Method-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer MUST include the content integrity method used by a swarm. The code for this option is 3. Defined values are listed in Table 4.
+A peer <span class="kw kw-must">MUST</span> include the content integrity method used by a swarm. The code for this option is 3. Defined values are listed in Table 4.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3754,7 +3759,7 @@ The &#34;Merkle Hash Tree&#34; method is the default for static content, see Sec
     <div class="row" id="7-6--Merkle-Tree-Hash-Function-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the content integrity protection method is &#34;Merkle Hash Tree&#34;, this option defining which hash function is used for the tree MUST be included. The code for this option is 4. Defined values are listed in Table 5 (see [FIPS180-4] for the function semantics).
+When the content integrity protection method is &#34;Merkle Hash Tree&#34;, this option defining which hash function is used for the tree <span class="kw kw-must">MUST</span> be included. The code for this option is 4. Defined values are listed in Table 5 (see [FIPS180-4] for the function semantics).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3794,7 +3799,7 @@ Table 5: PPSPP Merkle Hash Functions
     <div class="row" id="7-6--Merkle-Tree-Hash-Function-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Implementations MUST support SHA-1 (see Section 12.5) and SHA-256. SHA-256 is the default.
+Implementations <span class="kw kw-must">MUST</span> support SHA-1 (see Section 12.5) and SHA-256. SHA-256 is the default.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3829,7 +3834,7 @@ Implementations MUST support SHA-1 (see Section 12.5) and SHA-256. SHA-256 is th
     <div class="row" id="7-7--Live-Signature-Algorithm-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When the content integrity protection method is &#34;Sign All&#34; or &#34;Unified Merkle Tree&#34;, this option MUST be defined. The code for this option is 5. The 8-bit value of this option is one of the values listed in the &#34;Domain Name System Security (DNSSEC) Algorithm Numbers&#34; registry [IANADNSSECALGNUM]. The RSASHA1 <a href="./rfc4034.html">[RFC4034]</a>, RSASHA256 <a href="./rfc5702.html">[RFC5702]</a>, ECDSAP256SHA256 and ECDSAP384SHA384 <a href="./rfc6605.html">[RFC6605]</a> algorithms are mandatory to implement. Default is ECDSAP256SHA256.
+When the content integrity protection method is &#34;Sign All&#34; or &#34;Unified Merkle Tree&#34;, this option <span class="kw kw-must">MUST</span> be defined. The code for this option is 5. The 8-bit value of this option is one of the values listed in the &#34;Domain Name System Security (DNSSEC) Algorithm Numbers&#34; registry [IANADNSSECALGNUM]. The RSASHA1 <a href="./rfc4034.html">[RFC4034]</a>, RSASHA256 <a href="./rfc5702.html">[RFC5702]</a>, ECDSAP256SHA256 and ECDSAP384SHA384 <a href="./rfc6605.html">[RFC6605]</a> algorithms are mandatory to implement. Default is ECDSAP256SHA256.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3864,7 +3869,7 @@ When the content integrity protection method is &#34;Sign All&#34; or &#34;Unifi
     <div class="row" id="7-8--Chunk-Addressing-Method-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer MUST include the chunk addressing method it uses. The code for this option is 6. Defined values are listed in Table 6.
+A peer <span class="kw kw-must">MUST</span> include the chunk addressing method it uses. The code for this option is 6. Defined values are listed in Table 6.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3904,7 +3909,7 @@ Table 6: PPSPP Chunk Addressing Methods
     <div class="row" id="7-8--Chunk-Addressing-Method-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Implementations MUST support &#34;32-bit chunk ranges&#34; and &#34;64-bit chunk ranges&#34;. Default is &#34;32-bit chunk ranges&#34;.
+Implementations <span class="kw kw-must">MUST</span> support &#34;32-bit chunk ranges&#34; and &#34;64-bit chunk ranges&#34;. Default is &#34;32-bit chunk ranges&#34;.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3939,7 +3944,7 @@ Implementations MUST support &#34;32-bit chunk ranges&#34; and &#34;64-bit chunk
     <div class="row" id="7-9--Live-Discard-Window-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer in a live swarm MUST include the discard window it uses. The code for this option is 7. The unit of the discard window depends on the chunk addressing method used, see Table 6. For bins and chunk ranges, it is a number of chunks; for byte ranges, it is a number of bytes. Its data type is the same as for a bin, or one value in a range specification. In other words, its value is a 32-bit or 64-bit integer in big-endian format. If this option is used, the Chunk Addressing Method MUST appear before it in the list. This option has the following structure:
+A peer in a live swarm <span class="kw kw-must">MUST</span> include the discard window it uses. The code for this option is 7. The unit of the discard window depends on the chunk addressing method used, see Table 6. For bins and chunk ranges, it is a number of chunks; for byte ranges, it is a number of bytes. Its data type is the same as for a bin, or one value in a range specification. In other words, its value is a 32-bit or 64-bit integer in big-endian format. If this option is used, the Chunk Addressing Method <span class="kw kw-must">MUST</span> appear before it in the list. This option has the following structure:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3964,7 +3969,7 @@ A peer in a live swarm MUST include the discard window it uses. The code for thi
     <div class="row" id="7-9--Live-Discard-Window-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer that does not, under normal circumstances, discard chunks MUST set this option to the special value 0xFFFFFFFF (32-bit) or 0xFFFFFFFFFFFFFFFF (64-bit). For example, peers that record a complete broadcast to offer it directly as a static file after the broadcast ends use these values (see Section 6.1.2). Section 6.2 explains how to determine a value for this option.
+A peer that does not, under normal circumstances, discard chunks <span class="kw kw-must">MUST</span> set this option to the special value 0xFFFFFFFF (32-bit) or 0xFFFFFFFFFFFFFFFF (64-bit). For example, peers that record a complete broadcast to offer it directly as a static file after the broadcast ends use these values (see Section 6.1.2). Section 6.2 explains how to determine a value for this option.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -3988,7 +3993,7 @@ A peer that does not, under normal circumstances, discard chunks MUST set this o
     <div class="row" id="7-10--Supported-Messages-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Peers may support just a subset of the PPSPP messages. For example, peers running over TCP may not accept ACK messages or peers used with a centralized tracking infrastructure may not accept PEX messages. For these reasons, peers who support only a proper subset of the PPSPP messages MUST signal which subset they support by means of this protocol option. The code for this option is 8. The value of this option is a length octet (SupMsgLen) indicating the length, in bytes, of the compressed bitmap that follows.
+Peers may support just a subset of the PPSPP messages. For example, peers running over TCP may not accept ACK messages or peers used with a centralized tracking infrastructure may not accept PEX messages. For these reasons, peers who support only a proper subset of the PPSPP messages <span class="kw kw-must">MUST</span> signal which subset they support by means of this protocol option. The code for this option is 8. The value of this option is a length octet (SupMsgLen) indicating the length, in bytes, of the compressed bitmap that follows.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4037,7 +4042,7 @@ The set of messages supported can be derived from the compressed bitmap by paddi
     <div class="row" id="7-11--Chunk-Size-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer in a swarm MUST include the chunk size the swarm uses. The code for this option is 9. Its value is a 32-bit integer denoting the size of the chunks in bytes in big-endian format. When variable chunk sizes are used, this option MUST be set to the special value 0xFFFFFFFF. Section 8.1 explains how content publishers can determine a value for this option.
+A peer in a swarm <span class="kw kw-must">MUST</span> include the chunk size the swarm uses. The code for this option is 9. Its value is a 32-bit integer denoting the size of the chunks in bytes in big-endian format. When variable chunk sizes are used, this option <span class="kw kw-must">MUST</span> be set to the special value 0xFFFFFFFF. Section 8.1 explains how content publishers can determine a value for this option.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4074,7 +4079,7 @@ A peer in a swarm MUST include the chunk size the swarm uses. The code for this 
     <div class="row" id="8--UDP-Encapsulation-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP implementations MUST use UDP as transport protocol and MUST use LEDBAT for congestion control <a href="./rfc6817.html">[RFC6817]</a>. Using LEDBAT enables PPSPP to serve the content after playback (seeding) without disrupting the user who may have moved to different tasks that use its network connection. Future PPSPP versions can also run over other transport protocols or use different congestion control algorithms.
+PPSPP implementations <span class="kw kw-must">MUST</span> use UDP as transport protocol and <span class="kw kw-must">MUST</span> use LEDBAT for congestion control <a href="./rfc6817.html">[RFC6817]</a>. Using LEDBAT enables PPSPP to serve the content after playback (seeding) without disrupting the user who may have moved to different tasks that use its network connection. Future PPSPP versions can also run over other transport protocols or use different congestion control algorithms.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4098,12 +4103,12 @@ PPSPP実装は、UDPを転送プロトコルとして使用しなければなら
     <div class="row" id="8-1--Chunk-Size-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In general, a UDP datagram containing PPSPP messages SHOULD fit inside a single IP packet, so its maximum size depends on the MTU of the network. If the UDP datagram does not fit, its chance of getting lost in the network increases as the loss of a single fragment of the datagram causes the loss of the complete datagram.
+In general, a UDP datagram containing PPSPP messages <span class="kw kw-should">SHOULD</span> fit inside a single IP packet, so its maximum size depends on the MTU of the network. If the UDP datagram does not fit, its chance of getting lost in the network increases as the loss of a single fragment of the datagram causes the loss of the complete datagram.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-一般に、PPPSPメッセージを含むUDPデータグラムは単一のIPパケット内に収まる必要があるため（SHOULD）、その最大サイズはネットワークのMTUによって異なります。 UDPデータグラムが適合しない場合、データグラムの単一のフラグメントが失われるとデータグラム全体が失われるため、ネットワークで失われる可能性が高くなります。
+一般に、PPPSPメッセージを含むUDPデータグラムは単一のIPパケット内に収まる必要があるため（<span class="kw kw-should">SHOULD</span>）、その最大サイズはネットワークのMTUによって異なります。 UDPデータグラムが適合しない場合、データグラムの単一のフラグメントが失われるとデータグラム全体が失われるため、ネットワークで失われる可能性が高くなります。
         </p>
       </div>
     </div>
@@ -4122,7 +4127,7 @@ PPSPPデータグラムの最大のメッセージは、コンテンツのチャ
     <div class="row" id="8-1--Chunk-Size-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The RECOMMENDED approach is to use fixed-size chunks of 1024 bytes, as this size has a high likelihood of traveling end-to-end across the Internet without any fragmentation. In particular, with this size, a UDP datagram with a DATA message can be transmitted as a single IP packet over an Ethernet network with 1500-byte frames.
+The <span class="kw kw-should">RECOMMENDED</span> approach is to use fixed-size chunks of 1024 bytes, as this size has a high likelihood of traveling end-to-end across the Internet without any fragmentation. In particular, with this size, a UDP datagram with a DATA message can be transmitted as a single IP packet over an Ethernet network with 1500-byte frames.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4134,19 +4139,19 @@ The RECOMMENDED approach is to use fixed-size chunks of 1024 bytes, as this size
     <div class="row" id="8-1--Chunk-Size-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A PPSPP implementation MAY use a variant of the Packetization Layer Path MTU Discovery (PLPMTUD), described in <a href="./rfc4821.html">[RFC4821]</a>, for discovering the optimal MTU between sender and destination. As in PLPMTUD, progressively larger probing packets are used to detect the optimal MTU for a given path. However, in PPSPP, probe packets SHOULD contain actual messages, in particular, multiple DATA messages. By using actual DATA messages as probe packets, the returning ACK messages will confirm the probe delivery, effectively updating the MTU estimate on both ends of the link. To be able to scale up probe packets with sensible increments, a minimum chunk size of 512 bytes SHOULD be used. Smaller chunk sizes lead to an inefficient protocol. An implication is that PPSPP supports datagrams over IPv4 of 576 bytes or more only. This variant is not mandatory to implement.
+A PPSPP implementation <span class="kw kw-may">MAY</span> use a variant of the Packetization Layer Path MTU Discovery (PLPMTUD), described in <a href="./rfc4821.html">[RFC4821]</a>, for discovering the optimal MTU between sender and destination. As in PLPMTUD, progressively larger probing packets are used to detect the optimal MTU for a given path. However, in PPSPP, probe packets <span class="kw kw-should">SHOULD</span> contain actual messages, in particular, multiple DATA messages. By using actual DATA messages as probe packets, the returning ACK messages will confirm the probe delivery, effectively updating the MTU estimate on both ends of the link. To be able to scale up probe packets with sensible increments, a minimum chunk size of 512 bytes <span class="kw kw-should">SHOULD</span> be used. Smaller chunk sizes lead to an inefficient protocol. An implication is that PPSPP supports datagrams over IPv4 of 576 bytes or more only. This variant is not mandatory to implement.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PPSPP実装は、送信者と宛先の間の最適なMTUを発見するために、<a href="./rfc4821.html">[RFC4821]</a>で説明されているパケット化レイヤパスMTU発見（PLPMTUD）のバリアントを使用する場合があります。 PLPMTUDと同様に、徐々に大きくなるプローブパケットを使用して、特定のパスの最適なMTUを検出します。ただし、PPPSPでは、プローブパケットに実際のメッセージ、特に複数のDATAメッセージを含める必要があります（SHOULD）。実際のDATAメッセージをプローブパケットとして使用することにより、返されるACKメッセージはプローブ配信を確認し、リンクの両端のMTU推定を効果的に更新します。適切な増分でプローブパケットをスケールアップできるようにするには、512バイトの最小チャンクサイズを使用する必要があります（SHOULD）。チャンクサイズが小さいと、プロトコルが非効率になります。つまり、PPSPPは576バイト以上のIPv4を介したデータグラムのみをサポートします。このバリアントの実装は必須ではありません。
+PPSPP実装は、送信者と宛先の間の最適なMTUを発見するために、<a href="./rfc4821.html">[RFC4821]</a>で説明されているパケット化レイヤパスMTU発見（PLPMTUD）のバリアントを使用する場合があります。 PLPMTUDと同様に、徐々に大きくなるプローブパケットを使用して、特定のパスの最適なMTUを検出します。ただし、PPPSPでは、プローブパケットに実際のメッセージ、特に複数のDATAメッセージを含める必要があります（<span class="kw kw-should">SHOULD</span>）。実際のDATAメッセージをプローブパケットとして使用することにより、返されるACKメッセージはプローブ配信を確認し、リンクの両端のMTU推定を効果的に更新します。適切な増分でプローブパケットをスケールアップできるようにするには、512バイトの最小チャンクサイズを使用する必要があります（<span class="kw kw-should">SHOULD</span>）。チャンクサイズが小さいと、プロトコルが非効率になります。つまり、PPSPPは576バイト以上のIPv4を介したデータグラムのみをサポートします。このバリアントの実装は必須ではありません。
         </p>
       </div>
     </div>
     <div class="row" id="8-1--Chunk-Size-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The chunk size used for a particular swarm, or the fact that it is variable, MUST be part of the swarm&#39;s metadata (which then minimally consists of the swarm ID and the chunk nature and size).
+The chunk size used for a particular swarm, or the fact that it is variable, <span class="kw kw-must">MUST</span> be part of the swarm&#39;s metadata (which then minimally consists of the swarm ID and the chunk nature and size).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4232,12 +4237,12 @@ Furthermore, integers are serialized in network (big-endian) byte order. So, con
     <div class="row" id="8-2--Datagrams-and-Messages-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- All messages are idempotent or recognizable as duplicates. Idempotent means that processing a message more than once does not lead to a different state from if it was processed just once. In particular, a peer MAY resend DATA, ACK, HAVE, INTEGRITY, PEX_*, SIGNED_INTEGRITY, REQUEST, CANCEL, CHOKE, and UNCHOKE messages without problems when loss is suspected. When a peer resends a HANDSHAKE message, it can be recognized as duplicate by the receiver, because it already recorded the first connection attempt, and be dealt with.
+ All messages are idempotent or recognizable as duplicates. Idempotent means that processing a message more than once does not lead to a different state from if it was processed just once. In particular, a peer <span class="kw kw-may">MAY</span> resend DATA, ACK, HAVE, INTEGRITY, PEX_*, SIGNED_INTEGRITY, REQUEST, CANCEL, CHOKE, and UNCHOKE messages without problems when loss is suspected. When a peer resends a HANDSHAKE message, it can be recognized as duplicate by the receiver, because it already recorded the first connection attempt, and be dealt with.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-すべてのメッセージはべき等であるか、重複として認識されます。べき等とは、メッセージを2回以上処理しても、メッセージが1回だけ処理された場合とは異なる状態にならないことを意味します。特に、損失が疑われる場合、ピアはDATA、ACK、HAVE、INTEGRITY、PEX _ *、SIGNED_INTEGRITY、REQUEST、CANCEL、CHOKE、およびUNCHOKEメッセージを問題なく再送信できます（MAY）。ピアがHANDSHAKEメッセージを再送信すると、すでに最初の接続試行が記録されており、処理されているため、受信者はそれを重複として認識できます。
+すべてのメッセージはべき等であるか、重複として認識されます。べき等とは、メッセージを2回以上処理しても、メッセージが1回だけ処理された場合とは異なる状態にならないことを意味します。特に、損失が疑われる場合、ピアはDATA、ACK、HAVE、INTEGRITY、PEX _ *、SIGNED_INTEGRITY、REQUEST、CANCEL、CHOKE、およびUNCHOKEメッセージを問題なく再送信できます（<span class="kw kw-may">MAY</span>）。ピアがHANDSHAKEメッセージを再送信すると、すでに最初の接続試行が記録されており、処理されているため、受信者はそれを重複として認識できます。
         </p>
       </div>
     </div>
@@ -4256,7 +4261,7 @@ Furthermore, integers are serialized in network (big-endian) byte order. So, con
     <div class="row" id="8-3--Channels-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As described in Section 3.11, PPSPP uses a multiplexing scheme, called channels, to allow multiple swarms to use the same UDP port. In the UDP encapsulation, each datagram from Peer A to Peer B is prefixed with the channel ID allocated by Peer B. The peers learn about each other&#39;s channel ID during the handshake as explained in Section 3.1.1. A channel ID consists of 4 bytes and MUST be generated following the requirements in <a href="./rfc4960.html">[RFC4960]</a> (Section 5.1.3).
+As described in Section 3.11, PPSPP uses a multiplexing scheme, called channels, to allow multiple swarms to use the same UDP port. In the UDP encapsulation, each datagram from Peer A to Peer B is prefixed with the channel ID allocated by Peer B. The peers learn about each other&#39;s channel ID during the handshake as explained in Section 3.1.1. A channel ID consists of 4 bytes and <span class="kw kw-must">MUST</span> be generated following the requirements in <a href="./rfc4960.html">[RFC4960]</a> (Section 5.1.3).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4335,7 +4340,7 @@ Destination Channel ID:
     <div class="row" id="8-4--HANDSHAKE-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-9">
-If the datagram is sent by the initiating peer, then it MUST be an all-zeros channel ID.
+If the datagram is sent by the initiating peer, then it <span class="kw kw-must">MUST</span> be an all-zeros channel ID.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4347,7 +4352,7 @@ If the datagram is sent by the initiating peer, then it MUST be an all-zeros cha
     <div class="row" id="8-4--HANDSHAKE-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-9">
-If the datagram is sent by the responding peer, then it MUST consist of the Source Channel ID from the sender&#39;s HANDSHAKE message.
+If the datagram is sent by the responding peer, then it <span class="kw kw-must">MUST</span> consist of the Source Channel ID from the sender&#39;s HANDSHAKE message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4383,12 +4388,12 @@ Protocol Options: A list of protocol options encoding the swarm&#39;s metadata, 
     <div class="row" id="8-4--HANDSHAKE-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A peer SHOULD explicitly close a channel by sending a HANDSHAKE message that MUST contain an all zeros Source Channel ID and a list of protocol options. The list MUST either be empty or contain the maximum version number the sender supports, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1.
+A peer <span class="kw kw-should">SHOULD</span> explicitly close a channel by sending a HANDSHAKE message that <span class="kw kw-must">MUST</span> contain an all zeros Source Channel ID and a list of protocol options. The list <span class="kw kw-must">MUST</span> either be empty or contain the maximum version number the sender supports, following the min/max versioning scheme defined in <a href="./rfc6709.html">[RFC6709]</a>, Section 4.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ピアは、すべてゼロのソースチャネルIDとプロトコルオプションのリストを含む必要があるHANDSHAKEメッセージを送信して、チャネルを明示的に閉じる必要があります（SHOULD）。 <a href="./rfc6709.html">[RFC6709]</a>のセクション4.1で定義されている最小/最大バージョン管理スキームに従って、リストは空であるか、送信者がサポートする最大バージョン番号を含んでいる必要があります。
+ピアは、すべてゼロのソースチャネルIDとプロトコルオプションのリストを含む必要があるHANDSHAKEメッセージを送信して、チャネルを明示的に閉じる必要があります（<span class="kw kw-should">SHOULD</span>）。 <a href="./rfc6709.html">[RFC6709]</a>のセクション4.1で定義されている最小/最大バージョン管理スキームに従って、リストは空であるか、送信者がサポートする最大バージョン番号を含んでいる必要があります。
         </p>
       </div>
     </div>
@@ -4470,7 +4475,7 @@ where the first octet is the HAVE message (0x03) followed by the start chunk and
     <div class="row" id="8-6--DATA-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- A DATA message (type 0x01) consists of a chunk specification, a timestamp, and the actual chunk. In case a datagram contains one DATA message, a sender MUST always put the DATA message in the tail of the datagram. A datagram MAY contain multiple DATA messages when the chunk size is fixed and when none of the DATA messages carry the last chunk, if that is smaller than the chunk size. As LEDBAT congestion control is used, a sender MUST include a timestamp, in particular, a 64-bit integer representing the current system time with microsecond accuracy. The timestamp MUST be included between chunk specification and the actual chunk.
+ A DATA message (type 0x01) consists of a chunk specification, a timestamp, and the actual chunk. In case a datagram contains one DATA message, a sender <span class="kw kw-must">MUST</span> always put the DATA message in the tail of the datagram. A datagram <span class="kw kw-may">MAY</span> contain multiple DATA messages when the chunk size is fixed and when none of the DATA messages carry the last chunk, if that is smaller than the chunk size. As LEDBAT congestion control is used, a sender <span class="kw kw-must">MUST</span> include a timestamp, in particular, a 64-bit integer representing the current system time with microsecond accuracy. The timestamp <span class="kw kw-must">MUST</span> be included between chunk specification and the actual chunk.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -4971,12 +4976,12 @@ where the first octet is the UNCHOKE message (0x0b).
     <div class="row" id="8-13--PEXREQ-PEXRESv4-PEXRESv6-and-PEXREScert-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A PEX_REQ (0x06) message has no payload. A PEX_RESv4 (0x05) message consists of an IPv4 address in big-endian format followed by a UDP port number in big-endian format. A PEX_RESv6 (0x0c) message contains a 128-bit IPv6 address instead of an IPv4 one. If a PEX_REQ message does not originate from a private, unique-local, link-local, or multicast address <a href="https://datatracker.ietf.org/doc/html/rfc1918">[RFC1918]</a> <a href="./rfc4193.html">[RFC4193]</a> <a href="./rfc4291.html">[RFC4291]</a>, then the PEX_RES* messages sent in reply MUST NOT contain such addresses. This is to prevent leaking of internal addresses to external peers.
+A PEX_REQ (0x06) message has no payload. A PEX_RESv4 (0x05) message consists of an IPv4 address in big-endian format followed by a UDP port number in big-endian format. A PEX_RESv6 (0x0c) message contains a 128-bit IPv6 address instead of an IPv4 one. If a PEX_REQ message does not originate from a private, unique-local, link-local, or multicast address <a href="https://datatracker.ietf.org/doc/html/rfc1918">[RFC1918]</a> <a href="./rfc4193.html">[RFC4193]</a> <a href="./rfc4291.html">[RFC4291]</a>, then the PEX_RES* messages sent in reply <span class="kw kw-mustnot">MUST NOT</span> contain such addresses. This is to prevent leaking of internal addresses to external peers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-PEX_REQ（0x06）メッセージにはペイロードがありません。 PEX_RESv4（0x05）メッセージは、ビッグエンディアン形式のIPv4アドレスと、それに続くビッグエンディアン形式のUDPポート番号で構成されます。 PEX_RESv6（0x0c）メッセージには、IPv4アドレスの代わりに128ビットIPv6アドレスが含まれています。 PEX_REQメッセージがプライベート、一意ローカル、リンクローカル、またはマルチキャストアドレス<a href="https://datatracker.ietf.org/doc/html/rfc1918">[RFC1918]</a> <a href="./rfc4193.html">[RFC4193]</a> <a href="./rfc4291.html">[RFC4291]</a>から発信されていない場合、返信で送信されるPEX_RES *メッセージにそのようなアドレスを含めてはなりません（MUST NOT）。これは、内部アドレスが外部ピアに漏洩するのを防ぐためです。
+PEX_REQ（0x06）メッセージにはペイロードがありません。 PEX_RESv4（0x05）メッセージは、ビッグエンディアン形式のIPv4アドレスと、それに続くビッグエンディアン形式のUDPポート番号で構成されます。 PEX_RESv6（0x0c）メッセージには、IPv4アドレスの代わりに128ビットIPv6アドレスが含まれています。 PEX_REQメッセージがプライベート、一意ローカル、リンクローカル、またはマルチキャストアドレス<a href="https://datatracker.ietf.org/doc/html/rfc1918">[RFC1918]</a> <a href="./rfc4193.html">[RFC4193]</a> <a href="./rfc4291.html">[RFC4291]</a>から発信されていない場合、返信で送信されるPEX_RES *メッセージにそのようなアドレスを含めてはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。これは、内部アドレスが外部ピアに漏洩するのを防ぐためです。
         </p>
       </div>
     </div>
@@ -5098,7 +5103,7 @@ where the first octet is the PEX_RESv6 message (0x0c), followed by the IPv6 addr
     <div class="row" id="8-13--PEXREQ-PEXRESv4-PEXRESv6-and-PEXREScert-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A PEX_REScert (0x0d) message consists of a 16-bit integer in big-endian specifying the size of the membership certificate that follows, see Section 12.2.1. This membership certificate states that Peer P at Time T is a member of Swarm S and is a X.509v3 certificate <a href="./rfc5280.html">[RFC5280]</a> that is encoded using the ASN.1 distinguished encoding rules (DER) [CCITT.X690.2002]. The certificate MUST contain a &#34;Subject Alternative Name&#34; extension, marked as critical, of type uniformResourceIdentifier.
+A PEX_REScert (0x0d) message consists of a 16-bit integer in big-endian specifying the size of the membership certificate that follows, see Section 12.2.1. This membership certificate states that Peer P at Time T is a member of Swarm S and is a X.509v3 certificate <a href="./rfc5280.html">[RFC5280]</a> that is encoded using the ASN.1 distinguished encoding rules (DER) [CCITT.X690.2002]. The certificate <span class="kw kw-must">MUST</span> contain a &#34;Subject Alternative Name&#34; extension, marked as critical, of type uniformResourceIdentifier.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5149,7 +5154,7 @@ where the first octet is the PEX_REScert message (0x0d) followed by the size of 
     <div class="row" id="8-13--PEXREQ-PEXRESv4-PEXRESv6-and-PEXREScert-p15">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The URL contained in the name extension MUST follow the generic syntax for URLs <a href="./rfc3986.html">[RFC3986]</a>, where its scheme component is &#34;file&#34;, the host in the authority component is the DNS name or IP address of Peer P, the port in the authority component is the port of Peer P, and the path contains the swarm identifier for Swarm S, in hexadecimal form. In particular, the preferred form of the swarm identifier is xxyyzz..., where the &#39;x&#39;s, &#39;y&#39;s, and &#39;z&#39;s are 2 hexadecimal digits of the 8-bit pieces of the identifier. The validity time of the certificate is set with notBefore UTCTime set to T and notAfter UTCTime set to T plus some expiry time defined by the issuer. An example URL:
+The URL contained in the name extension <span class="kw kw-must">MUST</span> follow the generic syntax for URLs <a href="./rfc3986.html">[RFC3986]</a>, where its scheme component is &#34;file&#34;, the host in the authority component is the DNS name or IP address of Peer P, the port in the authority component is the port of Peer P, and the path contains the swarm identifier for Swarm S, in hexadecimal form. In particular, the preferred form of the swarm identifier is xxyyzz..., where the &#39;x&#39;s, &#39;y&#39;s, and &#39;z&#39;s are 2 hexadecimal digits of the 8-bit pieces of the identifier. The validity time of the certificate is set with notBefore UTCTime set to T and notAfter UTCTime set to T plus some expiry time defined by the issuer. An example URL:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5323,7 +5328,7 @@ We present a small example of communication between a leecher and a seeder. The 
     <div class="row" id="8-16--Example-of-Operation-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To do the handshake, the initiating peer sends a datagram that MUST start with an all-zeros channel ID (0x00000000); followed by a HANDSHAKE message, whose payload is a locally unused; a random channel ID (in this case 0x00000001); and a list of protocol options. Channel IDs MUST be randomly chosen, as described in Section 12.1.
+To do the handshake, the initiating peer sends a datagram that <span class="kw kw-must">MUST</span> start with an all-zeros channel ID (0x00000000); followed by a HANDSHAKE message, whose payload is a locally unused; a random channel ID (in this case 0x00000001); and a list of protocol options. Channel IDs <span class="kw kw-must">MUST</span> be randomly chosen, as described in Section 12.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5447,12 +5452,12 @@ Chunk Size: 1024
     <div class="row" id="8-16--Example-of-Operation-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The receiving peer MAY respond, in which case the returned datagram MUST consist of the channel ID from the sender&#39;s HANDSHAKE message (0x00000001); a HANDSHAKE message, whose payload is a locally unused; a random channel ID (0x00000008); and a list of protocol options; followed by any other messages it wants to send.
+The receiving peer <span class="kw kw-may">MAY</span> respond, in which case the returned datagram <span class="kw kw-must">MUST</span> consist of the channel ID from the sender&#39;s HANDSHAKE message (0x00000001); a HANDSHAKE message, whose payload is a locally unused; a random channel ID (0x00000008); and a list of protocol options; followed by any other messages it wants to send.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-受信側ピアは応答してもよい (MAY)です。その場合、返されるデータグラムは、送信者のHANDSHAKEメッセージのchannel ID (0x00000001)、ペイロードがlocally unusedであるHANDSHAKEメッセージ、random channel ID (0x00000008)、およびプロトコルオプションのリストで構成されなければなりません (MUST)。続いて、送信したい他のメッセージが続きます。
+受信側ピアは応答してもよい (<span class="kw kw-may">MAY</span>)です。その場合、返されるデータグラムは、送信者のHANDSHAKEメッセージのchannel ID (0x00000001)、ペイロードがlocally unusedであるHANDSHAKEメッセージ、random channel ID (0x00000008)、およびプロトコルオプションのリストで構成されなければなりません (<span class="kw kw-must">MUST</span>)。続いて、送信したい他のメッセージが続きます。
         </p>
       </div>
     </div>
@@ -5496,7 +5501,7 @@ The receiving peer MAY respond, in which case the returned datagram MUST consist
     <div class="row" id="8-16--Example-of-Operation-p14">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-At this point, the initiator knows that the peer really responds; for that purpose, channel IDs MUST be random enough to prevent easy guessing. So, the third datagram of a handshake MAY already contain some heavy payload. To minimize the number of initialization round trips, the first two datagrams MAY also contain some minor payload, e.g., the HAVE message.
+At this point, the initiator knows that the peer really responds; for that purpose, channel IDs <span class="kw kw-must">MUST</span> be random enough to prevent easy guessing. So, the third datagram of a handshake <span class="kw kw-may">MAY</span> already contain some heavy payload. To minimize the number of initialization round trips, the first two datagrams <span class="kw kw-may">MAY</span> also contain some minor payload, e.g., the HAVE message.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -5508,7 +5513,7 @@ At this point, the initiator knows that the peer really responds; for that purpo
     <div class="row" id="8-16--Example-of-Operation-p15">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The initiating peer MAY send a request for the chunks of content it wants to retrieve from the receiving peer, e.g., the first chunk announced during the handshake. It always precedes the message with the channel ID of the peer it is communicating with (0x00000008 in our example), as described in Section 3.11. Furthermore, it MAY add additional messages such as a PEX_REQ.
+The initiating peer <span class="kw kw-may">MAY</span> send a request for the chunks of content it wants to retrieve from the receiving peer, e.g., the first chunk announced during the handshake. It always precedes the message with the channel ID of the peer it is communicating with (0x00000008 in our example), as described in Section 3.11. Furthermore, it <span class="kw kw-may">MAY</span> add additional messages such as a PEX_REQ.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -6693,7 +6698,7 @@ On receiving the first datagram Peer B will record some state about Peer A. At p
     <div class="row" id="12-1-2--Protection-against-Attack-2-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-So presently, PPSPP is somewhat vulnerable to attack 2. An attacker could send many datagrams with HANDSHAKEs and HAVEs and thus allocate state at the PPSPP peer. Therefore, Peer A MUST respond immediately to the second datagram, if it is still interested in Peer B.
+So presently, PPSPP is somewhat vulnerable to attack 2. An attacker could send many datagrams with HANDSHAKEs and HAVEs and thus allocate state at the PPSPP peer. Therefore, Peer A <span class="kw kw-must">MUST</span> respond immediately to the second datagram, if it is still interested in Peer B.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -6945,12 +6950,12 @@ The load generated on the tracker depends on churn and the lifetime of a certifi
     <div class="row" id="12-2-2--Example-Tracker-as-Certification-Authority-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The membership certificate mechanism itself can be used for a kind of amplification attack against good peers. Malicious Peer T can cause Peer A to spend some CPU to verify the signatures on the membership certificates that Peer T sends. To counter this, Peer A SHOULD check a few of the certificates sent and discard the rest if they are defective.
+The membership certificate mechanism itself can be used for a kind of amplification attack against good peers. Malicious Peer T can cause Peer A to spend some CPU to verify the signatures on the membership certificates that Peer T sends. To counter this, Peer A <span class="kw kw-should">SHOULD</span> check a few of the certificates sent and discard the rest if they are defective.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-メンバーシップ証明書メカニズム自体は、優れたピアに対する一種の増幅攻撃に使用できます。悪意のあるピアTは、ピアAにCPUを費やして、ピアTが送信するメンバーシップ証明書の署名を検証させる可能性があります。これに対抗するため、ピアAは送信された証明書のいくつかを確認し、欠陥がある場合は残りを破棄する必要があります（SHOULD）。
+メンバーシップ証明書メカニズム自体は、優れたピアに対する一種の増幅攻撃に使用できます。悪意のあるピアTは、ピアAにCPUを費やして、ピアTが送信するメンバーシップ証明書の署名を検証させる可能性があります。これに対抗するため、ピアAは送信された証明書のいくつかを確認し、欠陥がある場合は残りを破棄する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -7113,7 +7118,7 @@ DTLSを介して送信する場合、PPSPPはIPレイヤーによって維持さ
     <div class="row" id="12-5--Strength-of-the-Hash-Function-for-Merkle-Hash-Trees-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Implementations MUST support SHA-1 as the hash function for content integrity protection via Merkle hash trees. SHA-1 may be preferred over stronger hash functions by content providers because it reduces on-the-wire overhead. As such, it presents a trade-off between performance and security. The security considerations for SHA-1 are discussed in <a href="./rfc6194.html">[RFC6194]</a>.
+Implementations <span class="kw kw-must">MUST</span> support SHA-1 as the hash function for content integrity protection via Merkle hash trees. SHA-1 may be preferred over stronger hash functions by content providers because it reduces on-the-wire overhead. As such, it presents a trade-off between performance and security. The security considerations for SHA-1 are discussed in <a href="./rfc6194.html">[RFC6194]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

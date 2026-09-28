@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、高速かつ長距離のネットワーク向けTCP輻輳制御アルゴリズム「CUBIC」の標準仕様を全面的に更新・再定義しています（RFC 8312を廃止）。実際のインターネット環境での実装経験や学術的な研究に基づき、スロースタート時の挙動（HyStart++との統合）、ウィンドウ削減の最適化、および公平性の向上に関する修正を行い、現代の広帯域ネットワークにおけるパフォーマンスと安定性を高める決定版の標準を提供しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 9438 - 高速・長距離ネットワークのためのCUBIC</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -475,12 +480,12 @@ The following sections
     <div class="row" id="2--Conventions-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -1262,7 +1267,7 @@ Upon receiving a new ACK during congestion avoidance, CUBIC computes the _target
     <div class="row" id="4-2--Window-Increase-Function-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The elapsed time _t_ in Figure 1 MUST NOT include periods during which _cwnd_ has not been updated due to application-limited behavior (see Section 5.8).
+The elapsed time _t_ in Figure 1 <span class="kw kw-mustnot">MUST NOT</span> include periods during which _cwnd_ has not been updated due to application-limited behavior (see Section 5.8).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1438,7 +1443,7 @@ Thus, CUBIC uses Figure 4 to estimate the window size _W_est_ in the Reno-friend
     <div class="row" id="4-3--Reno-Friendly-Region-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-which achieves approximately the same average window size as Reno in many cases. The model used to calculate α__cubic_ is not absolutely precise, but analysis and simulation as discussed in [AIMD-friendliness], as well as over a decade of experience with CUBIC in the public Internet, show that this approach produces acceptable levels of rate fairness between CUBIC and Reno flows. Also, no significant drawbacks of the model have been reported. However, continued detailed analysis of this approach would be beneficial. When receiving a new ACK in congestion avoidance (where _cwnd_ could be greater than or less than _W_max_), CUBIC checks whether W_cubic(_t_) is less than _W_est_.  If so, CUBIC is in the Reno-friendly region and _cwnd_ SHOULD be set to _W_est_ at each reception of a new ACK.
+which achieves approximately the same average window size as Reno in many cases. The model used to calculate α__cubic_ is not absolutely precise, but analysis and simulation as discussed in [AIMD-friendliness], as well as over a decade of experience with CUBIC in the public Internet, show that this approach produces acceptable levels of rate fairness between CUBIC and Reno flows. Also, no significant drawbacks of the model have been reported. However, continued detailed analysis of this approach would be beneficial. When receiving a new ACK in congestion avoidance (where _cwnd_ could be greater than or less than _W_max_), CUBIC checks whether W_cubic(_t_) is less than _W_est_.  If so, CUBIC is in the Reno-friendly region and _cwnd_ <span class="kw kw-should">SHOULD</span> be set to _W_est_ at each reception of a new ACK.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1473,12 +1478,12 @@ _W_est_は、うっ血回避段階の開始時に_cwnd_epoch_に等しく設定�
     <div class="row" id="4-3--Reno-Friendly-Region-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once _W_est_ has grown to reach the _cwnd_ at the time of most recently setting _ssthresh_ -- that is, _W_est_ &gt;= _cwnd_prior_ -- the sender SHOULD set α__cubic_ to 1 to ensure that it can achieve the same congestion window increment rate as Reno, which uses AIMD(1, 0.5).
+Once _W_est_ has grown to reach the _cwnd_ at the time of most recently setting _ssthresh_ -- that is, _W_est_ &gt;= _cwnd_prior_ -- the sender <span class="kw kw-should">SHOULD</span> set α__cubic_ to 1 to ensure that it can achieve the same congestion window increment rate as Reno, which uses AIMD(1, 0.5).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-_W_est_が最近設定された時点で_cwnd_に到達するように成長したら、_ssthresh_を設定します。AIMD（1、0.5）を使用しますべきです (SHOULD)。
+_W_est_が最近設定された時点で_cwnd_に到達するように成長したら、_ssthresh_を設定します。AIMD（1、0.5）を使用しますべきです (<span class="kw kw-should">SHOULD</span>)。
         </p>
       </div>
     </div>
@@ -1509,7 +1514,7 @@ The next two sections assume that CUBIC is not in the Reno-friendly region and u
     <div class="row" id="4-4--Concave-Region-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When receiving a new ACK in congestion avoidance, if CUBIC is not in the Reno-friendly region and _cwnd_ is less than _W_max_, then CUBIC is in the concave region. In this region, _cwnd_ MUST be incremented by
+When receiving a new ACK in congestion avoidance, if CUBIC is not in the Reno-friendly region and _cwnd_ is less than _W_max_, then CUBIC is in the concave region. In this region, _cwnd_ <span class="kw kw-must">MUST</span> be incremented by
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1578,7 +1583,7 @@ The convex region indicates that the network conditions might have changed since
     <div class="row" id="4-5--Convex-Region-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Unless the cwnd is overridden by the AIMD window increase, CUBIC will behave cautiously when operating in this region. The convex profile aims to increase the window very slowly at the beginning when _cwnd_ is around _W_max_ and then gradually increases its rate of increase. This region is also called the &#34;maximum probing phase&#34;, since CUBIC is searching for a new _W_max_.  In this region, _cwnd_ MUST be incremented by
+Unless the cwnd is overridden by the AIMD window increase, CUBIC will behave cautiously when operating in this region. The convex profile aims to increase the window very slowly at the beginning when _cwnd_ is around _W_max_ and then gradually increases its rate of increase. This region is also called the &#34;maximum probing phase&#34;, since CUBIC is searching for a new _W_max_.  In this region, _cwnd_ <span class="kw kw-must">MUST</span> be incremented by
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1623,7 +1628,7 @@ for each received new ACK, where _target_ is calculated as described in Section 
     <div class="row" id="4-6--Multiplicative-Decrease-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a congestion event is detected by the mechanisms described in Section 3.1, CUBIC updates _W_max_ and reduces _cwnd_ and _ssthresh_ immediately, as described below. In the case of packet loss, the sender MUST reduce _cwnd_ and _ssthresh_ immediately upon entering loss recovery, similar to <a href="./rfc5681.html">[RFC5681]</a> (and <a href="./rfc6675.html">[RFC6675]</a>). Note that other mechanisms, such as Proportional Rate Reduction <a href="./rfc6937.html">[RFC6937]</a>, can be used to reduce the sending rate during loss recovery more gradually. The parameter β__cubic_ SHOULD be set to 0.7, which is different from the multiplicative decrease factor used in <a href="./rfc5681.html">[RFC5681]</a> (and <a href="./rfc6675.html">[RFC6675]</a>) during fast recovery.
+When a congestion event is detected by the mechanisms described in Section 3.1, CUBIC updates _W_max_ and reduces _cwnd_ and _ssthresh_ immediately, as described below. In the case of packet loss, the sender <span class="kw kw-must">MUST</span> reduce _cwnd_ and _ssthresh_ immediately upon entering loss recovery, similar to <a href="./rfc5681.html">[RFC5681]</a> (and <a href="./rfc6675.html">[RFC6675]</a>). Note that other mechanisms, such as Proportional Rate Reduction <a href="./rfc6937.html">[RFC6937]</a>, can be used to reduce the sending rate during loss recovery more gradually. The parameter β__cubic_ <span class="kw kw-should">SHOULD</span> be set to 0.7, which is different from the multiplicative decrease factor used in <a href="./rfc5681.html">[RFC5681]</a> (and <a href="./rfc6675.html">[RFC6675]</a>) during fast recovery.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1647,7 +1652,7 @@ In Figure 5, _flight_size_ is the amount of outstanding (unacknowledged) data in
     <div class="row" id="4-6--Multiplicative-Decrease-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Some implementations of CUBIC currently use _cwnd_ instead of _flight_size_ when calculating a new _ssthresh_.  Implementations that use _cwnd_ MUST use other measures to prevent _cwnd_ from growing when the volume of bytes in flight is smaller than _cwnd_.  This also effectively prevents _cwnd_ from growing beyond the receive window. Such measures are important for preventing a CUBIC sender from using an arbitrarily high cwnd _value_ when calculating new values for _ssthresh_ and _cwnd_ when congestion is detected. This might not be as robust as the mechanisms described in <a href="./rfc7661.html">[RFC7661]</a>.
+Some implementations of CUBIC currently use _cwnd_ instead of _flight_size_ when calculating a new _ssthresh_.  Implementations that use _cwnd_ <span class="kw kw-must">MUST</span> use other measures to prevent _cwnd_ from growing when the volume of bytes in flight is smaller than _cwnd_.  This also effectively prevents _cwnd_ from growing beyond the receive window. Such measures are important for preventing a CUBIC sender from using an arbitrarily high cwnd _value_ when calculating new values for _ssthresh_ and _cwnd_ when congestion is detected. This might not be as robust as the mechanisms described in <a href="./rfc7661.html">[RFC7661]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1659,7 +1664,7 @@ Cubicのいくつかの実装は、新しい_SSTHRESH_を計算するときに_f
     <div class="row" id="4-6--Multiplicative-Decrease-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A QUIC sender that uses a _cwnd_ _value_ to calculate new values for _cwnd_ and _ssthresh_ after detecting a congestion event is REQUIRED to apply similar mechanisms <a href="./rfc9002.html">[RFC9002]</a>.
+A QUIC sender that uses a _cwnd_ _value_ to calculate new values for _cwnd_ and _ssthresh_ after detecting a congestion event is <span class="kw kw-must">REQUIRED</span> to apply similar mechanisms <a href="./rfc9002.html">[RFC9002]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1699,7 +1704,7 @@ A side effect of setting β__cubic_ to a value bigger than 0.5 is that packet lo
     <div class="row" id="4-6--Multiplicative-Decrease-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Note that CUBIC MUST continue to reduce _cwnd_ in response to congestion events detected by ECN-Echo ACKs until it reaches a value of 1 SMSS. If congestion events indicated by ECN-Echo ACKs persist, a sender with a _cwnd_ of 1 SMSS MUST reduce its sending rate even further. This can be achieved by using a retransmission timer with exponential backoff, as described in <a href="./rfc3168.html">[RFC3168]</a>.
+Note that CUBIC <span class="kw kw-must">MUST</span> continue to reduce _cwnd_ in response to congestion events detected by ECN-Echo ACKs until it reaches a value of 1 SMSS. If congestion events indicated by ECN-Echo ACKs persist, a sender with a _cwnd_ of 1 SMSS <span class="kw kw-must">MUST</span> reduce its sending rate even further. This can be achieved by using a retransmission timer with exponential backoff, as described in <a href="./rfc3168.html">[RFC3168]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1723,7 +1728,7 @@ Cubicは、ECNエコーACKによって検出された輻輳イベントに応じ
     <div class="row" id="4-7--Fast-Convergence-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To improve convergence speed, CUBIC uses a heuristic. When a new flow joins the network, existing flows need to give up some of their bandwidth to allow the new flow some room for growth if the existing flows have been using all the network bandwidth. To speed up this bandwidth release by existing flows, the following fast convergence mechanism SHOULD be implemented.
+To improve convergence speed, CUBIC uses a heuristic. When a new flow joins the network, existing flows need to give up some of their bandwidth to allow the new flow some room for growth if the existing flows have been using all the network bandwidth. To speed up this bandwidth release by existing flows, the following fast convergence mechanism <span class="kw kw-should">SHOULD</span> be implemented.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1772,7 +1777,7 @@ During a congestion event, if the current _cwnd_ is less than _W_max_, this indi
     <div class="row" id="4-7--Fast-Convergence-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Fast convergence is designed for network environments with multiple CUBIC flows. In network environments with only a single CUBIC flow and without any other traffic, fast convergence SHOULD be disabled.
+Fast convergence is designed for network environments with multiple CUBIC flows. In network environments with only a single CUBIC flow and without any other traffic, fast convergence <span class="kw kw-should">SHOULD</span> be disabled.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1808,7 +1813,7 @@ In the case of a timeout, CUBIC follows Reno to reduce _cwnd_ <a href="./rfc5681
     <div class="row" id="4-8--Timeout-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-During the first congestion avoidance stage after a timeout, CUBIC increases its congestion window size using Figure 1, where _t_ is the elapsed time since the beginning of the current congestion avoidance stage, _K_ is set to 0, and _W_max_ is set to the congestion window size at the beginning of the current congestion avoidance stage. In addition, for the Reno-friendly region, _W_est_ SHOULD be set to the congestion window size at the beginning of the current congestion avoidance stage.
+During the first congestion avoidance stage after a timeout, CUBIC increases its congestion window size using Figure 1, where _t_ is the elapsed time since the beginning of the current congestion avoidance stage, _K_ is set to 0, and _W_max_ is set to the congestion window size at the beginning of the current congestion avoidance stage. In addition, for the Reno-friendly region, _W_est_ <span class="kw kw-should">SHOULD</span> be set to the congestion window size at the beginning of the current congestion avoidance stage.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1868,7 +1873,7 @@ TCPの場合、偽のタイムアウトと偽の速い再送信の2つのタイ�
     <div class="row" id="4-9-1--Spurious-Timeouts-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-An implementation MAY detect spurious timeouts based on the mechanisms described in Forward RTO-Recovery <a href="./rfc5682.html">[RFC5682]</a>. Experimental alternatives include the Eifel detection algorithm <a href="./rfc3522.html">[RFC3522]</a>. When a spurious timeout is detected, a TCP implementation MAY follow the response algorithm described in <a href="./rfc4015.html">[RFC4015]</a> to restore the congestion control state and adapt the retransmission timer to avoid further spurious timeouts.
+An implementation <span class="kw kw-may">MAY</span> detect spurious timeouts based on the mechanisms described in Forward RTO-Recovery <a href="./rfc5682.html">[RFC5682]</a>. Experimental alternatives include the Eifel detection algorithm <a href="./rfc3522.html">[RFC3522]</a>. When a spurious timeout is detected, a TCP implementation <span class="kw kw-may">MAY</span> follow the response algorithm described in <a href="./rfc4015.html">[RFC4015]</a> to restore the congestion control state and adapt the retransmission timer to avoid further spurious timeouts.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1892,7 +1897,7 @@ An implementation MAY detect spurious timeouts based on the mechanisms described
     <div class="row" id="4-9-2--Spurious-Fast-Retransmits-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Upon receiving an ACK, a TCP implementation MAY detect spurious fast retransmits either using TCP Timestamps or via D-SACK <a href="./rfc2883.html">[RFC2883]</a>. As noted above, experimental alternatives include the Eifel detection algorithm <a href="./rfc3522.html">[RFC3522]</a>, which uses TCP Timestamps; and DSACK-based detection <a href="./rfc3708.html">[RFC3708]</a>, which uses DSACK information. A QUIC implementation can easily determine a spurious fast retransmit if a QUIC packet is acknowledged after it has been marked as lost and the original data has been retransmitted with a new QUIC packet.
+Upon receiving an ACK, a TCP implementation <span class="kw kw-may">MAY</span> detect spurious fast retransmits either using TCP Timestamps or via D-SACK <a href="./rfc2883.html">[RFC2883]</a>. As noted above, experimental alternatives include the Eifel detection algorithm <a href="./rfc3522.html">[RFC3522]</a>, which uses TCP Timestamps; and DSACK-based detection <a href="./rfc3708.html">[RFC3708]</a>, which uses DSACK information. A QUIC implementation can easily determine a spurious fast retransmit if a QUIC packet is acknowledged after it has been marked as lost and the original data has been retransmitted with a new QUIC packet.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1916,7 +1921,7 @@ This section specifies a simple response algorithm when a spurious fast retransm
     <div class="row" id="4-9-2--Spurious-Fast-Retransmits-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When packet loss is detected via acknowledgments, a CUBIC implementation MAY save the current value of the following variables before the congestion window is reduced.
+When packet loss is detected via acknowledgments, a CUBIC implementation <span class="kw kw-may">MAY</span> save the current value of the following variables before the congestion window is reduced.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1945,7 +1950,7 @@ When packet loss is detected via acknowledgments, a CUBIC implementation MAY sav
     <div class="row" id="4-9-2--Spurious-Fast-Retransmits-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once the previously declared packet loss is confirmed to be spurious, CUBIC MAY restore the original values of the above-mentioned variables as follows if the current _cwnd_ is lower than _cwnd_prior_.  Restoring the original values ensures that CUBIC&#39;s performance is similar to what it would be without spurious losses.
+Once the previously declared packet loss is confirmed to be spurious, CUBIC <span class="kw kw-may">MAY</span> restore the original values of the above-mentioned variables as follows if the current _cwnd_ is lower than _cwnd_prior_.  Restoring the original values ensures that CUBIC&#39;s performance is similar to what it would be without spurious losses.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1974,7 +1979,7 @@ Once the previously declared packet loss is confirmed to be spurious, CUBIC MAY 
     <div class="row" id="4-9-2--Spurious-Fast-Retransmits-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In rare cases, when the detection happens long after a spurious fast retransmit event and the current _cwnd_ is already higher than _cwnd_prior_, CUBIC SHOULD continue to use the current and the most recent values of these variables.
+In rare cases, when the detection happens long after a spurious fast retransmit event and the current _cwnd_ is already higher than _cwnd_prior_, CUBIC <span class="kw kw-should">SHOULD</span> continue to use the current and the most recent values of these variables.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1998,7 +2003,7 @@ In rare cases, when the detection happens long after a spurious fast retransmit 
     <div class="row" id="4-10--Slow-Start-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When _cwnd_ is no more than _ssthresh_, CUBIC MUST employ a slow start algorithm. In general, CUBIC SHOULD use the HyStart++ slow start algorithm <a href="./rfc9406.html">[RFC9406]</a> or MAY use the Reno TCP slow start algorithm <a href="./rfc5681.html">[RFC5681]</a> in the rare cases when HyStart++ is not suitable. Experimental alternatives include hybrid slow start [HR11], a predecessor to HyStart++ that some CUBIC implementations have used as the default for the last decade, and limited slow start <a href="./rfc3742.html">[RFC3742]</a>. Whichever startup algorithm is used, work might be needed to ensure that the end of slow start and the first multiplicative decrease of congestion avoidance work well together.
+When _cwnd_ is no more than _ssthresh_, CUBIC <span class="kw kw-must">MUST</span> employ a slow start algorithm. In general, CUBIC <span class="kw kw-should">SHOULD</span> use the HyStart++ slow start algorithm <a href="./rfc9406.html">[RFC9406]</a> or <span class="kw kw-may">MAY</span> use the Reno TCP slow start algorithm <a href="./rfc5681.html">[RFC5681]</a> in the rare cases when HyStart++ is not suitable. Experimental alternatives include hybrid slow start [HR11], a predecessor to HyStart++ that some CUBIC implementations have used as the default for the last decade, and limited slow start <a href="./rfc3742.html">[RFC3742]</a>. Whichever startup algorithm is used, work might be needed to ensure that the end of slow start and the first multiplicative decrease of congestion avoidance work well together.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -2292,7 +2297,7 @@ Both tables show that CUBIC with any of these three _C_ values is more friendly 
     <div class="row" id="5-1--Fairness-to-Reno-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-_C_ determines the aggressiveness of CUBIC in competing with other congestion control algorithms for bandwidth. CUBIC is more friendly to Reno TCP if the value of _C_ is lower. However, it is NOT RECOMMENDED to set _C_ to a very low value like 0.04, since CUBIC with a low _C_ cannot efficiently use the bandwidth in fast and long-distance networks. Based on these observations and extensive deployment experience, _C_=0.4 seems to provide a good balance between Reno-friendliness and aggressiveness of window increase. Therefore, _C_ SHOULD be set to 0.4. With _C_ set to 0.4, Figure 7 is reduced to
+_C_ determines the aggressiveness of CUBIC in competing with other congestion control algorithms for bandwidth. CUBIC is more friendly to Reno TCP if the value of _C_ is lower. However, it is <span class="kw kw-shouldnot">NOT RECOMMENDED</span> to set _C_ to a very low value like 0.04, since CUBIC with a low _C_ cannot efficiently use the bandwidth in fast and long-distance networks. Based on these observations and extensive deployment experience, _C_=0.4 seems to provide a good balance between Reno-friendliness and aggressiveness of window increase. Therefore, _C_ <span class="kw kw-should">SHOULD</span> be set to 0.4. With _C_ set to 0.4, Figure 7 is reduced to
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

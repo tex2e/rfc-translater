@@ -7,13 +7,17 @@
   <meta name="description" content="RFC 3708は、TCPプロトコルにおいて、実際にはパケットが失われていないのに発生する「不要な（偽の）再送」を、重複選択認承（D-SACK）を利用して正確に検知する手法を提案しています。受信側から返されるD-SACK情報を送信側がどのように解釈し、再送タイマーや輻輳制御の判断（ウィンドウ縮小の撤回等）に活用すべきかのルールを規定しています。ネットワークの遅延変動によるTCPの誤動作を修正し、特に無線環境などにおいて通信のスループットと安定性を向上させることを目的としています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 3708 - TCP の DSACK および SCTP の重複 TSN を用いたスプリアス再送の検出</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -228,12 +233,12 @@ Terminology
     <div class="row" id="1--Introduction-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、RFC 2119 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -360,7 +365,7 @@ The algorithm specified below gives reasonable, but not complete, protection aga
     <div class="row" id="3--CongestionDuplicate-Disambiguation-Algorithm-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-We assume the TCP sender has a data structure to hold selective acknowledgment information (e.g., as outlined in <a href="./rfc3517.html">[RFC3517]</a>). The following steps require an extension of such a &#39;scoreboard&#39; to incorporate a slightly longer history of retransmissions than called for in <a href="./rfc3517.html">[RFC3517]</a>. The following steps MUST be taken upon the receipt of each DSACK or duplicate TSN notification:
+We assume the TCP sender has a data structure to hold selective acknowledgment information (e.g., as outlined in <a href="./rfc3517.html">[RFC3517]</a>). The following steps require an extension of such a &#39;scoreboard&#39; to incorporate a slightly longer history of retransmissions than called for in <a href="./rfc3517.html">[RFC3517]</a>. The following steps <span class="kw kw-must">MUST</span> be taken upon the receipt of each DSACK or duplicate TSN notification:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -384,7 +389,7 @@ TCP送信者には、選択的な確認情報を保持するためのデータ�
     <div class="row" id="3--CongestionDuplicate-Disambiguation-Algorithm-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-(A.1) If the SACK scoreboard is empty (i.e., the TCP sender has received no SACK information from the receiver) and the left edge of the incoming DSACK is equal to SND.UNA, processing of this DSACK MUST be terminated and the congestion control state MUST NOT be reverted during the current window of data. This clause intends to cover the case when an entire window of acknowledgments have been dropped by the network. In such a case, the reverse path seems to be in a congested state and so reducing TCP&#39;s sending rate is the conservative approach.
+(A.1) If the SACK scoreboard is empty (i.e., the TCP sender has received no SACK information from the receiver) and the left edge of the incoming DSACK is equal to SND.UNA, processing of this DSACK <span class="kw kw-must">MUST</span> be terminated and the congestion control state <span class="kw kw-mustnot">MUST NOT</span> be reverted during the current window of data. This clause intends to cover the case when an entire window of acknowledgments have been dropped by the network. In such a case, the reverse path seems to be in a congested state and so reducing TCP&#39;s sending rate is the conservative approach.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -408,7 +413,7 @@ TCP送信者には、選択的な確認情報を保持するためのデータ�
     <div class="row" id="3--CongestionDuplicate-Disambiguation-Algorithm-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-(A.3) If the segment was retransmitted more than once processing of this DSACK MUST be terminated and the congestion control state MUST NOT be reverted to its previous state during the current window of data.
+(A.3) If the segment was retransmitted more than once processing of this DSACK <span class="kw kw-must">MUST</span> be terminated and the congestion control state <span class="kw kw-mustnot">MUST NOT</span> be reverted to its previous state during the current window of data.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -420,7 +425,7 @@ TCP送信者には、選択的な確認情報を保持するためのデータ�
     <div class="row" id="3--CongestionDuplicate-Disambiguation-Algorithm-p12">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-7">
-(A.4) If the segment was not retransmitted the incoming DSACK indicates that the network duplicated the segment in question. Processing of this DSACK MUST be terminated. In addition, the algorithm specified in this document MUST NOT be used for the remainder of the connection, as future DSACK reports may be indicating network duplication rather than unnecessary retransmission. Note that some techniques to further disambiguate network duplication from unnecessary retransmission (e.g., the TCP timestamp option <a href="https://datatracker.ietf.org/doc/html/rfc1323">[RFC1323]</a>) may be used to refine the algorithm in this document further. Using such a technique in conjunction with an algorithm similar to the one presented herein may allow for the continued use of the algorithm in the face of duplicated segments. We do not delve into such an algorithm in this document due the current rarity of network duplication. However, future work should include tackling this problem.
+(A.4) If the segment was not retransmitted the incoming DSACK indicates that the network duplicated the segment in question. Processing of this DSACK <span class="kw kw-must">MUST</span> be terminated. In addition, the algorithm specified in this document <span class="kw kw-mustnot">MUST NOT</span> be used for the remainder of the connection, as future DSACK reports may be indicating network duplication rather than unnecessary retransmission. Note that some techniques to further disambiguate network duplication from unnecessary retransmission (e.g., the TCP timestamp option <a href="https://datatracker.ietf.org/doc/html/rfc1323">[RFC1323]</a>) may be used to refine the algorithm in this document further. Using such a technique in conjunction with an algorithm similar to the one presented herein may allow for the continued use of the algorithm in the face of duplicated segments. We do not delve into such an algorithm in this document due the current rarity of network duplication. However, future work should include tackling this problem.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

@@ -7,13 +7,17 @@
   <meta name="description" content="RFC 3686は、IPsecのESPにおいて、AESブロック暗号をカウンターモード（CTR）で使用するための具体的な仕様を定義しています。従来のCBCモードと比較して、並列処理による高速化が容易であり、パディングが不要になるなどの効率上の利点があります。AES-CTRモードを安全に利用するためのノンス（Nonce）や初期化ベクトルの構造、および処理手順について詳細に記述しています。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 3686 - IPsec カプセル化セキュリティペイロード (ESP) における Advanced Encryption Standard (AES) カウンターモードの利用</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成＆有志による翻訳・編集</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -259,12 +264,12 @@ This document does not provide an overview of IPsec. However, information about 
     <div class="row" id="1-1--Conventions-Used-In-This-Document-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in [STDWORDS].
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in [STDWORDS].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード「MUST」、「MUST NOT」、「REQUIRED」、「SHALL」、「SHALL NOT」、「SHOULD」、「SHOULD NOT」、「RECOMMENDED」、「MAY」、「OPTIONAL」は、[STDWORDS] に記述されている通りに解釈されるものとします。
+このドキュメントのキーワード「<span class="kw kw-must">MUST</span>」、「<span class="kw kw-mustnot">MUST NOT</span>」、「<span class="kw kw-must">REQUIRED</span>」、「<span class="kw kw-must">SHALL</span>」、「<span class="kw kw-mustnot">SHALL NOT</span>」、「<span class="kw kw-should">SHOULD</span>」、「<span class="kw kw-shouldnot">SHOULD NOT</span>」、「<span class="kw kw-should">RECOMMENDED</span>」、「<span class="kw kw-may">MAY</span>」、「<span class="kw kw-may">OPTIONAL</span>」は、[STDWORDS] に記述されている通りに解釈されるものとします。
         </p>
       </div>
     </div>
@@ -319,24 +324,24 @@ NISTは、AESおよびその他のFIPS承認済みブロック暗号向けに5�
     <div class="row" id="2-1--Counter-Mode-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Only AES Counter mode (AES-CTR) is discussed in this specification. AES-CTR requires the encryptor to generate a unique per-packet value, and communicate this value to the decryptor. This specification calls this per-packet value an initialization vector (IV). The same IV and key combination MUST NOT be used more than once. The encryptor can generate the IV in any manner that ensures uniqueness. Common approaches to IV generation include incrementing a counter for each packet and linear feedback shift registers (LFSRs).
+Only AES Counter mode (AES-CTR) is discussed in this specification. AES-CTR requires the encryptor to generate a unique per-packet value, and communicate this value to the decryptor. This specification calls this per-packet value an initialization vector (IV). The same IV and key combination <span class="kw kw-mustnot">MUST NOT</span> be used more than once. The encryptor can generate the IV in any manner that ensures uniqueness. Common approaches to IV generation include incrementing a counter for each packet and linear feedback shift registers (LFSRs).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この仕様では、AESカウンターモード (AES-CTR) のみについて説明します。AES-CTRでは、暗号化側が一意のパケットごとの値を生成し、この値を復号側に伝える必要があります。この仕様では、このパケットごとの値を初期化ベクトル (IV) と呼びます。同じIVと鍵の組み合わせを複数回使用してはなりません (MUST NOT)。暗号化側は、一意性を保証する任意のアルゴリズムでIVを生成することができます。IV生成の一般的なアプローチには、パケットごとにカウンターをインクリメントする方法や、線形フィードバックシフトレジスタ (LFSR) などがあります。
+この仕様では、AESカウンターモード (AES-CTR) のみについて説明します。AES-CTRでは、暗号化側が一意のパケットごとの値を生成し、この値を復号側に伝える必要があります。この仕様では、このパケットごとの値を初期化ベクトル (IV) と呼びます。同じIVと鍵の組み合わせを複数回使用してはなりません (<span class="kw kw-mustnot">MUST NOT</span>)。暗号化側は、一意性を保証する任意のアルゴリズムでIVを生成することができます。IV生成の一般的なアプローチには、パケットごとにカウンターをインクリメントする方法や、線形フィードバックシフトレジスタ (LFSR) などがあります。
         </p>
       </div>
     </div>
     <div class="row" id="2-1--Counter-Mode-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This specification calls for the use of a nonce for additional protection against precomputation attacks. The nonce value need not be secret. However, the nonce MUST be unpredictable prior to the establishment of the IPsec security association that is making use of AES-CTR.
+This specification calls for the use of a nonce for additional protection against precomputation attacks. The nonce value need not be secret. However, the nonce <span class="kw kw-must">MUST</span> be unpredictable prior to the establishment of the IPsec security association that is making use of AES-CTR.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この仕様では、事前計算攻撃に対する追加の保護のためにノンス (nonce) の使用を要求しています。ノンスの値は秘密である必要はありません。ただし、ノンスは AES-CTR を使用する IPsec セキュリティアソシエーションの確立前に予測不可能でなければなりません (MUST)。
+この仕様では、事前計算攻撃に対する追加の保護のためにノンス (nonce) の使用を要求しています。ノンスの値は秘密である必要はありません。ただし、ノンスは AES-CTR を使用する IPsec セキュリティアソシエーションの確立前に予測不可能でなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -403,24 +408,24 @@ AES-CTRは（暗号化と復号の双方において）AESの暗号化操作の�
     <div class="row" id="2-1--Counter-Mode-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When used correctly, AES-CTR provides a high level of confidentiality. Unfortunately, AES-CTR is easy to use incorrectly. Being a stream cipher, any reuse of the per-packet value, called the IV, with the same nonce and key is catastrophic. An IV collision immediately leaks information about the plaintext in both packets. For this reason, it is inappropriate to use this mode of operation with static keys. Extraordinary measures would be needed to prevent reuse of an IV value with the static key across power cycles. To be safe, implementations MUST use fresh keys with AES-CTR. The Internet Key Exchange (IKE) [IKE] protocol can be used to establish fresh keys. IKE can also provide the nonce value.
+When used correctly, AES-CTR provides a high level of confidentiality. Unfortunately, AES-CTR is easy to use incorrectly. Being a stream cipher, any reuse of the per-packet value, called the IV, with the same nonce and key is catastrophic. An IV collision immediately leaks information about the plaintext in both packets. For this reason, it is inappropriate to use this mode of operation with static keys. Extraordinary measures would be needed to prevent reuse of an IV value with the static key across power cycles. To be safe, implementations <span class="kw kw-must">MUST</span> use fresh keys with AES-CTR. The Internet Key Exchange (IKE) [IKE] protocol can be used to establish fresh keys. IKE can also provide the nonce value.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-正しく使用すれば、AES-CTRは高度な機密性を提供します。しかし残念ながら、AES-CTRは誤って使用されやすい性質があります。ストリーム暗号であるため、同じノンスおよび鍵に対して、IVと呼ばれるパケットごとの値を一度でも再利用することは致命的（catastrophic）です。IVの衝突は、両方のパケットの平文に関する情報を即座に漏洩させます。このため、静的鍵を用いてこの動作モードを使用することは不適切です。電源サイクルをまたいで静的鍵によるIV値の再利用を防ぐには、極めて高度な対策が必要となります。安全性を確保するため、実装はAES-CTRに新しい鍵を使用しなければなりません (MUST)。新しい鍵の確立には、インターネットキーエクスチェンジ (IKE) [IKE] プロトコルを使用できます。また、IKEはノンス値を提供することもできます。
+正しく使用すれば、AES-CTRは高度な機密性を提供します。しかし残念ながら、AES-CTRは誤って使用されやすい性質があります。ストリーム暗号であるため、同じノンスおよび鍵に対して、IVと呼ばれるパケットごとの値を一度でも再利用することは致命的（catastrophic）です。IVの衝突は、両方のパケットの平文に関する情報を即座に漏洩させます。このため、静的鍵を用いてこの動作モードを使用することは不適切です。電源サイクルをまたいで静的鍵によるIV値の再利用を防ぐには、極めて高度な対策が必要となります。安全性を確保するため、実装はAES-CTRに新しい鍵を使用しなければなりません (<span class="kw kw-must">MUST</span>)。新しい鍵の確立には、インターネットキーエクスチェンジ (IKE) [IKE] プロトコルを使用できます。また、IKEはノンス値を提供することもできます。
         </p>
       </div>
     </div>
     <div class="row" id="2-1--Counter-Mode-p10">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-With AES-CTR, it is trivial to use a valid ciphertext to forge other (valid to the decryptor) ciphertexts. Thus, it is equally catastrophic to use AES-CTR without a companion authentication function. Implementations MUST use AES-CTR in conjunction with an authentication function, such as HMAC-SHA-1-96 [HMAC-SHA].
+With AES-CTR, it is trivial to use a valid ciphertext to forge other (valid to the decryptor) ciphertexts. Thus, it is equally catastrophic to use AES-CTR without a companion authentication function. Implementations <span class="kw kw-must">MUST</span> use AES-CTR in conjunction with an authentication function, such as HMAC-SHA-1-96 [HMAC-SHA].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES-CTRでは、有効な暗号文を用いて別の（復号側で有効と判定される）暗号文を偽造することが容易です。したがって、併用する認証機能なしでAES-CTRを使用することも、同様に致命的です。実装は、HMAC-SHA-1-96 [HMAC-SHA] などの認証機能と組み合わせて AES-CTR を使用しなければなりません (MUST)。
+AES-CTRでは、有効な暗号文を用いて別の（復号側で有効と判定される）暗号文を偽造することが容易です。したがって、併用する認証機能なしでAES-CTRを使用することも、同様に致命的です。実装は、HMAC-SHA-1-96 [HMAC-SHA] などの認証機能と組み合わせて AES-CTR を使用しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -530,24 +535,24 @@ Decryption is similar. The decryption of n ciphertext blocks can be summarized a
     <div class="row" id="2-2--Key-Size-and-Rounds-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES supports three key sizes: 128 bits, 192 bits, and 256 bits. The default key size is 128 bits, and all implementations MUST support this key size. Implementations MAY also support key sizes of 192 bits and 256 bits.
+AES supports three key sizes: 128 bits, 192 bits, and 256 bits. The default key size is 128 bits, and all implementations <span class="kw kw-must">MUST</span> support this key size. Implementations <span class="kw kw-may">MAY</span> also support key sizes of 192 bits and 256 bits.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AESは、128ビット、192ビット、256ビットの3つの鍵サイズをサポートしています。デフォルトの鍵サイズは128ビットであり、すべての実装はこの鍵サイズをサポートしなければなりません (MUST)。また、実装は192ビットおよび256ビットの鍵サイズをサポートしてもよいです (MAY)。
+AESは、128ビット、192ビット、256ビットの3つの鍵サイズをサポートしています。デフォルトの鍵サイズは128ビットであり、すべての実装はこの鍵サイズをサポートしなければなりません (<span class="kw kw-must">MUST</span>)。また、実装は192ビットおよび256ビットの鍵サイズをサポートしてもよいです (<span class="kw kw-may">MAY</span>)。
         </p>
       </div>
     </div>
     <div class="row" id="2-2--Key-Size-and-Rounds-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES uses a different number of rounds for each of the defined key sizes. When a 128-bit key is used, implementations MUST use 10 rounds. When a 192-bit key is used, implementations MUST use 12 rounds. When a 256-bit key is used, implementations MUST use 14 rounds.
+AES uses a different number of rounds for each of the defined key sizes. When a 128-bit key is used, implementations <span class="kw kw-must">MUST</span> use 10 rounds. When a 192-bit key is used, implementations <span class="kw kw-must">MUST</span> use 12 rounds. When a 256-bit key is used, implementations <span class="kw kw-must">MUST</span> use 14 rounds.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AESは、定義された鍵サイズごとに異なるラウンド数を使用します。128ビットの鍵を使用する場合、実装は10ラウンドを使用しなければなりません (MUST)。192ビットの鍵を使用する場合、実装は12ラウンドを使用しなければなりません (MUST)。256ビットの鍵を使用する場合、実装は14ラウンドを使用しなければなりません (MUST)。
+AESは、定義された鍵サイズごとに異なるラウンド数を使用します。128ビットの鍵を使用する場合、実装は10ラウンドを使用しなければなりません (<span class="kw kw-must">MUST</span>)。192ビットの鍵を使用する場合、実装は12ラウンドを使用しなければなりません (<span class="kw kw-must">MUST</span>)。256ビットの鍵を使用する場合、実装は14ラウンドを使用しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -566,12 +571,12 @@ AESは、定義された鍵サイズごとに異なるラウンド数を使用�
     <div class="row" id="2-3--Block-Size-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The AES has a block size of 128 bits (16 octets). As such, when using AES-CTR, each AES encrypt operation generates 128 bits of key stream. AES-CTR encryption is the XOR of the key stream with the plaintext. AES-CTR decryption is the XOR of the key stream with the ciphertext. If the generated key stream is longer than the plaintext or ciphertext, the extra key stream bits are simply discarded. For this reason, AES-CTR does not require the plaintext to be padded to a multiple of the block size. However, to provide limited traffic flow confidentiality, padding MAY be included, as specified in [ESP].
+The AES has a block size of 128 bits (16 octets). As such, when using AES-CTR, each AES encrypt operation generates 128 bits of key stream. AES-CTR encryption is the XOR of the key stream with the plaintext. AES-CTR decryption is the XOR of the key stream with the ciphertext. If the generated key stream is longer than the plaintext or ciphertext, the extra key stream bits are simply discarded. For this reason, AES-CTR does not require the plaintext to be padded to a multiple of the block size. However, to provide limited traffic flow confidentiality, padding <span class="kw kw-may">MAY</span> be included, as specified in [ESP].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AESのブロックサイズは128ビット（16オクテット）です。そのため、AES-CTRを使用する場合、各AES暗号化操作は128ビットのキーストリームを生成します。AES-CTRによる暗号化は、キーストリームと平文のXOR演算です。AES-CTRによる復号は、キーストリームと暗号文のXOR演算です。生成されたキーストリームが平文または暗号文よりも長い場合、余分なキーストリームビットは単に破棄されます。このため、AES-CTRでは平文をブロックサイズの倍数にパディングする必要はありません。ただし、[ESP]で規定されているように、限定的なトラフィックフロー機密性（TFC）を提供するためにパディングを含めてもよいです (MAY)。
+AESのブロックサイズは128ビット（16オクテット）です。そのため、AES-CTRを使用する場合、各AES暗号化操作は128ビットのキーストリームを生成します。AES-CTRによる暗号化は、キーストリームと平文のXOR演算です。AES-CTRによる復号は、キーストリームと暗号文のXOR演算です。生成されたキーストリームが平文または暗号文よりも長い場合、余分なキーストリームビットは単に破棄されます。このため、AES-CTRでは平文をブロックサイズの倍数にパディングする必要はありません。ただし、[ESP]で規定されているように、限定的なトラフィックフロー機密性（TFC）を提供するためにパディングを含めてもよいです (<span class="kw kw-may">MAY</span>)。
         </p>
       </div>
     </div>
@@ -646,12 +651,12 @@ Figure 1. ESP Payload Encrypted with AES-CTR
     <div class="row" id="3-1--Initialization-Vector-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The AES-CTR IV field MUST be eight octets. The IV MUST be chosen by the encryptor in a manner that ensures that the same IV value is used only once for a given key. The encryptor can generate the IV in any manner that ensures uniqueness. Common approaches to IV generation include incrementing a counter for each packet and linear feedback shift registers (LFSRs).
+The AES-CTR IV field <span class="kw kw-must">MUST</span> be eight octets. The IV <span class="kw kw-must">MUST</span> be chosen by the encryptor in a manner that ensures that the same IV value is used only once for a given key. The encryptor can generate the IV in any manner that ensures uniqueness. Common approaches to IV generation include incrementing a counter for each packet and linear feedback shift registers (LFSRs).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES-CTRのIVフィールドは8オクテットでなければなりません (MUST)。IVは、特定の鍵に対して同じIV値が一度しか使用されないことを保証する方法で、暗号化側によって選択されなければなりません (MUST)。暗号化側は、一意性を保証する任意の方法でIVを生成できます。IV生成の一般的なアプローチには、パケットごとにカウンターをインクリメントする方法や、線形フィードバックシフトレジスタ (LFSR) などがあります。
+AES-CTRのIVフィールドは8オクテットでなければなりません (<span class="kw kw-must">MUST</span>)。IVは、特定の鍵に対して同じIV値が一度しか使用されないことを保証する方法で、暗号化側によって選択されなければなりません (<span class="kw kw-must">MUST</span>)。暗号化側は、一意性を保証する任意の方法でIVを生成できます。IV生成の一般的なアプローチには、パケットごとにカウンターをインクリメントする方法や、線形フィードバックシフトレジスタ (LFSR) などがあります。
         </p>
       </div>
     </div>
@@ -694,12 +699,12 @@ The encrypted payload contains the ciphertext.
     <div class="row" id="3-2--Encrypted-Payload-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES-CTR mode does not require plaintext padding. However, ESP does require padding to 32-bit word-align the authentication data. The padding, Pad Length, and the Next Header MUST be concatenated with the plaintext before performing encryption, as described in [ESP].
+AES-CTR mode does not require plaintext padding. However, ESP does require padding to 32-bit word-align the authentication data. The padding, Pad Length, and the Next Header <span class="kw kw-must">MUST</span> be concatenated with the plaintext before performing encryption, as described in [ESP].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AES-CTRモードでは、平文のパディングは必要ありません。しかし、ESPでは、認証データを32ビットワード境界に整列（アラインメント）させるためのパディングが必要です。[ESP]で説明されているように、暗号化を実行する前に、パディング、パッド長（Pad Length）、および次ヘッダー（Next Header）を平文に連結しなければなりません (MUST)。
+AES-CTRモードでは、平文のパディングは必要ありません。しかし、ESPでは、認証データを32ビットワード境界に整列（アラインメント）させるためのパディングが必要です。[ESP]で説明されているように、暗号化を実行する前に、パディング、パッド長（Pad Length）、および次ヘッダー（Next Header）を平文に連結しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -718,12 +723,12 @@ AES-CTRモードでは、平文のパディングは必要ありません。し�
     <div class="row" id="3-3--Authentication-Data-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Since it is trivial to construct a forgery AES-CTR ciphertext from a valid AES-CTR ciphertext, AES-CTR implementations MUST employ a non-NULL ESP authentication method. HMAC-SHA-1-96 [HMAC-SHA] is a likely choice.
+Since it is trivial to construct a forgery AES-CTR ciphertext from a valid AES-CTR ciphertext, AES-CTR implementations <span class="kw kw-must">MUST</span> employ a non-NULL ESP authentication method. HMAC-SHA-1-96 [HMAC-SHA] is a likely choice.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-有効なAES-CTR暗号文から偽造されたAES-CTR暗号文を作成することは容易であるため、AES-CTR実装は非NULLのESP認証方法を採用しなければなりません (MUST)。HMAC-SHA-1-96 [HMAC-SHA]が有力な選択肢です。
+有効なAES-CTR暗号文から偽造されたAES-CTR暗号文を作成することは容易であるため、AES-CTR実装は非NULLのESP認証方法を採用しなければなりません (<span class="kw kw-must">MUST</span>)。HMAC-SHA-1-96 [HMAC-SHA]が有力な選択肢です。
         </p>
       </div>
     </div>
@@ -794,24 +799,24 @@ The components of the counter block are as follows:
     <div class="row" id="4--Counter-Block-Format-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Nonce The Nonce field is 32 bits. As the name implies, the nonce is a single use value. That is, a fresh nonce value MUST be assigned for each security association. It MUST be assigned at the beginning of the security association. The nonce value need not be secret, but it MUST be unpredictable prior to the beginning of the security association.
+Nonce The Nonce field is 32 bits. As the name implies, the nonce is a single use value. That is, a fresh nonce value <span class="kw kw-must">MUST</span> be assigned for each security association. It <span class="kw kw-must">MUST</span> be assigned at the beginning of the security association. The nonce value need not be secret, but it <span class="kw kw-must">MUST</span> be unpredictable prior to the beginning of the security association.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ノンス（Nonce）：ノンスフィールドは32ビットです。その名の通り、ノンスは一度だけ使用される値（単一使用値）です。すなわち、セキュリティアソシエーションごとに新しいノンス値を割り当てなければなりません (MUST)。これはセキュリティアソシエーションの開始時に割り当てられなければなりません (MUST)。ノンスの値は秘密である必要はありませんが、セキュリティアソシエーションの開始前に予測不可能でなければなりません (MUST)。
+ノンス（Nonce）：ノンスフィールドは32ビットです。その名の通り、ノンスは一度だけ使用される値（単一使用値）です。すなわち、セキュリティアソシエーションごとに新しいノンス値を割り当てなければなりません (<span class="kw kw-must">MUST</span>)。これはセキュリティアソシエーションの開始時に割り当てられなければなりません (<span class="kw kw-must">MUST</span>)。ノンスの値は秘密である必要はありませんが、セキュリティアソシエーションの開始前に予測不可能でなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
     <div class="row" id="4--Counter-Block-Format-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Initialization Vector The IV field is 64 bits. As described in section 3.1, the IV MUST be chosen by the encryptor in a manner that ensures that the same IV value is used only once for a given key.
+Initialization Vector The IV field is 64 bits. As described in section 3.1, the IV <span class="kw kw-must">MUST</span> be chosen by the encryptor in a manner that ensures that the same IV value is used only once for a given key.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-初期化ベクトル（Initialization Vector）：IVフィールドは64ビットです。セクション3.1で説明されているように、特定の鍵に対して同じIV値が一度しか使用されないことを保証する方法で、暗号化側によって選択されなければなりません (MUST)。
+初期化ベクトル（Initialization Vector）：IVフィールドは64ビットです。セクション3.1で説明されているように、特定の鍵に対して同じIV値が一度しか使用されないことを保証する方法で、暗号化側によって選択されなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -902,12 +907,12 @@ This section describes the conventions used to generate keying material and nonc
     <div class="row" id="5-1--Keying-Material-and-Nonces-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As described in section 2.1, implementations MUST use fresh keys with AES-CTR. IKE can be used to establish fresh keys. This section describes the conventions for obtaining the unpredictable nonce value from IKE. Note that this convention provides a nonce value that is secret as well as unpredictable.
+As described in section 2.1, implementations <span class="kw kw-must">MUST</span> use fresh keys with AES-CTR. IKE can be used to establish fresh keys. This section describes the conventions for obtaining the unpredictable nonce value from IKE. Note that this convention provides a nonce value that is secret as well as unpredictable.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-セクション2.1で説明されているように、実装はAES-CTRに新しい鍵を使用しなければなりません (MUST)。新しい鍵を確立するためにIKEを使用できます。このセクションでは、IKEから予測不可能なノンス値を取得するための慣例について説明します。なお、この慣例は、予測不可能であるだけでなく秘密でもあるノンス値を提供することに注意してください。
+セクション2.1で説明されているように、実装はAES-CTRに新しい鍵を使用しなければなりません (<span class="kw kw-must">MUST</span>)。新しい鍵を確立するためにIKEを使用できます。このセクションでは、IKEから予測不可能なノンス値を取得するための慣例について説明します。なお、この慣例は、予測不可能であるだけでなく秘密でもあるノンス値を提供することに注意してください。
         </p>
       </div>
     </div>
@@ -926,12 +931,12 @@ IKEは擬似ランダム関数 (PRF) を使用してキーイング材料を導�
     <div class="row" id="5-1--Keying-Material-and-Nonces-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The size of the requested KEYMAT MUST be four octets longer than is needed for the associated AES key. The keying material is used as follows:
+The size of the requested KEYMAT <span class="kw kw-must">MUST</span> be four octets longer than is needed for the associated AES key. The keying material is used as follows:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-要求されるKEYMATのサイズは、関連するAESキーに必要なサイズよりも4オクテット長くなければなりません (MUST)。キーイング材料は以下のように使用されます。
+要求されるKEYMATのサイズは、関連するAESキーに必要なサイズよりも4オクテット長くなければなりません (<span class="kw kw-must">MUST</span>)。キーイング材料は以下のように使用されます。
         </p>
       </div>
     </div>
@@ -1034,12 +1039,12 @@ IKEフェーズ2ネゴシエーションに関して、IANAは明示的なIVを�
     <div class="row" id="5-4--Key-Length-Attribute-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Since the AES supports three key lengths, the Key Length attribute MUST be specified in the IKE Phase 2 exchange [DOI]. The Key Length attribute MUST have a value of 128, 192, or 256.
+Since the AES supports three key lengths, the Key Length attribute <span class="kw kw-must">MUST</span> be specified in the IKE Phase 2 exchange [DOI]. The Key Length attribute <span class="kw kw-must">MUST</span> have a value of 128, 192, or 256.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-AESは3つの鍵長をサポートしているため、IKEフェーズ2交換 [DOI] において鍵長（Key Length）属性を指定しなければなりません (MUST)。鍵長属性の値は128、192、または256でなければなりません (MUST)。
+AESは3つの鍵長をサポートしているため、IKEフェーズ2交換 [DOI] において鍵長（Key Length）属性を指定しなければなりません (<span class="kw kw-must">MUST</span>)。鍵長属性の値は128、192、または256でなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -1296,12 +1301,12 @@ Once the attacker obtains the two plaintexts XORed together, it is relatively st
     <div class="row" id="7--Security-Considerations-p9">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Therefore, stream ciphers, including AES-CTR, should not be used with static keys. It is inappropriate to use AES-CTR with static keys. Extraordinary measures would be needed to prevent reuse of a counter block value with the static key across power cycles. To be safe, ESP implementations MUST use fresh keys with AES-CTR. The Internet Key Exchange (IKE) protocol [IKE] can be used to establish fresh keys. IKE can also be used to establish the nonce at the beginning of the security association.
+Therefore, stream ciphers, including AES-CTR, should not be used with static keys. It is inappropriate to use AES-CTR with static keys. Extraordinary measures would be needed to prevent reuse of a counter block value with the static key across power cycles. To be safe, ESP implementations <span class="kw kw-must">MUST</span> use fresh keys with AES-CTR. The Internet Key Exchange (IKE) protocol [IKE] can be used to establish fresh keys. IKE can also be used to establish the nonce at the beginning of the security association.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-したがって、AES-CTRを含むストリーム暗号を静的鍵とともに使用すべきではありません。静的鍵でAES-CTRを使用することは不適切です。電源サイクル（パワーサイクル）をまたいで静的鍵によるカウンターブロック値の再利用を防ぐには、極めて高度な対策が必要となります。安全性を確保するため、ESP実装はAES-CTRに新しい鍵を使用しなければなりません (MUST)。新しい鍵の確立には、インターネットキーエクスチェンジ (IKE) [IKE] プロトコルを使用できます。また、IKEはセキュリティアソシエーションの開始時にノンスを確立するためにも使用できます。
+したがって、AES-CTRを含むストリーム暗号を静的鍵とともに使用すべきではありません。静的鍵でAES-CTRを使用することは不適切です。電源サイクル（パワーサイクル）をまたいで静的鍵によるカウンターブロック値の再利用を防ぐには、極めて高度な対策が必要となります。安全性を確保するため、ESP実装はAES-CTRに新しい鍵を使用しなければなりません (<span class="kw kw-must">MUST</span>)。新しい鍵の確立には、インターネットキーエクスチェンジ (IKE) [IKE] プロトコルを使用できます。また、IKEはセキュリティアソシエーションの開始時にノンスを確立するためにも使用できます。
         </p>
       </div>
     </div>
@@ -1320,12 +1325,12 @@ IKEを使用して2つのピアエンティティ間で新しい鍵を確立す�
     <div class="row" id="7--Security-Considerations-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ESP implementations that permit use of the same key for encrypting outbound traffic and decrypting incoming traffic with the same peer MUST ensure that the two peers assign different Nonce values to the security association.
+ESP implementations that permit use of the same key for encrypting outbound traffic and decrypting incoming traffic with the same peer <span class="kw kw-must">MUST</span> ensure that the two peers assign different Nonce values to the security association.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-同じピアとの間で、送信トラフィックの暗号化と受信トラフィックの復号に同一の鍵を使用することを許可するESP実装は、2つのピアがセキュリティアソシエーションに異なるノンス値を割り当てることを保証しなければなりません (MUST)。
+同じピアとの間で、送信トラフィックの暗号化と受信トラフィックの復号に同一の鍵を使用することを許可するESP実装は、2つのピアがセキュリティアソシエーションに異なるノンス値を割り当てることを保証しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
@@ -1408,24 +1413,24 @@ Decryption of the attacker-generated ciphertext will yield exactly what the atta
     <div class="row" id="7--Security-Considerations-p20">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Accordingly, ESP implementations MUST use of AES-CTR in conjunction with ESP authentication.
+Accordingly, ESP implementations <span class="kw kw-must">MUST</span> use of AES-CTR in conjunction with ESP authentication.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-したがって、ESP実装は、ESP認証と組み合わせてAES-CTRを使用しなければなりません (MUST)。
+したがって、ESP実装は、ESP認証と組み合わせてAES-CTRを使用しなければなりません (<span class="kw kw-must">MUST</span>)。
         </p>
       </div>
     </div>
     <div class="row" id="7--Security-Considerations-p21">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Additionally, since AES has a 128-bit block size, regardless of the mode employed, the ciphertext generated by AES encryption becomes distinguishable from random values after 2^64 blocks are encrypted with a single key. Since ESP with Enhanced Sequence Numbers allows for up to 2^64 packets in a single security association, there is real potential for more than 2^64 blocks to be encrypted with one key. Therefore, implementations SHOULD generate a fresh key before 2^64 blocks are encrypted with the same key. Note that ESP with 32- bit Sequence Numbers will not exceed 2^64 blocks even if all of the packets are maximum-length IPv6 jumbograms [JUMBO].
+Additionally, since AES has a 128-bit block size, regardless of the mode employed, the ciphertext generated by AES encryption becomes distinguishable from random values after 2^64 blocks are encrypted with a single key. Since ESP with Enhanced Sequence Numbers allows for up to 2^64 packets in a single security association, there is real potential for more than 2^64 blocks to be encrypted with one key. Therefore, implementations <span class="kw kw-should">SHOULD</span> generate a fresh key before 2^64 blocks are encrypted with the same key. Note that ESP with 32- bit Sequence Numbers will not exceed 2^64 blocks even if all of the packets are maximum-length IPv6 jumbograms [JUMBO].
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-さらに、採用されるモードに関わらずAESのブロックサイズは128ビットであるため、単一の鍵で 2^64 ブロックが暗号化された後は、AES暗号化によって生成される暗号文がランダムな値と区別できるようになります。拡張シーケンス番号（ESN）を伴うESPでは、単一のセキュリティアソシエーションで最大 2^64 パケットの送信が許可されるため、1つの鍵で 2^64 ブロック超が暗号化される現実的な可能性があります。したがって、実装は、同一の鍵で 2^64 ブロックが暗号化される前に、新しい鍵を生成すべきです (SHOULD)。なお、すべてのパケットが最大長のIPv6ジャンボグラム [JUMBO] であっても、32ビットのシーケンス番号を用いるESPでは 2^64 ブロックを超えることはありません。
+さらに、採用されるモードに関わらずAESのブロックサイズは128ビットであるため、単一の鍵で 2^64 ブロックが暗号化された後は、AES暗号化によって生成される暗号文がランダムな値と区別できるようになります。拡張シーケンス番号（ESN）を伴うESPでは、単一のセキュリティアソシエーションで最大 2^64 パケットの送信が許可されるため、1つの鍵で 2^64 ブロック超が暗号化される現実的な可能性があります。したがって、実装は、同一の鍵で 2^64 ブロックが暗号化される前に、新しい鍵を生成すべきです (<span class="kw kw-should">SHOULD</span>)。なお、すべてのパケットが最大長のIPv6ジャンボグラム [JUMBO] であっても、32ビットのシーケンス番号を用いるESPでは 2^64 ブロックを超えることはありません。
         </p>
       </div>
     </div>

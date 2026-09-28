@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、BGPセッションを意図的に終了する際、トラフィックの損失を最小限に抑えるための「グレースフル・シャットダウン（Graceful Shutdown）」手順を定義しています（BCP 214）。「GRACEFUL_SHUTDOWN」周知コミュニティを用いて、隣接ルータに事前に経路の引き下げを通知し、代替経路への切り替えを促すことで、メンテナンス時等のパケットドロップを回避し、ネットワークの可用性を向上させます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8326 - グレースフルなBGPセッションシャットダウン</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -336,12 +341,12 @@ IBGPセッションのシャットダウンやEBGPセッションの確立など
     <div class="row" id="1--Introduction-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -468,7 +473,7 @@ This section describes configurations and actions to be performed for the gracef
     <div class="row" id="4--Procedure-for-EBGP-Graceful-Shutdown-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The goal of this procedure is to retain the paths to be shut down between the peers, but with a lower LOCAL_PREF value, allowing the paths to remain in use while alternate paths are selected and propagated, rather than simply withdrawing the paths. The LOCAL_PREF value SHOULD be lower than any of the alternative paths. The RECOMMENDED value is 0.
+The goal of this procedure is to retain the paths to be shut down between the peers, but with a lower LOCAL_PREF value, allowing the paths to remain in use while alternate paths are selected and propagated, rather than simply withdrawing the paths. The LOCAL_PREF value <span class="kw kw-should">SHOULD</span> be lower than any of the alternative paths. The <span class="kw kw-should">RECOMMENDED</span> value is 0.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -648,12 +653,12 @@ In the case of a shutdown of the whole router, in addition to the graceful shutd
     <div class="row" id="4-3--BGP-Implementation-Support-for-Graceful-Shutdown-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-BGP Implementers SHOULD provide configuration knobs that utilize the GRACEFUL_SHUTDOWN community to inform BGP neighbors in preparation for an impending neighbor shutdown. Implementation details are outside the scope of this document.
+BGP Implementers <span class="kw kw-should">SHOULD</span> provide configuration knobs that utilize the GRACEFUL_SHUTDOWN community to inform BGP neighbors in preparation for an impending neighbor shutdown. Implementation details are outside the scope of this document.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-BGP実装者は、GRACEFUL_SHUTDOWNコミュニティを利用して、切迫したネイバーシャットダウンの準備としてBGPネイバーに通知する設定ノブを提供する必要があります（SHOULD）。実装の詳細は、このドキュメントの範囲外です。
+BGP実装者は、GRACEFUL_SHUTDOWNコミュニティを利用して、切迫したネイバーシャットダウンの準備としてBGPネイバーに通知する設定ノブを提供する必要があります（<span class="kw kw-should">SHOULD</span>）。実装の詳細は、このドキュメントの範囲外です。
         </p>
       </div>
     </div>
@@ -720,12 +725,12 @@ The neighbor could abuse the technique and do inbound traffic engineering by dec
     <div class="row" id="6--Security-Considerations-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-If this behavior is not tolerated by the ISP, it SHOULD monitor the use of the graceful shutdown community.
+If this behavior is not tolerated by the ISP, it <span class="kw kw-should">SHOULD</span> monitor the use of the graceful shutdown community.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-この動作がISPによって許容されない場合、グレースフルシャットダウンコミュニティの使用を監視する必要があります（SHOULD）。
+この動作がISPによって許容されない場合、グレースフルシャットダウンコミュニティの使用を監視する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>
@@ -1163,19 +1168,19 @@ An ASBR that selects a path received over a newly established EBGP session as th
     <div class="row" id="C-2-1--Unreachability-Local-to-the-ASBR-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A BGP speaker implementation MAY avoid such losses by ensuring that third-party NEXT_HOPs are resolved before installing paths using these NEXT_HOPs in the RIB.
+A BGP speaker implementation <span class="kw kw-may">MAY</span> avoid such losses by ensuring that third-party NEXT_HOPs are resolved before installing paths using these NEXT_HOPs in the RIB.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-BGPスピーカーの実装は、RIBでこれらのNEXT_HOPを使用してパスをインストールする前に、サードパーティのNEXT_HOPが解決されることを保証することにより、そのような損失を回避することができます（MAY）。
+BGPスピーカーの実装は、RIBでこれらのNEXT_HOPを使用してパスをインストールする前に、サードパーティのNEXT_HOPが解決されることを保証することにより、そのような損失を回避することができます（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="C-2-1--Unreachability-Local-to-the-ASBR-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Alternatively, the operator (script) MAY ping third-party NEXT_HOPs that are expected to be used prior to establishing the session. By proceeding like this, the MAC addresses associated with these third-party NEXT_HOPs are resolved by the startup initiator.
+Alternatively, the operator (script) <span class="kw kw-may">MAY</span> ping third-party NEXT_HOPs that are expected to be used prior to establishing the session. By proceeding like this, the MAC addresses associated with these third-party NEXT_HOPs are resolved by the startup initiator.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">

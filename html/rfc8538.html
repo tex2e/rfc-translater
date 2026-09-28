@@ -7,13 +7,17 @@
   <meta name="description" content="この文書は、BGPグレースフルリスタート（GR）メカニズムを拡張し、セッション終了時に送信される「NOTIFICATION」メッセージをGRプロセスの一部としてサポートするための仕様を規定しています。ルータが再起動や一時的な中断を行う際、NOTIFICATIONメッセージに含めた終了理由を維持しつつ、隣接ピアがルーティング情報を即座に破棄せずに保持し続ける（GR動作を継続する）ための処理ルールを明確化し、BGP運用の安定性を高めます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 8538 - BGPグレースフルリスタートのための通知メッセージのサポート</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -293,12 +298,12 @@ At a high level, this document can be summed up as follows. When a BGP session i
     <div class="row" id="1-1--Requirements-Language-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> when, and only when, they appear in all capitals, as shown here.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、BCP 14 <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> <a href="./rfc8174.html">[RFC8174]</a> で説明されているように、すべて大文字で表示される場合にのみ解釈されるものとします。
         </p>
       </div>
     </div>
@@ -504,7 +509,7 @@ ErrCodeは、ハードリセットの理由を示すBGPエラーコードです�
     <div class="row" id="3-2--Receiving-a-Hard-Reset-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Whenever a BGP speaker receives a Hard Reset, the speaker MUST terminate the BGP session following the standard procedures in <a href="./rfc4271.html">[RFC4271]</a>.
+Whenever a BGP speaker receives a Hard Reset, the speaker <span class="kw kw-must">MUST</span> terminate the BGP session following the standard procedures in <a href="./rfc4271.html">[RFC4271]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -528,7 +533,7 @@ BGPスピーカーがハードリセットを受信するたびに、スピー�
     <div class="row" id="4--Operation-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A BGP speaker that is willing to receive and send BGP NOTIFICATION messages according to the procedures of this document MUST advertise the &#34;N&#34; bit using the Graceful Restart Capability as defined in <a href="./rfc4724.html">[RFC4724]</a>.
+A BGP speaker that is willing to receive and send BGP NOTIFICATION messages according to the procedures of this document <span class="kw kw-must">MUST</span> advertise the &#34;N&#34; bit using the Graceful Restart Capability as defined in <a href="./rfc4724.html">[RFC4724]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -540,7 +545,7 @@ A BGP speaker that is willing to receive and send BGP NOTIFICATION messages acco
     <div class="row" id="4--Operation-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When such a BGP speaker has received the &#34;N&#34; bit from its peer, and receives from that peer a BGP NOTIFICATION message other than a Hard Reset, it MUST follow the rules for the Receiving Speaker mentioned in Section 4.1. The BGP speaker generating the BGP NOTIFICATION message MUST also follow the rules for the Receiving Speaker.
+When such a BGP speaker has received the &#34;N&#34; bit from its peer, and receives from that peer a BGP NOTIFICATION message other than a Hard Reset, it <span class="kw kw-must">MUST</span> follow the rules for the Receiving Speaker mentioned in Section 4.1. The BGP speaker generating the BGP NOTIFICATION message <span class="kw kw-must">MUST</span> also follow the rules for the Receiving Speaker.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -552,7 +557,7 @@ When such a BGP speaker has received the &#34;N&#34; bit from its peer, and rece
     <div class="row" id="4--Operation-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When a BGP speaker resets its session due to a HOLDTIME expiry, it should generate the relevant BGP NOTIFICATION message as mentioned in <a href="./rfc4271.html">[RFC4271]</a> but subsequently MUST follow the rules for the Receiving Speaker mentioned in Section 4.1.
+When a BGP speaker resets its session due to a HOLDTIME expiry, it should generate the relevant BGP NOTIFICATION message as mentioned in <a href="./rfc4271.html">[RFC4271]</a> but subsequently <span class="kw kw-must">MUST</span> follow the rules for the Receiving Speaker mentioned in Section 4.1.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -564,7 +569,7 @@ BGPスピーカーがHOLDTIMEの期限切れのためにセッションをリセ
     <div class="row" id="4--Operation-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-A BGP speaker SHOULD NOT send a Hard Reset to a peer from which it has not received the &#34;N&#34; bit. We note, however, that if it did so, the effect would be as desired in any case because, according to <a href="./rfc4271.html">[RFC4271]</a> and <a href="./rfc4724.html">[RFC4724]</a>, any NOTIFICATION message, whether recognized or not, results in a session reset. Thus, the only negative effect to be expected from sending the Hard Reset to a peer that hasn&#39;t advertised compliance to this specification would be that the peer would be unable to properly log the associated information.
+A BGP speaker <span class="kw kw-shouldnot">SHOULD NOT</span> send a Hard Reset to a peer from which it has not received the &#34;N&#34; bit. We note, however, that if it did so, the effect would be as desired in any case because, according to <a href="./rfc4271.html">[RFC4271]</a> and <a href="./rfc4724.html">[RFC4724]</a>, any NOTIFICATION message, whether recognized or not, results in a session reset. Thus, the only negative effect to be expected from sending the Hard Reset to a peer that hasn&#39;t advertised compliance to this specification would be that the peer would be unable to properly log the associated information.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -576,12 +581,12 @@ BGPスピーカーは、「N」ビットを受信して​​いないピアに�
     <div class="row" id="4--Operation-p5">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Once the session is re-established, both BGP speakers SHOULD set their Forwarding State bit to 1. If the Forwarding State bit is not set, then, according to the procedures in Section 4.2 of <a href="./rfc4724.html">[RFC4724]</a>, the relevant routes will be flushed, defeating the goals of this specification.
+Once the session is re-established, both BGP speakers <span class="kw kw-should">SHOULD</span> set their Forwarding State bit to 1. If the Forwarding State bit is not set, then, according to the procedures in Section 4.2 of <a href="./rfc4724.html">[RFC4724]</a>, the relevant routes will be flushed, defeating the goals of this specification.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-セッションが再確立されると、両方のBGPスピーカーは転送状態ビットを1に設定する必要があります（SHOULD）。転送状態ビットが設定されていない場合、<a href="./rfc4724.html">[RFC4724]</a>のセクション4.2の手順に従って、関連するルートがフラッシュされます。この仕様の目標を打ち破る。
+セッションが再確立されると、両方のBGPスピーカーは転送状態ビットを1に設定する必要があります（<span class="kw kw-should">SHOULD</span>）。転送状態ビットが設定されていない場合、<a href="./rfc4724.html">[RFC4724]</a>のセクション4.2の手順に従って、関連するルートがフラッシュされます。この仕様の目標を打ち破る。
         </p>
       </div>
     </div>
@@ -612,7 +617,7 @@ Section 4.2 of <a href="./rfc4724.html">[RFC4724]</a> defines rules for the Rec
     <div class="row" id="4-1--Rules-for-the-Receiving-Speaker-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The sentence &#34;To deal with possible consecutive restarts, a route (from the peer) previously marked as stale MUST be deleted&#34; only applies when the &#34;N&#34; bit has not been exchanged with the peer:
+The sentence &#34;To deal with possible consecutive restarts, a route (from the peer) previously marked as stale <span class="kw kw-must">MUST</span> be deleted&#34; only applies when the &#34;N&#34; bit has not been exchanged with the peer:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -624,24 +629,24 @@ The sentence &#34;To deal with possible consecutive restarts, a route (from the 
     <div class="row" id="4-1--Rules-for-the-Receiving-Speaker-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-OLD: When the Receiving Speaker detects termination of the TCP session for a BGP session with a peer that has advertised the Graceful Restart Capability, it MUST retain the routes received from the peer for all the address families that were previously received in the Graceful Restart Capability and MUST mark them as stale routing information. To deal with possible consecutive restarts, a route (from the peer) previously marked as stale MUST be deleted. The router MUST NOT differentiate between stale and other routing information during forwarding.
+OLD: When the Receiving Speaker detects termination of the TCP session for a BGP session with a peer that has advertised the Graceful Restart Capability, it <span class="kw kw-must">MUST</span> retain the routes received from the peer for all the address families that were previously received in the Graceful Restart Capability and <span class="kw kw-must">MUST</span> mark them as stale routing information. To deal with possible consecutive restarts, a route (from the peer) previously marked as stale <span class="kw kw-must">MUST</span> be deleted. The router <span class="kw kw-mustnot">MUST NOT</span> differentiate between stale and other routing information during forwarding.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-OLD：受信スピーカーが、グレースフルリスタート機能をアドバタイズしたピアとのBGPセッションのTCPセッションの終了を検出すると、以前にグレースフルリスタート機能で受信されたすべてのアドレスファミリのピアから受信したルートを保持する必要がありますそしてそれらを古いルーティング情報としてマークしなければなりません。起こり得る連続した再起動に対処するには、以前に失効としてマークされた（ピアからの）ルートを削除する必要があります。ルーターは、転送中に古い情報と他のルーティング情報を区別してはなりません（MUST NOT）。
+OLD：受信スピーカーが、グレースフルリスタート機能をアドバタイズしたピアとのBGPセッションのTCPセッションの終了を検出すると、以前にグレースフルリスタート機能で受信されたすべてのアドレスファミリのピアから受信したルートを保持する必要がありますそしてそれらを古いルーティング情報としてマークしなければなりません。起こり得る連続した再起動に対処するには、以前に失効としてマークされた（ピアからの）ルートを削除する必要があります。ルーターは、転送中に古い情報と他のルーティング情報を区別してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="4-1--Rules-for-the-Receiving-Speaker-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-NEW: When the Receiving Speaker detects termination of the TCP session for a BGP session with a peer that has advertised the Graceful Restart Capability, it MUST retain the routes received from the peer for all the address families that were previously received in the Graceful Restart Capability and MUST mark them as stale routing information. The router MUST NOT differentiate between stale and other routing information during forwarding. If the &#34;N&#34; bit has not been exchanged with the peer, then to deal with possible consecutive restarts, a route (from the peer) previously marked as stale MUST be deleted.
+NEW: When the Receiving Speaker detects termination of the TCP session for a BGP session with a peer that has advertised the Graceful Restart Capability, it <span class="kw kw-must">MUST</span> retain the routes received from the peer for all the address families that were previously received in the Graceful Restart Capability and <span class="kw kw-must">MUST</span> mark them as stale routing information. The router <span class="kw kw-mustnot">MUST NOT</span> differentiate between stale and other routing information during forwarding. If the &#34;N&#34; bit has not been exchanged with the peer, then to deal with possible consecutive restarts, a route (from the peer) previously marked as stale <span class="kw kw-must">MUST</span> be deleted.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-新規：グレースフルリスタート機能をアドバタイズしたピアとのBGPセッションのTCPセッションの終了を受信スピーカーが検出すると、以前にグレースフルリスタート機能で受信したすべてのアドレスファミリのピアから受信したルートを保持する必要がありますそしてそれらを古いルーティング情報としてマークしなければなりません。ルーターは、転送中に古い情報と他のルーティング情報を区別してはなりません（MUST NOT）。 「N」ビットがピアと交換されていない場合、可能な連続した再起動に対処するために、以前に失効としてマークされた（ピアからの）ルートを削除する必要があります。
+新規：グレースフルリスタート機能をアドバタイズしたピアとのBGPセッションのTCPセッションの終了を受信スピーカーが検出すると、以前にグレースフルリスタート機能で受信したすべてのアドレスファミリのピアから受信したルートを保持する必要がありますそしてそれらを古いルーティング情報としてマークしなければなりません。ルーターは、転送中に古い情報と他のルーティング情報を区別してはなりません（<span class="kw kw-mustnot">MUST NOT</span>）。 「N」ビットがピアと交換されていない場合、可能な連続した再起動に対処するために、以前に失効としてマークされた（ピアからの）ルートを削除する必要があります。
         </p>
       </div>
     </div>
@@ -660,19 +665,19 @@ The stale timer is given a formal name and made mandatory:
     <div class="row" id="4-1--Rules-for-the-Receiving-Speaker-p6">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-OLD: To put an upper bound on the amount of time a router retains the stale routes, an implementation MAY support a (configurable) timer that imposes this upper bound.
+OLD: To put an upper bound on the amount of time a router retains the stale routes, an implementation <span class="kw kw-may">MAY</span> support a (configurable) timer that imposes this upper bound.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-OLD：ルーターが古いルートを保持する時間に上限を設けるために、実装はこの上限を課す（構成可能な）タイマーをサポートしてもよい（MAY）。
+OLD：ルーターが古いルートを保持する時間に上限を設けるために、実装はこの上限を課す（構成可能な）タイマーをサポートしてもよい（<span class="kw kw-may">MAY</span>）。
         </p>
       </div>
     </div>
     <div class="row" id="4-1--Rules-for-the-Receiving-Speaker-p7">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-NEW: To put an upper bound on the amount of time a router retains the stale routes, an implementation MUST support a (configurable) timer, called the &#34;stale timer&#34;, that imposes this upper bound. A suggested default value for the stale timer is 180 seconds. An implementation MAY provide the option to disable the timer (i.e., to provide an infinite retention time) but MUST NOT do so by default.
+NEW: To put an upper bound on the amount of time a router retains the stale routes, an implementation <span class="kw kw-must">MUST</span> support a (configurable) timer, called the &#34;stale timer&#34;, that imposes this upper bound. A suggested default value for the stale timer is 180 seconds. An implementation <span class="kw kw-may">MAY</span> provide the option to disable the timer (i.e., to provide an infinite retention time) but <span class="kw kw-mustnot">MUST NOT</span> do so by default.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -775,12 +780,12 @@ For all NOTIFICATION codes other than Cease, use of Hard Reset does not appear t
     <div class="row" id="5-2--Interaction-with-Other-Specifications-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-&#34;BGP Administrative Shutdown Communication&#34; <a href="./rfc8203.html">[RFC8203]</a> specifies use of the data portion of the Administrative Shutdown or Administrative Reset subcodes to convey a short message. When <a href="./rfc8203.html">[RFC8203]</a> is used in conjunction with Hard Reset, the subcode of the outermost Cease MUST be Hard Reset, with the Administrative Shutdown or Administrative Reset subcodes encapsulated within. The encapsulated message MUST subsequently be processed according to <a href="./rfc8203.html">[RFC8203]</a>.
+&#34;BGP Administrative Shutdown Communication&#34; <a href="./rfc8203.html">[RFC8203]</a> specifies use of the data portion of the Administrative Shutdown or Administrative Reset subcodes to convey a short message. When <a href="./rfc8203.html">[RFC8203]</a> is used in conjunction with Hard Reset, the subcode of the outermost Cease <span class="kw kw-must">MUST</span> be Hard Reset, with the Administrative Shutdown or Administrative Reset subcodes encapsulated within. The encapsulated message <span class="kw kw-must">MUST</span> subsequently be processed according to <a href="./rfc8203.html">[RFC8203]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-「BGP管理シャットダウン通信」<a href="./rfc8203.html">[RFC8203]</a>は、管理シャットダウンまたは管理リセットサブコードのデータ部分を使用してショートメッセージを伝えることを指定しています。 <a href="./rfc8203.html">[RFC8203]</a>をハードリセットと組み合わせて使用​​する場合、最も外側の停止のサブコードはハードリセットでなければならず、管理シャットダウンまたは管理リセットサブコードがカプセル化されている必要があります。カプセル化されたメッセージはその後<a href="./rfc8203.html">[RFC8203]</a>に従って処理されなければならない（MUST）。
+「BGP管理シャットダウン通信」<a href="./rfc8203.html">[RFC8203]</a>は、管理シャットダウンまたは管理リセットサブコードのデータ部分を使用してショートメッセージを伝えることを指定しています。 <a href="./rfc8203.html">[RFC8203]</a>をハードリセットと組み合わせて使用​​する場合、最も外側の停止のサブコードはハードリセットでなければならず、管理シャットダウンまたは管理リセットサブコードがカプセル化されている必要があります。カプセル化されたメッセージはその後<a href="./rfc8203.html">[RFC8203]</a>に従って処理されなければならない（<span class="kw kw-must">MUST</span>）。
         </p>
       </div>
     </div>
@@ -799,12 +804,12 @@ For all NOTIFICATION codes other than Cease, use of Hard Reset does not appear t
     <div class="row" id="6--Management-Considerations-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When reporting a Hard Reset to network management, the error code and subcode reported MUST be Cease and Hard Reset, respectively. If the network management layer in use permits it, the information carried in the Data portion SHOULD be reported as well.
+When reporting a Hard Reset to network management, the error code and subcode reported <span class="kw kw-must">MUST</span> be Cease and Hard Reset, respectively. If the network management layer in use permits it, the information carried in the Data portion <span class="kw kw-should">SHOULD</span> be reported as well.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-ハードリセットをネットワーク管理に報告する場合、報告されるエラーコードとサブコードはそれぞれ停止とハードリセットでなければなりません。使用中のネットワーク管理層で許可されている場合は、データ部分に含まれる情報も報告する必要があります（SHOULD）。
+ハードリセットをネットワーク管理に報告する場合、報告されるエラーコードとサブコードはそれぞれ停止とハードリセットでなければなりません。使用中のネットワーク管理層で許可されている場合は、データ部分に含まれる情報も報告する必要があります（<span class="kw kw-should">SHOULD</span>）。
         </p>
       </div>
     </div>

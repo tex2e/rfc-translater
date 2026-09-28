@@ -7,13 +7,17 @@
   <meta name="description" content="このRFCは、P2PオーバーレイプロトコルRELOADにおいて、ネットワークの規模やノードの頻繁な参加・離脱（チャーン）に合わせて構造を動的に変更する「自己調整型分散ハッシュテーブル（DHT）」の仕様を定義しています。トポロジの維持コストを抑えつつ、リソースの発見効率を最大化するための適応的なルーティングアルゴリズムを提供し、大規模な分散システムの安定性を向上させます。">
   
   <script>
-    // 描画前にダークテーマを適用して、白い画面が一瞬表示されるのを防ぐ。
-    // 保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
     (function () {
       var saved = null;
       try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
       var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
       if (dark) document.documentElement.classList.add('dark-theme');
+      // 規範キーワードの強調表示（既定は表示）
+      var keyword = null;
+      try { keyword = localStorage.getItem('isKeywordHighlight'); } catch (e) {}
+      if (keyword === 'false') document.documentElement.classList.add('kw-off');
     })();
   </script>
   <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
@@ -56,6 +60,7 @@
           タイトル : <strong>RFC 7363 - REsource LOcation And Discovery（RELOAD）のための自己調整分散ハッシュテーブル（DHT）</strong></span><br>
         <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span><br>
         <span id="rfc_actions"></span>
+        <span id="rfc_keywords"></span>
       </div>
       <div id="rfc_alert" class="hidden" role="alert">
         <div class="alert alert-danger">
@@ -325,12 +330,12 @@ The remainder of this document is structured as follows: Section 2 provides defi
     <div class="row" id="2--Terminology-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The key words &#34;MUST&#34;, &#34;MUST NOT&#34;, &#34;REQUIRED&#34;, &#34;SHALL&#34;, &#34;SHALL NOT&#34;, &#34;SHOULD&#34;, &#34;SHOULD NOT&#34;, &#34;RECOMMENDED&#34;, &#34;NOT RECOMMENDED&#34;, &#34;MAY&#34;, and &#34;OPTIONAL&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
+The key words &#34;<span class="kw kw-must">MUST</span>&#34;, &#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;, &#34;<span class="kw kw-must">REQUIRED</span>&#34;, &#34;<span class="kw kw-must">SHALL</span>&#34;, &#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;, &#34;<span class="kw kw-should">SHOULD</span>&#34;, &#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;, &#34;<span class="kw kw-should">RECOMMENDED</span>&#34;, &#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;, &#34;<span class="kw kw-may">MAY</span>&#34;, and &#34;<span class="kw kw-may">OPTIONAL</span>&#34; in this document are to be interpreted as described in <a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-このドキュメントのキーワード &#34;MUST&#34;、&#34;MUST NOT&#34;、&#34;REQUIRED&#34;、&#34;SHALL&#34;、&#34;SHALL NOT&#34;、&#34;SHOULD&#34;、&#34;SHOULD NOT&#34;、&#34;RECOMMENDED&#34;、&#34;NOT RECOMMENDED&#34;、&#34;MAY&#34;、および &#34;OPTIONAL&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
+このドキュメントのキーワード &#34;<span class="kw kw-must">MUST</span>&#34;、&#34;<span class="kw kw-mustnot">MUST NOT</span>&#34;、&#34;<span class="kw kw-must">REQUIRED</span>&#34;、&#34;<span class="kw kw-must">SHALL</span>&#34;、&#34;<span class="kw kw-mustnot">SHALL NOT</span>&#34;、&#34;<span class="kw kw-should">SHOULD</span>&#34;、&#34;<span class="kw kw-shouldnot">SHOULD NOT</span>&#34;、&#34;<span class="kw kw-should">RECOMMENDED</span>&#34;、&#34;<span class="kw kw-shouldnot">NOT RECOMMENDED</span>&#34;、&#34;<span class="kw kw-may">MAY</span>&#34;、および &#34;<span class="kw kw-may">OPTIONAL</span>&#34; は、<a href="https://datatracker.ietf.org/doc/html/rfc2119">[RFC2119]</a> で説明されているように解釈されるものとします。
         </p>
       </div>
     </div>
@@ -877,7 +882,7 @@ RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で説明されているよ
     <div class="row" id="5-1--Update-Requests-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-&#39;neighbors&#39;, and &#39;full&#39;. Regardless of the type, all Update requests include an &#39;uptime&#39; field. The self-tuning extensions require information on the uptimes of peers in the routing table. The sender of an Update request includes its current uptime (in seconds) in the &#39;uptime&#39; field. Regardless of the type, all Update requests MUST include an &#39;uptime&#39; field.
+&#39;neighbors&#39;, and &#39;full&#39;. Regardless of the type, all Update requests include an &#39;uptime&#39; field. The self-tuning extensions require information on the uptimes of peers in the routing table. The sender of an Update request includes its current uptime (in seconds) in the &#39;uptime&#39; field. Regardless of the type, all Update requests <span class="kw kw-must">MUST</span> include an &#39;uptime&#39; field.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -889,7 +894,7 @@ RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で説明されているよ
     <div class="row" id="5-1--Update-Requests-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-When self-tuning is used, each peer decides independently the appropriate size for the successor list, predecessor list, and finger table. Thus, the &#39;predecessors&#39;, &#39;successors&#39;, and &#39;fingers&#39; fields included in RELOAD Update requests are of variable length. As specified in RELOAD <a href="./rfc6940.html">[RFC6940]</a>, variable-length fields are on the wire preceded by length bytes. In the case of the successor list, predecessor list, and finger table, there are two length bytes (allowing lengths up to 2^16-1). The number of NodeId structures included in each field can be calculated based on the length bytes since the size of a single NodeId structure is 16 bytes. If a peer receives more entries than fit into its successor list, predecessor list, or finger table, the peer MUST ignore the extra entries. A peer may also receive less entries than it currently has in its own data structure. In that case, it uses the received entries to update only a subset of the entries in its data structure. As an example, a peer that has a successor list of size 8 may receive a successor list of size 4 from its immediate successor. In that case, the received successor list can only be used to update the first few successors on the peer&#39;s successor list. The rest of the successors will remain intact.
+When self-tuning is used, each peer decides independently the appropriate size for the successor list, predecessor list, and finger table. Thus, the &#39;predecessors&#39;, &#39;successors&#39;, and &#39;fingers&#39; fields included in RELOAD Update requests are of variable length. As specified in RELOAD <a href="./rfc6940.html">[RFC6940]</a>, variable-length fields are on the wire preceded by length bytes. In the case of the successor list, predecessor list, and finger table, there are two length bytes (allowing lengths up to 2^16-1). The number of NodeId structures included in each field can be calculated based on the length bytes since the size of a single NodeId structure is 16 bytes. If a peer receives more entries than fit into its successor list, predecessor list, or finger table, the peer <span class="kw kw-must">MUST</span> ignore the extra entries. A peer may also receive less entries than it currently has in its own data structure. In that case, it uses the received entries to update only a subset of the entries in its data structure. As an example, a peer that has a successor list of size 8 may receive a successor list of size 4 from its immediate successor. In that case, the received successor list can only be used to update the first few successors on the peer&#39;s successor list. The rest of the successors will remain intact.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -913,7 +918,7 @@ When self-tuning is used, each peer decides independently the appropriate size f
     <div class="row" id="5-2--Neighbor-Stabilization-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-In the neighbor stabilization operation of chord-reload, a peer periodically sends an Update request to every peer in its connection table. In a small, low-churn overlay, the amount of traffic this process generates is typically acceptable. However, in a large-scale overlay churning at a moderate or high churn rate, the traffic load may no longer be acceptable since the size of the connection table is large and the stabilization interval relatively short. The self-tuning mechanisms described in this document are especially designed for overlays of the latter type. Therefore, when the self-tuning mechanisms are used, each peer only sends a periodic Update request to its first predecessor and first successor on the Chord ring; it MUST NOT send Update requests to others.
+In the neighbor stabilization operation of chord-reload, a peer periodically sends an Update request to every peer in its connection table. In a small, low-churn overlay, the amount of traffic this process generates is typically acceptable. However, in a large-scale overlay churning at a moderate or high churn rate, the traffic load may no longer be acceptable since the size of the connection table is large and the stabilization interval relatively short. The self-tuning mechanisms described in this document are especially designed for overlays of the latter type. Therefore, when the self-tuning mechanisms are used, each peer only sends a periodic Update request to its first predecessor and first successor on the Chord ring; it <span class="kw kw-mustnot">MUST NOT</span> send Update requests to others.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -925,7 +930,7 @@ In the neighbor stabilization operation of chord-reload, a peer periodically sen
     <div class="row" id="5-2--Neighbor-Stabilization-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The neighbor stabilization routine is executed when the stabilization timer fires. To begin the neighbor stabilization routine, a peer sends an Update request to its first successor and its first predecessor. The type of the Update request MUST be &#39;neighbors&#39;. The Update request includes the successor and predecessor lists of the sender. If a peer receiving such an Update request learns from the predecessor and successor lists included in the request that new peers can be included in its neighborhood set, it sends Attach requests to the new peers.
+ The neighbor stabilization routine is executed when the stabilization timer fires. To begin the neighbor stabilization routine, a peer sends an Update request to its first successor and its first predecessor. The type of the Update request <span class="kw kw-must">MUST</span> be &#39;neighbors&#39;. The Update request includes the successor and predecessor lists of the sender. If a peer receiving such an Update request learns from the predecessor and successor lists included in the request that new peers can be included in its neighborhood set, it sends Attach requests to the new peers.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -973,7 +978,7 @@ Chord-reloadは、fingerテーブルの新しいピアを検索するための2�
     <div class="row" id="5-3--Finger-Stabilization-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-Immediately after a new peer has been added to the finger table, a Probe request is sent to the new peer to fetch its uptime. The &#39;requested_info&#39; field of the Probe request MUST be set to contain the ProbeInformationType &#39;uptime&#39; defined in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>.
+Immediately after a new peer has been added to the finger table, a Probe request is sent to the new peer to fetch its uptime. The &#39;requested_info&#39; field of the Probe request <span class="kw kw-must">MUST</span> be set to contain the ProbeInformationType &#39;uptime&#39; defined in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1045,12 +1050,12 @@ This document does not require any changes to the mechanism chord-reload uses to
     <div class="row" id="5-6--Leaving-the-Overlay-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- As specified in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>, a leaving peer SHOULD send a Leave request to all members of its neighbor table prior to leaving the overlay. The &#39;overlay_specific_data&#39; field MUST contain the ChordLeaveData structure. The Leave requests that are sent to successors contain the predecessor list of the leaving peer. The Leave requests that are sent to the predecessors contain the successor list of the leaving peer. If a given successor can identify better predecessors (that is, predecessors that are closer to it on the Chord ring than its existing predecessors) than are already included in its predecessor lists by investigating the predecessor list it receives from the leaving peer, it sends Attach requests to them. Similarly, if a given predecessor identifies better successors by investigating the successor list it receives from the leaving peer, it sends Attach requests to them.
+ As specified in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>, a leaving peer <span class="kw kw-should">SHOULD</span> send a Leave request to all members of its neighbor table prior to leaving the overlay. The &#39;overlay_specific_data&#39; field <span class="kw kw-must">MUST</span> contain the ChordLeaveData structure. The Leave requests that are sent to successors contain the predecessor list of the leaving peer. The Leave requests that are sent to the predecessors contain the successor list of the leaving peer. If a given successor can identify better predecessors (that is, predecessors that are closer to it on the Chord ring than its existing predecessors) than are already included in its predecessor lists by investigating the predecessor list it receives from the leaving peer, it sends Attach requests to them. Similarly, if a given predecessor identifies better successors by investigating the successor list it receives from the leaving peer, it sends Attach requests to them.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
-RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で指定されているように、離脱ピアは、オーバーレイを離脱する前に、ネイバーテーブルのすべてのメンバーに離脱リクエストを送信する必要があります（SHOULD）。 「overlay_specific_data」フィールドには、ChordLeaveData構造が含まれている必要があります。後続ノードに送信されるLeave要求には、離脱するピアの先行リストが含まれています。先行ノードに送信されるLeave要求には、離脱するピアの後続リストが含まれています。特定のサクセサが、離脱するピアから受信するプレデクサリストを調査することにより、そのプレデクサリストに既に含まれているものよりも優れたプレデクサ（つまり、既存のプレデセサよりもコードリング上でより近いプレデクサ）を識別できる場合、アタッチを送信します。それらへの要求。同様に、特定の先行ノードが、退出するピアから受信した後続リストを調査して、より優れた後続ノードを特定した場合、接続リクエストをそれらに送信します。
+RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で指定されているように、離脱ピアは、オーバーレイを離脱する前に、ネイバーテーブルのすべてのメンバーに離脱リクエストを送信する必要があります（<span class="kw kw-should">SHOULD</span>）。 「overlay_specific_data」フィールドには、ChordLeaveData構造が含まれている必要があります。後続ノードに送信されるLeave要求には、離脱するピアの先行リストが含まれています。先行ノードに送信されるLeave要求には、離脱するピアの後続リストが含まれています。特定のサクセサが、離脱するピアから受信するプレデクサリストを調査することにより、そのプレデクサリストに既に含まれているものよりも優れたプレデクサ（つまり、既存のプレデセサよりもコードリング上でより近いプレデクサ）を識別できる場合、アタッチを送信します。それらへの要求。同様に、特定の先行ノードが、退出するピアから受信した後続リストを調査して、より優れた後続ノードを特定した場合、接続リクエストをそれらに送信します。
         </p>
       </div>
     </div>
@@ -1069,7 +1074,7 @@ RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で指定されているよ
     <div class="row" id="6--Self-Tuning-Chord-Parameters-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-This section specifies how to determine an appropriate stabilization rate and routing table size in an adaptive fashion. The proposed mechanism is based on [Mahajan2003], [Liben-Nowell2002], and [Ghinita2006]. To calculate an appropriate stabilization rate, the values of three parameters must be estimated: overlay size N, failure rate U, and join rate L. To calculate an appropriate routing table size, the estimated network size N can be used. Peers in the overlay MUST recalculate the values of the parameters to self-tune the chord-reload algorithm at the end of each stabilization period before restarting the stabilization timer.
+This section specifies how to determine an appropriate stabilization rate and routing table size in an adaptive fashion. The proposed mechanism is based on [Mahajan2003], [Liben-Nowell2002], and [Ghinita2006]. To calculate an appropriate stabilization rate, the values of three parameters must be estimated: overlay size N, failure rate U, and join rate L. To calculate an appropriate routing table size, the estimated network size N can be used. Peers in the overlay <span class="kw kw-must">MUST</span> recalculate the values of the parameters to self-tune the chord-reload algorithm at the end of each stabilization period before restarting the stabilization timer.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1162,7 +1167,7 @@ During the join process, a joining peer fills its routing table by sending a ser
     <div class="row" id="6-2--Determining-Routing-Table-Size-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As specified in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>, the finger table must contain at least 16 entries. When the self-tuning mechanisms are used, the size of the finger table MUST be set to max(ceiling(log2(N)), 16) using the estimated network size N.
+As specified in RELOAD base <a href="./rfc6940.html">[RFC6940]</a>, the finger table must contain at least 16 entries. When the self-tuning mechanisms are used, the size of the finger table <span class="kw kw-must">MUST</span> be set to max(ceiling(log2(N)), 16) using the estimated network size N.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1174,7 +1179,7 @@ RELOADベース<a href="./rfc6940.html">[RFC6940]</a>で指定されているよ
     <div class="row" id="6-2--Determining-Routing-Table-Size-p2">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The size of the successor list MUST be set to a maximum of ceiling(log2(N)). An implementation can place a lower limit on the size of the successor list. As an example, the implementation might require the size of the successor list to be always at least three.
+The size of the successor list <span class="kw kw-must">MUST</span> be set to a maximum of ceiling(log2(N)). An implementation can place a lower limit on the size of the successor list. As an example, the implementation might require the size of the successor list to be always at least three.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1186,7 +1191,7 @@ The size of the successor list MUST be set to a maximum of ceiling(log2(N)). An 
     <div class="row" id="6-2--Determining-Routing-Table-Size-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The size of the predecessor list MUST be set to ceiling(log2(N)).
+The size of the predecessor list <span class="kw kw-must">MUST</span> be set to ceiling(log2(N)).
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1243,7 +1248,7 @@ where M is the number of unique peer identifiers in the routing table, Tk is the
     <div class="row" id="6-3--Estimating-Failure-Rate-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-0">
- The size of the failure history K affects the accuracy of the estimate of U. One can increase the accuracy by increasing K. However, this has the side effect of decreasing responsiveness to changes in the failure rate. On the other hand, a small history size may cause a peer to overreact each time a new failure occurs. In [Ghinita2006], K is set to 25% of the routing table size. Use of this value is RECOMMENDED.
+ The size of the failure history K affects the accuracy of the estimate of U. One can increase the accuracy by increasing K. However, this has the side effect of decreasing responsiveness to changes in the failure rate. On the other hand, a small history size may cause a peer to overreact each time a new failure occurs. In [Ghinita2006], K is set to 25% of the routing table size. Use of this value is <span class="kw kw-should">RECOMMENDED</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1291,7 +1296,7 @@ A new failure is inserted to the failure history in the following cases:
     <div class="row" id="6-3-1--Detecting-Failures-p3">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-2. A peer fails to reply to a Ping request sent in the situation explained below. If no packets have been received on a connection during the past 2*Tr seconds (where Tr is the inactivity timer defined by Interactive Connectivity Establishment (ICE) <a href="./rfc5245.html">[RFC5245]</a>), a RELOAD Ping request MUST be sent to the remote peer. RELOAD mandates the use of Session Traversal Utilities for NAT (STUN) <a href="./rfc5389.html">[RFC5389]</a> for keepalives. STUN keepalives take the form of STUN Binding Indication transactions. As specified in ICE <a href="./rfc5245.html">[RFC5245]</a>, a peer sends a STUN Binding Indication if there has been no packet sent on a connection for Tr seconds. Tr is configurable and has a default of 15 seconds. Although STUN Binding Indications do not generate a response, the fact that a peer has failed can be learned from the lack of packets (Binding Indications or application protocol packets) received from the peer. If the remote peer fails to reply to the Ping request, the sender should consider the remote peer to have failed.
+2. A peer fails to reply to a Ping request sent in the situation explained below. If no packets have been received on a connection during the past 2*Tr seconds (where Tr is the inactivity timer defined by Interactive Connectivity Establishment (ICE) <a href="./rfc5245.html">[RFC5245]</a>), a RELOAD Ping request <span class="kw kw-must">MUST</span> be sent to the remote peer. RELOAD mandates the use of Session Traversal Utilities for NAT (STUN) <a href="./rfc5389.html">[RFC5389]</a> for keepalives. STUN keepalives take the form of STUN Binding Indication transactions. As specified in ICE <a href="./rfc5245.html">[RFC5245]</a>, a peer sends a STUN Binding Indication if there has been no packet sent on a connection for Tr seconds. Tr is configurable and has a default of 15 seconds. Although STUN Binding Indications do not generate a response, the fact that a peer has failed can be learned from the lack of packets (Binding Indications or application protocol packets) received from the peer. If the remote peer fails to reply to the Ping request, the sender should consider the remote peer to have failed.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1303,7 +1308,7 @@ A new failure is inserted to the failure history in the following cases:
     <div class="row" id="6-3-1--Detecting-Failures-p4">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-As an alternative to relying on STUN keepalives to detect peer failure, a peer could send additional, frequent RELOAD messages to every peer in its connection table. These messages could be Update requests, in which case they would serve two purposes: detecting peer failure and stabilization. However, as the cost of this approach can be very high in terms of bandwidth consumption and traffic load, especially in large-scale overlays experiencing churn, its use is NOT RECOMMENDED.
+As an alternative to relying on STUN keepalives to detect peer failure, a peer could send additional, frequent RELOAD messages to every peer in its connection table. These messages could be Update requests, in which case they would serve two purposes: detecting peer failure and stabilization. However, as the cost of this approach can be very high in terms of bandwidth consumption and traffic load, especially in large-scale overlays experiencing churn, its use is <span class="kw kw-shouldnot">NOT RECOMMENDED</span>.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1384,7 +1389,7 @@ In order for this mechanism to work, peers need to exchange information about th
     <div class="row" id="6-5--Estimate-Sharing-p1">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-To improve the accuracy of network size, join rate, and leave rate estimates, peers share their estimates. When the stabilization timer fires, a peer selects number-of-peers-to-probe random peers from its finger table and send each of them a Probe request. The targets of Probe requests are selected from the finger table rather than from the neighbor table since neighbors are likely to make similar errors when calculating their estimates. The number-of-peers-to-probe is a new element in the overlay configuration document. It is defined in Section 7. Both the Probe request and the answer returned by the target peer MUST contain a new message extension whose MessageExtensionType is &#39;self_tuning_data&#39;. This extension type is defined in Section 9.1. The &#39;extension_contents&#39; field of the MessageExtension structure MUST contain a SelfTuningData structure:
+To improve the accuracy of network size, join rate, and leave rate estimates, peers share their estimates. When the stabilization timer fires, a peer selects number-of-peers-to-probe random peers from its finger table and send each of them a Probe request. The targets of Probe requests are selected from the finger table rather than from the neighbor table since neighbors are likely to make similar errors when calculating their estimates. The number-of-peers-to-probe is a new element in the overlay configuration document. It is defined in Section 7. Both the Probe request and the answer returned by the target peer <span class="kw kw-must">MUST</span> contain a new message extension whose MessageExtensionType is &#39;self_tuning_data&#39;. This extension type is defined in Section 9.1. The &#39;extension_contents&#39; field of the MessageExtension structure <span class="kw kw-must">MUST</span> contain a SelfTuningData structure:
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1503,7 +1508,7 @@ The join and leave rates are expressed as joins or failures per 24 hours. As an 
     <div class="row" id="6-5--Estimate-Sharing-p11">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The &#39;type&#39; field of the MessageExtension structure MUST be set to contain the value &#39;self_tuning_data&#39;. The &#39;critical&#39; field of the structure MUST be set to False.
+The &#39;type&#39; field of the MessageExtension structure <span class="kw kw-must">MUST</span> be set to contain the value &#39;self_tuning_data&#39;. The &#39;critical&#39; field of the structure <span class="kw kw-must">MUST</span> be set to False.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1527,7 +1532,7 @@ A peer stores all estimates it receives in Probe requests and answers during a s
     <div class="row" id="6-5--Estimate-Sharing-p13">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The default value for number-of-peers-to-probe is 4. This default value is recommended to allow a peer to receive a sufficiently large set of estimates from other peers. With a value of 4, a peer receives four estimates in Probe answers. On the average, each peer also receives four Probe requests each carrying an estimate. Thus, on the average, each peer has nine estimates (including its own) that it can use at the end of the stabilization interval. A value smaller than 4 is NOT RECOMMENDED to keep the number of received estimates high enough. As an example, if the value were 2, there would be peers in the overlay that would only receive two estimates during a stabilization interval. Such peers would only have three estimates available at the end of the interval, which may not be reliable enough since even a single exceptionally high or low estimate can have a large impact.
+The default value for number-of-peers-to-probe is 4. This default value is recommended to allow a peer to receive a sufficiently large set of estimates from other peers. With a value of 4, a peer receives four estimates in Probe answers. On the average, each peer also receives four Probe requests each carrying an estimate. Thus, on the average, each peer has nine estimates (including its own) that it can use at the end of the stabilization interval. A value smaller than 4 is <span class="kw kw-shouldnot">NOT RECOMMENDED</span> to keep the number of received estimates high enough. As an example, if the value were 2, there would be peers in the overlay that would only receive two estimates during a stabilization interval. Such peers would only have three estimates available at the end of the interval, which may not be reliable enough since even a single exceptionally high or low estimate can have a large impact.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
@@ -1626,7 +1631,7 @@ Finally, the actual stabilization interval Tstab that is used can be obtained by
     <div class="row" id="6-6--Calculating-the-Stabilization-Interval-p8">
       <div class="col-sm-12 col-md-6">
         <p class="text indent-3">
-The results obtained in [Maenpaa2009] indicate that making the stabilization interval too small has the effect of making the overlay less stable (e.g., in terms of detected loops and path failures). Thus, a lower limit should be used for the stabilization period. Based on the results in [Maenpaa2009], a lower limit of 15 s is RECOMMENDED, since using a stabilization period smaller than this will with a high probability cause too much traffic in the overlay.
+The results obtained in [Maenpaa2009] indicate that making the stabilization interval too small has the effect of making the overlay less stable (e.g., in terms of detected loops and path failures). Thus, a lower limit should be used for the stabilization period. Based on the results in [Maenpaa2009], a lower limit of 15 s is <span class="kw kw-should">RECOMMENDED</span>, since using a stabilization period smaller than this will with a high probability cause too much traffic in the overlay.
         </p>
       </div>
       <div class="col-sm-12 col-md-6">
