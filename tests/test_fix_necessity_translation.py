@@ -29,11 +29,15 @@ class TestNecessityTranslation(unittest.TestCase):
             "示す": "示さなければなりません",
             "なる": "ならなければなりません",
             "ゼロである": "ゼロでなければなりません",
+            "送る": "送らなければなりません",         # 漢字 + る (辞書で型が決まるもの)
+            "見る": "見なければなりません",
+            "互換性がある": "互換性がなければなりません",
+            "ディレクトリにある": "ディレクトリになければなりません",
         }
         for pre, expected in cases.items():
             self.assertEqual(to_nakereba(pre), expected, pre)
-        # 漢字 + る (送る/着る) は五段か一段か決まらない。否定・ある は対象外
-        for pre in ("送る", "着る", "送信しない", "ある"):
+        # 辞書にない漢字 + る (要る/居る) は型が決まらない。否定・単独の「ある」は対象外
+        for pre in ("要る", "居る", "送信しない", "ある"):
             self.assertIsNone(to_nakereba(pre), pre)
 
     def test_to_beki(self):
@@ -61,15 +65,26 @@ class TestNecessityTranslation(unittest.TestCase):
                 "サーバーはトークンを送り返します。このメッセージは、ポートPTからポートCTに送信する必要があります。"),
             "サーバーはトークンを送り返します。このメッセージは、ポートPTからポートCTに送信しなければなりません (MUST)。")
 
-    def test_fix_multi_sentence_skips_misaligned(self):
-        # 文の数が違う
-        self.assertIsNone(fix_necessity_translation(
+    def test_fix_multi_sentence_unique(self):
+        # 文の数が違っても、原文・訳文とも規範表現が1か所だけで位置も合えば直す
+        self.assertEqual(fix_necessity_translation(
             "A is sent. B MUST be sent. C is fine.",
-            "Aが送信され、Bを送信する必要があります。Cは問題ありません。"))
-        # キーワードの文と「必要があ」の文の位置が違う
+            "Aが送信され、Bを送信する必要があります。Cは問題ありません。"),
+            "Aが送信され、Bを送信しなければなりません (MUST)。Cは問題ありません。")
+
+    def test_fix_multi_sentence_skips_misaligned(self):
+        # キーワードの文と「必要があ」の文の位置が違う (訳抜けの疑い)
         self.assertIsNone(fix_necessity_translation(
             "B MUST be sent. C is fine.",
             "Bが送信されます。Cを確認する必要があります。"))
+        # 文の数が違い、訳文に別の規範表現がある
+        self.assertIsNone(fix_necessity_translation(
+            "A is sent. B MUST be sent. C is fine.",
+            "Aは送信してください。Bを送信する必要があります。"))
+        # 原文に「必要があります」と訳されやすい語 (ensure) がある
+        self.assertIsNone(fix_necessity_translation(
+            "A is sent. B MUST be sent. Ensure C.",
+            "Aが送信され、Bが送信されます。Cを確認する必要があります。"))
 
     def test_fix_renyo(self):
         self.assertEqual(
@@ -87,8 +102,27 @@ class TestNecessityTranslation(unittest.TestCase):
             "X MUST be set to zero and ignored by receivers.",
             "Xはゼロに設定する必要があり、受信者は無視しなければなりません。"))
 
+    def test_fix_keeps_trailing_notes(self):
+        # 述語の後の括弧書き・引用・コロン・「が、」は残して述語だけ直す
+        self.assertEqual(fix_necessity_translation(
+            "C MUST send X directly (see Section 3).",
+            "CはXを直接送信する必要があります（詳細については、セクション3を参照してください）。"),
+            "CはXを直接送信しなければなりません (MUST)（詳細については、セクション3を参照してください）。")
+        self.assertEqual(fix_necessity_translation("It MUST cut X [RFC1234].", "Xを切る必要があります [RFC1234]。"),
+                         "Xを切らなければなりません (MUST) [RFC1234]。")
+        self.assertEqual(fix_necessity_translation("A peer SHOULD respond with one of the following:",
+                                                   "ピアは次のいずれかで応答する必要があります："),
+                         "ピアは次のいずれかで応答すべきです (SHOULD)：")
+        self.assertEqual(fix_necessity_translation("It MUST return X, but it has Y.",
+                                                   "Xを返す必要がありますが、Yを備えています。"),
+                         "Xを返さなければなりません (MUST) が、Yを備えています。")
+
     def test_fix_skips_uncertain(self):
-        self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを送る必要があります。"))
+        self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを要る必要があります。"))
+        # 述語の後の括弧書きに規範表現がある (括弧内が別の規範の訳かもしれない)
+        self.assertIsNone(fix_necessity_translation(
+            "It MUST get confirmation (or not send MDN).",
+            "確認を取得する必要があります（またはMDNを送信しないでください）。"))
         # 文中に既に注釈がある (キーワードの訳は別の節)
         self.assertIsNone(fix_necessity_translation(
             "The router SHALL construct X and return it.",

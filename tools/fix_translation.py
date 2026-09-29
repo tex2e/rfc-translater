@@ -52,7 +52,7 @@ from lint_translation import (  # noqa: E402
     check_reference_author_format, fix_url_format, update_reference_section_state,
     BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
     check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
-    check_necessity_translation, ANNOTATION_RE, STRENGTH_PATTERNS,
+    check_necessity_translation, ANNOTATION_RE, STRENGTH_PATTERNS, NECESSITY_RE,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -152,6 +152,10 @@ _I_ROW = "いきしちにひみりぎじぢびぴ"
 _E_ROW = "えけせてねへめれげぜでべぺ"
 _GODAN_A = {"う": "わ", "く": "か", "ぐ": "が", "す": "さ", "つ": "た", "ぬ": "な", "ぶ": "ば", "む": "ま"}
 _HIRAGANA = re.compile(r"[ぁ-ゖ]")
+# 漢字 + る の動詞で、活用の型が一つに決まるもの (RFCの訳文に現れるものに限る)。
+# 「入る」は「はいる」(五段) として扱う。「要る」「居る」のように読みで型が変わる字は入れない。
+_GODAN_KANJI_RU = set("入切取戻残送守限作知図至帰渡移乗絞頼握探測計減走通売振貼縛当触握散止")
+_ICHIDAN_KANJI_RU = set("見着似煮得寝出経")
 
 
 def to_nakereba(pre):
@@ -160,15 +164,21 @@ def to_nakereba(pre):
         return pre[:-2] + "しなければなりません"
     if pre.endswith("である"):
         return pre[:-3] + "でなければなりません"
+    if pre.endswith(("がある", "にある", "である")) and len(pre) > 3:
+        return pre[:-2] + "なければなりません"            # 「ある」の否定は「ない」(互換性がなければなりません)
     if pre.endswith(("ない", "ある", "くる", "来る")):
-        return None  # 否定・「ある」・カ変は対象外
+        return None  # 否定・その他の「ある」・カ変は対象外
     if pre.endswith("る") and len(pre) >= 2:
         before = pre[-2]
         if before in _I_ROW or before in _E_ROW:
             return pre[:-1] + "なければなりません"          # 一段動詞 (含める、用いる、できる)
         if _HIRAGANA.match(before):
             return pre[:-1] + "らなければなりません"        # 五段動詞 (なる、かかる)
-        return None  # 漢字 + る (送る/着る など) は五段か一段か決まらない
+        if before in _GODAN_KANJI_RU:
+            return pre[:-1] + "らなければなりません"        # 五段動詞 (送る、取る、切る)
+        if before in _ICHIDAN_KANJI_RU:
+            return pre[:-1] + "なければなりません"          # 一段動詞 (見る、得る、出る)
+        return None  # 上記以外の漢字 + る は五段か一段か決まらない
     if pre and pre[-1] in _GODAN_A and len(pre) >= 2:
         return pre[:-1] + _GODAN_A[pre[-1]] + "なければなりません"  # 五段動詞 (使う、示す)
     return None
@@ -206,6 +216,13 @@ def _split_ja_sentences(ja):
     return [x for x in re.findall(r"[^。]*。\s*|[^。]+$", ja) if x.strip()]
 
 
+# 後続の節・括弧書きにあってはならない規範表現 (そこが別の規範の訳である可能性)
+_ANY_STRENGTH_RE = re.compile("|".join(p for ps in STRENGTH_PATTERNS.values() for p in ps))
+# 述語の後の括弧書き (1段の入れ子まで) と引用
+_PAREN_TAIL = (r"(?:[（(](?:[^（()）]|[（(][^（()）]*[)）])*[)）]"
+               r"|\[[^\[\]]+\])")
+
+
 def _rewrite_necessity_sentence(ja, keyword):
     """一文の訳文の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
     strength = RFC2119_STRENGTH[keyword]
@@ -222,17 +239,19 @@ def _rewrite_necessity_sentence(ja, keyword):
         end = m.group(1)
     if ANNOTATION_RE.search(end):
         return None
-    m = re.fullmatch(r"(.*)必要があります", end)
-    if not m:
+    # 述語の後に続いてよいのは、補足の括弧書き・引用 ([RFC1234])・コロンだけ。
+    # 括弧の中に規範表現があれば、括弧内が別の規範の訳である可能性があるので対象外
+    m = re.fullmatch(r"(.*)必要があります((?:\s*" + _PAREN_TAIL + r")*)(\s*[：:]?)", end, re.S)
+    if not m or _ANY_STRENGTH_RE.search(m.group(2)):
         return None
     rewritten = (to_nakereba if strength == "必須" else to_beki)(m.group(1))
     if not rewritten:
         return None
-    return f"{rewritten} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
+    tail = " " + m.group(2) if m.group(2).startswith("[") else m.group(2)
+    return (f"{rewritten} ({keyword}){tail}{m.group(3)}"
+            + ("。" if body.endswith("。") else "") + ja[len(body):])
 
 
-# 連用形の書き換えで、後続の節にあってはならない規範表現 (後続の節が別の規範の訳である可能性)
-_ANY_STRENGTH_RE = re.compile("|".join(p for ps in STRENGTH_PATTERNS.values() for p in ps))
 
 
 def _rewrite_necessity_renyo(ja, keyword):
@@ -245,7 +264,17 @@ def _rewrite_necessity_renyo(ja, keyword):
     if "。" in end or ANNOTATION_RE.search(end):
         return None
     m = re.fullmatch(r"(.*)必要があり([、,])(.*)", end, re.S)
-    if not m or not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
+    if not m:
+        # 「〜する必要がありますが、〜」は「〜しなければなりません (MUST) が、〜」
+        m = re.fullmatch(r"(.*)必要があります(が[、,])(.*)", end, re.S)
+        if not m or not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
+            return None
+        converted = (to_nakereba if strength == "必須" else to_beki)(m.group(1))
+        if not converted:
+            return None
+        return (f"{converted} ({keyword}) {m.group(2)}{m.group(3)}"
+                + ("。" if body.endswith("。") else "") + ja[len(body):])
+    if not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
         return None
     if strength == "必須":
         converted = to_nakereba(m.group(1))
@@ -281,9 +310,22 @@ def fix_necessity_translation(en, ja):
             return None
         return _rewrite_necessity_sentence(ja, keyword) or _rewrite_necessity_renyo(ja, keyword)
 
-    # --- 複数文の段落: 文の対応が確実なときだけ、キーワードの1文を直す ---
-    en_sentences = _split_en_sentences(en)
     ja_sentences = _split_ja_sentences(ja)
+    return (_fix_aligned_necessity(en, ja_sentences, keyword)
+            or _fix_unique_necessity(en, ja_sentences, keyword))
+
+
+def _rewrite_ja_sentence_at(ja_sentences, k, keyword):
+    rewritten = (_rewrite_necessity_sentence(ja_sentences[k], keyword)
+                 or _rewrite_necessity_renyo(ja_sentences[k], keyword))
+    if not rewritten:
+        return None
+    return "".join(ja_sentences[:k]) + rewritten + "".join(ja_sentences[k + 1:])
+
+
+def _fix_aligned_necessity(en, ja_sentences, keyword):
+    """複数文の段落: 文の対応が確実なときだけ、キーワードの1文を直す"""
+    en_sentences = _split_en_sentences(en)
     if len(en_sentences) < 2 or len(en_sentences) != len(ja_sentences):
         return None
     # 各文の長さの比が極端なら、文の分け方が原文と訳文でずれている
@@ -298,11 +340,50 @@ def fix_necessity_translation(en, ja):
     k = en_index[0]
     if not _is_clean_keyword_sentence(en_sentences[k]):
         return None
-    rewritten = (_rewrite_necessity_sentence(ja_sentences[k], keyword)
-                 or _rewrite_necessity_renyo(ja_sentences[k], keyword))
-    if not rewritten:
+    return _rewrite_ja_sentence_at(ja_sentences, k, keyword)
+
+
+# 「必要があります」と訳されやすい、キーワード以外の英語表現 (_fix_unique_necessity 用)
+_NECESSITY_SOURCE_RE = re.compile(
+    r"\b(?:ensur(?:e|es|ed|ing)|essential|important|critical|crucial|vital|imperative|"
+    r"expected to|obliged|obligated|want(?:s|ed)? to|wish(?:es)? to|(?:is|are|be) to be)\b",
+    re.IGNORECASE)
+# 訳文の規範表現 (任意を除く)。「〜してください」も含める
+_NORMATIVE_JA_RE = re.compile("|".join(
+    [p for s in ("必須", "禁止", "推奨", "非推奨") for p in STRENGTH_PATTERNS[s]] + [r"ください"]))
+
+
+def _fix_unique_necessity(en, ja_sentences, keyword):
+    """文の対応が取れない段落: 原文の規範表現がキーワード1個だけで (小文字の法助動詞や
+    necessary/ensure 等もない)、訳文の規範表現も「必要があ」の1か所だけなら、
+    その「必要があ」がキーワードの訳と決まる。その文だけを直す。"""
+    en_flat = re.sub(r"\s+", " ", en)
+    if not _is_clean_keyword_sentence(en_flat) or _NECESSITY_SOURCE_RE.search(en_flat):
         return None
-    return "".join(ja_sentences[:k]) + rewritten + "".join(ja_sentences[k + 1:])
+    if ANNOTATION_RE.search("".join(ja_sentences)):
+        return None
+    index = [i for i, j in enumerate(ja_sentences) if NECESSITY_RE.search(j)]
+    if len(index) != 1:
+        return None
+    k = index[0]
+    head = ja_sentences[k][:NECESSITY_RE.search(ja_sentences[k]).start()]
+    rest = "".join(ja_sentences[:k] + ja_sentences[k + 1:])
+    if _NORMATIVE_JA_RE.search(head) or _NORMATIVE_JA_RE.search(rest):
+        return None
+    # 訳抜けで「必要があ」が別の文の訳になっていることがあるので、位置を照合する:
+    # 訳文の文末 (述語の位置) が、原文のキーワードの文の範囲 (段落内の相対位置) に収まること
+    en_sentences = _split_en_sentences(en)
+    en_k = [i for i, e in enumerate(en_sentences) if count_rfc2119_keywords(e)]
+    if len(en_k) != 1:
+        return None
+    en_total = sum(len(e) for e in en_sentences) or 1
+    en_start = sum(len(e) for e in en_sentences[:en_k[0]]) / en_total
+    en_end = en_start + len(en_sentences[en_k[0]]) / en_total
+    ja_total = sum(len(j) for j in ja_sentences) or 1
+    ja_end = sum(len(j) for j in ja_sentences[:k + 1]) / ja_total
+    if not en_start - 0.1 <= ja_end <= en_end + 0.15:
+        return None
+    return _rewrite_ja_sentence_at(ja_sentences, k, keyword)
 
 
 def fix_identifier_case(en, ja):
