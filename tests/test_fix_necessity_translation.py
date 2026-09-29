@@ -66,6 +66,22 @@ class TestNecessityTranslation(unittest.TestCase):
             "B MUST be sent. C is fine.",
             "Bが送信されます。Cを確認する必要があります。"))
 
+    def test_fix_renyo(self):
+        self.assertEqual(
+            fix_necessity_translation(
+                "The Reserved field MUST be set to zero, and receivers ignore it on receipt.",
+                "予約フィールドはゼロに設定する必要があり、受信者は受信時にそれを無視します。"),
+            "予約フィールドはゼロに設定しなければならず (MUST)、受信者は受信時にそれを無視します。")
+        self.assertEqual(
+            fix_necessity_translation(
+                "Implementations SHOULD log the event, and the log is kept for a day.",
+                "実装はイベントを記録する必要があり、ログは1日保持されます。"),
+            "実装はイベントを記録すべきであり (SHOULD)、ログは1日保持されます。")
+        # 後続の節に規範表現があると、どの節がキーワードの訳か決まらない
+        self.assertIsNone(fix_necessity_translation(
+            "X MUST be set to zero and ignored by receivers.",
+            "Xはゼロに設定する必要があり、受信者は無視しなければなりません。"))
+
     def test_fix_skips_uncertain(self):
         self.assertIsNone(fix_necessity_translation("It MUST send X.", "Xを送る必要があります。"))
         # 文中に既に注釈がある (キーワードの訳は別の節)

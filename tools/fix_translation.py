@@ -52,7 +52,7 @@ from lint_translation import (  # noqa: E402
     check_reference_author_format, fix_url_format, update_reference_section_state,
     BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
     check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
-    check_necessity_translation, ANNOTATION_RE,
+    check_necessity_translation, ANNOTATION_RE, STRENGTH_PATTERNS,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -231,6 +231,35 @@ def _rewrite_necessity_sentence(ja, keyword):
     return f"{rewritten} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
 
 
+# 連用形の書き換えで、後続の節にあってはならない規範表現 (後続の節が別の規範の訳である可能性)
+_ANY_STRENGTH_RE = re.compile("|".join(p for ps in STRENGTH_PATTERNS.values() for p in ps))
+
+
+def _rewrite_necessity_renyo(ja, keyword):
+    """一文の訳文の「〜する必要があり、〜」(連用形) を「〜しなければならず (MUST)、〜」
+    「〜すべきであり (SHOULD)、〜」に直す。後続の節に規範表現があるときは、どの節が
+    キーワードの訳か決まらないので対象外。"""
+    strength = RFC2119_STRENGTH[keyword]
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end or ANNOTATION_RE.search(end):
+        return None
+    m = re.fullmatch(r"(.*)必要があり([、,])(.*)", end, re.S)
+    if not m or not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
+        return None
+    if strength == "必須":
+        converted = to_nakereba(m.group(1))
+        if not converted:
+            return None
+        converted = converted[:-len("なければなりません")] + "なければならず"
+    else:
+        converted = to_beki(m.group(1))
+        if not converted:
+            return None
+        converted = converted[:-len("べきです")] + "べきであり"
+    return f"{converted} ({keyword}){m.group(2)}{m.group(3)}" + ("。" if body.endswith("。") else "") + ja[len(body):]
+
+
 def _is_clean_keyword_sentence(en):
     """キーワードの文に、訳文の述語の対応を曖昧にする語がないか"""
     return not (OTHER_NORMATIVE_WORDS.search(en) or LOWERCASE_MODAL_RE.search(en))
@@ -250,7 +279,7 @@ def fix_necessity_translation(en, ja):
     if is_single_sentence(en) and "。" not in (ja_body[:-1] if ja_body.endswith("。") else ja_body):
         if not _is_clean_keyword_sentence(en):
             return None
-        return _rewrite_necessity_sentence(ja, keyword)
+        return _rewrite_necessity_sentence(ja, keyword) or _rewrite_necessity_renyo(ja, keyword)
 
     # --- 複数文の段落: 文の対応が確実なときだけ、キーワードの1文を直す ---
     en_sentences = _split_en_sentences(en)
@@ -269,7 +298,8 @@ def fix_necessity_translation(en, ja):
     k = en_index[0]
     if not _is_clean_keyword_sentence(en_sentences[k]):
         return None
-    rewritten = _rewrite_necessity_sentence(ja_sentences[k], keyword)
+    rewritten = (_rewrite_necessity_sentence(ja_sentences[k], keyword)
+                 or _rewrite_necessity_renyo(ja_sentences[k], keyword))
     if not rewritten:
         return None
     return "".join(ja_sentences[:k]) + rewritten + "".join(ja_sentences[k + 1:])
