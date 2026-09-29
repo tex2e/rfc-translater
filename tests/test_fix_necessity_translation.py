@@ -18,6 +18,13 @@ class TestNecessityTranslation(unittest.TestCase):
             "X is RECOMMENDED if Y needs Z.", "YがZを必要とする場合は、Xが推奨されます (RECOMMENDED)。Yは設定する必要があります。"))
         self.assertIsNotNone(check_necessity_translation(
             "It MUST send X.", "Xを推奨しますが、送信する必要があります。"))
+        # 「必須です (REQUIRED)」「必須 (REQUIRED)」は必須の強度を一意に表すので対象外
+        self.assertIsNone(check_necessity_translation(
+            "Support for X is REQUIRED.", "Yを問い合わせる必要があります。Xのサポートは必須です (REQUIRED)。"))
+        self.assertIsNone(check_necessity_translation(
+            "[REQUIRED as follows]", "[次のとおり必須 (REQUIRED)：送信する必要がある]"))
+        self.assertIsNotNone(check_necessity_translation(
+            "It MUST send X.", "不必須ですが、送信する必要があります。"))
 
     def test_to_nakereba(self):
         cases = {
