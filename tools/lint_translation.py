@@ -824,7 +824,7 @@ def check_rfc2119_annotation_count(en, ja):
 # 規範強度ごとの、スタイルガイドに沿った (強度を一意に表す) 述語
 PROPER_PREDICATES = {
     "必須": re.compile(r"なければな|ねばなりません|(?<!ない)ものとします|必要とします"),
-    "推奨": re.compile(r"べき(?!ではあり|ではな)|お勧めします|望ましい"),
+    "推奨": re.compile(r"べき(?!ではあり|ではな)|お勧めします|望ましい|推奨(?:され|し)ます"),
 }
 NECESSITY_RE = re.compile(r"(?<!不)必要があ")
 

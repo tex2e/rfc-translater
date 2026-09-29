@@ -13,6 +13,11 @@ class TestNecessityTranslation(unittest.TestCase):
         # 正しい訳語があれば対象外。MAY 等の強度も対象外
         self.assertIsNone(check_necessity_translation("It MUST send X.", "Xを送信しなければなりません。"))
         self.assertIsNone(check_necessity_translation("It MAY send X.", "Xを送信する必要がある場合があります。"))
+        # 「推奨されます」「推奨します」は推奨の強度を一意に表すので対象外
+        self.assertIsNone(check_necessity_translation(
+            "X is RECOMMENDED if Y needs Z.", "YがZを必要とする場合は、Xが推奨されます (RECOMMENDED)。Yは設定する必要があります。"))
+        self.assertIsNotNone(check_necessity_translation(
+            "It MUST send X.", "Xを推奨しますが、送信する必要があります。"))
 
     def test_to_nakereba(self):
         cases = {
