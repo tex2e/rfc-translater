@@ -45,6 +45,8 @@ CHECKS = {
     "E015": "RFC2119キーワード注釈の過剰 (原文にないキーワードの注釈がある。小文字の should 等に規範性を付加している)",
     "W012": "MUST/SHOULDを「必要があります」で訳している (MUSTかSHOULDか区別できない。スタイルガイドで禁止)",
     "W011": "RFC2119キーワード注釈の欠落 (原文にキーワードがあるのに訳文に (MUST) 等の併記が1つもない)",
+    "W013": "訳文の捏造・欠落の疑い (原文の数値や識別子が訳文から大量に消えている)",
+    "W014": "用語集違反 (AGENTS.md の用語集で禁止している訳語・既知の誤訳語を使っている)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -849,6 +851,92 @@ def check_necessity_translation(en, ja):
     return ("W012", f"原文 {keyword}({strength}) を「必要があります」で訳している")
 
 
+# 原文から抜き出す「訳文にもそのまま残るはずの語」(アンカー)。
+# 角括弧の参照 ([RFC2119] など)、大文字や数字を含む語 (識別子・略語・番号)、数値。
+ANCHOR_RE = re.compile(r"\[[A-Za-z0-9\-\.]+\]|\b[A-Za-z]*[A-Z0-9][A-Za-z0-9_\-\.]*[A-Za-z0-9]\b|\b\d+\b")
+ANCHOR_STOP = {"I", "A", "OLD", "NEW", "MUST", "SHOULD", "MAY", "NOT", "SHALL",
+               "REQUIRED", "RECOMMENDED", "OPTIONAL"}
+NUMBER_RE = re.compile(r"^\d+(?:\.\d+)?$")
+
+
+def _anchor_norm(s):
+    # 桁区切りのカンマ (9,984) と空白の違いは、同じ値とみなす
+    return re.sub(r"(?<=\d)[,，](?=\d{3})", "", s).lower().replace(" ", "")
+
+
+def extract_anchors(en):
+    # 文頭が大文字なだけの一般語 (The, Figure など) は識別子ではないので除く
+    return {t for t in ANCHOR_RE.findall(en)
+            if t not in ANCHOR_STOP and not (t[0].isupper() and t[1:].islower())}
+
+
+def check_anchor_loss(en, ja):
+    """W013: 訳文が原文と無関係な文に置き換わっている・途中で切れている疑い。
+    機械翻訳 (特にLLMによる一括再翻訳) は、同じRFCの別の箇所の内容で訳文を捏造したり、
+    段落の後半を落としたりする。そうした訳文では原文の数値や識別子が消える。
+    識別子が単に訳されてしまっただけの段落 (これも誤りだが別問題) と区別するため、
+    次のどちらかに当たる場合に限る。
+      (a) 原文の数値が2個以上消えている、または原文の数値がすべて消えている
+      (b) 訳文が原文の1/4未満の長さしかなく、アンカーの6割以上が消えている
+    """
+    anchors = extract_anchors(en)
+    if len(anchors) < 2:
+        return None
+    normalized_ja = _anchor_norm(ja)
+    missing = sorted(a for a in anchors if _anchor_norm(a) not in normalized_ja)
+    numbers = [a for a in anchors if NUMBER_RE.match(a)]
+    missing_numbers = [a for a in numbers if a in missing]
+    lost_numbers = len(missing_numbers) >= 2 or (
+        numbers and len(missing_numbers) == len(numbers)
+        and len(anchors) >= 3 and len(missing) * 2 > len(anchors))
+    truncated = (len(anchors) >= 3 and len(missing) * 10 >= len(anchors) * 6
+                 and len(ja) * 4 < len(en))
+    if not (lost_numbers or truncated):
+        return None
+    reason = "数値が消えている" if lost_numbers else "訳文が極端に短い"
+    return ("W013", f"{reason}: 原文の {', '.join(missing[:6])} が訳文にない "
+                    f"({len(missing)}/{len(anchors)})")
+
+
+# 用語集 (AGENTS.md「9. 用語集」) と既知の誤訳語。
+# (原文に含まれる語の正規表現, 訳文で使ってはならない語の正規表現, 正しい訳語)
+# 原文にその語があるときだけ検査する (原文と無関係な「混雑」等は対象外)。
+GLOSSARY = [
+    (re.compile(r"shared[- ]secret[- ]keying[- ]material", re.I),
+     re.compile(r"共有秘密鍵(?:の素材|素材|材料|マテリアル|イングマテリアル)"), "共有シークレット鍵素材"),
+    (re.compile(r"shared[- ]secret[- ]keys?\b", re.I),
+     re.compile(r"共有シークレットキー|共有秘密キー|共有秘密の鍵|共有シークレット鍵(?!素材)"), "共有秘密鍵"),
+    (re.compile(r"shared[- ]secret(?![- ]key)", re.I),
+     re.compile(r"共有秘密(?!鍵)"), "共有シークレット"),
+    (re.compile(r"\bcongest", re.I), re.compile(r"混雑|渋滞"), "輻輳"),
+    (re.compile(r"\bingress", re.I), re.compile(r"侵入"), "イングレス/入口"),
+    (re.compile(r"\btraffic", re.I), re.compile(r"交通"), "トラフィック"),
+    (re.compile(r"\bcells?\b", re.I), re.compile(r"細胞"), "セル"),
+    (re.compile(r"\bsalt", re.I), re.compile(r"(?<![食岩])塩(?!基|化|素|水)"), "ソルト/salt"),
+    (re.compile(r"handshake", re.I), re.compile(r"握手"), "ハンドシェイク"),
+    (re.compile(r"\bpeers?\b", re.I), re.compile(r"仲間"), "ピア"),
+    (re.compile(r"\b(?:torn|tear|tearing) down", re.I), re.compile(r"取り壊|引き裂"), "切断/解放"),
+]
+# ingress の「侵入」は、原文が本当に侵入 (intrusion 等) を述べている段落では正しい
+GLOSSARY_EXCEPTIONS = {"侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I)}
+
+
+def check_glossary(en, ja):
+    """W014: 用語集で禁止している訳語や、既知の誤訳語 (cell=細胞 など) を使っているか。"""
+    found = []
+    for en_re, bad_re, correct in GLOSSARY:
+        if not en_re.search(en):
+            continue
+        m = bad_re.search(ja)
+        if not m:
+            continue
+        exc = GLOSSARY_EXCEPTIONS.get(m.group(0))
+        if exc and exc.search(en):
+            continue
+        found.append(("W014", f"「{m.group(0)}」は用語集違反 (原文 '{en_re.search(en).group(0)}' → {correct})"))
+    return found
+
+
 # ------------------------------------------------------------------------------
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
@@ -989,6 +1077,17 @@ def lint_file(path, enabled):
             r = check_necessity_translation(en, ja)
             if r:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+
+        # --- 捏造・欠落の疑い ---
+        if "W013" in enabled and not is_title:
+            r = check_anchor_loss(en, ja)
+            if r:
+                findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+
+        # --- 用語集 ---
+        if "W014" in enabled:
+            for code, detail in check_glossary(en, ja):
+                findings.append(Finding(code, path, rfc, i, detail, en, ja))
 
         # --- 文体 ---
         if is_title:
