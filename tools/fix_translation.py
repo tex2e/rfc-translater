@@ -14,6 +14,16 @@
 #         例) [RFC2119] Bradner、S。、「...」 -> [RFC2119] Bradner, S.、「...」
 #   E012: URL表記破壊 (全角コロンや空白) を半角・正しい形式へ修正する
 #         例) https ：//... -> https://...
+#   W011: RFC2119キーワード注釈の欠落のうち、原文・訳文とも一文でキーワードが1個、
+#         訳文の文末の述語がキーワードの規範強度に合う定型表現のものに注釈を付ける
+#         例) Xを送信しなければなりません。 -> Xを送信しなければなりません (MUST)。
+#         「〜する必要があります」のような強度が曖昧な訳には付けない（欠陥のある訳を
+#         正しいものとして確定させてしまうため）。
+#   W012: MUST/SHOULD を「〜する必要があります」で訳した一文の段落を、スタイルガイドの訳語へ直す
+#         例) Xを送信する必要があります。 -> Xを送信しなければなりません (MUST)。
+#             Xを含める必要があります。   -> Xを含めるべきです (SHOULD)。
+#         MUST は動詞の活用を変えるため、活用の型が確定できるものだけを対象にする
+#         (漢字の直後の「る」は五段/一段を区別できないので対象外)。
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -40,6 +50,9 @@ from lint_translation import (  # noqa: E402
     CAMEL_RE, CAMEL_STOPWORDS, COMPOUND_JA_RE, URL_RE, ambiguous_lowers,
     BULLET_RE, compound_identifier_variants, recoverable_mime_context_identifiers,
     check_reference_author_format, fix_url_format, update_reference_section_state,
+    BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
+    check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
+    check_necessity_translation, ANNOTATION_RE, STRENGTH_PATTERNS, NECESSITY_RE,
 )
 
 # --- W006: 体言止めへの変換パターン ---
@@ -73,6 +86,304 @@ DESU_PATTERNS = [
 
 # 見出し先頭の番号 (「6.1.1. 」「付録A. 」など) は変換対象から外して温存する
 HEADING_NUM_RE = re.compile(r"^((?:付録)?[A-Z0-9]+(?:\.[0-9]+)*\.?\s+)(.*)$", re.S)
+
+
+# 原文の小文字の法助動詞・必要の表現。キーワードと同じ文にあると、訳文の文末の述語が
+# キーワードではなくこれらの訳である可能性があり、そこに注釈を付けると原文にない規範性を
+# 足してしまう (例: "The header SHOULD be sent, but agents need to be prepared ..." の
+# 「準備する必要があります」は need の訳)。W011/W012 の修正はこの文を対象外にする。
+LOWERCASE_MODAL_RE = re.compile(r"\b(?:must|shall|should|may|need(?:s|ed)?|have to|has to|ought)\b")
+
+# --- W011: RFC2119キーワード注釈の付与 ---
+# キーワード -> 規範強度 (注釈の原語は原文の語をそのまま使う。SHALL は (SHALL))
+RFC2119_STRENGTH = {
+    "MUST": "必須", "SHALL": "必須", "REQUIRED": "必須",
+    "MUST NOT": "禁止", "SHALL NOT": "禁止",
+    "SHOULD": "推奨", "RECOMMENDED": "推奨",
+    "SHOULD NOT": "非推奨", "NOT RECOMMENDED": "非推奨",
+    "MAY": "任意", "OPTIONAL": "任意",
+}
+# 規範強度ごとの「文末の述語」。訳文の最後の述語がこれに一致するときだけ注釈を付ける。
+# 文中の一致は見ない (別の節の述語に注釈を付けてしまうため)。
+# 複数の強度に読める述語には付けない。注釈を付けると W011 が消え、言い回しの欠陥が
+# どのチェックにも掛からなくなるため:
+#   「必要があります」: MUST と SHOULD のどちらの訳にも使われている (スタイルガイドの最頻出の欠陥)
+#   「ないでください」: MUST NOT と SHOULD NOT のどちらの訳にも使われている
+ANNOTATABLE_PREDICATES = {
+    "必須": r"(?:なければなりません|ねばなりません|なければならない|必要とします|(?<!ない)ものとします)",
+    "禁止": r"(?:てはなりません|てはいけません|ではなりません|ではいけません|ないものとします)",
+    "推奨": r"(?:べきです|べきである|お勧めします|おすすめします|が望ましいです|推奨されます|推奨します)",
+    "非推奨": r"(?:べきではありません|べきではない|推奨されません|お勧めしません|おすすめしません|望ましくありません)",
+    "任意": r"(?:てもよい|てもよいです|てもかまいません|ても構いません|ことができます|できます|"
+            r"場合があります|任意です|オプションです)",
+}
+
+
+def fix_rfc2119_annotation(en, ja):
+    """W011: 訳文の文末の述語の直後に (MUST) 等の注釈を付ける。付けられないときは None。
+    誤った注釈は規範強度の誤り (E002/E015) を生むため、確実なものだけを対象にする。"""
+    if [code for code, _ in check_rfc2119_annotation_count(en, ja)] != ["W011"]:
+        return None
+    keywords = count_rfc2119_keywords(en)
+    if sum(keywords.values()) != 1:
+        return None
+    keyword = next(iter(keywords))
+    # 原文が一文で、キーワード以外に規範強度に関わる語を含まない
+    # (複数の節があると、訳文の文末の述語がキーワードの訳とは限らない)
+    if (not is_single_sentence(en) or NON_NORMATIVE_NEGATION.search(en)
+            or OTHER_NORMATIVE_WORDS.search(en) or LOWERCASE_MODAL_RE.search(en)):
+        return None
+    # 訳文も一文 (文末以外に句点がない)
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end or not end:
+        return None
+    # 文末の述語がキーワードと同じ強度のときだけ付ける。"MUST be absent" を
+    # 「存在してはいけません」と訳した文のように、原文の否定表現によって述語の
+    # 強度が変わっている場合は一致しないため付けない。
+    m = re.search(ANNOTATABLE_PREDICATES[RFC2119_STRENGTH[keyword]] + r"$", end)
+    if not m:
+        return None
+    return f"{end} ({keyword})" + ("。" if body.endswith("。") else "") + ja[len(body):]
+
+
+# --- W012: 「必要があります」の言い換え ---
+_I_ROW = "いきしちにひみりぎじぢびぴ"
+_E_ROW = "えけせてねへめれげぜでべぺ"
+_GODAN_A = {"う": "わ", "く": "か", "ぐ": "が", "す": "さ", "つ": "た", "ぬ": "な", "ぶ": "ば", "む": "ま"}
+_HIRAGANA = re.compile(r"[ぁ-ゖ]")
+# 漢字 + る の動詞で、活用の型が一つに決まるもの (RFCの訳文に現れるものに限る)。
+# 「入る」は「はいる」(五段) として扱う。「要る」「居る」のように読みで型が変わる字は入れない。
+_GODAN_KANJI_RU = set("入切取戻残送守限作知図至帰渡移乗絞頼握探測計減走通売振貼縛当触握散止")
+_ICHIDAN_KANJI_RU = set("見着似煮得寝出経")
+
+
+def to_nakereba(pre):
+    """動詞の辞書形で終わる文字列を「〜なければなりません」の形にする。型が決まらなければ None。"""
+    if pre.endswith("する"):
+        return pre[:-2] + "しなければなりません"
+    if pre.endswith("である"):
+        return pre[:-3] + "でなければなりません"
+    if pre.endswith(("がある", "にある", "である")) and len(pre) > 3:
+        return pre[:-2] + "なければなりません"            # 「ある」の否定は「ない」(互換性がなければなりません)
+    if pre.endswith(("ない", "ある", "くる", "来る")):
+        return None  # 否定・その他の「ある」・カ変は対象外
+    if pre.endswith("る") and len(pre) >= 2:
+        before = pre[-2]
+        if before in _I_ROW or before in _E_ROW:
+            return pre[:-1] + "なければなりません"          # 一段動詞 (含める、用いる、できる)
+        if _HIRAGANA.match(before):
+            return pre[:-1] + "らなければなりません"        # 五段動詞 (なる、かかる)
+        if before in _GODAN_KANJI_RU:
+            return pre[:-1] + "らなければなりません"        # 五段動詞 (送る、取る、切る)
+        if before in _ICHIDAN_KANJI_RU:
+            return pre[:-1] + "なければなりません"          # 一段動詞 (見る、得る、出る)
+        return None  # 上記以外の漢字 + る は五段か一段か決まらない
+    if pre and pre[-1] in _GODAN_A and len(pre) >= 2:
+        return pre[:-1] + _GODAN_A[pre[-1]] + "なければなりません"  # 五段動詞 (使う、示す)
+    return None
+
+
+def to_beki(pre):
+    """動詞の辞書形で終わる文字列を「〜べきです」の形にする。否定形は対象外。"""
+    if pre.endswith("ない") or not pre:
+        return None
+    if pre.endswith("する"):
+        return pre[:-2] + "すべきです"
+    if pre[-1] in "うくぐすつぬぶむる":
+        return pre + "べきです"
+    return None
+
+
+def _split_en_sentences(en):
+    """英文を文に分ける。is_single_sentence と同じく略語・頭文字・節番号のピリオドでは分けない。"""
+    masked = re.sub(r"\b(?:e\.g|i\.e|etc|vs|cf|Sec|Fig|No|Dr|Mr|Ms|St|approx)\.",
+                    lambda m: m.group(0).replace(".", "\x00"), en)
+    masked = re.sub(r"\b[A-Z]\.", lambda m: m.group(0).replace(".", "\x00"), masked)
+    masked = re.sub(r"\d+\.\d+", lambda m: m.group(0).replace(".", "\x00"), masked)
+    ends = [m.end() for m in re.finditer(r"[.!?](?=\s|$)", masked)]
+    sentences, last = [], 0
+    for e in ends:
+        sentences.append(en[last:e])
+        last = e
+    if en[last:].strip():
+        sentences.append(en[last:])
+    return [x for x in sentences if x.strip()]
+
+
+def _split_ja_sentences(ja):
+    """訳文を「。」で文に分ける (区切りの「。」と後続の空白は前の文に含める)"""
+    return [x for x in re.findall(r"[^。]*。\s*|[^。]+$", ja) if x.strip()]
+
+
+# 後続の節・括弧書きにあってはならない規範表現 (そこが別の規範の訳である可能性)
+_ANY_STRENGTH_RE = re.compile("|".join(p for ps in STRENGTH_PATTERNS.values() for p in ps))
+# 述語の後の括弧書き (1段の入れ子まで) と引用
+_PAREN_TAIL = (r"(?:[（(](?:[^（()）]|[（(][^（()）]*[)）])*[)）]"
+               r"|\[[^\[\]]+\])")
+
+
+def _rewrite_necessity_sentence(ja, keyword):
+    """一文の訳文の文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。"""
+    strength = RFC2119_STRENGTH[keyword]
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end:
+        return None
+    # 既に注釈が付いている場合は外してから直し、付け直す (種類が違う注釈は触らない)。
+    # 文末以外に注釈があるときは、キーワードの訳が文中の別の節なので対象外
+    m = re.fullmatch(r"(.*?)\s*[（(]\s*([A-Z ]+?)\s*[）)]", end)
+    if m:
+        if re.sub(r"\s+", " ", m.group(2)) != keyword:
+            return None
+        end = m.group(1)
+    if ANNOTATION_RE.search(end):
+        return None
+    # 述語の後に続いてよいのは、補足の括弧書き・引用 ([RFC1234])・コロンだけ。
+    # 括弧の中に規範表現があれば、括弧内が別の規範の訳である可能性があるので対象外
+    m = re.fullmatch(r"(.*)必要があります((?:\s*" + _PAREN_TAIL + r")*)(\s*[：:]?)", end, re.S)
+    if not m or _ANY_STRENGTH_RE.search(m.group(2)):
+        return None
+    rewritten = (to_nakereba if strength == "必須" else to_beki)(m.group(1))
+    if not rewritten:
+        return None
+    tail = " " + m.group(2) if m.group(2).startswith("[") else m.group(2)
+    return (f"{rewritten} ({keyword}){tail}{m.group(3)}"
+            + ("。" if body.endswith("。") else "") + ja[len(body):])
+
+
+
+
+def _rewrite_necessity_renyo(ja, keyword):
+    """一文の訳文の「〜する必要があり、〜」(連用形) を「〜しなければならず (MUST)、〜」
+    「〜すべきであり (SHOULD)、〜」に直す。後続の節に規範表現があるときは、どの節が
+    キーワードの訳か決まらないので対象外。"""
+    strength = RFC2119_STRENGTH[keyword]
+    body = ja.rstrip()
+    end = body[:-1] if body.endswith("。") else body
+    if "。" in end or ANNOTATION_RE.search(end):
+        return None
+    m = re.fullmatch(r"(.*)必要があり([、,])(.*)", end, re.S)
+    if not m:
+        # 「〜する必要がありますが、〜」は「〜しなければなりません (MUST) が、〜」
+        m = re.fullmatch(r"(.*)必要があります(が[、,])(.*)", end, re.S)
+        if not m or not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
+            return None
+        converted = (to_nakereba if strength == "必須" else to_beki)(m.group(1))
+        if not converted:
+            return None
+        return (f"{converted} ({keyword}) {m.group(2)}{m.group(3)}"
+                + ("。" if body.endswith("。") else "") + ja[len(body):])
+    if not m.group(3).strip() or _ANY_STRENGTH_RE.search(m.group(3)):
+        return None
+    if strength == "必須":
+        converted = to_nakereba(m.group(1))
+        if not converted:
+            return None
+        converted = converted[:-len("なければなりません")] + "なければならず"
+    else:
+        converted = to_beki(m.group(1))
+        if not converted:
+            return None
+        converted = converted[:-len("べきです")] + "べきであり"
+    return f"{converted} ({keyword}){m.group(2)}{m.group(3)}" + ("。" if body.endswith("。") else "") + ja[len(body):]
+
+
+def _is_clean_keyword_sentence(en):
+    """キーワードの文に、訳文の述語の対応を曖昧にする語がないか"""
+    return not (OTHER_NORMATIVE_WORDS.search(en) or LOWERCASE_MODAL_RE.search(en))
+
+
+def fix_necessity_translation(en, ja):
+    """W012: 文末「〜必要があります」を、キーワードの強度の訳語と注釈に直す。
+    一文の段落のほか、原文と訳文の文の数が等しく、キーワードの文と「必要があ」の文が
+    同じ位置にある複数文の段落も、その1文だけを直す。"""
+    if not check_necessity_translation(en, ja):
+        return None
+    # 「必要があ」が複数あると、どれがキーワードの訳か決まらない
+    if len(re.findall(r"(?<!不)必要があ", ja)) != 1:
+        return None
+    keyword = next(iter(count_rfc2119_keywords(en)))
+    ja_body = ja.rstrip()
+    if is_single_sentence(en) and "。" not in (ja_body[:-1] if ja_body.endswith("。") else ja_body):
+        if not _is_clean_keyword_sentence(en):
+            return None
+        return _rewrite_necessity_sentence(ja, keyword) or _rewrite_necessity_renyo(ja, keyword)
+
+    ja_sentences = _split_ja_sentences(ja)
+    return (_fix_aligned_necessity(en, ja_sentences, keyword)
+            or _fix_unique_necessity(en, ja_sentences, keyword))
+
+
+def _rewrite_ja_sentence_at(ja_sentences, k, keyword):
+    rewritten = (_rewrite_necessity_sentence(ja_sentences[k], keyword)
+                 or _rewrite_necessity_renyo(ja_sentences[k], keyword))
+    if not rewritten:
+        return None
+    return "".join(ja_sentences[:k]) + rewritten + "".join(ja_sentences[k + 1:])
+
+
+def _fix_aligned_necessity(en, ja_sentences, keyword):
+    """複数文の段落: 文の対応が確実なときだけ、キーワードの1文を直す"""
+    en_sentences = _split_en_sentences(en)
+    if len(en_sentences) < 2 or len(en_sentences) != len(ja_sentences):
+        return None
+    # 各文の長さの比が極端なら、文の分け方が原文と訳文でずれている
+    for e, j in zip(en_sentences, ja_sentences):
+        ratio = len(j.strip()) / max(len(e.strip()), 1)
+        if not 0.15 <= ratio <= 1.5:
+            return None
+    en_index = [i for i, e in enumerate(en_sentences) if count_rfc2119_keywords(e)]
+    ja_index = [i for i, j in enumerate(ja_sentences) if re.search(r"(?<!不)必要があ", j)]
+    if len(en_index) != 1 or en_index != ja_index:
+        return None
+    k = en_index[0]
+    if not _is_clean_keyword_sentence(en_sentences[k]):
+        return None
+    return _rewrite_ja_sentence_at(ja_sentences, k, keyword)
+
+
+# 「必要があります」と訳されやすい、キーワード以外の英語表現 (_fix_unique_necessity 用)
+_NECESSITY_SOURCE_RE = re.compile(
+    r"\b(?:ensur(?:e|es|ed|ing)|essential|important|critical|crucial|vital|imperative|"
+    r"expected to|obliged|obligated|want(?:s|ed)? to|wish(?:es)? to|(?:is|are|be) to be)\b",
+    re.IGNORECASE)
+# 訳文の規範表現 (任意を除く)。「〜してください」も含める
+_NORMATIVE_JA_RE = re.compile("|".join(
+    [p for s in ("必須", "禁止", "推奨", "非推奨") for p in STRENGTH_PATTERNS[s]] + [r"ください"]))
+
+
+def _fix_unique_necessity(en, ja_sentences, keyword):
+    """文の対応が取れない段落: 原文の規範表現がキーワード1個だけで (小文字の法助動詞や
+    necessary/ensure 等もない)、訳文の規範表現も「必要があ」の1か所だけなら、
+    その「必要があ」がキーワードの訳と決まる。その文だけを直す。"""
+    en_flat = re.sub(r"\s+", " ", en)
+    if not _is_clean_keyword_sentence(en_flat) or _NECESSITY_SOURCE_RE.search(en_flat):
+        return None
+    if ANNOTATION_RE.search("".join(ja_sentences)):
+        return None
+    index = [i for i, j in enumerate(ja_sentences) if NECESSITY_RE.search(j)]
+    if len(index) != 1:
+        return None
+    k = index[0]
+    head = ja_sentences[k][:NECESSITY_RE.search(ja_sentences[k]).start()]
+    rest = "".join(ja_sentences[:k] + ja_sentences[k + 1:])
+    if _NORMATIVE_JA_RE.search(head) or _NORMATIVE_JA_RE.search(rest):
+        return None
+    # 訳抜けで「必要があ」が別の文の訳になっていることがあるので、位置を照合する:
+    # 訳文の文末 (述語の位置) が、原文のキーワードの文の範囲 (段落内の相対位置) に収まること
+    en_sentences = _split_en_sentences(en)
+    en_k = [i for i, e in enumerate(en_sentences) if count_rfc2119_keywords(e)]
+    if len(en_k) != 1:
+        return None
+    en_total = sum(len(e) for e in en_sentences) or 1
+    en_start = sum(len(e) for e in en_sentences[:en_k[0]]) / en_total
+    en_end = en_start + len(en_sentences[en_k[0]]) / en_total
+    ja_total = sum(len(j) for j in ja_sentences) or 1
+    ja_end = sum(len(j) for j in ja_sentences[:k + 1]) / ja_total
+    if not en_start - 0.1 <= ja_end <= en_end + 0.15:
+        return None
+    return _rewrite_ja_sentence_at(ja_sentences, k, keyword)
 
 
 def fix_identifier_case(en, ja):
@@ -207,7 +518,8 @@ def fix_desumasu(ja):
 def process_file(path, checks, dry_run, samples, stats):
     try:
         with open(path, encoding="utf-8") as f:
-            obj = json.load(f)
+            original_text = f.read()
+        obj = json.loads(original_text)
     except Exception as e:
         print(f"[-] {path}: JSON読み込み失敗 {e}", file=sys.stderr)
         stats["read_error"] += 1
@@ -230,6 +542,10 @@ def process_file(path, checks, dry_run, samples, stats):
             obj["title"]["ja"] = new_title
             stats["E007"] += 1
             changed = True
+
+    # W011/W012 は BCP 14 を参照する文書だけが対象 (lint_translation.py と同じ基準)
+    uses_bcp14 = any(isinstance(c, dict) and BCP14_REFERENCE_RE.search(c.get("text", "") or "")
+                     for c in contents)
 
     in_ref_section = False
     for c in contents:
@@ -319,6 +635,30 @@ def process_file(path, checks, dry_run, samples, stats):
             elif new_ja is None and re.search(r"(ます|です)。?$", ja):
                 stats["W006_skipped"] += 1
 
+        # --- W012: 「必要があります」の言い換え (W011 より先に行う) ---
+        if ("W012" in checks and uses_bcp14 and not is_title and c.get("raw") is not True
+                and ja):
+            new_ja = fix_necessity_translation(en, ja)
+            if new_ja:
+                if len(samples["W012"]) < 12:
+                    samples["W012"].append((os.path.basename(path), None, ja[-90:], new_ja[-90:]))
+                stats["W012"] += 1
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
+        # --- W011: RFC2119キーワード注釈の付与 ---
+        if ("W011" in checks and uses_bcp14 and not is_title and c.get("raw") is not True
+                and ja):
+            new_ja = fix_rfc2119_annotation(en, ja)
+            if new_ja:
+                if len(samples["W011"]) < 12:
+                    samples["W011"].append((os.path.basename(path), None, ja[-90:], new_ja[-90:]))
+                stats["W011"] += 1
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
         # --- W005: 本文のである調 -> ですます調 ---
         # 見出しは体言止めが正しいので対象外。箇条書きも規約上ですます調の対象外。
         if ("W005" in checks and not c.get("section_title")
@@ -334,6 +674,9 @@ def process_file(path, checks, dry_run, samples, stats):
     if changed and not dry_run:
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(obj, f, ensure_ascii=False, indent=2)
+            # 手で編集されたファイルには末尾の改行があるものがある。無関係な差分を出さないよう保つ
+            if original_text.endswith("\n"):
+                f.write("\n")
     return changed
 
 
@@ -354,7 +697,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -368,7 +711,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012")}
     files_changed = 0
 
     for path in paths:
@@ -393,6 +736,10 @@ def main():
         print(f"  E007 タイトルprefixを付与: {stats['E007']} 件")
     if "W005" in checks:
         print(f"  W005 ですます調に変換: {stats['W005']} 段落")
+    if "W012" in checks:
+        print(f"  W012 「必要があります」を訳語に修正: {stats['W012']} 段落")
+    if "W011" in checks:
+        print(f"  W011 RFC2119キーワード注釈を付与: {stats['W011']} 段落")
     if "W006" in checks:
         print(f"  W006 体言止めに変換: {stats['W006']} 件")
         print(f"  W006 変換できず据え置き: {stats['W006_skipped']} 件 (要人手/AI対応)")
@@ -400,7 +747,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:

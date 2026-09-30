@@ -43,6 +43,7 @@ CHECKS = {
     "E013": "差分指示子の誤訳 (OLD:が「年：」「古い：」、NEW:が「新着：」「新しい：」などになっている)",
     "E014": "RFC2119キーワード注釈の不足 (訳文の (MUST) 等の併記が原文のキーワードより少ない)",
     "E015": "RFC2119キーワード注釈の過剰 (原文にないキーワードの注釈がある。小文字の should 等に規範性を付加している)",
+    "W012": "MUST/SHOULDを「必要があります」で訳している (MUSTかSHOULDか区別できない。スタイルガイドで禁止)",
     "W011": "RFC2119キーワード注釈の欠落 (原文にキーワードがあるのに訳文に (MUST) 等の併記が1つもない)",
 }
 
@@ -820,6 +821,34 @@ def check_rfc2119_annotation_count(en, ja):
     return findings
 
 
+# 規範強度ごとの、スタイルガイドに沿った (強度を一意に表す) 述語
+PROPER_PREDICATES = {
+    # 「必須です (REQUIRED)」のように「必須」+注釈で述語にしている訳も必須の強度を一意に表す
+    "必須": re.compile(r"なければな|ねばなりません|(?<!ない)ものとします|必要とします|(?<!不)必須(?:です|となります|とします|\s*\()"),
+    "推奨": re.compile(r"べき(?!ではあり|ではな)|お勧めします|望ましい|推奨(?:され|し)ます"),
+}
+NECESSITY_RE = re.compile(r"(?<!不)必要があ")
+
+
+def check_necessity_translation(en, ja):
+    """W012: MUST/SHALL/REQUIRED/SHOULD/RECOMMENDED を「〜する必要があります」で訳しているか。
+    「必要があります」は MUST と SHOULD のどちらの訳にも使われており、読者は強度を区別できない
+    (スタイルガイド1章で禁止)。キーワードが1個で、訳文にその強度を一意に表す述語がなく
+    「必要があ」を含む段落に限る (複数のキーワードがあると、どの節の訳か決まらないため)。"""
+    if re.search(r"2119|8174|BCP ?14\b", en) or NON_NORMATIVE_NEGATION.search(en):
+        return None
+    keywords = count_rfc2119_keywords(en)
+    if sum(keywords.values()) != 1:
+        return None
+    keyword = next(iter(keywords))
+    strength = dict((kw, st) for kw, _, st in RFC2119)[keyword]
+    if strength not in PROPER_PREDICATES:
+        return None
+    if not NECESSITY_RE.search(ja) or PROPER_PREDICATES[strength].search(ja):
+        return None
+    return ("W012", f"原文 {keyword}({strength}) を「必要があります」で訳している")
+
+
 # ------------------------------------------------------------------------------
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
@@ -956,6 +985,10 @@ def lint_file(path, enabled):
             for code, detail in check_rfc2119_annotation_count(en, ja):
                 if code in enabled:
                     findings.append(Finding(code, path, rfc, i, detail, en, ja))
+        if uses_bcp14 and not is_title and "W012" in enabled:
+            r = check_necessity_translation(en, ja)
+            if r:
+                findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
         # --- 文体 ---
         if is_title:
