@@ -143,6 +143,7 @@ python3 tools/rank_rfcs.py --report --check E002 --limit 30
 |---|---|---|
 | shared secret key | 共有秘密鍵 | 「共有シークレットキー」「共有秘密の鍵」は使わない |
 | shared secret | 共有シークレット | 後ろに key が続かない場合。"shared secret information" は「共有シークレット情報」 |
+| shared secret keying material | 共有シークレット鍵素材 | 「共有秘密鍵素材」「共有秘密鍵マテリアル」などは使わない |
 
 ### 補足: スクリプトの置き場所
 
