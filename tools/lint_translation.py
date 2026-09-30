@@ -879,6 +879,10 @@ def check_anchor_loss(en, ja):
       (a) 原文の数値が2個以上消えている、または原文の数値がすべて消えている
       (b) 訳文が原文の1/4未満の長さしかなく、アンカーの6割以上が消えている
     """
+    # 全文が大文字の段落 (TABLE OF CONTENTS、ライセンスの免責文など) は、
+    # 大文字の英単語がすべてアンカー扱いになり、正しい訳でも消えて見えるため除く
+    if not re.search(r"[a-z]", en):
+        return None
     anchors = extract_anchors(en)
     if len(anchors) < 2:
         return None

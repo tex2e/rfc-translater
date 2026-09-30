@@ -42,6 +42,9 @@ class TestAnchorLoss(unittest.TestCase):
         ja = "torrentのSwarmサイズはそれぞれ9,984、3,944、2,561、2,023でした。"
         self.assertIsNone(check_anchor_loss(en, ja))
 
+    def test_ignores_all_uppercase_paragraph(self):
+        self.assertIsNone(check_anchor_loss("TABLE OF CONTENTS", "目次"))
+
     def test_ignores_paragraph_with_few_anchors(self):
         self.assertIsNone(check_anchor_loss("Section 3 describes it.", "説明します。"))
 
