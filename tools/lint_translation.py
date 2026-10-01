@@ -772,12 +772,17 @@ def check_rfc2119(en, ja):
     return ("W003", f"強度未表現: 原文 {kw}({expected}) の規範強度が訳文から読み取れない")
 
 
+REQUIREMENT_LABEL_RE = re.compile(r"\b(?:MUST|SHOULD|SHLD|MAY|REC)-\d+\b")
+
+
 def count_rfc2119_keywords(en):
     """原文の規範的なキーワードを数える (キーワード -> 個数)。
     引用符付きの言及 ("MUST") や冠詞付きの名詞的用法 (a MUST) は段落自身の指示では
     ないため除外する。"MUST also not" 等は MUST NOT として数える (訳文の注釈と揃える)。"""
     masked = QUOTED_KEYWORD_RE.sub(" ", en)
     masked = REFERENTIAL_KEYWORD_RE.sub(" ", masked)
+    # RFC 9293 などの要件番号ラベル (MUST-15)、(SHLD-3) はキーワードではない
+    masked = REQUIREMENT_LABEL_RE.sub(" ", masked)
     return Counter(kw for kw, _ in detect_rfc2119(masked))
 
 
@@ -879,6 +884,10 @@ def check_anchor_loss(en, ja):
       (a) 原文の数値が2個以上消えている、または原文の数値がすべて消えている
       (b) 訳文が原文の1/4未満の長さしかなく、アンカーの6割以上が消えている
     """
+    # 全文が大文字の段落 (TABLE OF CONTENTS、ライセンスの免責文など) は、
+    # 大文字の英単語がすべてアンカー扱いになり、正しい訳でも消えて見えるため除く
+    if not re.search(r"[a-z]", en):
+        return None
     anchors = extract_anchors(en)
     if len(anchors) < 2:
         return None
@@ -917,8 +926,19 @@ GLOSSARY = [
     (re.compile(r"\bpeers?\b", re.I), re.compile(r"仲間"), "ピア"),
     (re.compile(r"\b(?:torn|tear|tearing) down", re.I), re.compile(r"取り壊|引き裂"), "切断/解放"),
 ]
-# ingress の「侵入」は、原文が本当に侵入 (intrusion 等) を述べている段落では正しい
-GLOSSARY_EXCEPTIONS = {"侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I)}
+# 訳文の語が正しい訳になる原文の文脈。
+# ingress の「侵入」は、原文が本当に侵入 (intrusion 等) を述べている段落では正しい。
+# traffic の「交通」は、道路・航空・車両の往来を述べている段落では正しい (航空交通管制、交通事故など)。
+# cell の「細胞」は、生物学の文脈では正しい。
+GLOSSARY_EXCEPTIONS = {
+    "侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I),
+    "交通": re.compile(r"\b(?:road|roads|vehicular|aircraft|aviation|highway|pedestrians?)\b"
+                       r"|\bair[- ]traffic\b|\brush hour\b|\bstuck in traffic\b|\bintelligent (?:transport|traffic)"
+                       r"|\btraffic[- ](?:lights?|signals?|signs?|accidents?|incidents?|cameras?|jams?|police|safety)\b", re.I),
+    "細胞": re.compile(r"biolog", re.I),
+}
+# 道路の congestion は「渋滞」が正しい
+GLOSSARY_EXCEPTIONS["渋滞"] = GLOSSARY_EXCEPTIONS["混雑"] = GLOSSARY_EXCEPTIONS["交通"]
 
 
 def check_glossary(en, ja):

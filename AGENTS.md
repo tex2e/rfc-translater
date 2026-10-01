@@ -144,11 +144,13 @@ python3 tools/rank_rfcs.py --report --check E002 --limit 30
 | shared secret key | 共有秘密鍵 | 「共有シークレットキー」「共有秘密の鍵」は使わない |
 | shared secret | 共有シークレット | 後ろに key が続かない場合。"shared secret information" は「共有シークレット情報」 |
 | shared secret keying material | 共有シークレット鍵素材 | 「共有秘密鍵素材」「共有秘密鍵マテリアル」などは使わない |
-| congestion | 輻輳 | 「混雑」「渋滞」は使わない |
+| congestion | 輻輳 | 「混雑」「渋滞」は使わない（道路の渋滞を述べる箇所を除く） |
 | ingress | イングレス / 入口 | 文脈に応じてどちらでもよい（迷ったらイングレス）。「侵入」は使わない（原文が intrusion 等の場合を除く） |
 
 機械翻訳に由来する既知の誤訳語も使わないこと: traffic→「交通」、cell→「細胞」、salt→「塩」、
 handshake→「握手」、peer→「仲間」、torn down→「取り壊し」「引き裂き」。
+ただし、原文が道路・航空・車両の往来を述べている箇所の traffic は「交通」（航空交通管制、交通事故など）、
+生物学の cell は「細胞」が正しい訳です。
 
 用語集の違反は linter の `W014` で検出されます。また、原文の数値や識別子が訳文から大量に
 消えている段落（LLMによる捏造・切り詰めの疑い）は `W013` で検出されます。

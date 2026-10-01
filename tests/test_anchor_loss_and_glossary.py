@@ -42,6 +42,9 @@ class TestAnchorLoss(unittest.TestCase):
         ja = "torrentのSwarmサイズはそれぞれ9,984、3,944、2,561、2,023でした。"
         self.assertIsNone(check_anchor_loss(en, ja))
 
+    def test_ignores_all_uppercase_paragraph(self):
+        self.assertIsNone(check_anchor_loss("TABLE OF CONTENTS", "目次"))
+
     def test_ignores_paragraph_with_few_anchors(self):
         self.assertIsNone(check_anchor_loss("Section 3 describes it.", "説明します。"))
 
@@ -77,6 +80,11 @@ class TestGlossary(unittest.TestCase):
         self.assertFalse(self.codes("ingress filtering prevents intrusion", "侵入を防ぎます"))
         # salt と無関係な「塩水」
         self.assertFalse(self.codes("salt water", "塩水"))
+        # 道路・航空の交通、生物学の細胞
+        self.assertFalse(self.codes("air traffic control", "航空交通管制"))
+        self.assertFalse(self.codes("traffic lights and road traffic", "信号機と道路交通"))
+        self.assertFalse(self.codes("cell biology", "細胞生物学"))
+        self.assertTrue(self.codes("traffic amplification", "交通増幅"))
 
 
 if __name__ == "__main__":
