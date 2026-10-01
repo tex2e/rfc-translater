@@ -14,6 +14,11 @@ class TestRfc2119AnnotationCount(unittest.TestCase):
         en = 'Use "MUST" here; this violates a SHOULD in Section 3, and it MAY fail.'
         self.assertEqual(count_rfc2119_keywords(en), {"MAY": 1})
 
+    def test_count_keywords_excludes_requirement_labels(self):
+        # RFC 9293 の要件番号ラベル (MUST-15) はキーワードではない
+        en = "TCP implementations MUST assume a default send MSS of 536 (MUST-15)."
+        self.assertEqual(count_rfc2119_keywords(en), {"MUST": 1})
+
     def test_count_keywords_negation_variants(self):
         en = "It MUST also not send X and SHOULD NOT send Y."
         self.assertEqual(count_rfc2119_keywords(en), {"MUST NOT": 1, "SHOULD NOT": 1})

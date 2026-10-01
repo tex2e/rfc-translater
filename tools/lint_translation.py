@@ -772,12 +772,17 @@ def check_rfc2119(en, ja):
     return ("W003", f"強度未表現: 原文 {kw}({expected}) の規範強度が訳文から読み取れない")
 
 
+REQUIREMENT_LABEL_RE = re.compile(r"\b(?:MUST|SHOULD|SHLD|MAY|REC)-\d+\b")
+
+
 def count_rfc2119_keywords(en):
     """原文の規範的なキーワードを数える (キーワード -> 個数)。
     引用符付きの言及 ("MUST") や冠詞付きの名詞的用法 (a MUST) は段落自身の指示では
     ないため除外する。"MUST also not" 等は MUST NOT として数える (訳文の注釈と揃える)。"""
     masked = QUOTED_KEYWORD_RE.sub(" ", en)
     masked = REFERENTIAL_KEYWORD_RE.sub(" ", masked)
+    # RFC 9293 などの要件番号ラベル (MUST-15)、(SHLD-3) はキーワードではない
+    masked = REQUIREMENT_LABEL_RE.sub(" ", masked)
     return Counter(kw for kw, _ in detect_rfc2119(masked))
 
 
