@@ -926,8 +926,19 @@ GLOSSARY = [
     (re.compile(r"\bpeers?\b", re.I), re.compile(r"仲間"), "ピア"),
     (re.compile(r"\b(?:torn|tear|tearing) down", re.I), re.compile(r"取り壊|引き裂"), "切断/解放"),
 ]
-# ingress の「侵入」は、原文が本当に侵入 (intrusion 等) を述べている段落では正しい
-GLOSSARY_EXCEPTIONS = {"侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I)}
+# 訳文の語が正しい訳になる原文の文脈。
+# ingress の「侵入」は、原文が本当に侵入 (intrusion 等) を述べている段落では正しい。
+# traffic の「交通」は、道路・航空・車両の往来を述べている段落では正しい (航空交通管制、交通事故など)。
+# cell の「細胞」は、生物学の文脈では正しい。
+GLOSSARY_EXCEPTIONS = {
+    "侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I),
+    "交通": re.compile(r"\b(?:road|roads|vehicular|aircraft|aviation|highway|pedestrians?)\b"
+                       r"|\bair[- ]traffic\b|\brush hour\b|\bstuck in traffic\b|\bintelligent (?:transport|traffic)"
+                       r"|\btraffic[- ](?:lights?|signals?|signs?|accidents?|incidents?|cameras?|jams?|police|safety)\b", re.I),
+    "細胞": re.compile(r"biolog", re.I),
+}
+# 道路の congestion は「渋滞」が正しい
+GLOSSARY_EXCEPTIONS["渋滞"] = GLOSSARY_EXCEPTIONS["混雑"] = GLOSSARY_EXCEPTIONS["交通"]
 
 
 def check_glossary(en, ja):
