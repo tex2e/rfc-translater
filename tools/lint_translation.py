@@ -696,11 +696,24 @@ def fix_url_format(en, ja):
     return new_ja
 
 
+# キーワードをハイフンで連結した大文字の識別子 (RFC 4120 の MAY-POSTDATE /
+# MUTUAL-REQUIRED フラグ、RFC 8120 の AUTH-REQUIRED 状態など)。名前の一部であって
+# 規範的指示ではない。RFC 9293 の要件番号ラベル (MUST-15) もこの形に含まれる。
+# 「MUST-level」のように小文字が続くものは対象外 (規範強度への言及として数える)。
+HYPHENATED_KEYWORD_IDENT_RE = re.compile(
+    r"(?<![\w-])(?:[A-Z0-9]+-)*(?:MUST|SHALL|SHOULD|MAY|REQUIRED|RECOMMENDED|OPTIONAL)"
+    r"(?:-[A-Z0-9]+)*(?![\w-])")
+
+
+def _mask_hyphenated_identifiers(en):
+    return HYPHENATED_KEYWORD_IDENT_RE.sub(lambda m: " " if "-" in m.group(0) else m.group(0), en)
+
+
 def detect_rfc2119(en):
     """原文に含まれるRFC2119キーワードを検出し、(キーワード, 強度)のリストを返す。
     長いキーワードを優先し、重複カウントを避ける。"""
     found = []
-    masked = en
+    masked = _mask_hyphenated_identifiers(en)
     for kw, pattern, strength in RFC2119:
         for _ in re.finditer(pattern, masked):
             found.append((kw, strength))
@@ -774,6 +787,18 @@ def check_rfc2119(en, ja):
 
 REQUIREMENT_LABEL_RE = re.compile(r"\b(?:MUST|SHOULD|SHLD|MAY|REC)-\d+\b")
 
+# 「the SHOULD NOTs」のような複数形の名詞用法。キーワードそのものへの言及であり指示ではない。
+PLURAL_KEYWORD_RE = re.compile(r"\b(?:MUST|SHALL|SHOULD)\s+NOTs\b")
+
+# 段落自身の指示ではなく、キーワードの定義・解釈を述べる段落。
+# - 引用符なしでキーワードを列挙する定型文 (... are to be interpreted as described in [KEYWORDS])
+# - RFC 4307 / 4835 / 5751 などの拡張キーワード (SHOULD+ / SHOULD- / MUST-) の定義
+#   (「SHOULD- support RSA with SHA-1」のような規範的な使用は対象外)
+KEYWORD_DEFINITION_RE = re.compile(
+    r"\bare to be interpreted as (?:described|defined) in\b|"
+    r"^\s*(?:MUST|SHOULD|MAY)[+-]\s+This term means\b|"
+    r"\bdefinitions? (?:for|of)\s+(?:MUST|SHOULD|MAY)[+-]")
+
 
 def count_rfc2119_keywords(en):
     """原文の規範的なキーワードを数える (キーワード -> 個数)。
@@ -783,6 +808,7 @@ def count_rfc2119_keywords(en):
     masked = REFERENTIAL_KEYWORD_RE.sub(" ", masked)
     # RFC 9293 などの要件番号ラベル (MUST-15)、(SHLD-3) はキーワードではない
     masked = REQUIREMENT_LABEL_RE.sub(" ", masked)
+    masked = PLURAL_KEYWORD_RE.sub(" ", masked)
     return Counter(kw for kw, _ in detect_rfc2119(masked))
 
 
@@ -809,6 +835,8 @@ def check_rfc2119_annotation_count(en, ja):
     二重に報告しない。"""
     if re.search(r"2119|8174|BCP ?14\b", en):
         return []  # BCP 14 の定型文・参照の説明はキーワードを列挙するだけで指示ではない
+    if KEYWORD_DEFINITION_RE.search(en):
+        return []
     expected = count_rfc2119_keywords(en)
     if not expected:
         return []

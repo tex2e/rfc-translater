@@ -65,6 +65,34 @@ class TestRfc2119AnnotationCount(unittest.TestCase):
               'interpreted as described in BCP 14 [RFC2119] [RFC8174].')
         self.assertEqual(check_rfc2119_annotation_count(en, "本文書のキーワード…"), [])
 
+    def test_hyphenated_identifiers_are_not_keywords(self):
+        # RFC 4120 のフラグ名は名前の一部であり、規範的指示ではない
+        en = ("The MAY-POSTDATE flag tells the TGS that a postdated ticket MAY be issued, "
+              "and MUTUAL-REQUIRED asks for mutual authentication.")
+        self.assertEqual(count_rfc2119_keywords(en), {"MAY": 1})
+
+    def test_keyword_followed_by_lowercase_level_is_counted(self):
+        self.assertEqual(count_rfc2119_keywords("This requirement is MUST-level."), {"MUST": 1})
+
+    def test_plural_should_nots_is_not_keyword(self):
+        en = "It gives reasons for its recommendations -- especially for the SHOULD NOTs."
+        self.assertEqual(count_rfc2119_keywords(en), {})
+
+    def test_unquoted_keyword_list_boilerplate_is_skipped(self):
+        en = ("The keywords MUST, MUST NOT, SHOULD, and MAY, when they appear in this document, "
+              "are to be interpreted as described in [KEYWORDS].")
+        self.assertEqual(check_rfc2119_annotation_count(en, "キーワード…"), [])
+
+    def test_extended_keyword_definition_is_skipped(self):
+        en = ("SHOULD- This term means the same as SHOULD. However, a requirement marked as "
+              "SHOULD- will be demoted to a MAY.")
+        self.assertEqual(check_rfc2119_annotation_count(en, "SHOULD- この用語は…"), [])
+
+    def test_extended_keyword_normative_use_is_checked(self):
+        [(code, _)] = check_rfc2119_annotation_count(
+            "- SHOULD- support RSA with SHA-1.", "- SHA-1を用いるRSAをサポートします。")
+        self.assertEqual(code, "W011")
+
 
 if __name__ == "__main__":
     unittest.main()
