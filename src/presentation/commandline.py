@@ -11,6 +11,7 @@ from ..application.usecase.fetch_rfc import fetch_rfc
 from ..application.usecase.trans_rfc import (trans_prepare, trans_export, trans_import, trans_finish,
                                              trans_status, print_json, TransError)
 from ..application.usecase.make_html import make_html
+from ..application.usecase.check_summary import check_summary, find_unsummarized
 from ..application.usecase.make_html_all import make_html_all
 from ..application.usecase.make_index import make_index, make_index_draft
 from ..application.usecase.make_title_json import make_title_json
@@ -78,10 +79,10 @@ def main():
                     help='Make draft/index.html (ex. --make-index-draft)')
     ap.add_argument('--fetch-status', action='store_true',
                     help='Make group-rfcs.json and obsoletes.json')
-    ap.add_argument('--summarize', action='store_true',
-                    help='Summarize RFC by ChatGPT (ex. --summarize --rfc 8446)')
-    ap.add_argument('--chatgpt', type=str,
-                    help='ChatGPT model version (ex. --chatgpt gpt-3.5-turbo)')
+    ap.add_argument('--summary-check', action='store_true',
+                    help='Validate rfcXXXX-summary.json (ex. --rfc 8446 --summary-check)')
+    ap.add_argument('--list-unsummarized', action='store_true',
+                    help='Print translated RFC numbers without summary (ex. --list-unsummarized --begin 9000)')
     ap.add_argument('--txt', action='store_true',
                     help='Fetch TXT (ex. --rfc 8446 --fetch --txt)')
     ap.add_argument('--debug', action='store_true',
@@ -157,16 +158,24 @@ def main():
         for rfc in rfcs:
             make_json_from_html(rfc, RfcHtmlFileRepository(),
                                 RfcJsonTransFileRepository())
-    elif args.summarize and rfcs:
-        # RFCの要約作成
-        from ..application.usecase.nlp_summarize_rfc import summarize_rfc
+    elif args.list_unsummarized:
+        # 要約が未作成のRFC番号を1行ずつ出力する
+        for rfc_number in find_unsummarized(args.begin or 2220):
+            print(rfc_number)
+        return
+    elif args.summary_check and rfcs:
+        # RFCの要約の検証（要約そのものはClaudeが作成する。.claude/skills/summarize-rfc を参照）
+        has_error = False
         for rfc in rfcs:
-            if summarize_rfc(rfc, RfcJsonTransFileRepository(),
-                             RfcJsonDataSummaryFileRepository(), args):
-                # RFCのHTMLを作成
-                make_html(rfc, RfcJsonTransFileRepository(),
-                          RfcJsonDataSummaryFileRepository(),
-                          RfcHtmlFileRepository())
+            errors = check_summary(rfc, RfcJsonTransFileRepository(),
+                                   RfcJsonDataSummaryFileRepository())
+            for error in errors:
+                has_error = True
+                print(f"[-] RFC {rfc.get_id()}: {error}")
+            if not errors:
+                print(f"[+] RFC {rfc.get_id()}: OK")
+        if has_error:
+            sys.exit(1)
     elif rfcs and (args.trans_prepare or args.trans_export or args.trans_import
                    or args.trans_finish or args.trans_status):
         # RFCの翻訳 (rfcXXXX-trans.json)

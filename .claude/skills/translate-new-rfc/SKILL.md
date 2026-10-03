@@ -129,13 +129,11 @@ python3 main.py --rfc N --trans-import <修正JSONのパス>
 
 ## 8. 要約の作成
 
-`data/<帯>/rfcN-summary.json` を作成します。形式は `AGENTS.md` の「`rfcNXXX-summary.json` のJSON構造」に従います。
+スキル summarize-rfc（`.claude/skills/summarize-rfc/SKILL.md`）の「2.」〜「5.」の手順で、`data/<帯>/rfcN-summary.json` を作成します。
 
-- `number`: RFC番号（整数）
-- `model`: 要約を生成したモデルのID（自分のモデルID。例: `claude-sonnet-5-5`）
-- `created_at`: 今日の日付で `2026-02-15T00:00:00.000000` の形式
-- `summary`: 要約文の配列（3文程度、ですます調。`**` やコードブロックの記号は使わない）
-  - このRFCが何を規定するか、何を解決するか、既存のどの仕様を更新・拡張するかを、本文の内容に基づいて書きます。
+```sh
+python3 main.py --rfc N --summary-check
+```
 
 ## 9. HTMLの生成
 

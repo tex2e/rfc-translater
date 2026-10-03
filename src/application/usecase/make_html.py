@@ -41,7 +41,7 @@ def make_html(rfc: IRfc,
         print("[-] make_html: Not found json:", input_file)
         return
 
-    # ChatGPTによる要約が存在すれば、その情報 (json) の読み込み
+    # 要約が存在すれば、その情報 (json) の読み込み
     summary = rfc_json_data_summary_repo.find(rfc)
 
     # テンプレートエンジン「Mako」を使って、値をバインドする

@@ -130,9 +130,14 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
 
 - **RFCの要約作成**
 
+    要約は Claude Code のスキル [summarize-rfc](.claude/skills/summarize-rfc/SKILL.md) で作成します。
+    Claude Code で `/summarize-rfc 9446`（番号を省略すると、要約が未作成のRFCが対象）を実行します。
+    定期実行の翻訳（translate-new-rfc）でも、翻訳に続けて要約を作成します。
+
     ```bash
-    python3 main.py --summarize --make --rfc 9446  # 指定したRFCのみ
-    python3 main.py --summarize --make --force --begin 9600 --end 9700  # 範囲指定
+    python3 main.py --list-unsummarized --begin 9000  # 翻訳済みで要約がないRFCの番号を表示する
+    python3 main.py --rfc 9446 --summary-check        # 要約 (rfc9446-summary.json) の形式を検証する
+    python3 main.py --rfc 9446 --make                 # 要約をHTMLに反映する
     ```
 
 生成物：
@@ -144,6 +149,7 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
 | data/N000/rfcNXXX.json | 段落区切りの文書 | fetch_rfc.py（取得）
 | data/N000/rfcNXXX-midway.json | 翻訳の作業ファイル（確定時に削除） | trans_rfc.py（翻訳の補助）
 | data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳の補助）
+| data/N000/rfcNXXX-summary.json | RFCの要約 | Claude（作成）、check_summary.py（検証）
 | html/rfcNXXX.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）
 | html/index.html | トップページの生成 | make_index.py (生成)
 | data/draft/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
