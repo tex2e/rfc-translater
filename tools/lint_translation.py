@@ -790,6 +790,10 @@ REQUIREMENT_LABEL_RE = re.compile(r"\b(?:MUST|SHOULD|SHLD|MAY|REC)-\d+\b")
 # 「the SHOULD NOTs」のような複数形の名詞用法。キーワードそのものへの言及であり指示ではない。
 PLURAL_KEYWORD_RE = re.compile(r"\b(?:MUST|SHALL|SHOULD)\s+NOTs\b")
 
+# 「NOT REQUIRED」はRFC 2119のキーワードではない (「要求されない」という非規範的な記述)。
+# REQUIRED として数えると、訳文に (REQUIRED) を付けるよう誤って促すことになる。
+NOT_REQUIRED_RE = re.compile(r"\bNOT\s+REQUIRED\b")
+
 # 段落自身の指示ではなく、キーワードの定義・解釈を述べる段落。
 # - 引用符なしでキーワードを列挙する定型文 (... are to be interpreted as described in [KEYWORDS])
 # - RFC 4307 / 4835 / 5751 などの拡張キーワード (SHOULD+ / SHOULD- / MUST-) の定義
@@ -797,7 +801,10 @@ PLURAL_KEYWORD_RE = re.compile(r"\b(?:MUST|SHALL|SHOULD)\s+NOTs\b")
 KEYWORD_DEFINITION_RE = re.compile(
     r"\bare to be interpreted as (?:described|defined) in\b|"
     r"^\s*(?:MUST|SHOULD|MAY)[+-]\s+This term means\b|"
-    r"\bdefinitions? (?:for|of)\s+(?:MUST|SHOULD|MAY)[+-]")
+    r"\bdefinitions? (?:for|of)\s+(?:MUST|SHOULD|MAY)[+-]|"
+    # RFC 2119 本文の定義をそのまま引き写した段落 (1. MUST - This word, or the terms ...)
+    r"^\s*(?:\d+\.\s*)?(?:MUST NOT|SHALL NOT|SHOULD NOT|MUST|SHALL|SHOULD|MAY)\s+-?\s*"
+    r"This (?:word|phrase)\b")
 
 
 def count_rfc2119_keywords(en):
@@ -809,6 +816,7 @@ def count_rfc2119_keywords(en):
     # RFC 9293 などの要件番号ラベル (MUST-15)、(SHLD-3) はキーワードではない
     masked = REQUIREMENT_LABEL_RE.sub(" ", masked)
     masked = PLURAL_KEYWORD_RE.sub(" ", masked)
+    masked = NOT_REQUIRED_RE.sub(" ", masked)
     return Counter(kw for kw, _ in detect_rfc2119(masked))
 
 

@@ -93,6 +93,16 @@ class TestRfc2119AnnotationCount(unittest.TestCase):
             "- SHOULD- support RSA with SHA-1.", "- SHA-1を用いるRSAをサポートします。")
         self.assertEqual(code, "W011")
 
+    def test_not_required_is_not_keyword(self):
+        en = ("Applications are REQUIRED to process complete CRLs. "
+              "They are NOT REQUIRED to support delta CRLs.")
+        self.assertEqual(count_rfc2119_keywords(en), {"REQUIRED": 1})
+
+    def test_rfc2119_definition_copy_is_skipped(self):
+        en = ('1. MUST - This word, or the terms "REQUIRED" or "SHALL", means that '
+              "the definition is an absolute requirement of the specification.")
+        self.assertEqual(check_rfc2119_annotation_count(en, "1. MUST - この単語は…"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
