@@ -26,37 +26,58 @@
 
 
 ### 動作環境
-Python3 + Selenium (FireFox) on Windows / MacOS / Ubuntu (headless)
+Python 3.12 + Claude Code on Windows / MacOS / Ubuntu
 
-requests, lxml, beautifulsoup4, Mako, tqdm, seleniumなどのライブラリが実行に必要のためインストールしてください。Windowsの場合は、py -m pip に読み替えてください。
+requests, lxml, beautifulsoup4, Mako, xml2rfcなどのライブラリが実行に必要のためインストールしてください。Windowsの場合は、py -m pip に読み替えてください。
 ```
 pip3 install -r requirements.txt
 ```
 
-加えてSeleniumを動かすために以下のツールが実行に必要です。
-- **Windows**: FireFox のサイトから geckodriver.exe をダウンロードし、src/trans_rfc.py から呼び出せるように環境変数 WEBDRIVER_EXE_PATH に exe のパスを設定ください。
-- **Linux (Ubuntu)** の場合は、以下のパッケージをインストールください。
-    ```
-    sudo apt install python3-pip firefox xdg-utils
-    sudo pip install selenium
-    ```
+### 翻訳の流れ
+
+RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行います。
+
+| 工程 | 担当 | 内容 |
+|-----|-----|-----|
+| 取得 | `main.py --fetch` | RFCを取得して段落に分割する (rfcNXXX.json) |
+| 翻訳 | Claude のサブエージェント [rfc-translator](.claude/agents/rfc-translator.md) | [AGENTS.md](AGENTS.md) の翻訳スタイルガイドに従って段落を翻訳する |
+| 検証 | `main.py --trans-import` と `tools/lint_translation.py` | 訳文の形式と、規範キーワード・識別子の表記を機械的に検証する |
+| 生成 | `main.py --make` | 対訳HTMLを生成する (rfcNXXX.html) |
+
+この一連の作業は Claude Code のスキル [translate-new-rfc](.claude/skills/translate-new-rfc/SKILL.md) にまとめてあります。
+
+- **定期実行**: Claude Code のルーティン（クラウドの定期実行）が毎日このスキルを実行し、未翻訳の最新RFCを1件翻訳してPRを作成します。ルーティンの確認・停止は https://claude.ai/code/routines で行います。
+- **手動実行**: Claude Code でこのレポジトリを開き、`/translate-new-rfc`（RFC番号を指定するときは `/translate-new-rfc 9999`）を実行します。
 
 ### 実行コマンド例
 
-**注意：翻訳処理は非常に時間がかかります。1個のRFCを翻訳するのに短いものは5分、長いものは30分〜1時間程度かかります。**
-開発初期には複数のインスタンスを起動して同時並行で24時間回し続けたのを半年くらいしていました。
-
-- **取得・翻訳・生成**
+- **取得・生成**
 
     ```bash
-    python3 main.py --rfc 1234          # RFC1234を翻訳する（取得+翻訳+HTML生成）
     python3 main.py --rfc 1234 --fetch  # RFCの取得だけ
-    python3 main.py --rfc 1234 --trans  # RFCの翻訳だけ
     python3 main.py --rfc 1234 --make   # HTMLの生成だけ
-    python3 main.py --begin 2220 --end 10000         # RFC2220〜10000を翻訳する
     python3 main.py --make --begin 2220 --end 10000  # RFC2220〜10000のHTMLを生成する
-    python3 main.py --begin 8000 --only-first  # RFC8000以降の未翻訳RFCを1つ選択して翻訳する
+    python3 main.py --list-untranslated --begin 9000  # RFC9000以降の未翻訳RFCの番号を表示する
     ```
+
+- **翻訳の補助（Claudeが使うコマンド）**
+
+    翻訳対象の抽出と、訳文の検証・適用を行います。訳文そのものは作成しません。
+
+    ```bash
+    python3 main.py --rfc 1234 --trans-prepare  # 作業ファイル (rfc1234-midway.json) を作成し、進捗と翻訳単位を表示する
+    python3 main.py --rfc 1234 --trans-export --offset 0 --limit 40  # 段落0〜39のうち未翻訳の段落をJSONで出力する
+    python3 main.py --rfc 1234 --trans-import batch.json  # 訳文を検証して適用する
+    python3 main.py --rfc 1234 --trans-status   # 進捗を表示する
+    python3 main.py --rfc 1234 --trans-finish   # 全段落の翻訳完了を確認して rfc1234-trans.json に確定する
+    ```
+
+    `--trans-import` に渡すJSONの形式：
+    ```json
+    {"title_ja": "RFC 1234 - 日本語タイトル", "items": [{"idx": 12, "ja": "訳文"}]}
+    ```
+    箇条書きの記号や見出し番号が訳文の先頭に残っていない、訳文が空である、などの問題が1件でもあると、何も適用せずにエラーを表示します。
+    確定後の `rfc1234-trans.json` に対しても同じコマンドで訳文を修正できます。
 
 - **全ページの作り直し**
 
@@ -99,16 +120,24 @@ pip3 install -r requirements.txt
 - **RFC Draftの翻訳**
 
     例えば、TLS Encrypted Client Hello (Draft版) である https://datatracker.ietf.org/doc/draft-ietf-tls-esni/ を翻訳したい場合は、以下のコマンドを実行します。
+    翻訳の補助コマンドは `--rfc` の代わりに `--draft` を指定しても同じように使えます。
     ```bash
-    python3 main.py --draft draft-ietf-tls-esni-14
+    python3 main.py --draft draft-ietf-tls-esni-14 --fetch
+    # （Claudeで翻訳する）
+    python3 main.py --draft draft-ietf-tls-esni-14 --make
     python3 main.py --make-index-draft  # インデックスページの作成
     ```
 
 - **RFCの要約作成**
 
+    要約は Claude Code のスキル [summarize-rfc](.claude/skills/summarize-rfc/SKILL.md) で作成します。
+    Claude Code で `/summarize-rfc 9446`（番号を省略すると、要約が未作成のRFCが対象）を実行します。
+    定期実行の翻訳（translate-new-rfc）でも、翻訳に続けて要約を作成します。
+
     ```bash
-    python3 main.py --summarize --make --rfc 9446  # 指定したRFCのみ
-    python3 main.py --summarize --make --force --begin 9600 --end 9700  # 範囲指定
+    python3 main.py --list-unsummarized --begin 9000  # 翻訳済みで要約がないRFCの番号を表示する
+    python3 main.py --rfc 9446 --summary-check        # 要約 (rfc9446-summary.json) の形式を検証する
+    python3 main.py --rfc 9446 --make                 # 要約をHTMLに反映する
     ```
 
 生成物：
@@ -118,11 +147,13 @@ pip3 install -r requirements.txt
 | html/data-rfc-list.json | 廃止RFC・WG・発行年月の一覧 | fetch_status.py (取得)
 | html/data-rfc-title.json | 全RFCの日本語タイトル一覧 | make_title_json.py (生成)
 | data/N000/rfcNXXX.json | 段落区切りの文書 | fetch_rfc.py（取得）
-| data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
+| data/N000/rfcNXXX-midway.json | 翻訳の作業ファイル（確定時に削除） | trans_rfc.py（翻訳の補助）
+| data/N000/rfcNXXX-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳の補助）
+| data/N000/rfcNXXX-summary.json | RFCの要約 | Claude（作成）、check_summary.py（検証）
 | html/rfcNXXX.html | 原文と翻訳を並べて表示するHTML | make_html.py（生成）
 | html/index.html | トップページの生成 | make_index.py (生成)
 | data/draft/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
-| data/draft/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳）
+| data/draft/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳の補助）
 | html/draft/draft-*.html | RFCドラフトの原文と翻訳を並べて表示するHTML | make_html.py（生成）
 | html/draft/index.html | RFCドラフト一覧のトップページHTML | make_html.py（生成）
 

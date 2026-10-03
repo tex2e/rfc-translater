@@ -27,11 +27,20 @@
         - `section_title` : 章節項の見出しフラグ（true: 見出しタイトル）
 - `rfcNXXX-summary.json` のJSON構造
     - `number`: RFCの番号（整数）
-    - `model`: 要約を生成したAIのモデル（Geminiで出力したときは "gemini-3-flash"）
-    - `created_at`: 要約生成日時（Geminiで出力したときは "2026-02-15T00:00:00.000000" 形式で今日の日時）。summaryを修正したときのみ更新すること
+    - `model`: 要約を生成したAIのモデル（Geminiで出力したときは "gemini-3-flash"、Claudeで出力したときは "claude-sonnet-5-5" のようなモデルID）
+    - `created_at`: 要約生成日時（"2026-02-15T00:00:00.000000" 形式で今日の日時）。summaryを修正したときのみ更新すること
     - `"summary": [` : 要約内容（配列）... インデントは2
-        - 要約文（文字列。最大3行程度。ですます調。強調の`**`やコードブロックの記号（バックスラッシュ）は使わないこと） ... インデントは4
+        - 要約文（文字列。最大3文、1文は200文字以内。ですます調。強調の`**`やコードブロックの記号（バックスラッシュ）は使わないこと） ... インデントは4
     - `]` : インデントは2
+
+### 新規RFCの翻訳
+
+新しいRFCの翻訳は Claude が行います（Google翻訳などの機械翻訳は使いません）。
+手順は `.claude/skills/translate-new-rfc/SKILL.md`、翻訳を担当するサブエージェントは `.claude/agents/rfc-translator.md` に定義しています。
+`main.py --trans-prepare / --trans-export / --trans-import / --trans-finish` は、翻訳対象の抽出と訳文の検証・適用だけを行う補助コマンドです。
+
+要約（`rfcNXXX-summary.json`）も Claude が作成します。手順は `.claude/skills/summarize-rfc/SKILL.md` に定義しています。
+作成・修正したら `python3 main.py --rfc <RFC番号> --summary-check` で形式を検証してください。
 
 <br>
 
