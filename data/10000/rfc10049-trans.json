@@ -1,0 +1,1843 @@
+{
+  "title": {
+    "text": "RFC 10049 - Roughtime: A Protocol for Rough Time Synchronization",
+    "ja": "RFC 10049 - Roughtime: おおまかな時刻同期のためのプロトコル"
+  },
+  "number": 10049,
+  "created_at": "2026-10-07 05:28:14.285576+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                           W. Ladd\nRequest for Comments: 10049                          Akamai Technologies\nCategory: Experimental                                       M. Dansarie\nISSN: 2070-1721                                                   Netnod\n                                                            October 2026",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Roughtime: A Protocol for Rough Time Synchronization",
+      "section_title": true,
+      "ja": "Roughtime: おおまかな時刻同期のためのプロトコル"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "要約"
+    },
+    {
+      "indent": 3,
+      "text": "This document describes Roughtime, an experimental protocol that aims to achieve two things: secure, rough time synchronization (even for clients without any idea of what time it is) and a format for clients to report any inconsistencies they observe between timeservers. This document specifies the on-wire protocol required for these goals and discusses aspects of the ecosystem needed for it to work.",
+      "ja": "本文書は、実験的プロトコルであるRoughtimeを説明します。Roughtimeは2つの目的の達成を目指します。1つは、現在時刻がまったく分からないクライアントでも利用できる、安全でおおまかな時刻同期です。もう1つは、クライアントがタイムサーバ間で観測した不整合を報告するためのフォーマットです。本文書は、これらの目的に必要なオンワイヤプロトコルを規定し、その機能に必要なエコシステムの側面について議論します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本メモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for examination, experimental implementation, and evaluation.",
+      "ja": "本文書はInternet Standards Trackの仕様ではありません。検討、実験的実装、および評価のために公開されています。"
+    },
+    {
+      "indent": 3,
+      "text": "This document defines an Experimental Protocol for the Internet community. This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "本文書は、インターネットコミュニティ向けの実験的プロトコル (Experimental Protocol) を定義します。本文書はInternet Engineering Task Force (IETF) の成果物であり、IETFコミュニティのコンセンサスを表しています。本文書は公開レビューを受け、Internet Engineering Steering Group (IESG) により公開が承認されました。IESGが承認した文書がすべて、あらゆるレベルのInternet Standardの候補となるわけではありません。RFC 7841の2節を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc10049.",
+      "ja": "本文書の現在のステータス、正誤表、およびフィードバックの方法に関する情報は、https://www.rfc-editor.org/info/rfc10049 で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright (c) 2026 IETF Trustおよび本文書の著者として特定された人々。All rights reserved."
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "本文書は、BCP 78、および本文書の公開日に有効なIETF TrustのIETF文書に関する法的規定 (https://trustee.ietf.org/license-info) の適用を受けます。これらの文書は、本文書に関するあなたの権利と制限を記述していますので、注意深く確認してください。本文書から抽出されるコードコンポーネントには、Trust Legal Provisionsの4節.eに記載されているRevised BSD Licenseの文面を含めなければならず、Revised BSD Licenseに記載されているとおり無保証で提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions\n3.  Protocol Overview\n  3.1.  Single Server Mode\n  3.2.  Multi-server Mode\n4.  Message Format\n  4.1.  Data Types\n    4.1.1.  uint32\n    4.1.2.  uint64\n    4.1.3.  Tag\n    4.1.4.  Timestamp\n  4.2.  Header\n5.  Protocol Details\n  5.1.  Requests\n    5.1.1.  VER\n    5.1.2.  NONC\n    5.1.3.  TYPE\n    5.1.4.  SRV\n    5.1.5.  ZZZZ\n  5.2.  Responses\n    5.2.1.  SIG\n    5.2.2.  NONC\n    5.2.3.  TYPE\n    5.2.4.  PATH\n    5.2.5.  SREP\n    5.2.6.  CERT\n    5.2.7.  INDX\n  5.3.  The Merkle Tree\n    5.3.1.  Root Value Validity Check Algorithm\n  5.4.  Validity of Response\n6.  Integration into NTP\n7.  Grease\n8.  Roughtime Clients\n  8.1.  Necessary Configuration\n  8.2.  Measurement Sequence\n  8.3.  Server Lists\n  8.4.  Malfeasance Reporting\n    8.4.1.  Malfeasance Report Format\n    8.4.2.  Reporting\n9.  Security Considerations\n  9.1.  Confidentiality\n  9.2.  Integrity and Authenticity\n  9.3.  Generating Private Keys\n  9.4.  Private Key Compromise\n  9.5.  Quantum Resistance\n  9.6.  Maintaining Lists of Servers\n  9.7.  Amplification Attacks\n10. Privacy Considerations\n11. Operational Considerations\n12. IANA Considerations\n  12.1.  Service Name and Transport Protocol Port Number Registry\n  12.2.  Roughtime Versions Registry\n  12.3.  Roughtime Tags Registry\n  12.4.  Media Type Registry\n    12.4.1.  Media Type for Roughtime Server List\n    12.4.2.  Media Type for Roughtime Malfeasance\n13. References\n  13.1.  Normative References\n  13.2.  Informative References\nAppendix A.  Example Server List\nAppendix B.  Example Malfeasance Report\nAcknowledgments\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "Time synchronization is essential to Internet security as many security protocols and other applications require it [RFC0738]. Unfortunately, widely deployed protocols such as the Network Time Protocol (NTP) [RFC5905] lack essential security features, and even newer protocols like Network Time Security (NTS) [RFC8915] lack mechanisms to observe that the servers behave correctly. Furthermore, clients may lack even a basic idea of the time, creating bootstrapping problems as time is required for X.509 certificate validation.",
+      "ja": "時刻同期は、多くのセキュリティプロトコルやその他のアプリケーションが必要とするため、インターネットのセキュリティにとって不可欠です [RFC0738]。残念ながら、Network Time Protocol (NTP) [RFC5905] のように広く展開されているプロトコルにはセキュリティ上不可欠な機能が欠けており、Network Time Security (NTS) [RFC8915] のような新しいプロトコルでさえ、サーバが正しく動作しているかを観測する仕組みを欠いています。さらに、クライアントは時刻の基本的な見当さえ持たない場合があり、X.509証明書の検証には時刻が必要であるため、ブートストラップの問題が生じます。"
+    },
+    {
+      "indent": 3,
+      "text": "The primary design goal of Roughtime is to permit devices to obtain a rough idea of the current time from a fairly static configuration and to enable them to report any inconsistencies they observe between servers. The configuration consists of a list of servers and their associated long-term keys, which ideally remain unchanged throughout a server's lifetime. This makes the long-term public keys the roots of trust in Roughtime. With a sufficiently long list of trusted servers and keys, a client will be able to acquire authenticated time with high probability, even after long periods of inactivity. Proofs of malfeasance constructed by chaining together responses from different trusted servers can be used to prove misbehavior by a server and, after analysis, can result in revoking trust in that particular key.",
+      "ja": "Roughtimeの主要な設計目標は、デバイスがほぼ固定的な設定から現在時刻のおおまかな見当を得られるようにすること、およびサーバ間で観測した不整合を報告できるようにすることです。この設定は、サーバのリストと、それに関連付けられた長期鍵で構成されます。これらの鍵は、理想的にはサーバの存続期間を通じて変更されません。このため、長期公開鍵がRoughtimeにおける信頼の基点となります。十分に長い信頼済みサーバと鍵のリストがあれば、クライアントは長期間使用されなかった後でも、高い確率で認証済みの時刻を取得できます。異なる信頼済みサーバからのレスポンスを連鎖させて構築した不整合の証明である不正行為の証明は、サーバの不正な動作を証明するために使用でき、分析の後、その特定の鍵に対する信頼の取り消しにつながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Unlike Khronos [RFC9523], Roughtime produces external evidence that time servers are reporting incompatible times. This requires changes to the format of the timestamps and hence cannot be a mere extension to NTP.",
+      "ja": "Khronos [RFC9523] とは異なり、Roughtimeはタイムサーバが互いに矛盾する時刻を報告していることの外部的な証拠を生成します。これにはタイムスタンプのフォーマットの変更が必要となるため、単なるNTPの拡張にはなり得ません。"
+    },
+    {
+      "indent": 3,
+      "text": "Operational experience is needed to evaluate the viability of using Roughtime for secure time bootstrapping in Internet-connected systems. This includes the need for experience with maintaining a Roughtime ecosystem with services that maintain and distribute lists of trusted servers and process malfeasance reports. To facilitate the experiments necessary to gain that experience, this document is limited to describing the Roughtime on-wire protocol. Apart from describing the server list and malfeasance report formats, this document does not describe the ecosystem, nor the means by which the server list is maintained and distributed or the policies to apply to such a list.",
+      "ja": "インターネットに接続されたシステムにおける安全な時刻のブートストラップにRoughtimeを使用することの実現可能性を評価するには、運用経験が必要です。これには、信頼済みサーバのリストを維持・配布し、不正行為レポートを処理するサービスを備えたRoughtimeエコシステムを維持する経験の必要性も含まれます。その経験を得るために必要な実験を容易にするため、本文書はRoughtimeのオンワイヤプロトコルの説明に限定します。サーバリストと不正行為レポートのフォーマットを説明する点を除き、本文書は、エコシステム、サーバリストの維持・配布の手段、およびそのリストに適用するポリシーについては説明しません。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions",
+      "section_title": true,
+      "ja": "2. 表記規約"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "本文書におけるキーワード \"MUST\"、\"MUST NOT\"、\"REQUIRED\"、\"SHALL\"、\"SHALL NOT\"、\"SHOULD\"、\"SHOULD NOT\"、\"RECOMMENDED\"、\"NOT RECOMMENDED\"、\"MAY\"、\"OPTIONAL\" は、ここに示すようにすべて大文字で現れる場合に限り、BCP 14 [RFC2119] [RFC8174] に記載されているとおりに解釈されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Protocol Overview",
+      "section_title": true,
+      "ja": "3. プロトコル概要"
+    },
+    {
+      "indent": 3,
+      "text": "Roughtime is a protocol for authenticated, rough time synchronization that enables clients to provide cryptographic proof of server malfeasance. It does so by having responses from servers include a signature over a value derived from the client's request, which includes a nonce. This provides cryptographic proof that the response was issued after the server received the client's request. The derived value included in the server's response is the root of a Merkle tree [Merkle] that includes the hash value of the client's request as the value of one of its leaf nodes. This tree enables the server to amortize the relatively costly signing operation over a number of client requests.",
+      "ja": "Roughtimeは、認証された、おおまかな時刻同期のためのプロトコルであり、クライアントがサーバの不正行為の暗号学的証明を提示できるようにします。そのために、サーバのレスポンスに、ナンスを含むクライアントのリクエストから導出された値に対する署名を含めます。これにより、レスポンスがサーバによるクライアントのリクエスト受信後に発行されたことの暗号学的証明が得られます。サーバのレスポンスに含まれる導出値は、クライアントのリクエストのハッシュ値を葉ノードの1つの値として含むマークル木 [Merkle] の根です。この木により、サーバは比較的コストの高い署名操作を、複数のクライアントリクエストにわたって分散させることができます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Single Server Mode",
+      "section_title": true,
+      "ja": "3.1. 単一サーバモード"
+    },
+    {
+      "indent": 3,
+      "text": "At its most basic level, Roughtime is a one-round protocol in which a completely fresh client requests the current time and the server sends a signed response. The response includes a timestamp and a radius used to indicate the server's certainty about the reported time.",
+      "ja": "最も基本的なレベルでは、Roughtimeは1往復のプロトコルであり、まったく新しい状態のクライアントが現在時刻を要求し、サーバが署名付きレスポンスを送信します。レスポンスには、タイムスタンプと、報告された時刻に対するサーバの確からしさを示すための半径が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The client's request contains a nonce that the server incorporates into its signed response. The client can verify the server's signatures and -- provided that the nonce has sufficient entropy -- this proves that the signed response could only have been generated after the nonce.",
+      "ja": "クライアントのリクエストにはナンスが含まれ、サーバはそれを署名付きレスポンスに組み込みます。クライアントはサーバの署名を検証でき、ナンスに十分なエントロピーがあれば、これにより、署名付きレスポンスはそのナンスより後にしか生成され得ないことが証明されます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Multi-server Mode",
+      "section_title": true,
+      "ja": "3.2. マルチサーバモード"
+    },
+    {
+      "indent": 3,
+      "text": "When using multiple servers, a client can detect, cryptographically prove, and report inconsistencies between different servers.",
+      "ja": "複数のサーバを使用する場合、クライアントは異なるサーバ間の不整合を検出し、暗号学的に証明し、報告できます。"
+    },
+    {
+      "indent": 3,
+      "text": "A Roughtime server guarantees that the timestamp included in the response to a request is generated after the reception of the request and prior to the transmission of the associated response. If the time response from a server is not consistent with time responses from other servers, this indicates server error or intentional malfeasance that can be reported and potentially used to impeach the server.",
+      "ja": "Roughtimeサーバは、リクエストに対するレスポンスに含まれるタイムスタンプが、そのリクエストの受信後、かつ関連するレスポンスの送信前に生成されることを保証します。あるサーバからの時刻レスポンスが他のサーバからの時刻レスポンスと整合しない場合、これはサーバのエラーまたは意図的な不正行為を示しており、報告され、そのサーバを弾劾するために使用される可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "Proofs of malfeasance are constructed by chaining requests to different Roughtime servers. Details on proofs and malfeasance reporting are provided in Section 8. For the reporting to result in impeachment, an additional mechanism is required that provides a review and impeachment process. Defining such a mechanism is beyond the scope of this document. A simple option could be an online forum where a court of human observers evaluate cases after reviewing input reports.",
+      "ja": "不正行為の証明は、異なるRoughtimeサーバへのリクエストを連鎖させることで構築されます。証明と不正行為の報告の詳細は、8節に記載されています。報告が弾劾につながるためには、審査と弾劾のプロセスを提供する追加の仕組みが必要です。そのような仕組みの定義は、本文書の範囲外です。簡単な選択肢としては、人間の観察者からなる法廷が、入力された報告を確認した上で事案を評価するオンラインフォーラムが考えられます。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Message Format",
+      "section_title": true,
+      "ja": "4. メッセージフォーマット"
+    },
+    {
+      "indent": 3,
+      "text": "Roughtime messages are maps consisting of one or more (tag, value) pairs. They start with a header, which contains the number of pairs, the value offsets, and the tags. The header is followed by a message values section, which contains the values associated with the tags in the header. Messages are formatted according to Figure 1 as described in the following subsections.",
+      "ja": "Roughtimeのメッセージは、1つ以上の (タグ, 値) のペアからなるマップです。メッセージは、ペアの数、値のオフセット、およびタグを含むヘッダで始まります。ヘッダの後には、ヘッダ内のタグに関連付けられた値を含むメッセージ値セクションが続きます。メッセージは、以下のサブセクションで説明するとおり、図1に従ってフォーマットされます。"
+    },
+    {
+      "indent": 3,
+      "text": "In some cases, messages are recursive, i.e., the value of a tag can itself be a Roughtime message.",
+      "ja": "場合によっては、メッセージは再帰的になります。すなわち、タグの値自体がRoughtimeメッセージとなることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                   Number of pairs, N (uint32)                 |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n.                                                               .\n.                     N-1 offsets (uint32)                      .\n.                                                               .\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n.                                                               .\n.                        N tags (uint32)                        .\n.                                                               .\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n.                                                               .\n.                           N values                            .\n.                                                               .\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 24,
+      "text": "Figure 1: Roughtime Message",
+      "ja": "図1: Roughtimeメッセージ"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. Data Types",
+      "section_title": true,
+      "ja": "4.1. データ型"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.1. uint32",
+      "section_title": true,
+      "ja": "4.1.1. uint32"
+    },
+    {
+      "indent": 3,
+      "text": "A uint32 is a 32-bit unsigned integer. It is serialized with the least significant byte first.",
+      "ja": "uint32は32ビットの符号なし整数です。最下位バイトを先頭にしてシリアライズされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.2. uint64",
+      "section_title": true,
+      "ja": "4.1.2. uint64"
+    },
+    {
+      "indent": 3,
+      "text": "A uint64 is a 64-bit unsigned integer. It is serialized with the least significant byte first.",
+      "ja": "uint64は64ビットの符号なし整数です。最下位バイトを先頭にしてシリアライズされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.3. Tag",
+      "section_title": true,
+      "ja": "4.1.3. タグ"
+    },
+    {
+      "indent": 3,
+      "text": "Tags are used to identify values in Roughtime messages. A tag is a sequence of four octets. Each tag sequence starts with one to four capital ASCII letters (A-Z) [RFC0020] followed by zero to three padding zero octets. Throughout this document, tags are referred to by their ASCII string representation. However, they are registered and sorted as uint32 values, where the least significant byte is the first octet in the sequence.",
+      "ja": "タグは、Roughtimeメッセージ内の値を識別するために使用されます。タグは4オクテットの列です。各タグ列は、1〜4文字の大文字のASCII文字 (A-Z) [RFC0020] で始まり、その後に0〜3個のパディング用のゼロオクテットが続きます。本文書全体を通じて、タグはそのASCII文字列表現で参照されます。ただし、タグはuint32の値として登録およびソートされ、その際、最下位バイトが列の最初のオクテットとなります。"
+    },
+    {
+      "indent": 3,
+      "text": "For example, the ASCII string \"NONC\" would correspond to the uint32 0x434e4f4e, which is serialized as {0x4e, 0x4f, 0x4e, 0x43}. \"VER\" would correspond to 0x00524556 and be serialized as {0x56, 0x45, 0x52, 0x00}.",
+      "ja": "例えば、ASCII文字列 \"NONC\" はuint32の 0x434e4f4e に対応し、{0x4e, 0x4f, 0x4e, 0x43} とシリアライズされます。\"VER\" は 0x00524556 に対応し、{0x56, 0x45, 0x52, 0x00} とシリアライズされます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.4. Timestamp",
+      "section_title": true,
+      "ja": "4.1.4. タイムスタンプ"
+    },
+    {
+      "indent": 3,
+      "text": "A timestamp is a representation of UTC time as a uint64 count of seconds since 00:00:00 on 1 January 1970 (the Unix epoch), assuming every day has 86400 seconds. This is a constant offset from the NTP timestamp in seconds. Leap seconds do not have an unambiguous representation in a timestamp, and this has implications for the attainable accuracy and setting of the RADI tag (see Section 5.2.5).",
+      "ja": "タイムスタンプは、UTC時刻を、1970年1月1日 00:00:00 (Unixエポック) からの経過秒数のuint64値で表したものであり、1日は常に86400秒であると仮定します。これは、秒単位のNTPタイムスタンプに対する一定のオフセットです。うるう秒はタイムスタンプ内で曖昧さなく表現できず、これは達成可能な精度とRADIタグの設定に影響を与えます (5.2.5節を参照)。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. Header",
+      "section_title": true,
+      "ja": "4.2. ヘッダ"
+    },
+    {
+      "indent": 3,
+      "text": "As illustrated in Figure 1, the first four bytes of the header is the uint32 number of tags N, and hence of (tag, value) pairs. The following 4*(N-1) bytes are offsets, each a uint32, and the last 4*N bytes in the header are tags.",
+      "ja": "図1に示すとおり、ヘッダの最初の4バイトはタグ数N、すなわち (タグ, 値) のペアの数を表すuint32の数値です。続く4*(N-1)バイトはオフセットで、それぞれuint32です。ヘッダの最後の4*Nバイトはタグです。"
+    },
+    {
+      "indent": 3,
+      "text": "The offsets array is considered to have an implicitly encoded value of 0 as its zeroth entry. Its members refer to the positions of the tag values in the message values section. All offsets are multiples of four.",
+      "ja": "オフセット配列は、第0要素として値0が暗黙的に符号化されているものとみなされます。その要素は、メッセージ値セクション内でのタグ値の位置を指します。すべてのオフセットは4の倍数です。"
+    },
+    {
+      "indent": 3,
+      "text": "The members of the offsets and tags arrays, as well as the message values section are sorted in ascending order by the tag's uint32 value. As a consequence, the offset array is also sorted in ascending order. A tag MUST NOT appear more than once in a header.",
+      "ja": "オフセット配列とタグ配列の要素、およびメッセージ値セクションは、タグのuint32値の昇順に並べられます。その結果、オフセット配列も昇順に並びます。1つのタグがヘッダ内に複数回現れてはなりません (MUST NOT)。"
+    },
+    {
+      "indent": 3,
+      "text": "The first post-header byte, i.e., the first byte of the message values section, is at offset 0. The value associated with the ith tag begins at offset[i] and ends at offset[i+1]-1, with the exception of the last value, which ends at the end of the message. Values MAY have zero length. All lengths and offsets are in bytes.",
+      "ja": "ヘッダの後の最初のバイト、すなわちメッセージ値セクションの最初のバイトは、オフセット0にあります。i番目のタグに対応する値は offset[i] から始まり offset[i+1]-1 で終わります。ただし最後の値は、メッセージの末尾で終わります。値の長さはゼロであってもよい (MAY)。すべての長さとオフセットはバイト単位です。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Protocol Details",
+      "section_title": true,
+      "ja": "5. プロトコルの詳細"
+    },
+    {
+      "indent": 3,
+      "text": "As described in Section 3, clients initiate time synchronization by sending requests containing a nonce to servers who send signed time responses in return. Roughtime packets can be sent between clients and servers either as UDP datagrams or via TCP streams. Servers SHOULD support both the UDP and TCP transport modes.",
+      "ja": "3節で説明したとおり、クライアントは、ナンスを含むリクエストをサーバに送信して時刻同期を開始し、サーバは署名付きの時刻レスポンスを返します。Roughtimeパケットは、クライアントとサーバの間で、UDPデータグラムとして、またはTCPストリーム経由のいずれかで送信できます。サーバは、UDPとTCPの両方のトランスポートモードをサポートすべきです (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "Roughtime packets are formatted according to Figure 2 and as described here. The first field is a uint64 with the value 0x4d49544847554f52 (\"ROUGHTIM\" in ASCII). The second field is a uint32 and contains the length of the third field. The third and last field contains a Roughtime message as specified in Section 4.",
+      "ja": "Roughtimeパケットは、図2およびここでの説明に従って整形されます。最初のフィールドは、値が0x4d49544847554f52 (ASCIIで \"ROUGHTIM\") のuint64です。2番目のフィールドはuint32で、3番目のフィールドの長さを格納します。3番目、かつ最後のフィールドは、4節で規定されるRoughtimeメッセージを格納します。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                  0x4d49544847554f52 (uint64)                  |\n|                        (\"ROUGHTIM\")                           |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                    Message length (uint32)                    |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                                                               |\n.                                                               .\n.                      Roughtime message                        .\n.                                                               .\n|                                                               |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 25,
+      "text": "Figure 2: Roughtime Packet",
+      "ja": "図2: Roughtimeパケット"
+    },
+    {
+      "indent": 3,
+      "text": "Roughtime request and response packets MUST be transmitted in a single datagram when the UDP transport mode is used. Setting the packet's Don't Fragment bit [RFC0791] is OPTIONAL in IPv4 networks. Setting it may cause packets to get dropped, but not setting it could lead to long delays due to reconstruction and dropped fragments.",
+      "ja": "UDPトランスポートモードを使用する場合、Roughtimeのリクエストパケットとレスポンスパケットは、単一のデータグラムで送信しなければなりません (MUST)。パケットのDon't Fragmentビット [RFC0791] の設定は、IPv4ネットワークでは任意です (OPTIONAL)。設定するとパケットが破棄される場合があり、設定しないと再構成やフラグメントの破棄により長い遅延が生じる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "A Roughtime packet could exceed the maximum deliverable length of a packet on a particular path, making Roughtime queries over UDP impossible on that path. A client SHOULD attempt to use the TCP transport mode for Roughtime queries to a server if it does not receive responses to its UDP queries.",
+      "ja": "Roughtimeパケットが特定の経路で配送可能な最大長を超える場合があり、その経路ではUDPによるRoughtimeクエリが不可能になります。クライアントは、UDPクエリへのレスポンスを受信しない場合、サーバへのRoughtimeクエリにTCPトランスポートモードの使用を試みるべきです (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST implement exponential backoff in establishing TCP connections and making requests over UDP. It is RECOMMENDED that clients use an initial retry interval of 1 second, a maximum interval of 24 hours, and a base of 1.5. Therefore, the minimum interval, in seconds, before retrying after n failures is min(1.5^(n-1), 86400). Guidance for implementers considering other values can be found in Section 3.1.3 of [RFC8085].",
+      "ja": "クライアントは、TCP接続の確立およびUDPによるリクエストの送信において、指数バックオフを実装しなければなりません (MUST)。クライアントは、初期再試行間隔を1秒、最大間隔を24時間、底を1.5とすることが推奨されます (RECOMMENDED)。したがって、n回の失敗の後に再試行するまでの最小間隔 (秒単位) は min(1.5^(n-1), 86400) です。他の値を検討する実装者向けのガイダンスは、[RFC8085] の3.1.3節にあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT reset the retry interval until they receive a properly signed response.",
+      "ja": "クライアントは、適切に署名されたレスポンスを受信するまで、再試行間隔をリセットしてはなりません (MUST NOT)。"
+    },
+    {
+      "indent": 3,
+      "text": "Multiple requests and responses can be exchanged over an established TCP connection. Clients MAY send multiple outstanding requests and servers MAY send responses out of order. The connection SHOULD be closed by the client when it has no more requests to send and has received all expected responses. Either side SHOULD close the connection in response to synchronization, format, implementation-defined timeouts, or other errors.",
+      "ja": "確立されたTCP接続上で、複数のリクエストとレスポンスをやり取りできます。クライアントは未完了のリクエストを複数送信してもよく (MAY)、サーバはレスポンスを順不同で送信してもよい (MAY)。接続は、クライアントが送信すべきリクエストをもう持たず、期待されるすべてのレスポンスを受信した時点で、クライアントが閉じるべきです (SHOULD)。どちらの側も、同期エラー、フォーマットエラー、実装定義のタイムアウト、またはその他のエラーに応じて、接続を閉じるべきです (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "All requests and responses contain the VER tag. It contains a list of one or more uint32 version numbers. The version of Roughtime specified by this document has version number 1.",
+      "ja": "すべてのリクエストとレスポンスはVERタグを含みます。VERタグは、1つ以上のuint32のバージョン番号のリストを格納します。本文書で規定されるRoughtimeのバージョンのバージョン番号は1です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1. Requests",
+      "section_title": true,
+      "ja": "5.1. リクエスト"
+    },
+    {
+      "indent": 3,
+      "text": "A request contains the tags VER, NONC, and TYPE. It SHOULD include the tag SRV. Unknown tags MUST be ignored by the server. Requests not containing the three mandatory tags MUST be ignored. A future version of this protocol may mandate additional tags in the message and assign them semantic meaning.",
+      "ja": "リクエストはVER、NONC、TYPEの各タグを含みます。SRVタグも含めるべきです (SHOULD)。未知のタグは、サーバによって無視されなければなりません (MUST)。3つの必須タグを含まないリクエストは、無視されなければなりません (MUST)。このプロトコルの将来のバージョンでは、メッセージ内に追加のタグを必須とし、それらに意味を割り当てる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The size of the request message SHOULD be at least 1024 bytes when the UDP transport mode is used. To attain this size, the ZZZZ tag is added to the message. A reason for sending request messages smaller could be to use the UDP transport mode over paths with low maximum deliverable length. However, responding to request messages shorter than 1024 bytes is OPTIONAL and servers MUST NOT send responses larger than the request messages they are replying to; see Section 9.7.",
+      "ja": "リクエストメッセージのサイズは、UDPトランスポートモードを使用する場合、少なくとも1024バイトであるべきです (SHOULD)。このサイズに到達させるため、メッセージにZZZZタグを追加します。これより小さいリクエストメッセージを送信する理由として、配送可能な最大長が小さい経路でUDPトランスポートモードを使用することが考えられます。ただし、1024バイト未満のリクエストメッセージへの応答は任意であり (OPTIONAL)、サーバは、応答先のリクエストメッセージより大きいレスポンスを送信してはなりません (MUST NOT)。9.7節を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.1. VER",
+      "section_title": true,
+      "ja": "5.1.1. VER"
+    },
+    {
+      "indent": 3,
+      "text": "In a request, the VER tag contains a list of uint32 version numbers. The VER tag MUST include at least one Roughtime version supported by the client and MUST NOT contain more than 32 version numbers. The version numbers and tags included in the request MUST be compatible with each other and the packet contents.",
+      "ja": "リクエストにおいて、VERタグはuint32のバージョン番号のリストを格納します。VERタグは、クライアントがサポートするRoughtimeバージョンを少なくとも1つ含まなければならず (MUST)、32個を超えるバージョン番号を含んではなりません (MUST NOT)。リクエストに含まれるバージョン番号とタグは、互いに、またパケットの内容と、整合していなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "The version numbers MUST NOT repeat and MUST be sorted in ascending numerical order.",
+      "ja": "バージョン番号は、重複してはならず (MUST NOT)、数値の昇順に並べられていなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "Servers MUST ignore any unknown version numbers in the list supplied by the client. If the list contains no version numbers supported by the server, it MAY respond with another version or ignore the request entirely; see Section 5.2.5.",
+      "ja": "サーバは、クライアントが提供したリストにある未知のバージョン番号をすべて無視しなければなりません (MUST)。リストにサーバがサポートするバージョン番号が1つもない場合、サーバは別のバージョンで応答するか、リクエストを完全に無視してもよい (MAY)。5.2.5節を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.2. NONC",
+      "section_title": true,
+      "ja": "5.1.2. NONC"
+    },
+    {
+      "indent": 3,
+      "text": "The value of the NONC tag is a 32-byte nonce. It SHOULD be generated in a manner indistinguishable from random. RFC 4086 [BCP106] contains specific guidelines regarding this. Section 8.2 describes how to securely generate nonces when querying multiple servers in sequence.",
+      "ja": "NONCタグの値は、32バイトのナンスです。これは、乱数と区別できない方法で生成されるべきです (SHOULD)。RFC 4086 [BCP106] に、これに関する具体的なガイドラインが記載されています。8.2節では、複数のサーバに順次クエリを送信する際にナンスを安全に生成する方法を説明しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.3. TYPE",
+      "section_title": true,
+      "ja": "5.1.3. TYPE"
+    },
+    {
+      "indent": 3,
+      "text": "The TYPE tag is used to unambiguously distinguish between request and response messages. In a request, it MUST contain a uint32 with value 0. Requests containing a TYPE tag with any other value MUST be ignored by servers.",
+      "ja": "TYPEタグは、リクエストメッセージとレスポンスメッセージを曖昧さなく区別するために使用されます。リクエストにおいて、TYPEタグは値0のuint32を格納しなければなりません (MUST)。TYPEタグに0以外の値を含むリクエストは、サーバによって無視されなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.4. SRV",
+      "section_title": true,
+      "ja": "5.1.4. SRV"
+    },
+    {
+      "indent": 3,
+      "text": "The SRV tag is used by the client to indicate which long-term public key it expects to verify the response with. The value of the SRV tag is H(0xff || public_key) where public_key is the server's long-term, 32-byte Ed25519 public key, and H is SHA-512 truncated to the first 32 bytes.",
+      "ja": "SRVタグは、クライアントがレスポンスの検証に使用すると想定する長期公開鍵を示すために、クライアントによって使用されます。SRVタグの値は H(0xff || public_key) です。ここで public_key はサーバの32バイトのEd25519長期公開鍵であり、H は先頭32バイトに切り詰めたSHA-512です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.1.5. ZZZZ",
+      "section_title": true,
+      "ja": "5.1.5. ZZZZ"
+    },
+    {
+      "indent": 3,
+      "text": "The ZZZZ tag is used to expand the request to the minimum required length. Its value is all zero bytes.",
+      "ja": "ZZZZタグは、リクエストを必要な最小長まで拡張するために使用されます。その値はすべてゼロバイトです。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2. Responses",
+      "section_title": true,
+      "ja": "5.2. レスポンス"
+    },
+    {
+      "indent": 3,
+      "text": "The server begins the request handling process with a set of long-term keys. It resolves which long-term key to use with the following procedure:",
+      "ja": "サーバは、長期鍵の集合を持った状態でリクエストの処理を開始します。サーバは、次の手順で、使用する長期鍵を決定します。"
+    },
+    {
+      "indent": 8,
+      "text": "1. If the request contains a SRV tag, then the server looks up the long-term key indicated by the SRV value. If no such key exists, then the server MUST ignore the request.",
+      "ja": "1. リクエストにSRVタグが含まれる場合、サーバはSRVの値が示す長期鍵を検索します。そのような鍵が存在しない場合、サーバはリクエストを無視しなければなりません (MUST)。"
+    },
+    {
+      "indent": 8,
+      "text": "2. If the request contains no SRV tag, but the server has just one long-term key, it SHOULD select that key. Otherwise, if the server has multiple long-term keys, then it MUST ignore the request.",
+      "ja": "2. リクエストにSRVタグが含まれないが、サーバが長期鍵を1つだけ持つ場合、サーバはその鍵を選択すべきです (SHOULD)。そうでなく、サーバが複数の長期鍵を持つ場合は、リクエストを無視しなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "A response contains the tags SIG, NONC, TYPE, PATH, SREP, CERT, and INDX. The structure of a response message is illustrated in Figure 3.",
+      "ja": "レスポンスはSIG、NONC、TYPE、PATH、SREP、CERT、INDXの各タグを含みます。レスポンスメッセージの構造を図3に示します。"
+    },
+    {
+      "indent": 3,
+      "text": "|--SIG\n|--NONC\n|--TYPE\n|--PATH\n|--SREP\n|  |--VER\n|  |--RADI\n|  |--MIDP\n|  |--VERS\n|  |--ROOT\n|--CERT\n|  |--SIG\n|  |--DELE\n|  |  |--PUBK\n|  |  |--MINT\n|  |  |--MAXT\n|--INDX",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 15,
+      "text": "Figure 3: Roughtime Response Message Structure",
+      "ja": "図3: Roughtimeレスポンスメッセージの構造"
+    },
+    {
+      "indent": 3,
+      "text": "No mechanism for reporting errors -- such as wrong request format, unsupported version, or unknown SRV value -- back to the client is provided. This is based on experience from the NTP protocol, where Kiss-o'-Death packets (see Section 7.4 of [RFC5905]) are used to indicate errors. The existence of this unauthenticated protocol feature in NTP makes it possible for on-path attackers to make a client stop using authenticated modes or certain servers altogether (see Section 5.4 of [RFC8633] and Sections 8.3 and 8.7 of [RFC8915]). Considering the protocol's dependence on multiple independent servers for security, error reporting functionality has been excluded from this version of Roughtime.",
+      "ja": "誤ったリクエスト形式、サポートされないバージョン、未知のSRV値などのエラーをクライアントに報告するメカニズムは提供されていません。これは、エラーの通知にKiss-o'-Deathパケット ([RFC5905] の7.4節を参照) が使用されているNTPプロトコルでの経験に基づいています。NTPにこの認証されないプロトコル機能が存在することで、経路上の攻撃者が、クライアントに認証モードや特定のサーバの使用を完全に停止させることが可能になります ([RFC8633] の5.4節、および [RFC8915] の8.3節と8.7節を参照)。セキュリティを複数の独立したサーバに依存するというこのプロトコルの性質を考慮し、このバージョンのRoughtimeではエラー報告機能を除外しています。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.1. SIG",
+      "section_title": true,
+      "ja": "5.2.1. SIG"
+    },
+    {
+      "indent": 3,
+      "text": "In general, a SIG tag value is a 64-byte Ed25519 signature [RFC8032] over a concatenation of a context string and the entire value of a tag. All context strings include a terminating zero byte.",
+      "ja": "一般に、SIGタグの値は、コンテキスト文字列とタグの値全体を連結したものに対する、64バイトのEd25519署名 [RFC8032] です。すべてのコンテキスト文字列は、終端のゼロバイトを含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "The SIG tag in the root of a response is a signature over the SREP value using the public key contained in CERT and the context string \"Roughtime v1 response signature\".",
+      "ja": "レスポンスのルートにある SIG タグは、CERT に含まれる公開鍵とコンテキスト文字列 \"Roughtime v1 response signature\" を用いた、SREP の値に対する署名です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.2. NONC",
+      "section_title": true,
+      "ja": "5.2.2. NONC"
+    },
+    {
+      "indent": 3,
+      "text": "The NONC tag contains the nonce of the message being responded to.",
+      "ja": "NONC タグには、応答対象のメッセージのナンスが含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.3. TYPE",
+      "section_title": true,
+      "ja": "5.2.3. TYPE"
+    },
+    {
+      "indent": 3,
+      "text": "In a response, the TYPE tag MUST contain a uint32 with value 1. Responses containing a TYPE tag with any other value MUST be ignored by clients.",
+      "ja": "レスポンスでは、TYPE タグに値 1 の uint32 を格納しなければなりません (MUST)。TYPE タグに 1 以外の値が含まれるレスポンスは、クライアントによって無視されなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.4. PATH",
+      "section_title": true,
+      "ja": "5.2.4. PATH"
+    },
+    {
+      "indent": 3,
+      "text": "The PATH tag value is a multiple of 32 bytes long and represents a path of 32-byte hash values in the Merkle tree used to generate the ROOT value as described in Section 5.3. In the case where a response is prepared for a single request and the Merkle tree contains only the root node, the size of PATH is zero.",
+      "ja": "PATH タグの値は長さが 32 バイトの倍数であり、5.3 節で説明するように ROOT の値を生成するために使用されるマークル木における、32 バイトのハッシュ値の経路を表します。単一のリクエストに対してレスポンスが作成され、マークル木がルートノードのみを含む場合、PATH のサイズはゼロです。"
+    },
+    {
+      "indent": 3,
+      "text": "The PATH MUST NOT contain more than 32 hash values. The maximum length of PATH is normally limited by the maximum size of the response message; see Sections 5.1 and 9.7. Server implementations MUST select a maximum Merkle tree height (see Section 5.3) that ensures this.",
+      "ja": "PATH に 32 個を超えるハッシュ値を含めてはなりません (MUST NOT)。PATH の最大長は通常、レスポンスメッセージの最大サイズによって制限されます。5.1 節および 9.7 節を参照してください。サーバ実装は、これを保証できるマークル木の最大の高さ (5.3 節を参照) を選択しなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.5. SREP",
+      "section_title": true,
+      "ja": "5.2.5. SREP"
+    },
+    {
+      "indent": 3,
+      "text": "The SREP tag contains a signed response. Its value is a Roughtime message with the tags VER, RADI, MIDP, VERS, and ROOT.",
+      "ja": "SREP タグには署名付きレスポンスが含まれます。その値は、タグ VER、RADI、MIDP、VERS、ROOT を持つ Roughtime メッセージです。"
+    },
+    {
+      "indent": 3,
+      "text": "The VER tag, when used in a response, contains a single uint32 version number. It SHOULD be one of the version numbers supplied by the client in its request; see Section 5.1.1. The server MUST ensure that the version number corresponds with the rest of the packet contents.",
+      "ja": "VER タグは、レスポンスで使用される場合、単一の uint32 のバージョン番号を含みます。この値は、クライアントがリクエストで提示したバージョン番号のいずれかであるべきです (SHOULD)。5.1.1 節を参照してください。サーバは、バージョン番号がパケットの残りの内容と対応していることを保証しなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "The RADI tag value is a uint32 representing the server's estimate of the accuracy of MIDP in seconds. Servers MUST ensure that the true time is within (MIDP-RADI, MIDP+RADI) at the moment of processing. The value of RADI MUST NOT be zero. Since leap seconds cannot be unambiguously represented by Roughtime timestamps, servers MUST take this into account when setting the RADI value during leap second events. Servers that do not have any leap second information SHOULD set the value of RADI to at least 3. Failure to do so will impact the observed correctness of Roughtime servers and can lead to malfeasance reports.",
+      "ja": "RADI タグの値は、MIDP の精度に関するサーバの推定値を秒単位で表す uint32 です。サーバは、処理の時点で真の時刻が (MIDP-RADI, MIDP+RADI) の範囲内にあることを保証しなければなりません (MUST)。RADI の値をゼロにしてはなりません (MUST NOT)。うるう秒は Roughtime のタイムスタンプでは曖昧さなく表現できないため、サーバは、うるう秒のイベント中に RADI の値を設定する際にこれを考慮しなければなりません (MUST)。うるう秒に関する情報を持たないサーバは、RADI の値を少なくとも 3 に設定すべきです (SHOULD)。これを怠ると、Roughtime サーバの観測上の正確性に影響し、不正行為レポートにつながる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The MIDP tag value is the timestamp of the moment of processing.",
+      "ja": "MIDP タグの値は、処理の時点のタイムスタンプです。"
+    },
+    {
+      "indent": 3,
+      "text": "The VERS tag value contains a list of uint32 version numbers supported by the server, sorted in ascending numerical order. It MUST contain the version number specified in the VER tag. It MUST NOT contain more than 32 version numbers.",
+      "ja": "VERS タグの値には、サーバがサポートする uint32 のバージョン番号のリストが、数値の昇順に並べて含まれます。このリストには、VER タグで指定されたバージョン番号を含めなければなりません (MUST)。また、32 個を超えるバージョン番号を含めてはなりません (MUST NOT)。"
+    },
+    {
+      "indent": 3,
+      "text": "The ROOT tag contains a 32-byte value of a Merkle tree root as described in Section 5.3.",
+      "ja": "ROOT タグには、5.3 節で説明するマークル木のルートの 32 バイトの値が含まれます。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.6. CERT",
+      "section_title": true,
+      "ja": "5.2.6. CERT"
+    },
+    {
+      "indent": 3,
+      "text": "The CERT tag contains a public key certificate signed with the server's private long-term key. Its value is a Roughtime message with the tags SIG and DELE, where SIG is a signature over the DELE value with the context string \"Roughtime v1 delegation signature\".",
+      "ja": "CERT タグには、サーバの長期秘密鍵で署名された公開鍵証明書が含まれます。その値は、タグ SIG と DELE を持つ Roughtime メッセージであり、SIG はコンテキスト文字列 \"Roughtime v1 delegation signature\" を用いた DELE の値に対する署名です。"
+    },
+    {
+      "indent": 3,
+      "text": "The DELE tag contains a delegated public key certificate used by the server to sign the SREP tag. Its value is a Roughtime message with the tags PUBK, MINT, and MAXT. The purpose of the DELE tag is to enable separation of a long-term public key from keys on devices exposed to the public Internet.",
+      "ja": "DELE タグには、サーバが SREP タグに署名するために使用する委任された公開鍵証明書が含まれます。その値は、タグ PUBK、MINT、MAXT を持つ Roughtime メッセージです。DELE タグの目的は、長期公開鍵を、公共のインターネットに公開されるデバイス上の鍵から分離できるようにすることです。"
+    },
+    {
+      "indent": 3,
+      "text": "The PUBK tag contains a temporary 32-byte Ed25519 public key that is used to sign the SREP tag.",
+      "ja": "PUBK タグには、SREP タグへの署名に使用される一時的な 32 バイトの Ed25519 公開鍵が含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The MINT tag is the minimum timestamp for which the key in PUBK is trusted to sign responses. MIDP MUST be more than or equal to MINT for a response to be considered valid.",
+      "ja": "MINT タグは、PUBK の鍵がレスポンスへの署名を信頼される最小のタイムスタンプです。レスポンスが有効とみなされるためには、MIDP は MINT 以上でなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "The MAXT tag is the maximum timestamp for which the key in PUBK is trusted to sign responses. MIDP MUST be less than or equal to MAXT for a response to be considered valid.",
+      "ja": "MAXT タグは、PUBK の鍵がレスポンスへの署名を信頼される最大のタイムスタンプです。レスポンスが有効とみなされるためには、MIDP は MAXT 以下でなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "5.2.7. INDX",
+      "section_title": true,
+      "ja": "5.2.7. INDX"
+    },
+    {
+      "indent": 3,
+      "text": "The INDX tag value is a uint32 determining the position of NONC in the Merkle tree used to generate the ROOT value as described in Section 5.3.",
+      "ja": "INDX タグの値は、5.3 節で説明するように ROOT の値を生成するために使用されるマークル木における NONC の位置を決定する uint32 です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3. The Merkle Tree",
+      "section_title": true,
+      "ja": "5.3. マークル木"
+    },
+    {
+      "indent": 3,
+      "text": "A Merkle tree [Merkle] is a binary tree where the value of each non-leaf node is a hash value derived from its two children. The root of the tree is thus dependent on all leaf nodes.",
+      "ja": "マークル木 [Merkle] は二分木であり、葉以外の各ノードの値は、その2つの子から導出されるハッシュ値です。したがって、木のルートはすべての葉ノードに依存します。"
+    },
+    {
+      "indent": 3,
+      "text": "In Roughtime, each leaf node in the Merkle tree represents one request. Leaf nodes are indexed left to right, beginning with zero.",
+      "ja": "Roughtime では、マークル木の各葉ノードは1つのリクエストを表します。葉ノードには、左から右へゼロから始まるインデックスが付けられます。"
+    },
+    {
+      "indent": 3,
+      "text": "The values of all nodes are calculated from the leaf nodes and up towards the root node using the first 32 bytes of the output of the SHA-512 hash algorithm [RFC6234]. For leaf nodes, the byte 0x00 is prepended to the full value of the client's request packet, including the \"ROUGHTIM\" header, before applying the hash function. For all other nodes, the byte 0x01 is concatenated with first the left and then the right child node value before applying the hash function.",
+      "ja": "すべてのノードの値は、SHA-512 ハッシュアルゴリズム [RFC6234] の出力の先頭 32 バイトを用いて、葉ノードからルートノードに向かって計算されます。葉ノードでは、ハッシュ関数を適用する前に、\"ROUGHTIM\" ヘッダを含むクライアントのリクエストパケットの完全な値の先頭にバイト 0x00 を付加します。それ以外のすべてのノードでは、ハッシュ関数を適用する前に、バイト 0x01 に、まず左の子ノードの値、次に右の子ノードの値を連結します。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of the Merkle tree's root node is included in the ROOT tag of the response.",
+      "ja": "マークル木のルートノードの値は、レスポンスの ROOT タグに含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The index of a request leaf node is included in the INDX tag of the response.",
+      "ja": "リクエストの葉ノードのインデックスは、レスポンスの INDX タグに含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "The values of all sibling nodes in the path between a request leaf node and the root node are stored in the PATH tag so that the client can reconstruct and validate the value in the ROOT tag using its request packet. These values are each 32 bytes and are stored one after the other with no additional padding or structure. The order in which they are stored is described in the following subsection.",
+      "ja": "リクエストの葉ノードとルートノードの間の経路上にあるすべての兄弟ノードの値は PATH タグに格納され、クライアントは自身のリクエストパケットを用いて ROOT タグの値を再構築し検証できます。これらの値はそれぞれ 32 バイトであり、追加のパディングや構造なしに、順に並べて格納されます。格納される順序については、次の小節で説明します。"
+    },
+    {
+      "indent": 0,
+      "text": "5.3.1. Root Value Validity Check Algorithm",
+      "section_title": true,
+      "ja": "5.3.1. ルート値の有効性検査アルゴリズム"
+    },
+    {
+      "indent": 3,
+      "text": "This section describes how to compute the value of the root of the Merkle tree from the values in the tags PATH, INDX, and NONC. The bits of INDX are ordered from least to most significant. H(x) denotes the first 32 bytes of the SHA-512 hash digest of x, and || denotes concatenation.",
+      "ja": "この節では、タグ PATH、INDX、NONC の値からマークル木のルートの値を計算する方法を説明します。INDX のビットは、最下位から最上位の順に並べられます。H(x) は x の SHA-512 ハッシュダイジェストの先頭 32 バイトを表し、|| は連結を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "The algorithm maintains a current value h. At initialization, h is set to H(0x00 || request_packet). For each step of the algorithm, let node be the next 32 bytes in PATH. If the current bit in INDX is 0 then h = H(0x01 || h || node), else h = H(0x01 || node || h). When no more entries remain in PATH, h is compared to the value of the root of the Merkle tree contained in ROOT. If they are equal, the algorithm succeeds. If they are not, or if any of the remaining bits of INDX is non-zero, the algorithm fails.",
+      "ja": "このアルゴリズムは現在の値 h を保持します。初期化時に、h は H(0x00 || request_packet) に設定されます。アルゴリズムの各ステップでは、PATH の次の 32 バイトを node とします。INDX の現在のビットが 0 であれば h = H(0x01 || h || node) とし、そうでなければ h = H(0x01 || node || h) とします。PATH に残りのエントリがなくなった時点で、h を ROOT に含まれるマークル木のルートの値と比較します。両者が等しければ、アルゴリズムは成功です。等しくない場合、または INDX の残りのビットのいずれかがゼロでない場合、アルゴリズムは失敗です。"
+    },
+    {
+      "indent": 0,
+      "text": "5.4. Validity of Response",
+      "section_title": true,
+      "ja": "5.4. レスポンスの有効性"
+    },
+    {
+      "indent": 3,
+      "text": "A client MUST check the following properties when it receives a response. We assume the long-term server public key is known to the client through other means.",
+      "ja": "クライアントは、レスポンスを受信したとき、次の特性を検査しなければなりません (MUST)。サーバの長期公開鍵は、他の手段によってクライアントに知られているものとします。"
+    },
+    {
+      "indent": 3,
+      "text": "The signature in CERT was made with the long-term key of the server.",
+      "ja": "CERT の署名が、サーバの長期鍵で作成されていること。"
+    },
+    {
+      "indent": 3,
+      "text": "The MIDP timestamp lies in the interval specified by the MINT and MAXT timestamps.",
+      "ja": "MIDP タイムスタンプが、MINT と MAXT のタイムスタンプで指定される区間内にあること。"
+    },
+    {
+      "indent": 3,
+      "text": "The INDX and PATH values prove a hash value derived from the request packet was included in the Merkle tree with value ROOT using the algorithm in Section 5.3.1.",
+      "ja": "INDX と PATH の値により、リクエストパケットから導出されたハッシュ値が、5.3.1 節のアルゴリズムを用いて、値が ROOT であるマークル木に含まれていたことが証明されること。"
+    },
+    {
+      "indent": 3,
+      "text": "The signature of SREP in SIG validates with the public key in DELE.",
+      "ja": "SIG にある SREP の署名が、DELE の公開鍵で検証できること。"
+    },
+    {
+      "indent": 3,
+      "text": "A response that passes these checks is said to be valid. Validity of a response does not prove that the timestamp's value in the response is correct, but merely that the server guarantees that it signed the timestamp and computed its signature during the time interval (MIDP-RADI, MIDP+RADI).",
+      "ja": "これらの検査に合格したレスポンスは、有効であるといいます。レスポンスの有効性は、レスポンス内のタイムスタンプの値が正しいことを証明するものではなく、サーバがタイムスタンプに署名し、その署名を時間区間 (MIDP-RADI, MIDP+RADI) の間に計算したことをサーバが保証していることを示すにすぎません。"
+    },
+    {
+      "indent": 0,
+      "text": "6. Integration into NTP",
+      "section_title": true,
+      "ja": "6. NTPへの統合"
+    },
+    {
+      "indent": 3,
+      "text": "We assume that there is a bound phi on the frequency error in the clock on the machine. Let delta be the time difference between the clock on the client and the clock on the server, and let sigma represent the error in the measured value of delta introduced by the measurement process. Given a measurement taken at a local time t, we know the true time is in (t-delta-sigma, t-delta+sigma). After d seconds have elapsed we know the true time is within (t-delta-sigma-d*phi, t-delta+sigma+d*phi).",
+      "ja": "マシン上のクロックの周波数誤差に上限 phi があると仮定します。delta をクライアントのクロックとサーバのクロックとの時間差とし、sigma を測定過程によって生じる delta の測定値の誤差とします。ローカル時刻 t に行った測定から、真の時刻は (t-delta-sigma, t-delta+sigma) の範囲にあることがわかります。d 秒が経過した後は、真の時刻は (t-delta-sigma-d*phi, t-delta+sigma+d*phi) の範囲内にあることがわかります。"
+    },
+    {
+      "indent": 3,
+      "text": "This bound can be used as a simple and effective means to limit the error an attacker can introduce into NTP or Precision Time Protocol (PTP) measurements. For example, an NTP client can ensure that its observation intervals fall entirely within this range or can reject measurements that fall outside.",
+      "ja": "この上限は、攻撃者がNTPまたはPrecision Time Protocol (PTP) の測定に持ち込みうる誤差を制限する、単純で効果的な手段として使えます。たとえば、NTPクライアントは、自身の観測区間がこの範囲に完全に収まるようにすることも、範囲外の測定値を拒否することもできます。"
+    },
+    {
+      "indent": 3,
+      "text": "An application that needs to verify X.509 certificates (which requires knowledge of the current time) but lacks an accurate and trusted time source can use Roughtime to obtain a time estimate. In particular, securely establishing NTS-protected NTP time synchronization requires verification of the NTS-KE server's certificate, which is not possible if the client has no idea of the current time (see Section 8.5 of [RFC8915]). In that case, a Roughtime time estimate can be used for certificate validation.",
+      "ja": "X.509証明書を検証する必要があるものの (これには現在時刻の知識が必要です)、正確で信頼できる時刻源を持たないアプリケーションは、Roughtimeを使って時刻の推定値を得ることができます。特に、NTSで保護されたNTP時刻同期を安全に確立するには、NTS-KEサーバの証明書の検証が必要ですが、クライアントが現在時刻をまったく把握していない場合には、これは不可能です ([RFC8915] の8.5節を参照)。そのような場合、Roughtimeによる時刻の推定値を証明書の検証に使用できます。"
+    },
+    {
+      "indent": 3,
+      "text": "If an NTP server uses a Roughtime server as a time source for synchronization (and not only for filtering its NTP measurements), the root dispersion SHOULD include the server's RADI value, and root delay SHOULD include the interval between sending the Roughtime request and receiving the response.",
+      "ja": "NTPサーバが、(NTPの測定値のフィルタリングのためだけでなく) 同期のための時刻源としてRoughtimeサーバを使用する場合、root dispersion にはそのサーバの RADI の値を含めるべきです (SHOULD)。また、root delay にはRoughtimeリクエストの送信からレスポンスの受信までの間隔を含めるべきです (SHOULD)。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Grease",
+      "section_title": true,
+      "ja": "7. グリース"
+    },
+    {
+      "indent": 3,
+      "text": "The primary purpose of grease is to prevent protocol ossification, which could prohibit future protocol extensions and development [RFC9170]. In Roughtime, grease is also intended to ensure that clients validate signatures. To grease the Roughtime protocol, servers SHOULD send back a fraction of responses with any of the following: lack of mandatory tags, version numbers not in the request, undefined tags, or invalid signatures together with incorrect times. Clients MUST properly ignore undefined tags and reject invalid responses. Servers MUST NOT send back responses with incorrect times and valid signatures. Either signature in the response (i.e., of the SREP or DELE tag) MAY be invalid for this application.",
+      "ja": "グリースの主な目的は、将来のプロトコル拡張と発展を妨げかねないプロトコルの硬直化 (ossification) を防ぐことです [RFC9170]。Roughtimeでは、グリースはクライアントに署名を検証させることも意図しています。Roughtimeプロトコルにグリースを適用するため、サーバは、一部のレスポンスを、次のいずれかを含めて返すべきです (SHOULD)。必須タグの欠落、リクエストにないバージョン番号、未定義のタグ、または無効な署名と誤った時刻の組み合わせです。クライアントは、未定義のタグを適切に無視し、無効なレスポンスを拒否しなければなりません (MUST)。サーバは、誤った時刻と有効な署名を持つレスポンスを返してはなりません (MUST NOT)。この用途では、レスポンス内のどちらの署名 (すなわち SREP タグまたは DELE タグの署名) も無効であってもよい (MAY)。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Roughtime Clients",
+      "section_title": true,
+      "ja": "8. Roughtimeクライアント"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Necessary Configuration",
+      "section_title": true,
+      "ja": "8.1. 必要な設定"
+    },
+    {
+      "indent": 3,
+      "text": "To carry out a Roughtime measurement, a client needs a list of servers, a minimum of three of which are operational and not run by the same parties. Roughtime clients SHOULD regularly update their view of which servers are trustworthy in order to benefit from the detection of misbehavior (see Section 8.3). Clients SHOULD also have a means of reporting to the provider of such a list, such as an operating system or software vendor, a malfeasance report as described in Section 8.4.",
+      "ja": "Roughtimeの測定を行うには、クライアントはサーバのリストを必要とします。そのうち少なくとも3つは稼働していて、同じ運営者によって運営されていないものである必要があります。Roughtimeクライアントは、不正行為の検出の恩恵を受けるため、どのサーバが信頼できるかについての認識を定期的に更新すべきです (SHOULD) (8.3節を参照)。クライアントはまた、そのようなリストの提供者 (オペレーティングシステムやソフトウェアのベンダーなど) に対して、8.4節で説明する不正行為レポートを報告する手段も備えるべきです (SHOULD)。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Measurement Sequence",
+      "section_title": true,
+      "ja": "8.2. 測定シーケンス"
+    },
+    {
+      "indent": 3,
+      "text": "The client randomly selects at least three servers from the list, and sequentially queries them. To ensure that all possible inconsistencies can be detected, it is necessary for clients to repeat the query sequence twice with the servers in the same order.",
+      "ja": "クライアントは、リストから少なくとも3つのサーバをランダムに選択し、それらに順番に問い合わせます。起こりうるすべての不整合を確実に検出できるようにするため、クライアントは同じ順序のサーバに対して問い合わせシーケンスを2回繰り返す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The first probe uses a nonce that is randomly generated. The second query uses H(resp || rand) where rand is a random 32-byte value and resp is the entire response to the first probe, including the \"ROUGHTIM\" header. Each subsequent query uses H(resp || rand) for the previous response and a different 32-byte rand value. H(x) and || are defined as in Section 5.3.1.",
+      "ja": "最初のプローブでは、ランダムに生成したナンスを使用します。2番目のクエリでは H(resp || rand) を使用します。ここで rand はランダムな32バイトの値、resp は \"ROUGHTIM\" ヘッダを含む最初のプローブへのレスポンス全体です。以降の各クエリでは、直前のレスポンスについての H(resp || rand) を、毎回異なる32バイトの rand の値とともに使用します。H(x) および || は、5.3.1節と同様に定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "For each pair of responses (i, j), where i was received before j, the client MUST check that MIDP_i-RADI_i is less than or equal to MIDP_j+RADI_j. If these checks pass, the times are consistent with causal ordering. The measurement succeeds if the validity checks described in Section 5.4 are successful, the times reported are consistent with causal ordering, and the delay between request and response is within an implementation-dependent maximum value.",
+      "ja": "レスポンスの各ペア (i, j) (i が j より先に受信されたもの) について、クライアントは、MIDP_i-RADI_i が MIDP_j+RADI_j 以下であることを確認しなければなりません (MUST)。これらの確認に合格すれば、時刻は因果順序と整合しています。測定が成功するのは、5.4節で説明した有効性の確認が成功し、報告された時刻が因果順序と整合し、かつリクエストからレスポンスまでの遅延が実装依存の最大値以内である場合です。"
+    },
+    {
+      "indent": 3,
+      "text": "If the validity checks are successful, but at least one of the responses is not consistent with causal ordering, there has been a malfeasance. In case of detected malfeasance, clients SHOULD, if it is technically possible, generate a malfeasance report (see Section 8.4), alert the user, and make another measurement. See Section 5 for guidance on backoff when making repeated measurements.",
+      "ja": "有効性の確認が成功したものの、レスポンスの少なくとも1つが因果順序と整合していない場合、不正行為があったことになります。不正行為を検出した場合、クライアントは、技術的に可能であれば、不正行為レポートを生成し (8.4節を参照)、ユーザに警告し、再度測定を行うべきです (SHOULD)。測定を繰り返す際のバックオフについては、5節を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. Server Lists",
+      "section_title": true,
+      "ja": "8.3. サーバリスト"
+    },
+    {
+      "indent": 3,
+      "text": "To facilitate regular updates of lists of trusted servers, a common server list format is specified here. Support for the common server list format is OPTIONAL and clients MAY instead implement their own mechanisms for configuring server lists.",
+      "ja": "信頼できるサーバのリストの定期的な更新を容易にするため、ここで共通のサーバリスト形式を規定します。共通のサーバリスト形式のサポートは任意 (OPTIONAL) であり、クライアントは代わりにサーバリストを設定する独自の仕組みを実装してもよい (MAY)。"
+    },
+    {
+      "indent": 3,
+      "text": "A server list is a JSON object [RFC8259] that contains the key \"servers\". Server list objects MAY also contain the keys \"sources\" and \"reports\". Appendix A contains an example server list in the format described here.",
+      "ja": "サーバリストは、キー \"servers\" を含むJSONオブジェクト [RFC8259] です。サーバリストのオブジェクトは、キー \"sources\" および \"reports\" を含んでもよい (MAY)。ここで説明する形式のサーバリストの例を付録Aに示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Server lists have the \"application/roughtime-server+json\" media type.",
+      "ja": "サーバリストのメディアタイプは \"application/roughtime-server+json\" です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of the \"servers\" key is a list of server objects, each containing the keys \"name\", \"version\", \"publicKeyType\", \"publicKey\", and \"addresses\".",
+      "ja": "\"servers\" キーの値はサーバオブジェクトのリストで、各サーバオブジェクトはキー \"name\"、\"version\"、\"publicKeyType\"、\"publicKey\"、\"addresses\" を含みます。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"name\" is a string that contains a server name suitable for display to a user.",
+      "ja": "\"name\" の値は、ユーザへの表示に適したサーバ名を含む文字列です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"version\" is an integer that indicates the highest Roughtime version number supported by the server.",
+      "ja": "\"version\" の値は、そのサーバがサポートする最も高いRoughtimeバージョン番号を示す整数です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"publicKeyType\" is a string indicating the signature scheme used by the server. The value for servers supporting version 1 of Roughtime is \"ed25519\".",
+      "ja": "\"publicKeyType\" の値は、サーバが使用する署名方式を示す文字列です。Roughtimeのバージョン1をサポートするサーバの値は \"ed25519\" です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"publicKey\" is a string that is base64-encoded [RFC4648] and represents the long-term public key of the server in a format consistent with the value of \"publicKeyType\".",
+      "ja": "\"publicKey\" の値は、base64エンコード [RFC4648] された文字列で、\"publicKeyType\" の値と整合する形式によるサーバの長期公開鍵を表します。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"addresses\" is a list of address objects. An address object contains the keys \"protocol\" and \"address\". The value of \"protocol\" is either \"tcp\" or \"udp\", indicating the transport mode to use. The value of \"address\" is a string indicating a host and a port number, separated by a colon character, for example \"roughtime.example.com:5319\". The host part is either an IPv4 address, an IPv6 address, or a fully qualified domain name (FQDN). IPv4 addresses are specified in dotted decimal notation. IPv6 addresses MUST conform to the \"Text Representation of Addresses\" (Section 2.2 of [RFC4291]) and MUST NOT include zone identifiers [RFC9844]. To disambiguate IPv6 addresses from ports when zero compression happens, IPv6 addresses are encapsulated within []. The port part is a decimal integer representing a valid port number, i.e., in the range 0-65535.",
+      "ja": "\"addresses\" の値はアドレスオブジェクトのリストです。アドレスオブジェクトはキー \"protocol\" および \"address\" を含みます。\"protocol\" の値は \"tcp\" または \"udp\" のいずれかで、使用するトランスポートモードを示します。\"address\" の値は、ホストとポート番号をコロン文字で区切って示す文字列で、たとえば \"roughtime.example.com:5319\" です。ホスト部は、IPv4アドレス、IPv6アドレス、または完全修飾ドメイン名 (FQDN) のいずれかです。IPv4アドレスはドット付き10進表記で指定します。IPv6アドレスは \"Text Representation of Addresses\" ([RFC4291] の2.2節) に準拠しなければならず (MUST)、ゾーン識別子 [RFC9844] を含めてはなりません (MUST NOT)。ゼロ圧縮が行われる場合にIPv6アドレスとポートを区別できるようにするため、IPv6アドレスは [] で囲みます。ポート部は、有効なポート番号、すなわち0〜65535の範囲の10進整数です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"sources\", if present, is a list of strings indicating where updated versions of the list may be acquired using the HTTP GET method [RFC9110]. Each string is a URL [RFC3986] pointing to a list in the format specified here. The URI scheme MUST be HTTPS [RFC9110].",
+      "ja": "\"sources\" の値は、存在する場合、HTTP GETメソッド [RFC9110] を使ってリストの更新版を取得できる場所を示す文字列のリストです。各文字列は、ここで規定する形式のリストを指すURL [RFC3986] です。URIスキームはHTTPSでなければなりません (MUST) [RFC9110]。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"reports\", if present, is a string indicating a URL [RFC3986] where malfeasance reports can be sent by clients using the HTTP POST method. The URI scheme MUST be HTTPS [RFC9110].",
+      "ja": "\"reports\" の値は、存在する場合、クライアントがHTTP POSTメソッドを使って不正行為レポートを送信できるURL [RFC3986] を示す文字列です。URIスキームはHTTPSでなければなりません (MUST) [RFC9110]。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4. Malfeasance Reporting",
+      "section_title": true,
+      "ja": "8.4. 不正行為の報告"
+    },
+    {
+      "indent": 3,
+      "text": "A malfeasance report is cryptographic proof that a sequence of responses arrived in that order. It can be used to demonstrate that at least one server sent the wrong time.",
+      "ja": "不正行為レポートは、一連のレスポンスがその順序で到着したことの暗号学的な証明です。これは、少なくとも1つのサーバが誤った時刻を送信したことを示すために使用できます。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4.1. Malfeasance Report Format",
+      "section_title": true,
+      "ja": "8.4.1. 不正行為レポートの形式"
+    },
+    {
+      "indent": 3,
+      "text": "A malfeasance report is a JSON object [RFC8259] that contains the key \"responses\". Its value is a list of response objects, sorted in the order received. Each response object contains the keys \"rand\", \"publicKey\", \"request\", and \"response\". The values of all four keys are represented as strings that are base64-encoded [RFC4648]. Appendix B contains an example malfeasance report in the format described here.",
+      "ja": "不正行為レポートは、キー \"responses\" を含むJSONオブジェクト [RFC8259] です。その値は、受信した順にソートされたレスポンスオブジェクトのリストです。各レスポンスオブジェクトはキー \"rand\"、\"publicKey\"、\"request\"、\"response\" を含みます。4つのキーすべての値は、base64エンコード [RFC4648] された文字列として表現されます。ここで説明する形式の不正行為レポートの例を付録Bに示します。"
+    },
+    {
+      "indent": 3,
+      "text": "Malfeasance reports have the \"application/roughtime-malfeasance+json\" media type.",
+      "ja": "不正行為レポートのメディアタイプは \"application/roughtime-malfeasance+json\" です。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"rand\" key MAY be omitted from the first response object in the list. In all other cases, its value is the 32-byte value used to generate the request nonce value from the previous response packet.",
+      "ja": "リストの最初のレスポンスオブジェクトでは、\"rand\" キーを省略してもよい (MAY)。それ以外のすべての場合、その値は、直前のレスポンスパケットからリクエストのナンス値を生成するために使用した32バイトの値です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"publicKey\" is the long-term key that the server was expected to use for deriving the response signature.",
+      "ja": "\"publicKey\" の値は、サーバがレスポンスの署名の導出に使用すると想定されていた長期鍵です。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"request\" is the transmitted request packet, including the \"ROUGHTIM\" header.",
+      "ja": "\"request\" の値は、\"ROUGHTIM\" ヘッダを含む、送信されたリクエストパケットです。"
+    },
+    {
+      "indent": 3,
+      "text": "The value of \"response\" is the received response packet, including the \"ROUGHTIM\" header.",
+      "ja": "\"response\" の値は、\"ROUGHTIM\" ヘッダを含む、受信したレスポンスパケットです。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4.2. Reporting",
+      "section_title": true,
+      "ja": "8.4.2. 報告"
+    },
+    {
+      "indent": 3,
+      "text": "When the client's list of servers has an associated URL for malfeasance reports, it SHOULD send a malfeasance report to that URL when malfeasance is detected (see Section 8.2) and it is technically feasible to do so. Malfeasance reports are sent using the HTTP POST method [RFC9110].",
+      "ja": "クライアントのサーバリストに不正行為レポート用のURLが関連付けられている場合、不正行為が検出され (8.2節を参照)、かつそうすることが技術的に可能であるときは、クライアントはそのURLに不正行為レポートを送信すべきです (SHOULD)。不正行為レポートはHTTP POSTメソッド [RFC9110] を使って送信されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Since the failure of a popular Roughtime server can cause numerous clients to send malfeasance reports at the same time, clients MUST use exponential backoff to prevent overloading the server receiving the reports. It is RECOMMENDED that clients use an initial retry interval of 10 seconds, a maximum interval of 24 hours, and a base of 1.5. Therefore, the minimum interval, in seconds, before retrying after n failures is min(10 * 1.5^(n-1), 86400).",
+      "ja": "人気のあるRoughtimeサーバが故障すると、多数のクライアントが同時に不正行為レポートを送信する可能性があるため、クライアントは、レポートを受信するサーバの過負荷を防ぐために指数バックオフを使用しなければなりません (MUST)。クライアントは、初期再試行間隔を10秒、最大間隔を24時間、底を1.5とすることが推奨されます (RECOMMENDED)。したがって、n回の失敗後に再試行するまでの最小間隔 (秒) は min(10 * 1.5^(n-1), 86400) です。"
+    },
+    {
+      "indent": 3,
+      "text": "Clients MUST NOT send malfeasance reports in response to signature verification failures or any other protocol errors.",
+      "ja": "クライアントは、署名検証の失敗やその他のプロトコルエラーに応じて不正行為レポートを送信してはなりません (MUST NOT)。"
+    },
+    {
+      "indent": 3,
+      "text": "As described in Section 1, the operational rules for acceptance or rejection of a particular malfeasance report are beyond the scope of this document.",
+      "ja": "第1章で説明したとおり、特定の不正行為レポートを受理するか却下するかの運用ルールは、本文書の範囲外です。"
+    },
+    {
+      "indent": 0,
+      "text": "9. Security Considerations",
+      "section_title": true,
+      "ja": "9. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Confidentiality",
+      "section_title": true,
+      "ja": "9.1. 機密性"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol does not provide any confidentiality. Given the nature of timestamps, such impact is minor.",
+      "ja": "このプロトコルは機密性を一切提供しません。タイムスタンプの性質上、その影響は軽微です。"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Integrity and Authenticity",
+      "section_title": true,
+      "ja": "9.2. 完全性と真正性"
+    },
+    {
+      "indent": 3,
+      "text": "The Roughtime protocol only provides integrity and authenticity protection for data contained in the SREP tag. Accordingly, new tags SHOULD be added to the SREP tag whenever possible.",
+      "ja": "Roughtimeプロトコルが完全性と真正性の保護を提供するのは、SREPタグに含まれるデータに対してのみです。したがって、新しいタグは可能な限りSREPタグに追加すべきです (SHOULD)。"
+    },
+    {
+      "indent": 0,
+      "text": "9.3. Generating Private Keys",
+      "section_title": true,
+      "ja": "9.3. 秘密鍵の生成"
+    },
+    {
+      "indent": 3,
+      "text": "Although any random 256-bit string can be used as a private Ed25519 key, it has a high risk of being vulnerable to small-subgroup attacks and timing side-channel leaks. For this reason, all private keys used in Roughtime MUST be generated following the procedure described in Section 5.1.5 of [RFC8032].",
+      "ja": "任意のランダムな256ビット文字列をEd25519の秘密鍵として使用することはできますが、小部分群攻撃やタイミングサイドチャネル漏えいに対して脆弱になる危険性が高くなります。このため、Roughtimeで使用するすべての秘密鍵は、[RFC8032]の5.1.5節に記載された手順に従って生成しなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "9.4. Private Key Compromise",
+      "section_title": true,
+      "ja": "9.4. 秘密鍵の漏えい"
+    },
+    {
+      "indent": 3,
+      "text": "The compromise of a PUBK's private key, even past MAXT, is a problem, as the private key can be used to sign invalid times that are in the range MINT to MAXT, and thus violate the good-behavior guarantee of the server. To protect against this, it is necessary for clients to query multiple servers in accordance with the procedure described in Section 8.2.",
+      "ja": "PUBKの秘密鍵の漏えいは、MAXTを過ぎた後であっても問題となります。その秘密鍵を使って、MINTからMAXTの範囲にある不正な時刻に署名でき、その結果サーバの良好な動作の保証に違反しうるためです。これを防ぐには、クライアントが8.2節に記載された手順に従って複数のサーバに問い合わせる必要があります。"
+    },
+    {
+      "indent": 0,
+      "text": "9.5. Quantum Resistance",
+      "section_title": true,
+      "ja": "9.5. 耐量子性"
+    },
+    {
+      "indent": 3,
+      "text": "Since the only supported signature scheme, Ed25519, is not quantum resistant, the Roughtime version described in this document will not survive the advent of quantum computers. A later version will have to be devised and implemented before then. The use of a single version number as the negotiation point rather than defining a suite of acceptable signatures is intended to prevent fragmentation and misconfiguration.",
+      "ja": "サポートされる署名方式がEd25519のみであり、これは耐量子性を持たないため、本文書に記載されたRoughtimeのバージョンは、量子コンピュータの出現後には存続できません。それまでに、後続バージョンを考案し実装しなければなりません。許容される署名のスイートを定義するのではなく、単一のバージョン番号をネゴシエーションの基準とするのは、分断や設定ミスを防ぐ意図によるものです。"
+    },
+    {
+      "indent": 0,
+      "text": "9.6. Maintaining Lists of Servers",
+      "section_title": true,
+      "ja": "9.6. サーバリストの維持"
+    },
+    {
+      "indent": 3,
+      "text": "The infrastructure and procedures for maintaining a list of trusted servers and adjudicating violations of the rules by servers is not discussed in this document and is essential for security.",
+      "ja": "信頼できるサーバのリストを維持し、サーバによるルール違反を裁定するためのインフラストラクチャと手順は、本文書では扱いません。これらはセキュリティ上不可欠です。"
+    },
+    {
+      "indent": 0,
+      "text": "9.7. Amplification Attacks",
+      "section_title": true,
+      "ja": "9.7. 増幅攻撃"
+    },
+    {
+      "indent": 3,
+      "text": "UDP protocols that send responses significantly larger than requests, such as NTP, have previously been leveraged for amplification attacks. To prevent Roughtime from being used for such attacks, servers MUST NOT send response packets larger than the request packets sent by clients.",
+      "ja": "NTPなど、リクエストよりも大幅に大きいレスポンスを送信するUDPプロトコルは、これまでに増幅攻撃に悪用されてきました。Roughtimeがこのような攻撃に利用されるのを防ぐため、サーバは、クライアントが送信したリクエストパケットよりも大きいレスポンスパケットを送信してはなりません (MUST NOT)。"
+    },
+    {
+      "indent": 0,
+      "text": "10. Privacy Considerations",
+      "section_title": true,
+      "ja": "10. プライバシーに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This protocol is designed to obscure all client identifiers. Servers necessarily have persistent long-term identities essential to enforcing correct behavior. Generating nonces in a nonrandom manner can cause leaks of private data or enable tracking of clients as they move between networks.",
+      "ja": "このプロトコルは、すべてのクライアント識別子を秘匿するように設計されています。サーバには、正しい動作を強制するために不可欠な、永続的な長期のアイデンティティが必然的に存在します。ナンスを非ランダムな方法で生成すると、プライベートデータの漏えいや、クライアントがネットワーク間を移動する際の追跡を可能にしてしまう場合があります。"
+    },
+    {
+      "indent": 0,
+      "text": "11. Operational Considerations",
+      "section_title": true,
+      "ja": "11. 運用上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "It is expected that clients identify a server by its long-term public key. In multi-tenancy environments, where multiple servers may be listening on the same IP or port space, the protocol is designed so that the client indicates which server it expects to respond. This is done with the SRV tag. Additional recommendations for clients are listed in Section 8.",
+      "ja": "クライアントは、サーバを長期公開鍵によって識別することが想定されています。同じIPまたはポート空間で複数のサーバが待ち受けている可能性があるマルチテナンシー環境では、クライアントが応答を期待するサーバを指定するようにプロトコルが設計されています。これはSRVタグで行います。クライアント向けの追加の推奨事項は、第8章に記載しています。"
+    },
+    {
+      "indent": 0,
+      "text": "12. IANA Considerations",
+      "section_title": true,
+      "ja": "12. IANAに関する考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "12.1. Service Name and Transport Protocol Port Number Registry",
+      "section_title": true,
+      "ja": "12.1. サービス名およびトランスポートプロトコルのポート番号レジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has allocated the following entry in the \"Service Name and Transport Protocol Port Number Registry\":",
+      "ja": "IANAは、「Service Name and Transport Protocol Port Number Registry」に次のエントリを割り当てました。"
+    },
+    {
+      "indent": 3,
+      "text": "Service Name:",
+      "ja": "サービス名："
+    },
+    {
+      "indent": 12,
+      "text": "roughtime",
+      "ja": "roughtime"
+    },
+    {
+      "indent": 3,
+      "text": "Transport Protocol:",
+      "ja": "トランスポートプロトコル："
+    },
+    {
+      "indent": 12,
+      "text": "tcp, udp",
+      "ja": "tcp, udp"
+    },
+    {
+      "indent": 3,
+      "text": "Assignee:",
+      "ja": "割り当て先："
+    },
+    {
+      "indent": 12,
+      "text": "IESG <iesg@ietf.org>",
+      "ja": "IESG <iesg@ietf.org>"
+    },
+    {
+      "indent": 3,
+      "text": "Contact:",
+      "ja": "連絡先："
+    },
+    {
+      "indent": 12,
+      "text": "IETF Chair <chair@ietf.org>",
+      "ja": "IETF Chair <chair@ietf.org>"
+    },
+    {
+      "indent": 3,
+      "text": "Description:",
+      "ja": "説明："
+    },
+    {
+      "indent": 12,
+      "text": "Roughtime time synchronization",
+      "ja": "Roughtime時刻同期"
+    },
+    {
+      "indent": 3,
+      "text": "Reference:",
+      "ja": "参照："
+    },
+    {
+      "indent": 12,
+      "text": "RFC 10049",
+      "ja": "RFC 10049"
+    },
+    {
+      "indent": 3,
+      "text": "Port Number:",
+      "ja": "ポート番号："
+    },
+    {
+      "indent": 12,
+      "text": "5319",
+      "ja": "5319"
+    },
+    {
+      "indent": 0,
+      "text": "12.2. Roughtime Versions Registry",
+      "section_title": true,
+      "ja": "12.2. Roughtimeバージョンレジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created a new registry titled \"Roughtime Versions\" in a new \"Roughtime\" registry group. Entries have the following fields:",
+      "ja": "IANAは、新しい「Roughtime」レジストリグループに、「Roughtime Versions」という名称の新しいレジストリを作成しました。エントリには次のフィールドがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Version ID (REQUIRED):",
+      "ja": "Version ID (REQUIRED)："
+    },
+    {
+      "indent": 12,
+      "text": "A 32-bit unsigned integer",
+      "ja": "32ビット符号なし整数"
+    },
+    {
+      "indent": 3,
+      "text": "Version Name (REQUIRED):",
+      "ja": "Version Name (REQUIRED):"
+    },
+    {
+      "indent": 12,
+      "text": "A short text string naming the version being identified",
+      "ja": "識別されるバージョンを示す短いテキスト文字列"
+    },
+    {
+      "indent": 3,
+      "text": "Reference (REQUIRED):",
+      "ja": "Reference (REQUIRED):"
+    },
+    {
+      "indent": 12,
+      "text": "A reference to a relevant specification document",
+      "ja": "関連する仕様書への参照"
+    },
+    {
+      "indent": 3,
+      "text": "The policy for allocation of new entries is IETF Review [RFC8126].",
+      "ja": "新しいエントリの割り当てポリシーは IETF Review [RFC8126] です。"
+    },
+    {
+      "indent": 3,
+      "text": "The initial contents of this registry are specified below.",
+      "ja": "このレジストリの初期内容を以下に示します。"
+    },
+    {
+      "indent": 3,
+      "text": "+=======================+===============================+===========+\n| Version ID            | Version Name                  | Reference |\n+=======================+===============================+===========+\n| 0x0                   | Reserved                      | RFC 10049 |\n+-----------------------+-------------------------------+-----------+\n| 0x1                   | Roughtime version 1           | RFC 10049 |\n+-----------------------+-------------------------------+-----------+\n| 0x2-0x7fffffff        | Unassigned                    |           |\n+-----------------------+-------------------------------+-----------+\n| 0x80000000-0xbfffffff | Reserved for                  | RFC 10049 |\n|                       | Experimental Use              |           |\n+-----------------------+-------------------------------+-----------+\n| 0xc0000000-0xffffffff | Reserved for                  | RFC 10049 |\n|                       | Private Use                   |           |\n+-----------------------+-------------------------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 8,
+      "text": "Table 1: Initial Contents of the Roughtime Versions Registry",
+      "ja": "表1: Roughtime Versions レジストリの初期内容"
+    },
+    {
+      "indent": 3,
+      "text": "Private and Experimental Use are defined in [RFC8126]. The experimental range is intended for testing and evaluating new versions of the Roughtime protocol. Such tests may be conducted over the open Internet.",
+      "ja": "Private と Experimental Use は [RFC8126] で定義されています。実験用の範囲は、Roughtimeプロトコルの新しいバージョンのテストと評価を目的としています。このようなテストは、公開インターネット上で実施してもかまいません。"
+    },
+    {
+      "indent": 0,
+      "text": "12.3. Roughtime Tags Registry",
+      "section_title": true,
+      "ja": "12.3. Roughtime Tags レジストリ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has created a new registry titled \"Roughtime Tags\" in a new \"Roughtime\" registry group. Entries have the following fields:",
+      "ja": "IANAは、新しい \"Roughtime\" レジストリグループに \"Roughtime Tags\" という名称の新しいレジストリを作成しました。エントリには次のフィールドがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "Tag (REQUIRED):",
+      "ja": "Tag (REQUIRED):"
+    },
+    {
+      "indent": 12,
+      "text": "A 32-bit unsigned integer in hexadecimal format.",
+      "ja": "16進数形式の32ビット符号なし整数。"
+    },
+    {
+      "indent": 3,
+      "text": "ASCII Representation (REQUIRED):",
+      "ja": "ASCII Representation (REQUIRED):"
+    },
+    {
+      "indent": 12,
+      "text": "The ASCII representation of the tag in accordance with Section 4.1.3 of this document.",
+      "ja": "本文書の4.1.3節に従った、タグのASCII表現。"
+    },
+    {
+      "indent": 3,
+      "text": "Reference (REQUIRED):",
+      "ja": "Reference (REQUIRED):"
+    },
+    {
+      "indent": 12,
+      "text": "A reference to a relevant specification document.",
+      "ja": "関連する仕様書への参照。"
+    },
+    {
+      "indent": 3,
+      "text": "The policy for allocation of new entries in this registry is Specification Required [RFC8126].",
+      "ja": "このレジストリにおける新しいエントリの割り当てポリシーは Specification Required [RFC8126] です。"
+    },
+    {
+      "indent": 3,
+      "text": "The initial contents of this registry are specified below.",
+      "ja": "このレジストリの初期内容を以下に示します。"
+    },
+    {
+      "indent": 13,
+      "text": "+============+======================+===========+\n|        Tag | ASCII Representation | Reference |\n+============+======================+===========+\n| 0x00474953 | SIG                  | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x00524556 | VER                  | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x00565253 | SRV                  | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x434e4f4e | NONC                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x454c4544 | DELE                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x45505954 | TYPE                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x48544150 | PATH                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x49444152 | RADI                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x4b425550 | PUBK                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x5044494d | MIDP                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x50455253 | SREP                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x53524556 | VERS                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x544e494d | MINT                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x544f4f52 | ROOT                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x54524543 | CERT                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x5458414d | MAXT                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x58444e49 | INDX                 | RFC 10049 |\n+------------+----------------------+-----------+\n| 0x5a5a5a5a | ZZZZ                 | RFC 10049 |\n+------------+----------------------+-----------+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 17,
+      "text": "Table 2: Initial Contents of the Roughtime Tags Registry",
+      "ja": "表2: Roughtime Tags レジストリの初期内容"
+    },
+    {
+      "indent": 0,
+      "text": "12.4. Media Type Registry",
+      "section_title": true,
+      "ja": "12.4. メディアタイプレジストリ"
+    },
+    {
+      "indent": 0,
+      "text": "12.4.1. Media Type for Roughtime Server List",
+      "section_title": true,
+      "ja": "12.4.1. Roughtimeサーバリスト用のメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has allocated the following entry in the \"Media Types\" registry.",
+      "ja": "IANAは、\"Media Types\" レジストリに次のエントリを割り当てました。"
+    },
+    {
+      "indent": 3,
+      "text": "Type name:",
+      "ja": "Type name:"
+    },
+    {
+      "indent": 12,
+      "text": "application",
+      "ja": "application"
+    },
+    {
+      "indent": 3,
+      "text": "Subtype name:",
+      "ja": "Subtype name:"
+    },
+    {
+      "indent": 12,
+      "text": "roughtime-server+json",
+      "ja": "roughtime-server+json"
+    },
+    {
+      "indent": 3,
+      "text": "Required parameters:",
+      "ja": "Required parameters:"
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Optional parameters:",
+      "ja": "Optional parameters:"
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Encoding considerations:",
+      "ja": "Encoding considerations:"
+    },
+    {
+      "indent": 12,
+      "text": "Encoding considerations are identical to those specified for the \"application/json\" media type, see [RFC8259].",
+      "ja": "エンコーディングに関する考慮事項は、\"application/json\" メディアタイプに対して指定されているものと同一です。[RFC8259] を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Security considerations:",
+      "ja": "Security considerations:"
+    },
+    {
+      "indent": 12,
+      "text": "Section 9 of RFC 10049.",
+      "ja": "RFC 10049 の9節。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations:",
+      "ja": "Interoperability considerations:"
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Published specification:",
+      "ja": "Published specification:"
+    },
+    {
+      "indent": 12,
+      "text": "Section 8.3 of RFC 10049.",
+      "ja": "RFC 10049 の8.3節。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that use this media type:",
+      "ja": "このメディアタイプを使用するアプリケーション:"
+    },
+    {
+      "indent": 12,
+      "text": "Roughtime clients (RFC 10049) that update their lists of Roughtime servers.",
+      "ja": "サーバリストを更新する Roughtime クライアント (RFC 10049)。"
+    },
+    {
+      "indent": 3,
+      "text": "Fragment identifier considerations:",
+      "ja": "フラグメント識別子に関する考慮事項："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Additional information:",
+      "ja": "追加情報："
+    },
+    {
+      "indent": 6,
+      "text": "Deprecated alias names for this type:",
+      "ja": "このタイプの非推奨の別名："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "Magic number(s):",
+      "ja": "マジックナンバー："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "File extension(s):",
+      "ja": "ファイル拡張子："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "Macintosh file type code(s):",
+      "ja": "Macintosh ファイルタイプコード："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Person & email address to contact for further information:",
+      "ja": "詳細情報の問い合わせ先の担当者とメールアドレス："
+    },
+    {
+      "indent": 12,
+      "text": "See Authors' Addresses section of RFC 10049.",
+      "ja": "RFC 10049 の Authors' Addresses セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage:",
+      "ja": "想定される用途："
+    },
+    {
+      "indent": 12,
+      "text": "COMMON",
+      "ja": "COMMON"
+    },
+    {
+      "indent": 3,
+      "text": "Restrictions on usage:",
+      "ja": "使用上の制限："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Author:",
+      "ja": "作成者："
+    },
+    {
+      "indent": 12,
+      "text": "See Authors' Addresses section of RFC 10049.",
+      "ja": "RFC 10049 の Authors' Addresses セクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Change controller:",
+      "ja": "変更管理者："
+    },
+    {
+      "indent": 12,
+      "text": "Internet Engineering Task Force",
+      "ja": "Internet Engineering Task Force"
+    },
+    {
+      "indent": 0,
+      "text": "12.4.2. Media Type for Roughtime Malfeasance",
+      "section_title": true,
+      "ja": "12.4.2. Roughtime 不正行為のメディアタイプ"
+    },
+    {
+      "indent": 3,
+      "text": "IANA has allocated the following entry in the \"Media Types\" registry.",
+      "ja": "IANA は「Media Types」レジストリに次のエントリを割り当てました。"
+    },
+    {
+      "indent": 3,
+      "text": "Type name:",
+      "ja": "タイプ名："
+    },
+    {
+      "indent": 12,
+      "text": "application",
+      "ja": "application"
+    },
+    {
+      "indent": 3,
+      "text": "Subtype name:",
+      "ja": "サブタイプ名："
+    },
+    {
+      "indent": 12,
+      "text": "roughtime-malfeasance+json",
+      "ja": "roughtime-malfeasance+json"
+    },
+    {
+      "indent": 3,
+      "text": "Required parameters:",
+      "ja": "必須パラメータ："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Optional parameters:",
+      "ja": "任意パラメータ："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Encoding considerations:",
+      "ja": "エンコーディングに関する考慮事項："
+    },
+    {
+      "indent": 12,
+      "text": "Encoding considerations are identical to those specified for the \"application/json\" media type, see [RFC8259].",
+      "ja": "エンコーディングに関する考慮事項は、「application/json」メディアタイプに指定されているものと同一です。[RFC8259] を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Security considerations:",
+      "ja": "セキュリティに関する考慮事項："
+    },
+    {
+      "indent": 12,
+      "text": "Section 9 of RFC 10049.",
+      "ja": "RFC 10049 のセクション 9。"
+    },
+    {
+      "indent": 3,
+      "text": "Interoperability considerations:",
+      "ja": "相互運用性に関する考慮事項："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Published specification:",
+      "ja": "公開されている仕様："
+    },
+    {
+      "indent": 12,
+      "text": "Section 8.4.1 of RFC 10049.",
+      "ja": "RFC 10049 のセクション 8.4.1。"
+    },
+    {
+      "indent": 3,
+      "text": "Applications that use this media type:",
+      "ja": "このメディアタイプを使用するアプリケーション："
+    },
+    {
+      "indent": 12,
+      "text": "Roughtime clients (RFC 10049) use this media type to report cryptographic proof that a Roughtime server has sent the wrong time.",
+      "ja": "Roughtimeクライアント (RFC 10049) は、Roughtimeサーバが誤った時刻を送信したことの暗号学的証明を報告するために、このメディアタイプを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Fragment identifier considerations:",
+      "ja": "フラグメント識別子に関する考慮事項："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Additional information:",
+      "ja": "追加情報："
+    },
+    {
+      "indent": 6,
+      "text": "Deprecated alias names for this type:",
+      "ja": "このタイプの非推奨の別名："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "Magic number(s):",
+      "ja": "マジックナンバー："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "File extension(s):",
+      "ja": "ファイル拡張子："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 6,
+      "text": "Macintosh file type code(s):",
+      "ja": "Macintoshファイルタイプコード："
+    },
+    {
+      "indent": 15,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Person & email address to contact for further information:",
+      "ja": "詳細情報の問い合わせ先の担当者とメールアドレス："
+    },
+    {
+      "indent": 12,
+      "text": "See Authors' Addresses section of RFC 10049.",
+      "ja": "RFC 10049のAuthors' Addressesセクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Intended usage:",
+      "ja": "想定される用途："
+    },
+    {
+      "indent": 12,
+      "text": "COMMON",
+      "ja": "COMMON"
+    },
+    {
+      "indent": 3,
+      "text": "Restrictions on usage:",
+      "ja": "使用上の制限："
+    },
+    {
+      "indent": 12,
+      "text": "N/A",
+      "ja": "N/A"
+    },
+    {
+      "indent": 3,
+      "text": "Author:",
+      "ja": "作者："
+    },
+    {
+      "indent": 12,
+      "text": "See Authors' Addresses section of RFC 10049.",
+      "ja": "RFC 10049のAuthors' Addressesセクションを参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Change controller:",
+      "ja": "変更管理者："
+    },
+    {
+      "indent": 12,
+      "text": "Internet Engineering Task Force",
+      "ja": "Internet Engineering Task Force"
+    },
+    {
+      "indent": 0,
+      "text": "13. References",
+      "section_title": true,
+      "ja": "13. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "13.1. Normative References",
+      "section_title": true,
+      "ja": "13.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[BCP106]   Best Current Practice 106,\n           <https://www.rfc-editor.org/info/bcp106>.\n           At the time of writing, this BCP comprises the following:\n\n           Eastlake 3rd, D., Schiller, J., and S. Crocker,\n           \"Randomness Requirements for Security\", BCP 106, RFC 4086,\n           DOI 10.17487/RFC4086, June 2005,\n           <https://www.rfc-editor.org/info/rfc4086>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0020]  Cerf, V., \"ASCII format for network interchange\", STD 80,\n           RFC 20, DOI 10.17487/RFC20, October 1969,\n           <https://www.rfc-editor.org/info/rfc20>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0791]  Postel, J., \"Internet Protocol\", STD 5, RFC 791,\n           DOI 10.17487/RFC791, September 1981,\n           <https://www.rfc-editor.org/info/rfc791>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3986]  Berners-Lee, T., Fielding, R., and L. Masinter, \"Uniform\n           Resource Identifier (URI): Generic Syntax\", STD 66,\n           RFC 3986, DOI 10.17487/RFC3986, January 2005,\n           <https://www.rfc-editor.org/info/rfc3986>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4291]  Hinden, R. and S. Deering, \"IP Version 6 Addressing\n           Architecture\", RFC 4291, DOI 10.17487/RFC4291, February\n           2006, <https://www.rfc-editor.org/info/rfc4291>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4648]  Josefsson, S., \"The Base16, Base32, and Base64 Data\n           Encodings\", RFC 4648, DOI 10.17487/RFC4648, October 2006,\n           <https://www.rfc-editor.org/info/rfc4648>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6234]  Eastlake 3rd, D. and T. Hansen, \"US Secure Hash Algorithms\n           (SHA and SHA-based HMAC and HKDF)\", RFC 6234,\n           DOI 10.17487/RFC6234, May 2011,\n           <https://www.rfc-editor.org/info/rfc6234>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8032]  Josefsson, S. and I. Liusvaara, \"Edwards-Curve Digital\n           Signature Algorithm (EdDSA)\", RFC 8032,\n           DOI 10.17487/RFC8032, January 2017,\n           <https://www.rfc-editor.org/info/rfc8032>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8085]  Eggert, L., Fairhurst, G., and G. Shepherd, \"UDP Usage\n           Guidelines\", BCP 145, RFC 8085, DOI 10.17487/RFC8085,\n           March 2017, <https://www.rfc-editor.org/info/rfc8085>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8259]  Bray, T., Ed., \"The JavaScript Object Notation (JSON) Data\n           Interchange Format\", STD 90, RFC 8259,\n           DOI 10.17487/RFC8259, December 2017,\n           <https://www.rfc-editor.org/info/rfc8259>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,\n           Ed., \"HTTP Semantics\", STD 97, RFC 9110,\n           DOI 10.17487/RFC9110, June 2022,\n           <https://www.rfc-editor.org/info/rfc9110>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "13.2. Informative References",
+      "section_title": true,
+      "ja": "13.2. 参考情報"
+    },
+    {
+      "indent": 3,
+      "text": "[Merkle]   Merkle, R. C., \"A Digital Signature Based on a\n           Conventional Encryption Function\", Advances in Cryptology\n           - CRYPTO '87, Lecture Notes in Computer Science, vol. 293,\n           pp. 369-378, DOI 10.1007/3-540-48184-2_32, 1988,\n           <https://doi.org/10.1007/3-540-48184-2_32>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC0738]  Harrenstien, K., \"Time server\", RFC 738,\n           DOI 10.17487/RFC738, October 1977,\n           <https://www.rfc-editor.org/info/rfc738>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5905]  Mills, D., Martin, J., Ed., Burbank, J., and W. Kasch,\n           \"Network Time Protocol Version 4: Protocol and Algorithms\n           Specification\", RFC 5905, DOI 10.17487/RFC5905, June 2010,\n           <https://www.rfc-editor.org/info/rfc5905>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8126]  Cotton, M., Leiba, B., and T. Narten, \"Guidelines for\n           Writing an IANA Considerations Section in RFCs\", BCP 26,\n           RFC 8126, DOI 10.17487/RFC8126, June 2017,\n           <https://www.rfc-editor.org/info/rfc8126>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8633]  Reilly, D., Stenn, H., and D. Sibold, \"Network Time\n           Protocol Best Current Practices\", BCP 223, RFC 8633,\n           DOI 10.17487/RFC8633, July 2019,\n           <https://www.rfc-editor.org/info/rfc8633>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8915]  Franke, D., Sibold, D., Teichel, K., Dansarie, M., and R.\n           Sundblad, \"Network Time Security for the Network Time\n           Protocol\", RFC 8915, DOI 10.17487/RFC8915, September 2020,\n           <https://www.rfc-editor.org/info/rfc8915>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9170]  Thomson, M. and T. Pauly, \"Long-Term Viability of Protocol\n           Extension Mechanisms\", RFC 9170, DOI 10.17487/RFC9170,\n           December 2021, <https://www.rfc-editor.org/info/rfc9170>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9523]  Rozen-Schiff, N., Dolev, D., Mizrahi, T., and M. Schapira,\n           \"A Secure Selection and Filtering Mechanism for the\n           Network Time Protocol with Khronos\", RFC 9523,\n           DOI 10.17487/RFC9523, February 2024,\n           <https://www.rfc-editor.org/info/rfc9523>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9844]  Carpenter, B. and R. Hinden, \"Entering IPv6 Zone\n           Identifiers in User Interfaces\", RFC 9844,\n           DOI 10.17487/RFC9844, August 2025,\n           <https://www.rfc-editor.org/info/rfc9844>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Appendix A. Example Server List",
+      "section_title": true,
+      "ja": "付録A. サーバリストの例"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix presents an example Roughtime server list in the format described by Section 8.3.",
+      "ja": "この付録では、8.3節で説明されている形式のRoughtimeサーバリストの例を示します。"
+    },
+    {
+      "indent": 3,
+      "text": "{\n  \"servers\": [\n    {\n      \"name\": \"example.com Roughtime server\",\n      \"version\": 1,\n      \"publicKeyType\": \"ed25519\",\n      \"publicKey\": \"2O3mkkheDExCuhG+ZNIoWmO/IdCdLzADgUn8SnC4hME=\",\n      \"addresses\": [\n        {\n          \"protocol\": \"udp\",\n          \"address\": \"roughtime.example.com:5319\"\n        },\n        {\n          \"protocol\": \"tcp\",\n          \"address\": \"roughtime.example.com:5319\"\n        }\n      ]\n    },\n    {\n      \"name\": \"A UDP-only server specified with IP addresses\",\n      \"version\": 1,\n      \"publicKeyType\": \"ed25519\",\n      \"publicKey\": \"ZYfeGa94YuG1IZrV3kR9+8/nmZ2lX2XyHmiSb+wI0OY=\",\n      \"addresses\": [\n        {\n          \"protocol\": \"udp\",\n          \"address\": \"192.0.2.33:5319\"\n        },\n        {\n          \"protocol\": \"udp\",\n          \"address\": \"[2001:db8::2:33]:5319\"\n        }\n      ]\n    }\n  ],\n  \"sources\": [\n    \"https://www.example.net/roughtime/ecosystem.json\",\n    \"https://www.example.org/roughtime/ecosystem.json\"\n  ],\n  \"reports\":  \"https://www.example.net/roughtime/malfeasance\"\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Appendix B. Example Malfeasance Report",
+      "section_title": true,
+      "ja": "付録B. 不正行為レポートの例"
+    },
+    {
+      "indent": 3,
+      "text": "This appendix presents an example Roughtime malfeasance report in the format described by Section 8.4.1. The report provides sufficient information to prove that the server with the public key lRhHag6fn2wZQ6idy10ChgpRgks3gvdMM2hWNeJNgXg= responded with a time that is inconsistent with the times reported by the two other servers.",
+      "ja": "この付録では、8.4.1節で説明されている形式のRoughtime不正行為レポートの例を示します。このレポートは、公開鍵 lRhHag6fn2wZQ6idy10ChgpRgks3gvdMM2hWNeJNgXg= を持つサーバが、他の2台のサーバが報告した時刻と矛盾する時刻で応答したことを証明するのに十分な情報を提供します。"
+    },
+    {
+      "indent": 3,
+      "text": "{\n  \"responses\": [\n    {\n      \"publicKey\": \"FnDyLV/68ephhLdFJbdEGCdkVvpXDaVe5PYvRDdlOOY=\",\n      \"request\": \"Uk9VR0hUSU0ABAAABQAAAAQAAAAkAAAARAAAAEgAAABWRVIAU1JW\nAE5PTkNUWVBFWlpaWgEAAACf4gKLPdPfiNTv93lrhNqYgyehDgMyHFmA1BrAhM1QEDBh9l\nBlN6LUye6zghiqSWMwyNm0IucxQxW3zTMrwj4dAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n==\",\n      \"response\": \"Uk9VR0hUSU2UAQAABwAAAEAAAABgAAAAZAAAAGQAAADAAAAAWAE\nAAFNJRwBOT05DVFlQRVBBVEhTUkVQQ0VSVElORFhBWL64CToGs4v/4UtfN/80HLFiA09vG\nIDRP/zTjcTj8/1DlZWCsVja6RlfwaYnc1wfJqThfhcuSDonrTGyKngBMGH2UGU3otTJ7rO\nCGKpJYzDI2bQi5zFDFbfNMyvCPh0BAAAABQAAAAQAAAAIAAAAEAAAABQAAABWRVIAUkFES\nU1JRFBWRVJTUk9PVAEAAAADAAAAQ0u4aQAAAAABAAAAc86AWYB/O3Kxzsx4d5P5cbSOftJ\nUA8bWVtVrQ3tc+b0CAAAAQAAAAFNJRwBERUxFI2B5tbj5ePjVKYE0PAL1NmgZOAsqh/E2f\nrom9Ol5BAnVcLje0C6exbXY8hE3dRvYV01Alru8Ocle+jOZT5r8AwMAAAAgAAAAKAAAAFB\nVQktNSU5UTUFYVKqljhhqi4A54vW20e+slwViPyxybNnqKXzimIiIUHQMaBCvaQAAAADYy\nd9pAAAAAAAAAAA=\"\n    },\n    {\n      \"publicKey\": \"l9cdSuR8dFxtG9aJo9pWzUXaX8pftNG4UDC45Qk3znc=\",\n      \"rand\": \"v/DirVBRQLGtictYD7mN3px02UlMT4J3haTRomt1NNM=\",\n      \"request\": \"Uk9VR0hUSU0ABAAABQAAAAQAAAAkAAAARAAAAEgAAABWRVIAU1JW\nAE5PTkNUWVBFWlpaWgEAAABFCvadUKPN/U9OXqFalVFnv/EhsAuPPpBYfo5MDULZKv335k\nbNTZcsYLM96o77yLbvvRk1fm2TQB4yKxbP1jzeAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n==\",\n      \"response\": \"Uk9VR0hUSU2UAQAABwAAAEAAAABgAAAAZAAAAGQAAADAAAAAWAE\nAAFNJRwBOT05DVFlQRVBBVEhTUkVQQ0VSVElORFj+2I02cCBAfDYzP+8znW6bICqVrAF23\nxNLfM+Qycmkpfp1+BQSb4l/6mRll66l2VIfPSQzigl2V5OJgQzGEBcG/ffmRs1Nlyxgsz3\nqjvvItu+9GTV+bZNAHjIrFs/WPN4BAAAABQAAAAQAAAAIAAAAEAAAABQAAABWRVIAUkFES\nU1JRFBWRVJTUk9PVAEAAAADAAAAw/m2aQAAAAABAAAAS8ROJoXIPSlO9yN+uREb+/UiOJJ\nqCjx3VWZ/vD2FqBMCAAAAQAAAAFNJRwBERUxFw0MFQMiDoHySot8rlnV83Vqaa3qTrAY15\nW1TzqNuAurOvreNw08BfUwxF7BQ/b/JCwCQcqtD5uRYsvikvuyLCwMAAAAgAAAAKAAAAFB\nVQktNSU5UTUFYVCQs/eCxtWjVrXyse0SeojyZdNFkOwe3B3nLHtHJZK/9gRCvaQAAAADxy\nd9pAAAAAAAAAAA=\"\n    },\n    {\n      \"publicKey\": \"lRhHag6fn2wZQ6idy10ChgpRgks3gvdMM2hWNeJNgXg=\",\n      \"rand\": \"lMvMVoLsakxc5ZmMzEFQ8hh1FaDo2gCXXIX/L4QPSxQ=\",\n      \"request\": \"Uk9VR0hUSU0ABAAABQAAAAQAAAAkAAAARAAAAEgAAABWRVIAU1JW\nAE5PTkNUWVBFWlpaWgEAAADmAab6GlTSr3xRmwwwvRjW6EKRhtyWYYWZHZIGnF8w2b4DuI\nICvoCWTwCaupBfcOEwV+RqBWB6L1JUGn+ot8+9AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n==\",\n      \"response\": \"Uk9VR0hUSU2UAQAABwAAAEAAAABgAAAAZAAAAGQAAADAAAAAWAE\nAAFNJRwBOT05DVFlQRVBBVEhTUkVQQ0VSVElORFg8MlhdCJeQ2qzN6b9q646W9kB+XmAdS\ng7ToU1gj3AD8AP8eCHfduMBE0E8j4/LqWIr72zWQx8Y1U/1uxs97yMAvgO4ggK+gJZPAJq\n6kF9w4TBX5GoFYHovUlQaf6i3z70BAAAABQAAAAQAAAAIAAAAEAAAABQAAABWRVIAUkFES\nU1JRFBWRVJTUk9PVAEAAAADAAAAw/m2aQAAAAABAAAA6ho4+0Cml+VJbqU7hsF717uusV2\nHYvRbU9CdjJE/Zn0CAAAAQAAAAFNJRwBERUxFM9Fvq8T9kOrxcS7jviCPHe44HX/75Je1h\nafPJ0f8NoASy29EgD7C0c/LMxXiXxEwyuxYTPN9oseAr9XIt68uDwMAAAAgAAAAKAAAAFB\nVQktNSU5UTUFYVMxBDiNG247IO4onsGcjFHsA3vP+arl+s0lBLhXw0c1RlBCvaQAAAAAEy\nt9pAAAAAAAAAAA=\"\n    }\n  ]\n}",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "Aanchal Malhotra and Adam Langley authored early draft versions of this document. Daniel Franke, Sarah Grant, Erik Kline, Martin Langer, Ben Laurie, Peter Löthberg, Michael McCourt, Hal Murray, Tal Mizrahi, Ruben Nijveld, Christopher Patton, Thomas Peterson, Rich Salz, Dieter Sibold, Ragnar Sundblad, Kristof Teichel, Luke Valenta, David Venhoek, Ulrich Windl, and the other members of the NTP Working Group contributed comments and suggestions as well as pointed out errors. We also acknowledge the helpful comments and suggestions provided by the Last Call reviewers and members of the IESG.",
+      "ja": "Aanchal MalhotraとAdam Langleyは、本文書の初期ドラフト版を執筆しました。Daniel Franke、Sarah Grant、Erik Kline、Martin Langer、Ben Laurie、Peter Löthberg、Michael McCourt、Hal Murray、Tal Mizrahi、Ruben Nijveld、Christopher Patton、Thomas Peterson、Rich Salz、Dieter Sibold、Ragnar Sundblad、Kristof Teichel、Luke Valenta、David Venhoek、Ulrich Windl、およびNTPワーキンググループのその他のメンバーは、コメントや提案を寄せ、誤りを指摘してくれました。また、Last Callのレビュアーの方々とIESGのメンバーの方々からいただいた有益なコメントと提案にも感謝します。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "Authors' Addresses"
+    },
+    {
+      "indent": 3,
+      "text": "Watson Ladd\nAkamai Technologies\nEmail: watsonbladd@gmail.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Marcus Dansarie\nNetnod\nEmail: marcus@dansarie.se\nURI:   https://orcid.org/0000-0001-9246-0263",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
