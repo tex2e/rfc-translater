@@ -157,10 +157,43 @@ git push -u origin claude/translate-rfcN
 `main` 向けのPRを作成します（`gh pr create`、または利用できるGitHub連携のツール）。PRの本文には次を書きます。
 
 - RFC番号と原題・邦題
+- 対訳HTMLのプレビューURL（GitHub上で `html/rfcN.html` をレビューできるようにするため）
 - 段落数（翻訳した段落数／全段落数）
 - lintの最終結果（検出数。残したものがあれば、その理由）
 - 原文が曖昧で解釈を選んだ箇所（段落番号と理由）
 - 用語表（主要な訳語）
+
+プレビューURLは、ブランチ名 `claude/translate-rfcN` と `html/rfcN.html` から次の形式で組み立てます。
+
+```
+https://htmlpreview.github.io/?https://raw.githubusercontent.com/tex2e/rfc-translater/refs/heads/claude/translate-rfcN/html/rfcN.html
+```
+
+PR本文の雛形は次のとおりです。
+
+```markdown
+## 翻訳したRFC
+- RFC N - 原題
+- 邦題: RFC N - 日本語タイトル
+
+## 対訳HTMLのプレビュー
+https://htmlpreview.github.io/?https://raw.githubusercontent.com/tex2e/rfc-translater/refs/heads/claude/translate-rfcN/html/rfcN.html
+
+## 段落数
+- 翻訳した段落 X / 全段落 Y（残りは図表・コードなどの raw 段落）
+
+## lint
+- `tools/lint_translation.py --rfc N`: 検出 0 件
+- `unittest` OK、`--summary-check` OK
+
+## 解釈を選んだ箇所
+- idx ...: 理由
+
+## 主要な訳語
+原語 / 訳語 / ...
+
+人が確認したほうがよい箇所: ...
+```
 
 PRを作成する手段がないときは、pushしたブランチ名を報告します。
 
