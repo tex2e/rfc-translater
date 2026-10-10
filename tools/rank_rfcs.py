@@ -28,6 +28,7 @@ import math
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,7 +49,9 @@ WEIGHTS = {
     "E010": 1.0,    # MIME関連識別子を一意に復元可能
     "E011": 1.0,    # 参考文献の著者名表記破壊
     "E012": 1.0,    # URL表記破壊
+    "E013": 1.0,    # OLD/NEW差分指示子の誤訳
     "E014": 1.0,    # RFC2119キーワード注釈の付け漏れ (強調表示から抜ける)
+    "W009": 0.5,    # 原文内の表記揺れにより自動判定できない識別子
     "W010": 0.5,    # MIME関連識別子を自動復元不可
     "W006": 0.5,    # 見出しの体言止め
     "W005": 0.5,    # 文体
@@ -62,7 +65,7 @@ CITE_RE = re.compile(r"\[RFC\s?(\d{3,5})\]")
 
 
 def scan(dirs=None):
-    """対象ファイルを走査し、被引用数と検出数をキャッシュに追記する"""
+    """対象ファイルを走査し、被引用数と検出数をキャッシュに保存する"""
     if dirs:
         paths = []
         for d in dirs:
@@ -75,9 +78,18 @@ def scan(dirs=None):
         return 2
 
     cache = load_cache()
+    enabled = set(CHECKS)
+    if dirs:
+        cached_checks = set(cache.get("checks", []))
+        if cache.get("files") and cached_checks != enabled:
+            print("[-] キャッシュのチェック定義が現在と異なります。全件 --scan を実行してください。",
+                  file=sys.stderr)
+            return 2
+    else:
+        # 全件スキャンでは削除済みRFCや古い検査結果を残さないよう、必ず作り直す。
+        cache = {}
     cites = Counter(cache.get("citations", {}))
     files = cache.get("files", {})
-    enabled = set(CHECKS)
 
     for i, path in enumerate(paths, 1):
         m = re.search(r"rfc(\d+)-trans", path)
@@ -119,7 +131,12 @@ def scan(dirs=None):
         if i % 200 == 0:
             print(f"  ... {i}/{len(paths)}", file=sys.stderr)
 
-    save_cache({"citations": dict(cites), "files": files})
+    save_cache({
+        "citations": dict(cites),
+        "files": files,
+        "checks": sorted(enabled),
+        "scanned_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
     print(f"[+] {len(paths)} ファイルをスキャンし {CACHE} を更新しました")
     return 0
 
@@ -149,6 +166,10 @@ def report(args):
     if not files:
         print(f"[-] キャッシュがありません。先に --scan を実行してください。", file=sys.stderr)
         return 2
+    if set(cache.get("checks", [])) != set(CHECKS):
+        print("[-] キャッシュのチェック定義が現在と異なります。全件 --scan を実行してください。",
+              file=sys.stderr)
+        return 2
     cites = cache.get("citations", {})
 
     rows = []
@@ -172,7 +193,10 @@ def report(args):
     rows.sort(key=lambda r: -r[0])
     rows = rows[: args.limit]
 
-    codes = ["E002", "E015", "E014", "E001", "E009", "E010", "E004", "E007", "E008", "W003", "W012", "W011", "W010", "W006", "W005"]
+    # 重み付け対象を先に並べ、重み未設定のチェックも末尾に表示する。
+    # 新しいチェックを追加した際、優先度計算や表から黙って漏れるのを防ぐ。
+    codes = [code for code in WEIGHTS if code in CHECKS]
+    codes.extend(code for code in CHECKS if code not in codes)
     if args.check:
         codes = [c for c in codes if c in args.check]
 
@@ -180,6 +204,9 @@ def report(args):
     out.append(f"# 翻訳修正 優先順リスト (上位 {len(rows)} 件)")
     out.append("")
     out.append(f"- 並び順: `{args.sort}`  (優先度 = 深刻度 x (1 + log2(1 + 被引用数)))")
+    out.append(f"- 検査ファイル数: {len(files)}")
+    if cache.get("scanned_at"):
+        out.append(f"- スキャン日時 (UTC): {cache['scanned_at']}")
     out.append(f"- 深刻度の重み: " + ", ".join(f"{k}={v:g}" for k, v in WEIGHTS.items()))
     out.append("")
     out.append("| # | RFC | 被引用 | 優先度 | " + " | ".join(codes) + " | タイトル |")
