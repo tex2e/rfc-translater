@@ -56,9 +56,11 @@ CHECKS = {
 # また、"MUST also not", "MUST therefore not" のように副詞が挟まるケースも
 # 禁止・非推奨として扱う。
 RFC2119 = [
-    ("MUST NOT", r"\bMUST\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "禁止"),
-    ("SHALL NOT", r"\bSHALL\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "禁止"),
-    ("SHOULD NOT", r"\bSHOULD\s+(?:(?:also|therefore)\s+)?[Nn][Oo][Tt]\b", "非推奨"),
+    # RFC本文では *NOT* のようにMarkdownで強調されることがある。
+    # 強調記号を許容しないと "MUST *NOT*" が MUST と NOT に分割される。
+    ("MUST NOT", r"\bMUST\s+(?:(?:also|therefore)\s+)?\*{0,2}[Nn][Oo][Tt]\b\*{0,2}", "禁止"),
+    ("SHALL NOT", r"\bSHALL\s+(?:(?:also|therefore)\s+)?\*{0,2}[Nn][Oo][Tt]\b\*{0,2}", "禁止"),
+    ("SHOULD NOT", r"\bSHOULD\s+(?:(?:also|therefore)\s+)?\*{0,2}[Nn][Oo][Tt]\b\*{0,2}", "非推奨"),
     ("NOT RECOMMENDED", r"\bNOT\s+RECOMMENDED\b", "非推奨"),
     ("MUST", r"\bMUST\b", "必須"),
     ("SHALL", r"\bSHALL\b", "必須"),
@@ -230,16 +232,22 @@ NON_NORMATIVE_NEGATION = re.compile(
 # 「a MUST」「a SHOULD NOT」のように冠詞つきで名詞的に使われるRFC2119キーワードは、
 # その段落自身が発する規範的指示ではなく、他所のルールへの言及(例: "this would
 # violate a SHOULD NOT in Section 3.5") であることが多い。この場合は訳文の強度と
-# 比較する対象がそもそも存在しないため、検査対象から外す。
+# 比較する対象がそもそも存在しないため、検査対象から外す。ただし "a RECOMMENDED
+# maximum discrepancy" のように冠詞の後の形容詞として要件を述べる用法は検査する。
+# "the SHOULD in [RFC3261]" のような他RFCのキーワードへの明示的な言及も、当該段落の
+# 指示ではないため同様に除外する。
 REFERENTIAL_KEYWORD_RE = re.compile(
     r"\b(?:a|an)\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
-    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\b|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\b"
+    r"(?=\s+(?:in|at|from|under|within|of|instead\s+of)\b|\s+[\(\[]|[.,;:?!)]|$)|"
     r"\b(?:vs\.?|versus)\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
     r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\b|"
     # 「at the SHOULD level」のように、キーワードを規範強度のラベルとして
     # 言及する形も同様に、その段落自身の指示ではなく強度分類への言及。
     r"\bat the\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
-    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\s+level\b"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\s+level\b|"
+    r"\bthe\s+[\"'\`]?(?:MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED|"
+    r"MUST|SHALL|REQUIRED|RECOMMENDED|SHOULD|OPTIONAL|MAY)[\"'\`]?\s+in\s+\[RFC\s?\d{3,5}\]"
 )
 
 # 文書が BCP 14 (RFC 2119 / RFC 8174) を参照しているか。大文字のキーワードが
@@ -703,10 +711,14 @@ def fix_url_format(en, ja):
 HYPHENATED_KEYWORD_IDENT_RE = re.compile(
     r"(?<![\w-])(?:[A-Z0-9]+-)*(?:MUST|SHALL|SHOULD|MAY|REQUIRED|RECOMMENDED|OPTIONAL)"
     r"(?:-[A-Z0-9]+)*(?![\w-])")
+EXTENDED_KEYWORD_RE = re.compile(r"\b(?:MUST|SHALL|SHOULD|MAY)[+-](?!\w)")
 
 
 def _mask_hyphenated_identifiers(en):
-    return HYPHENATED_KEYWORD_IDENT_RE.sub(lambda m: " " if "-" in m.group(0) else m.group(0), en)
+    masked = HYPHENATED_KEYWORD_IDENT_RE.sub(lambda m: " " if "-" in m.group(0) else m.group(0), en)
+    # RFC 4307系の拡張キーワード (SHOULD+, SHOULD-, MUST-) は通常の
+    # RFC 2119キーワードとして数えない。語尾の +/- は識別子の一部。
+    return EXTENDED_KEYWORD_RE.sub(" ", masked)
 
 
 def detect_rfc2119(en):
@@ -741,6 +753,10 @@ def check_rfc2119(en, ja):
         return None
     if REFERENTIAL_KEYWORD_RE.search(en):
         return None
+    # MUST-/SHOULD+/- はRFC 4307系の拡張レベル。段落内に併存する
+    # RFC 2119キーワードと注釈の対応を単一キーワード判定で比較しない。
+    if EXTENDED_KEYWORD_RE.search(en):
+        return None
     found = detect_rfc2119(en)
     if len(found) != 1:
         return None
@@ -750,7 +766,7 @@ def check_rfc2119(en, ja):
     ann = ANNOTATION_RE.search(ja)
     if ann:
         ann_kw = re.sub(r"\s+", " ", ann.group(1)).upper()
-        if ann_kw == kw:
+        if canonical_rfc2119_annotation(ann_kw) == canonical_rfc2119_annotation(kw):
             return None
         return ("E002", f"注釈不一致: 原文 {kw} に対し訳文の注釈は ({ann_kw})")
 
@@ -793,6 +809,9 @@ PLURAL_KEYWORD_RE = re.compile(r"\b(?:MUST|SHALL|SHOULD)\s+NOTs\b")
 # 「NOT REQUIRED」はRFC 2119のキーワードではない (「要求されない」という非規範的な記述)。
 # REQUIRED として数えると、訳文に (REQUIRED) を付けるよう誤って促すことになる。
 NOT_REQUIRED_RE = re.compile(r"\bNOT\s+REQUIRED\b")
+# PRECISの派生プロパティ名。ここでの REQUIRED は要件キーワードではなく
+# 固有の分類ラベルなので、注釈数に含めない。
+CONTEXTUAL_RULE_LABEL_RE = re.compile(r"\bCONTEXTUAL RULE REQUIRED\b")
 
 # 段落自身の指示ではなく、キーワードの定義・解釈を述べる段落。
 # - 引用符なしでキーワードを列挙する定型文 (... are to be interpreted as described in [KEYWORDS])
@@ -817,12 +836,33 @@ def count_rfc2119_keywords(en):
     masked = REQUIREMENT_LABEL_RE.sub(" ", masked)
     masked = PLURAL_KEYWORD_RE.sub(" ", masked)
     masked = NOT_REQUIRED_RE.sub(" ", masked)
-    return Counter(kw for kw, _ in detect_rfc2119(masked))
+    masked = CONTEXTUAL_RULE_LABEL_RE.sub(" ", masked)
+    # SHOULD+/SHOULD-/MUST- はRFC 2119キーワードそのものではなく、
+    # RFC 4307系で定義された拡張ラベル。通常キーワードと混同しない。
+    masked = _mask_hyphenated_identifiers(masked)
+    return Counter(canonical_rfc2119_annotation(kw) for kw, _ in detect_rfc2119(masked))
+
+
+def canonical_rfc2119_annotation(keyword):
+    """RFC2119/RFC8174の同義キーワードを翻訳規約の注釈表記へ正規化する。
+
+    REQUIRED/SHALL は MUST、RECOMMENDED は SHOULD、OPTIONAL は MAY と同じ
+    規範強度であり、訳文注釈もこの正規形で表す。
+    """
+    keyword = re.sub(r"\s+", " ", keyword.upper().strip())
+    return {
+        "SHALL NOT": "MUST NOT",
+        "NOT RECOMMENDED": "SHOULD NOT",
+        "SHALL": "MUST",
+        "REQUIRED": "MUST",
+        "RECOMMENDED": "SHOULD",
+        "OPTIONAL": "MAY",
+    }.get(keyword, keyword)
 
 
 def count_rfc2119_annotations(ja):
     """訳文の注釈 (MUST) / （MUST） を数える (キーワード -> 個数)"""
-    return Counter(re.sub(r"\s+", " ", m.group(1)).upper() for m in ANNOTATION_RE.finditer(ja))
+    return Counter(canonical_rfc2119_annotation(m.group(1)) for m in ANNOTATION_RE.finditer(ja))
 
 
 def _format_keyword_counts(counts):
@@ -970,7 +1010,7 @@ GLOSSARY_EXCEPTIONS = {
     "侵入": re.compile(r"intru|invasi|penetrat|break[- ]?in", re.I),
     "交通": re.compile(r"\b(?:road|roads|vehicular|aircraft|aviation|highway|pedestrians?)\b"
                        r"|\bair[- ]traffic\b|\brush hour\b|\bstuck in traffic\b|\bintelligent (?:transport|traffic)"
-                       r"|\btraffic[- ](?:lights?|signals?|signs?|accidents?|incidents?|cameras?|jams?|police|safety)\b", re.I),
+                       r"|\btraffic[- ](?:lights?|signals?|signs?|accidents?|incidents?|cameras?|jams?|police|safety|control|congestion|monitoring|rules?|load)\b", re.I),
     "細胞": re.compile(r"biolog", re.I),
 }
 # 道路の congestion は「渋滞」が正しい
