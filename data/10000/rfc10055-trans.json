@@ -1,0 +1,652 @@
+{
+  "title": {
+    "text": "RFC 10055 - Configuring UDP Sockets for Explicit Congestion Notification (ECN) for Common Platforms",
+    "ja": "RFC 10055 - 一般的なプラットフォームにおける明示的輻輳通知 (ECN) のためのUDPソケットの設定"
+  },
+  "number": 10055,
+  "created_at": "2026-10-16 05:15:00.796351+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                           M. Duke\nRequest for Comments: 10055                                       Google\nCategory: Informational                                     October 2026\nISSN: 2070-1721",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Configuring UDP Sockets for Explicit Congestion Notification (ECN) for Common Platforms",
+      "section_title": true,
+      "ja": "一般的なプラットフォームにおける明示的輻輳通知 (ECN) のためのUDPソケットの設定"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "Explicit Congestion Notification (ECN) applies to all transport protocols in principle. However, it had limited deployment for UDP until QUIC became widely adopted. As a result, documentation of UDP socket APIs for ECN on various platforms is sparse. This document records the results of experimenting with these APIs in order to get ECN working on UDP for Chromium on Apple, Linux, and Windows platforms.",
+      "ja": "明示的輻輳通知 (ECN) は、原理的にはすべてのトランスポートプロトコルに適用されます。しかし、QUICが広く採用されるまで、UDPでの展開は限定的でした。その結果、さまざまなプラットフォームにおけるECN向けUDPソケットAPIの文書化は乏しい状況です。本文書は、Apple、Linux、Windowsの各プラットフォーム上のChromiumでUDPのECNを動作させるために、これらのAPIを試行した結果を記録するものです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document provides a snapshot of the ECN state of affairs as supported by these platforms at the time of writing. Readers should refer to the documentation of the various platforms for more up-to-date information.",
+      "ja": "本文書は、執筆時点でこれらのプラットフォームがサポートしているECNの状況のスナップショットを提供します。より新しい情報については、読者は各プラットフォームの文書を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本メモのステータス"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not an Internet Standards Track specification; it is published for informational purposes.",
+      "ja": "本文書はInternet Standards Trackの仕様ではなく、情報提供を目的として公開されるものです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.",
+      "ja": "本文書はInternet Engineering Task Force (IETF) の成果物です。IETFコミュニティの合意を表しています。公開レビューを受け、Internet Engineering Steering Group (IESG) により公開が承認されました。IESGが承認したすべての文書がいずれかのレベルのInternet Standardの候補となるわけではありません。RFC 7841のSection 2を参照してください。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc10055.",
+      "ja": "本文書の現在のステータス、正誤表、およびフィードバックの方法に関する情報は、https://www.rfc-editor.org/info/rfc10055 で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.（著作権表示。無断複写・転載を禁じます。）"
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "本文書は、本文書の公開日に有効なBCP 78およびIETF Trustの IETF文書に関する法的規定 (https://trustee.ietf.org/license-info) の適用を受けます。これらの文書は本文書に関する権利と制限を記述しているため、注意深く確認してください。本文書から抽出されるコードコンポーネントには、Trust Legal ProvisionsのSection 4.eに記載されているRevised BSD Licenseの条文を含めなければならず、Revised BSD Licenseに記載されているとおり無保証で提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Conventions and Definitions\n3.  Receiving ECN Codepoints\n  3.1.  Setting the Socket to Report Incoming ECN Codepoints\n    3.1.1.  Linux, Apple, and FreeBSD\n    3.1.2.  Windows\n  3.2.  Retrieving ECN Codepoints on Incoming Packets\n    3.2.1.  Linux\n    3.2.2.  Apple and FreeBSD\n    3.2.3.  Windows\n4.  Sending ECN Codepoints\n  4.1.  On a Per-Socket Basis\n    4.1.1.  Apple, FreeBSD, and Linux\n    4.1.2.  Windows\n  4.2.  On a Per-Packet Basis\n    4.2.1.  Apple, FreeBSD, and Linux\n    4.2.2.  Windows\n5.  Security Considerations\n6.  IANA Considerations\n7.  References\n  7.1.  Normative References\n  7.2.  Informative References\nAcknowledgments\nAuthor's Address",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3168] defines a 2-bit field in the IP header for Explicit Congestion Notification (ECN), which provides network feedback to endpoint congestion controllers. Historically, this has mostly been relevant to TCP [RFC9293], where any incoming ECN codepoints are internally consumed by the kernel and, therefore, imply no application interface except for enabling and disabling the capability.",
+      "ja": "[RFC3168] は、エンドポイントの輻輳制御器にネットワークからのフィードバックを提供する明示的輻輳通知 (ECN) のために、IPヘッダ内に2ビットのフィールドを定義しています。歴史的には、これは主にTCP [RFC9293] に関連するものでした。TCPでは、受信したECNコードポイントはカーネル内部で消費されるため、この機能の有効化と無効化を除いて、アプリケーションインタフェースは必要ありません。"
+    },
+    {
+      "indent": 3,
+      "text": "The Stream Control Transmission Protocol (SCTP) [RFC9260] has long supported ECN in its design. SCTP is sometimes carried over DTLS and UDP [RFC8261]. In principle, user-space implementers might have leveraged UDP ECN APIs to deliver ECN codepoints between SCTP and the UDP socket. At the time of publication, the IETF is not aware of any such efforts.",
+      "ja": "Stream Control Transmission Protocol (SCTP) [RFC9260] は、設計当初からECNをサポートしてきました。SCTPは、DTLSおよびUDP上で運ばれることもあります [RFC8261]。原理的には、ユーザ空間の実装者がUDPのECN APIを活用して、SCTPとUDPソケットの間でECNコードポイントを受け渡すことも可能だったかもしれません。公開時点で、IETFはそのような取り組みを把握していません。"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6679] defines ECN over RTP over UDP. The IETF is aware of a research implementation but cannot confirm any commercial deployments. [RFC8888] proposes a different feedback format to work with [RFC6679], and there are a few implementations of this.",
+      "ja": "[RFC6679] は、UDP上のRTPにおけるECNを定義しています。IETFは研究用の実装を把握していますが、商用での展開は確認できていません。[RFC8888] は、[RFC6679] と組み合わせて動作する別のフィードバック形式を提案しており、これについてはいくつかの実装があります。"
+    },
+    {
+      "indent": 3,
+      "text": "QUIC [RFC9000] runs over UDP and has seen wider deployment than SCTP. The Low Latency, Low Loss, Scalable Throughput (L4S) architecture [RFC9330] and QUIC have combined to increase interest in ECN over UDP.",
+      "ja": "QUIC [RFC9000] はUDP上で動作し、SCTPよりも広く展開されています。Low Latency, Low Loss, Scalable Throughput (L4S) アーキテクチャ [RFC9330] とQUICが相まって、UDP上のECNへの関心が高まっています。"
+    },
+    {
+      "indent": 3,
+      "text": "The Chromium Projects [CHROMIUM] provide a widely deployed protocol library that includes QUIC. An effort to provide ECN support for QUIC on the many platforms on which Chromium is deployed revealed that many ECN-related UDP socket interfaces are poorly documented.",
+      "ja": "Chromium Projects [CHROMIUM] は、QUICを含む広く展開されたプロトコルライブラリを提供しています。Chromiumが展開されている多くのプラットフォームでQUIC向けにECNサポートを提供する取り組みを通じて、ECNに関連するUDPソケットインタフェースの多くが十分に文書化されていないことが明らかになりました。"
+    },
+    {
+      "indent": 3,
+      "text": "This Informational document provides a record of that experience to encourage further support for ECN in other QUIC implementations and any consumer of ECN codepoints that operates over UDP. It is not a Standards Track document and does not bind platforms to any API nor suggest any such API.",
+      "ja": "この情報提供文書 (Informational) は、他のQUIC実装や、UDP上で動作するECNコードポイントのあらゆる利用者におけるECNのさらなるサポートを促すため、その経験を記録するものです。本文書はStandards Trackの文書ではなく、プラットフォームに特定のAPIを課すものでも、そのようなAPIを提案するものでもありません。"
+    },
+    {
+      "indent": 3,
+      "text": "Many socket APIs continue to reference the \"ToS (Type of Service) byte\", including the IP_TOS label, even though [RFC2474] obsoleted that in 1998. That 8-bit field now contains a 6-bit Differentiated Services Code Point (DSCP) and the 2-bit ECN field.",
+      "ja": "多くのソケットAPIは、[RFC2474] が1998年にこれを廃止したにもかかわらず、IP_TOSというラベルを含め、依然として「ToS (Type of Service) バイト」を参照しています。この8ビットのフィールドは現在、6ビットのDifferentiated Services Code Point (DSCP) と2ビットのECNフィールドを含んでいます。"
+    },
+    {
+      "indent": 3,
+      "text": "This document focuses on the APIs for the C and C++ languages. Other languages are likely to have different syntax and capabilities.",
+      "ja": "本文書は、CおよびC++言語向けのAPIに焦点を当てています。他の言語では、構文や機能が異なる可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The \"ecn-examples\" code repository [EXAMPLES] is extremely compact code that can verify the information in this document.",
+      "ja": "「ecn-examples」コードリポジトリ [EXAMPLES] は、本文書の情報を検証できる、極めて簡潔なコードです。"
+    },
+    {
+      "indent": 3,
+      "text": "This document addresses access to the ECN field in the IP header via socket APIs. It does not address UDP transport-layer options [RFC9868], which are a separate extension mechanism operating at a different layer.",
+      "ja": "本文書は、ソケットAPIを介したIPヘッダ内のECNフィールドへのアクセスを扱います。UDPトランスポート層オプション [RFC9868] は扱いません。これは別の層で動作する、別個の拡張メカニズムです。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Conventions and Definitions",
+      "section_title": true,
+      "ja": "2. 表記と定義"
+    },
+    {
+      "indent": 3,
+      "text": "This document is not a general tutorial on UDP socket programming and does assume familiarity with basic socket concepts like binding, socket options, and common system error codes.",
+      "ja": "本文書はUDPソケットプログラミングの一般的なチュートリアルではなく、バインド、ソケットオプション、一般的なシステムエラーコードといった基本的なソケットの概念に精通していることを前提としています。"
+    },
+    {
+      "indent": 3,
+      "text": "Throughout this document, \"Apple\" refers to both macOS and iOS. \"Linux\" guidance also applies to Android.",
+      "ja": "本文書全体を通じて、「Apple」はmacOSとiOSの両方を指します。「Linux」に関する指針はAndroidにも当てはまります。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Receiving ECN Codepoints",
+      "section_title": true,
+      "ja": "3. ECNコードポイントの受信"
+    },
+    {
+      "indent": 3,
+      "text": "Network devices can change the ECN codepoint in the IP header. Since this feedback is required at the packet sender, the packet receiver needs to extract this codepoint from the UDP socket in order to report to the sender.",
+      "ja": "ネットワーク機器は、IPヘッダ内のECNコードポイントを変更することがあります。このフィードバックはパケットの送信側で必要とされるため、パケットの受信側は、送信側に報告するために、UDPソケットからこのコードポイントを取り出す必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "There are two components to this: 1) setting the socket to report incoming ECN marks and 2) retrieving the ECN codepoint for each incoming packet.",
+      "ja": "これには2つの要素があります。1) 受信したECNマークを報告するようにソケットを設定すること、2) 受信した各パケットのECNコードポイントを取得することです。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that Apple platforms additionally provide a framework for network connections that allows receiving ECN flags when using UDP without traditional socket option semantics. When sending or receiving UDP datagrams, IP protocol metadata carries ECN information in both directions. See [APPLE-NETWORK-FRAMEWORK].",
+      "ja": "Appleのプラットフォームは、従来のソケットオプションの意味論を用いずに、UDP使用時にECNフラグを受信できる、ネットワーク接続用のフレームワークも追加で提供している点に注意してください。UDPデータグラムの送信または受信時には、IPプロトコルのメタデータが双方向でECN情報を運びます。[APPLE-NETWORK-FRAMEWORK] を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1. Setting the Socket to Report Incoming ECN Codepoints",
+      "section_title": true,
+      "ja": "3.1. 受信したECNコードポイントを報告するためのソケットの設定"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.1. Linux, Apple, and FreeBSD",
+      "section_title": true,
+      "ja": "3.1.1. Linux、Apple、FreeBSD"
+    },
+    {
+      "indent": 3,
+      "text": "To receive ECN codepoints, applications set a socket option to \"true\" using a setsockopt() call.",
+      "ja": "ECNコードポイントを受信するために、アプリケーションはsetsockopt()呼び出しを使用してソケットオプションを「true」に設定します。"
+    },
+    {
+      "indent": 3,
+      "text": "On all platforms, IPv4 sockets require the IPPROTO_IP-level socket option with the name IP_RECVTOS to be set.",
+      "ja": "すべてのプラットフォームで、IPv4ソケットには、名前がIP_RECVTOSであるIPPROTO_IPレベルのソケットオプションを設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "On all platforms, IPv6 sockets require the IPPROTO_IPV6-level socket option with the name IPV6_RECVTCLASS to be set.",
+      "ja": "すべてのプラットフォームで、IPv6ソケットには、名前がIPV6_RECVTCLASSであるIPPROTO_IPV6レベルのソケットオプションを設定する必要があります。"
+    },
+    {
+      "indent": 3,
+      "text": "If the IPv6 socket is not IPv6 only, on Linux hosts it is required to also set the IPPROTO_IP-level socket option IP_RECVTOS to receive ECN codepoints for UDP/IPv4 packets. This step is not necessary for Apple or FreeBSD.",
+      "ja": "IPv6ソケットがIPv6 onlyでない場合、LinuxホストではUDP/IPv4パケットのECNコードポイントを受信するために、IPPROTO_IPレベルのソケットオプションIP_RECVTOSも設定する必要があります。この手順はAppleやFreeBSDでは不要です。"
+    },
+    {
+      "indent": 3,
+      "text": "At the time of writing, an example implementation can be found at [CHROMIUM-POSIX].",
+      "ja": "執筆時点での実装例は、[CHROMIUM-POSIX] で参照できます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.1.2. Windows",
+      "section_title": true,
+      "ja": "3.1.2. Windows"
+    },
+    {
+      "indent": 3,
+      "text": "Windows documentation recommends using the function WSASetRecvIPEcn() to enable ECN codepoint reporting regardless of the IP version. This function dates to Windows 10 Build 20348, according to [WINDOWS-DOC].",
+      "ja": "Windowsの文書では、IPバージョンにかかわらずECNコードポイントの報告を有効にするために、関数WSASetRecvIPEcn()の使用を推奨しています。[WINDOWS-DOC] によれば、この関数はWindows 10 Build 20348以降で提供されています。"
+    },
+    {
+      "indent": 3,
+      "text": "However, this can also be accomplished by calling setsockopt() and using options of level IPPROTO_IP and name IP_RECVECN for IPv4 and level IPPROTO_IPV6 and name IPV6_RECVECN for IPv6. These options are documented at [WINDOWS-SOCKOPT].",
+      "ja": "ただし、setsockopt()を呼び出し、IPv4にはレベルIPPROTO_IPと名前IP_RECVECN、IPv6にはレベルIPPROTO_IPV6と名前IPV6_RECVECNのオプションを使用することでも、同じことを実現できます。これらのオプションは [WINDOWS-SOCKOPT] に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "For IPv6 sockets that are not IPv6 only, WSASetRecvIPEcn() will not enable ECN reporting for IPv4. This requires a separate setsockopt() call using the IP_RECVECN option.",
+      "ja": "IPv6 専用ではない IPv6 ソケットでは、WSASetRecvIPEcn() を呼び出しても IPv4 に対する ECN 報告は有効になりません。IPv4 に対して有効にするには、IP_RECVECN オプションを使った別の setsockopt() 呼び出しが必要です。"
+    },
+    {
+      "indent": 3,
+      "text": "If a socket is bound to an IPv4-mapped IPv6 address (i.e., it is of the format ::ffff:<IPv4 address>; see Section 2.5.5.2 of [RFC4291]), then calls to WSASetRecvIpEcn() return the error EINVAL. These sockets should instead use an explicit setsockopt() call to set IP_RECVECN.",
+      "ja": "ソケットが IPv4 射影 IPv6 アドレス（すなわち ::ffff:<IPv4 address> の形式のアドレス。[RFC4291] のセクション 2.5.5.2 を参照）にバインドされている場合、WSASetRecvIpEcn() の呼び出しはエラー EINVAL を返します。このようなソケットでは、代わりに明示的な setsockopt() 呼び出しで IP_RECVECN を設定すべきです。"
+    },
+    {
+      "indent": 3,
+      "text": "At the time of writing, an example implementation can be found at [CHROMIUM-WINDOWS].",
+      "ja": "本書の執筆時点では、実装例を [CHROMIUM-WINDOWS] で確認できます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2. Retrieving ECN Codepoints on Incoming Packets",
+      "section_title": true,
+      "ja": "3.2. 受信パケットの ECN コードポイントの取得"
+    },
+    {
+      "indent": 3,
+      "text": "All platforms described in this document require the use of a recvmsg() call to read data from the socket and to retrieve the ECN codepoint, because that information is provided as ancillary data. Those platforms all return zero or more \"cmsg\"s that contain requested information about the arriving packet.",
+      "ja": "本書で説明するすべてのプラットフォームでは、ソケットからデータを読み取り ECN コードポイントを取得するために recvmsg() の呼び出しが必要です。これは、その情報が補助データとして提供されるためです。これらのプラットフォームはいずれも、到着したパケットに関する要求された情報を含む \"cmsg\" を 0 個以上返します。"
+    },
+    {
+      "indent": 3,
+      "text": "Examples of the technique described below can be found at [CHROMIUM-POSIX] and [CHROMIUM-WINDOWS].",
+      "ja": "以下に説明する手法の例は、[CHROMIUM-POSIX] と [CHROMIUM-WINDOWS] で確認できます。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.1. Linux",
+      "section_title": true,
+      "ja": "3.2.1. Linux"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP/IPv4 message is received, Linux will include a cmsg of level IPPROTO_IP and type IP_TOS. The cmsg data contains an unsigned char. This applies to IPv4 sockets and to IPv6 sockets that are not IPv6 only.",
+      "ja": "UDP/IPv4 メッセージを受信すると、Linux はレベル IPPROTO_IP、タイプ IP_TOS の cmsg を含めます。cmsg データには unsigned char が入っています。これは IPv4 ソケットと、IPv6 専用ではない IPv6 ソケットに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP/IPv6 message is received, Linux will include a cmsg of level IPPROTO_IPV6 and type IPV6_TCLASS. The cmsg data contains an int. This applies to IPv6 sockets.",
+      "ja": "UDP/IPv6 メッセージを受信すると、Linux はレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を含めます。cmsg データには int が入っています。これは IPv6 ソケットに適用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "The cmsg data contains the entire IP header byte, which includes the DSCP and the ECN codepoint. The ECN codepoint constitutes the two least significant bits of this byte.",
+      "ja": "cmsg データには、DSCP と ECN コードポイントを含む IP ヘッダーのバイト全体が入っています。ECN コードポイントは、このバイトの下位 2 ビットです。"
+    },
+    {
+      "indent": 3,
+      "text": "The same applies to the Linux-specific recvmmsg() call.",
+      "ja": "Linux 固有の recvmmsg() 呼び出しにも同じことが当てはまります。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.2. Apple and FreeBSD",
+      "section_title": true,
+      "ja": "3.2.2. Apple と FreeBSD"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP/IPv4 message is received on an IPv4 socket, the ancillary data will contain a cmsg of level IPPROTO_IP and type IP_RECVTOS. The cmsg data contains an unsigned char.",
+      "ja": "IPv4 ソケットで UDP/IPv4 メッセージを受信すると、補助データにはレベル IPPROTO_IP、タイプ IP_RECVTOS の cmsg が含まれます。cmsg データには unsigned char が入っています。"
+    },
+    {
+      "indent": 3,
+      "text": "If a UDP/IPv6 or UDP/IPv4 message is received on an IPv6 socket, the ancillary data will contain a cmsg of level IPPROTO_IPV6 and type IPV6_TCLASS. The cmsg data contains an int.",
+      "ja": "IPv6 ソケットで UDP/IPv6 または UDP/IPv4 メッセージを受信すると、補助データにはレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg が含まれます。cmsg データには int が入っています。"
+    },
+    {
+      "indent": 3,
+      "text": "The cmsg data contains the entire IP header byte, which includes the DSCP and the ECN codepoint. The ECN codepoint constitutes the two least significant bits of this byte.",
+      "ja": "cmsg データには、DSCP と ECN コードポイントを含む IP ヘッダーのバイト全体が入っています。ECN コードポイントは、このバイトの下位 2 ビットです。"
+    },
+    {
+      "indent": 0,
+      "text": "3.2.3. Windows",
+      "section_title": true,
+      "ja": "3.2.3. Windows"
+    },
+    {
+      "indent": 3,
+      "text": "If the incoming packet is UDP/IPv4, the socket will include a cmsg of level IPPROTO_IP and type IP_ECN. The cmsg data contains an int.",
+      "ja": "受信パケットが UDP/IPv4 の場合、ソケットはレベル IPPROTO_IP、タイプ IP_ECN の cmsg を含めます。cmsg データには int が入っています。"
+    },
+    {
+      "indent": 3,
+      "text": "If the incoming packet is UDP/IPv6, the socket will include a cmsg of level IPPROTO_IPV6 and type IPV6_ECN. The cmsg data contains an int.",
+      "ja": "受信パケットが UDP/IPv6 の場合、ソケットはレベル IPPROTO_IPV6、タイプ IPV6_ECN の cmsg を含めます。cmsg データには int が入っています。"
+    },
+    {
+      "indent": 3,
+      "text": "The cmsg data solely consists of the ECN codepoint and requires no further bitwise operations.",
+      "ja": "cmsg データは ECN コードポイントのみで構成されており、それ以上のビット演算は不要です。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Sending ECN Codepoints",
+      "section_title": true,
+      "ja": "4. ECN コードポイントの送信"
+    },
+    {
+      "indent": 3,
+      "text": "Existing ECN specifications ([RFC3168] and [RFC9330]) envision a particular connection that is consistently sending the same ECN codepoint. It might transition that marking after successfully completing a handshake, recognizing that the path or the peer does not support ECN or transitioning to a new path. Therefore, using a socket option to configure a consistent marking is generally more resource efficient.",
+      "ja": "既存の ECN 仕様（[RFC3168] と [RFC9330]）は、特定のコネクションが一貫して同じ ECN コードポイントを送信し続けることを想定しています。ハンドシェイクが正常に完了した後や、経路またはピアが ECN をサポートしていないと認識した場合、あるいは新しい経路へ移行する場合には、そのマーキングを切り替えることもあります。したがって、ソケットオプションを使って一貫したマーキングを設定する方が、一般にリソース効率が高くなります。"
+    },
+    {
+      "indent": 3,
+      "text": "However, some server designs receive all incoming packets on a single socket. As the many connections that constitute this packet stream may have different support for ECN, it is suitable to provide the ECN codepoint on a per-packet basis.",
+      "ja": "しかし、サーバーの設計によっては、すべての受信パケットを単一のソケットで受信するものがあります。このパケットストリームを構成する多数のコネクションでは ECN のサポート状況が異なる可能性があるため、ECN コードポイントをパケット単位で指定できるようにするのが適切です。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that Apple platforms additionally provide a framework for network connections that allows sending ECN flags when using UDP without traditional socket option semantics. When sending or receiving UDP datagrams, IP protocol metadata carries ECN information in both directions. See [APPLE-NETWORK-FRAMEWORK].",
+      "ja": "Apple プラットフォームは、従来のソケットオプションの意味論を用いずに UDP 使用時に ECN フラグを送信できる、ネットワーク接続用のフレームワークも追加で提供していることに注意してください。UDP データグラムの送信時と受信時には、IP プロトコルのメタデータが双方向で ECN 情報を運びます。[APPLE-NETWORK-FRAMEWORK] を参照してください。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1. On a Per-Socket Basis",
+      "section_title": true,
+      "ja": "4.1. ソケット単位"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.1. Apple, FreeBSD, and Linux",
+      "section_title": true,
+      "ja": "4.1.1. Apple、FreeBSD、Linux"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv4 packets on an IPv4 socket, Apple, FreeBSD, and Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IP-level socket option with the name IP_TOS. The value has the type int.",
+      "ja": "IPv4 ソケットで UDP/IPv4 パケットを送信する場合、Apple、FreeBSD、Linux の各プラットフォームでは、IPPROTO_IP レベルの IP_TOS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。値の型は int です。"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv6 packets on an IPv6 socket, Apple, FreeBSD, and Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IPV6-level socket option with the name IPV6_TCLASS. The value has the type int.",
+      "ja": "IPv6 ソケットで UDP/IPv6 パケットを送信する場合、Apple、FreeBSD、Linux の各プラットフォームでは、IPPROTO_IPV6 レベルの IPV6_TCLASS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。値の型は int です。"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv4 packets on an IPv6 socket, Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IP-level socket option with the name IP_TOS.",
+      "ja": "IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Linux プラットフォームでは、IPPROTO_IP レベルの IP_TOS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv4 packets on an IPv6 socket, Apple and FreeBSD platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IPV6-level socket option with the name IPV6_TCLASS.",
+      "ja": "IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Apple および FreeBSD プラットフォームでは、IPPROTO_IPV6 レベルの IPV6_TCLASS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Except for Apple platforms, this setsockopt() call also sets the DSCP that comprises the rest of the header byte. Applications making this call ought to preserve any existing DSCP setting, which might require an additional getsockopt() call, to avoid overriding commands set by other code in the stack. If there are multiple threads making changes to this byte, further safeguards will be necessary.",
+      "ja": "Apple プラットフォームを除き、この setsockopt() 呼び出しは、ヘッダーバイトの残りの部分を構成する DSCP も設定します。この呼び出しを行うアプリケーションは、スタック内の他のコードが設定した指示を上書きしないよう、既存の DSCP 設定を保持すべきであり、そのためには追加の getsockopt() 呼び出しが必要になる場合があります。複数のスレッドがこのバイトを変更する場合は、さらなる保護策が必要になります。"
+    },
+    {
+      "indent": 3,
+      "text": "An example of the technique described above can be found at [CHROMIUM-POSIX].",
+      "ja": "上記の手法の例は [CHROMIUM-POSIX] で確認できます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.1.2. Windows",
+      "section_title": true,
+      "ja": "4.1.2. Windows"
+    },
+    {
+      "indent": 3,
+      "text": "At the time of this writing, Windows does not provide a way to configure marking on a per-socket basis.",
+      "ja": "本書の執筆時点では、Windows にはソケット単位でマーキングを設定する方法がありません。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2. On a Per-Packet Basis",
+      "section_title": true,
+      "ja": "4.2. パケット単位"
+    },
+    {
+      "indent": 3,
+      "text": "Packets can be individually marked with ECN codepoints using the ancillary data that accompanies a sendmsg() call.",
+      "ja": "sendmsg() 呼び出しに付随する補助データを使って、個々のパケットに ECN コードポイントでマーキングできます。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.1. Apple, FreeBSD, and Linux",
+      "section_title": true,
+      "ja": "4.2.1. Apple、FreeBSD、Linux"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv4 packets on an IPv4 socket, Apple, FreeBSD, and Linux use a cmsg with level IPPROTO_IP and type IP_TOS. On Apple and Linux, the type of data is int; and for FreeBSD, it is unsigned char.",
+      "ja": "IPv4 ソケットで UDP/IPv4 パケットを送信する場合、Apple、FreeBSD、Linux はレベル IPPROTO_IP、タイプ IP_TOS の cmsg を使います。データの型は、Apple と Linux では int、FreeBSD では unsigned char です。"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv6 packets on an IPv6 socket, Apple, FreeBSD, and Linux use a cmsg with level IPPROTO_IPV6 and type IPV6_TCLASS. The type of the data is int.",
+      "ja": "IPv6 ソケットで UDP/IPv6 パケットを送信する場合、Apple、FreeBSD、Linux はレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を使います。データの型は int です。"
+    },
+    {
+      "indent": 3,
+      "text": "For sending UDP/IPv4 packets on an IPv6 socket, Linux requires a cmsg with level IPPROTO_IP and type IP_TOS. Apple and FreeBSD accept a cmsg with level IPPROTO_IPV6 and type IPV6_TCLASS.",
+      "ja": "IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Linux ではレベル IPPROTO_IP、タイプ IP_TOS の cmsg が必要です。Apple と FreeBSD は、レベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を受け付けます。"
+    },
+    {
+      "indent": 3,
+      "text": "The same applies to the Linux-specific sendmmsg() call.",
+      "ja": "Linux 固有の sendmmsg() 呼び出しにも同じことが当てはまります。"
+    },
+    {
+      "indent": 0,
+      "text": "4.2.2. Windows",
+      "section_title": true,
+      "ja": "4.2.2. Windows"
+    },
+    {
+      "indent": 3,
+      "text": "For IPv4 packets, Windows uses a cmsg with level IPPROTO_IP and type IP_ECN.",
+      "ja": "IPv4パケットの場合、Windowsはレベルが IPPROTO_IP、タイプが IP_ECN の cmsg を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "For IPv6 packets, Windows uses a cmsg with level IPPROTO_IPV6 and type IPV6_ECN.",
+      "ja": "IPv6パケットの場合、Windowsはレベルが IPPROTO_IPV6、タイプが IPV6_ECN の cmsg を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "An example of the technique described above can be found at [CHROMIUM-WINDOWS].",
+      "ja": "上記の手法の例は [CHROMIUM-WINDOWS] にあります。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Security Considerations",
+      "section_title": true,
+      "ja": "5. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "The security implications of ECN are documented in [RFC3168] and [RFC9330]. This document is a guide to enabling these capabilities, which incurs no additional security considerations.",
+      "ja": "ECNのセキュリティ上の影響は [RFC3168] と [RFC9330] に記載されています。本文書はこれらの機能を有効にするためのガイドであり、追加のセキュリティ上の考慮事項は生じません。"
+    },
+    {
+      "indent": 3,
+      "text": "Note that implementing ECN capabilities on some platforms, but not others, can help peers identify the operating system in use by a host, which can have privacy implications. This document aims to mitigate that possibility.",
+      "ja": "一部のプラットフォームでECN機能を実装し、他では実装しない場合、ピアがホストの使用しているオペレーティングシステムを識別しやすくなる可能性があり、プライバシー上の影響が生じうることに注意してください。本文書は、その可能性を軽減することを目的としています。"
+    },
+    {
+      "indent": 0,
+      "text": "6. IANA Considerations",
+      "section_title": true,
+      "ja": "6. IANAに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "This document has no IANA actions.",
+      "ja": "本文書にはIANAへの要請事項はありません。"
+    },
+    {
+      "indent": 0,
+      "text": "7. References",
+      "section_title": true,
+      "ja": "7. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "7.1. Normative References",
+      "section_title": true,
+      "ja": "7.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2474]  Nichols, K., Blake, S., Baker, F., and D. Black,\n           \"Definition of the Differentiated Services Field (DS\n           Field) in the IPv4 and IPv6 Headers\", RFC 2474,\n           DOI 10.17487/RFC2474, December 1998,\n           <https://www.rfc-editor.org/info/rfc2474>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC3168]  Ramakrishnan, K., Floyd, S., and D. Black, \"The Addition\n           of Explicit Congestion Notification (ECN) to IP\",\n           RFC 3168, DOI 10.17487/RFC3168, September 2001,\n           <https://www.rfc-editor.org/info/rfc3168>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9330]  Briscoe, B., Ed., De Schepper, K., Bagnulo, M., and G.\n           White, \"Low Latency, Low Loss, and Scalable Throughput\n           (L4S) Internet Service: Architecture\", RFC 9330,\n           DOI 10.17487/RFC9330, January 2023,\n           <https://www.rfc-editor.org/info/rfc9330>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "7.2. Informative References",
+      "section_title": true,
+      "ja": "7.2. 参考引用"
+    },
+    {
+      "indent": 3,
+      "text": "[APPLE-NETWORK-FRAMEWORK]\n           \"NWProtocolIP.Metadata\",\n           <https://developer.apple.com/documentation/network/\n           nwprotocolip/metadata>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[CHROMIUM] \"The Chromium Projects\",\n           <https://www.chromium.org/chromium-projects/>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[CHROMIUM-POSIX]\n           \"udp_socket_posix.cc\", commit 6bdc14d, 19 June 2026,\n           <https://source.chromium.org/chromium/chromium/\n           src/+/main:net/socket/udp_socket_posix.cc>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[CHROMIUM-WINDOWS]\n           \"udp_socket_win.cc\", commit 85a1d1c, 10 June 2026,\n           <https://source.chromium.org/chromium/chromium/\n           src/+/main:net/socket/udp_socket_win.cc>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[EXAMPLES] \"ecn-examples\", commit 39e39bf, 1 December 2025,\n           <https://github.com/nplab/ecn-examples>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC4291]  Hinden, R. and S. Deering, \"IP Version 6 Addressing\n           Architecture\", RFC 4291, DOI 10.17487/RFC4291, February\n           2006, <https://www.rfc-editor.org/info/rfc4291>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6679]  Westerlund, M., Johansson, I., Perkins, C., O'Hanlon, P.,\n           and K. Carlberg, \"Explicit Congestion Notification (ECN)\n           for RTP over UDP\", RFC 6679, DOI 10.17487/RFC6679, August\n           2012, <https://www.rfc-editor.org/info/rfc6679>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8261]  Tuexen, M., Stewart, R., Jesup, R., and S. Loreto,\n           \"Datagram Transport Layer Security (DTLS) Encapsulation of\n           SCTP Packets\", RFC 8261, DOI 10.17487/RFC8261, November\n           2017, <https://www.rfc-editor.org/info/rfc8261>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8888]  Sarker, Z., Perkins, C., Singh, V., and M. Ramalho, \"RTP\n           Control Protocol (RTCP) Feedback for Congestion Control\",\n           RFC 8888, DOI 10.17487/RFC8888, January 2021,\n           <https://www.rfc-editor.org/info/rfc8888>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based\n           Multiplexed and Secure Transport\", RFC 9000,\n           DOI 10.17487/RFC9000, May 2021,\n           <https://www.rfc-editor.org/info/rfc9000>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9260]  Stewart, R., Tüxen, M., and K. Nielsen, \"Stream Control\n           Transmission Protocol\", RFC 9260, DOI 10.17487/RFC9260,\n           June 2022, <https://www.rfc-editor.org/info/rfc9260>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9293]  Eddy, W., Ed., \"Transmission Control Protocol (TCP)\",\n           STD 7, RFC 9293, DOI 10.17487/RFC9293, August 2022,\n           <https://www.rfc-editor.org/info/rfc9293>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9868]  Touch, J. and C. Heard, Ed., \"Transport Options for UDP\",\n           RFC 9868, DOI 10.17487/RFC9868, October 2025,\n           <https://www.rfc-editor.org/info/rfc9868>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[WINDOWS-DOC]\n           \"WSASetRecvIPEcn function (ws2tcpip.h)\", 22 February 2024,\n           <https://learn.microsoft.com/en-\n           us/windows/win32/api/ws2tcpip/nf-ws2tcpip-\n           wsasetrecvipecn>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[WINDOWS-SOCKOPT]\n           \"MSDN - IPPROTO_IP socket options\", 7 May 2026,\n           <https://learn.microsoft.com/en-us/windows/win32/winsock/\n           ipproto-ip-socket-options>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgments",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The author would like to thank Ryan Hamilton, who provided constant advice through this effort. Randall Meyer from Apple and Nick Grifka from Microsoft provided useful hints about the behavior of their respective operating systems. However, the author takes full responsibility for any errors above.",
+      "ja": "著者は、この取り組みを通じて常に助言をくださった Ryan Hamilton に感謝します。Apple の Randall Meyer と Microsoft の Nick Grifka は、それぞれのオペレーティングシステムの挙動について有益なヒントを提供してくれました。ただし、上記の誤りについては、著者がすべての責任を負います。"
+    },
+    {
+      "indent": 3,
+      "text": "Michael Tüxen wrote the \"ecn-examples\" code that was very helpful in verifying the conclusions in this document. He also made multiple editorial contributions.",
+      "ja": "Michael Tüxen は、本文書の結論を検証する上で非常に役立った \"ecn-examples\" のコードを書きました。また、複数の編集上の貢献もしてくれました。"
+    },
+    {
+      "indent": 3,
+      "text": "Neal Cardwell, Gorry Fairhurst, Max Franke, Rodney Grimes, Will Hawkins, Guillaume Hétier, Max Inden, Jonathan Lennox, Colin Perkins, Marten Seemann, and Greg White made improvements to this document.",
+      "ja": "Neal Cardwell、Gorry Fairhurst、Max Franke、Rodney Grimes、Will Hawkins、Guillaume Hétier、Max Inden、Jonathan Lennox、Colin Perkins、Marten Seemann、Greg White は、本文書の改善に貢献しました。"
+    },
+    {
+      "indent": 0,
+      "text": "Author's Address",
+      "section_title": true,
+      "ja": "著者の連絡先"
+    },
+    {
+      "indent": 3,
+      "text": "Martin Duke\nGoogle\nEmail: martin.h.duke@gmail.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
