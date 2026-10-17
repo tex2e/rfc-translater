@@ -14,11 +14,10 @@ class TestFixRfc2119Annotation(unittest.TestCase):
             fix_rfc2119_annotation("Servers SHOULD NOT send X.", "サーバーはXを送信すべきではありません。"),
             "サーバーはXを送信すべきではありません (SHOULD NOT)。")
 
-    def test_uses_canonical_keyword(self):
-        # SHALL NOT は規範強度が同じ MUST NOT の注釈で表す (AGENTS.md 1章)
+    def test_uses_original_keyword(self):
         self.assertEqual(
             fix_rfc2119_annotation("It SHALL NOT be sent.", "それは送信されないものとします。"),
-            "それは送信されないものとします (MUST NOT)。")
+            "それは送信されないものとします (SHALL NOT)。")
 
     def test_bullet_without_period(self):
         self.assertEqual(

@@ -98,8 +98,7 @@ class TestRfc2119AnnotationCount(unittest.TestCase):
     def test_not_required_is_not_keyword(self):
         en = ("Applications are REQUIRED to process complete CRLs. "
               "They are NOT REQUIRED to support delta CRLs.")
-        # REQUIRED は注釈の正規形 MUST として数える (NOT REQUIRED は数えない)
-        self.assertEqual(count_rfc2119_keywords(en), {"MUST": 1})
+        self.assertEqual(count_rfc2119_keywords(en), {"REQUIRED": 1})
 
     def test_rfc2119_definition_copy_is_skipped(self):
         en = ('1. MUST - This word, or the terms "REQUIRED" or "SHALL", means that '
