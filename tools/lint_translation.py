@@ -827,7 +827,7 @@ KEYWORD_DEFINITION_RE = re.compile(
 
 
 def count_rfc2119_keywords(en):
-    """原文の規範的なキーワードを数える (キーワード -> 個数)。
+    """原文の規範的なキーワードを原文の表記で数える (キーワード -> 個数)。
     引用符付きの言及 ("MUST") や冠詞付きの名詞的用法 (a MUST) は段落自身の指示では
     ないため除外する。"MUST also not" 等は MUST NOT として数える (訳文の注釈と揃える)。"""
     masked = QUOTED_KEYWORD_RE.sub(" ", en)
@@ -840,7 +840,7 @@ def count_rfc2119_keywords(en):
     # SHOULD+/SHOULD-/MUST- はRFC 2119キーワードそのものではなく、
     # RFC 4307系で定義された拡張ラベル。通常キーワードと混同しない。
     masked = _mask_hyphenated_identifiers(masked)
-    return Counter(canonical_rfc2119_annotation(kw) for kw, _ in detect_rfc2119(masked))
+    return Counter(kw for kw, _ in detect_rfc2119(masked))
 
 
 def canonical_rfc2119_annotation(keyword):
@@ -885,7 +885,10 @@ def check_rfc2119_annotation_count(en, ja):
         return []  # BCP 14 の定型文・参照の説明はキーワードを列挙するだけで指示ではない
     if KEYWORD_DEFINITION_RE.search(en):
         return []
-    expected = count_rfc2119_keywords(en)
+    # 原文のキーワードは原文の表記で数え、注釈との比較だけ同義語を正規形に揃える
+    expected = Counter()
+    for kw, n in count_rfc2119_keywords(en).items():
+        expected[canonical_rfc2119_annotation(kw)] += n
     if not expected:
         return []
     actual = count_rfc2119_annotations(ja)

@@ -88,10 +88,12 @@ class TestRfc2119AnnotationCount(unittest.TestCase):
               "SHOULD- will be demoted to a MAY.")
         self.assertEqual(check_rfc2119_annotation_count(en, "SHOULD- この用語は…"), [])
 
-    def test_extended_keyword_normative_use_is_checked(self):
-        [(code, _)] = check_rfc2119_annotation_count(
-            "- SHOULD- support RSA with SHA-1.", "- SHA-1を用いるRSAをサポートします。")
-        self.assertEqual(code, "W011")
+    def test_extended_keyword_is_not_counted_as_plain_keyword(self):
+        # SHOULD-/SHOULD+/MUST- はRFC 4307系の拡張ラベルで、通常のキーワードとは数えない
+        self.assertEqual(
+            check_rfc2119_annotation_count(
+                "- SHOULD- support RSA with SHA-1.", "- SHA-1を用いるRSAをサポートします。"),
+            [])
 
     def test_not_required_is_not_keyword(self):
         en = ("Applications are REQUIRED to process complete CRLs. "
