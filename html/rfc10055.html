@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RFC 10055 - Configuring UDP Sockets for Explicit Congestion Notification (ECN) for Common Platforms 日本語訳</title>
+  <meta name="description" content="Apple、Linux、Windows などの一般的なプラットフォームで、UDPソケットから明示的輻輳通知（ECN）を扱うためのAPIと設定方法を、Chromiumでの実験結果に基づいて記録した情報提供文書です。受信時にECNコードポイントを報告させるソケットの設定と、パケットごとの取得方法、送信時にソケット単位またはパケット単位でコードポイントを設定する方法を、プラットフォーム別に説明します。特定のAPIを規定するものではなく、執筆時点の状況の記録であり、QUICなどUDP上でECNを使う実装の支援を目的としています。">
+  
+  <script>
+    // 描画前に表示設定を適用して、切り替え前の表示が一瞬見えるのを防ぐ。
+    // ダークテーマは、保存した設定がなければOSの設定（prefers-color-scheme）に従う
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('isDarkMode'); } catch (e) {}
+      var dark = saved === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : saved === 'true';
+      if (dark) document.documentElement.classList.add('dark-theme');
+    })();
+  </script>
+  <link rel="shortcut icon" type="image/x-icon" href="https://tex2e.github.io/rfc-translater/favicon.ico" />
+  <link rel="stylesheet" href="./bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="./master.css">
+  <script src="./index.js"></script>
+
+</head>
+<body>
+  
+  <nav class="navbar navbar-expand navbar-light bg-light">
+    <a class="navbar-brand" href="index.html">RFC Trans</a>
+    <div class="collapse navbar-collapse" id="navbarText">
+      <div class="navbar-nav mr-auto">
+        <a class="nav-item nav-link" href="draft/index.html">Draft</a>
+        <a class="nav-item nav-link" href="contact.html">Contact</a>
+        <a class="nav-item nav-link" href="../figs/html/index.html">Figs</a>
+      </div>
+      <div class="navbar-nav ml-auto">
+        <span class="navbar-text"><small>@tex2e</small></span>
+      </div>
+    </div>
+  </nav>
+
+  <span id="rfc_number" class="hidden">10055</span>
+  <div style="height: 1ex;"></div>
+  <div class="jump-to-original-rfc-container">
+    <a id="orig_link" class="btn btn-light btn-sm jump-to-original-rfc" href="https://www.rfc-editor.org/rfc/rfc10055.html" data-orig-url="https://www.rfc-editor.org/rfc/rfc10055.html" title="原文を開く（表示中の節へ移動します）">原文</a>
+  </div>
+  <div class="container">
+    <div>
+      <div class="alert alert-info" role="alert">
+        <h4 class="alert-heading">RFC 10055 - Configuring UDP Sockets for Explicit Congestion Notification (ECN) for Common Platforms 日本語訳</h4>
+        <span class="URL">原文URL :
+          <a href="https://www.rfc-editor.org/rfc/rfc10055.html">
+            https://www.rfc-editor.org/rfc/rfc10055.html
+          </a>
+        </span><br>
+        <span class="title_ja">
+          タイトル : <strong>RFC 10055 - 一般的なプラットフォームにおける明示的輻輳通知 (ECN) のためのUDPソケットの設定</strong></span><br>
+        <span class="updated_by">翻訳編集 : 自動生成</span><span id="rfc_status"></span><span id="rfc_wg"></span>
+      </div>
+      <div id="rfc_alert" class="hidden" role="alert">
+        <div class="alert alert-danger">
+          <span id="rfc_alert_obsoleted_by"></span>
+        </div>
+      </div>
+    </div>
+    <div id="rfc_summary">
+      <div class="card mb-3">
+        <div class="card-body">
+          <p class="card-text">[要約] Apple、Linux、Windows などの一般的なプラットフォームで、UDPソケットから明示的輻輳通知（ECN）を扱うためのAPIと設定方法を、Chromiumでの実験結果に基づいて記録した情報提供文書です。受信時にECNコードポイントを報告させるソケットの設定と、パケットごとの取得方法、送信時にソケット単位またはパケット単位でコードポイントを設定する方法を、プラットフォーム別に説明します。特定のAPIを規定するものではなく、執筆時点の状況の記録であり、QUICなどUDP上でECNを使う実装の支援を目的としています。</p>
+        </div>
+      </div>
+    </div>
+    <div class="row" id="top-p1">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+Internet Engineering Task Force (IETF)                           M. Duke
+Request for Comments: 10055                                       Google
+Category: Informational                                     October 2026
+ISSN: 2070-1721
+        </pre>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1 no-rule">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Configuring-UDP-Sockets-for-Explicit-Congestion-Notification-ECN-for-Common-Platforms">
+Configuring UDP Sockets for Explicit Congestion Notification (ECN) for Common Platforms
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+一般的なプラットフォームにおける明示的輻輳通知 (ECN) のためのUDPソケットの設定
+        </h5>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1 no-rule">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Abstract">
+Abstract
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+概要
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Abstract-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Explicit Congestion Notification (ECN) applies to all transport protocols in principle. However, it had limited deployment for UDP until QUIC became widely adopted. As a result, documentation of UDP socket APIs for ECN on various platforms is sparse. This document records the results of experimenting with these APIs in order to get ECN working on UDP for Chromium on Apple, Linux, and Windows platforms.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+明示的輻輳通知 (ECN) は、原理的にはすべてのトランスポートプロトコルに適用されます。しかし、QUICが広く採用されるまで、UDPでの展開は限定的でした。その結果、さまざまなプラットフォームにおけるECN向けUDPソケットAPIの文書化は乏しい状況です。本文書は、Apple、Linux、Windowsの各プラットフォーム上のChromiumでUDPのECNを動作させるために、これらのAPIを試行した結果を記録するものです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Abstract-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document provides a snapshot of the ECN state of affairs as supported by these platforms at the time of writing. Readers should refer to the documentation of the various platforms for more up-to-date information.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書は、執筆時点でこれらのプラットフォームがサポートしているECNの状況のスナップショットを提供します。より新しい情報については、読者は各プラットフォームの文書を参照してください。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Status-of-This-Memo">
+Status of This Memo
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+本メモのステータス
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Status-of-This-Memo-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document is not an Internet Standards Track specification; it is published for informational purposes.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書はInternet Standards Trackの仕様ではなく、情報提供を目的として公開されるものです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Status-of-This-Memo-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Not all documents approved by the IESG are candidates for any level of Internet Standard; see Section 2 of RFC 7841.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書はInternet Engineering Task Force (IETF) の成果物です。IETFコミュニティの合意を表しています。公開レビューを受け、Internet Engineering Steering Group (IESG) により公開が承認されました。IESGが承認したすべての文書がいずれかのレベルのInternet Standardの候補となるわけではありません。RFC 7841のSection 2を参照してください。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Status-of-This-Memo-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc10055.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書の現在のステータス、正誤表、およびフィードバックの方法に関する情報は、https://www.rfc-editor.org/info/rfc10055 で入手できます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Copyright-Notice">
+Copyright Notice
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+著作権表示
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Copyright-Notice-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.（著作権表示。無断複写・転載を禁じます。）
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Copyright-Notice-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document is subject to BCP 78 and the IETF Trust&#39;s Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書は、本文書の公開日に有効なBCP 78およびIETF Trustの IETF文書に関する法的規定 (https://trustee.ietf.org/license-info) の適用を受けます。これらの文書は本文書に関する権利と制限を記述しているため、注意深く確認してください。本文書から抽出されるコードコンポーネントには、Trust Legal ProvisionsのSection 4.eに記載されているRevised BSD Licenseの条文を含めなければならず、Revised BSD Licenseに記載されているとおり無保証で提供されます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Table-of-Contents">
+Table of Contents
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+目次
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Table-of-Contents-p1">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace toc">
+   <a href="#1--Introduction">1.</a>  Introduction
+   <a href="#2--Conventions-and-Definitions">2.</a>  Conventions and Definitions
+   <a href="#3--Receiving-ECN-Codepoints">3.</a>  Receiving ECN Codepoints
+     <a href="#3-1--Setting-the-Socket-to-Report-Incoming-ECN-Codepoints">3.1.</a>  Setting the Socket to Report Incoming ECN Codepoints
+       <a href="#3-1-1--Linux-Apple-and-FreeBSD">3.1.1.</a>  Linux, Apple, and FreeBSD
+       <a href="#3-1-2--Windows">3.1.2.</a>  Windows
+     <a href="#3-2--Retrieving-ECN-Codepoints-on-Incoming-Packets">3.2.</a>  Retrieving ECN Codepoints on Incoming Packets
+       <a href="#3-2-1--Linux">3.2.1.</a>  Linux
+       <a href="#3-2-2--Apple-and-FreeBSD">3.2.2.</a>  Apple and FreeBSD
+       <a href="#3-2-3--Windows">3.2.3.</a>  Windows
+   <a href="#4--Sending-ECN-Codepoints">4.</a>  Sending ECN Codepoints
+     <a href="#4-1--On-a-Per-Socket-Basis">4.1.</a>  On a Per-Socket Basis
+       <a href="#4-1-1--Apple-FreeBSD-and-Linux">4.1.1.</a>  Apple, FreeBSD, and Linux
+       <a href="#4-1-2--Windows">4.1.2.</a>  Windows
+     <a href="#4-2--On-a-Per-Packet-Basis">4.2.</a>  On a Per-Packet Basis
+       <a href="#4-2-1--Apple-FreeBSD-and-Linux">4.2.1.</a>  Apple, FreeBSD, and Linux
+       <a href="#4-2-2--Windows">4.2.2.</a>  Windows
+   <a href="#5--Security-Considerations">5.</a>  Security Considerations
+   <a href="#6--IANA-Considerations">6.</a>  IANA Considerations
+   <a href="#7--References">7.</a>  References
+     <a href="#7-1--Normative-References">7.1.</a>  Normative References
+     <a href="#7-2--Informative-References">7.2.</a>  Informative References
+   Acknowledgments
+   Author&#39;s Address
+        </pre>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="1--Introduction" data-section="1">
+1. Introduction
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+1. はじめに
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+<a href="./rfc3168.html">[RFC3168]</a> defines a 2-bit field in the IP header for Explicit Congestion Notification (ECN), which provides network feedback to endpoint congestion controllers. Historically, this has mostly been relevant to TCP <a href="./rfc9293.html">[RFC9293]</a>, where any incoming ECN codepoints are internally consumed by the kernel and, therefore, imply no application interface except for enabling and disabling the capability.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+<a href="./rfc3168.html">[RFC3168]</a> は、エンドポイントの輻輳制御器にネットワークからのフィードバックを提供する明示的輻輳通知 (ECN) のために、IPヘッダ内に2ビットのフィールドを定義しています。歴史的には、これは主にTCP <a href="./rfc9293.html">[RFC9293]</a> に関連するものでした。TCPでは、受信したECNコードポイントはカーネル内部で消費されるため、この機能の有効化と無効化を除いて、アプリケーションインタフェースは必要ありません。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The Stream Control Transmission Protocol (SCTP) <a href="./rfc9260.html">[RFC9260]</a> has long supported ECN in its design. SCTP is sometimes carried over DTLS and UDP <a href="./rfc8261.html">[RFC8261]</a>. In principle, user-space implementers might have leveraged UDP ECN APIs to deliver ECN codepoints between SCTP and the UDP socket. At the time of publication, the IETF is not aware of any such efforts.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Stream Control Transmission Protocol (SCTP) <a href="./rfc9260.html">[RFC9260]</a> は、設計当初からECNをサポートしてきました。SCTPは、DTLSおよびUDP上で運ばれることもあります <a href="./rfc8261.html">[RFC8261]</a>。原理的には、ユーザ空間の実装者がUDPのECN APIを活用して、SCTPとUDPソケットの間でECNコードポイントを受け渡すことも可能だったかもしれません。公開時点で、IETFはそのような取り組みを把握していません。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+<a href="./rfc6679.html">[RFC6679]</a> defines ECN over RTP over UDP. The IETF is aware of a research implementation but cannot confirm any commercial deployments. <a href="./rfc8888.html">[RFC8888]</a> proposes a different feedback format to work with <a href="./rfc6679.html">[RFC6679]</a>, and there are a few implementations of this.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+<a href="./rfc6679.html">[RFC6679]</a> は、UDP上のRTPにおけるECNを定義しています。IETFは研究用の実装を把握していますが、商用での展開は確認できていません。<a href="./rfc8888.html">[RFC8888]</a> は、<a href="./rfc6679.html">[RFC6679]</a> と組み合わせて動作する別のフィードバック形式を提案しており、これについてはいくつかの実装があります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+QUIC <a href="./rfc9000.html">[RFC9000]</a> runs over UDP and has seen wider deployment than SCTP. The Low Latency, Low Loss, Scalable Throughput (L4S) architecture <a href="./rfc9330.html">[RFC9330]</a> and QUIC have combined to increase interest in ECN over UDP.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+QUIC <a href="./rfc9000.html">[RFC9000]</a> はUDP上で動作し、SCTPよりも広く展開されています。Low Latency, Low Loss, Scalable Throughput (L4S) アーキテクチャ <a href="./rfc9330.html">[RFC9330]</a> とQUICが相まって、UDP上のECNへの関心が高まっています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p5">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The Chromium Projects [CHROMIUM] provide a widely deployed protocol library that includes QUIC. An effort to provide ECN support for QUIC on the many platforms on which Chromium is deployed revealed that many ECN-related UDP socket interfaces are poorly documented.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Chromium Projects [CHROMIUM] は、QUICを含む広く展開されたプロトコルライブラリを提供しています。Chromiumが展開されている多くのプラットフォームでQUIC向けにECNサポートを提供する取り組みを通じて、ECNに関連するUDPソケットインタフェースの多くが十分に文書化されていないことが明らかになりました。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p6">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This Informational document provides a record of that experience to encourage further support for ECN in other QUIC implementations and any consumer of ECN codepoints that operates over UDP. It is not a Standards Track document and does not bind platforms to any API nor suggest any such API.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+この情報提供文書 (Informational) は、他のQUIC実装や、UDP上で動作するECNコードポイントのあらゆる利用者におけるECNのさらなるサポートを促すため、その経験を記録するものです。本文書はStandards Trackの文書ではなく、プラットフォームに特定のAPIを課すものでも、そのようなAPIを提案するものでもありません。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p7">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Many socket APIs continue to reference the &#34;ToS (Type of Service) byte&#34;, including the IP_TOS label, even though <a href="./rfc2474.html">[RFC2474]</a> obsoleted that in 1998. That 8-bit field now contains a 6-bit Differentiated Services Code Point (DSCP) and the 2-bit ECN field.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+多くのソケットAPIは、<a href="./rfc2474.html">[RFC2474]</a> が1998年にこれを廃止したにもかかわらず、IP_TOSというラベルを含め、依然として「ToS (Type of Service) バイト」を参照しています。この8ビットのフィールドは現在、6ビットのDifferentiated Services Code Point (DSCP) と2ビットのECNフィールドを含んでいます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p8">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document focuses on the APIs for the C and C++ languages. Other languages are likely to have different syntax and capabilities.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書は、CおよびC++言語向けのAPIに焦点を当てています。他の言語では、構文や機能が異なる可能性があります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p9">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The &#34;ecn-examples&#34; code repository [EXAMPLES] is extremely compact code that can verify the information in this document.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+「ecn-examples」コードリポジトリ [EXAMPLES] は、本文書の情報を検証できる、極めて簡潔なコードです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="1--Introduction-p10">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document addresses access to the ECN field in the IP header via socket APIs. It does not address UDP transport-layer options <a href="./rfc9868.html">[RFC9868]</a>, which are a separate extension mechanism operating at a different layer.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書は、ソケットAPIを介したIPヘッダ内のECNフィールドへのアクセスを扱います。UDPトランスポート層オプション <a href="./rfc9868.html">[RFC9868]</a> は扱いません。これは別の層で動作する、別個の拡張メカニズムです。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="2--Conventions-and-Definitions" data-section="2">
+2. Conventions and Definitions
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+2. 表記と定義
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="2--Conventions-and-Definitions-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document is not a general tutorial on UDP socket programming and does assume familiarity with basic socket concepts like binding, socket options, and common system error codes.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書はUDPソケットプログラミングの一般的なチュートリアルではなく、バインド、ソケットオプション、一般的なシステムエラーコードといった基本的なソケットの概念に精通していることを前提としています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="2--Conventions-and-Definitions-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Throughout this document, &#34;Apple&#34; refers to both macOS and iOS. &#34;Linux&#34; guidance also applies to Android.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書全体を通じて、「Apple」はmacOSとiOSの両方を指します。「Linux」に関する指針はAndroidにも当てはまります。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3--Receiving-ECN-Codepoints" data-section="3">
+3. Receiving ECN Codepoints
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3. ECNコードポイントの受信
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3--Receiving-ECN-Codepoints-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Network devices can change the ECN codepoint in the IP header. Since this feedback is required at the packet sender, the packet receiver needs to extract this codepoint from the UDP socket in order to report to the sender.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+ネットワーク機器は、IPヘッダ内のECNコードポイントを変更することがあります。このフィードバックはパケットの送信側で必要とされるため、パケットの受信側は、送信側に報告するために、UDPソケットからこのコードポイントを取り出す必要があります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3--Receiving-ECN-Codepoints-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+There are two components to this: 1) setting the socket to report incoming ECN marks and 2) retrieving the ECN codepoint for each incoming packet.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+これには2つの要素があります。1) 受信したECNマークを報告するようにソケットを設定すること、2) 受信した各パケットのECNコードポイントを取得することです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3--Receiving-ECN-Codepoints-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Note that Apple platforms additionally provide a framework for network connections that allows receiving ECN flags when using UDP without traditional socket option semantics. When sending or receiving UDP datagrams, IP protocol metadata carries ECN information in both directions. See [APPLE-NETWORK-FRAMEWORK].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Appleのプラットフォームは、従来のソケットオプションの意味論を用いずに、UDP使用時にECNフラグを受信できる、ネットワーク接続用のフレームワークも追加で提供している点に注意してください。UDPデータグラムの送信または受信時には、IPプロトコルのメタデータが双方向でECN情報を運びます。[APPLE-NETWORK-FRAMEWORK] を参照してください。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-1--Setting-the-Socket-to-Report-Incoming-ECN-Codepoints" data-section="3.1">
+3.1. Setting the Socket to Report Incoming ECN Codepoints
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.1. 受信したECNコードポイントを報告するためのソケットの設定
+        </h5>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-1-1--Linux-Apple-and-FreeBSD" data-section="3.1.1">
+3.1.1. Linux, Apple, and FreeBSD
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.1.1. Linux、Apple、FreeBSD
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-1-1--Linux-Apple-and-FreeBSD-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+To receive ECN codepoints, applications set a socket option to &#34;true&#34; using a setsockopt() call.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+ECNコードポイントを受信するために、アプリケーションはsetsockopt()呼び出しを使用してソケットオプションを「true」に設定します。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-1--Linux-Apple-and-FreeBSD-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+On all platforms, IPv4 sockets require the IPPROTO_IP-level socket option with the name IP_RECVTOS to be set.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+すべてのプラットフォームで、IPv4ソケットには、名前がIP_RECVTOSであるIPPROTO_IPレベルのソケットオプションを設定する必要があります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-1--Linux-Apple-and-FreeBSD-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+On all platforms, IPv6 sockets require the IPPROTO_IPV6-level socket option with the name IPV6_RECVTCLASS to be set.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+すべてのプラットフォームで、IPv6ソケットには、名前がIPV6_RECVTCLASSであるIPPROTO_IPV6レベルのソケットオプションを設定する必要があります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-1--Linux-Apple-and-FreeBSD-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If the IPv6 socket is not IPv6 only, on Linux hosts it is required to also set the IPPROTO_IP-level socket option IP_RECVTOS to receive ECN codepoints for UDP/IPv4 packets. This step is not necessary for Apple or FreeBSD.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6ソケットがIPv6 onlyでない場合、LinuxホストではUDP/IPv4パケットのECNコードポイントを受信するために、IPPROTO_IPレベルのソケットオプションIP_RECVTOSも設定する必要があります。この手順はAppleやFreeBSDでは不要です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-1--Linux-Apple-and-FreeBSD-p5">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+At the time of writing, an example implementation can be found at [CHROMIUM-POSIX].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+執筆時点での実装例は、[CHROMIUM-POSIX] で参照できます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-1-2--Windows" data-section="3.1.2">
+3.1.2. Windows
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.1.2. Windows
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-1-2--Windows-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Windows documentation recommends using the function WSASetRecvIPEcn() to enable ECN codepoint reporting regardless of the IP version. This function dates to Windows 10 Build 20348, according to [WINDOWS-DOC].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Windowsの文書では、IPバージョンにかかわらずECNコードポイントの報告を有効にするために、関数WSASetRecvIPEcn()の使用を推奨しています。[WINDOWS-DOC] によれば、この関数はWindows 10 Build 20348以降で提供されています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-2--Windows-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+However, this can also be accomplished by calling setsockopt() and using options of level IPPROTO_IP and name IP_RECVECN for IPv4 and level IPPROTO_IPV6 and name IPV6_RECVECN for IPv6. These options are documented at [WINDOWS-SOCKOPT].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+ただし、setsockopt()を呼び出し、IPv4にはレベルIPPROTO_IPと名前IP_RECVECN、IPv6にはレベルIPPROTO_IPV6と名前IPV6_RECVECNのオプションを使用することでも、同じことを実現できます。これらのオプションは [WINDOWS-SOCKOPT] に記載されています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-2--Windows-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For IPv6 sockets that are not IPv6 only, WSASetRecvIPEcn() will not enable ECN reporting for IPv4. This requires a separate setsockopt() call using the IP_RECVECN option.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 専用ではない IPv6 ソケットでは、WSASetRecvIPEcn() を呼び出しても IPv4 に対する ECN 報告は有効になりません。IPv4 に対して有効にするには、IP_RECVECN オプションを使った別の setsockopt() 呼び出しが必要です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-2--Windows-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If a socket is bound to an IPv4-mapped IPv6 address (i.e., it is of the format ::ffff:&lt;IPv4 address&gt;; see Section 2.5.5.2 of <a href="./rfc4291.html">[RFC4291]</a>), then calls to WSASetRecvIpEcn() return the error EINVAL. These sockets should instead use an explicit setsockopt() call to set IP_RECVECN.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+ソケットが IPv4 射影 IPv6 アドレス（すなわち ::ffff:&lt;IPv4 address&gt; の形式のアドレス。<a href="./rfc4291.html">[RFC4291]</a> のセクション 2.5.5.2 を参照）にバインドされている場合、WSASetRecvIpEcn() の呼び出しはエラー EINVAL を返します。このようなソケットでは、代わりに明示的な setsockopt() 呼び出しで IP_RECVECN を設定すべきです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-1-2--Windows-p5">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+At the time of writing, an example implementation can be found at [CHROMIUM-WINDOWS].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本書の執筆時点では、実装例を [CHROMIUM-WINDOWS] で確認できます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-2--Retrieving-ECN-Codepoints-on-Incoming-Packets" data-section="3.2">
+3.2. Retrieving ECN Codepoints on Incoming Packets
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2. 受信パケットの ECN コードポイントの取得
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-2--Retrieving-ECN-Codepoints-on-Incoming-Packets-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+All platforms described in this document require the use of a recvmsg() call to read data from the socket and to retrieve the ECN codepoint, because that information is provided as ancillary data. Those platforms all return zero or more &#34;cmsg&#34;s that contain requested information about the arriving packet.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本書で説明するすべてのプラットフォームでは、ソケットからデータを読み取り ECN コードポイントを取得するために recvmsg() の呼び出しが必要です。これは、その情報が補助データとして提供されるためです。これらのプラットフォームはいずれも、到着したパケットに関する要求された情報を含む &#34;cmsg&#34; を 0 個以上返します。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2--Retrieving-ECN-Codepoints-on-Incoming-Packets-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Examples of the technique described below can be found at [CHROMIUM-POSIX] and [CHROMIUM-WINDOWS].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+以下に説明する手法の例は、[CHROMIUM-POSIX] と [CHROMIUM-WINDOWS] で確認できます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-2-1--Linux" data-section="3.2.1">
+3.2.1. Linux
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2.1. Linux
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-2-1--Linux-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If a UDP/IPv4 message is received, Linux will include a cmsg of level IPPROTO_IP and type IP_TOS. The cmsg data contains an unsigned char. This applies to IPv4 sockets and to IPv6 sockets that are not IPv6 only.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+UDP/IPv4 メッセージを受信すると、Linux はレベル IPPROTO_IP、タイプ IP_TOS の cmsg を含めます。cmsg データには unsigned char が入っています。これは IPv4 ソケットと、IPv6 専用ではない IPv6 ソケットに適用されます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-1--Linux-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If a UDP/IPv6 message is received, Linux will include a cmsg of level IPPROTO_IPV6 and type IPV6_TCLASS. The cmsg data contains an int. This applies to IPv6 sockets.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+UDP/IPv6 メッセージを受信すると、Linux はレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を含めます。cmsg データには int が入っています。これは IPv6 ソケットに適用されます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-1--Linux-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The cmsg data contains the entire IP header byte, which includes the DSCP and the ECN codepoint. The ECN codepoint constitutes the two least significant bits of this byte.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+cmsg データには、DSCP と ECN コードポイントを含む IP ヘッダーのバイト全体が入っています。ECN コードポイントは、このバイトの下位 2 ビットです。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-1--Linux-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The same applies to the Linux-specific recvmmsg() call.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Linux 固有の recvmmsg() 呼び出しにも同じことが当てはまります。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-2-2--Apple-and-FreeBSD" data-section="3.2.2">
+3.2.2. Apple and FreeBSD
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2.2. Apple と FreeBSD
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-2-2--Apple-and-FreeBSD-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If a UDP/IPv4 message is received on an IPv4 socket, the ancillary data will contain a cmsg of level IPPROTO_IP and type IP_RECVTOS. The cmsg data contains an unsigned char.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv4 ソケットで UDP/IPv4 メッセージを受信すると、補助データにはレベル IPPROTO_IP、タイプ IP_RECVTOS の cmsg が含まれます。cmsg データには unsigned char が入っています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-2--Apple-and-FreeBSD-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If a UDP/IPv6 or UDP/IPv4 message is received on an IPv6 socket, the ancillary data will contain a cmsg of level IPPROTO_IPV6 and type IPV6_TCLASS. The cmsg data contains an int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv6 または UDP/IPv4 メッセージを受信すると、補助データにはレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg が含まれます。cmsg データには int が入っています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-2--Apple-and-FreeBSD-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The cmsg data contains the entire IP header byte, which includes the DSCP and the ECN codepoint. The ECN codepoint constitutes the two least significant bits of this byte.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+cmsg データには、DSCP と ECN コードポイントを含む IP ヘッダーのバイト全体が入っています。ECN コードポイントは、このバイトの下位 2 ビットです。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="3-2-3--Windows" data-section="3.2.3">
+3.2.3. Windows
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+3.2.3. Windows
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="3-2-3--Windows-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If the incoming packet is UDP/IPv4, the socket will include a cmsg of level IPPROTO_IP and type IP_ECN. The cmsg data contains an int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+受信パケットが UDP/IPv4 の場合、ソケットはレベル IPPROTO_IP、タイプ IP_ECN の cmsg を含めます。cmsg データには int が入っています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-3--Windows-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+If the incoming packet is UDP/IPv6, the socket will include a cmsg of level IPPROTO_IPV6 and type IPV6_ECN. The cmsg data contains an int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+受信パケットが UDP/IPv6 の場合、ソケットはレベル IPPROTO_IPV6、タイプ IPV6_ECN の cmsg を含めます。cmsg データには int が入っています。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="3-2-3--Windows-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The cmsg data solely consists of the ECN codepoint and requires no further bitwise operations.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+cmsg データは ECN コードポイントのみで構成されており、それ以上のビット演算は不要です。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4--Sending-ECN-Codepoints" data-section="4">
+4. Sending ECN Codepoints
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4. ECN コードポイントの送信
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4--Sending-ECN-Codepoints-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Existing ECN specifications (<a href="./rfc3168.html">[RFC3168]</a> and <a href="./rfc9330.html">[RFC9330]</a>) envision a particular connection that is consistently sending the same ECN codepoint. It might transition that marking after successfully completing a handshake, recognizing that the path or the peer does not support ECN or transitioning to a new path. Therefore, using a socket option to configure a consistent marking is generally more resource efficient.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+既存の ECN 仕様（<a href="./rfc3168.html">[RFC3168]</a> と <a href="./rfc9330.html">[RFC9330]</a>）は、特定のコネクションが一貫して同じ ECN コードポイントを送信し続けることを想定しています。ハンドシェイクが正常に完了した後や、経路またはピアが ECN をサポートしていないと認識した場合、あるいは新しい経路へ移行する場合には、そのマーキングを切り替えることもあります。したがって、ソケットオプションを使って一貫したマーキングを設定する方が、一般にリソース効率が高くなります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4--Sending-ECN-Codepoints-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+However, some server designs receive all incoming packets on a single socket. As the many connections that constitute this packet stream may have different support for ECN, it is suitable to provide the ECN codepoint on a per-packet basis.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+しかし、サーバーの設計によっては、すべての受信パケットを単一のソケットで受信するものがあります。このパケットストリームを構成する多数のコネクションでは ECN のサポート状況が異なる可能性があるため、ECN コードポイントをパケット単位で指定できるようにするのが適切です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4--Sending-ECN-Codepoints-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Note that Apple platforms additionally provide a framework for network connections that allows sending ECN flags when using UDP without traditional socket option semantics. When sending or receiving UDP datagrams, IP protocol metadata carries ECN information in both directions. See [APPLE-NETWORK-FRAMEWORK].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Apple プラットフォームは、従来のソケットオプションの意味論を用いずに UDP 使用時に ECN フラグを送信できる、ネットワーク接続用のフレームワークも追加で提供していることに注意してください。UDP データグラムの送信時と受信時には、IP プロトコルのメタデータが双方向で ECN 情報を運びます。[APPLE-NETWORK-FRAMEWORK] を参照してください。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-1--On-a-Per-Socket-Basis" data-section="4.1">
+4.1. On a Per-Socket Basis
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.1. ソケット単位
+        </h5>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-1-1--Apple-FreeBSD-and-Linux" data-section="4.1.1">
+4.1.1. Apple, FreeBSD, and Linux
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.1.1. Apple、FreeBSD、Linux
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv4 packets on an IPv4 socket, Apple, FreeBSD, and Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IP-level socket option with the name IP_TOS. The value has the type int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv4 ソケットで UDP/IPv4 パケットを送信する場合、Apple、FreeBSD、Linux の各プラットフォームでは、IPPROTO_IP レベルの IP_TOS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。値の型は int です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv6 packets on an IPv6 socket, Apple, FreeBSD, and Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IPV6-level socket option with the name IPV6_TCLASS. The value has the type int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv6 パケットを送信する場合、Apple、FreeBSD、Linux の各プラットフォームでは、IPPROTO_IPV6 レベルの IPV6_TCLASS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。値の型は int です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv4 packets on an IPv6 socket, Linux platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IP-level socket option with the name IP_TOS.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Linux プラットフォームでは、IPPROTO_IP レベルの IP_TOS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv4 packets on an IPv6 socket, Apple and FreeBSD platforms allow the outgoing ECN codepoint to be configured by using the IPPROTO_IPV6-level socket option with the name IPV6_TCLASS.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Apple および FreeBSD プラットフォームでは、IPPROTO_IPV6 レベルの IPV6_TCLASS という名前のソケットオプションを使って、送信する ECN コードポイントを設定できます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p5">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Except for Apple platforms, this setsockopt() call also sets the DSCP that comprises the rest of the header byte. Applications making this call ought to preserve any existing DSCP setting, which might require an additional getsockopt() call, to avoid overriding commands set by other code in the stack. If there are multiple threads making changes to this byte, further safeguards will be necessary.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Apple プラットフォームを除き、この setsockopt() 呼び出しは、ヘッダーバイトの残りの部分を構成する DSCP も設定します。この呼び出しを行うアプリケーションは、スタック内の他のコードが設定した指示を上書きしないよう、既存の DSCP 設定を保持すべきであり、そのためには追加の getsockopt() 呼び出しが必要になる場合があります。複数のスレッドがこのバイトを変更する場合は、さらなる保護策が必要になります。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-1-1--Apple-FreeBSD-and-Linux-p6">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+An example of the technique described above can be found at [CHROMIUM-POSIX].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+上記の手法の例は [CHROMIUM-POSIX] で確認できます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-1-2--Windows" data-section="4.1.2">
+4.1.2. Windows
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.1.2. Windows
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4-1-2--Windows-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+At the time of this writing, Windows does not provide a way to configure marking on a per-socket basis.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本書の執筆時点では、Windows にはソケット単位でマーキングを設定する方法がありません。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-2--On-a-Per-Packet-Basis" data-section="4.2">
+4.2. On a Per-Packet Basis
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.2. パケット単位
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4-2--On-a-Per-Packet-Basis-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Packets can be individually marked with ECN codepoints using the ancillary data that accompanies a sendmsg() call.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+sendmsg() 呼び出しに付随する補助データを使って、個々のパケットに ECN コードポイントでマーキングできます。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-2-1--Apple-FreeBSD-and-Linux" data-section="4.2.1">
+4.2.1. Apple, FreeBSD, and Linux
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.2.1. Apple、FreeBSD、Linux
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4-2-1--Apple-FreeBSD-and-Linux-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv4 packets on an IPv4 socket, Apple, FreeBSD, and Linux use a cmsg with level IPPROTO_IP and type IP_TOS. On Apple and Linux, the type of data is int; and for FreeBSD, it is unsigned char.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv4 ソケットで UDP/IPv4 パケットを送信する場合、Apple、FreeBSD、Linux はレベル IPPROTO_IP、タイプ IP_TOS の cmsg を使います。データの型は、Apple と Linux では int、FreeBSD では unsigned char です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-2-1--Apple-FreeBSD-and-Linux-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv6 packets on an IPv6 socket, Apple, FreeBSD, and Linux use a cmsg with level IPPROTO_IPV6 and type IPV6_TCLASS. The type of the data is int.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv6 パケットを送信する場合、Apple、FreeBSD、Linux はレベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を使います。データの型は int です。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-2-1--Apple-FreeBSD-and-Linux-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For sending UDP/IPv4 packets on an IPv6 socket, Linux requires a cmsg with level IPPROTO_IP and type IP_TOS. Apple and FreeBSD accept a cmsg with level IPPROTO_IPV6 and type IPV6_TCLASS.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6 ソケットで UDP/IPv4 パケットを送信する場合、Linux ではレベル IPPROTO_IP、タイプ IP_TOS の cmsg が必要です。Apple と FreeBSD は、レベル IPPROTO_IPV6、タイプ IPV6_TCLASS の cmsg を受け付けます。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-2-1--Apple-FreeBSD-and-Linux-p4">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The same applies to the Linux-specific sendmmsg() call.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Linux 固有の sendmmsg() 呼び出しにも同じことが当てはまります。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-3">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="4-2-2--Windows" data-section="4.2.2">
+4.2.2. Windows
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+4.2.2. Windows
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="4-2-2--Windows-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For IPv4 packets, Windows uses a cmsg with level IPPROTO_IP and type IP_ECN.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv4パケットの場合、Windowsはレベルが IPPROTO_IP、タイプが IP_ECN の cmsg を使用します。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-2-2--Windows-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+For IPv6 packets, Windows uses a cmsg with level IPPROTO_IPV6 and type IPV6_ECN.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+IPv6パケットの場合、Windowsはレベルが IPPROTO_IPV6、タイプが IPV6_ECN の cmsg を使用します。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="4-2-2--Windows-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+An example of the technique described above can be found at [CHROMIUM-WINDOWS].
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+上記の手法の例は [CHROMIUM-WINDOWS] にあります。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="5--Security-Considerations" data-section="5">
+5. Security Considerations
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+5. セキュリティに関する考慮事項
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="5--Security-Considerations-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The security implications of ECN are documented in <a href="./rfc3168.html">[RFC3168]</a> and <a href="./rfc9330.html">[RFC9330]</a>. This document is a guide to enabling these capabilities, which incurs no additional security considerations.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+ECNのセキュリティ上の影響は <a href="./rfc3168.html">[RFC3168]</a> と <a href="./rfc9330.html">[RFC9330]</a> に記載されています。本文書はこれらの機能を有効にするためのガイドであり、追加のセキュリティ上の考慮事項は生じません。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="5--Security-Considerations-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Note that implementing ECN capabilities on some platforms, but not others, can help peers identify the operating system in use by a host, which can have privacy implications. This document aims to mitigate that possibility.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+一部のプラットフォームでECN機能を実装し、他では実装しない場合、ピアがホストの使用しているオペレーティングシステムを識別しやすくなる可能性があり、プライバシー上の影響が生じうることに注意してください。本文書は、その可能性を軽減することを目的としています。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="6--IANA-Considerations" data-section="6">
+6. IANA Considerations
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+6. IANAに関する考慮事項
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="6--IANA-Considerations-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+This document has no IANA actions.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+本文書にはIANAへの要請事項はありません。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="7--References" data-section="7">
+7. References
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+7. 参考文献
+        </h5>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="7-1--Normative-References" data-section="7.1">
+7.1. Normative References
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+7.1. 引用文献
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="7-1--Normative-References-p1">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc2474.html">[RFC2474]</a>  Nichols, K., Blake, S., Baker, F., and D. Black,
+              &#34;Definition of the Differentiated Services Field (DS
+              Field) in the IPv4 and IPv6 Headers&#34;, RFC 2474,
+              DOI 10.17487/RFC2474, December 1998,
+              &lt;https://www.rfc-editor.org/info/rfc2474&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-1--Normative-References-p2">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc3168.html">[RFC3168]</a>  Ramakrishnan, K., Floyd, S., and D. Black, &#34;The Addition
+              of Explicit Congestion Notification (ECN) to IP&#34;,
+              RFC 3168, DOI 10.17487/RFC3168, September 2001,
+              &lt;https://www.rfc-editor.org/info/rfc3168&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-1--Normative-References-p3">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc9330.html">[RFC9330]</a>  Briscoe, B., Ed., De Schepper, K., Bagnulo, M., and G.
+              White, &#34;Low Latency, Low Loss, and Scalable Throughput
+              (L4S) Internet Service: Architecture&#34;, RFC 9330,
+              DOI 10.17487/RFC9330, January 2023,
+              &lt;https://www.rfc-editor.org/info/rfc9330&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-2">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="7-2--Informative-References" data-section="7.2">
+7.2. Informative References
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+7.2. 参考引用
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p1">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [APPLE-NETWORK-FRAMEWORK]
+              &#34;NWProtocolIP.Metadata&#34;,
+              &lt;https://developer.apple.com/documentation/network/
+              nwprotocolip/metadata&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p2">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [CHROMIUM] &#34;The Chromium Projects&#34;,
+              &lt;https://www.chromium.org/chromium-projects/&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p3">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [CHROMIUM-POSIX]
+              &#34;udp_socket_posix.cc&#34;, commit 6bdc14d, 19 June 2026,
+              &lt;https://source.chromium.org/chromium/chromium/
+              src/+/main:net/socket/udp_socket_posix.cc&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p4">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [CHROMIUM-WINDOWS]
+              &#34;udp_socket_win.cc&#34;, commit 85a1d1c, 10 June 2026,
+              &lt;https://source.chromium.org/chromium/chromium/
+              src/+/main:net/socket/udp_socket_win.cc&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p5">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [EXAMPLES] &#34;ecn-examples&#34;, commit 39e39bf, 1 December 2025,
+              &lt;https://github.com/nplab/ecn-examples&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p6">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc4291.html">[RFC4291]</a>  Hinden, R. and S. Deering, &#34;IP Version 6 Addressing
+              Architecture&#34;, RFC 4291, DOI 10.17487/RFC4291, February
+              2006, &lt;https://www.rfc-editor.org/info/rfc4291&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p7">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc6679.html">[RFC6679]</a>  Westerlund, M., Johansson, I., Perkins, C., O&#39;Hanlon, P.,
+              and K. Carlberg, &#34;Explicit Congestion Notification (ECN)
+              for RTP over UDP&#34;, RFC 6679, DOI 10.17487/RFC6679, August
+              2012, &lt;https://www.rfc-editor.org/info/rfc6679&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p8">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc8261.html">[RFC8261]</a>  Tuexen, M., Stewart, R., Jesup, R., and S. Loreto,
+              &#34;Datagram Transport Layer Security (DTLS) Encapsulation of
+              SCTP Packets&#34;, RFC 8261, DOI 10.17487/RFC8261, November
+              2017, &lt;https://www.rfc-editor.org/info/rfc8261&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p9">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc8888.html">[RFC8888]</a>  Sarker, Z., Perkins, C., Singh, V., and M. Ramalho, &#34;RTP
+              Control Protocol (RTCP) Feedback for Congestion Control&#34;,
+              RFC 8888, DOI 10.17487/RFC8888, January 2021,
+              &lt;https://www.rfc-editor.org/info/rfc8888&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p10">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc9000.html">[RFC9000]</a>  Iyengar, J., Ed. and M. Thomson, Ed., &#34;QUIC: A UDP-Based
+              Multiplexed and Secure Transport&#34;, RFC 9000,
+              DOI 10.17487/RFC9000, May 2021,
+              &lt;https://www.rfc-editor.org/info/rfc9000&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p11">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc9260.html">[RFC9260]</a>  Stewart, R., Tüxen, M., and K. Nielsen, &#34;Stream Control
+              Transmission Protocol&#34;, RFC 9260, DOI 10.17487/RFC9260,
+              June 2022, &lt;https://www.rfc-editor.org/info/rfc9260&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p12">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc9293.html">[RFC9293]</a>  Eddy, W., Ed., &#34;Transmission Control Protocol (TCP)&#34;,
+              STD 7, RFC 9293, DOI 10.17487/RFC9293, August 2022,
+              &lt;https://www.rfc-editor.org/info/rfc9293&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p13">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   <a href="./rfc9868.html">[RFC9868]</a>  Touch, J. and C. Heard, Ed., &#34;Transport Options for UDP&#34;,
+              RFC 9868, DOI 10.17487/RFC9868, October 2025,
+              &lt;https://www.rfc-editor.org/info/rfc9868&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p14">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [WINDOWS-DOC]
+              &#34;WSASetRecvIPEcn function (ws2tcpip.h)&#34;, 22 February 2024,
+              &lt;https://learn.microsoft.com/en-
+              us/windows/win32/api/ws2tcpip/nf-ws2tcpip-
+              wsasetrecvipecn&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row" id="7-2--Informative-References-p15">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   [WINDOWS-SOCKOPT]
+              &#34;MSDN - IPPROTO_IP socket options&#34;, 7 May 2026,
+              &lt;https://learn.microsoft.com/en-us/windows/win32/winsock/
+              ipproto-ip-socket-options&gt;.
+        </pre>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Acknowledgments">
+Acknowledgments
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+謝辞
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Acknowledgments-p1">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+The author would like to thank Ryan Hamilton, who provided constant advice through this effort. Randall Meyer from Apple and Nick Grifka from Microsoft provided useful hints about the behavior of their respective operating systems. However, the author takes full responsibility for any errors above.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+著者は、この取り組みを通じて常に助言をくださった Ryan Hamilton に感謝します。Apple の Randall Meyer と Microsoft の Nick Grifka は、それぞれのオペレーティングシステムの挙動について有益なヒントを提供してくれました。ただし、上記の誤りについては、著者がすべての責任を負います。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Acknowledgments-p2">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Michael Tüxen wrote the &#34;ecn-examples&#34; code that was very helpful in verifying the conclusions in this document. He also made multiple editorial contributions.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Michael Tüxen は、本文書の結論を検証する上で非常に役立った &#34;ecn-examples&#34; のコードを書きました。また、複数の編集上の貢献もしてくれました。
+        </p>
+      </div>
+    </div>
+    <div class="row" id="Acknowledgments-p3">
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Neal Cardwell, Gorry Fairhurst, Max Franke, Rodney Grimes, Will Hawkins, Guillaume Hétier, Max Inden, Jonathan Lennox, Colin Perkins, Marten Seemann, and Greg White made improvements to this document.
+        </p>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <p class="text indent-3">
+Neal Cardwell、Gorry Fairhurst、Max Franke、Rodney Grimes、Will Hawkins、Guillaume Hétier、Max Inden、Jonathan Lennox、Colin Perkins、Marten Seemann、Greg White は、本文書の改善に貢献しました。
+        </p>
+      </div>
+    </div>
+    <div class="row sec-row sec-level-1">
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2" id="Authors-Address">
+Author&#39;s Address
+        </h5>
+      </div>
+      <div class="col-sm-12 col-md-6">
+        <h5 class="text mt-2">
+著者の連絡先
+        </h5>
+      </div>
+    </div>
+    <div class="row" id="Authors-Address-p1">
+      <div class="col-sm-12 col-md-12">
+        <pre class="text text-monospace">
+   Martin Duke
+   Google
+   Email: martin.h.duke@gmail.com
+        </pre>
+      </div>
+    </div>
+  </div>
+  <div id="rfc_footer"></div>
+</body>
+</html>
