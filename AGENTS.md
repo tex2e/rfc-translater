@@ -56,11 +56,15 @@ RFC2119/RFC8174のキーワードは**規範強度そのもの**であり、意�
 
 | 原文 | 規範強度 | 日本語訳 |
 |---|---|---|
-| MUST / SHALL / REQUIRED | 必須 | 〜しなければなりません (MUST) |
-| MUST NOT / SHALL NOT | 禁止 | 〜してはなりません (MUST NOT) |
-| SHOULD / RECOMMENDED | 推奨 | 〜すべきです (SHOULD) |
-| SHOULD NOT / NOT RECOMMENDED | 非推奨 | 〜すべきではありません (SHOULD NOT) |
-| MAY / OPTIONAL | 任意 | 〜してもよい (MAY) |
+| MUST / SHALL / REQUIRED | 必須 | 〜しなければなりません (MUST / SHALL / REQUIRED) |
+| MUST NOT / SHALL NOT | 禁止 | 〜してはなりません (MUST NOT / SHALL NOT) |
+| SHOULD / RECOMMENDED | 推奨 | 〜すべきです (SHOULD / RECOMMENDED) |
+| SHOULD NOT / NOT RECOMMENDED | 非推奨 | 〜すべきではありません (SHOULD NOT / NOT RECOMMENDED) |
+| MAY / OPTIONAL | 任意 | 〜してもよい (MAY / OPTIONAL) |
+
+- 丸括弧に書く原語は、**原文のキーワードをそのまま**使います。表の「/」は原文にあるキーワードのうち該当するものを選ぶ意味です。
+  例: `SHALL NOT` は `(SHALL NOT)`、`REQUIRED` は `(REQUIRED)`、`RECOMMENDED` は `(RECOMMENDED)`。`MUST NOT` に置き換えません。
+- 同義のキーワード同士（`SHALL` と `MUST` など）は規範強度が同じなので、lint は `(MUST)` と `(SHALL)` を区別せず、どちらもエラーにしません。ただし、新規の翻訳と修正では原文の表記に揃えます。
 
 - 併記する原語は `(MUST)` のように**半角丸括弧**で書き、直前に半角スペースを入れます。
 - **「〜する必要があります」をMUSTの訳に使わないこと。** SHOULD相当にも読めるため、
