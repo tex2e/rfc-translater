@@ -47,6 +47,8 @@ CHECKS = {
     "W011": "RFC2119キーワード注釈の欠落 (原文にキーワードがあるのに訳文に (MUST) 等の併記が1つもない)",
     "W013": "訳文の捏造・欠落の疑い (原文の数値や識別子が訳文から大量に消えている)",
     "W014": "用語集違反 (AGENTS.md の用語集で禁止している訳語・既知の誤訳語を使っている)",
+    "W015": "語順崩れ (文末の述語「ます/です」の後ろに名詞句がぶら下がっている。例: 上回っています標準スペース。)",
+    "W016": "助詞連鎖の破壊 (「をに」「がで」「のの」など、名詞が抜け落ちて助詞が連続している)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -1037,6 +1039,58 @@ def check_glossary(en, ja):
 
 
 # ------------------------------------------------------------------------------
+# 機械翻訳由来の語順崩れ (W015) と助詞連鎖の破壊 (W016)
+# ------------------------------------------------------------------------------
+
+# W015: 英語の後置修飾句を訳し損ね、文末の述語の後ろに名詞句が残っている。
+#   例) コストがメリットを上回っています標準スペース。
+#       …変更を許可する権利を付与していない可能性がありますIETF標準プロセス外。
+# 述語の直後から「。」まで、述語を挟まずに名詞句 (漢字・カタカナで終わる) が続く場合に検出する。
+# 誤検知を避けるため、次は対象外にする。
+#   - 「ますます」「すでに」「すべて」「すぐ」などの語の一部 (後続文字で判定)
+#   - 「ますが」「ますか」「ますので」「ですし」など、述語に接続助詞・終助詞が続く場合
+#   - 「なりすます」「だます」など、動詞の語幹に「ます/まし」を含む場合 (直前の文字で判定)
+_DANGLING_FRAG = r"[ぁ-んァ-ヶ一-龠ーA-Za-z0-9・\-]"
+DANGLING_PREDICATE_RE = re.compile(
+    r"(?<![ましすだ])(?:ます|ました|ません|です|でした)"
+    r"(?!ます|でした|でに|べて|ぐ|ので|から|が|か|し|ね|よ|と|け|ら|て|で)"
+    r"(?:(?!ます|です|ません|ました)" + _DANGLING_FRAG + r")*?"
+    r"[一-龠ァ-ヶー][一-龠ァ-ヶーA-Za-z0-9]*(?=。)"
+)
+
+# W016: 名詞が抜け落ちて格助詞が連続している。
+#   例) メッセージをに転送します / 属性値がに設定されている / Counter64のの使用
+# 直前がひらがなの場合 (「ものの」「にに」を含む活用形など) は対象外にする。
+PARTICLE_CHAIN_PATTERNS = [
+    re.compile(r"(?<![ぁ-ん])(?:を|が)(?:に|を|が|へ|で)(?=[一-龠ァ-ヶ])"),
+    re.compile(r"(?<![ぁ-ん])にに(?=[一-龠ァ-ヶぁ-ん])"),
+    # 「のれん」「ののしる」などの語は除外する
+    re.compile(r"(?<=[A-Za-z0-9ァ-ヶー一-龠])のの(?!しる|しり|れん|み|ち|め)"),
+    re.compile(r"(?<![もの])のへの"),
+]
+
+
+def _snippet(ja, start, end, before=15, after=3):
+    return ja[max(0, start - before):end + after]
+
+
+def check_dangling_predicate(ja):
+    """W015: 文末の述語の後ろに名詞句がぶら下がっている箇所を返す。"""
+    return [("W015", f"述語の後ろに名詞句がある: 「{_snippet(ja, m.start(), m.end(), after=1)}」")
+            for m in DANGLING_PREDICATE_RE.finditer(ja)]
+
+
+def check_particle_chain(ja):
+    """W016: 「をに」「のの」など、助詞が連続している箇所を返す。"""
+    found = []
+    for pat in PARTICLE_CHAIN_PATTERNS:
+        for m in pat.finditer(ja):
+            found.append((m.start(), "W016",
+                          f"助詞「{m.group(0)}」が連続している: 「{_snippet(ja, m.start(), m.end(), 10, 8)}」"))
+    return [(code, detail) for _, code, detail in sorted(found)]
+
+
+# ------------------------------------------------------------------------------
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
 
@@ -1186,6 +1240,14 @@ def lint_file(path, enabled):
         # --- 用語集 ---
         if "W014" in enabled:
             for code, detail in check_glossary(en, ja):
+                findings.append(Finding(code, path, rfc, i, detail, en, ja))
+
+        # --- 語順崩れ・助詞連鎖 ---
+        if "W015" in enabled and not is_title:
+            for code, detail in check_dangling_predicate(ja):
+                findings.append(Finding(code, path, rfc, i, detail, en, ja))
+        if "W016" in enabled and not is_title:
+            for code, detail in check_particle_chain(ja):
                 findings.append(Finding(code, path, rfc, i, detail, en, ja))
 
         # --- 文体 ---
