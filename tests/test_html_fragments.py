@@ -78,6 +78,26 @@ class TestHtmlFragments(unittest.TestCase):
         self.assertTrue(blocks[0].is_code)
         self.assertEqual(blocks[0].text, text)
 
+    def test_http_and_mime_samples_keep_physical_lines(self):
+        for text in ['   HTTP/1.1 200 OK\n   ...',
+                     '   GET /inbox/ HTTP/1.1\n   Host: www.example.com',
+                     '      --boundary-example\n      Content-Location: image.gif',
+                     '      R0lGODlhGAGgAPEAAP/////ZRaCgoAAAACH+PUNvcHlyaWdodCAoQykgMTk5\n      etc...']:
+            with self.subTest(text=text):
+                blocks = list(Paragraphs(text, ignore_header=False))
+                self.assertEqual(len(blocks), 1)
+                self.assertTrue(blocks[0].is_code)
+                self.assertIn('\n', blocks[0].text)
+
+    def test_explicit_xml_input_example_is_not_translated(self):
+        example = '   See <relref section="2.3" target="RFC9999"/> for an overview.'
+        blocks = list(Paragraphs('   For example, with an input of:\n\n' + example, ignore_header=False))
+        self.assertFalse(blocks[0].is_code)
+        self.assertTrue(blocks[1].is_code)
+        self.assertEqual(blocks[1].text, example.strip())
+        inline = list(Paragraphs('   This is ordinary prose.\n\n' + example, ignore_header=False))
+        self.assertFalse(inline[1].is_code)
+
     def test_unrelated_xml_and_html_documents_are_not_merged(self):
         text = '<?xml version="1.0"?><feed><entry>Example</entry></feed>'
         blocks = list(Paragraphs(text + '\n\nExplanation.\n\n<html><body>Other example</body></html>', ignore_header=False))

@@ -19,7 +19,8 @@ from src.infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 
 # 見出し・目次・図表・箇条書き・RFC参照を一通り含むRFC
 SAMPLE_RFCS = ['8446', '9110', '5280', '2616', '7540', '9293',
-               '2397', '5005', '5707', '6121', '6596', '6787']
+               '2397', '5005', '5707', '6121', '6596', '6787',
+               '2557', '4590', '4709', '5090', '7991', '7992']
 
 
 class MemoryHtmlRepository(IRfcHtmlRepository):

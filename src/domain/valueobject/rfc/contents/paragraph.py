@@ -145,6 +145,10 @@ class Paragraph:
             return False
 
         conds = []
+        conds.append(re.match(r'^HTTP/\d+(?:\.\d+)? +\d{3}\b', text))  # HTTP response
+        conds.append(re.match(r'^(?:GET|HEAD|POST|PUT|DELETE|OPTIONS|PATCH|CONNECT|TRACE) +\S+ +HTTP/\d', text))
+        conds.append(re.match(r'^--[a-zA-Z0-9][-\w]*(?:\n|$)', text))  # MIME boundary
+        conds.append(re.search(r'^[A-Za-z0-9+/]{32,}={0,2}$', text, re.MULTILINE))  # Base64 sample
         conds.append(re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text))  # fig
         conds.append(re.search(r'   -{1,3}>|<-{1,3}   ', text))  # fig
         conds.append(re.search(r'\.{4}|(?:\. ){4}', text))  # TOC

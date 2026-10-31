@@ -50,10 +50,16 @@ class Paragraphs:
         for i, chunk in enumerate(chunks):
             # 最初の段落は著者の情報などのメタ情報のため翻訳しない
             is_header = (i == 0 and ignore_header)
+            # RFC 7991/7992 show XML input mixed with ordinary text nodes.
+            # An explicit introduction makes the following paragraph an
+            # example; inline markup elsewhere must remain translatable.
+            input_example = i > 0 and re.search(
+                r'(?:with an input of|for this input|for example)\s*:\s*$', chunks[i - 1], re.I)
+            input_example = bool(input_example and re.search(r'<[\w:-]+\s+[\w:-]+\s*=', chunk))
             # 文字列を段落にしてから配列に追加していく
             # Keep existing XML/code blocks intact, including text nodes that
             # happen to use HTML tag names such as <body> or <input>.
-            paragraph = Paragraph(chunk, is_code=is_header)
+            paragraph = Paragraph(chunk, is_code=is_header or input_example)
             introduction = re.match(r'^\s*[A-Za-z][^<>\n]*:\n', chunk)
             if paragraph.is_code and (is_header or not introduction):
                 self.paragraphs.append(paragraph)
