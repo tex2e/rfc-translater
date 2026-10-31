@@ -1483,6 +1483,7 @@ class RfcListUi {
     this.domStatus = document.querySelector('#filterStatus');
     this.domHideObsoleted = document.querySelector('#filterHideObsoleted');
     this.domCount = document.querySelector('#searchCount');
+    this.domEmpty = document.querySelector('#searchEmpty');
     this._createIndex();
 
     this.domSearch.addEventListener('input', () => this._update());
@@ -1514,11 +1515,19 @@ class RfcListUi {
   _createIndex() {
     document.querySelectorAll(RfcListUi.QUERYSELECTOR_RFCLIST_ITEM).forEach(el => {
       const rfcNumber = el.id.replace(/^RFC/, "");
-      const keywords = this._normalize(el.innerText).split(/\s+/)
+      const titleEn = el.querySelector('.rfc-title-en');
+      const titleJa = el.querySelector('.rfc-title-ja');
+      const keywords = this._normalize(titleEn ? titleEn.textContent : el.innerText).split(/\s+/)
         .filter(x => !x.match(/^(?:rfc|-)?$/))
         .map(x => x.replace(/[-()/:,]/g, ''));
-      this.items.push({ el, rfcNumber, keywords, titleJa: null });
+      this.items.push({ el, rfcNumber, keywords,
+        titleJa: titleJa ? this._normalize(titleJa.textContent) : null });
     });
+    // 生成済みの一覧では、表示中の日本語タイトルをそのまま検索に使う。
+    // 旧形式のHTMLは従来どおりJSONを取得する。
+    if (document.querySelector('#RFCs .rfc-list-titles')) {
+      this.titlesJa = Object.fromEntries(this.items.map(item => [item.rfcNumber, item.titleJa || '']));
+    }
     this.visibleItems = this.items;
   }
 
@@ -1529,7 +1538,7 @@ class RfcListUi {
 
   _findExactNumber(query) {
     const m = this._normalize(query).trim().match(/^(?:rfc\s*)?(\d+)$/);
-    return m ? this.items.find(item => item.rfcNumber === String(parseInt(m[1]))) : null;
+    return m ? this.visibleItems.find(item => item.rfcNumber === String(parseInt(m[1]))) : null;
   }
 
   // 現在の入力で検索し直してから、先頭の検索結果を開く
@@ -1566,6 +1575,9 @@ class RfcListUi {
       }
     }
     this.visibleItems = visible;
+    if (this.domEmpty) {
+      this.domEmpty.hidden = visible.length !== 0;
+    }
     if (this.domCount) {
       this.domCount.textContent = visible.length === this.items.length
         ? `全${this.items.length.toLocaleString()}件`

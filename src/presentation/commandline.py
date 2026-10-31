@@ -124,23 +124,22 @@ def main():
         # 本文中のRFCへのリンク先は生成時に決まるため、翻訳を追加したら全ページを作り直す
         print("[*] 全RFC・全DraftのHTMLの作成")
         make_html_all()
-        print("[*] トップページ(index.html)の作成")
-        make_index(IndexHtmlFileRepository(),
-                   RfcHtmlFileRepository())
         print("[*] RFCの日本語タイトル一覧(data-rfc-title.json)の作成")
         make_title_json(RfcTitleJsonFileRepository(),
                         RfcJsonTransFileRepository())
+        print("[*] トップページ(index.html)の作成")
+        make_index(IndexHtmlFileRepository(),
+                   RfcHtmlFileRepository())
         print("[*] draft/index.htmlの作成")
         make_index_draft(IndexDraftHtmlFileRepository(),
                          RfcHtmlFileRepository())
     elif args.make_index:
-        print("[*] トップページ(index.html)の作成")
-        make_index(IndexHtmlFileRepository(),
-                   RfcHtmlFileRepository())
-        # トップページと同じくRFC一覧に依存するため、まとめて最新化する
         print("[*] RFCの日本語タイトル一覧(data-rfc-title.json)の作成")
         make_title_json(RfcTitleJsonFileRepository(),
                         RfcJsonTransFileRepository())
+        print("[*] トップページ(index.html)の作成")
+        make_index(IndexHtmlFileRepository(),
+                   RfcHtmlFileRepository())
     elif args.make_index_draft:
         print("[*] draft/index.htmlの作成")
         make_index_draft(IndexDraftHtmlFileRepository(),

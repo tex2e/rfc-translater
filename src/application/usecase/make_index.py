@@ -39,9 +39,14 @@ def make_index(index_html_repo: IIndexHtmlRepository,
     if os.path.isfile(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE):
         statuses = RfcFile.read_json_file(RfcFile.OUTPUT_HTML_RFC_LIST_JSON_FILE)
 
+    titles_ja = {}
+    if os.path.isfile(RfcFile.OUTPUT_HTML_RFC_TITLE_JSON_FILE):
+        titles_ja = RfcFile.read_json_file(RfcFile.OUTPUT_HTML_RFC_TITLE_JSON_FILE)
+
     mylookup = TemplateLookup(directories=["./"], input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_INDEX)
-    output = mytemplate.render_unicode(ctx={'files': files}, statuses=statuses,
+    output = mytemplate.render_unicode(ctx={'files': files}, is_draft=False,
+                                       statuses=statuses, titles_ja=titles_ja,
                                        status_codes=RFC_STATUS_CODES)
 
     # HTMLファイル出力
@@ -62,7 +67,7 @@ def make_index_draft(index_draft_html_repo: IIndexDraftHtmlRepository,
     mylookup = TemplateLookup(directories=["./"], input_encoding='utf-8', output_encoding='utf-8')
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_INDEX)
     output = mytemplate.render_unicode(ctx={'files': files}, is_draft=True,
-                                       statuses={}, status_codes=RFC_STATUS_CODES)
+                                       statuses={}, titles_ja={}, status_codes=RFC_STATUS_CODES)
 
     # HTMLファイル出力
     index_draft_html_repo.save(output)
