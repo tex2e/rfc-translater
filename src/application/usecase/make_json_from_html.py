@@ -60,6 +60,18 @@ def make_json_from_html(rfc: IRfc,
         if len(texts) <= 0:
             continue
 
+        # 対訳目次は表示用の派生データ。日本語側をrawのjaへ逆輸入しない。
+        # 原文専用要素から、空白・改行・indentをそのまま復元する。
+        if 'toc-source' in texts[0].get('class', []):
+            data[RfcJsonElem.CONTENTS].append({
+                RfcJsonElem.Contents.TEXT: texts[0].get_text(),
+                RfcJsonElem.Contents.JA: '',
+                RfcJsonElem.Contents.INDENT: int(texts[0]['data-indent']),
+                RfcJsonElem.Contents.RAW: True,
+                RfcJsonElem.Contents.TOC: True,
+            })
+            continue
+
         # タグ名（pre:図表, h5:見出し, p:文章）
         tag_name = texts[0].name
 

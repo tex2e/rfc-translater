@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import textwrap
 import markupsafe
 from pprint import pprint
@@ -15,6 +16,7 @@ from ...domain.services.rfcfile import RfcFile
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
+from .rfc_toc import make_toc_rows
 
 
 def make_html(rfc: IRfc,
@@ -49,12 +51,19 @@ def make_html(rfc: IRfc,
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_RFC)
     is_draft = isinstance(rfc, RfcDraft)
     contents = obj[RfcJsonElem.CONTENTS]
+    paragraph_ids = RfcHtmlHelper.make_paragraph_ids(contents)
+    toc_rows = make_toc_rows(contents, paragraph_ids, RfcHtmlHelper.text_to_id)
+    missing = [row['en'].strip() for rows in toc_rows.values() for row in rows
+               if not row['translated'] and not row['blank']]
+    if missing:
+        print(f'[!] RFC {rfc.get_id()}: 目次の見出し訳が未解決 ({len(missing)}件): '
+              + '; '.join(missing[:5]) + ('; ...' if len(missing) > 5 else ''), file=sys.stderr)
     output = mytemplate.render_unicode(ctx=obj, summary=summary, is_draft=is_draft,
                                        bcp14=RfcHtmlHelper.uses_bcp14(contents),
                                        orig_url=RfcHtmlHelper.get_orig_url(obj[RfcJsonElem.NUMBER], is_draft),
-                                       paragraph_ids=RfcHtmlHelper.make_paragraph_ids(contents),
+                                       paragraph_ids=paragraph_ids,
                                        rule_start=RfcHtmlHelper.rule_start_index(contents),
-                                       toc_section_ids=RfcHtmlHelper.make_toc_section_ids(contents),
+                                       toc_rows=toc_rows,
                                        RfcJsonElem=RfcJsonElem, RfcHtmlHelper=RfcHtmlHelper)
 
     # 翻訳したRFC (html) の作成
@@ -221,27 +230,9 @@ class RfcHtmlHelper:
         return ids
 
     @staticmethod
-    def make_toc_section_ids(contents: list) -> dict[str, str]:
-        """目次中の章節番号から見出しのidへの対応表（"6.1.6." → "6-1-6--Outputs"）"""
-        section_ids = {}
-        for paragraph in contents:
-            if paragraph.get(RfcJsonElem.Contents.SECTION_TITLE) == True:
-                section_id = RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT])
-                key = re.sub(r'--+.+$', '-', section_id).replace('-', '.')
-                key = re.sub(r'^(Appendix)\.', r'\1 ', key)
-                section_ids.setdefault(key, section_id)
-        return section_ids
-
-    @staticmethod
-    def render_toc(text: str, section_ids: dict[str, str], is_draft: bool = False) -> str:
-        """目次（整形済みテキスト）をエスケープし、章節番号を本文の見出しへのリンクにする"""
+    def render_toc_cell(text: str, target: str | None) -> str:
         escaped = str(markupsafe.escape(text))
-        def _link(m: re.Match) -> str:
-            if m[1] in section_ids:
-                return f'<a href="#{section_ids[m[1]]}">{m[1]}</a>'
-            return m[1]
-        escaped = re.sub(r'(?<= )((?:[A-Z]\.)?(?:\d+\.)+|Appendix [A-Z]\.)(?= )', _link, escaped)
-        return RfcHtmlHelper.link_rfc_refs(escaped, is_draft)
+        return f'<a href="#{markupsafe.escape(target)}">{escaped}</a>' if target else escaped
 
     @staticmethod
     def get_orig_url(number: str | int, is_draft: bool) -> str:
