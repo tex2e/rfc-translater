@@ -95,6 +95,21 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
             else:
                 entries[-1].append(line)
         rows = []
+        # tocフラグには図表の誤判定もある。明示的な目次見出しか、複数の
+        # 本文見出しとの一致で目次を確認してから、短縮題名を番号で解決する。
+        preceding = next((p['text'].strip().casefold() for p in reversed(contents[:i])
+                          if not p.get('raw')), '')
+        numbered = matches = 0
+        for lines in entries:
+            key, _, title = _parts(lines[0])
+            if key is None:
+                continue
+            numbered += 1
+            candidates = by_number.get(key, [])
+            full_title = _without_page(' '.join([title] + [s.strip() for s in lines[1:]]))
+            if len(candidates) == 1 and candidates[0]['title'] == _normalize(full_title):
+                matches += 1
+        confirmed = preceding in ('table of contents', 'contents') or (matches >= 2 and matches * 2 >= numbered)
         for lines in entries:
             key, prefix, first_title = _parts(lines[0])
             title = _without_page(' '.join([first_title] + [s.strip() for s in lines[1:]]))
@@ -109,11 +124,22 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
                 if single_dot and heading['title'] == _normalize(title[:single_dot.start()]):
                     title = title[:single_dot.start()]
                     page = re.search(r'(?P<page>\d+)$', lines[-1])
-            if heading and heading['title'] != _normalize(title):
+            title_mismatch = bool(heading and heading['title'] != _normalize(title))
+            if title_mismatch and not (confirmed and key is not None):
                 heading = None
             ja = _japanese_title(heading['ja'], key is not None) if heading else ''
             source = '\n'.join(lines)
             translated = bool(ja)
+            issue = None
+            if source.strip():
+                if len(candidates) > 1:
+                    issue = 'ambiguous_heading'
+                elif not heading:
+                    issue = 'missing_heading' if confirmed else 'unrecognized_toc'
+                elif not ja:
+                    issue = 'missing_translation'
+                elif title_mismatch:
+                    issue = 'title_mismatch'
             if ja:
                 ja = prefix + ja
                 if page:
@@ -125,6 +151,7 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
             indent = ' ' * paragraph.get('indent', 0)
             rows.append({'en': textwrap.indent(source, indent), 'ja': textwrap.indent(ja, indent),
                          'target': heading['target'] if heading else None,
+                         'number': key, 'issue': issue, 'confirmed': confirmed,
                          'translated': translated, 'blank': not source.strip()})
         result[i] = rows
     return result

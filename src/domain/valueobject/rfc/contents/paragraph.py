@@ -66,8 +66,12 @@ class Paragraph:
 
         # BREAKの置き換え (段落がページをまたいだときの処理)
         if self.is_code:
-            # 図表・コードのときは、改行に置き換える
-            self.text = self.text.replace(BREAK, '\n')
+            # 改ページ直後の行も独立した行として字下げを計算する。
+            # dedent後の置換では、この行だけページ共通の字下げが残ってしまう。
+            if BREAK in text:
+                logical_text = text.replace(BREAK, '\n').lstrip('\n').rstrip()
+                self.text = textwrap.dedent(logical_text)
+                self.indent = RfcUtils.get_line_len_diff(logical_text, self.text)
         else:
             # 箇条書き（複数行）以外の文章のときは、空白1つに置き換える (ページ間の余分な空白も取り除く)
             self.text = re.sub(BREAK + r'\s+', ' ', self.text)

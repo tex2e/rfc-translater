@@ -87,6 +87,24 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
     見出しとの対応が不明・曖昧な項目や訳がない項目は英語を残し、生成ログに報告します。
     HTMLからJSONへ戻す際は、表示用の対訳を除外して元の目次原文を復元します。
 
+    目次の検査は次のコマンドで行います。通常の検査はネットワークにアクセスしません。
+    ```bash
+    python3 tools/check_toc.py --rfc 3323 --check-html
+    python3 tools/check_toc.py --check-html --output /tmp/toc-report.json
+    ```
+    章節番号が一意で、明示的な目次見出しまたは複数の本文見出しとの一致から目次と確認できる場合、
+    短縮された題名も番号でリンクします。題名相違、見出し欠落、番号重複、訳の欠落、目次の誤判定候補は別々に報告します。
+    字下げの多数派との違いは調査候補です。原文の階層を推測で整形するためには使いません。
+    旧TXTの改ページ直後に段落共通の字下げが残る問題は、次の手順で原文照合して補正できます。
+    ```bash
+    python3 tools/check_toc.py --source-dir /tmp/rfc-sources --fetch-sources --output /tmp/toc-source-report.json
+    python3 tools/check_toc.py --source-dir /tmp/rfc-sources --apply-indent --output /tmp/toc-repair-report.json
+    ```
+    自動補正は、RFC番号を検証した原文TXTの改ページ直後の行に一意一致し、
+    段落共通の字下げが余分に残っている場合の先頭空白だけに限定します。
+    補正後は翻訳linterを実行し、HTMLを再生成してください。
+    CIではHTMLのリンク先の存在・一意性・英日一致を検査し、比較元コミットにないエラーを検出すると失敗します。
+
     翻訳済みの全RFCのHTMLと、トップページ・日本語タイトル一覧をまとめて作り直します。Draftは公開対象外です。
     本文中の `[RFCxxxx]` のリンク先（翻訳済みページがあればサイト内、なければdatatracker）はHTMLの生成時に決まります。
     **新しいRFCの翻訳を追加したときや、テンプレート（templates/）を変更したときに実行してください。**
