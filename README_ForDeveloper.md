@@ -81,7 +81,7 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
 
 - **全ページの作り直し**
 
-    翻訳済みの全RFC・全DraftのHTMLと、トップページ・Draftの一覧ページ・日本語タイトル一覧をまとめて作り直します。
+    翻訳済みの全RFCのHTMLと、トップページ・日本語タイトル一覧をまとめて作り直します。Draftは公開対象外です。
     本文中の `[RFCxxxx]` のリンク先（翻訳済みページがあればサイト内、なければdatatracker）はHTMLの生成時に決まります。
     **新しいRFCの翻訳を追加したときや、テンプレート（templates/）を変更したときに実行してください。**
     実行しないと、既存ページから新しく翻訳したRFCへのリンクがdatatrackerを向いたままになります。
@@ -117,16 +117,9 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
     python3 main.py --make-title-json
     ```
 
-- **RFC Draftの翻訳**
+- **RFC Draftの扱い**
 
-    例えば、TLS Encrypted Client Hello (Draft版) である https://datatracker.ietf.org/doc/draft-ietf-tls-esni/ を翻訳したい場合は、以下のコマンドを実行します。
-    翻訳の補助コマンドは `--rfc` の代わりに `--draft` を指定しても同じように使えます。
-    ```bash
-    python3 main.py --draft draft-ietf-tls-esni-14 --fetch
-    # （Claudeで翻訳する）
-    python3 main.py --draft draft-ietf-tls-esni-14 --make
-    python3 main.py --make-index-draft  # インデックスページの作成
-    ```
+    Draftページの公開は廃止しました。既存の `data/draft/` の翻訳データは保存しますが、DraftのHTML・一覧ページは生成しません。`--make-all` も正式なRFCのみを対象とします。
 
 - **RFCの要約作成**
 
@@ -154,8 +147,6 @@ RFCの取得とHTMLの生成は `main.py` が行い、翻訳は Claude が行い
 | html/index.html | トップページの生成 | make_index.py (生成)
 | data/draft/draft-*.json | 段落区切りの文書 | fetch_rfc.py（取得）
 | data/draft/draft-*-trans.json | 各文章の翻訳を付与した情報 | trans_rfc.py（翻訳の補助）
-| html/draft/draft-*.html | RFCドラフトの原文と翻訳を並べて表示するHTML | make_html.py（生成）
-| html/draft/index.html | RFCドラフト一覧のトップページHTML | make_html.py（生成）
 
 
 ### 翻訳結果確認
@@ -172,13 +163,6 @@ python3 -m unittest discover -s tests -p "test_*.py"
 特定のテストのみ実施したい場合
 ```
 python3 -m unittest tests.test_fetch_rfc.TestFetchRfcSectionTitle.test_section_title
-```
-
-### Draft版の全RFCのHTMLを再作成する
-
-```bash
-find data/draft -name '*' -type f -exec /bin/bash -c '/opt/homebrew/bin/python3 main.py --draft $(basename {} -trans.json) --make' \;
-python main.py --make-index-draft
 ```
 
 ### その他

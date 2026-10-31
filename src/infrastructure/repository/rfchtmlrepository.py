@@ -3,7 +3,7 @@ import os
 import re
 import abc
 import glob
-from ...domain.valueobject.rfc import IRfc
+from ...domain.valueobject.rfc import IRfc, RfcDraft
 from ...domain.valueobject.html import HtmlFile
 from ...domain.services.rfcfile import RfcFile
 
@@ -58,6 +58,8 @@ class RfcHtmlFileRepository(IRfcHtmlRepository):
 
     def save(self, rfc: IRfc, output_string: object) -> None:
         assert isinstance(rfc, IRfc)
+        if isinstance(rfc, RfcDraft):
+            raise ValueError('Draftページの公開は廃止されました。DraftのHTMLは保存できません。')
 
         filepath = self.findpath(rfc)
         RfcFile.write_html_file(filepath, output_string)  # HTML出力

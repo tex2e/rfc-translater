@@ -11,7 +11,6 @@ class RfcFile:
     OUTPUT_DRAFT = 'draft'
 
     OUTPUT_HTML_INDEX_FILE = 'html/index.html'
-    OUTPUT_HTML_DRAFT_INDEX_FILE = 'html/draft/index.html'
     OUTPUT_HTML_RFC_LIST_JSON_FILE = 'html/data-rfc-list.json'
     OUTPUT_HTML_RFC_LIST_SHARD_DIR = 'html/data-rfc-list'
     OUTPUT_HTML_RFC_TITLE_JSON_FILE = 'html/data-rfc-title.json'

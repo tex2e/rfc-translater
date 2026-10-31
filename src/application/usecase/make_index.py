@@ -8,7 +8,6 @@ from mako.lookup import TemplateLookup
 from ...domain.services.rfcfile import RfcFile
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 from ...infrastructure.repository.indexhtmlrepository import IIndexHtmlRepository
-from ...infrastructure.repository.indexdrafthtmlrepository import IIndexDraftHtmlRepository
 
 
 # 一覧に表示するRFCステータスの略称（html/index.js と master.css でも同じ略称を使う）
@@ -51,23 +50,3 @@ def make_index(index_html_repo: IIndexHtmlRepository,
 
     # HTMLファイル出力
     index_html_repo.save(output)
-
-
-def make_index_draft(index_draft_html_repo: IIndexDraftHtmlRepository,
-                     rfc_html_repo: IRfcHtmlRepository) -> None:
-    """Draft版のトップページ作成"""
-
-    assert isinstance(index_draft_html_repo, IIndexDraftHtmlRepository)
-    assert isinstance(rfc_html_repo, IRfcHtmlRepository)
-
-    print(f'[*] make_index_draft()')
-
-    files = rfc_html_repo.findalldraft()
-
-    mylookup = TemplateLookup(directories=["./"], input_encoding='utf-8', output_encoding='utf-8')
-    mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_INDEX)
-    output = mytemplate.render_unicode(ctx={'files': files}, is_draft=True,
-                                       statuses={}, titles_ja={}, status_codes=RFC_STATUS_CODES)
-
-    # HTMLファイル出力
-    index_draft_html_repo.save(output)

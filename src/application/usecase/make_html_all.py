@@ -1,5 +1,5 @@
 # ------------------------------------------------------------------------------
-# 翻訳済みの全RFC・全DraftのHTMLを作り直すためのプログラム
+# 翻訳済みの全RFCのHTMLを作り直すためのプログラム
 # ------------------------------------------------------------------------------
 #
 # 本文中の [RFCxxxx] のリンク先（翻訳済みページ or datatracker）はHTMLの生成時に決まるため、
@@ -15,7 +15,7 @@ import glob
 import io
 import contextlib
 from concurrent.futures import ProcessPoolExecutor
-from ...domain.valueobject.rfc import IRfc, Rfc, RfcDraft
+from ...domain.valueobject.rfc import IRfc, Rfc
 from ...domain.services.rfcfile import RfcFile
 from ...infrastructure.repository.rfcjsontransrepository import RfcJsonTransFileRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import RfcJsonDataSummaryFileRepository
@@ -24,16 +24,12 @@ from .make_html import make_html
 
 
 def find_all_targets() -> list[IRfc]:
-    """翻訳済みJSONが存在する全RFC（番号順）と全Draft"""
+    """翻訳済みJSONが存在する全RFC（番号順）。公開を廃止したDraftは対象外。"""
     rfc_numbers = set()
     for filepath in glob.glob(RfcFile.GLOB_DATA_TRANS_JSON_FILE):
         if m := re.fullmatch(r'rfc(\d+)-trans\.json', os.path.basename(filepath)):
             rfc_numbers.add(int(m[1]))
-    drafts = set()
-    for filepath in glob.glob(RfcFile.GLOB_DATA_DRAFT_TRANS_JSON_FILE):
-        if m := re.fullmatch(r'(draft-.+)-trans\.json', os.path.basename(filepath)):
-            drafts.add(m[1])
-    return [Rfc(str(n)) for n in sorted(rfc_numbers)] + [RfcDraft(d) for d in sorted(drafts)]
+    return [Rfc(str(n)) for n in sorted(rfc_numbers)]
 
 
 def _make_html_quietly(rfc: IRfc) -> str:
@@ -46,7 +42,7 @@ def _make_html_quietly(rfc: IRfc) -> str:
 
 
 def make_html_all(max_workers: int | None = None) -> int:
-    """全RFC・全DraftのHTMLを並列で作成し、作成した件数を返す"""
+    """全RFCのHTMLを並列で作成し、作成した件数を返す"""
     targets = find_all_targets()
     print(f'[*] make_html_all: {len(targets)} files')
     with ProcessPoolExecutor(max_workers=max_workers) as executor:

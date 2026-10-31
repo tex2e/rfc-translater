@@ -1452,6 +1452,16 @@ class RfcHistoryGraphUi {
 // html/index.html
 
 document.addEventListener('DOMContentLoaded', function () {
+  const notice = document.querySelector('.rfc-notice');
+  if (notice) {
+    const mobile = window.matchMedia('(max-width: 575.98px)');
+    const updateNotice = () => {
+      notice.open = !mobile.matches;
+      notice.classList.toggle('rfc-notice-static', !mobile.matches);
+    };
+    updateNotice();
+    mobile.addEventListener('change', updateNotice);
+  }
   const rfcList = new RfcListUi();
   rfcList.setup();
 });
