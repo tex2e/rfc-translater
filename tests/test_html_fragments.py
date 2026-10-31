@@ -89,6 +89,37 @@ class TestHtmlFragments(unittest.TestCase):
                 self.assertTrue(blocks[0].is_code)
                 self.assertIn('\n', blocks[0].text)
 
+    def test_mib_description_is_literal_across_blank_lines(self):
+        text = ('   EXAMPLE-MIB DEFINITIONS ::= BEGIN\n\n'
+                '       DESCRIPTION "\n\n'
+                '         This text is part of a MIB string.\n\n'
+                '       "\n\n   END\n\n'
+                '   This is explanatory prose after the module.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in blocks[:-1]))
+        self.assertFalse(blocks[-1].is_code)
+
+    def test_fenced_yang_description_is_not_translated(self):
+        text = ('   <CODE BEGINS> file "example.yang"\n\n'
+                '   This is English inside source code.\n\n'
+                '   <CODE ENDS>\n\n   This paragraph explains the code.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in blocks[:-1]))
+        self.assertFalse(blocks[-1].is_code)
+
+    def test_state_table_rows_remain_literal_between_blank_lines(self):
+        text = ('   STATE          EVENT                                  NEW STATE\n'
+                '   ---------------------------------------------------------------\n'
+                '   RESET          Initial event                          WAITING\n\n'
+                '                  Transmit Application Connect TLV       CONNECTING\n'
+                '                  with A-bit=1\n\n'
+                '   This paragraph explains the table.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(blocks[0].is_code)
+        self.assertTrue(blocks[1].is_code)
+        self.assertIn('       CONNECTING\n', blocks[1].text)
+        self.assertFalse(blocks[2].is_code)
+
     def test_explicit_xml_input_example_is_not_translated(self):
         example = '   See <relref section="2.3" target="RFC9999"/> for an overview.'
         blocks = list(Paragraphs('   For example, with an input of:\n\n' + example, ignore_header=False))
@@ -97,6 +128,35 @@ class TestHtmlFragments(unittest.TestCase):
         self.assertEqual(blocks[1].text, example.strip())
         inline = list(Paragraphs('   This is ordinary prose.\n\n' + example, ignore_header=False))
         self.assertFalse(inline[1].is_code)
+
+    def test_ldap_schema_description_and_nested_lists_remain_code(self):
+        text = ("   ( nisSchema.2.1 NAME 'shadowAccount'\n"
+                "     DESC 'Additional attributes (including passwords)'\n"
+                "     MUST uid MAY ( userPassword $ description ) )")
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertEqual(len(blocks), 1)
+        self.assertTrue(blocks[0].is_code)
+        self.assertIn('\n', blocks[0].text)
+
+    def test_ldap_schema_is_separated_from_following_explanation(self):
+        text = ("   ( 1.3.6.1 NAME 'example' DESC 'The example' )\n"
+                "   This paragraph explains another attribute.")
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertEqual(len(blocks), 2)
+        self.assertTrue(blocks[0].is_code)
+        self.assertFalse(blocks[1].is_code)
+        self.assertEqual(blocks[1].indent, 3)
+
+    def test_annotated_cbor_keeps_comments_and_physical_lines(self):
+        text = ("   [ 12, / type code /\n"
+                "     2, / block number /\n"
+                "     1, / flags - block must be replicated /\n"
+                "     0, / CRC type /\n"
+                "     h'81010201' ]")
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertEqual(len(blocks), 1)
+        self.assertTrue(blocks[0].is_code)
+        self.assertIn('\n', blocks[0].text)
 
     def test_unrelated_xml_and_html_documents_are_not_merged(self):
         text = '<?xml version="1.0"?><feed><entry>Example</entry></feed>'
