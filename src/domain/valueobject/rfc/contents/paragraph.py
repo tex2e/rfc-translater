@@ -4,6 +4,7 @@
 import re
 import textwrap
 from ....services.rfcutils import RfcUtils
+from .html_example import is_html_example, is_xml_example
 
 
 # 段落がページをまたぐことを表す文字
@@ -137,6 +138,9 @@ class Paragraph:
 
     # 図表・ソースコード・数式の判定
     def _find_code_pattern(self, text: str) -> bool:
+        logical_text = text.replace(BREAK, '\n')
+        if is_html_example(logical_text) or is_xml_example(logical_text):
+            return True
         if (re.search(r'\A\s*As described in \[RFC\d+\],', text)):  # For RFC9015
             return False
 

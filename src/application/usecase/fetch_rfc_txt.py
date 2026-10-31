@@ -9,6 +9,7 @@ from ...domain.services.rfcutils import RfcUtils
 from ...domain.valueobject.rfc import RfcJsonElem, IRfc, Rfc, RfcDraft, RFCNotFoundException
 from ...domain.valueobject.rfc.contents.paragraph import BREAK
 from ...domain.valueobject.rfc.contents.paragraphs import Paragraphs
+from ...domain.valueobject.rfc.contents.html_example import ends_with_markup_example
 from ...infrastructure.repository.rfcjsondatarepository import IRfcJsonDataRepository
 from ...infrastructure.apiclient.rfcapiclient import IRfcApiClient
 
@@ -92,6 +93,7 @@ def fetch_rfc_txt(rfc: IRfc,
             #   1) 前ページの最後の段落の字下げの幅と、次ページの最初の段落の字下げの幅が同じとき
             #   2) 前ページの最後の段落が、文終端の「.」や「;」や「|」ではないとき
             if not prev_last_line.endswith('.') \
+                    and not ends_with_markup_example(contents[i - 1]) \
                     and not re.search(r'[;|]$', prev_last_line) \
                     and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \
                     and indent1 == indent2:
