@@ -755,6 +755,8 @@ def check_rfc2119(en, ja):
         return None
     if REFERENTIAL_KEYWORD_RE.search(en):
         return None
+    if KEYWORD_DEFINITION_RE.search(en):
+        return None
     # MUST-/SHOULD+/- はRFC 4307系の拡張レベル。段落内に併存する
     # RFC 2119キーワードと注釈の対応を単一キーワード判定で比較しない。
     if EXTENDED_KEYWORD_RE.search(en):
@@ -820,7 +822,7 @@ CONTEXTUAL_RULE_LABEL_RE = re.compile(r"\bCONTEXTUAL RULE REQUIRED\b")
 # - RFC 4307 / 4835 / 5751 などの拡張キーワード (SHOULD+ / SHOULD- / MUST-) の定義
 #   (「SHOULD- support RSA with SHA-1」のような規範的な使用は対象外)
 KEYWORD_DEFINITION_RE = re.compile(
-    r"\bare to be interpreted as (?:described|defined) in\b|"
+    r"\b(?:are|is) to be interpreted as (?:described|defined) in\b|"
     r"^\s*(?:MUST|SHOULD|MAY)[+-]\s+This term means\b|"
     r"\bdefinitions? (?:for|of)\s+(?:MUST|SHOULD|MAY)[+-]|"
     # RFC 2119 本文の定義をそのまま引き写した段落 (1. MUST - This word, or the terms ...)

@@ -3,6 +3,7 @@ import unittest
 
 sys.path.insert(0, "tools")
 from lint_translation import (  # noqa: E402
+    check_rfc2119,
     check_rfc2119_annotation_count,
     count_rfc2119_annotations,
     count_rfc2119_keywords,
@@ -10,6 +11,17 @@ from lint_translation import (  # noqa: E402
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_single_keyword_definition_does_not_add_an_obligation(self):
+        en = ('The key word "SHALL" in this document is to be interpreted '
+              'as described in [RFC2119].')
+        ja = '本文書のキーワード「SHALL」は、[RFC2119]で説明するとおりに解釈します。'
+        self.assertIsNone(check_rfc2119(en, ja))
+        self.assertEqual(check_rfc2119_annotation_count(en, ja), [])
+        # A genuine requirement remains subject to the strength check.
+        self.assertEqual(check_rfc2119(
+            'The server SHALL interpret the status value.',
+            'サーバーは状態値を無視してもよい (MAY)。')[0], 'E002')
+
     def test_count_keywords_excludes_quoted_and_referential(self):
         en = 'Use "MUST" here; this violates a SHOULD in Section 3, and it MAY fail.'
         self.assertEqual(count_rfc2119_keywords(en), {"MAY": 1})

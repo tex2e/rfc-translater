@@ -75,6 +75,7 @@ class Paragraphs:
         self.paragraphs = []
         literal_end = None
         state_table = False
+        parameter_table = False
         for i, chunk in enumerate(chunks):
             # MIB modules and explicitly fenced source files contain English
             # DESCRIPTION strings too. They remain code across blank lines.
@@ -95,12 +96,28 @@ class Paragraphs:
                 if literal_end.search(chunk):
                     literal_end = None
                 continue
+            parameter_header = re.search(
+                r'^ *PARAMETER +UNITS OR DESCRIPTION *\n *={5,} +={5,}',
+                chunk, re.M | re.I)
+            parameter_row = re.search(r'\S {3,}\S', chunk)
+            if parameter_header or parameter_table and parameter_row:
+                parameter_table = True
+                paragraph = Paragraph(chunk, is_code=True)
+                paragraph.is_code = True
+                paragraph.is_toc = False
+                paragraph.is_section_title = False
+                self.paragraphs.append(paragraph)
+                continue
+            parameter_table = False
             # State transition tables in RFC TXT use blank lines between
             # rows. Retain their column alignment rather than translating
             # isolated event descriptions as prose (e.g. RFC 7275).
             table_header = re.search(
-                r'^ *STATE +EVENT +(?:NEW|NEXT) STATE *\n *[-=]{10,}', chunk, re.M | re.I)
-            table_row = re.search(r'\S {4,}[A-Z][A-Z0-9_-]{2,}[ \t]*$', chunk, re.M)
+                r'^ *STATE +EVENT +(?:ACTIONS? +)?(?:NEW|NEXT) STATE *\n *[-=]{10,}',
+                chunk, re.M | re.I)
+            table_row = re.search(
+                r'\S {4,}[A-Z][A-Za-z0-9_-]+(?: [A-Z][A-Za-z0-9_-]+)?[ \t]*$',
+                chunk, re.M)
             if table_header or state_table and table_row:
                 state_table = True
                 paragraph = Paragraph(chunk, is_code=True)
@@ -109,6 +126,13 @@ class Paragraphs:
                 self.paragraphs.append(paragraph)
                 continue
             state_table = False
+            # Information model listings use access/name/type/description
+            # columns, often without a header (e.g. RFC 7326 Appendix A).
+            if re.match(
+                    r'^\s*(?:r|w|rw)[ \t]+[A-Za-z][\w-]*[ \t]{2,}'
+                    r'(?:[A-Za-z][\w-]*|"[^"\n]+")[ \t]{2,}\S', chunk):
+                self.paragraphs.append(Paragraph(chunk, is_code=True))
+                continue
             # LDAP schemas contain English DESC strings, and old TXT sources
             # can put explanatory prose immediately after their closing ')'.
             schema_end = self._ldap_schema_end(chunk)
@@ -117,6 +141,17 @@ class Paragraphs:
                 chunk = re.sub(r'^(?:[ \t]*\n)+', '', chunk[schema_end:])
                 if not chunk.strip():
                     continue
+            # Standalone XML comments are source, even when their contents
+            # look like ordinary English (e.g. RFC 4933's XML schema).
+            if re.fullmatch(r'\s*<!--(?:(?!-->)[\s\S])*-->\s*', chunk):
+                self.paragraphs.append(Paragraph(chunk, is_code=True))
+                continue
+            # Comments and preprocessor directives can be separated from
+            # their C example by blank lines (e.g. RFC 4757).
+            if (re.fullmatch(r'\s*(?://[^\n]*(?:\n|$)[ \t]*)+', chunk)
+                    or re.fullmatch(r'\s*#\s*(?:define|include|undef)\b[^\n]*\s*', chunk)):
+                self.paragraphs.append(Paragraph(chunk, is_code=True))
+                continue
             # Annotated CBOR blocks use / comments / inside array literals.
             if (re.match(r'^\s*\[\s*\d+,\s*/\s*type code\s*/', chunk)
                     and chunk.rstrip().endswith(']')):

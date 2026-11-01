@@ -47,7 +47,7 @@ def is_bibliography_or_names(text, context=''):
     return False
 
 
-def inspect(obj):
+def inspect(obj, include_short_headings=False):
     findings = []
     references = authors = False
     section = previous = ''
@@ -85,6 +85,8 @@ def inspect(obj):
         words = re.findall(r'[A-Za-z]+', text)
         if GUIDANCE.fullmatch(text):
             kind = 'guidance'
+        elif include_short_headings and heading and is_short_heading_candidate(text):
+            kind = 'short_heading_candidate'
         elif (len(words) >= 5
               and re.search(r'\b(?:the|this|these|that|with|for|should|must|may|are|is|can|will|from|only|when|one|and)\b', text)
               and not re.search(r'[{}]|::=', text)):
@@ -96,11 +98,27 @@ def inspect(obj):
     return findings
 
 
+def is_short_heading_candidate(text):
+    """Report readable headings for review, leaving lone protocol names alone."""
+    title = re.sub(r'^(?:Appendix\s+)?(?:[A-Z]|\d+)(?:\.\d+)*\.?\s+', '', text)
+    # Attribute identifiers and type annotations are literal vocabulary labels.
+    if re.fullmatch(r"[\w.-]+\s+\((?:1setOf\s+)?[a-z][\w.-]*\)", title):
+        return False
+    if re.match(r'^(?:public|protected|private)\s+(?:interface|class|static|final)\b', title):
+        return False
+    words = title.split()
+    return (len(words) >= 2 and any(
+        re.fullmatch(r'[A-Z]?[a-z]{2,}(?:[A-Z][a-z]+)*', word.strip('()[]:,.'))
+        for word in words))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rfc', nargs='+', type=int)
     parser.add_argument('--format', choices=['text', 'json'], default='text')
     parser.add_argument('--check-guidance', action='store_true')
+    parser.add_argument('--include-short-headings', action='store_true',
+                        help='Also report short readable headings for human review')
     args = parser.parse_args()
     findings = []
     count = 0
@@ -109,7 +127,7 @@ def main():
         if args.rfc and obj['number'] not in args.rfc:
             continue
         count += 1
-        findings.extend(inspect(obj))
+        findings.extend(inspect(obj, include_short_headings=args.include_short_headings))
     if args.check_guidance:
         findings = [f for f in findings if f['kind'] == 'guidance']
     counts = Counter(f['kind'] for f in findings)

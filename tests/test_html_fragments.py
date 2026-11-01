@@ -22,6 +22,25 @@ def fetch(text):
 
 
 class TestHtmlFragments(unittest.TestCase):
+    def test_information_model_columns_remain_literal(self):
+        rows = [
+            '   r energy     EnergyMeasurement    The present energy measurement\n'
+            '                                        for the Energy Object',
+            '   rw relationshipType    Enumeration    A description of the relationship',
+            '   w name    String    An entPhysicalName',
+            '   r units    "kWh"    The units of measure for the energy',
+        ]
+        blocks = list(Paragraphs('\n\n'.join(rows + [
+            'I. EnergyMeasurement (Class) inherits from Measurement:',
+            'The r energy field contains the present energy measurement.',
+        ]), ignore_header=False))
+        self.assertEqual(len(blocks), 6)
+        for block, original in zip(blocks, rows):
+            self.assertTrue(block.is_code)
+            self.assertEqual(block.text, '\n'.join(line[3:] for line in original.splitlines()))
+        self.assertFalse(blocks[4].is_code)
+        self.assertFalse(blocks[5].is_code)
+
     def test_image_and_description_do_not_join_across_page(self):
         blocks = fetch('Header\n\n   The HTML fragment:\n'
                        '   <IMG\n   SRC="data:image/gif;base64,AAAA"\n   ALT="Larry">\n\n'
@@ -128,6 +147,49 @@ class TestHtmlFragments(unittest.TestCase):
         self.assertEqual(blocks[1].text, example.strip())
         inline = list(Paragraphs('   This is ordinary prose.\n\n' + example, ignore_header=False))
         self.assertFalse(inline[1].is_code)
+
+    def test_state_table_with_action_column_and_mixed_case_states(self):
+        text = ('   State     Event                          Action       New State\n'
+                '   ---------------------------------------------------------------\n'
+                '   Idle      Client requests access         Send request Pending\n\n'
+                '   PendingB  Failure to send                             Idle\n\n'
+                '   Not       Answer received                None        No Change\n'
+                '   Discon\n\n'
+                '   This paragraph explains the state transitions.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in blocks[:3]))
+        self.assertFalse(blocks[3].is_code)
+
+    def test_parameter_report_table_keeps_columns_across_blank_lines(self):
+        text = ('   Parameter                        Units or Description\n'
+                '   ===========================      ==========================\n'
+                '   Test case                        Test case number\n\n'
+                '   Test topology                    1, 2, 3, or 4\n\n'
+                '   SIDR origin authentication       Yes, No [RFC7115]\n\n'
+                '   This paragraph explains the reported results.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in blocks[:3]))
+        self.assertIn('       Yes, No', blocks[2].text)
+        self.assertFalse(blocks[3].is_code)
+
+    def test_standalone_xml_comment_is_source_but_inline_comment_is_prose(self):
+        text = ('   <!-- Data elements that can be added or removed. -->\n\n'
+                '   <!--\n   This comment spans multiple source lines.\n   -->\n\n'
+                '   The literal <!-- comment --> is discussed here.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(blocks[0].is_code)
+        self.assertTrue(blocks[1].is_code)
+        self.assertFalse(blocks[2].is_code)
+
+    def test_c_comments_and_preprocessor_directives_remain_source(self):
+        text = ('   // new encryption key salted with seq\n\n'
+                '   // Derive encryption key for data\n   // Key derivation salt = 0\n\n'
+                '   #define GSS_C_DCE_STYLE 0x1000\n\n'
+                '   The // notation introduces a source comment.')
+        blocks = list(Paragraphs(text, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in blocks[:3]))
+        self.assertIn('\n// Key derivation', blocks[1].text)
+        self.assertFalse(blocks[3].is_code)
 
     def test_ldap_schema_description_and_nested_lists_remain_code(self):
         text = ("   ( nisSchema.2.1 NAME 'shadowAccount'\n"

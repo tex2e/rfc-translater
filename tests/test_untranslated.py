@@ -35,6 +35,15 @@ class TestUntranslated(unittest.TestCase):
         self.assertEqual(len(inspect(obj)), 1)
         self.assertEqual(inspect(obj)[0]['kind'], 'prose_candidate')
 
+    def test_short_heading_audit_includes_words_but_preserves_literal_labels(self):
+        obj = {'number': 1, 'contents': [
+            {'text': text, 'ja': '', 'section_title': True}
+            for text in ['10. Security Considerations', '6.2. IPsec',
+                         '4.1. TLS CipherSuites', '3. printer-more-info (uri)',
+                         '7.4. public interface GSSCredential implements Cloneable']]}
+        self.assertEqual([f['text'] for f in inspect(obj, include_short_headings=True)],
+                         ['10. Security Considerations', '4.1. TLS CipherSuites'])
+
     def test_inline_bibliography_and_contributor_names_are_not_missing_prose(self):
         obj = {'number': 1, 'contents': [
             {'text': '[8] Smith, A. and B. Jones, "The example of a protocol", RFC 1234, October 2000.', 'ja': ''},
