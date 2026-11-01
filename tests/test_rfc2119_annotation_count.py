@@ -1,16 +1,67 @@
 import sys
 import unittest
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 sys.path.insert(0, "tools")
 from lint_translation import (  # noqa: E402
     check_rfc2119,
     check_rfc2119_annotation_count,
+    check_rfc2119_annotation_spelling,
     count_rfc2119_annotations,
     count_rfc2119_keywords,
+    lint_file,
 )
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_same_strength_synonyms_preserve_original_spelling(self):
+        for source, annotation in [('SHALL', 'MUST'), ('SHALL NOT', 'MUST NOT'),
+                                   ('REQUIRED', 'MUST'), ('RECOMMENDED', 'SHOULD'),
+                                   ('NOT RECOMMENDED', 'SHOULD NOT'), ('OPTIONAL', 'MAY'),
+                                   ('MUST', 'SHALL')]:
+            with self.subTest(source=source, annotation=annotation):
+                en = f'The client {source} use this option.'
+                ja = f'クライアントはこのオプションを使うものとします ({annotation})。'
+                self.assertEqual(check_rfc2119_annotation_count(en, ja), [])
+                self.assertEqual(check_rfc2119_annotation_spelling(en, ja)[0], 'W017')
+                self.assertIsNone(check_rfc2119_annotation_spelling(
+                    en, ja.replace(f'({annotation})', f'({source})')))
+
+    def test_spelling_check_handles_mixed_keywords(self):
+        en = 'The client MUST use X. The server SHALL use Y. It SHALL use Z.'
+        self.assertEqual(check_rfc2119_annotation_spelling(
+            en, 'Xを使わなければなりません (MUST)。YもZも使わなければなりません (MUST) (MUST)。')[0],
+            'W017')
+        self.assertIsNone(check_rfc2119_annotation_spelling(
+            en, 'Xを使わなければなりません (MUST)。YもZも使わなければなりません (SHALL) (SHALL)。'))
+
+    def test_spelling_warning_does_not_duplicate_strength_or_count_findings(self):
+        for en, ja in [('It SHALL use X.', 'Xを使うべきです (SHOULD)。'),
+                       ('It SHALL use X and SHALL use Y.', 'Xを使わなければなりません (MUST)。'),
+                       ('It should use X.', 'Xを使うべきです (SHOULD)。'),
+                       ('Use "SHALL" in this sentence.', '「MUST」を使います。'),
+                       ('The key word "SHALL" is to be interpreted as described in [RFC2119].',
+                        '「SHALL」を解釈します。')]:
+            with self.subTest(en=en):
+                self.assertIsNone(check_rfc2119_annotation_spelling(en, ja))
+
+    def test_spelling_check_runs_in_file_lint_and_excludes_raw(self):
+        obj = {'title': {'text': 'RFC 9999 - Test', 'ja': 'RFC 9999 - テスト'},
+               'contents': [
+                   {'text': 'The key words are interpreted as described in RFC2119.',
+                    'ja': 'RFC2119に従います。'},
+                   {'text': 'The client SHALL send X.',
+                    'ja': 'クライアントはXを送信しなければなりません (MUST)。'},
+                   {'text': 'The client SHALL send X.', 'ja': '', 'raw': True},
+               ]}
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / 'rfc9999-trans.json'
+            path.write_text(json.dumps(obj), encoding='utf-8')
+            findings = lint_file(str(path), {'W017'})
+        self.assertEqual([(f.code, f.index) for f in findings], [('W017', 1)])
+
     def test_single_keyword_definition_does_not_add_an_obligation(self):
         en = ('The key word "SHALL" in this document is to be interpreted '
               'as described in [RFC2119].')

@@ -49,6 +49,7 @@ CHECKS = {
     "W014": "用語集違反 (AGENTS.md の用語集で禁止している訳語・既知の誤訳語を使っている)",
     "W015": "語順崩れ (文末の述語「ます/です」の後ろに名詞句がぶら下がっている。例: 上回っています標準スペース。)",
     "W016": "助詞連鎖の破壊 (「をに」「がで」「のの」など、名詞が抜け落ちて助詞が連続している)",
+    "W017": "RFC2119注釈の原語不一致 (同じ規範強度でも SHALL/REQUIRED 等を原文どおりに併記していない)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -851,7 +852,7 @@ def canonical_rfc2119_annotation(keyword):
     """RFC2119/RFC8174の同義キーワードを翻訳規約の注釈表記へ正規化する。
 
     REQUIRED/SHALL は MUST、RECOMMENDED は SHOULD、OPTIONAL は MAY と同じ
-    規範強度であり、訳文注釈もこの正規形で表す。
+    規範強度として比較するための内部表現。訳文には原文のキーワードを残す。
     """
     keyword = re.sub(r"\s+", " ", keyword.upper().strip())
     return {
@@ -909,6 +910,23 @@ def check_rfc2119_annotation_count(en, ja):
     if actual - expected:
         findings.append(("E015", f"注釈の過剰 {_format_keyword_counts(actual - expected)}: {summary}"))
     return findings
+
+
+def check_rfc2119_annotation_spelling(en, ja):
+    """W017: 強度・個数は同じでも、注釈に原文と異なる同義語を使っている。"""
+    if re.search(r"2119|8174|BCP ?14\b", en) or KEYWORD_DEFINITION_RE.search(en):
+        return None
+    expected = count_rfc2119_keywords(en)
+    actual = Counter(m.group(1) for m in ANNOTATION_RE.finditer(ja))
+    if not expected or expected == actual:
+        return None
+    normalize = lambda counts: Counter(
+        canonical_rfc2119_annotation(kw)
+        for kw, n in counts.items() for _ in range(n))
+    if normalize(expected) != normalize(actual):
+        return None  # 強度や個数の違いは既存の E002/E014/E015/W011 で扱う。
+    return ("W017", f"同義語への置換: 原文 {_format_keyword_counts(expected)} / "
+            f"訳文 {_format_keyword_counts(actual)}。注釈は原文の表記に揃える")
 
 
 # 規範強度ごとの、スタイルガイドに沿った (強度を一意に表す) 述語
@@ -1230,6 +1248,10 @@ def lint_file(path, enabled):
                     findings.append(Finding(code, path, rfc, i, detail, en, ja))
         if uses_bcp14 and not is_title and "W012" in enabled:
             r = check_necessity_translation(en, ja)
+            if r:
+                findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+        if uses_bcp14 and not is_title and "W017" in enabled:
+            r = check_rfc2119_annotation_spelling(en, ja)
             if r:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
