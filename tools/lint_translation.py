@@ -870,6 +870,19 @@ def count_rfc2119_annotations(ja):
     return Counter(canonical_rfc2119_annotation(m.group(1)) for m in ANNOTATION_RE.finditer(ja))
 
 
+def annotations_for_comparison(en, ja):
+    """原文の MAY NOT をそのまま併記した場合も、MAY 一個として照合する。
+
+    MAY NOT は RFC2119 の独立したキーワードではないが、RFC8450 などに
+    実在する表現。NOT を消す修正を促さないよう、原文に存在する個数だけ
+    比較用文字列を正規化する。訳文や規範強度の判定は変更しない。
+    """
+    count = len(re.findall(r"\bMAY\s+NOT\b", en))
+    if count:
+        return re.sub(r"[（(]\s*MAY\s+NOT\s*[）)]", "(MAY)", ja, count=count)
+    return ja
+
+
 def _format_keyword_counts(counts):
     return ", ".join(f"{kw}\u00d7{n}" if n > 1 else kw
                      for kw, n in sorted(counts.items(), key=lambda x: -x[1])) or "なし"
@@ -896,7 +909,7 @@ def check_rfc2119_annotation_count(en, ja):
         expected[canonical_rfc2119_annotation(kw)] += n
     if not expected:
         return []
-    actual = count_rfc2119_annotations(ja)
+    actual = count_rfc2119_annotations(annotations_for_comparison(en, ja))
     if not actual:
         return [("W011", f"注釈なし: 原文 {_format_keyword_counts(expected)} に対し訳文に注釈がない")]
     if actual == expected:
@@ -917,7 +930,7 @@ def check_rfc2119_annotation_spelling(en, ja):
     if re.search(r"2119|8174|BCP ?14\b", en) or KEYWORD_DEFINITION_RE.search(en):
         return None
     expected = count_rfc2119_keywords(en)
-    actual = Counter(m.group(1) for m in ANNOTATION_RE.finditer(ja))
+    actual = Counter(m.group(1) for m in ANNOTATION_RE.finditer(annotations_for_comparison(en, ja)))
     if not expected or expected == actual:
         return None
     normalize = lambda counts: Counter(

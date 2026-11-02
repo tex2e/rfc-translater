@@ -16,6 +16,25 @@ from lint_translation import (  # noqa: E402
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_literal_may_not_annotation_is_not_a_missing_may(self):
+        en = 'A packet MAY NOT contain X. It MUST NOT split Y. It MAY contain Z.'
+        ja = 'Xを含めることはできません (MAY NOT)。Yを分割してはなりません (MUST NOT)。Zを含めてもよいです (MAY)。'
+        self.assertEqual(check_rfc2119_annotation_count(en, ja), [])
+        self.assertIsNone(check_rfc2119_annotation_spelling(en, ja))
+
+    def test_literal_may_not_does_not_hide_other_missing_or_replaced_keywords(self):
+        en = 'A packet MAY NOT contain X. It SHALL contain Y. It MAY contain Z.'
+        ja = 'Xを含められません (MAY NOT)。Yを含めなければなりません (MUST)。'
+        self.assertEqual(check_rfc2119_annotation_count(en, ja)[0][0], 'E014')
+        self.assertEqual(check_rfc2119_annotation_spelling(
+            en, ja + 'Zを含めてもよいです (MAY)。')[0], 'W017')
+
+    def test_may_not_normalization_is_limited_to_source_occurrences(self):
+        for en in ['It MAY use X. It MAY use Y.', 'It MAY NOT use X. It MAY use Y.']:
+            ja = 'Xを使えません (MAY NOT)。Yを使えません (MAY NOT)。'
+            self.assertEqual(check_rfc2119_annotation_count(en, ja)[0][0],
+                             'W011' if 'NOT' not in en else 'E014')
+
     def test_same_strength_synonyms_preserve_original_spelling(self):
         for source, annotation in [('SHALL', 'MUST'), ('SHALL NOT', 'MUST NOT'),
                                    ('REQUIRED', 'MUST'), ('RECOMMENDED', 'SHOULD'),
