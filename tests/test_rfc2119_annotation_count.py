@@ -12,10 +12,34 @@ from lint_translation import (  # noqa: E402
     count_rfc2119_annotations,
     count_rfc2119_keywords,
     lint_file,
+    normative_source,
 )
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_handling_values_are_not_bcp14_requirements(self):
+        en = ('If the field is OPTIONAL, the gateway MUST NOT notify. '
+              'If it is REQUIRED, it MAY notify.')
+        source = normative_source(en, 'rfc3459')
+        self.assertEqual(count_rfc2119_keywords(source), {'MUST NOT': 1, 'MAY': 1})
+        ja = '値がOPTIONALなら通知してはなりません (MUST NOT)。REQUIREDなら通知してもよい (MAY)。'
+        self.assertEqual(check_rfc2119_annotation_count(source, ja), [])
+        self.assertEqual(check_rfc2119_annotation_count(source, '通知を処理します。')[0][0], 'W011')
+        self.assertEqual(normative_source(en, 'rfc1234'), en)
+
+    def test_handling_exception_is_used_by_file_lint(self):
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'rfc3459-trans.json'
+            obj = {'title': {'text': 'RFC 3459 - Test', 'ja': 'RFC 3459 - テスト'},
+                   'contents': [
+                       {'text': 'Keywords follow RFC 2119.', 'ja': 'RFC 2119に従います。'},
+                       {'text': 'The default Handling value is REQUIRED.', 'ja': 'Handlingのデフォルト値はREQUIREDです。'},
+                       {'text': 'The gateway MUST reject REQUIRED content.', 'ja': 'REQUIREDの内容を拒否しなければなりません (MUST)。'},
+                       {'text': 'The gateway SHALL reject OPTIONAL content.', 'ja': 'OPTIONALの内容を拒否します。'}]}
+            path.write_text(json.dumps(obj), encoding='utf-8')
+            findings = lint_file(str(path), {'E002', 'W003', 'E014', 'E015', 'W011', 'W012', 'W017'})
+            self.assertEqual([(f.code, f.index) for f in findings], [('W003', 3), ('W011', 3)])
+
     def test_literal_may_not_annotation_is_not_a_missing_may(self):
         en = 'A packet MAY NOT contain X. It MUST NOT split Y. It MAY contain Z.'
         ja = 'Xを含めることはできません (MAY NOT)。Yを分割してはなりません (MUST NOT)。Zを含めてもよいです (MAY)。'

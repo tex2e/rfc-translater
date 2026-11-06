@@ -1127,6 +1127,16 @@ def check_particle_chain(ja):
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
 
+def normative_source(en, rfc):
+    """文書内で規範語と明確に区別されたパラメーター値を検査用にマスクする。"""
+    # RFC 3459 section 1 explicitly excludes REQUIRED from RFC 2119 usage.
+    # REQUIRED / OPTIONAL throughout this RFC name Handling parameter values;
+    # retain them in source/translation and identifier checks, not BCP 14 counts.
+    if rfc == "rfc3459":
+        return re.sub(r"\b(?:REQUIRED|OPTIONAL)\b", "parameter_value", en)
+    return en
+
+
 def lint_file(path, enabled):
     findings = []
     rfc = os.path.basename(path).replace("-trans.json", "")
@@ -1249,22 +1259,23 @@ def lint_file(path, enabled):
                         f"{variants} が併存するため自動判定不可", en, ja))
 
         # --- RFC2119 ---
+        normative_en = normative_source(en, rfc)
         if "E002" in enabled or "W003" in enabled:
-            r = check_rfc2119(en, ja)
+            r = check_rfc2119(normative_en, ja)
             if r and r[0] in enabled:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
         # --- RFC2119 注釈の数 ---
         if uses_bcp14 and not is_title and enabled & {"E014", "E015", "W011"}:
-            for code, detail in check_rfc2119_annotation_count(en, ja):
+            for code, detail in check_rfc2119_annotation_count(normative_en, ja):
                 if code in enabled:
                     findings.append(Finding(code, path, rfc, i, detail, en, ja))
         if uses_bcp14 and not is_title and "W012" in enabled:
-            r = check_necessity_translation(en, ja)
+            r = check_necessity_translation(normative_en, ja)
             if r:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
         if uses_bcp14 and not is_title and "W017" in enabled:
-            r = check_rfc2119_annotation_spelling(en, ja)
+            r = check_rfc2119_annotation_spelling(normative_en, ja)
             if r:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
 
