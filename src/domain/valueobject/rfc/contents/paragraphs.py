@@ -82,20 +82,27 @@ class Paragraphs:
             if literal_end is None:
                 candidate_end = None
                 if re.search(r'<CODE BEGINS\b', chunk, re.I):
-                    candidate_end = re.compile(r'<CODE ENDS\b', re.I)
+                    candidate_end = re.compile(r'<CODE ENDS\b[^>\n]*>', re.I)
                 elif re.search(r'^ *[\w-]+\s+DEFINITIONS\s*::=\s*BEGIN\b', chunk, re.M):
                     candidate_end = re.compile(r'^ *END(?:[ \t]*--[^\n]*)?[ \t]*$', re.M)
                 if candidate_end and candidate_end.search('\n\n'.join(chunks[i:])):
                     literal_end = candidate_end
             if literal_end is not None:
-                paragraph = Paragraph(chunk, is_code=True)
+                closing = literal_end.search(chunk)
+                code = chunk[:closing.end()] if closing else chunk
+                paragraph = Paragraph(code, is_code=True)
                 paragraph.is_code = True
                 paragraph.is_section_title = False
                 paragraph.is_toc = False
                 self.paragraphs.append(paragraph)
-                if literal_end.search(chunk):
-                    literal_end = None
-                continue
+                if closing is None:
+                    continue
+                literal_end = None
+                # A closing fence ends the code even if explanatory prose
+                # follows without a blank line (e.g. RFC 7748).
+                chunk = re.sub(r'^(?:[ \t]*\n)+', '', chunk[closing.end():])
+                if not chunk.strip():
+                    continue
             parameter_header = re.search(
                 r'^ *PARAMETER +UNITS OR DESCRIPTION *\n *={5,} +={5,}',
                 chunk, re.M | re.I)
