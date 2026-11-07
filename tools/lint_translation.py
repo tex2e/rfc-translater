@@ -50,6 +50,7 @@ CHECKS = {
     "W015": "語順崩れ (文末の述語「ます/です」の後ろに名詞句がぶら下がっている。例: 上回っています標準スペース。)",
     "W016": "助詞連鎖の破壊 (「をに」「がで」「のの」など、名詞が抜け落ちて助詞が連続している)",
     "W017": "RFC2119注釈の原語不一致 (同じ規範強度でも SHALL/REQUIRED 等を原文どおりに併記していない)",
+    "W018": "RECOMMENDEDの訳語不統一 (推奨されます / 推奨されませんに統一する)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -951,6 +952,31 @@ PROPER_PREDICATES = {
 NECESSITY_RE = re.compile(r"(?<!不)必要があ")
 
 
+def check_recommendation_style(en, ja):
+    """注釈に直接対応する推奨表現の、決定的な表記違反を検出する。"""
+    if re.search(r"2119|8174|BCP ?14\b", en) or KEYWORD_DEFINITION_RE.search(en):
+        return []
+    keywords = count_rfc2119_keywords(en)
+    if not (keywords.get("RECOMMENDED") or keywords.get("NOT RECOMMENDED")):
+        return []
+    findings = []
+    previous_end = 0
+    for annotation in ANNOTATION_RE.finditer(ja):
+        phrase = ja[previous_end:annotation.start()].rsplit("。", 1)[-1].rstrip()
+        previous_end = annotation.end()
+        keyword = annotation.group(1)
+        if keyword not in {"RECOMMENDED", "NOT RECOMMENDED"}:
+            continue
+        if re.search(
+            r"べき(?:です|である|であり|だ|ではありません|ではない(?:こと)?|ではなく|ですが)?$|"
+            r"(?:お勧め|おすすめ|推奨)(?:します|しません|できません)(?:が)?$|望ましいです$",
+            phrase,
+        ):
+            expected = "推奨されません" if keyword == "NOT RECOMMENDED" else "推奨されます"
+            findings.append(("W018", f"{keyword} は「{expected}」で表現する: 「{phrase[-45:]}」"))
+    return findings
+
+
 def check_necessity_translation(en, ja):
     """W012: MUST/SHALL/REQUIRED/SHOULD/RECOMMENDED を「〜する必要があります」で訳しているか。
     「必要があります」は MUST と SHOULD のどちらの訳にも使われており、読者は強度を区別できない
@@ -1278,6 +1304,9 @@ def lint_file(path, enabled):
             r = check_rfc2119_annotation_spelling(normative_en, ja)
             if r:
                 findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+        if uses_bcp14 and not is_title and "W018" in enabled:
+            for code, detail in check_recommendation_style(normative_en, ja):
+                findings.append(Finding(code, path, rfc, i, detail, en, ja))
 
         # --- 捏造・欠落の疑い ---
         if "W013" in enabled and not is_title:

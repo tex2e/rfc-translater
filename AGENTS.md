@@ -58,8 +58,10 @@ RFC2119/RFC8174のキーワードは**規範強度そのもの**であり、意�
 |---|---|---|
 | MUST / SHALL / REQUIRED | 必須 | 〜しなければなりません (MUST / SHALL / REQUIRED) |
 | MUST NOT / SHALL NOT | 禁止 | 〜してはなりません (MUST NOT / SHALL NOT) |
-| SHOULD / RECOMMENDED | 推奨 | 〜すべきです (SHOULD / RECOMMENDED) |
-| SHOULD NOT / NOT RECOMMENDED | 非推奨 | 〜すべきではありません (SHOULD NOT / NOT RECOMMENDED) |
+| SHOULD | 推奨 | 〜すべきです (SHOULD) |
+| RECOMMENDED | 推奨 | 〜することが推奨されます (RECOMMENDED) |
+| SHOULD NOT | 非推奨 | 〜すべきではありません (SHOULD NOT) |
+| NOT RECOMMENDED | 非推奨 | 〜することは推奨されません (NOT RECOMMENDED) |
 | MAY / OPTIONAL | 任意 | 〜してもよい (MAY / OPTIONAL) |
 
 - 丸括弧に書く原語は、**原文のキーワードをそのまま**使います。表の「/」は原文にあるキーワードのうち該当するものを選ぶ意味です。
@@ -70,6 +72,8 @@ RFC2119/RFC8174のキーワードは**規範強度そのもの**であり、意�
 - **「〜する必要があります」をMUSTの訳に使わないこと。** SHOULD相当にも読めるため、
   規範強度が曖昧になります（現状の最頻出の欠陥です。`W012`）。
 - SHOULD NOT に「〜してはなりません」を当てないこと。MUST NOT に格上げされてしまいます。
+- `RECOMMENDED` は「推奨されます」、`NOT RECOMMENDED` は「推奨されません」で統一します。`SHOULD` / `SHOULD NOT` と規範強度は同じですが、日本語でも原語との対応を区別します。名詞を修飾する場合は「推奨される値」のように活用させます。原語の併記に対応する「すべき」「お勧めします」「推奨します」などの表記揺れは `W018` で検出します。
+- `It is RECOMMENDED that ... not ...` は「〜しないことが推奨されます (RECOMMENDED)」とします。原文の否定の範囲を維持し、括弧内を `NOT RECOMMENDED` に変えません。
 - 原語の併記は、原文のキーワードと**同じ種類・同じ個数**にします。段落内に MUST が2つあれば `(MUST)` も2つです。
   - 付け漏れは強調表示から抜け、読者が規範を見落とします（`E014`、1つも併記がない段落は `W011`）。
   - 原文が小文字の `should` や `is required to` の箇所に `(SHOULD)` `(MUST)` を付けないこと。原文にない規範性を足してしまいます（`E015`）。
