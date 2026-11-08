@@ -151,7 +151,7 @@ class Paragraph:
         conds.append(re.search(r'^[A-Za-z0-9+/]{32,}={0,2}$', text, re.MULTILINE))  # Base64 sample
         conds.append(re.search(r'----|___|~~~|\+\+\+|\*\*\*|\+-\+-\+-\+|=====', text))  # fig
         conds.append(re.search(r'   -{1,3}>|<-{1,3}   ', text))  # fig
-        conds.append(re.search(r'\.{4}|(?:\. ){4}', text))  # TOC
+        conds.append(re.search(r'\.{4}|(?:\. ){4}', self._without_prose_ellipses(text)))  # TOC
         conds.append(text.find('+--') >= 0)  # directory tree
         conds.append(re.search(r'^\/\*|(?<=\s)\/\* | \*\/$', text))  # src
         conds.append(re.search(r'(?:enum|struct|object) \{', text))  # tls
@@ -205,6 +205,17 @@ class Paragraph:
                 and (not re.search(r'[,:]\)?$|(?<!\.\.)[.]\)?$', text)):  # 文末が「.,:」ではない
             return True
         return False
+
+    @staticmethod
+    def _without_prose_ellipses(text: str) -> str:
+        """引用文の句点＋省略記号を、図表判定の際だけ点線から除外する。"""
+        if len(re.findall(r'\b[A-Za-z]+\b', text)) < 12:
+            return text
+        # 文の先頭、または列挙された用語の定義に限定する。XML、通信ログ、
+        # フィールド定義や表の省略行は、この例外で本文に変更しない。
+        if not re.match(r"\s*(?:(?:A|I|[A-Z][a-z'-]+)\s|'\d+'\s|\d+\.(?:[A-Za-z]|\s))", text):
+            return text
+        return re.sub(r'(?<!\.)\.{4}(?!\.|[ \t]*\d+[ \t]*(?:\n|$))', '.', text)
 
     # 見出しの判定
     def _find_section_title_pattern(self, text: str) -> bool:

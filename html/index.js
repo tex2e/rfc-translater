@@ -79,10 +79,9 @@ class RfcUi {
     if (this.rfcNumber) {
       // 段落ごとの操作ボタン（リンクのコピー・原文・誤訳の報告）
       this._setupRowTools();
-      // 目次と現在の節名の表示。原文ボタンのリンク先も表示中の節に追従させる
+      // 目次と現在の節名の表示
       this.sectionNav = new RfcSectionNavUi();
       this.sectionNav.setup();
-      this._setupOrigLinkTracking();
     }
   }
 
@@ -264,8 +263,8 @@ class RfcUi {
 
   // 原文の該当節へのURL（"4.1.2" → #section-4.1.2、"A.1" → #appendix-A.1）
   _getOrigUrl(heading) {
-    const origLink = document.getElementById('orig_link');
-    const base = origLink ? origLink.dataset.origUrl : null;
+    const origLink = document.querySelector('.URL a');
+    const base = origLink ? origLink.href : null;
     if (!base) {
       return null;
     }
@@ -277,27 +276,13 @@ class RfcUi {
     return `${base}#${kind}-${section}`;
   }
 
-  // 原文ボタンのリンク先を、画面上部に表示中の節へ追従させる
-  _setupOrigLinkTracking() {
-    const origLink = document.getElementById('orig_link');
-    if (!origLink) {
-      return;
-    }
-    this.sectionNav.onChange(entry => {
-      const heading = entry ? entry.heading : null;
-      origLink.href = this._getOrigUrl(heading);
-      origLink.title = heading
-        ? `原文の「${heading.textContent.trim()}」を開く`
-        : '原文を開く';
-    });
-  }
-
   // 段落にマウスを乗せたとき、左側に操作ボタンを表示する
   _setupRowTools() {
     const container = document.querySelector('.container');
     if (!container) {
       return;
     }
+    container.classList.add('row-tools-enabled');
     const tools = document.createElement('div');
     tools.classList.add('row-tools');
     tools.innerHTML = `
@@ -320,7 +305,8 @@ class RfcUi {
       report.href = this._makeIssueUrl(row, anchorId, heading);
       row.appendChild(tools);
     };
-    container.addEventListener('mouseover', (evt) => {
+    // スクロールだけで別の段落へ移動させず、ボタンへマウスを動かして操作できるようにする。
+    container.addEventListener('pointermove', (evt) => {
       const row = evt.target.closest('.row[id], .sec-row');
       if (row) {
         show(row);
@@ -503,7 +489,7 @@ class RfcSectionNavUi {
     if (container) {
       const rect = container.getBoundingClientRect();
       this.bar.style.left = `${Math.max(rect.left + 15, 8)}px`;
-      this.bar.style.maxWidth = `${Math.max(rect.width - 30, 200)}px`;
+      this.bar.style.width = `${rect.width - 30}px`;
     }
     if (current !== this.barEntry) {
       this.barEntry = current;
