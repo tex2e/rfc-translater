@@ -89,6 +89,7 @@ class RfcHtmlHelper:
     @staticmethod
     def render_text(text: str, is_draft: bool = False, bcp14: bool = False) -> str:
         """文章をHTMLに変換する（エスケープ、段落内改行、規範キーワードの強調、RFC参照のリンク化）"""
+        text = RfcHtmlHelper.space_after_annotation(text)
         html = RfcHtmlHelper.my_replace_filter(text)
         if bcp14:
             html = RfcHtmlHelper.highlight_keywords(html)
@@ -110,6 +111,14 @@ class RfcHtmlHelper:
     BCP14_PATTERN = re.compile(
         r'(?<![A-Za-z0-9_-])(MUST\s+NOT|SHALL\s+NOT|SHOULD\s+NOT|NOT\s+RECOMMENDED'
         r'|MUST|SHALL|REQUIRED|SHOULD|RECOMMENDED|MAY|OPTIONAL)(?![A-Za-z0-9_-])')
+
+    @staticmethod
+    def space_after_annotation(text: str) -> str:
+        """規範語の注記と後続の平仮名を区切る。句読点や既存の空白は変更しない。"""
+        return re.sub(
+            r'\((?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED'
+            r'|MUST|SHALL|REQUIRED|SHOULD|RECOMMENDED|MAY|OPTIONAL)\)(?=[ぁ-ゖゝゞ])',
+            r'\g<0> ', text)
 
     @staticmethod
     def uses_bcp14(contents: list) -> bool:
