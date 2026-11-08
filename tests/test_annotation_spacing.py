@@ -12,11 +12,16 @@ class TestAnnotationSpacing(unittest.TestCase):
                 self.assertEqual(RfcHtmlHelper.space_after_annotation(text), spaced)
                 self.assertEqual(RfcHtmlHelper.space_after_annotation(spaced), spaced)
 
-    def test_preserves_punctuation_existing_spaces_and_other_parentheses(self):
+    def test_preserves_punctuation_and_existing_spaces(self):
         for suffix in ['。', '、', '（例）', ' か', '  か', 'フィールド', '値', '']:
             text = f'発行すべきです (SHOULD){suffix}'
             self.assertEqual(RfcHtmlHelper.space_after_annotation(text), text)
-        self.assertEqual(RfcHtmlHelper.space_after_annotation('(RFC 10002)か'), '(RFC 10002)か')
+
+    def test_separates_hiragana_after_other_parentheses(self):
+        for text, expected in [('(RFC 10002)か', '(RFC 10002) か'),
+                               ('(SASL)を', '(SASL) を'),
+                               ('isValid()なら', 'isValid() なら')]:
+            self.assertEqual(RfcHtmlHelper.space_after_annotation(text), expected)
 
     def test_rendered_annotation_keeps_spacing_and_highlighting(self):
         rendered = RfcHtmlHelper.render_text('発行すべき (SHOULD)か。', bcp14=True)

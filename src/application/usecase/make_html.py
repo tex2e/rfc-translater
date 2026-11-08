@@ -114,11 +114,8 @@ class RfcHtmlHelper:
 
     @staticmethod
     def space_after_annotation(text: str) -> str:
-        """規範語の注記と後続の平仮名を区切る。句読点や既存の空白は変更しない。"""
-        return re.sub(
-            r'\((?:MUST NOT|SHALL NOT|SHOULD NOT|NOT RECOMMENDED'
-            r'|MUST|SHALL|REQUIRED|SHOULD|RECOMMENDED|MAY|OPTIONAL)\)(?=[ぁ-ゖゝゞ])',
-            r'\g<0> ', text)
+        """半角の閉じ括弧と後続の平仮名を区切る。句読点や既存の空白は変更しない。"""
+        return re.sub(r'\)(?=[ぁ-ゖゝゞ])', ') ', text)
 
     @staticmethod
     def uses_bcp14(contents: list) -> bool:
