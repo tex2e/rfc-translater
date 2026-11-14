@@ -17,6 +17,25 @@ from lint_translation import (  # noqa: E402
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_schema_and_keyword_mentions_keep_actual_requirements(self):
+        ldap = "( 2.5.6.2 NAME 'country' SUP top STRUCTURAL MUST c MAY ( searchGuide $ description ) )"
+        self.assertEqual(count_rfc2119_keywords(normative_source(ldap, "rfc2256")), {})
+        source = normative_source(ldap + " The client MUST accept it.", "rfc2256")
+        self.assertEqual(count_rfc2119_keywords(source), {"MUST": 1})
+        source = normative_source(
+            "The client MUST NOT rely on this behavior; the SHOULD mentioned above still applies.", "rfc4551")
+        self.assertEqual(count_rfc2119_keywords(source), {"MUST NOT": 1})
+        self.assertEqual(check_rfc2119_annotation_count(
+            source, "この動作に依存してはなりません (MUST NOT)。"), [])
+
+    def test_mixed_case_not_preserves_annotation_spelling(self):
+        en = "The client MUST not send X. It MAY not receive X."
+        ja = "Xを送信してはなりません (MUST not)。Xを受信しない場合があります (MAY not)。"
+        self.assertEqual(check_rfc2119_annotation_count(en, ja), [])
+        self.assertIsNone(check_rfc2119_annotation_spelling(en, ja))
+        self.assertEqual(check_rfc2119_annotation_count(
+            "The client MUST transmit X.", ja)[0][0], "W011")
+
     def test_handling_values_are_not_bcp14_requirements(self):
         en = ('If the field is OPTIONAL, the gateway MUST NOT notify. '
               'If it is REQUIRED, it MAY notify.')

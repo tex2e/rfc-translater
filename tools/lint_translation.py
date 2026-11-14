@@ -769,7 +769,7 @@ def check_rfc2119(en, ja):
     kw, expected = found[0]
 
     # 明示注釈があれば、それが正しいか見るだけでよい
-    ann = ANNOTATION_RE.search(ja)
+    ann = ANNOTATION_RE.search(annotations_for_comparison(en, ja))
     if ann:
         ann_kw = re.sub(r"\s+", " ", ann.group(1)).upper()
         if canonical_rfc2119_annotation(ann_kw) == canonical_rfc2119_annotation(kw):
@@ -872,16 +872,20 @@ def count_rfc2119_annotations(ja):
 
 
 def annotations_for_comparison(en, ja):
-    """原文の MAY NOT をそのまま併記した場合も、MAY 一個として照合する。
+    """原文どおりに併記した混在表記を、照合時だけ既存の強度区分に揃える。"""
+    variant = r"MAY\s+(?:NOT|not)|(?:MUST|SHALL|SHOULD)\s+not"
+    variants = Counter(" ".join(m.split()) for m in re.findall(rf"\b(?:{variant})\b", en))
 
-    MAY NOT は RFC2119 の独立したキーワードではないが、RFC8450 などに
-    実在する表現。NOT を消す修正を促さないよう、原文に存在する個数だけ
-    比較用文字列を正規化する。訳文や規範強度の判定は変更しない。
-    """
-    count = len(re.findall(r"\bMAY\s+NOT\b", en))
-    if count:
-        return re.sub(r"[（(]\s*MAY\s+NOT\s*[）)]", "(MAY)", ja, count=count)
-    return ja
+    def normalize(match):
+        literal = " ".join(match[1].split())
+        if variants[literal] == 0:
+            return match[0]
+        variants[literal] -= 1
+        return "(MAY)" if literal.startswith("MAY ") else f"({literal.upper()})"
+
+    if not variants:
+        return ja
+    return re.sub(rf"[（(]\s*({variant})\s*[）)]", normalize, ja)
 
 
 def _format_keyword_counts(counts):
@@ -1153,13 +1157,88 @@ def check_particle_chain(ja):
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
 
+# 固有の分類名やキーワードへの言及と、規範的な指示が混在する文書。
+# RFCと原文の文言の両方を限定し、その段落の規範的な指示は検査に残す。
+NON_NORMATIVE_PHRASES = {
+    "rfc2252": ("The MAY attribute list of this class",),
+    "rfc2440": (
+        "MUST-implement",
+    ),
+    "rfc2829": (
+        "this is a SHOULD to allow",
+    ),
+    "rfc2981": (
+        "Notification Log MIB is REQUIRED",
+    ),
+    "rfc3680": (
+        "at SHOULD strength",
+        "not MUST strength",
+        "a MUST requirement",
+    ),
+    "rfc4104": ("optional (MAY) attributes",),
+    "rfc4324": (
+        "there is no requirement that a person's UPN MUST be",
+    ),
+    "rfc4452": ("MAY not always be dereferenceable",),
+    "rfc4551": (
+        "the SHOULD recommendation in Section 6.4.6",
+        "the SHOULD mentioned above",
+    ),
+    "rfc5025": (
+        "is not a MUST is that",
+    ),
+    "rfc5106": (
+        "\"MUST/MUST-\"",
+    ),
+    "rfc5435": (
+        "violation of this SHOULD NOT may result",
+    ),
+    "rfc5590": (
+        "This is a SHOULD rather than a MUST only",
+    ),
+    "rfc5705": (
+        "This is not a MUST because",
+    ),
+    "rfc5754": (
+        "loss of the OPTIONAL associated",
+        "the OPTIONAL was recovered",
+    ),
+    "rfc7146": (
+        "(replaces RFC 3723's \"MUST implement\" requirement)",
+        "(replaces RFC 3723's \"SHOULD implement\" requirement)",
+    ),
+    "rfc7974": (
+        "uses SHOULD rather than MUST because",
+    ),
+    "rfc9142": (
+        "suitability for implementation of MUST, SHOULD, MAY, SHOULD NOT, and MUST NOT",
+    ),
+    "rfc9754": (
+        "currently REQUIRED flags and OPTIONAL flags that become REQUIRED",
+        "mark REQUIRED flags",
+        "from OPTIONAL to REQUIRED when",
+    ),
+}
+
+LDAP_OBJECT_CLASS_RE = re.compile(
+    r"^\s*\(\s*\d+(?:\.\d+)+\s+NAME\s+"
+    r"(?:'[^']*'|\(\s*(?:'[^']*'\s*)+\))"
+    r"(?:\s+(?:DESC\s+'[^']*'|OBSOLETE|SUP\s+[^()\s]+|ABSTRACT|STRUCTURAL|AUXILIARY|"
+    r"(?:MUST|MAY)\s+(?:[^()\s]+|\([^()]*\))))*\s*\)"
+)
+
+
 def normative_source(en, rfc):
-    """文書内で規範語と明確に区別されたパラメーター値を検査用にマスクする。"""
+    """文書内で規範語と明確に区別された構文・言及を検査用にマスクする。"""
     # RFC 3459 section 1 explicitly excludes REQUIRED from RFC 2119 usage.
     # REQUIRED / OPTIONAL throughout this RFC name Handling parameter values;
     # retain them in source/translation and identifier checks, not BCP 14 counts.
     if rfc == "rfc3459":
         return re.sub(r"\b(?:REQUIRED|OPTIONAL)\b", "parameter_value", en)
+    if rfc in {"rfc2256", "rfc2307", "rfc4104", "rfc4523", "rfc4524"}:
+        en = LDAP_OBJECT_CLASS_RE.sub(" ", en)
+    for phrase in NON_NORMATIVE_PHRASES.get(rfc, ()):
+        en = en.replace(phrase, " ")
     return en
 
 
