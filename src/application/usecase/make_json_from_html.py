@@ -107,7 +107,9 @@ def make_json_from_html(rfc: IRfc,
             row_data[RfcJsonElem.Contents.JA] = ""
 
         # 見出しのとき、見出しフラグをTrueにする
-        if texts[0].name == 'h5':
+        if tag_name == 'h5' and row.has_attr('data-toc-heading-indent'):
+            row_data[RfcJsonElem.Contents.INDENT] = int(row['data-toc-heading-indent'])
+        elif tag_name == 'h5':
             row_data[RfcJsonElem.Contents.SECTION_TITLE] = True
 
         # 翻訳文 (ja)

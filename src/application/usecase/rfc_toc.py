@@ -14,6 +14,7 @@ LABEL = re.compile(
 PAGE = re.compile(
     r'(?:[ .]*\.[ .]*\.[ .]*|[ \t]{4,})(?P<page>\d+|[ivxlcdm]+)\s*$',
     re.IGNORECASE)
+CAPTION = re.compile(r'^(?:figure|table)\s+[A-Z]?\.?\d', re.IGNORECASE)
 
 
 def _normalize(text: str) -> str:
@@ -32,6 +33,27 @@ def _parts(text: str) -> tuple[str | None, str, str]:
 
 def _without_page(text: str) -> str:
     return PAGE.sub('', text).rstrip()
+
+
+def section_number(text: str) -> str | None:
+    """章節番号を取得する。"""
+    # コロンを使うRFC 2743などの見出しにも階層を付ける。
+    text = re.sub(r'^(\d+(?:\.\d+)*[a-z]?):(?=\s)', r'\1.', text)
+    return _parts(text + ' ')[0]
+
+
+def toc_section_targets(contents: list[dict], paragraph_ids: list[str | None],
+                        toc_rows: dict[int, list[dict]]) -> set[str]:
+    """目次との照合で特定できた、通常段落として保存されている章節見出し。"""
+    candidates = {
+        target for paragraph, target in zip(contents, paragraph_ids)
+        if target and not paragraph.get('raw') and not paragraph.get('list_continuation')
+        and paragraph.get('indent', 0) <= 3 and not CAPTION.match(paragraph['text'].strip())
+    }
+    return {
+        row['target'] for rows in toc_rows.values() if any(row['translated'] for row in rows)
+        for row in rows if row['confirmed'] and row['target'] in candidates
+    }
 
 
 def _width(text: str) -> int:

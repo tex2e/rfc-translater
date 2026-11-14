@@ -16,7 +16,7 @@ from ...domain.services.rfcfile import RfcFile
 from ...infrastructure.repository.rfcjsontransrepository import IRfcJsonTransRepository
 from ...infrastructure.repository.rfcjsondatasummaryrepository import IRfcJsonDataSummaryRepository
 from ...infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
-from .rfc_toc import make_toc_rows
+from .rfc_toc import make_toc_rows, section_number, toc_section_targets
 
 
 def make_html(rfc: IRfc,
@@ -53,6 +53,7 @@ def make_html(rfc: IRfc,
     contents = obj[RfcJsonElem.CONTENTS]
     paragraph_ids = RfcHtmlHelper.make_paragraph_ids(contents)
     toc_rows = make_toc_rows(contents, paragraph_ids, RfcHtmlHelper.text_to_id)
+    toc_heading_ids = toc_section_targets(contents, paragraph_ids, toc_rows)
     missing = [row['en'].strip() for rows in toc_rows.values() for row in rows
                if not row['translated'] and not row['blank']]
     if missing:
@@ -62,6 +63,7 @@ def make_html(rfc: IRfc,
                                        bcp14=RfcHtmlHelper.uses_bcp14(contents),
                                        orig_url=RfcHtmlHelper.get_orig_url(obj[RfcJsonElem.NUMBER], is_draft),
                                        paragraph_ids=paragraph_ids,
+                                       toc_heading_ids=toc_heading_ids,
                                        rule_start=RfcHtmlHelper.rule_start_index(contents),
                                        toc_rows=toc_rows,
                                        RfcJsonElem=RfcJsonElem, RfcHtmlHelper=RfcHtmlHelper)
@@ -163,9 +165,7 @@ class RfcHtmlHelper:
     @staticmethod
     def section_number(text: str) -> str | None:
         """見出しの章節番号を取得する（"4.1.2.  Client Hello" → "4.1.2", "Appendix A.  X" → "A"）"""
-        # 英大文字1字だけの番号は "A." のようにピリオドがあるときだけ付録番号とみなす（"A Framework" を除外）
-        m = re.match(r'^(?:Appendix\s+([A-Z])\.?|(\d+(?:\.\d+)*)\.?|([A-Z](?:\.\d+)+)\.?|([A-Z])\.)(?=\s|$)', text)
-        return next((g for g in m.groups() if g), None) if m else None
+        return section_number(text)
 
     @staticmethod
     def section_level(text: str) -> int:

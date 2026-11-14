@@ -142,6 +142,34 @@ class TestBilingualToc(unittest.TestCase):
         make_json_from_html(rfc, html_repo, restored)
         self.assertEqual(restored.find(rfc)['contents'][0], source)
 
+    def test_toc_target_renders_as_heading_and_preserves_existing_anchor_and_data(self):
+        legacy = {'text': '1.2 Legacy heading', 'ja': '1.2 旧形式の見出し', 'indent': 3}
+        caption = {'text': 'Figure 1: Example', 'ja': '図1：例', 'indent': 3}
+        plain = {'text': 'Schedule', 'ja': '予定', 'indent': 3}
+        contents = [
+            {'text': 'Table of Contents', 'ja': '目次', 'indent': 0},
+            toc('1.2 Legacy heading\nFigure 1: Example'),
+            legacy, caption,
+            heading('2. End', '2. 終わり'),
+            toc('Schedule ...........4'), plain,
+        ]
+        rfc = Rfc('99999')
+        obj = {'title': {'text': 'RFC 99999 - Test', 'ja': 'RFC 99999 - テスト'},
+               'number': 99999, 'created_at': '', 'updated_by': '', 'contents': contents}
+        json_repo = MemoryJsonTransRepository()
+        json_repo.save(rfc, obj)
+        html_repo = MemoryHtmlRepository()
+        make_html(rfc, json_repo, RfcJsonDataSummaryFileRepository(), html_repo)
+        soup = BeautifulSoup(html_repo.find(rfc), 'html.parser')
+        self.assertEqual(len(soup.select('.toc-grid a[href="#top-p3"]')), 2)
+        self.assertEqual(soup.select_one('.sec-row.sec-level-2 h5#top-p3')['data-section'], '1.2')
+        self.assertEqual(len(soup.select('.sec-row.sec-level-2 h5.text')), 2)
+        self.assertIsNotNone(soup.select_one('div#top-p4 p.text'))
+        self.assertIsNotNone(soup.select_one('div[id="2--End-p2"] p.text'))
+        restored = MemoryJsonTransRepository()
+        make_json_from_html(rfc, html_repo, restored)
+        self.assertEqual(restored.find(rfc)['contents'], contents)
+
 
 if __name__ == '__main__':
     unittest.main()
