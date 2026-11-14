@@ -72,14 +72,14 @@ def make_json_from_html(rfc: IRfc,
             })
             continue
 
-        # タグ名（pre:図表, h5:見出し, p:文章）
         tag_name = texts[0].name
+        front_heading = 'front-heading' in row.get('class', [])
 
         # インデント
         row_data[RfcJsonElem.Contents.INDENT] = 0
 
         # 文章のとき、indent-N というクラス名から、インデントレベル N を取得する
-        if tag_name == 'p':
+        if tag_name == 'p' or front_heading:
             if row.get('data-list-continuation') == 'true':
                 row_data[RfcJsonElem.Contents.LIST_CONTINUATION] = True
             for class_ in texts[0].attrs.get('class'):
@@ -107,9 +107,9 @@ def make_json_from_html(rfc: IRfc,
             row_data[RfcJsonElem.Contents.JA] = ""
 
         # 見出しのとき、見出しフラグをTrueにする
-        if tag_name == 'h5' and row.has_attr('data-toc-heading-indent'):
+        if tag_name in ('h2', 'h5') and row.has_attr('data-toc-heading-indent'):
             row_data[RfcJsonElem.Contents.INDENT] = int(row['data-toc-heading-indent'])
-        elif tag_name == 'h5':
+        elif tag_name in ('h2', 'h5') and not front_heading:
             row_data[RfcJsonElem.Contents.SECTION_TITLE] = True
 
         # 翻訳文 (ja)

@@ -242,7 +242,7 @@ class RfcUi {
   // 本文の見出し（英語側。data-section に章節番号を持つ）
   _getSectionHeadings() {
     if (!this.sectionHeadings) {
-      this.sectionHeadings = Array.from(document.querySelectorAll('.sec-row h5.text[id]'));
+      this.sectionHeadings = Array.from(document.querySelectorAll('.sec-row .text[id]'));
     }
     return this.sectionHeadings;
   }
@@ -324,10 +324,10 @@ class RfcUi {
     });
   }
 
-  // 段落（.row[id]）または見出し（h5[id]）のid
+  // 段落または見出しのID
   _getRowAnchorId(row) {
     if (row.classList.contains('sec-row')) {
-      const h = row.querySelector('h5.text[id]');
+      const h = row.querySelector('.text[id]');
       return h ? h.id : '';
     }
     return row.id;
@@ -418,7 +418,7 @@ class RfcSectionNavUi {
   _collectEntries() {
     return Array.from(document.querySelectorAll('.sec-row, .row.front-heading')).map(row => {
       const texts = row.querySelectorAll('.text');
-      const heading = row.classList.contains('sec-row') ? row.querySelector('h5.text[id]') : null;
+      const heading = row.classList.contains('sec-row') ? row.querySelector('.text[id]') : null;
       const en = texts[0] ? texts[0].textContent.trim() : '';
       const ja = texts[1] ? texts[1].textContent.trim() : '';
       const m = row.className.match(/\bsec-level-(\d)\b/);
