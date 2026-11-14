@@ -126,6 +126,17 @@ class TestHtmlFragments(unittest.TestCase):
         self.assertTrue(all(p.is_code for p in blocks[:-1]))
         self.assertFalse(blocks[-1].is_code)
 
+    def test_fenced_code_keeps_literal_content_and_separates_introduction(self):
+        rows = fetch('Header\n\n   This paragraph introduces the module.\n'
+                     '   <CODE BEGINS> file="example.yang"\n\n'
+                     '      module example {\n        prefix ex;\n      }\n\n'
+                     '   <CODE ENDS>')
+        self.assertEqual(rows[1]['text'], 'This paragraph introduces the module.')
+        self.assertFalse(rows[1].get('raw', False))
+        self.assertEqual(rows[3]['text'], 'module example {\n  prefix ex;\n}')
+        self.assertEqual(rows[3]['indent'], 6)
+        self.assertTrue(all(row['raw'] for row in rows[2:]))
+
     def test_code_fence_ends_before_prose_without_blank_line(self):
         for separator in ('\n', ' '):
             with self.subTest(separator=separator):

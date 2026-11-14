@@ -8,10 +8,12 @@ import unicodedata
 
 
 LABEL = re.compile(
-    r'^(?P<indent>[ \t]*)(?P<label>Appendix\s+[A-Z]\.?|'
+    r'^(?P<indent>[ \t]*)(?P<label>(?i:Appendix)\s+[A-Z][.:]?|'
     r'\d+(?:\.\d+)*[a-z]?\.?|[A-Z](?:\.\d+)+\.?|[A-Z]\.)'
     r'(?P<gap>[ \t]+)(?P<title>.*)$')
-PAGE = re.compile(r'(?P<leader>[ .]*\.[ .]*\.[ .]*)(?P<page>\d+|[ivxlcdm]+)\s*$', re.IGNORECASE)
+PAGE = re.compile(
+    r'(?:[ .]*\.[ .]*\.[ .]*|[ \t]{4,})(?P<page>\d+|[ivxlcdm]+)\s*$',
+    re.IGNORECASE)
 
 
 def _normalize(text: str) -> str:
@@ -24,7 +26,7 @@ def _parts(text: str) -> tuple[str | None, str, str]:
     if not match:
         indent = text[:len(text) - len(text.lstrip(' \t'))]
         return None, indent, text[len(indent):]
-    key = re.sub(r'^Appendix\s+', '', match['label']).rstrip('.')
+    key = re.sub(r'^Appendix\s+', '', match['label'], flags=re.IGNORECASE).rstrip('.:')
     return key, match['indent'] + match['label'] + match['gap'], match['title']
 
 
@@ -39,15 +41,16 @@ def _width(text: str) -> int:
                for c in text.expandtabs(8))
 
 
-def _japanese_title(text: str, numbered: bool) -> str:
-    if not numbered:
+def _japanese_title(text: str, section_number: str | None) -> str:
+    if section_number is None:
         return text.strip()
     # 本文見出しの番号は捨て、目次原文の番号と空白を再利用する。
     text = re.sub(r'^付録\s*([A-Z](?:\.\d+)*)[.．:]?\s*', '', text.strip())
     key, _, title = _parts(text)
     if key is not None:
         return title.strip()
-    return re.sub(r'^(?:\d+(?:\.\d+)*[a-z]?|[A-Z](?:\.\d+)*)[.．]\s*', '', text).strip()
+    return re.sub(r'^' + re.escape(section_number) + r'(?:[.．。]\s*|(?=[ぁ-んァ-ヶ一-龯]))',
+                  '', text).strip()
 
 
 def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
@@ -57,7 +60,7 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
     番号は本文の見出しだけから解決し、番号なしは原文タイトルの一意一致で解決する。
     不明・曖昧な項目は英語を残し、呼び出し元が未対応として報告できるようにする。
     """
-    by_number, by_title = {}, {}
+    by_number, by_title, by_numbered_title = {}, {}, {}
     for i, paragraph in enumerate(contents):
         if paragraph.get('raw') or paragraph.get('toc'):
             continue
@@ -68,6 +71,11 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
                    'title': _normalize(title if paragraph.get('section_title') else text)}
         if paragraph.get('section_title') and key is not None:
             by_number.setdefault(key, []).append(heading)
+        elif key is not None and paragraph.get('indent', 0) <= 3:
+            # 古いRFCでは「1 Introduction」などが段落として保存されている。
+            # 目次と番号・題名の両方が一致するときは既存の段落IDを使う。
+            candidate = {**heading, 'title': _normalize(title)}
+            by_numbered_title.setdefault((key, candidate['title']), []).append(candidate)
         by_title.setdefault(_normalize(title if paragraph.get('section_title') else text), []).append(heading)
 
     result = {}
@@ -107,14 +115,24 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
             numbered += 1
             candidates = by_number.get(key, [])
             full_title = _without_page(' '.join([title] + [s.strip() for s in lines[1:]]))
-            if len(candidates) == 1 and candidates[0]['title'] == _normalize(full_title):
+            normalized = _normalize(full_title)
+            exact = [candidate for candidate in candidates if candidate['title'] == normalized]
+            if not candidates:
+                exact = by_numbered_title.get((key, normalized), [])
+            if len(exact) == 1:
                 matches += 1
         confirmed = preceding in ('table of contents', 'contents') or (matches >= 2 and matches * 2 >= numbered)
         for lines in entries:
             key, prefix, first_title = _parts(lines[0])
             title = _without_page(' '.join([first_title] + [s.strip() for s in lines[1:]]))
             candidates = by_number.get(key, []) if key is not None else by_title.get(_normalize(title), [])
-            # 同じ番号が複数あるときは、先勝ちで誤った章へリンクしない。
+            # 同じ番号が複数ある場合、題名の完全一致で一意に絞れるときだけリンクする。
+            if len(candidates) > 1 and key is not None:
+                exact = [candidate for candidate in candidates if candidate['title'] == _normalize(title)]
+                if len(exact) == 1:
+                    candidates = exact
+            if not candidates and confirmed and key is not None:
+                candidates = by_numbered_title.get((key, _normalize(title)), [])
             heading = candidates[0] if len(candidates) == 1 else None
             page = PAGE.search(lines[-1])
             # 長い題名の直後に「.89」だけが付く古い形式。本文題名の一致を確認して
@@ -127,7 +145,7 @@ def make_toc_rows(contents: list[dict], paragraph_ids: list[str | None],
             title_mismatch = bool(heading and heading['title'] != _normalize(title))
             if title_mismatch and not (confirmed and key is not None):
                 heading = None
-            ja = _japanese_title(heading['ja'], key is not None) if heading else ''
+            ja = _japanese_title(heading['ja'], key) if heading else ''
             source = '\n'.join(lines)
             translated = bool(ja)
             issue = None

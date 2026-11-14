@@ -85,12 +85,30 @@ class TestBilingualToc(unittest.TestCase):
         self.assertFalse(result['translated'])
         self.assertIsNone(result['target'])
 
+    def test_legacy_heading_and_duplicate_number_use_exact_title(self):
+        contents = [{'text': 'Table of Contents', 'ja': '目次', 'indent': 0},
+                    toc('1 Introduction                         2\n2. Scope'),
+                    {'text': '1 Introduction', 'ja': '1はじめに', 'indent': 3},
+                    heading('2. Scope', '2. 適用範囲'),
+                    heading('2. Examples', '2. 例')]
+        result = rows(contents)[1]
+        self.assertEqual(result[0]['target'], 'top-p3')
+        self.assertTrue(result[0]['ja'].startswith('   1 はじめに '))
+        self.assertTrue(result[0]['ja'].endswith('2'))
+        self.assertEqual(result[1]['target'], '2--Scope')
+
     def test_old_lettered_numbers_and_roman_page_numbers(self):
         result = rows([toc('4a.  First Page Heading . . . . . . vii'),
                        heading('4a. First Page Heading', '4a. 最初のページの見出し')])[0][0]
         self.assertTrue(result['translated'])
         self.assertTrue(result['ja'].startswith('   4a.  最初のページの見出し'))
         self.assertTrue(result['ja'].endswith('vii'))
+
+    def test_uppercase_appendix_with_colon(self):
+        result = rows([toc('APPENDIX A: Reference Implementation ........ 45'),
+                       heading('APPENDIX A. Reference Implementation', '付録 A. 参照実装')])[0][0]
+        self.assertTrue(result['ja'].startswith('   APPENDIX A: 参照実装 '))
+        self.assertEqual(result['target'], 'APPENDIX-A--Reference-Implementation')
 
     def test_single_dot_page_separator_does_not_strip_version_numbers(self):
         result = rows([toc('1. Long title.89\n2. TLS 1.3'),

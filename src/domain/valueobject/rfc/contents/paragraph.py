@@ -28,7 +28,15 @@ class Paragraph:
     TYPE_TOC = 'toc'
     TYPE_SENTENCE = 'sentence'
 
-    def __init__(self, text: str, is_code=None):
+    def __init__(self, text: str, is_code=None, *, literal=False):
+        if literal:
+            text = text.replace(BREAK, '\n').lstrip('\n').rstrip()
+            self.text = textwrap.dedent(text)
+            self.indent = RfcUtils.get_line_len_diff(text, self.text)
+            self.is_code = True
+            self.is_section_title = False
+            self.is_toc = False
+            return
         # 段落文章（インデントは除く）
         self.text = textwrap.dedent(text.lstrip('\n').rstrip())
         # インデント数の取得

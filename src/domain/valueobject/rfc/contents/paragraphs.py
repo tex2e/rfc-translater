@@ -72,6 +72,8 @@ class Paragraphs:
             grouped.append(chunk)
             i += 1
         chunks = grouped
+        code_start = re.compile(r'^ *<CODE BEGINS[ \t]*>', re.I | re.M)
+        code_end = re.compile(r'<CODE ENDS[ \t]*>', re.I)
         self.paragraphs = []
         literal_end = None
         state_table = False
@@ -81,20 +83,22 @@ class Paragraphs:
             # DESCRIPTION strings too. They remain code across blank lines.
             if literal_end is None:
                 candidate_end = None
-                if re.search(r'<CODE BEGINS\b', chunk, re.I):
-                    candidate_end = re.compile(r'<CODE ENDS\b[^>\n]*>', re.I)
+                opening = code_start.search(chunk)
+                if opening:
+                    candidate_end = code_end
                 elif re.search(r'^ *[\w-]+\s+DEFINITIONS\s*::=\s*BEGIN\b', chunk, re.M):
                     candidate_end = re.compile(r'^ *END(?:[ \t]*--[^\n]*)?[ \t]*$', re.M)
-                if candidate_end and candidate_end.search('\n\n'.join(chunks[i:])):
+                remaining = '\n\n'.join(chunks[i:]) if candidate_end else ''
+                if candidate_end and candidate_end.search(remaining, opening.end() if opening else 0):
                     literal_end = candidate_end
+                    if opening and opening.start():
+                        prefix = chunk[:opening.start()]
+                        self.paragraphs.extend(Paragraphs(prefix, ignore_header=i == 0 and ignore_header))
+                        chunk = chunk[opening.start():]
             if literal_end is not None:
                 closing = literal_end.search(chunk)
                 code = chunk[:closing.end()] if closing else chunk
-                paragraph = Paragraph(code, is_code=True)
-                paragraph.is_code = True
-                paragraph.is_section_title = False
-                paragraph.is_toc = False
-                self.paragraphs.append(paragraph)
+                self.paragraphs.append(Paragraph(code, literal=True))
                 if closing is None:
                     continue
                 literal_end = None
@@ -183,12 +187,25 @@ class Paragraphs:
             parts = split_html_examples(chunk)
             for part, is_example in parts:
                 paragraph = Paragraph(part, is_code=is_header or is_example)
-                # 空行のない o の箇条書きは、改行を空白に変換する前に分ける。
-                first_item = re.match(r'^\n*( *)o[ \t]+\S', part)
-                if first_item and not paragraph.is_code and not paragraph.is_section_title:
-                    indent = first_item[1]
-                    items = re.split(rf'\n(?={indent}o[ \t]+\S)', part)
-                    if len(items) > 1:
+                # 空行を挟まない箇条書きは、物理行が残っている間に分ける。
+                if paragraph.is_code or paragraph.is_section_title or re.search(r'/\*|\*/', part):
+                    self.paragraphs.append(paragraph)
+                    continue
+                marker = r'(?P<indent> *)(?P<mark>[o*+-]|\d{1,2}[.)])[ \t]+\S'
+                first_item = re.match(r'^\n*' + marker, part)
+                intro = re.search(r':\n(?=' + marker + r')', part) if not first_item else None
+                if intro:
+                    first_item = intro
+                if first_item:
+                    indent, mark = first_item['indent'], first_item['mark']
+                    token = r'\d{1,2}' + re.escape(mark[-1]) if mark[0].isdigit() else re.escape(mark)
+                    items = re.split(rf'\n(?={indent}{token}[ \t]+\S)', part)
+                    if len(items) >= (3 if intro else 2):
+                        if mark[0].isdigit():
+                            numbers = [int(re.match(r'\s*(\d+)', item)[1]) for item in items[int(bool(intro)):]]
+                            if numbers != list(range(numbers[0], numbers[0] + len(numbers))):
+                                self.paragraphs.append(paragraph)
+                                continue
                         self.paragraphs.extend(Paragraph(item) for item in items)
                         continue
                 self.paragraphs.append(paragraph)

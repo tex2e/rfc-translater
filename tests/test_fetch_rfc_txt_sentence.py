@@ -29,6 +29,15 @@ class TestFetchRfcSentence(unittest.TestCase):
         self.assertTrue(all(p.is_code for p in paragraphs))
         self.assertEqual(paragraphs[1].text, "o  client\no  datastore")
 
+    def test_adjacent_bullets_after_intro_and_numbered_items(self):
+        for items in (["* first", "* second"], ["- first", "- second"],
+                      ["1. first", "2. second"], ["1) first", "2) second"]):
+            with self.subTest(items=items):
+                text = "\n".join(["   Options:"] + ["      " + item for item in items])
+                paragraphs = list(Paragraphs(text, ignore_header=False))
+                self.assertEqual([p.text for p in paragraphs], ["Options:"] + items)
+                self.assertEqual([p.indent for p in paragraphs], [3, 6, 6])
+
     def test_sentence_hello(self):
         p = Paragraph("hello world.")
         self.assertEqual(p.get_text_type(), Paragraph.TYPE_SENTENCE)
