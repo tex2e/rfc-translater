@@ -221,16 +221,25 @@ class RfcHtmlHelper:
         used = set()
         section_id = 'top'
         count = 0
+        list_item = 1
+        list_base = ''
         for paragraph in contents:
             if paragraph.get(RfcJsonElem.Contents.SECTION_TITLE) == True:
                 section_id = RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT]) or 'section'
                 count = 0
                 ids.append(None)
                 continue
-            count += 1
-            pid = f'{section_id}-p{count}'
+            if count and paragraph.get(RfcJsonElem.Contents.LIST_CONTINUATION):
+                list_item += 1
+                pid = f'{list_base}-item{list_item}'
+            else:
+                count += 1
+                list_item = 1
+                pid = f'{section_id}-p{count}'
             while pid in used:
                 pid += '_'
+            if list_item == 1:
+                list_base = pid
             used.add(pid)
             ids.append(pid)
         return ids

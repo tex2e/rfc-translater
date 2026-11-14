@@ -21,5 +21,6 @@ class RfcJsonElem:
         SECTION_TITLE = 'section_title'
         RAW = 'raw'
         TOC = 'toc'
+        LIST_CONTINUATION = 'list_continuation'
 
     IS_DRAFT = 'is_draft'

@@ -80,6 +80,8 @@ def make_json_from_html(rfc: IRfc,
 
         # 文章のとき、indent-N というクラス名から、インデントレベル N を取得する
         if tag_name == 'p':
+            if row.get('data-list-continuation') == 'true':
+                row_data[RfcJsonElem.Contents.LIST_CONTINUATION] = True
             for class_ in texts[0].attrs.get('class'):
                 if class_.startswith('indent-'):
                     row_data[RfcJsonElem.Contents.INDENT] = int(class_.replace('indent-', ''))

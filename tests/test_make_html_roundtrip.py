@@ -8,7 +8,7 @@ import re
 import textwrap
 import unittest
 
-from src.application.usecase.make_html import make_html
+from src.application.usecase.make_html import RfcHtmlHelper, make_html
 from src.application.usecase.make_json_from_html import make_json_from_html
 from src.domain.valueobject.rfc import Rfc, RfcJsonElem
 from src.infrastructure.repository.rfcjsontransrepository import (
@@ -20,7 +20,7 @@ from src.infrastructure.repository.rfchtmlrepository import IRfcHtmlRepository
 # 見出し・目次・図表・箇条書き・RFC参照を一通り含むRFC
 SAMPLE_RFCS = ['8446', '9110', '5280', '2616', '7540', '9293',
                '2397', '5005', '5707', '6121', '6596', '6787',
-               '2557', '4590', '4709', '5090', '7991', '7992']
+               '2557', '4590', '4709', '5090', '7991', '7992', '6749']
 
 
 class MemoryHtmlRepository(IRfcHtmlRepository):
@@ -89,10 +89,24 @@ def normalize(paragraph):
         'raw': raw,
         'section_title': section_title,
         'toc': bool(paragraph.get(RfcJsonElem.Contents.TOC)),
+        'list_continuation': bool(paragraph.get(RfcJsonElem.Contents.LIST_CONTINUATION)),
     }
 
 
 class TestMakeHtmlRoundTrip(unittest.TestCase):
+
+    def test_split_list_preserves_existing_paragraph_ids(self):
+        paragraphs = [
+            {'text': '1. Introduction', 'section_title': True},
+            {'text': 'o client'},
+            {'text': 'o datastore', 'list_continuation': True},
+            {'text': 'o server', 'list_continuation': True},
+            {'text': 'The next paragraph.'},
+        ]
+        self.assertEqual(RfcHtmlHelper.make_paragraph_ids(paragraphs), [
+            None, '1--Introduction-p1', '1--Introduction-p1-item2',
+            '1--Introduction-p1-item3', '1--Introduction-p2',
+        ])
 
     def test_roundtrip_keeps_contents(self):
         file_repo = RfcJsonTransFileRepository()

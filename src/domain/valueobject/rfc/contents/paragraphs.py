@@ -183,6 +183,14 @@ class Paragraphs:
             parts = split_html_examples(chunk)
             for part, is_example in parts:
                 paragraph = Paragraph(part, is_code=is_header or is_example)
+                # 空行のない o の箇条書きは、改行を空白に変換する前に分ける。
+                first_item = re.match(r'^\n*( *)o[ \t]+\S', part)
+                if first_item and not paragraph.is_code and not paragraph.is_section_title:
+                    indent = first_item[1]
+                    items = re.split(rf'\n(?={indent}o[ \t]+\S)', part)
+                    if len(items) > 1:
+                        self.paragraphs.extend(Paragraph(item) for item in items)
+                        continue
                 self.paragraphs.append(paragraph)
 
     def __getitem__(self, key: int) -> Paragraph:

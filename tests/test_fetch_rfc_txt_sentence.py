@@ -3,12 +3,31 @@
 
 import unittest
 from src.domain.valueobject.rfc.contents.paragraph import Paragraph
+from src.domain.valueobject.rfc.contents.paragraphs import Paragraphs
 
 
 # --- Sentence -----------------------------------------------------------------
 
 class TestFetchRfcSentence(unittest.TestCase):
     maxDiff = None
+
+    def test_adjacent_o_items_keep_their_wrapped_text(self):
+        paragraphs = list(Paragraphs(
+            "   o  client uses an o marker\n"
+            "      in the text.\n"
+            "   o  datastore",
+            ignore_header=False,
+        ))
+        self.assertEqual(
+            [(p.indent, p.text, p.is_code) for p in paragraphs],
+            [(3, "o client uses an o marker in the text.", False), (3, "o datastore", False)],
+        )
+
+    def test_o_lines_in_fenced_code_stay_together(self):
+        code = "<CODE BEGINS>\n\n   o  client\n   o  datastore\n\n<CODE ENDS>"
+        paragraphs = list(Paragraphs(code, ignore_header=False))
+        self.assertTrue(all(p.is_code for p in paragraphs))
+        self.assertEqual(paragraphs[1].text, "o  client\no  datastore")
 
     def test_sentence_hello(self):
         p = Paragraph("hello world.")
