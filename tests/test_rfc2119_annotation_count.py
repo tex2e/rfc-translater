@@ -17,6 +17,22 @@ from lint_translation import (  # noqa: E402
 
 
 class TestRfc2119AnnotationCount(unittest.TestCase):
+    def test_glossary_bullets_do_not_add_normative_requirements(self):
+        en = "o MUST: This word, or the terms REQUIRED or SHALL, means an absolute requirement."
+        self.assertEqual(check_rfc2119_annotation_count(en, "必須要件を示す用語です。"), [])
+        self.assertEqual(check_rfc2119_annotation_count(
+            "o The implementation MUST use this word.", "この語を使います。")[0][0], "W011")
+
+    def test_terms_intro_still_counts_requirement_in_same_paragraph(self):
+        en = ("Throughout this document, the terms MUST, MUST NOT, SHOULD and MAY are used in capital letters. "
+              "Software that claims compliance MUST provide the capabilities indicated by the "
+              "MUST, MUST NOT, SHOULD and MAY terms.")
+        source = normative_source(en, "rfc2876")
+        self.assertEqual(count_rfc2119_keywords(source), {"MUST": 1})
+        self.assertEqual(check_rfc2119_annotation_count(source, "機能を提供します。")[0][0], "W011")
+        self.assertEqual(check_rfc2119_annotation_count(
+            source, "機能を提供しなければなりません (MUST)。"), [])
+
     def test_schema_and_keyword_mentions_keep_actual_requirements(self):
         ldap = "( 2.5.6.2 NAME 'country' SUP top STRUCTURAL MUST c MAY ( searchGuide $ description ) )"
         self.assertEqual(count_rfc2119_keywords(normative_source(ldap, "rfc2256")), {})

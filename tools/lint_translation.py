@@ -828,7 +828,7 @@ KEYWORD_DEFINITION_RE = re.compile(
     r"^\s*(?:MUST|SHOULD|MAY)[+-]\s+This term means\b|"
     r"\bdefinitions? (?:for|of)\s+(?:MUST|SHOULD|MAY)[+-]|"
     # RFC 2119 本文の定義をそのまま引き写した段落 (1. MUST - This word, or the terms ...)
-    r"^\s*(?:\d+\.\s*)?(?:MUST NOT|SHALL NOT|SHOULD NOT|MUST|SHALL|SHOULD|MAY)\s+-?\s*"
+    r"^\s*(?:[o*+-]\s+|\d+\.\s*)?(?:MUST NOT|SHALL NOT|SHOULD NOT|MUST|SHALL|SHOULD|MAY)\s*[-:]?\s*"
     r"This (?:word|phrase)\b")
 
 
@@ -1206,6 +1206,8 @@ NON_NORMATIVE_PHRASES = {
     "rfc7146": (
         "(replaces RFC 3723's \"MUST implement\" requirement)",
         "(replaces RFC 3723's \"SHOULD implement\" requirement)",
+        "changes requirements for both to \"MAY implement\"",
+        "Adds a \"MUST implement\" requirement for AES CBC",
     ),
     "rfc7974": (
         "uses SHOULD rather than MUST because",
@@ -1218,6 +1220,131 @@ NON_NORMATIVE_PHRASES = {
         "mark REQUIRED flags",
         "from OPTIONAL to REQUIRED when",
     ),
+    "rfc2301": ("the SHOULD's and MAY's of these guidelines become SHALL's",),
+    "rfc2311": ("the terms MUST, MUST NOT, SHOULD, and SHOULD NOT",),
+    "rfc2312": ("the terms MUST, MUST NOT, SHOULD, and SHOULD NOT",),
+    "rfc2506": ("uses the terms MUST, MUST NOT, SHOULD, SHOULD NOT and MAY",),
+    "rfc2535": ("expect the above SHOULD to be a MUST",),
+    "rfc2581": (
+        "an ACK \"SHOULD\" be generated",
+        "in one place as a SHOULD and another as a MUST",
+        "state it is a SHOULD",
+        "this is a SHOULD, meaning",
+    ),
+    "rfc2779": (
+        "The terms MUST and SHOULD",
+        "MUST: A proposed solution",
+        "SHOULD: A proposed solution",
+    ),
+    "rfc2876": (
+        "the terms MUST, MUST NOT, SHOULD and MAY",
+        "the MUST, MUST NOT, SHOULD and MAY terms",
+    ),
+    "rfc2886": ("capitalize the word SHOULD",),
+    "rfc2895": ("Section 2.1 MUST, SHOULD text added per template",),
+    "rfc3058": ("the terms MUST, MUST NOT, SHOULD, and SHOULD NOT",),
+    "rfc3348": ("MAY NOT be able to determine",),
+    "rfc3585": ("the MUST/MAY/SHOULD status",),
+    "rfc3715": (
+        "the MUST or MUST NOT requirements",
+        "all the MUST, MUST NOT, SHOULD, and SHOULD NOT requirements",
+        "all the MUST and MUST NOT requirements",
+        "the SHOULD or SHOULD NOT requirements",
+    ),
+    "rfc3720": ("the mandating terms (MUST, SHOULD, MAY, etc.)",),
+    "rfc3853": ("(normative SHOULD)",),
+    "rfc4037": ("\"MUST satisfy or MUST have a reason to violate\"",),
+    "rfc4084": ("The terms SHOULD, MUST, or MAY",),
+    "rfc4250": ("SPECIFICATION REQUIRED -",),
+    "rfc4387": (
+        "a SHOULD NOT rather than a MUST NOT because",
+        "better to make this a MUST NOT",
+    ),
+    "rfc4538": (
+        "at SHOULD strength per RFC 3261",
+        "the SHOULD would not be followed",
+    ),
+    "rfc4549": ("\"SHOULD language\"",),
+    "rfc4614": (
+        "the various features that MUST, SHOULD, MAY, SHOULD NOT, and MUST NOT be present",
+    ),
+    "rfc4826": (
+        "at SHOULD strength",
+        "the SHOULD recommendation",
+    ),
+    "rfc5008": (
+        "the OPTIONAL associated with the AlgorithmIdentifier parameters",
+        "the OPTIONAL was recovered via a defect report",
+    ),
+    "rfc5162": ("violates this last SHOULD",),
+    "rfc5672": ("IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE",),
+    "rfc5759": (
+        "MUST-level requirements of RFC 5280",
+        "a MUST-level requirement is repeated",
+        "MAY-level options in RFC 5280 to SHOULD-level and MUST-level",
+        "SHOULD-level options in RFC 5280 to MUST-level",
+    ),
+    "rfc5961": (
+        "tagged as SHOULD, SHOULD, and MAY",
+        "DATA mitigation is tagged as MAY",
+    ),
+    "rfc6071": (
+        "128-bit keys are MUST; the other sizes are MAY",
+        "ICV sizes of 64 and 128 bits are MUST; 96 bits is MAY",
+        "An ICV size of 128 bits is a MUST; 64 and 96 bits are MAY",
+        "IKEv1 - MUST [RFC4109]",
+    ),
+    "rfc6122": ("Whether the feature MUST or SHOULD be implemented, where the capitalized terms",),
+    "rfc6157": ("normative strength of the text above is left at a SHOULD",),
+    "rfc6298": ("from a SHOULD to a MUST",),
+    "rfc6421": (
+        "the MUST or MUST NOT statements",
+        "all the MUST, MUST NOT, SHOULD, and SHOULD NOT statements",
+        "all the MUST and MUST NOT statements",
+        "the SHOULD or SHOULD NOT requirements",
+    ),
+    "rfc6709": ("from a MAY/SHOULD to a MUST",),
+    "rfc6733": (
+        "in the MUST column of the AVP flag table",
+        "in the MAY column of the AVP flag table",
+    ),
+    "rfc6885": (
+        "may change this requirement to MUST",
+        "the SHOULD is used",
+    ),
+    "rfc6919": (
+        "MUST (BUT WE KNOW YOU WON'T)",
+        "SHOULD CONSIDER",
+        "REALLY SHOULD NOT",
+        "we were unable to make MUST NOT",
+    ),
+    "rfc7088": ("a SHOULD-level proscription",),
+    "rfc7143": ("the mandating terms (MUST, SHOULD, MAY, etc.)",),
+    "rfc7243": ("an attacker MAY drive the endpoint",),
+    "rfc7456": ("that implements TRILL PM MUST/SHOULD/MAY/...",),
+    "rfc7643": ("\"REQUIRED.\"",),
+    "rfc7930": (
+        "stated at the SHOULD level",
+        "relaxed to the MAY level",
+    ),
+    "rfc7959": ("MUST/ SHOULD soup",),
+    "rfc8020": ("these rules use SHOULD and not MUST",),
+    "rfc8062": ("reduced from a MUST to a SHOULD",),
+    "rfc8088": ("no MUST, SHOULDs etc.",),
+    "rfc8603": (
+        "MUST-level requirements of RFC 5280",
+        "a MUST-level requirement is repeated",
+        "elevate some SHOULD-level options in RFC 5280 to MUST-level",
+        "elevate some MAY-level options in RFC 5280 to SHOULD-level or MUST-level",
+    ),
+    "rfc8994": ("this is only a MAY because",),
+    "rfc8996": ("by changing SHOULD NOT to MUST NOT",),
+    "rfc9077": ("use the SHOULD requirement level",),
+    "rfc9271": ("The SHOULD, rather than MUST, in Section 6.2",),
+    "rfc9303": ("the key word SHOULD across this memo",),
+    "rfc9580": ("Simple hash MUST/MAY clarification",),
+    "rfc9904": ("the recommendation status (MUST, MAY, RECOMMENDED, etc.)",),
+    "rfc9908": ("adding OPTIONAL to the 'value' field of SingleAttributeTemplate",),
 }
 
 LDAP_OBJECT_CLASS_RE = re.compile(
