@@ -143,6 +143,23 @@ class TestLintFileIntegration(unittest.TestCase):
         ])
         self.assertEqual(findings, [])
 
+    def test_detached_reference_method_requires_matching_body_prose(self):
+        en = "They combine the two mechanisms in the manner described in [RFC9954]."
+        ja = "2 つの方式を組み合わせます。[RFC9954] に記載されている方法。"
+        row = {"text": en, "ja": ja, "indent": 3}
+        findings = self._lint([
+            row,
+            {**row, "ja": "[RFC9954] に記載されている方法で組み合わせます。"},
+            {**row, "text": "* " + en, "ja": "* " + ja},
+            {**row, "section_title": True},
+            {"text": "Source code.", "ja": "", "raw": True},
+            {**row, "text": "See the glossary. A method described in [RFC9954].",
+             "ja": "用語集を参照してください。[RFC9954] に記載されている方法。"},
+            {"text": "The table is stored using the method described in Section 3.8.1.2.",
+             "ja": "テーブルを格納します。3.8.1.2 項に記載されている方法。", "indent": 3},
+        ], enabled=("W015",))
+        self.assertEqual([(f.code, f.index) for f in findings], [("W015", 0), ("W015", 6)])
+
 
 if __name__ == "__main__":
     unittest.main()

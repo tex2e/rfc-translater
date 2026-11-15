@@ -1121,6 +1121,15 @@ DANGLING_PREDICATE_RE = re.compile(
     r"[一-龠ァ-ヶー][一-龠ァ-ヶーA-Za-z0-9]*(?=。)"
 )
 
+METHOD_IN_REFERENCE_RE = re.compile(
+    r"\b(?:in the (?:manner|way)|using the method)\s+"
+    r"(?:described|specified|defined)\s+in\b", re.I
+)
+DETACHED_REFERENCE_METHOD_RE = re.compile(
+    r"(?<=。)\s*(?:\[[\w.:-]+\]|(?:第\s*)?\d+(?:\.\d+)*\s*[節項])"
+    r"\s*[でに]\s*(?:記載|説明|規定|定義)され(?:ている|た)\s*(?:方法|方式|手順)。"
+)
+
 # W016: 名詞が抜け落ちて格助詞が連続している。
 #   例) メッセージをに転送します / 属性値がに設定されている / Counter64のの使用
 # 直前がひらがなの場合 (「ものの」「にに」を含む活用形など) は対象外にする。
@@ -1529,6 +1538,13 @@ def lint_file(path, enabled):
         if "W015" in enabled and not is_title:
             for code, detail in check_dangling_predicate(ja):
                 findings.append(Finding(code, path, rfc, i, detail, en, ja))
+            if (not in_ref_section and not BULLET_RE.match(en.lstrip())
+                    and METHOD_IN_REFERENCE_RE.search(en)):
+                for fragment in DETACHED_REFERENCE_METHOD_RE.finditer(ja):
+                    findings.append(Finding(
+                        "W015", path, rfc, i,
+                        f"参照先が示す方法が本文の述語から分離している: 「{fragment[0].strip()}」",
+                        en, ja))
         if "W016" in enabled and not is_title:
             for code, detail in check_particle_chain(ja):
                 findings.append(Finding(code, path, rfc, i, detail, en, ja))
