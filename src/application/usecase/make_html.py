@@ -212,8 +212,8 @@ class RfcHtmlHelper:
 
     @staticmethod
     def bullet_class(text: str) -> str:
-        """箇条書き記号（- o * +）で始まる文章には、記号をぶら下げて表示するためのクラスを付ける"""
-        return ' bullet' if re.match(r'^[-o*+•]\s', text) else ''
+        """箇条書き記号で始まる文章には、記号をぶら下げて表示するためのクラスを付ける"""
+        return ' bullet' if re.match(r'^[-o*+•.]\s', text) else ''
 
     @staticmethod
     def make_paragraph_ids(contents: list, *,

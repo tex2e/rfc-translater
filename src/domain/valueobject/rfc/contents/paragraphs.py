@@ -191,7 +191,7 @@ class Paragraphs:
                 if paragraph.is_code or paragraph.is_section_title or re.search(r'/\*|\*/', part):
                     self.paragraphs.append(paragraph)
                     continue
-                marker = r'(?P<indent> *)(?P<mark>[o*+-]|\d{1,2}[.)])[ \t]+\S'
+                marker = r'(?P<indent> *)(?P<mark>[o*+.-]|\d{1,2}[.)])[ \t]+\S'
                 first_item = re.match(r'^\n*' + marker, part)
                 intro = re.search(r':\n(?=' + marker + r')', part) if not first_item else None
                 if intro:

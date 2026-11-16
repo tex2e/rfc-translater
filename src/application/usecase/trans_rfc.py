@@ -24,7 +24,7 @@ from ...infrastructure.repository.rfcjsontransmidwayrepository import IRfcJsonTr
 
 # 箇条書きのパターン
 # 「-」「o」「*」「+」「$」「A.」「A.1.」「a)」「1)」「(a)」「(1)」「[1]」「[a]」「a.」
-BULLET_PATTERN = r'^([\-o\*\+\$] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
+BULLET_PATTERN = r'^([\-o\*\+\$.] |(?:[A-Z]\.)?(?:\d{1,2}\.)+(?:\d{1,2})? |\(?[0-9a-z]\) |\[[0-9a-z]{1,2}\] |[a-z]\. )(.*)$'
 # 数式の変数説明のパターン（翻訳しない）
 VARIABLE_PATTERN = r'^([a-zA-Z]{1,3}:)$'
 # 付録の見出しのパターン

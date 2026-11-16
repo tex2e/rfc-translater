@@ -17,6 +17,29 @@ def findings(*contents):
 
 class TestDetachedClauses(unittest.TestCase):
 
+    def test_cardinality_warning_checks_explicit_counts_with_field_context(self):
+        source = 'Contact Zero or more. The contact information for the incident.'
+        wrong = body(source, 'Contact は0件または1件で、型は STRING です。連絡先を格納します。')
+        correct = body(source, 'Contact は0件以上です。連絡先を格納します。')
+        ambiguous = body(source, '連絡先を格納します。')
+        self.assertEqual([(f.kind, f.ending, f.fragment) for f in findings(wrong)],
+                         [('cardinality-mismatch', '0+', '0–1')])
+        self.assertEqual(findings(correct, ambiguous, {**wrong, 'toc': True}), [])
+
+        field = body('Analyzer', 'アナライザー')
+        child = body('Exactly one. Identification information for the analyzer.', '1件以上です。識別情報を格納します。',
+                     indent=6)
+        self.assertEqual([f.kind for f in findings(field, child)], ['cardinality-mismatch'])
+        self.assertEqual(findings(child, field, {**child, 'indent': 3}), [])
+
+    def test_source_sentence_tail_follows_an_unfinished_determiner(self):
+        start = body('The object is carried according to the aforementioned', 'オブジェクトを運びます。')
+        tail = body('specification. This means that the object is validated.', '仕様。オブジェクトを検証します。')
+        self.assertEqual([f.kind for f in findings(start, tail)], ['source-sentence-split'])
+        self.assertEqual(findings(start, {**tail, 'raw': True}), [])
+        self.assertEqual(findings(start, {**tail, 'indent': 6}), [])
+        self.assertEqual(findings({**start, 'text': start['text'] + ' specification.'}, tail), [])
+
     def test_mib_prose_is_reported_only_inside_a_complete_module(self):
         start = body("EXAMPLE-MIB DEFINITIONS ::= BEGIN", "", raw=True)
         comment = body("-- The following objects expose counters.", "以下はカウンターの定義です。")
@@ -37,6 +60,28 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(list(introduced(existing, findings(start, {**declaration, "ja": "カウンターです。"}, end))),
                          [])
         self.assertEqual([f.index for f in introduced([], existing)], [1])
+
+    def test_asn1_module_continues_beyond_nested_macro_end(self):
+        start = body('SNMPv2-TC DEFINITIONS ::= BEGIN', '', raw=True)
+        macro = body('TEXTUAL-CONVENTION MACRO ::= BEGIN\n    TYPE NOTATION ::= Text\nEND', '', raw=True)
+        comment = body('-- Comment within the module', 'モジュールのコメント。')
+        end = body('END', '', raw=True)
+        prose = body('The module ends on the preceding line.', 'モジュールは前の行で終わります。')
+        self.assertEqual([(f.kind, f.index) for f in findings(start, macro, comment, end, prose)],
+                         [('asn1-prose', 2)])
+        self.assertEqual(findings(start, macro, comment, prose), [])
+
+    def test_xml_prose_requires_a_complete_well_formed_document(self):
+        declaration = body('<?xml version="1.0"?>', '', raw=True)
+        root = body('<schema><documentation>', '', raw=True)
+        description = body('The next item contains a format description.', '次の項目には形式の説明が含まれます。')
+        end = body('</documentation></schema>', '', raw=True)
+        prose = body('The schema is informative.', 'スキーマは参考情報です。')
+        self.assertEqual([(f.kind, f.index) for f in findings(declaration, root, description, end, prose)],
+                         [('xml-prose', 2)])
+        self.assertEqual(findings(declaration, root, description, prose), [])
+        self.assertEqual(findings(declaration, root, description, {**end, 'text': '</schema>'}), [])
+        self.assertEqual(findings(root, description, end), [])
 
     def test_code_ending_joined_to_a_page_heading_is_a_warning(self):
         joined = body('END\x07\x07\x076. Security Considerations', '終了6。セキュリティ上の考慮事項')
@@ -182,6 +227,15 @@ class TestDetachedClauses(unittest.TestCase):
                          [(0, "nominal-label"), (1, "nominal-fragment"),
                           (2, "nominal-fragment"), (3, "nominal-fragment")])
 
+    def test_structured_value_type_label_checks_separator_and_cardinality(self):
+        label = body("Value type: One or more text values separated by a COMMA character (U+002C). Cardinality: *",
+                     "値タイプ：コンマ文字（U+002C）で区切られた1つ以上のテキスト値。カーディナリティ： *")
+        wrong_separator = {**label, "ja": label["ja"].replace("U+002C", "U+003B")}
+        wrong_cardinality = {**label, "ja": label["ja"].replace("*", "*1")}
+        obj = {"contents": [label, wrong_separator, wrong_cardinality]}
+        self.assertEqual([(f.index, f.kind) for f in inspect(obj, include_nominal=True)],
+                         [(0, "nominal-label"), (1, "nominal-fragment"), (2, "nominal-fragment")])
+
     def test_contextual_label_requires_matching_description_and_structure(self):
         figure = body("+---+\n|   |\n+---+", "", raw=True)
         caption = body("How the decision for isAccessAllowed is made.", "isAccessAllowedの決定方法。")
@@ -193,6 +247,14 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual([(f.index, f.kind) for f in inspect({"contents": rows}, include_nominal=True)],
                          [(0, "nominal-fragment"), (2, "nominal-label"), (4, "nominal-label"),
                           (6, "nominal-fragment"), (7, "nominal-fragment")])
+
+    def test_conditional_figure_footnote_requires_its_surrounding_structure(self):
+        footnote = body("(*2) If a listener is registered.", "（*2）リスナーが登録されている場合。")
+        prior = body("(*1) Registration is optional.", "（*1）登録は任意です。")
+        caption = body("Figure 1. Wallet architecture with VTS plug-ins", "図1. VTSプラグインを備えた構成")
+        obj = {"contents": [footnote, prior, footnote, caption, prior, footnote]}
+        self.assertEqual([(f.index, f.kind) for f in inspect(obj, include_nominal=True)],
+                         [(0, "nominal-fragment"), (2, "nominal-label"), (5, "nominal-fragment")])
 
     def test_new_warning_cannot_be_offset_by_removing_another(self):
         en = "The server may close the connection if authentication fails."

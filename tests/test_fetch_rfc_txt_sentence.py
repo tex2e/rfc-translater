@@ -30,7 +30,7 @@ class TestFetchRfcSentence(unittest.TestCase):
         self.assertEqual(paragraphs[1].text, "o  client\no  datastore")
 
     def test_adjacent_bullets_after_intro_and_numbered_items(self):
-        for items in (["* first", "* second"], ["- first", "- second"],
+        for items in (["* first", "* second"], ["- first", "- second"], [". first", ". second"],
                       ["1. first", "2. second"], ["1) first", "2) second"]):
             with self.subTest(items=items):
                 text = "\n".join(["   Options:"] + ["      " + item for item in items])

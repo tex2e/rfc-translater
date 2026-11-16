@@ -97,6 +97,10 @@ def normalize(paragraph):
 
 class TestMakeHtmlRoundTrip(unittest.TestCase):
 
+    def test_dot_bullet_keeps_the_marker_and_hanging_indent(self):
+        self.assertEqual(RfcHtmlHelper.bullet_class('. 入力形式'), ' bullet')
+        self.assertIn('<span class="bullet-mark">.</span> 入力形式', RfcHtmlHelper.render_text('. 入力形式'))
+
     def test_split_list_preserves_existing_paragraph_ids(self):
         paragraphs = [
             {'text': '1. Introduction', 'section_title': True},

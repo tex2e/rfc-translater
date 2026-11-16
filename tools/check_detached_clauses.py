@@ -1,4 +1,4 @@
-"""Report detached Japanese clauses, mistranslated notices, and MIB formatting regressions."""
+"""Report detached Japanese clauses, mistranslated notices, and ASN.1 formatting regressions."""
 
 import argparse
 from collections import Counter
@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from xml.etree import ElementTree
 
 from lint_translation import BULLET_RE, collect_paths, update_reference_section_state
 
@@ -18,6 +19,8 @@ NOMINAL_FRAGMENT = re.compile(
 )
 NOMINAL_LABELS = {"Examples.": "例。", "Requirement.": "要件。"}
 INLINE_NOMINAL_LABELS = {
+    ("3GPP2 C.S0050-B, 3GPP2 File Formats for Multimedia Services.",
+     "3GPP2 C.S0050-B、マルチメディアサービス用の3GPP2ファイル形式。"),
     ("Published specification: This specification.", "公開された仕様：この仕様。"),
     ("Type value: A single text value.", "タイプ値：単一のテキスト値。"),
     ("Type value: A single URI value.", "タイプ値：単一のURI値。"),
@@ -25,8 +28,26 @@ INLINE_NOMINAL_LABELS = {
     ("Value type: A single text value.", "値タイプ：単一のテキスト値。"),
     ("Value type: A single URI value.", "値タイプ：単一のURI値。"),
     ("Value type: A single uri value.", "値タイプ：単一のURI値。"),
+    ("Value type: A single language-tag value.", "値のタイプ：単一の言語タグ値。"),
+    ("Value type: A single language-tag value.", "値タイプ：単一の言語タグ値。"),
+    ("Value type: A single text value (default) or a single URI value.",
+     "値タイプ：単一のテキスト値（デフォルト）または単一のURI値。"),
+    ("Value type: One or more text values separated by a COMMA character (U+002C).",
+     "値のタイプ：COMMA文字（U+002C）で区切られた1つ以上のテキスト値。"),
+    ("Value type: One or more text values separated by a COMMA character (U+002C).",
+     "値タイプ：コンマ文字（U+002C）で区切られた1つ以上のテキスト値。"),
 }
 CARDINALITY_LABELS = {"1", "*", "1*", "*1"}
+EN_CARDINALITY = re.compile(
+    r"^(?:(?P<field>[A-Za-z][\w:.-]*)[ \t]+)?"
+    r"(?P<count>Exactly one|One or more|Zero or one|Zero or more|One)\.(?=\s|$)"
+)
+EN_COUNTS = {"Exactly one": "1", "One": "1", "One or more": "1+", "Zero or one": "0–1", "Zero or more": "0+"}
+JA_CARDINALITY = re.compile(
+    r"^(?P<count>(?:ちょうど)?[1一](?:件|つ|個|項目)|(?:0|ゼロ)(?:件|つ|個)?(?:または|か)[1一](?:件|つ|個)?"
+    r"|(?:[01]|ゼロ|一)(?:件|つ|個|項目)?以上)"
+    r"(?:です|で(?=、型))?[。．、]"
+)
 LIST_OR_LABEL = re.compile(
     r"^(?:[•–—]|\([0-9A-Za-z]+\)|[0-9]+\))\s+"
     r"|^(?:[\w.]*Exception\s+-\s+|[\w-]+:\s+because\b)"
@@ -56,12 +77,22 @@ FINITE_VERB = re.compile(
     re.I,
 )
 INCOMPLETE_SOURCE = re.compile(r"^(?:if|when|unless|(?:in order |so as )?to|because|for)\b", re.I)
-MIB_START = re.compile(r"^[ \t]*[A-Z][A-Z0-9-]*-MIB[ \t]+DEFINITIONS[ \t]+::=[ \t]+BEGIN[ \t]*$", re.M)
-MIB_END = re.compile(r"^[ \t]*END[ \t]*$", re.M)
+DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an|this|that|these|those|aforementioned|following)$")
+SENTENCE_TAIL = re.compile(r"^[a-z][A-Za-z-]+(?:[ \t]+[a-z][A-Za-z-]+){0,2}\.[ \t]+[A-Z]")
+ASN1_BOUNDARY = re.compile(
+    r"^[ \t]*(?:(?P<module>[A-Z][A-Za-z0-9-]*)[ \t]+DEFINITIONS[ \t]+::=[ \t]+BEGIN"
+    r"|(?P<begin>(?:[A-Z][A-Za-z0-9-]*[ \t]+MACRO[ \t]+::=[ \t]+)?BEGIN)|(?P<end>END))[ \t]*$",
+    re.M,
+)
 CODE_HEADING_JOIN = re.compile(
     r"\bEND\x07{3}(?:(?:\d+\.)*\d+\.?[ \t]+[A-Z]|(?:Annex|Appendix) [A-Z]\b|Full Copyright Statement)"
 )
-CI_WARNING_KINDS = BOILERPLATE_KINDS | {"detached-clause", "mib-prose", "code-heading-join"}
+XML_DECLARATION = re.compile(r"^<\?xml[ \t]+version[ \t]*=[^?]+\?>")
+XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
+CI_WARNING_KINDS = BOILERPLATE_KINDS | {
+    "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
+    "cardinality-mismatch",
+}
 
 
 @dataclass(frozen=True)
@@ -102,8 +133,39 @@ def is_inline_nominal_label(en, ja):
             and (source_label, translated_label.rstrip()) in INLINE_NOMINAL_LABELS)
 
 
-def is_contextual_nominal_label(en, ja, row, preceding):
+def cardinality_mismatch(en, ja, contextual_field):
+    source = EN_CARDINALITY.match(en)
+    if not source or not (source["field"] or contextual_field):
+        return None
+    field = source["field"]
+    if field and ja.startswith(field):
+        ja = ja[len(field):].lstrip(" ：:")
+        ja = ja.removeprefix("は").lstrip()
+    translated = JA_CARDINALITY.match(ja)
+    if translated is None:
+        return None
+    phrase = translated["count"]
+    if "または" in phrase or "か" in phrase:
+        actual = "0–1"
+    elif phrase.endswith("以上"):
+        actual = "0+" if phrase.startswith(("0", "ゼロ")) else "1+"
+    else:
+        actual = "1"
+    expected = EN_COUNTS[source["count"]]
+    return (expected, actual) if expected != actual else None
+
+
+def is_contextual_nominal_label(en, ja, row, preceding, following):
     prior_text = preceding.get("text", "").strip()
+    if (en, ja) == ("(*2) If a listener is registered.", "（*2）リスナーが登録されている場合。"):
+        return prior_text.startswith("(*1) ") and following.get("text", "").startswith("Figure 1. ")
+    if prior_text.startswith("The IETF mission statement [RFC3935]") and prior_text.endswith(":"):
+        return (en, ja) == (
+            "to produce high quality, relevant technical and engineering documents that influence the way people "
+            "design, use, and manage the Internet in such a way as to make the Internet work better.",
+            "インターネットの機能を向上させるために、人々がインターネットを設計、使用、管理する方法に影響を与える、"
+            "高品質で関連性の高い技術文書およびエンジニアリング文書を作成すること。",
+        )
     if preceding.get("raw") and not preceding.get("toc"):
         return ((en, ja) == ("How the decision for isAccessAllowed is made.", "isAccessAllowedの決定方法。")
                 and prior_text.startswith("+--"))
@@ -116,30 +178,73 @@ def is_contextual_nominal_label(en, ja, row, preceding):
     return prior_text.endswith(":") and (en, ja) == ("Part of L2.", "L2の一部。")
 
 
-def mib_prose_indices(rows):
-    """Find prose rows in a MIB module whose start and end are both visible."""
-    pending = None
+def module_prose_indices(rows):
+    """Find prose rows in complete ASN.1 modules, including MIBs."""
+    module = None
+    depth = 0
+    pending = []
     for index, row in enumerate(rows):
         en = row["text"]
         if row.get("section_title") or row.get("toc"):
-            pending = None
+            module = None
             continue
-        if "DEFINITIONS" in en and MIB_START.search(en):
-            pending = []
-        if pending is None:
+        if module is None and "DEFINITIONS" not in en:
             continue
-        if en.strip() and not row.get("raw"):
+        is_prose = bool(en.strip() and not row.get("raw"))
+        if module is not None and is_prose:
             pending.append(index)
-        if MIB_END.search(en):
-            yield from pending
-            pending = None
+        for boundary in ASN1_BOUNDARY.finditer(en):
+            if name := boundary["module"]:
+                module, depth = name, 1
+                pending = [index] if is_prose else []
+            elif module is not None:
+                depth += 1 if boundary["begin"] else -1
+                if depth == 0:
+                    kind = "mib-prose" if module.endswith("-MIB") else "asn1-prose"
+                    for prose_index in pending:
+                        yield prose_index, kind
+                    module = None
+
+
+def xml_prose_indices(rows):
+    """Find translated fragments inside a complete, well-formed XML document."""
+    chunks = []
+    pending = []
+    root = None
+    for index, row in enumerate(rows):
+        text = row["text"].strip()
+        if row.get("section_title") or row.get("toc") or "<!DOCTYPE" in text:
+            chunks = []
+            continue
+        if declaration := XML_DECLARATION.match(text):
+            chunks, pending, root = [], [], None
+            body = text[declaration.end():]
+        elif chunks:
+            body = text
+        else:
+            continue
+        chunks.append(text)
+        if text and not row.get("raw"):
+            pending.append(index)
+        if root is None and (opening := XML_ROOT.search(body)):
+            root = opening[1]
+        if root and text.endswith(f"</{root}>"):
+            if pending:
+                try:
+                    ElementTree.fromstring("\n".join(chunks))
+                except (ElementTree.ParseError, ValueError, LookupError):
+                    pass
+                else:
+                    yield from pending
+            chunks = []
 
 
 def inspect(obj, include_nominal=False):
     references = False
     previous = None
     rows = obj["contents"]
-    mib_prose = set(mib_prose_indices(rows))
+    module_prose = dict(module_prose_indices(rows))
+    markup_prose = set(xml_prose_indices(rows))
     for index, row in enumerate(rows):
         en = row["text"].strip()
         ja = row.get("ja", "")
@@ -151,20 +256,38 @@ def inspect(obj, include_nominal=False):
             yield Finding(index, "code-heading-join", "", en, "")
             previous = None
             continue
-        if index in mib_prose:
-            yield Finding(index, "mib-prose", "", en, "")
+        if index in module_prose:
+            yield Finding(index, module_prose[index], "", en, "")
             previous = None
             continue
+        if index in markup_prose:
+            yield Finding(index, "xml-prose", "", en, "")
+            previous = None
+            continue
+        if (prior and previous and not references
+                and not row.get("list_continuation") and not rows[index - 1].get("list_continuation")
+                and rows[index - 1].get("indent") == row.get("indent")
+                and SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior)):
+            yield Finding(index, "source-sentence-split", "", f"{prior}\n{en}", "")
+        if previous and not references:
+            preceding = rows[index - 1] if index else {}
+            contextual_field = bool(
+                prior and row.get("indent", 0) > preceding.get("indent", 0)
+                and re.fullmatch(r"[A-Za-z][\w:.-]*", prior)
+            )
+            if counts := cardinality_mismatch(en, ja.strip(), contextual_field):
+                expected, actual = counts
+                yield Finding(index, "cardinality-mismatch", expected, en, actual)
         warranty = WARRANTY_ERROR.search(ja) if WARRANTY_SOURCE.search(en) else None
         ipr = LICENSE_FRAGMENT.search(ja) if (
             en.startswith(IPR_NOTICE) and "might or might not be available" in en
         ) else None
         if not include_nominal and "ため。" not in ja and "場合。" not in ja and not (warranty or ipr):
             continue
+        collapsed_dot_list = DOT_BULLET.match(en) and len(DOT_BULLET.findall(en)) > 1
         if (references or heading or row.get("raw") or row.get("toc")
-                or row.get("list_continuation") or BULLET_RE.match(en)
+                or row.get("list_continuation") or (BULLET_RE.match(en) and not collapsed_dot_list)
                 or LIST_OR_LABEL.match(en) or len(ENUM_ENTRY.findall(en)) >= 2
-                or (DOT_BULLET.match(en) and len(DOT_BULLET.findall(en)) == 1)
                 or (prior and FIELD_LABEL.fullmatch(prior) and INCOMPLETE_SOURCE.match(en))):
             continue
 
@@ -194,7 +317,7 @@ def inspect(obj, include_nominal=False):
             following = rows[index + 1] if index + 1 < len(rows) else {}
             translated = ja.strip()
             is_label = (is_inline_nominal_label(en, translated)
-                        or is_contextual_nominal_label(en, translated, row, preceding)
+                        or is_contextual_nominal_label(en, translated, row, preceding, following)
                         or (NOMINAL_LABELS.get(en) == translated
                             and following.get("indent", 0) > row.get("indent", 0)))
             for match in NOMINAL_FRAGMENT.finditer(ja):
@@ -277,8 +400,16 @@ def main():
                    f"「{finding.fragment}」")
         if finding.kind == "mib-prose":
             message = f"MIB定義内の段落 {finding.index + 1} が本文として表示されています。"
+        if finding.kind == "asn1-prose":
+            message = f"ASN.1定義内の段落 {finding.index + 1} が本文として表示されています。"
+        if finding.kind == "xml-prose":
+            message = f"XML文書内の段落 {finding.index + 1} が本文として表示されています。"
         if finding.kind == "code-heading-join":
             message = f"段落 {finding.index + 1} にコードの終了行と次の見出しが混在しています。"
+        if finding.kind == "source-sentence-split":
+            message = f"段落 {finding.index + 1} の冒頭が直前の英文の続きになっています。改ページ位置を原文と照合してください。"
+        if finding.kind == "cardinality-mismatch":
+            message = f"段落 {finding.index + 1} の出現回数が原文と訳文で異なります（原文 {finding.ending}、訳文 {finding.fragment}）。"
         if args.format == "github" and finding.kind in CI_WARNING_KINDS:
             print(f"::warning file={escape_annotation(path)}::{escape_annotation(message)}")
         else:

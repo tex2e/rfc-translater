@@ -120,7 +120,7 @@ class Paragraph:
 
     # 箇条書きなどの判定（1行）
     def _find_list_pattern(self, text: str) -> bool:
-        return re.match(r'(?:[-o*+]|\d{1,2}\.) +[a-zA-Z]', text)
+        return re.match(r'(?:[-o*+.]|\d{1,2}\.) +[a-zA-Z]', text)
 
     # 箇条書きの判定（複数行）
     def _find_ul_li(self, text: str) -> bool:
