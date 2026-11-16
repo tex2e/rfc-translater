@@ -90,6 +90,8 @@ def normalize(paragraph):
         'section_title': section_title,
         'toc': bool(paragraph.get(RfcJsonElem.Contents.TOC)),
         'list_continuation': bool(paragraph.get(RfcJsonElem.Contents.LIST_CONTINUATION)),
+        'merged_paragraphs': paragraph.get(RfcJsonElem.Contents.MERGED_PARAGRAPHS, 0),
+        'preserve_paragraph_numbering': bool(paragraph.get(RfcJsonElem.Contents.PRESERVE_PARAGRAPH_NUMBERING)),
     }
 
 
@@ -107,6 +109,59 @@ class TestMakeHtmlRoundTrip(unittest.TestCase):
             None, '1--Introduction-p1', '1--Introduction-p1-item2',
             '1--Introduction-p1-item3', '1--Introduction-p2',
         ])
+
+    def test_merged_paragraph_preserves_existing_links_and_roundtrips(self):
+        rfc = Rfc('6337')
+        original = RfcJsonTransFileRepository().find(rfc)
+        html_repo = MemoryHtmlRepository()
+        json_repo = MemoryJsonTransRepository()
+        json_repo.save(rfc, original)
+        make_html(rfc, json_repo, RfcJsonDataSummaryFileRepository(), html_repo)
+
+        html = html_repo.find(rfc)
+        self.assertIn('class="paragraph-anchor" id="5-3--Hold-and-Resume-of-Media-p11"', html)
+        self.assertIn('class="row" id="5-3--Hold-and-Resume-of-Media-p10"', html)
+
+        make_json_from_html(rfc, html_repo, json_repo)
+        self.assertEqual([normalize(p) for p in json_repo.find(rfc)[RfcJsonElem.CONTENTS]],
+                         [normalize(p) for p in original[RfcJsonElem.CONTENTS]])
+
+    def test_merged_paragraph_keeps_following_paragraph_numbers(self):
+        heading = {'text': '1. Introduction', 'section_title': True}
+        paragraphs = [heading, {'text': 'First and second.', 'merged_paragraphs': 1},
+                      {'text': 'Third.'}, {'text': 'Fourth.'}]
+        aliases = {}
+        self.assertEqual(RfcHtmlHelper.make_paragraph_ids(paragraphs, aliases=aliases), [
+            None, '1--Introduction-p1', '1--Introduction-p3', '1--Introduction-p4',
+        ])
+        self.assertEqual(aliases, {1: ['1--Introduction-p2']})
+
+    def test_raw_rows_preserve_previous_paragraph_anchors_and_roundtrip(self):
+        rfc = Rfc('6337')
+        data = RfcJsonTransFileRepository().find(rfc)
+        paragraphs = [
+            {'indent': 0, 'text': '1. Introduction', 'ja': '1. はじめに', 'section_title': True},
+            {'indent': 0, 'text': 'First.', 'ja': ''},
+            {'indent': 0, 'text': '1) Raw list item.', 'ja': '', 'raw': True, 'list_continuation': True},
+            {'indent': 0, 'text': '2. Restored heading', 'ja': '2. 復元した見出し', 'section_title': True,
+             'preserve_paragraph_numbering': True},
+            {'indent': 0, 'text': 'Code block.', 'ja': '', 'raw': True, 'merged_paragraphs': 1},
+        ]
+        data[RfcJsonElem.CONTENTS] = paragraphs
+        html_repo = MemoryHtmlRepository()
+        json_repo = MemoryJsonTransRepository()
+        json_repo.save(rfc, data)
+        make_html(rfc, json_repo, RfcJsonDataSummaryFileRepository(), html_repo)
+
+        html = html_repo.find(rfc)
+        self.assertIn('id="1--Introduction-p1-item2" data-list-continuation="true"', html)
+        self.assertIn('id="2--Restored-heading"', html)
+        self.assertIn('id="1--Introduction-p2"', html)
+        self.assertIn('class="paragraph-anchor" id="1--Introduction-p3"', html)
+
+        make_json_from_html(rfc, html_repo, json_repo)
+        self.assertEqual([normalize(p) for p in json_repo.find(rfc)[RfcJsonElem.CONTENTS]],
+                         [normalize(p) for p in paragraphs])
 
     def test_roundtrip_keeps_contents(self):
         file_repo = RfcJsonTransFileRepository()

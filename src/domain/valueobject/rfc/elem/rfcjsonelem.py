@@ -22,5 +22,7 @@ class RfcJsonElem:
         RAW = 'raw'
         TOC = 'toc'
         LIST_CONTINUATION = 'list_continuation'
+        MERGED_PARAGRAPHS = 'merged_paragraphs'
+        PRESERVE_PARAGRAPH_NUMBERING = 'preserve_paragraph_numbering'
 
     IS_DRAFT = 'is_draft'

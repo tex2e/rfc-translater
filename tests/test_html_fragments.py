@@ -118,6 +118,15 @@ class TestHtmlFragments(unittest.TestCase):
         self.assertTrue(all(p.is_code for p in blocks[:-1]))
         self.assertFalse(blocks[-1].is_code)
 
+    def test_mib_end_does_not_join_the_heading_on_the_next_page(self):
+        blocks = fetch('Header\n\nEXAMPLE-MIB DEFINITIONS ::= BEGIN\n\n'
+                       '    DESCRIPTION "This text belongs to the MIB."\n\n'
+                       'END\n\nAuthor [Page 2]\n\f\nRFC 2397\n\n'
+                       '2. Acknowledgments\n\n   Thank you to our reviewers.')
+        self.assertEqual(blocks[-3], {'indent': 0, 'text': 'END', 'raw': True})
+        self.assertEqual(blocks[-2], {'indent': 0, 'text': '2. Acknowledgments', 'section_title': True})
+        self.assertNotIn('raw', blocks[-1])
+
     def test_fenced_yang_description_is_not_translated(self):
         text = ('   <CODE BEGINS> file "example.yang"\n\n'
                 '   This is English inside source code.\n\n'

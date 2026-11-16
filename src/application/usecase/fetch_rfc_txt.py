@@ -94,6 +94,7 @@ def fetch_rfc_txt(rfc: IRfc,
             #   2) 前ページの最後の段落が、文終端の「.」や「;」や「|」ではないとき
             if not prev_last_line.endswith('.') \
                     and not re.search(r'<CODE ENDS\b[^>\n]*>[ \t]*$', prev_last_line, re.I) \
+                    and not re.fullmatch(r'[ \t]*END(?:[ \t]+--[^\n]*)?[ \t]*', prev_last_line) \
                     and not ends_with_markup_example(contents[i - 1]) \
                     and not re.search(r'[;|]$', prev_last_line) \
                     and re.match(r'^ *[a-zA-Z0-9(]', next_first_line) \

@@ -78,10 +78,14 @@ def make_json_from_html(rfc: IRfc,
         # インデント
         row_data[RfcJsonElem.Contents.INDENT] = 0
 
+        if row.get('data-list-continuation') == 'true':
+            row_data[RfcJsonElem.Contents.LIST_CONTINUATION] = True
+        merged_count = len(row.find_all(class_='paragraph-anchor'))
+        if merged_count:
+            row_data[RfcJsonElem.Contents.MERGED_PARAGRAPHS] = merged_count
+
         # 文章のとき、indent-N というクラス名から、インデントレベル N を取得する
         if tag_name == 'p' or front_heading:
-            if row.get('data-list-continuation') == 'true':
-                row_data[RfcJsonElem.Contents.LIST_CONTINUATION] = True
             for class_ in texts[0].attrs.get('class'):
                 if class_.startswith('indent-'):
                     row_data[RfcJsonElem.Contents.INDENT] = int(class_.replace('indent-', ''))
@@ -111,6 +115,8 @@ def make_json_from_html(rfc: IRfc,
             row_data[RfcJsonElem.Contents.INDENT] = int(row['data-toc-heading-indent'])
         elif tag_name in ('h2', 'h5') and not front_heading:
             row_data[RfcJsonElem.Contents.SECTION_TITLE] = True
+            if row.get('data-preserve-paragraph-numbering') == 'true':
+                row_data[RfcJsonElem.Contents.PRESERVE_PARAGRAPH_NUMBERING] = True
 
         # 翻訳文 (ja)
         if len(texts) >= 2:

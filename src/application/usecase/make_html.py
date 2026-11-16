@@ -51,7 +51,8 @@ def make_html(rfc: IRfc,
     mytemplate = mylookup.get_template(RfcFile.TEMPLATE_HTML_RFC)
     is_draft = isinstance(rfc, RfcDraft)
     contents = obj[RfcJsonElem.CONTENTS]
-    paragraph_ids = RfcHtmlHelper.make_paragraph_ids(contents)
+    paragraph_aliases: dict[int, list[str]] = {}
+    paragraph_ids = RfcHtmlHelper.make_paragraph_ids(contents, aliases=paragraph_aliases)
     toc_rows = make_toc_rows(contents, paragraph_ids, RfcHtmlHelper.text_to_id)
     toc_heading_ids = toc_section_targets(contents, paragraph_ids, toc_rows)
     missing = [row['en'].strip() for rows in toc_rows.values() for row in rows
@@ -63,6 +64,7 @@ def make_html(rfc: IRfc,
                                        bcp14=RfcHtmlHelper.uses_bcp14(contents),
                                        orig_url=RfcHtmlHelper.get_orig_url(obj[RfcJsonElem.NUMBER], is_draft),
                                        paragraph_ids=paragraph_ids,
+                                       paragraph_aliases=paragraph_aliases,
                                        toc_heading_ids=toc_heading_ids,
                                        rule_start=RfcHtmlHelper.rule_start_index(contents),
                                        toc_rows=toc_rows,
@@ -214,7 +216,8 @@ class RfcHtmlHelper:
         return ' bullet' if re.match(r'^[-o*+•]\s', text) else ''
 
     @staticmethod
-    def make_paragraph_ids(contents: list) -> list[str]:
+    def make_paragraph_ids(contents: list, *,
+                           aliases: dict[int, list[str]] | None = None) -> list[str | None]:
         """各段落のid（見出しはidを持つため None）。
         段落番号は直前の見出しからの連番にし、他の章の編集でリンク先がずれにくいようにする"""
         ids = []
@@ -223,10 +226,11 @@ class RfcHtmlHelper:
         count = 0
         list_item = 1
         list_base = ''
-        for paragraph in contents:
+        for index, paragraph in enumerate(contents):
             if paragraph.get(RfcJsonElem.Contents.SECTION_TITLE) == True:
-                section_id = RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT]) or 'section'
-                count = 0
+                if not paragraph.get(RfcJsonElem.Contents.PRESERVE_PARAGRAPH_NUMBERING):
+                    section_id = RfcHtmlHelper.text_to_id(paragraph[RfcJsonElem.Contents.TEXT]) or 'section'
+                    count = 0
                 ids.append(None)
                 continue
             if count and paragraph.get(RfcJsonElem.Contents.LIST_CONTINUATION):
@@ -242,6 +246,15 @@ class RfcHtmlHelper:
                 list_base = pid
             used.add(pid)
             ids.append(pid)
+            # 番号を詰めず、改ページで分かれていた旧段落へのリンクも維持する。
+            for _ in range(paragraph.get(RfcJsonElem.Contents.MERGED_PARAGRAPHS, 0)):
+                count += 1
+                old_id = f'{section_id}-p{count}'
+                while old_id in used:
+                    old_id += '_'
+                used.add(old_id)
+                if aliases is not None:
+                    aliases.setdefault(index, []).append(old_id)
         return ids
 
     @staticmethod
