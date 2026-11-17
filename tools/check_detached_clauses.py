@@ -17,8 +17,12 @@ NOMINAL_FRAGMENT = re.compile(
     r"(?:^|(?<=[。！？]))[^。！？]*(?P<ending>方法|方式|手法|手順|処理|形式|値|場合|ため|条件|"
     r"結果|要件|仕様|実装|情報|理由|例|一部|もの|こと|必要性|可能性|範囲|機能|動作|設定|使用|利用|サポート)。"
 )
+STANDALONE_NOMINAL = re.compile(r"(?<=。)[ \t]*(?P<ending>範囲|情報|処理|値)。(?=\s*$)")
 NOMINAL_LABELS = {"Examples.": "例。", "Requirement.": "要件。"}
+IANA_REGISTRY_RANGE = re.compile(r"(?P<bounds>[0-9]+-[0-9]+): [Rr]ange available to IANA for assignment in this registry\.")
 INLINE_NOMINAL_LABELS = {
+    ("Additional requirements: Additional requirements on the parameter value.",
+     "追加要件：パラメータ値に関する追加要件。"),
     ("3GPP2 C.S0050-B, 3GPP2 File Formats for Multimedia Services.",
      "3GPP2 C.S0050-B、マルチメディアサービス用の3GPP2ファイル形式。"),
     ("Published specification: This specification.", "公開された仕様：この仕様。"),
@@ -43,13 +47,24 @@ EN_CARDINALITY = re.compile(
     r"(?P<count>Exactly one|One or more|Zero or one|Zero or more|One)\.(?=\s|$)"
 )
 EN_COUNTS = {"Exactly one": "1", "One": "1", "One or more": "1+", "Zero or one": "0–1", "Zero or more": "0+"}
+JSON_INT_RANGE = "-2^53+1 <= value <= 2^53-1"
+JA_JSON_INT_RANGE = re.compile(
+    r"[-−]2\s*\^\s*53\s*\+\s*1\s*(?:<=|≤|≦)\s*(?:value|値)"
+    r"\s*(?:<=|≤|≦)\s*2\s*\^\s*53\s*[-−]\s*1(?![0-9]|\.[0-9])"
+)
+IPP_STATUS = re.compile(r"(?<![\w-])(?:client|server)-error-[a-z0-9]+(?:-[a-z0-9]+)*(?![\w-])", re.I | re.ASCII)
+OCT_EXP_FORMULA = re.compile(
+    r"OCT_EXP\[(?:OCT_LOG\[[a-z]\]|[0-9]+)(?:\s*[+-]\s*(?:OCT_LOG\[[a-z]\]|[0-9]+))+\]"
+)
+DNS_QUERY_FIELD = re.compile(r"\b(QNAME|QTYPE|QCLASS)=([a-zA-Z0-9*_.-]+)", re.ASCII)
+TYPE_ASSIGNMENT = re.compile(r"(?P<inline>Type:[ \t]+)?(?P<number>[0-9]+) for (?P<name>[A-Za-z][A-Za-z0-9-]+)\.", re.I)
 JA_CARDINALITY = re.compile(
     r"^(?P<count>(?:ちょうど)?[1一](?:件|つ|個|項目)|(?:0|ゼロ)(?:件|つ|個)?(?:または|か)[1一](?:件|つ|個)?"
     r"|(?:[01]|ゼロ|一)(?:件|つ|個|項目)?以上)"
     r"(?:です|で(?=、型))?[。．、]"
 )
 LIST_OR_LABEL = re.compile(
-    r"^(?:[•–—]|\([0-9A-Za-z]+\)|[0-9]+\))\s+"
+    r"^(?:[•–—]|\([0-9A-Za-z]+\)|[0-9]+[A-Za-z]?\))\s+"
     r"|^(?:[\w.]*Exception\s+-\s+|[\w-]+:\s+because\b)"
     r"|^(?:Figure|Table)\s+\d+\s*[:.]",
     re.IGNORECASE,
@@ -79,6 +94,8 @@ FINITE_VERB = re.compile(
 INCOMPLETE_SOURCE = re.compile(r"^(?:if|when|unless|(?:in order |so as )?to|because|for)\b", re.I)
 DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an|this|that|these|those|aforementioned|following)$")
 SENTENCE_TAIL = re.compile(r"^[a-z][A-Za-z-]+(?:[ \t]+[a-z][A-Za-z-]+){0,2}\.[ \t]+[A-Z]")
+CITATION_WITHOUT_OBJECT = re.compile(r"\[RFC\d+\] (?:defines|describes|specifies)$")
+CITATION_OBJECT = re.compile(r"^(?:the|a|an) [^.!?\n]+\.[ \t]+[A-Z]")
 ASN1_BOUNDARY = re.compile(
     r"^[ \t]*(?:(?P<module>[A-Z][A-Za-z0-9-]*)[ \t]+DEFINITIONS[ \t]+::=[ \t]+BEGIN"
     r"|(?P<begin>(?:[A-Z][A-Za-z0-9-]*[ \t]+MACRO[ \t]+::=[ \t]+)?BEGIN)|(?P<end>END))[ \t]*$",
@@ -91,7 +108,8 @@ XML_DECLARATION = re.compile(r"^<\?xml[ \t]+version[ \t]*=[^?]+\?>")
 XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
-    "cardinality-mismatch",
+    "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
+    "octet-formula", "dns-query-fields",
 }
 
 
@@ -126,6 +144,8 @@ def source_has_main_clause(en, ending):
 def is_inline_nominal_label(en, ja):
     if (en, ja) in INLINE_NOMINAL_LABELS:
         return True
+    if registry_range := IANA_REGISTRY_RANGE.fullmatch(en):
+        return ja == f"{registry_range['bounds']}：このレジストリでの割り当てにIANAが使用できる範囲。"
     source_label, _, source_count = en.partition(" Cardinality: ")
     translated_label, _, translated_count = ja.partition("カーディナリティ：")
     return (source_count in CARDINALITY_LABELS and source_count == translated_count.strip()
@@ -267,9 +287,45 @@ def inspect(obj, include_nominal=False):
         if (prior and previous and not references
                 and not row.get("list_continuation") and not rows[index - 1].get("list_continuation")
                 and rows[index - 1].get("indent") == row.get("indent")
-                and SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior)):
+                and ((SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior))
+                     or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en)))):
             yield Finding(index, "source-sentence-split", "", f"{prior}\n{en}", "")
         if previous and not references:
+            if ja and en.startswith("QNAME="):
+                source_fields = dict(DNS_QUERY_FIELD.findall(en))
+                if len(source_fields) == 3:
+                    translated_fields = set(DNS_QUERY_FIELD.findall(ja))
+                    missing = source_fields.items() - translated_fields
+                    if missing:
+                        expected = ", ".join(f"{key}={value}" for key, value in sorted(missing))
+                        yield Finding(index, "dns-query-fields", "", en, expected)
+            if ja and "OCT_EXP[" in en:
+                translated = "".join(ja.replace("−", "-").split())
+                for formula in OCT_EXP_FORMULA.findall(en):
+                    if "".join(formula.split()) not in translated:
+                        yield Finding(index, "octet-formula", "", en, formula)
+            if ja and (assignment := TYPE_ASSIGNMENT.fullmatch(en)) and (
+                assignment["inline"] or (
+                    prior == "Type" and index + 1 < len(rows) and rows[index + 1]["text"].strip() == "Length"
+                )
+            ):
+                name, number = assignment["name"], assignment["number"]
+                name_pattern = rf"(?<![\w-]){re.escape(name)}(?![\w-])"
+                if not re.search(name_pattern, ja, re.ASCII) or not re.search(
+                    rf"(?<![0-9]){number}(?![0-9])", re.sub(name_pattern, "", ja, flags=re.ASCII)
+                ):
+                    yield Finding(index, "type-assignment", number, en, name)
+            if ja and JSON_INT_RANGE in en and not JA_JSON_INT_RANGE.search(ja):
+                yield Finding(index, "json-integer-range", "", en, JSON_INT_RANGE)
+            if "-not-supported" in en.lower():
+                source_codes = {code.lower() for code in IPP_STATUS.findall(en)}
+                translated_codes = {code.lower() for code in IPP_STATUS.findall(ja)}
+                for expected in sorted(source_codes - translated_codes):
+                    if not expected.endswith("-not-supported"):
+                        continue
+                    actual = expected.removesuffix("-not-supported") + "-supported"
+                    if actual in translated_codes - source_codes:
+                        yield Finding(index, "ipp-status-negation", expected, en, actual)
             preceding = rows[index - 1] if index else {}
             contextual_field = bool(
                 prior and row.get("indent", 0) > preceding.get("indent", 0)
@@ -282,7 +338,8 @@ def inspect(obj, include_nominal=False):
         ipr = LICENSE_FRAGMENT.search(ja) if (
             en.startswith(IPR_NOTICE) and "might or might not be available" in en
         ) else None
-        if not include_nominal and "ため。" not in ja and "場合。" not in ja and not (warranty or ipr):
+        standalone = STANDALONE_NOMINAL.search(ja)
+        if not include_nominal and "ため。" not in ja and "場合。" not in ja and not (warranty or ipr or standalone):
             continue
         collapsed_dot_list = DOT_BULLET.match(en) and len(DOT_BULLET.findall(en)) > 1
         if (references or heading or row.get("raw") or row.get("toc")
@@ -297,6 +354,11 @@ def inspect(obj, include_nominal=False):
         if ipr:
             yield Finding(index, "ipr-notice", "", en, ipr[0].strip())
             reported.add(ipr.span())
+        if standalone:
+            sentences = EN_SENTENCE_BREAK.split(en)
+            if len(sentences) >= 2 and en.endswith('.') and all(FINITE_VERB.search(s) for s in sentences):
+                yield Finding(index, "standalone-nominal", standalone["ending"], en, standalone[0].strip())
+                reported.add(standalone.span())
         for match in JAPANESE_FRAGMENT.finditer(ja):
             fragment = match[0].strip()
             ending = "場合" if fragment.endswith("場合。") else "ため"
@@ -392,6 +454,7 @@ def main():
             "warranty-disclaimer": "保証の否認",
             "ipr-notice": "知的財産権に関する声明",
             "nominal-fragment": "文末の名詞句",
+            "standalone-nominal": "文末で単独になっている名詞",
         }.get(finding.kind, "条件・目的句")
         if finding.kind == "nominal-label":
             print(f"{path} {finding.kind} 段落 {finding.index + 1} は項目の説明またはキャプションです。「{finding.fragment}」")
@@ -410,6 +473,16 @@ def main():
             message = f"段落 {finding.index + 1} の冒頭が直前の英文の続きになっています。改ページ位置を原文と照合してください。"
         if finding.kind == "cardinality-mismatch":
             message = f"段落 {finding.index + 1} の出現回数が原文と訳文で異なります（原文 {finding.ending}、訳文 {finding.fragment}）。"
+        if finding.kind == "json-integer-range":
+            message = f"段落 {finding.index + 1} の訳文でJSON整数の範囲「{finding.fragment}」を確認してください。"
+        if finding.kind == "ipp-status-negation":
+            message = f"段落 {finding.index + 1} のIPP状態コードで原文「{finding.ending}」の否定が訳文「{finding.fragment}」から抜けています。"
+        if finding.kind == "type-assignment":
+            message = f"段落 {finding.index + 1} の訳文で属性タイプ「{finding.fragment}」の名前と番号 {finding.ending} を確認してください。"
+        if finding.kind == "octet-formula":
+            message = f"段落 {finding.index + 1} の訳文でオクテット演算の式「{finding.fragment}」を確認してください。"
+        if finding.kind == "dns-query-fields":
+            message = f"段落 {finding.index + 1} のDNS問い合わせ例で「{finding.fragment}」を原文と照合してください。"
         if args.format == "github" and finding.kind in CI_WARNING_KINDS:
             print(f"::warning file={escape_annotation(path)}::{escape_annotation(message)}")
         else:

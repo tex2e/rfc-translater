@@ -17,6 +17,67 @@ def findings(*contents):
 
 class TestDetachedClauses(unittest.TestCase):
 
+    def test_dns_query_example_checks_missing_class_and_final_dot(self):
+        source = 'QNAME=host1.example., QTYPE=MX, QCLASS=IN because host1.example. exists.'
+        correct = body(source, 'QNAME=host1.example.、QTYPE=MX、QCLASS=IN の問い合わせです。')
+        wrong = {**correct, 'ja': 'QNAME=host1.example、QTYPE=MX の問い合わせです。'}
+        self.assertEqual(findings(correct), [])
+        self.assertEqual([(f.kind, f.fragment) for f in findings(wrong)],
+                         [('dns-query-fields', 'QCLASS=IN, QNAME=host1.example.')])
+        self.assertEqual(findings({**wrong, 'raw': True}), [])
+
+    def test_octet_formula_preserves_operators_and_constants(self):
+        formula = 'OCT_EXP[OCT_LOG[u] - OCT_LOG[v] + 255]'
+        correct = body(formula + ' otherwise.', 'それ以外は OCT_EXP [ OCT_LOG[u] − OCT_LOG[v] +255 ] です。')
+        self.assertEqual(findings(correct), [])
+        for wrong in (formula.replace('+', ''), formula.replace('255', '256'), formula.replace('OCT_LOG[v]', 'OCT_LOG[u]')):
+            row = {**correct, 'ja': wrong}
+            self.assertEqual([(f.kind, f.fragment) for f in findings(row)], [('octet-formula', formula)])
+
+    def test_type_assignment_checks_name_and_number_in_field_context(self):
+        before = body('Type', 'タイプ')
+        after = body('Length', '長さ')
+        correct = body('24 for State.', 'State のタイプは24です。')
+        wrong = {**correct, 'ja': '州の場合は24。'}
+        wrong_number = {**correct, 'ja': 'State のタイプは124です。'}
+        self.assertEqual(findings(before, correct, after), [])
+        self.assertEqual([f.kind for f in findings(before, wrong, after)], ['type-assignment'])
+        self.assertEqual([f.kind for f in findings(before, wrong_number, after)], ['type-assignment'])
+        self.assertEqual(findings(wrong), [])
+        self.assertEqual([f.kind for f in findings({**wrong, 'text': 'Type: 24 for State.'})], ['type-assignment'])
+
+    def test_ipp_status_warning_checks_omission_of_not(self):
+        code = 'client-error-attributes-or-values-not-supported'
+        wrong = code.replace('-not-supported', '-supported')
+        source = f"The server returns '{code}' otherwise."
+        row = body(source, f"それ以外の場合は '{wrong}' を返します。")
+        self.assertEqual([(f.kind, f.ending, f.fragment) for f in findings(row)],
+                         [('ipp-status-negation', code, wrong)])
+        self.assertEqual(findings({**row, 'ja': row['ja'].replace(wrong, code)}), [])
+        self.assertEqual(findings({**row, 'text': f"{source} See '{wrong}'."}), [])
+        self.assertEqual(findings({**row, 'raw': True}), [])
+
+    def test_json_integer_range_checks_signs_and_inclusive_bounds(self):
+        source = 'Int means an integer in the range -2^53+1 <= value <= 2^53-1.'
+        correct = body(source, '整数の範囲は −2 ^ 53 + 1 ≤ 値 ≤ 2^53−1 です。')
+        self.assertEqual(findings(correct), [])
+        for error in ('−2^53 1 ≤ 値 ≤ 2^53−1', '−2^53+1 < 値 ≤ 2^53−1', '−2^53+1 ≤ 値 ≤ 2^53−10'):
+            self.assertEqual([f.kind for f in findings({**correct, 'ja': error})], ['json-integer-range'])
+        self.assertEqual(findings({**correct, 'raw': True, 'ja': ''}), [])
+
+    def test_standalone_noun_warns_only_when_source_sentences_have_predicates(self):
+        source = 'The receiver uses the field. It contains the identifier value.'
+        wrong = body(source, '受信側はフィールドを読み取ります。識別子が入っています。 値。')
+        correct = body(source, '受信側はフィールドを読み取ります。フィールドには識別子の値が入っています。')
+        self.assertEqual([(f.kind, f.fragment) for f in findings(wrong)],
+                         [('standalone-nominal', '値。')])
+        self.assertEqual(list(inspect({'contents': [wrong]}, include_nominal=True)), findings(wrong))
+        self.assertEqual(findings(correct), [])
+        self.assertEqual(findings({**wrong, 'text': 'The receiver uses the field. Value.'}), [])
+        self.assertEqual(findings({**wrong, 'text': 'o ' + source}), [])
+        for flag in ('raw', 'section_title', 'toc', 'list_continuation'):
+            self.assertEqual(findings({**wrong, flag: True}), [])
+
     def test_cardinality_warning_checks_explicit_counts_with_field_context(self):
         source = 'Contact Zero or more. The contact information for the incident.'
         wrong = body(source, 'Contact は0件または1件で、型は STRING です。連絡先を格納します。')
@@ -39,6 +100,19 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings(start, {**tail, 'raw': True}), [])
         self.assertEqual(findings(start, {**tail, 'indent': 6}), [])
         self.assertEqual(findings({**start, 'text': start['text'] + ' specification.'}, tail), [])
+
+    def test_source_sentence_tail_can_complete_a_reference_clause(self):
+        first = body('A handover is possible. [RFC9999] defines', '引き渡しが可能です。[RFC9999] は定めています。')
+        tail = body('the specific requirements for an ownership handover procedure. It also gives examples.',
+                    '所有権の引き渡し手順の具体的な要件。例も示します。')
+        self.assertEqual([f.kind for f in findings(first, tail)], ['source-sentence-split'])
+        self.assertEqual(findings({**first, 'text': first['text'] + ' a procedure.'}, tail), [])
+        self.assertEqual(findings(first, {**tail, 'text': tail['text'].capitalize()}), [])
+
+    def test_mixed_numeric_and_letter_list_marker_is_excluded_from_nominal_audit(self):
+        row = body('3a) Forwarding plane requirements - requirements related to router forwarding behavior.',
+                   '3a) 転送プレーンの要件。')
+        self.assertEqual(list(inspect({'contents': [row]}, include_nominal=True)), [])
 
     def test_mib_prose_is_reported_only_inside_a_complete_module(self):
         start = body("EXAMPLE-MIB DEFINITIONS ::= BEGIN", "", raw=True)
@@ -226,6 +300,13 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual([(f.index, f.kind) for f in inspect(obj, include_nominal=True)],
                          [(0, "nominal-label"), (1, "nominal-fragment"),
                           (2, "nominal-fragment"), (3, "nominal-fragment")])
+
+    def test_registry_range_label_keeps_mismatched_bounds_in_the_audit(self):
+        source = '3-31: range available to IANA for assignment in this registry.'
+        correct = body(source, '3-31：このレジストリでの割り当てにIANAが使用できる範囲。')
+        wrong = {**correct, 'ja': correct['ja'].replace('3-31', '3-30')}
+        result = inspect({'contents': [correct, wrong]}, include_nominal=True)
+        self.assertEqual([f.kind for f in result], ['nominal-label', 'nominal-fragment'])
 
     def test_structured_value_type_label_checks_separator_and_cardinality(self):
         label = body("Value type: One or more text values separated by a COMMA character (U+002C). Cardinality: *",
