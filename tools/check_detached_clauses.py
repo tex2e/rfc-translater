@@ -56,6 +56,14 @@ IPP_STATUS = re.compile(r"(?<![\w-])(?:client|server)-error-[a-z0-9]+(?:-[a-z0-9
 IPP_LANGUAGE_LENGTH = re.compile(
     r"The length of a (?:text|name)WithLanguage value MUST be 4 \+ the value of field a \+ the value of field c\."
 )
+SHORT_PORT_CALCULATION = re.compile(
+    r"The actual 16-bit (?:source|destination) port is obtained by calculating: P \+ short_port value\."
+)
+JA_SHORT_PORT_SUM = re.compile(
+    r"(?<![A-Za-z0-9_])P(?:\s*[+＋]\s*short_port(?![A-Za-z0-9_])"
+    r"|\s*と\s*short_port(?:の値)?\s*の(?:和|合計)"
+    r"|\s*に\s*short_port(?:の値)?\s*を(?:加え|足し))"
+)
 JA_IPP_LANGUAGE_LENGTH = re.compile(
     r"(?<![0-9])[4４]\s*(?:[+＋]\s*フィールド\s*a\s*の値\s*[+＋]\s*フィールド\s*c\s*の値"
     r"|に\s*フィールド\s*a\s*(?:の値)?\s*と\s*フィールド\s*c\s*の値を\s*(?:加え|足し))"
@@ -126,7 +134,7 @@ XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
-    "octet-formula", "ipp-language-length", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
+    "octet-formula", "ipp-language-length", "short-port-formula", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
 }
 
 
@@ -361,6 +369,8 @@ def inspect(obj, include_nominal=False):
                 yield Finding(index, "json-integer-range", "", en, JSON_INT_RANGE)
             if ja and IPP_LANGUAGE_LENGTH.search(en) and not JA_IPP_LANGUAGE_LENGTH.search(ja):
                 yield Finding(index, "ipp-language-length", "", en, "4 + フィールドaの値 + フィールドcの値")
+            if ja and SHORT_PORT_CALCULATION.search(en) and not JA_SHORT_PORT_SUM.search(ja):
+                yield Finding(index, "short-port-formula", "", en, "P + short_port")
             if "-not-supported" in en.lower():
                 source_codes = {code.lower() for code in IPP_STATUS.findall(en)}
                 translated_codes = {code.lower() for code in IPP_STATUS.findall(ja)}
@@ -527,6 +537,8 @@ def main():
             message = f"段落 {finding.index + 1} の訳文でオクテット演算の式「{finding.fragment}」を確認してください。"
         if finding.kind == "ipp-language-length":
             message = f"段落 {finding.index + 1} の訳文でIPPの値の長さ「{finding.fragment}」を確認してください。"
+        if finding.kind == "short-port-formula":
+            message = f"段落 {finding.index + 1} の訳文で圧縮ポートの復元式「{finding.fragment}」を確認してください。"
         if finding.kind == "dns-query-fields":
             message = f"段落 {finding.index + 1} のDNS問い合わせ例で「{finding.fragment}」を原文と照合してください。"
         if finding.kind == "merged-claim-registration":

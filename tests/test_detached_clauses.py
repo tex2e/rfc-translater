@@ -17,6 +17,20 @@ def findings(*contents):
 
 class TestDetachedClauses(unittest.TestCase):
 
+    def test_compressed_port_restoration_preserves_addition(self):
+        for direction in ('source', 'destination'):
+            source = f'The actual 16-bit {direction} port is obtained by calculating: P + short_port value.'
+            for translation in ('P + short_portを計算します。', 'Pとshort_portの値の和です。',
+                                'Pにshort_portを加えて求めます。'):
+                self.assertEqual(findings(body(source, translation)), [])
+            for translation in ('PSHORT_PORT値を使います。', 'P - short_portを計算します。'):
+                wrong = body(source, translation)
+                self.assertEqual([(f.kind, f.fragment) for f in findings(wrong)],
+                                 [('short-port-formula', 'P + short_port')])
+                self.assertEqual(findings({**wrong, 'raw': True}), [])
+            self.assertEqual(findings(body(source.replace('P + short_port', 'Q + short_port'),
+                                           '別の式を使用します。')), [])
+
     def test_ipp_language_length_checks_both_field_lengths(self):
         source = 'The length of a textWithLanguage value MUST be 4 + the value of field a + the value of field c.'
         symbolic = body(source, '長さは4 + フィールドaの値 + フィールドcの値でなければなりません (MUST)。')
