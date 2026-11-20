@@ -59,6 +59,11 @@ IPP_LANGUAGE_LENGTH = re.compile(
 SHORT_PORT_CALCULATION = re.compile(
     r"The actual 16-bit (?:source|destination) port is obtained by calculating: P \+ short_port value\."
 )
+HEX_DEFAULT = re.compile(
+    r"\bdefault value is (?P<value>0x[0-9a-f]+(?:[ \t]+0x[0-9a-f]+)*)(?![A-Za-z0-9_])",
+    re.I | re.ASCII,
+)
+HEX_LITERAL = re.compile(r"(?<![A-Za-z0-9_])0x[0-9a-f]+(?![A-Za-z0-9_])", re.I | re.ASCII)
 JA_SHORT_PORT_SUM = re.compile(
     r"(?<![A-Za-z0-9_])P(?:\s*[+＋]\s*short_port(?![A-Za-z0-9_])"
     r"|\s*と\s*short_port(?:の値)?\s*の(?:和|合計)"
@@ -134,7 +139,7 @@ XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
-    "octet-formula", "ipp-language-length", "short-port-formula", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
+    "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
 }
 
 
@@ -371,6 +376,17 @@ def inspect(obj, include_nominal=False):
                 yield Finding(index, "ipp-language-length", "", en, "4 + フィールドaの値 + フィールドcの値")
             if ja and SHORT_PORT_CALCULATION.search(en) and not JA_SHORT_PORT_SUM.search(ja):
                 yield Finding(index, "short-port-formula", "", en, "P + short_port")
+            if ja:
+                for default in HEX_DEFAULT.finditer(en):
+                    expected = HEX_LITERAL.findall(default['value'].lower())
+                    actual = HEX_LITERAL.findall(ja.lower())
+                    if not any(actual[start:start + len(expected)] == expected
+                               for start in range(len(actual) - len(expected) + 1)):
+                        yield Finding(index, "hex-default-value", "", en, default['value'])
+            if ja and "with the following IVs" in en:
+                expected = HEX_LITERAL.findall(en.lower())
+                if expected and expected != HEX_LITERAL.findall(ja.lower()):
+                    yield Finding(index, "hex-iv-values", "", en, ", ".join(expected))
             if "-not-supported" in en.lower():
                 source_codes = {code.lower() for code in IPP_STATUS.findall(en)}
                 translated_codes = {code.lower() for code in IPP_STATUS.findall(ja)}
@@ -539,6 +555,10 @@ def main():
             message = f"段落 {finding.index + 1} の訳文でIPPの値の長さ「{finding.fragment}」を確認してください。"
         if finding.kind == "short-port-formula":
             message = f"段落 {finding.index + 1} の訳文で圧縮ポートの復元式「{finding.fragment}」を確認してください。"
+        if finding.kind == "hex-default-value":
+            message = f"段落 {finding.index + 1} の訳文で16進数のデフォルト値「{finding.fragment}」を原文と照合してください。"
+        if finding.kind == "hex-iv-values":
+            message = f"段落 {finding.index + 1} の訳文でIVの16進数の値・個数・順序を原文と照合してください。"
         if finding.kind == "dns-query-fields":
             message = f"段落 {finding.index + 1} のDNS問い合わせ例で「{finding.fragment}」を原文と照合してください。"
         if finding.kind == "merged-claim-registration":

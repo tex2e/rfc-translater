@@ -17,6 +17,35 @@ def findings(*contents):
 
 class TestDetachedClauses(unittest.TestCase):
 
+    def test_iv_examples_preserve_hex_values_and_order(self):
+        source = ('The sender sends packets with the following IVs: '
+                  '0x0100000000000001, 0x0100000000000002, '
+                  'with a final value of 0x01FFFFFFFFFFFFFF.')
+        correct = 'IVは0x0100000000000001、0x0100000000000002で、最後は0x01ffffffffffffffです。'
+        self.assertEqual(findings(body(source, correct)), [])
+        for wrong in (correct.replace('0x0100000000000001', '0x010000000000000001'),
+                      correct.replace('0x0100000000000001、', ''),
+                      correct.replace('0x0100000000000001、0x0100000000000002',
+                                      '0x0100000000000002、0x0100000000000001')):
+            row = body(source, wrong)
+            self.assertEqual([f.kind for f in findings(row)], ['hex-iv-values'])
+            self.assertEqual(findings({**row, 'raw': True}), [])
+        self.assertEqual(findings(body('An IV is an initialization vector.', '初期化ベクトルです。')), [])
+
+    def test_hex_default_preserves_digits_and_byte_order(self):
+        source = 'The default value is 0x55AA55AA55AA55BB.'
+        good = body(source, 'デフォルト値は0x55aa55aa55aa55bbです。')
+        bad = body(source, 'デフォルト値は0x555AA555555555BBです。')
+        self.assertEqual(findings(good), [])
+        self.assertEqual([(f.kind, f.fragment) for f in findings(bad)],
+                         [('hex-default-value', '0x55AA55AA55AA55BB')])
+        self.assertEqual(findings({**bad, 'raw': True}), [])
+        sequence = 'The default value is 0x63 0x69 0x73.'
+        self.assertEqual(findings(body(sequence, '値は0x63、0x69、0x73です。')), [])
+        self.assertEqual([f.kind for f in findings(body(sequence, '値は0x69 0x63 0x73です。'))],
+                         ['hex-default-value'])
+        self.assertEqual(findings(body(source.replace('default value', 'example value'), '例です。')), [])
+
     def test_compressed_port_restoration_preserves_addition(self):
         for direction in ('source', 'destination'):
             source = f'The actual 16-bit {direction} port is obtained by calculating: P + short_port value.'
