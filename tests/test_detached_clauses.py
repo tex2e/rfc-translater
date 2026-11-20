@@ -17,6 +17,15 @@ def findings(*contents):
 
 class TestDetachedClauses(unittest.TestCase):
 
+    def test_ipp_language_length_checks_both_field_lengths(self):
+        source = 'The length of a textWithLanguage value MUST be 4 + the value of field a + the value of field c.'
+        symbolic = body(source, '長さは4 + フィールドaの値 + フィールドcの値でなければなりません (MUST)。')
+        prose = body(source, '長さは4にフィールドaとフィールドcの値を加えた値でなければなりません (MUST)。')
+        wrong = body(source, '長さは4でなければなりません (MUST)。フィールドaとフィールドcの値。')
+        self.assertEqual(findings(symbolic, prose), [])
+        self.assertEqual([f.kind for f in findings(wrong)], ['ipp-language-length'])
+        self.assertEqual(findings({**wrong, 'raw': True}), [])
+
     def test_dns_query_example_checks_missing_class_and_final_dot(self):
         source = 'QNAME=host1.example., QTYPE=MX, QCLASS=IN because host1.example. exists.'
         correct = body(source, 'QNAME=host1.example.、QTYPE=MX、QCLASS=IN の問い合わせです。')
@@ -108,6 +117,47 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual([f.kind for f in findings(first, tail)], ['source-sentence-split'])
         self.assertEqual(findings({**first, 'text': first['text'] + ' a procedure.'}, tail), [])
         self.assertEqual(findings(first, {**tail, 'text': tail['text'].capitalize()}), [])
+
+    def test_source_sentence_split_across_an_indented_url(self):
+        first = body('The interface is maintained separately. See', '別のグループが管理しています。')
+        url = body('https://example.org/interface', 'https://example.org/interface', indent=6)
+        tail = body('for additional information on the current state of the interface.', 'インターフェースの追加情報。')
+        self.assertEqual([(f.kind, f.index) for f in findings(first, url, tail)], [('source-sentence-split', 2)])
+        self.assertEqual(findings({**first, 'text': 'See the site.'}, url, tail), [])
+        self.assertEqual(findings(first, {**url, 'indent': 3}, tail), [])
+
+    def test_source_sentence_split_in_an_indented_list_item(self):
+        first = body('o Two-way: The packets contain all the required', 'o 双方向：パケットにはすべて含まれます。')
+        tail = body('information to measure packet loss from the sender.', '送信側のパケット損失測定情報。', indent=6)
+        self.assertEqual([(f.kind, f.index) for f in findings(first, tail)], [('source-sentence-split', 1)])
+        self.assertEqual(findings(first, {**tail, 'list_continuation': True}), [])
+        self.assertEqual(findings({**first, 'text': first['text'] + ' fields.'}, tail), [])
+
+    def test_merged_claim_registration_detects_joined_fields(self):
+        fields = [
+            'Claim Name: scope',
+            'Claim Description: The scope of an access token.',
+            'JWT Claim Name: scope',
+            'Claim Key: 9',
+            'Change Controller: IETF',
+            'Reference: Section 4.2.',
+        ]
+        joined = body(' '.join(fields), '')
+        self.assertEqual([f.kind for f in findings(joined)], ['merged-claim-registration'])
+        fields[-1] = 'Specification Document(s): Section 4.2.'
+        self.assertEqual([f.kind for f in findings(body(' '.join(fields), ''))], ['merged-claim-registration'])
+        self.assertEqual(findings(*(body(field, '') for field in fields)), [])
+        self.assertEqual(findings({**joined, 'raw': True}), [])
+
+    def test_merged_checklist_item_is_scoped_to_the_checklist(self):
+        heading = body('2.1.8. Summary Checklist', '2.1.8. チェックリスト', section_title=True)
+        label = body('Rationale', '根拠')
+        item = body("_ Explain the building block's purpose", '_ 目的の説明', indent=6)
+        merged = body(f"{label['text']} {item['text']}", '')
+        self.assertEqual([f.kind for f in findings(heading, merged)], ['merged-checklist-item'])
+        self.assertEqual(findings(heading, label, item), [])
+        self.assertEqual(findings(heading, {**merged, 'raw': True}), [])
+        self.assertEqual(findings(heading, {**heading, 'text': '2.2. Design'}, merged), [])
 
     def test_mixed_numeric_and_letter_list_marker_is_excluded_from_nominal_audit(self):
         row = body('3a) Forwarding plane requirements - requirements related to router forwarding behavior.',

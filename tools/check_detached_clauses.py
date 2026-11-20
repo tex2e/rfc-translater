@@ -53,6 +53,13 @@ JA_JSON_INT_RANGE = re.compile(
     r"\s*(?:<=|≤|≦)\s*2\s*\^\s*53\s*[-−]\s*1(?![0-9]|\.[0-9])"
 )
 IPP_STATUS = re.compile(r"(?<![\w-])(?:client|server)-error-[a-z0-9]+(?:-[a-z0-9]+)*(?![\w-])", re.I | re.ASCII)
+IPP_LANGUAGE_LENGTH = re.compile(
+    r"The length of a (?:text|name)WithLanguage value MUST be 4 \+ the value of field a \+ the value of field c\."
+)
+JA_IPP_LANGUAGE_LENGTH = re.compile(
+    r"(?<![0-9])[4４]\s*(?:[+＋]\s*フィールド\s*a\s*の値\s*[+＋]\s*フィールド\s*c\s*の値"
+    r"|に\s*フィールド\s*a\s*(?:の値)?\s*と\s*フィールド\s*c\s*の値を\s*(?:加え|足し))"
+)
 OCT_EXP_FORMULA = re.compile(
     r"OCT_EXP\[(?:OCT_LOG\[[a-z]\]|[0-9]+)(?:\s*[+-]\s*(?:OCT_LOG\[[a-z]\]|[0-9]+))+\]"
 )
@@ -96,6 +103,16 @@ DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an|this|that|these|those|aforement
 SENTENCE_TAIL = re.compile(r"^[a-z][A-Za-z-]+(?:[ \t]+[a-z][A-Za-z-]+){0,2}\.[ \t]+[A-Z]")
 CITATION_WITHOUT_OBJECT = re.compile(r"\[RFC\d+\] (?:defines|describes|specifies)$")
 CITATION_OBJECT = re.compile(r"^(?:the|a|an) [^.!?\n]+\.[ \t]+[A-Z]")
+LIST_WITHOUT_INFORMATION = re.compile(r"^[o+*-]\s+.*\b(?:contain|include|provide)s? all the required$")
+INFORMATION_TAIL = re.compile(r"^information (?:to|for|about) [^\n]+\.$")
+STANDALONE_URL = re.compile(r"https?://[^\s<>]+")
+SEE_CLAUSE = re.compile(r"(?:^|[.!?]\s+)See$")
+SEE_CLAUSE_TAIL = re.compile(r"^for (?:additional|further|more) (?:information|details)\b")
+MERGED_CLAIM_REGISTRATION = re.compile(
+    r"^Claim Name: \S+ Claim Description: .+ Change Controller: .+ (?:Reference|Specification Document\(s\)): "
+)
+CHECKLIST_HEADING = re.compile(r"^(?:\d+\.)+\s*Summary Checklist$")
+MERGED_CHECKLIST_ITEM = re.compile(r"^[A-Z][^\n]*? _ [A-Z]")
 ASN1_BOUNDARY = re.compile(
     r"^[ \t]*(?:(?P<module>[A-Z][A-Za-z0-9-]*)[ \t]+DEFINITIONS[ \t]+::=[ \t]+BEGIN"
     r"|(?P<begin>(?:[A-Z][A-Za-z0-9-]*[ \t]+MACRO[ \t]+::=[ \t]+)?BEGIN)|(?P<end>END))[ \t]*$",
@@ -109,7 +126,7 @@ XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
-    "octet-formula", "dns-query-fields",
+    "octet-formula", "ipp-language-length", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
 }
 
 
@@ -259,8 +276,28 @@ def xml_prose_indices(rows):
             chunks = []
 
 
+def sentence_split_start(rows, index, prior, en):
+    previous_row, row = rows[index - 1:index + 1]
+    prior_indent = previous_row.get("indent", 0)
+    indent = row.get("indent", 0)
+    if prior_indent == indent and (
+            (SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior))
+            or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en))):
+        return index - 1
+    if indent > prior_indent and LIST_WITHOUT_INFORMATION.match(prior) and INFORMATION_TAIL.fullmatch(en):
+        return index - 1
+    if index >= 2 and prior_indent > indent and STANDALONE_URL.fullmatch(prior) and SEE_CLAUSE_TAIL.match(en):
+        lead = rows[index - 2]
+        if (lead.get("indent", 0) == indent
+                and not any(lead.get(flag) for flag in ("raw", "toc", "section_title", "list_continuation"))
+                and SEE_CLAUSE.search(lead["text"].strip())):
+            return index - 2
+    return None
+
+
 def inspect(obj, include_nominal=False):
     references = False
+    in_summary_checklist = False
     previous = None
     rows = obj["contents"]
     module_prose = dict(module_prose_indices(rows))
@@ -269,6 +306,8 @@ def inspect(obj, include_nominal=False):
         en = row["text"].strip()
         ja = row.get("ja", "")
         heading = row.get("section_title", False)
+        if heading:
+            in_summary_checklist = bool(CHECKLIST_HEADING.fullmatch(en))
         references = update_reference_section_state(references, en, heading)
         prior = previous
         previous = en if en and not (heading or row.get("raw") or row.get("toc")) else None
@@ -286,11 +325,14 @@ def inspect(obj, include_nominal=False):
             continue
         if (prior and previous and not references
                 and not row.get("list_continuation") and not rows[index - 1].get("list_continuation")
-                and rows[index - 1].get("indent") == row.get("indent")
-                and ((SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior))
-                     or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en)))):
-            yield Finding(index, "source-sentence-split", "", f"{prior}\n{en}", "")
+                and (start := sentence_split_start(rows, index, prior, en)) is not None):
+            source = "\n".join(part["text"].strip() for part in rows[start:index + 1])
+            yield Finding(index, "source-sentence-split", "", source, "")
         if previous and not references:
+            if in_summary_checklist and MERGED_CHECKLIST_ITEM.match(en):
+                yield Finding(index, "merged-checklist-item", "", en, "")
+            if MERGED_CLAIM_REGISTRATION.match(en):
+                yield Finding(index, "merged-claim-registration", "", en, "")
             if ja and en.startswith("QNAME="):
                 source_fields = dict(DNS_QUERY_FIELD.findall(en))
                 if len(source_fields) == 3:
@@ -317,6 +359,8 @@ def inspect(obj, include_nominal=False):
                     yield Finding(index, "type-assignment", number, en, name)
             if ja and JSON_INT_RANGE in en and not JA_JSON_INT_RANGE.search(ja):
                 yield Finding(index, "json-integer-range", "", en, JSON_INT_RANGE)
+            if ja and IPP_LANGUAGE_LENGTH.search(en) and not JA_IPP_LANGUAGE_LENGTH.search(ja):
+                yield Finding(index, "ipp-language-length", "", en, "4 + フィールドaの値 + フィールドcの値")
             if "-not-supported" in en.lower():
                 source_codes = {code.lower() for code in IPP_STATUS.findall(en)}
                 translated_codes = {code.lower() for code in IPP_STATUS.findall(ja)}
@@ -481,8 +525,14 @@ def main():
             message = f"段落 {finding.index + 1} の訳文で属性タイプ「{finding.fragment}」の名前と番号 {finding.ending} を確認してください。"
         if finding.kind == "octet-formula":
             message = f"段落 {finding.index + 1} の訳文でオクテット演算の式「{finding.fragment}」を確認してください。"
+        if finding.kind == "ipp-language-length":
+            message = f"段落 {finding.index + 1} の訳文でIPPの値の長さ「{finding.fragment}」を確認してください。"
         if finding.kind == "dns-query-fields":
             message = f"段落 {finding.index + 1} のDNS問い合わせ例で「{finding.fragment}」を原文と照合してください。"
+        if finding.kind == "merged-claim-registration":
+            message = f"段落 {finding.index + 1} に複数のクレーム登録欄が連結されています。原文の区切りを確認してください。"
+        if finding.kind == "merged-checklist-item":
+            message = f"段落 {finding.index + 1} にチェックリストの見出しと項目が連結されています。原文の区切りを確認してください。"
         if args.format == "github" and finding.kind in CI_WARNING_KINDS:
             print(f"::warning file={escape_annotation(path)}::{escape_annotation(message)}")
         else:
