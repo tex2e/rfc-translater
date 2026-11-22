@@ -41,6 +41,14 @@ INLINE_NOMINAL_LABELS = {
     ("Value type: One or more text values separated by a COMMA character (U+002C).",
      "値タイプ：コンマ文字（U+002C）で区切られた1つ以上のテキスト値。"),
 }
+VALUE_TYPE_DESCRIPTIONS = {
+    "A single timestamp value.": "単一のタイムスタンプ値。",
+    "A single text value that is restricted to an enumerated list of allowed values.":
+        "許可された値の列挙されたリストに制限された単一のテキスト値。",
+    "A single Language-Tag value as defined in Section 4 of [RFC6350].":
+        "[RFC6350]のセクション4で定義されている単一の言語タグ値。",
+    "A single text value.": "単一のテキスト値。",
+}
 CARDINALITY_LABELS = {"1", "*", "1*", "*1"}
 EN_CARDINALITY = re.compile(
     r"^(?:(?P<field>[A-Za-z][\w:.-]*)[ \t]+)?"
@@ -229,6 +237,8 @@ def is_contextual_nominal_label(en, ja, row, preceding, following):
                 and prior_text.startswith("+--"))
     if row.get("indent", 0) <= preceding.get("indent", 0):
         return False
+    if prior_text == "Value type:" and VALUE_TYPE_DESCRIPTIONS.get(en) == ja:
+        return True
     if prior_text == "Value" and en == "The value of the TLV.":
         return ja in {"TLVの値。", "TLV の値。"}
     if re.fullmatch(r"(?:Exclude-Any|Include-Any|Include-All) EAG:", prior_text):

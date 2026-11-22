@@ -427,6 +427,19 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual([(f.index, f.kind) for f in inspect(obj, include_nominal=True)],
                          [(0, "nominal-label"), (1, "nominal-fragment"), (2, "nominal-fragment")])
 
+    def test_value_type_description_requires_the_label_and_nested_indent(self):
+        label = body("Value type:", "値タイプ：")
+        value_type = body("A single timestamp value.", "単一のタイムスタンプ値。", indent=12)
+        cases = (
+            ([label, value_type], "nominal-label"),
+            ([label, {**value_type, "indent": 3}], "nominal-fragment"),
+            ([body("Protocol details:", "プロトコルの詳細："), value_type], "nominal-fragment"),
+            ([label, {**value_type, "ja": "複数のタイムスタンプ値。"}], "nominal-fragment"),
+        )
+        for contents, expected in cases:
+            result = inspect({"contents": contents}, include_nominal=True)
+            self.assertEqual([f.kind for f in result], [expected])
+
     def test_contextual_label_requires_matching_description_and_structure(self):
         figure = body("+---+\n|   |\n+---+", "", raw=True)
         caption = body("How the decision for isAccessAllowed is made.", "isAccessAllowedの決定方法。")
