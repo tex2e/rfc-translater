@@ -60,6 +60,23 @@ class TestDetachedClauses(unittest.TestCase):
             self.assertEqual(findings(body(source.replace('P + short_port', 'Q + short_port'),
                                            '別の式を使用します。')), [])
 
+    def test_link_layer_option_length_preserves_each_addend(self):
+        source = ('option-len 12 + link-layer-len field value + length of LLaddr-options field. '
+                  'With no extra options and an address length of 6, the option-len is 18.')
+        for translation in (
+            'option-len：12 + link-layer-lenフィールドの値 + LLaddr-optionsフィールドの長さです。',
+            'option-lenは12にlink-layer-lenの値とLLaddr-optionsの長さを加えた値です。',
+        ):
+            self.assertEqual(findings(body(source, translation)), [])
+        for translation in (
+            'option-len：12 + link-layer-lenフィールドの値です。',
+            'option-len：12 - link-layer-lenフィールドの値 + LLaddr-optionsフィールドの長さです。',
+            'option-len：112 + link-layer-lenの値 + LLaddr-optionsの長さです。',
+        ):
+            wrong = body(source, translation)
+            self.assertEqual([f.kind for f in findings(wrong)], ['lladdr-option-length'])
+            self.assertEqual(findings({**wrong, 'raw': True}), [])
+
     def test_ipp_language_length_checks_both_field_lengths(self):
         source = 'The length of a textWithLanguage value MUST be 4 + the value of field a + the value of field c.'
         symbolic = body(source, '長さは4 + フィールドaの値 + フィールドcの値でなければなりません (MUST)。')

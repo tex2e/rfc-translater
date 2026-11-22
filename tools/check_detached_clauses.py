@@ -59,6 +59,13 @@ IPP_LANGUAGE_LENGTH = re.compile(
 SHORT_PORT_CALCULATION = re.compile(
     r"The actual 16-bit (?:source|destination) port is obtained by calculating: P \+ short_port value\."
 )
+LLADDR_OPTION_LENGTH = "12 + link-layer-len field value + length of LLaddr-options field"
+JA_LLADDR_OPTION_LENGTH = re.compile(
+    r"(?<![0-9])12\s*(?:"
+    r"[+＋]\s*link-layer-len\s*(?:フィールド)?\s*の値\s*[+＋]\s*LLaddr-options\s*(?:フィールド)?\s*の長さ"
+    r"|に\s*link-layer-len\s*(?:フィールド)?\s*の値と\s*LLaddr-options\s*(?:フィールド)?\s*の長さを加え"
+    r")"
+)
 HEX_DEFAULT = re.compile(
     r"\bdefault value is (?P<value>0x[0-9a-f]+(?:[ \t]+0x[0-9a-f]+)*)(?![A-Za-z0-9_])",
     re.I | re.ASCII,
@@ -140,6 +147,7 @@ CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
     "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
+    "lladdr-option-length",
 }
 
 
@@ -376,6 +384,8 @@ def inspect(obj, include_nominal=False):
                 yield Finding(index, "ipp-language-length", "", en, "4 + フィールドaの値 + フィールドcの値")
             if ja and SHORT_PORT_CALCULATION.search(en) and not JA_SHORT_PORT_SUM.search(ja):
                 yield Finding(index, "short-port-formula", "", en, "P + short_port")
+            if ja and LLADDR_OPTION_LENGTH in en and not JA_LLADDR_OPTION_LENGTH.search(ja):
+                yield Finding(index, "lladdr-option-length", "", en, LLADDR_OPTION_LENGTH)
             if ja:
                 for default in HEX_DEFAULT.finditer(en):
                     expected = HEX_LITERAL.findall(default['value'].lower())
@@ -555,6 +565,8 @@ def main():
             message = f"段落 {finding.index + 1} の訳文でIPPの値の長さ「{finding.fragment}」を確認してください。"
         if finding.kind == "short-port-formula":
             message = f"段落 {finding.index + 1} の訳文で圧縮ポートの復元式「{finding.fragment}」を確認してください。"
+        if finding.kind == "lladdr-option-length":
+            message = f"段落 {finding.index + 1} の訳文でoption-lenを求める式「{finding.fragment}」を確認してください。"
         if finding.kind == "hex-default-value":
             message = f"段落 {finding.index + 1} の訳文で16進数のデフォルト値「{finding.fragment}」を原文と照合してください。"
         if finding.kind == "hex-iv-values":
