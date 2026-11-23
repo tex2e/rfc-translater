@@ -156,11 +156,13 @@ CODE_HEADING_JOIN = re.compile(
 )
 XML_DECLARATION = re.compile(r"^<\?xml[ \t]+version[ \t]*=[^?]+\?>")
 XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
+GRAMMAR_HEADING = re.compile(r"\b(?:ABNF|CDDL)\b")
+FLATTENED_GRAMMAR = re.compile(r"^; [^\n]+? ; [^\n]+? \b[A-Za-z][A-Za-z0-9_-]* += +\S")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
     "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
-    "lladdr-option-length",
+    "lladdr-option-length", "grammar-as-prose",
 }
 
 
@@ -364,6 +366,7 @@ def sentence_split_start(rows, index, prior, en):
 def inspect(obj, include_nominal=False):
     references = False
     in_summary_checklist = False
+    in_grammar_section = False
     previous = None
     rows = obj["contents"]
     module_prose = dict(module_prose_indices(rows))
@@ -374,6 +377,7 @@ def inspect(obj, include_nominal=False):
         heading = row.get("section_title", False)
         if heading:
             in_summary_checklist = bool(CHECKLIST_HEADING.fullmatch(en))
+            in_grammar_section = bool(GRAMMAR_HEADING.search(en))
         references = update_reference_section_state(references, en, heading)
         prior = previous
         previous = en if en and not (heading or row.get("raw") or row.get("toc")) else None
@@ -387,6 +391,12 @@ def inspect(obj, include_nominal=False):
             continue
         if index in markup_prose:
             yield Finding(index, "xml-prose", "", en, "")
+            previous = None
+            continue
+        if (previous and in_grammar_section and FLATTENED_GRAMMAR.match(en)
+                and 0 < index < len(rows) - 1
+                and rows[index - 1].get("raw") and rows[index + 1].get("raw")):
+            yield Finding(index, "grammar-as-prose", "", en, "")
             previous = None
             continue
         if (prior and previous and not references

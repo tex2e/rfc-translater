@@ -207,6 +207,18 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings(first, {**tail, 'list_continuation': True}), [])
         self.assertEqual(findings({**first, 'text': first['text'] + ' fields.'}, tail), [])
 
+    def test_flattened_grammar_between_raw_rules_is_detected_in_grammar_section(self):
+        heading = body("Appendix A. ABNF Syntax", "付録 A. ABNF 構文", section_title=True)
+        first = body("component = begin-array", "", raw=True)
+        flattened = body("; A property has a name ; and a value. property = name value", "プロパティの説明。")
+        last = body("name = string", "", raw=True)
+        self.assertEqual([f.kind for f in findings(heading, first, flattened, last)], ["grammar-as-prose"])
+        self.assertEqual(findings(heading, first, {**flattened, "raw": True}, last), [])
+        self.assertEqual(findings(heading, first, flattened), [])
+        self.assertEqual(findings({**heading, "text": "Appendix A. Examples"}, first, flattened, last), [])
+        comment_only = {**flattened, "text": "; A property has a name ; and a value."}
+        self.assertEqual(findings(heading, first, comment_only, last), [])
+
     def test_merged_claim_registration_detects_joined_fields(self):
         fields = [
             'Claim Name: scope',
