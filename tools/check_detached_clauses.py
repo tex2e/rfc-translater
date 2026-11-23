@@ -131,7 +131,9 @@ FINITE_VERB = re.compile(
 )
 INCOMPLETE_SOURCE = re.compile(r"^(?:if|when|unless|(?:in order |so as )?to|because|for)\b", re.I)
 DANGLING_DETERMINER = re.compile(r"\b(?:the|a|an|this|that|these|those|aforementioned|following)$")
+DANGLING_OBJECT = re.compile(r"\b(?:involve|require) more (?:complex|detailed|extensive)$")
 SENTENCE_TAIL = re.compile(r"^[a-z][A-Za-z-]+(?:[ \t]+[a-z][A-Za-z-]+){0,2}\.[ \t]+[A-Z]")
+NAME_TAIL_BEFORE_CLAUSE = re.compile(r"^[A-Z][A-Z0-9-]+(?: [A-Z][a-z]+){1,3}, that\b")
 CITATION_WITHOUT_OBJECT = re.compile(r"\[RFC\d+\] (?:defines|describes|specifies)$")
 CITATION_OBJECT = re.compile(r"^(?:the|a|an) [^.!?\n]+\.[ \t]+[A-Z]")
 LIST_WITHOUT_INFORMATION = re.compile(r"^[o+*-]\s+.*\b(?:contain|include|provide)s? all the required$")
@@ -344,7 +346,8 @@ def sentence_split_start(rows, index, prior, en):
     prior_indent = previous_row.get("indent", 0)
     indent = row.get("indent", 0)
     if prior_indent == indent and (
-            (SENTENCE_TAIL.match(en) and DANGLING_DETERMINER.search(prior))
+            (SENTENCE_TAIL.match(en) and (DANGLING_DETERMINER.search(prior) or DANGLING_OBJECT.search(prior)))
+            or (NAME_TAIL_BEFORE_CLAUSE.match(en) and DANGLING_DETERMINER.search(prior))
             or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en))):
         return index - 1
     if indent > prior_indent and LIST_WITHOUT_INFORMATION.match(prior) and INFORMATION_TAIL.fullmatch(en):

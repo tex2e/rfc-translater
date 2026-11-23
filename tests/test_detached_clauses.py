@@ -170,6 +170,20 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings(start, {**tail, 'indent': 6}), [])
         self.assertEqual(findings({**start, 'text': start['text'] + ' specification.'}, tail), [])
 
+    def test_source_sentence_tail_can_complete_an_object_after_a_comparative(self):
+        start = body("The method can involve more complex", "このメソッドにはより複雑なものが含まれます。")
+        tail = body("processing. It is useful for complex requests.", "処理。複雑な要求に役立ちます。")
+        self.assertEqual([f.kind for f in findings(start, tail)], ["source-sentence-split"])
+        self.assertEqual(findings({**start, "text": "The method can be more complex"}, tail), [])
+        self.assertEqual(findings(start, {**tail, "indent": 6}), [])
+
+    def test_source_sentence_tail_can_complete_a_named_phrase(self):
+        start = body("The application must ensure, when applied below the", "以下に適用する場合に確認します。")
+        tail = body("FEC Framework, that both streams are valid.", "FEC フレームワーク。両方とも有効です。")
+        self.assertEqual([f.kind for f in findings(start, tail)], ["source-sentence-split"])
+        self.assertEqual(findings({**start, "text": start["text"] + " transport layer."}, tail), [])
+        self.assertEqual(findings(start, {**tail, "section_title": True}), [])
+
     def test_source_sentence_tail_can_complete_a_reference_clause(self):
         first = body('A handover is possible. [RFC9999] defines', '引き渡しが可能です。[RFC9999] は定めています。')
         tail = body('the specific requirements for an ownership handover procedure. It also gives examples.',
