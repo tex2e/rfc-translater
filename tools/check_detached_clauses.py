@@ -106,6 +106,8 @@ LIST_OR_LABEL = re.compile(
     re.IGNORECASE,
 )
 DOT_BULLET = re.compile(r"(?:^|\s)\.\s+")
+ALPHABETIC_ITEM = re.compile(r"^([A-Z])\.[ \t]+")
+JA_ALPHABETIC_ITEM = re.compile(r"^([A-Z])\.[ \t]*")
 ENUM_ENTRY = re.compile(r"\b\w+\(\d+\),?\s+when\b", re.IGNORECASE)
 FIELD_LABEL = re.compile(r"^[^.!?\n]{1,70}:\s*(?:\d+\s+(?:bits?|bytes?|octets?))?$", re.I)
 COPYRIGHT = re.compile(r"provided that the above copyright notice and this paragraph", re.I)
@@ -257,6 +259,21 @@ def is_numbered_subitem(en, ja, row, preceding, following):
             sibling = NUMBERED_SUBITEM.match(neighbor.get("text", "").strip())
             if (sibling and sibling["group"] == source["group"]
                     and int(sibling["item"]) == int(source["item"]) + step):
+                return True
+    return False
+
+
+def is_alphabetic_item(en, ja, row, preceding, following):
+    source = ALPHABETIC_ITEM.match(en)
+    translated = JA_ALPHABETIC_ITEM.match(ja)
+    if not source or not translated or source[1] != translated[1]:
+        return False
+    for neighbor, step in ((preceding, -1), (following, 1)):
+        if neighbor.get("indent", 0) == row.get("indent", 0) and not any(
+            neighbor.get(flag) for flag in ("raw", "section_title", "toc")
+        ):
+            sibling = ALPHABETIC_ITEM.match(neighbor.get("text", "").strip())
+            if sibling and ord(sibling[1]) == ord(source[1]) + step:
                 return True
     return False
 
@@ -489,8 +506,12 @@ def inspect(obj, include_nominal=False):
                             and following.get("indent", 0) > row.get("indent", 0)))
             for match in NOMINAL_FRAGMENT.finditer(ja):
                 if match.span() not in reported:
-                    is_item = (match.start() == 0 and match["ending"] == "こと"
-                               and is_numbered_subitem(en, translated, row, preceding, following))
+                    is_item = match.start() == 0 and (
+                        (match["ending"] == "こと"
+                         and is_numbered_subitem(en, translated, row, preceding, following))
+                        or (not ja[match.end():].strip()
+                            and is_alphabetic_item(en, translated, row, preceding, following))
+                    )
                     kind = "nominal-label" if is_label or is_item else "nominal-fragment"
                     yield Finding(index, kind, match["ending"], en, match[0].strip())
 

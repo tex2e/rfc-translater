@@ -438,6 +438,17 @@ class TestDetachedClauses(unittest.TestCase):
                      [{**first, "ja": first["ja"].replace("14.1", "14.9")}, second]):
             self.assertEqual(next(inspect({"contents": rows}, include_nominal=True)).kind, "nominal-fragment")
 
+    def test_alphabetic_item_requires_matching_marker_and_adjacent_sibling(self):
+        first = body("A. How packets reach receivers.", "A. パケットが受信者に届く方法。")
+        second = body("B. How senders choose receivers.", "B.送信者が受信者を選ぶ方法。")
+        self.assertEqual([f.kind for f in inspect({"contents": [first, second]}, include_nominal=True)],
+                         ["nominal-label", "nominal-label"])
+        for rows in ([first], [first, {**second, "indent": 7}], [first, {**second, "raw": True}],
+                     [first, body("C. How failures are handled.", "C. 障害時の処理方法。")],
+                     [{**first, "ja": first["ja"].replace("A.", "D.")}, second],
+                     [{**first, "ja": first["ja"] + "送信者が宛先を選びます。"}, second]):
+            self.assertEqual(next(inspect({"contents": rows}, include_nominal=True)).kind, "nominal-fragment")
+
     def test_value_type_description_requires_the_label_and_nested_indent(self):
         label = body("Value type:", "値タイプ：")
         value_type = body("A single timestamp value.", "単一のタイムスタンプ値。", indent=12)
