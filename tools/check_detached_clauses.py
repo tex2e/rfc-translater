@@ -136,6 +136,12 @@ SENTENCE_TAIL = re.compile(r"^[a-z][A-Za-z-]+(?:[ \t]+[a-z][A-Za-z-]+){0,2}\.[ \
 NAME_TAIL_BEFORE_CLAUSE = re.compile(r"^[A-Z][A-Z0-9-]+(?: [A-Z][a-z]+){1,3}, that\b")
 CITATION_WITHOUT_OBJECT = re.compile(r"\[RFC\d+\] (?:defines|describes|specifies)$")
 CITATION_OBJECT = re.compile(r"^(?:the|a|an) [^.!?\n]+\.[ \t]+[A-Z]")
+QUOTED_LIST_HEAD = re.compile(r'"[^"\n]+",\s+"[^"\n]+",$')
+QUOTED_LIST_TAIL = re.compile(r'^"[^"\n]+",\s+(?:and\s+)?"[^"\n]+"')
+UNFINISHED_ENUMERATION = re.compile(r", ensuring$")
+ENUMERATION_TAIL = re.compile(r"^[a-z][^.!?\n]*, [^.!?\n]*, and [^.!?\n]+\.$")
+UNFINISHED_RANGE = re.compile(r"\bfrom [0-9]+$")
+RANGE_TAIL = re.compile(r"^to [0-9]+ to\s")
 LIST_WITHOUT_INFORMATION = re.compile(r"^[o+*-]\s+.*\b(?:contain|include|provide)s? all the required$")
 INFORMATION_TAIL = re.compile(r"^information (?:to|for|about) [^\n]+\.$")
 STANDALONE_URL = re.compile(r"https?://[^\s<>]+")
@@ -350,7 +356,11 @@ def sentence_split_start(rows, index, prior, en):
     if prior_indent == indent and (
             (SENTENCE_TAIL.match(en) and (DANGLING_DETERMINER.search(prior) or DANGLING_OBJECT.search(prior)))
             or (NAME_TAIL_BEFORE_CLAUSE.match(en) and DANGLING_DETERMINER.search(prior))
-            or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en))):
+            or (CITATION_WITHOUT_OBJECT.search(prior) and CITATION_OBJECT.match(en))
+            or (not prior.startswith('"') and QUOTED_LIST_HEAD.search(prior) and QUOTED_LIST_TAIL.match(en))
+            or (UNFINISHED_ENUMERATION.search(prior) and ENUMERATION_TAIL.fullmatch(en))):
+        return index - 1
+    if indent >= prior_indent and UNFINISHED_RANGE.search(prior) and RANGE_TAIL.match(en):
         return index - 1
     if indent > prior_indent and LIST_WITHOUT_INFORMATION.match(prior) and INFORMATION_TAIL.fullmatch(en):
         return index - 1

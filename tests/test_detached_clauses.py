@@ -192,6 +192,29 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings({**first, 'text': first['text'] + ' a procedure.'}, tail), [])
         self.assertEqual(findings(first, {**tail, 'text': tail['text'].capitalize()}), [])
 
+    def test_source_sentence_split_can_continue_a_quoted_list(self):
+        first = body('This document uses the terms "access token", "endpoint",', 'この文書では次の用語を使います。')
+        tail = body('"client", "authorization server", and "redirect".', 'クライアント、認可サーバー、リダイレクト。')
+        self.assertEqual([f.kind for f in findings(first, tail)], ["source-sentence-split"])
+        self.assertEqual(findings({**first, "text": first["text"].rstrip(",") + "."}, tail), [])
+        self.assertEqual(findings(first, {**tail, "indent": 6}), [])
+        dictionary = body('"ABLE", "ACID",', '"ABLE", "ACID",')
+        self.assertEqual(findings(dictionary, tail), [])
+
+    def test_source_sentence_split_can_continue_an_enumeration_with_ensuring(self):
+        first = body("This section covers protecting documents, ensuring", "この節では文書の保護を扱います。")
+        tail = body("proper authentication, data integrity, and transport security.", "適切な認証、完全性、安全性。")
+        self.assertEqual([f.kind for f in findings(first, tail)], ["source-sentence-split"])
+        self.assertEqual(findings({**first, "text": first["text"] + " security."}, tail), [])
+        self.assertEqual(findings(first, {**tail, "list_continuation": True}), [])
+
+    def test_source_sentence_split_can_continue_an_indented_numeric_range(self):
+        first = body("It may be set to any value from 1", "1 からの任意の値に設定できます。")
+        tail = body("to 7 to indicate a non-default priority.", "7 からデフォルト以外の優先度を示します。", indent=6)
+        self.assertEqual([f.kind for f in findings(first, tail)], ["source-sentence-split"])
+        self.assertEqual(findings({**first, "text": first["text"] + " to 7."}, tail), [])
+        self.assertEqual(findings(first, {**tail, "raw": True}), [])
+
     def test_source_sentence_split_across_an_indented_url(self):
         first = body('The interface is maintained separately. See', '別のグループが管理しています。')
         url = body('https://example.org/interface', 'https://example.org/interface', indent=6)
