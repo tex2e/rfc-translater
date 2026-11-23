@@ -427,6 +427,17 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual([(f.index, f.kind) for f in inspect(obj, include_nominal=True)],
                          [(0, "nominal-label"), (1, "nominal-fragment"), (2, "nominal-fragment")])
 
+    def test_numbered_requirement_requires_matching_number_and_adjacent_sibling(self):
+        first = body("14.1) Data integrity: protect the object,", "14.1) データの完全性を保護すること。")
+        second = body("14.2) Data confidentiality: protect stored objects.",
+                      "14.2）保存したオブジェクトを保護すること。追加の例。")
+        expected = [(0, "nominal-label"), (1, "nominal-label"), (1, "nominal-fragment")]
+        self.assertEqual([(f.index, f.kind) for f in inspect({"contents": [first, second]}, include_nominal=True)],
+                         expected)
+        for rows in ([first], [first, {**second, "indent": 6}],
+                     [{**first, "ja": first["ja"].replace("14.1", "14.9")}, second]):
+            self.assertEqual(next(inspect({"contents": rows}, include_nominal=True)).kind, "nominal-fragment")
+
     def test_value_type_description_requires_the_label_and_nested_indent(self):
         label = body("Value type:", "値タイプ：")
         value_type = body("A single timestamp value.", "単一のタイムスタンプ値。", indent=12)

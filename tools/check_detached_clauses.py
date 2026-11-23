@@ -19,6 +19,7 @@ NOMINAL_FRAGMENT = re.compile(
 )
 STANDALONE_NOMINAL = re.compile(r"(?<=。)[ \t]*(?P<ending>範囲|情報|処理|値)。(?=\s*$)")
 NOMINAL_LABELS = {"Examples.": "例。", "Requirement.": "要件。"}
+NUMBERED_SUBITEM = re.compile(r"(?P<group>[0-9]+)\.(?P<item>[0-9]+)[)）]\s*")
 IANA_REGISTRY_RANGE = re.compile(r"(?P<bounds>[0-9]+-[0-9]+): [Rr]ange available to IANA for assignment in this registry\.")
 INLINE_NOMINAL_LABELS = {
     ("Additional requirements: Additional requirements on the parameter value.",
@@ -244,6 +245,20 @@ def is_contextual_nominal_label(en, ja, row, preceding, following):
     if re.fullmatch(r"(?:Exclude-Any|Include-Any|Include-All) EAG:", prior_text):
         return (en, ja) == ("The EAG value, as defined in [RFC9350].", "[RFC9350]で定義されているEAG値。")
     return prior_text.endswith(":") and (en, ja) == ("Part of L2.", "L2の一部。")
+
+
+def is_numbered_subitem(en, ja, row, preceding, following):
+    source = NUMBERED_SUBITEM.match(en)
+    translated = NUMBERED_SUBITEM.match(ja)
+    if not source or not translated or source.groupdict() != translated.groupdict():
+        return False
+    for neighbor, step in ((preceding, -1), (following, 1)):
+        if neighbor.get("indent") == row.get("indent"):
+            sibling = NUMBERED_SUBITEM.match(neighbor.get("text", "").strip())
+            if (sibling and sibling["group"] == source["group"]
+                    and int(sibling["item"]) == int(source["item"]) + step):
+                return True
+    return False
 
 
 def module_prose_indices(rows):
@@ -474,7 +489,9 @@ def inspect(obj, include_nominal=False):
                             and following.get("indent", 0) > row.get("indent", 0)))
             for match in NOMINAL_FRAGMENT.finditer(ja):
                 if match.span() not in reported:
-                    kind = "nominal-label" if is_label else "nominal-fragment"
+                    is_item = (match.start() == 0 and match["ending"] == "こと"
+                               and is_numbered_subitem(en, translated, row, preceding, following))
+                    kind = "nominal-label" if is_label or is_item else "nominal-fragment"
                     yield Finding(index, kind, match["ending"], en, match[0].strip())
 
 
