@@ -164,11 +164,12 @@ XML_DECLARATION = re.compile(r"^<\?xml[ \t]+version[ \t]*=[^?]+\?>")
 XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 GRAMMAR_HEADING = re.compile(r"\b(?:ABNF|CDDL)\b")
 FLATTENED_GRAMMAR = re.compile(r"^; [^\n]+? ; [^\n]+? \b[A-Za-z][A-Za-z0-9_-]* += +\S")
+DER_OID_EXAMPLE = re.compile(r"^[^\n]+: 30 [0-9A-F]{2} 06 [0-9A-F]{2}(?: [0-9A-F]{2}){12,}$")
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
     "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
-    "lladdr-option-length", "grammar-as-prose",
+    "lladdr-option-length", "grammar-as-prose", "der-example-as-prose",
 }
 
 
@@ -407,6 +408,10 @@ def inspect(obj, include_nominal=False):
                 and 0 < index < len(rows) - 1
                 and rows[index - 1].get("raw") and rows[index + 1].get("raw")):
             yield Finding(index, "grammar-as-prose", "", en, "")
+            previous = None
+            continue
+        if previous and row.get("indent", 0) >= 6 and DER_OID_EXAMPLE.fullmatch(en):
+            yield Finding(index, "der-example-as-prose", "", en, "")
             previous = None
             continue
         if (prior and previous and not references

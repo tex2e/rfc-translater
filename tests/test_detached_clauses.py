@@ -242,6 +242,15 @@ class TestDetachedClauses(unittest.TestCase):
         comment_only = {**flattened, "text": "; A property has a name ; and a value."}
         self.assertEqual(findings(heading, first, comment_only, last), [])
 
+    def test_indented_der_example_is_detected_when_joined_with_its_caption(self):
+        caption = body("Example of an algorithm identifier:", "アルゴリズム識別子の例です。", indent=6)
+        vector = "30 15 06 06 2B 81 04 01 0B 02 30 0B 06 09 60 86 48 01 65 03 04 01 05"
+        flattened = {**caption, "text": f"{caption['text']} {vector}"}
+        self.assertEqual([f.kind for f in findings(flattened)], ["der-example-as-prose"])
+        self.assertEqual(findings(caption, body(vector, "", raw=True, indent=9)), [])
+        self.assertEqual(findings({**flattened, "indent": 3}), [])
+        self.assertEqual(findings({**flattened, "text": caption["text"] + " 30 15 06 06 2B"}), [])
+
     def test_merged_claim_registration_detects_joined_fields(self):
         fields = [
             'Claim Name: scope',
