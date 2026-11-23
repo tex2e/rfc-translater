@@ -164,6 +164,8 @@ XML_DECLARATION = re.compile(r"^<\?xml[ \t]+version[ \t]*=[^?]+\?>")
 XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 GRAMMAR_HEADING = re.compile(r"\b(?:ABNF|CDDL)\b")
 FLATTENED_GRAMMAR = re.compile(r"^; [^\n]+? ; [^\n]+? \b[A-Za-z][A-Za-z0-9_-]* += +\S")
+PSEUDOCODE_HEADING = re.compile(r"\bpseudo[- ]?code\b", re.I)
+COMMENTED_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*-?[0-9]+[ \t]+#[ \t]+\S")
 DER_OID_EXAMPLE = re.compile(r"^[^\n]+: 30 [0-9A-F]{2} 06 [0-9A-F]{2}(?: [0-9A-F]{2}){12,}$")
 FLATTENED_SIP = re.compile(r"^(?:[A-Z]+ sips?:\S+ SIP/2\.0|SIP/2\.0 [1-6][0-9]{2} [^\n]+?) Via: SIP/2\.0/")
 DNS_NAME = r"(?:[A-Za-z0-9_-]+\.)+"
@@ -175,6 +177,7 @@ CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
     "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
     "lladdr-option-length", "grammar-as-prose", "der-example-as-prose", "sip-message-as-prose", "soa-record-as-prose",
+    "pseudocode-as-prose",
 }
 
 
@@ -383,6 +386,7 @@ def inspect(obj, include_nominal=False):
     references = False
     in_summary_checklist = False
     in_grammar_section = False
+    in_pseudocode_section = False
     previous = None
     rows = obj["contents"]
     module_prose = dict(module_prose_indices(rows))
@@ -394,6 +398,7 @@ def inspect(obj, include_nominal=False):
         if heading:
             in_summary_checklist = bool(CHECKLIST_HEADING.fullmatch(en))
             in_grammar_section = bool(GRAMMAR_HEADING.search(en))
+            in_pseudocode_section = bool(PSEUDOCODE_HEADING.search(en))
         references = update_reference_section_state(references, en, heading)
         prior = previous
         previous = en if en and not (heading or row.get("raw") or row.get("toc")) else None
@@ -425,6 +430,10 @@ def inspect(obj, include_nominal=False):
             continue
         if previous and FLATTENED_SOA.fullmatch(en):
             yield Finding(index, "soa-record-as-prose", "", en, "")
+            previous = None
+            continue
+        if previous and in_pseudocode_section and COMMENTED_ASSIGNMENT.match(en):
+            yield Finding(index, "pseudocode-as-prose", "", en, "")
             previous = None
             continue
         if (prior and previous and not references

@@ -266,6 +266,15 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings({**record, "text": record["text"].replace("604800 ", "")}), [])
         self.assertEqual(findings({**record, "text": "The following record is an example: " + record["text"]}), [])
 
+    def test_commented_assignment_is_detected_in_pseudocode_section(self):
+        heading = body("Appendix A. Load Rate Adjustment Pseudocode", "付録 A. 擬似コード", section_title=True)
+        code = body("step = 3 # initial step # for this example", "初期値。")
+        example = body("Initialize step = 3 before comparing values.", "比較の前に step を 3 にします。")
+        self.assertEqual([f.kind for f in findings(heading, example, code)], ["pseudocode-as-prose"])
+        self.assertEqual(findings(heading, {**code, "raw": True}), [])
+        self.assertEqual(findings({**heading, "text": "Appendix A. Examples"}, code), [])
+        self.assertEqual(findings(heading, {**heading, "text": "Appendix B. References"}, code), [])
+
     def test_merged_claim_registration_detects_joined_fields(self):
         fields = [
             'Claim Name: scope',
