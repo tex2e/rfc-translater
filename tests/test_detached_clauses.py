@@ -327,6 +327,22 @@ class TestDetachedClauses(unittest.TestCase):
                          [])
         self.assertEqual([f.index for f in introduced([], existing)], [1])
 
+    def test_tagged_asn1_module_may_start_across_multiple_rows(self):
+        identifier = body("Example {iso(1) identified-organization(3)\n  example(1)}", "", raw=True)
+        mode = body("DEFINITIONS EXPLICIT TAGS ::=", "", raw=True)
+        begin = body("BEGIN", "開始")
+        definition = body("ExampleType ::= INTEGER", "整数")
+        end = body("END", "", raw=True)
+        complete = [identifier, mode, begin, definition, end]
+        self.assertEqual([(f.index, f.kind) for f in findings(*complete)],
+                         [(2, "asn1-prose"), (3, "asn1-prose")])
+        self.assertEqual(findings(*complete[:-1]), [])
+        self.assertEqual(findings(*complete[1:]), [])
+        self.assertEqual(findings(identifier, {**mode, "section_title": True}, begin, definition, end), [])
+
+        inline = body("Example {iso(1)} DEFINITIONS AUTOMATIC TAGS ::= BEGIN", "", raw=True)
+        self.assertEqual([f.kind for f in findings(inline, definition, end)], ["asn1-prose"])
+
     def test_asn1_module_continues_beyond_nested_macro_end(self):
         start = body('SNMPv2-TC DEFINITIONS ::= BEGIN', '', raw=True)
         macro = body('TEXTUAL-CONVENTION MACRO ::= BEGIN\n    TYPE NOTATION ::= Text\nEND', '', raw=True)

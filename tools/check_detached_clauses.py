@@ -153,7 +153,8 @@ MERGED_CLAIM_REGISTRATION = re.compile(
 CHECKLIST_HEADING = re.compile(r"^(?:\d+\.)+\s*Summary Checklist$")
 MERGED_CHECKLIST_ITEM = re.compile(r"^[A-Z][^\n]*? _ [A-Z]")
 ASN1_BOUNDARY = re.compile(
-    r"^[ \t]*(?:(?P<module>[A-Z][A-Za-z0-9-]*)[ \t]+DEFINITIONS[ \t]+::=[ \t]+BEGIN"
+    r"^[ \t]*(?:(?P<module>[A-Z][A-Za-z0-9-]*)(?:\s+\{[^{}]+\})?\s+"
+    r"DEFINITIONS(?:\s+(?:EXPLICIT|IMPLICIT|AUTOMATIC)\s+TAGS)?\s*::=\s*BEGIN"
     r"|(?P<begin>(?:[A-Z][A-Za-z0-9-]*[ \t]+MACRO[ \t]+::=[ \t]+)?BEGIN)|(?P<end>END))[ \t]*$",
     re.M,
 )
@@ -307,12 +308,27 @@ def module_prose_indices(rows):
         if row.get("section_title") or row.get("toc"):
             module = None
             continue
-        if module is None and "DEFINITIONS" not in en:
+        header = en
+        if en.strip() == "BEGIN":
+            # Some legacy modules store their identifier, tagging mode, and BEGIN as separate rows.
+            for size in (2, 3):
+                start = index + 1 - size
+                if start < 0:
+                    break
+                preceding = rows[start:index]
+                if not all(part.get("raw") and not (part.get("toc") or part.get("section_title"))
+                           for part in preceding):
+                    break
+                joined = "\n".join(part["text"] for part in (*preceding, row))
+                if (boundary := ASN1_BOUNDARY.fullmatch(joined)) and boundary["module"]:
+                    header = joined
+                    break
+        if module is None and "DEFINITIONS" not in header:
             continue
         is_prose = bool(en.strip() and not row.get("raw"))
         if module is not None and is_prose:
             pending.append(index)
-        for boundary in ASN1_BOUNDARY.finditer(en):
+        for boundary in ASN1_BOUNDARY.finditer(header):
             if name := boundary["module"]:
                 module, depth = name, 1
                 pending = [index] if is_prose else []
