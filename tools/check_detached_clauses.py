@@ -165,11 +165,16 @@ XML_ROOT = re.compile(r"<([A-Za-z_][\w.:-]*)(?=[\s/>])")
 GRAMMAR_HEADING = re.compile(r"\b(?:ABNF|CDDL)\b")
 FLATTENED_GRAMMAR = re.compile(r"^; [^\n]+? ; [^\n]+? \b[A-Za-z][A-Za-z0-9_-]* += +\S")
 DER_OID_EXAMPLE = re.compile(r"^[^\n]+: 30 [0-9A-F]{2} 06 [0-9A-F]{2}(?: [0-9A-F]{2}){12,}$")
+FLATTENED_SIP = re.compile(r"^(?:[A-Z]+ sips?:\S+ SIP/2\.0|SIP/2\.0 [1-6][0-9]{2} [^\n]+?) Via: SIP/2\.0/")
+DNS_NAME = r"(?:[A-Za-z0-9_-]+\.)+"
+FLATTENED_SOA = re.compile(
+    rf"^{DNS_NAME} +[0-9]+ +IN +SOA +{DNS_NAME} +{DNS_NAME} +\( *(?:[0-9]+ +){{4}}[0-9]+ *\)$"
+)
 CI_WARNING_KINDS = BOILERPLATE_KINDS | {
     "detached-clause", "mib-prose", "asn1-prose", "code-heading-join", "source-sentence-split", "xml-prose",
     "cardinality-mismatch", "standalone-nominal", "json-integer-range", "ipp-status-negation", "type-assignment",
     "octet-formula", "ipp-language-length", "short-port-formula", "hex-default-value", "hex-iv-values", "dns-query-fields", "merged-claim-registration", "merged-checklist-item",
-    "lladdr-option-length", "grammar-as-prose", "der-example-as-prose",
+    "lladdr-option-length", "grammar-as-prose", "der-example-as-prose", "sip-message-as-prose", "soa-record-as-prose",
 }
 
 
@@ -412,6 +417,14 @@ def inspect(obj, include_nominal=False):
             continue
         if previous and row.get("indent", 0) >= 6 and DER_OID_EXAMPLE.fullmatch(en):
             yield Finding(index, "der-example-as-prose", "", en, "")
+            previous = None
+            continue
+        if previous and FLATTENED_SIP.match(en):
+            yield Finding(index, "sip-message-as-prose", "", en, "")
+            previous = None
+            continue
+        if previous and FLATTENED_SOA.fullmatch(en):
+            yield Finding(index, "soa-record-as-prose", "", en, "")
             previous = None
             continue
         if (prior and previous and not references

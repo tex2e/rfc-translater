@@ -251,6 +251,21 @@ class TestDetachedClauses(unittest.TestCase):
         self.assertEqual(findings({**flattened, "indent": 3}), [])
         self.assertEqual(findings({**flattened, "text": caption["text"] + " 30 15 06 06 2B"}), [])
 
+    def test_sip_example_requires_request_or_status_line_followed_by_via_header(self):
+        for start in ("OPTIONS sip:example.com SIP/2.0", "SIP/2.0 200 OK"):
+            flattened = body(f"{start} Via: SIP/2.0/TCP example.com", "SIP メッセージの例。")
+            self.assertEqual([f.kind for f in findings(flattened)], ["sip-message-as-prose"])
+            self.assertEqual(findings({**flattened, "raw": True}), [])
+            self.assertEqual(findings({**flattened, "text": "For example: " + flattened["text"]}), [])
+            self.assertEqual(findings({**flattened, "text": start}), [])
+
+    def test_soa_example_requires_a_complete_record(self):
+        record = body("example. 900 IN SOA ns.example. admin.example. ( 1 1800 900 604800 86400 )", "例。")
+        self.assertEqual([f.kind for f in findings(record)], ["soa-record-as-prose"])
+        self.assertEqual(findings({**record, "raw": True}), [])
+        self.assertEqual(findings({**record, "text": record["text"].replace("604800 ", "")}), [])
+        self.assertEqual(findings({**record, "text": "The following record is an example: " + record["text"]}), [])
+
     def test_merged_claim_registration_detects_joined_fields(self):
         fields = [
             'Claim Name: scope',
