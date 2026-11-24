@@ -1,0 +1,828 @@
+{
+  "title": {
+    "text": "RFC 10087 - Extensible Provisioning Protocol (EPP) Transport over QUIC",
+    "ja": "RFC 10087 - QUIC上のExtensible Provisioning Protocol (EPP)トランスポート"
+  },
+  "number": 10087,
+  "created_at": "2026-11-24 02:34:53.588033+09:00",
+  "updated_by": "",
+  "contents": [
+    {
+      "indent": 0,
+      "text": "Internet Engineering Task Force (IETF)                            J. Yao\nRequest for Comments: 10087                                        H. Li\nCategory: Standards Track                                       M. Zhang\nISSN: 2070-1721                                                    CNNIC\n                                                             D. Keathley\n                                                                J. Gould\n                                                          VeriSign, Inc.\n                                                           November 2026",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Extensible Provisioning Protocol (EPP) Transport over QUIC",
+      "section_title": true,
+      "ja": "QUIC上のExtensible Provisioning Protocol (EPP)トランスポート"
+    },
+    {
+      "indent": 0,
+      "text": "Abstract",
+      "section_title": true,
+      "ja": "概要"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies how an Extensible Provisioning Protocol (EPP) session is mapped onto a QUIC connection. EPP over QUIC (EoQ) leverages features of the QUIC protocol.",
+      "ja": "この文書は、Extensible Provisioning Protocol (EPP) セッションをQUIC接続にマッピングする方法を規定します。EPP over QUIC (EoQ) は、QUICプロトコルの機能を活用します。"
+    },
+    {
+      "indent": 0,
+      "text": "Status of This Memo",
+      "section_title": true,
+      "ja": "本メモの位置付け"
+    },
+    {
+      "indent": 3,
+      "text": "This is an Internet Standards Track document.",
+      "ja": "これはInternet Standards Trackの文書です。"
+    },
+    {
+      "indent": 3,
+      "text": "This document is a product of the Internet Engineering Task Force (IETF). It represents the consensus of the IETF community. It has received public review and has been approved for publication by the Internet Engineering Steering Group (IESG). Further information on Internet Standards is available in Section 2 of RFC 7841.",
+      "ja": "この文書はInternet Engineering Task Force (IETF) の成果物です。IETFコミュニティのコンセンサスを表しています。この文書は公開レビューを受け、Internet Engineering Steering Group (IESG) により発行が承認されています。Internet Standardsに関する詳細は、RFC 7841のセクション2で入手できます。"
+    },
+    {
+      "indent": 3,
+      "text": "Information about the current status of this document, any errata, and how to provide feedback on it may be obtained at https://www.rfc-editor.org/info/rfc10087.",
+      "ja": "この文書の現在の状態、正誤表、およびフィードバックの方法に関する情報は、https://www.rfc-editor.org/info/rfc10087 で入手できます。"
+    },
+    {
+      "indent": 0,
+      "text": "Copyright Notice",
+      "section_title": true,
+      "ja": "著作権表示"
+    },
+    {
+      "indent": 3,
+      "text": "Copyright (c) 2026 IETF Trust and the persons identified as the document authors. All rights reserved.",
+      "ja": "著作権 (c) 2026 IETF Trustおよび文書の著者として特定された人々。All rights reserved."
+    },
+    {
+      "indent": 3,
+      "text": "This document is subject to BCP 78 and the IETF Trust's Legal Provisions Relating to IETF Documents (https://trustee.ietf.org/license-info) in effect on the date of publication of this document. Please review these documents carefully, as they describe your rights and restrictions with respect to this document. Code Components extracted from this document must include Revised BSD License text as described in Section 4.e of the Trust Legal Provisions and are provided without warranty as described in the Revised BSD License.",
+      "ja": "この文書は、BCP 78、およびこの文書の発行日時点で有効なIETF Trustの IETF文書に関する法的規定 (https://trustee.ietf.org/license-info) の適用を受けます。これらの文書は、この文書に関するあなたの権利と制限を記述しているため、注意深く確認してください。この文書から抽出されるコードコンポーネントには、Trust Legal Provisionsのセクション4.eに記載されているRevised BSD Licenseのテキストを含めなければならず、Revised BSD Licenseに記載されているとおり無保証で提供されます。"
+    },
+    {
+      "indent": 0,
+      "text": "Table of Contents",
+      "section_title": true,
+      "ja": "目次"
+    },
+    {
+      "indent": 3,
+      "text": "1.  Introduction\n2.  Terminology\n3.  Session Management\n4.  Message Exchange\n5.  Data Unit Format\n6.  EoQ Connection Start Packet\n7.  Transport Considerations\n8.  Operational Considerations\n  8.1.  Clients Fall Back with Management of Multiple Transport\n  8.2.  Port Number Reuse\n  8.3.  QUIC Support Announcement and Discovery\n  8.4.  Configuration Parameters\n  8.5.  Diagnostic and Troubleshooting\n  8.6.  Address Validation\n  8.7.  Authentication Considerations\n  8.8.  0-RTT and Session Resumption\n  8.9.  MTU and Fragmentation\n9.  IANA Considerations\n  9.1.  Registration of an EoQ Identification String\n  9.2.  Registration of Port Number\n10. Security Considerations\n11. References\n  11.1.  Normative References\n  11.2.  Informative References\nAcknowledgements\nAuthors' Addresses",
+      "raw": true,
+      "toc": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "1. Introduction",
+      "section_title": true,
+      "ja": "1. はじめに"
+    },
+    {
+      "indent": 3,
+      "text": "This document specifies how the Extensible Provisioning Protocol (EPP) [RFC5730] is mapped onto QUIC transport [RFC9000]. QUIC is a protocol that is based on UDP and incorporates encryption support using TLS [RFC9001]. Though based on UDP, QUIC provides connection semantics like other stateful protocols. This document discusses how EPP implementations can work with this and other features of QUIC while preserving the core EPP semantics.",
+      "ja": "この文書は、Extensible Provisioning Protocol (EPP) [RFC5730] をQUICトランスポート [RFC9000] にマッピングする方法を規定します。QUICはUDPに基づくプロトコルであり、TLS [RFC9001] による暗号化サポートを組み込んでいます。QUICはUDPに基づいていますが、他のステートフルなプロトコルと同様に接続のセマンティクスを提供します。この文書では、EPPのコアセマンティクスを維持しながら、EPP実装がこの機能やQUICの他の機能とどのように連携できるかを論じます。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP sessions use a single QUIC stream for all command and response exchanges throughout the session lifecycle. Unlike stateless transaction protocols that permit per-command independent streams, EPP is a stateful protocol with inherent sequential command dependencies defined in [RFC5730]. Maintaining a single stream preserves ordered transaction processing, consistent session state, and full compatibility with existing EPP operational and implementation models.",
+      "ja": "EPPセッションは、セッションのライフサイクル全体を通じて、すべてのコマンドとレスポンスの交換に単一のQUICストリームを使用します。コマンドごとに独立したストリームを許容するステートレスなトランザクションプロトコルとは異なり、EPPは、[RFC5730] で定義された、コマンド間の逐次的な依存関係を本質的に持つステートフルなプロトコルです。単一のストリームを維持することで、順序付けられたトランザクション処理、一貫したセッション状態、および既存のEPPの運用モデルおよび実装モデルとの完全な互換性が保たれます。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP [RFC5730] was designed for pluggability of transports that must follow Section 2.1 of [RFC5730]. EoQ defines a fully pluggable QUIC transport for EPP as an alternative to other EPP transports, such as EPP over TCP (EoT) [RFC5734]. The server can choose to offer EoQ in addition to EoT or as a replacement for EoT, based on the security and performance considerations of QUIC and the preferred deployment architecture of the server and clients.",
+      "ja": "EPP [RFC5730] は、[RFC5730] のセクション2.1に従わなければならないトランスポートを差し替え可能にするよう設計されました。EoQは、EPP over TCP (EoT) [RFC5734] などの他のEPPトランスポートの代替として、EPP向けの完全に差し替え可能なQUICトランスポートを定義します。サーバは、QUICのセキュリティおよび性能上の考慮事項と、サーバおよびクライアントが好む展開アーキテクチャに基づいて、EoTに加えて、またはEoTの代わりにEoQを提供することを選択できます。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP is primarily deployed for communication between domain registries and registrars, which commonly run many concurrent EPP sessions. Conventional EPP over TCP (EoT) requires a dedicated TCP connection for every single EPP session, resulting in connection overhead and resource consumption. EoQ addresses this issue by leveraging QUIC stream multiplexing: multiple independent EPP sessions can run over one single persistent QUIC connection.",
+      "ja": "EPPは主に、ドメインのレジストリとレジストラの間の通信に展開されており、これらは一般に多数の同時EPPセッションを実行します。従来のEPP over TCP (EoT) では、EPPセッションごとに専用のTCP接続が必要となり、接続のオーバーヘッドとリソース消費が生じます。EoQは、QUICストリームの多重化を活用することでこの問題に対処します。複数の独立したEPPセッションを、1本の永続的なQUIC接続上で実行できます。"
+    },
+    {
+      "indent": 0,
+      "text": "2. Terminology",
+      "section_title": true,
+      "ja": "2. 用語"
+    },
+    {
+      "indent": 3,
+      "text": "This document makes use of the following terms:",
+      "ja": "この文書では、次の用語を使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ:",
+      "ja": "EoQ:"
+    },
+    {
+      "indent": 12,
+      "text": "The acronym used for the EPP-over-QUIC transport that defines the use of QUIC as an EPP transport following the considerations in Section 2.1 of [RFC5730].",
+      "ja": "[RFC5730] のセクション2.1の考慮事項に従い、QUICをEPPトランスポートとして使用することを定義するEPP-over-QUICトランスポートに用いる略称です。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ connection:",
+      "ja": "EoQ接続:"
+    },
+    {
+      "indent": 12,
+      "text": "Is a client-initiated bidirectional QUIC stream established on a QUIC connection using the \"EoQ\" Application-Layer Protocol Negotiation (ALPN) [RFC7301] value. The EoQ connection maps to the client-server connection defined in Section 2.1 of [RFC5730], where the server returns an EPP <greeting>. A single QUIC connection supports many EoQ connections.",
+      "ja": "\"EoQ\" Application-Layer Protocol Negotiation (ALPN) [RFC7301] 値を使用して、QUIC接続上に確立される、クライアントが開始する双方向のQUICストリームです。EoQ接続は、[RFC5730] のセクション2.1で定義されるクライアント-サーバ接続に対応し、サーバはその上でEPP <greeting> を返します。1本のQUIC接続は、多数のEoQ接続をサポートします。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ session:",
+      "ja": "EoQセッション:"
+    },
+    {
+      "indent": 12,
+      "text": "Is an authenticated EoQ connection, which occurs after a successful EPP <login>.",
+      "ja": "EPP <login> の成功後に生じる、認証済みのEoQ接続です。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ Connection Start Packet:",
+      "ja": "EoQ Connection Start Packet:"
+    },
+    {
+      "indent": 12,
+      "text": "Used by clients to complete the creation of an EoQ connection by signaling the server to create the QUIC stream and return the EPP <greeting> needed for an EPP connection. Section 6 formally defines the EoQ Connection Start Packet.",
+      "ja": "クライアントが、サーバにQUICストリームの作成とEPP接続に必要なEPP <greeting> の返却を促すことで、EoQ接続の作成を完了するために使用します。セクション6でEoQ Connection Start Packetを正式に定義します。"
+    },
+    {
+      "indent": 3,
+      "text": "The key words \"MUST\", \"MUST NOT\", \"REQUIRED\", \"SHALL\", \"SHALL NOT\", \"SHOULD\", \"SHOULD NOT\", \"RECOMMENDED\", \"NOT RECOMMENDED\", \"MAY\", and \"OPTIONAL\" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.",
+      "ja": "この文書におけるキーワード \"MUST\"、\"MUST NOT\"、\"REQUIRED\"、\"SHALL\"、\"SHALL NOT\"、\"SHOULD\"、\"SHOULD NOT\"、\"RECOMMENDED\"、\"NOT RECOMMENDED\"、\"MAY\"、\"OPTIONAL\" は、ここに示されているとおりすべて大文字で現れる場合に限り、BCP 14 [RFC2119] [RFC8174] で記述されているとおりに解釈します。"
+    },
+    {
+      "indent": 0,
+      "text": "3. Session Management",
+      "section_title": true,
+      "ja": "3. セッション管理"
+    },
+    {
+      "indent": 3,
+      "text": "Mapping EPP session management facilities onto the QUIC service is accomplished with a combination of a QUIC connection with the \"EoQ\" ALPN [RFC7301] value and client-initiated, bidirectional QUIC streams. QUIC supports four stream types (Section 2.1 of [RFC9000]), but EoQ only supports the client-initiated, bidirectional stream type.",
+      "ja": "EPPのセッション管理機能をQUICサービスにマッピングするには、\"EoQ\" ALPN [RFC7301] 値を持つQUIC接続と、クライアントが開始する双方向のQUICストリームを組み合わせます。QUICは4種類のストリームタイプ ([RFC9000] のセクション2.1) をサポートしますが、EoQはクライアントが開始する双方向のストリームタイプのみをサポートします。"
+    },
+    {
+      "indent": 3,
+      "text": "As shown in Figure 1, an EPP session first requires creation of a QUIC connection between two peers, one that initiates the connection request and one that responds to the connection request. The initiating peer is called the \"client\", and the responding peer is called the \"server\". By default, an EPP server MUST listen for QUIC connection requests on the well-known UDP port number updated by IANA (see Section 9.2), unless there is a mutual agreement to use another port number.",
+      "ja": "図1に示すように、EPPセッションでは、まず2つのピア間にQUIC接続を作成する必要があります。一方のピアは接続要求を開始し、もう一方は接続要求に応答します。開始するピアを「クライアント」、応答するピアを「サーバ」と呼びます。デフォルトでは、双方が別のポート番号を使用することに合意している場合を除き、EPPサーバはIANAによって更新されたウェルノウンUDPポート番号 (セクション9.2を参照) でQUIC接続要求をリッスンしなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "A successfully established QUIC connection is secured by the TLS support that QUIC provides using the \"EoQ\" ALPN value.",
+      "ja": "正常に確立されたQUIC接続は、\"EoQ\" ALPN値を使用して、QUICが提供するTLSサポートによって保護されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Once the QUIC connection is established, the EPP client MUST then create a bidirectional QUIC stream by sending the EoQ Connection Start Packet (Section 6). [RFC9000] states that \"streams can be created by sending data\". If the EPP server accepts the QUIC stream, it reads the EoQ Connection Start Packet (Section 6) and returns an EPP <greeting> to the client on the same QUIC stream. After reading the EPP <greeting> message, and absent processing errors, the EPP client sends EPP commands and receives EPP responses on the same stream. A QUIC stream corresponds to an EPP connection, which is referred to as an EoQ connection. An authenticated QUIC stream, via a successful EPP <login>, corresponds to an EPP session, which is referred to as an EoQ session.",
+      "ja": "QUIC接続が確立されたら、EPPクライアントは次に、EoQ Connection Start Packet (セクション6) を送信することで、双方向のQUICストリームを作成しなければなりません (MUST)。[RFC9000] は、\"streams can be created by sending data\" と述べています。EPPサーバがそのQUICストリームを受け入れる場合、EoQ Connection Start Packet (セクション6) を読み取り、同じQUICストリーム上でEPP <greeting> をクライアントに返します。EPP <greeting> メッセージを読み取った後、処理エラーがなければ、EPPクライアントは同じストリーム上でEPPコマンドを送信し、EPPレスポンスを受信します。1本のQUICストリームは1つのEPP接続に対応し、これをEoQ接続と呼びます。EPP <login> の成功によって認証されたQUICストリームは、1つのEPPセッションに対応し、これをEoQセッションと呼びます。"
+    },
+    {
+      "indent": 3,
+      "text": "An EPP session is normally ended by the client issuing an EPP <logout> command. A server receiving an EPP <logout> command MUST end the EPP session and close the QUIC stream. A client MAY end an EoQ session by closing the QUIC stream and the server MUST end the EoQ session by closing the QUIC stream.",
+      "ja": "EPPセッションは通常、クライアントがEPP <logout> コマンドを発行することで終了します。EPP <logout> コマンドを受信したサーバは、EPPセッションを終了し、QUICストリームを閉じなければなりません (MUST)。クライアントは、QUICストリームを閉じることでEoQセッションを終了してもよく (MAY)、サーバはQUICストリームを閉じることでそのEoQセッションを終了しなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ connections are established as described in the QUIC transport specification [RFC9000]. During connection establishment, EoQ support is indicated using the \"EoQ\" ALPN value in the cryptographic handshake.",
+      "ja": "EoQ接続は、QUICトランスポート仕様 [RFC9000] に記述されているとおりに確立されます。接続の確立中に、暗号化ハンドシェイクで \"EoQ\" ALPN値を使用してEoQのサポートが示されます。"
+    },
+    {
+      "indent": 3,
+      "text": "A single QUIC connection may allow multiple QUIC streams. This means that a single QUIC connection may support multiple EoQ sessions. A server MAY limit the life span of an established EoQ session. EoQ sessions that are inactive for more than a server-defined period MAY be ended by the server closing the QUIC stream. A server MAY close EoQ sessions that have been open and active for longer than a server-defined limit. The max_idle_timeout transport parameter defined in Section 18.2 of [RFC9000] MUST NOT be set to a non-zero value by the client or server. Once the last QUIC stream for a QUIC connection is closed, the server MAY either immediately end the QUIC connection or retain the open connection in accordance with local configuration and operational policy.",
+      "ja": "1本のQUIC接続は、複数のQUICストリームを許可することがあります。これは、1本のQUIC接続が複数のEoQセッションをサポートできることを意味します。サーバは、確立されたEoQセッションの存続期間を制限してもよい (MAY)。サーバが定義した期間を超えて非アクティブなEoQセッションは、サーバがQUICストリームを閉じることで終了されてもよい (MAY)。サーバは、サーバが定義した上限より長く開いたままアクティブであるEoQセッションを閉じてもよい (MAY)。[RFC9000] のセクション18.2で定義されるmax_idle_timeoutトランスポートパラメータは、クライアントまたはサーバによって0以外の値に設定してはなりません (MUST NOT)。QUIC接続の最後のQUICストリームが閉じられたら、サーバは、直ちにQUIC接続を終了するか、ローカルの設定および運用ポリシーに従って開いた接続を保持するかのいずれかを選んでもよい (MAY)。"
+    },
+    {
+      "indent": 0,
+      "text": "4. Message Exchange",
+      "section_title": true,
+      "ja": "4. メッセージ交換"
+    },
+    {
+      "indent": 3,
+      "text": "EPP messages are passed on an EoQ connection, which is a client-initiated, bidirectional QUIC stream, defined in Section 3. Except for the EPP server <greeting>, EPP messages are initiated by the EPP client in the form of EPP commands. An EPP server MUST return an EPP response to an EPP command on the same QUIC stream that carried the command. If the QUIC stream is closed after a server receives and successfully processes a command but before the response can be returned to the client, the server MAY attempt to undo the effects of the command to ensure a consistent state between the client and the server. EPP commands are idempotent, so processing a command more than once produces the same net effect on the repository as successfully processing the command once.",
+      "ja": "EPPメッセージは、セクション3で定義された、クライアントが開始する双方向のQUICストリームであるEoQ接続上で受け渡されます。EPPサーバの <greeting> を除き、EPPメッセージはEPPコマンドの形でEPPクライアントによって開始されます。EPPサーバは、EPPコマンドに対するEPPレスポンスを、そのコマンドを運んだ同じQUICストリーム上で返さなければなりません (MUST)。サーバがコマンドを受信して正常に処理した後、レスポンスをクライアントに返す前にQUICストリームが閉じられた場合、サーバは、クライアントとサーバの間で一貫した状態を保証するために、そのコマンドの効果の取り消しを試みてもよい (MAY)。EPPコマンドは冪等であるため、コマンドを複数回処理しても、コマンドを1回正常に処理した場合と同じ正味の効果がリポジトリに生じます。"
+    },
+    {
+      "indent": 3,
+      "text": "An EPP client streams EPP commands to an EPP server on an established QUIC stream. A client MAY establish multiple QUIC streams to support multiple EoQ sessions with each EoQ session mapped to a single QUIC stream. A server SHOULD limit a client to a maximum number of QUIC streams per QUIC connection based on server capabilities and operational load. Absent such a limit, a server may be subject to overload and resource exhaustion. Section 4.6 of [RFC9000] discusses this situation.",
+      "ja": "EPPクライアントは、確立されたQUICストリーム上でEPPコマンドをEPPサーバにストリーミングします。クライアントは、複数のEoQセッションをサポートするために複数のQUICストリームを確立してもよく (MAY)、各EoQセッションは1本のQUICストリームにマッピングされます。サーバは、サーバの能力と運用負荷に基づいて、1本のQUIC接続あたりのQUICストリーム数の上限をクライアントに課すべきです (SHOULD)。このような上限がない場合、サーバは過負荷とリソース枯渇にさらされる可能性があります。[RFC9000] のセクション4.6でこの状況を論じています。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP describes client-server interaction as a command-response exchange where the client sends one command to the server and the server returns one response to the client.",
+      "ja": "EPPは、クライアントとサーバの対話を、クライアントがサーバに1つのコマンドを送信し、サーバがクライアントに1つのレスポンスを返すコマンド-レスポンス交換として記述します。"
+    },
+    {
+      "indent": 3,
+      "text": "Each EPP data unit MUST contain a single EPP message. Commands MUST be processed independently.",
+      "ja": "各EPPデータユニットは、単一のEPPメッセージを含まなければなりません (MUST)。コマンドは独立して処理されなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "A server SHOULD impose a limit on the amount of time required for a client to issue a well-formed EPP command to reduce the risk associated with a resource exhaustion attack. For example, the time limit is 10 minutes for the server idle timeout and 8 minutes for client keep-alive. Absent local policy, a server MUST end an EoQ session and close the QUIC stream if a well-formed command is not received within the time limit.",
+      "ja": "サーバは、リソース枯渇攻撃に伴うリスクを軽減するため、クライアントが整形式のEPPコマンドを発行するまでに要する時間に制限を課すべきです (SHOULD)。例えば、サーバのアイドルタイムアウトは10分、クライアントのキープアライブは8分という時間制限があります。ローカルポリシーがない場合、サーバは、制限時間内に整形式のコマンドを受信しなければ、EoQセッションを終了し、QUICストリームを閉じなければなりません (MUST)。"
+    },
+    {
+      "indent": 3,
+      "text": "A general state machine for an EPP server is described in Section 2 of [RFC5730]. A general client-server message exchange using QUIC transport is illustrated in Figure 1. It shows an example of successful exchange over a single QUIC stream of a QUIC connection. Many QUIC streams may be opened and closed during the life of a QUIC connection.",
+      "ja": "EPPサーバの一般的な状態機械は、[RFC5730] のセクション2に記載されています。QUICトランスポートを使用する一般的なクライアントとサーバのメッセージ交換を、図1に示します。これは、QUIC接続の単一のQUICストリーム上での正常な交換の例を示しています。QUIC接続の存続期間中に、多数のQUICストリームが開かれたり閉じられたりすることがあります。"
+    },
+    {
+      "indent": 3,
+      "text": "     Client                  Server\n|                                     |\n|      Successful QUIC Connection     |\n| <<------------------------------->> |\n|                                     |\n|     Successful QUIC Stream with     |\n|     EoQ Connection Start Packet     |\n| <<------------------------------->> |\n|                                     |\n|             Send Greeting           |\n| <<-------------------------------<< |\n|                                     |\n|             Send <login>            |\n| >>------------------------------->> |\n|                                     |\n|             Send Response           |\n| <<-------------------------------<< |\n|                                     |\n|            Send Command X           |\n| >>------------------------------->> |\n|                                     |\n|            Send Response X          |\n| <<-------------------------------<< |\n|                                     |\n|            Send Command Y           |\n| >>------------------------------->> |\n|                                     |\n|            Send Response Y          |\n| <<-------------------------------<< |\n|                  .                  |\n                   .\n                   .\n|            Send <logout>            |\n| >>------------------------------->> |\n|                                     |\n|            Send Response            |\n| <<-------------------------------<< |\n|                                     |\n|          Close QUIC Stream          |\n| <<------------------------------->> |\n|                                     |\n|        Close QUIC Connection        |\n| <<------------------------------->> |",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 4,
+      "text": "Figure 1: Example of Successful QUIC Client-Server Message Exchange",
+      "ja": "図1: QUICクライアントとサーバのメッセージ交換が成功する例"
+    },
+    {
+      "indent": 3,
+      "text": "The EPP server MUST follow the \"EPP Server State Machine\" procedure (see Figure 1 in [RFC5730]).",
+      "ja": "EPPサーバは、\"EPP Server State Machine\" の手順に従わなければなりません (MUST)（[RFC5730] の図1を参照）。"
+    },
+    {
+      "indent": 0,
+      "text": "5. Data Unit Format",
+      "section_title": true,
+      "ja": "5. データユニットの形式"
+    },
+    {
+      "indent": 3,
+      "text": "The EPP data unit contains two fields: a 32-bit header that describes the total length of the data unit, and the EPP XML instance. The length of the EPP XML instance is determined by subtracting four octets from the total length of the data unit. A receiver must successfully read that many octets to retrieve the complete EPP XML instance before processing the EPP message. The EPP data unit format is depicted in Figure 2 (one tick mark represents one bit position).",
+      "ja": "EPPデータユニットは2つのフィールドで構成されます。データユニット全体の長さを示す32ビットのヘッダと、EPP XMLインスタンスです。EPP XMLインスタンスの長さは、データユニットの全長から4オクテットを引いた値になります。受信側は、EPPメッセージを処理する前に、そのオクテット数を正しく読み取って、完全なEPP XMLインスタンスを取得しなければなりません。EPPデータユニットの形式を図2に示します（目盛り1つが1ビット位置を表します）。"
+    },
+    {
+      "indent": 3,
+      "text": " 0                   1                   2                   3\n 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                           Total Length                        |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+\n|                         EPP XML Instance                      |\n+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+//-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 23,
+      "text": "Figure 2: EPP Data Unit Format",
+      "ja": "図2: EPPデータユニットの形式"
+    },
+    {
+      "indent": 3,
+      "text": "The fields shown in Figure 2 are defined as follows:",
+      "ja": "図2に示すフィールドは、次のように定義されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Total Length (32 bits):",
+      "ja": "Total Length (32ビット):"
+    },
+    {
+      "indent": 12,
+      "text": "The total length of the EPP data unit measured in octets in network (big endian) byte order. The octets contained in this field MUST be included in the total length calculation. The 32-bit total length matches the total length used in EoT, defined in [RFC5734], to support transport pluggability.",
+      "ja": "ネットワーク（ビッグエンディアン）バイトオーダーで、オクテット単位で測ったEPPデータユニットの全長です。このフィールドに含まれるオクテットも、全長の計算に含めなければなりません (MUST)。32ビットの全長は、トランスポートの差し替え可能性をサポートするため、[RFC5734] で定義されるEoTで使用される全長と一致します。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP XML Instance (variable length):",
+      "ja": "EPP XML Instance (可変長):"
+    },
+    {
+      "indent": 12,
+      "text": "The EPP XML instance carried in the data unit.",
+      "ja": "データユニットで運ばれるEPP XMLインスタンスです。"
+    },
+    {
+      "indent": 0,
+      "text": "6. EoQ Connection Start Packet",
+      "section_title": true,
+      "ja": "6. EoQ Connection Start Packet"
+    },
+    {
+      "indent": 3,
+      "text": "The EoQ Connection Start Packet is written by the client after creating a QUIC stream to signal to the server to initialize the QUIC stream. Absent processing errors or local policy, the server accepts the QUIC stream, reads the EoQ Connection Start Packet, and returns the EPP <greeting> to the client on same QUIC stream.",
+      "ja": "EoQ Connection Start Packetは、QUICストリームを作成した後にクライアントが書き込み、サーバにそのQUICストリームの初期化を通知するものです。処理エラーやローカルポリシーがない限り、サーバはそのQUICストリームを受け入れ、EoQ Connection Start Packetを読み取り、同じQUICストリーム上でEPPの<greeting>をクライアントに返します。"
+    },
+    {
+      "indent": 3,
+      "text": "The EoQ Connection Start Packet follows the Data Unit Format (Section 5) with two fields: a 32-bit header that describes the total length of the data unit, and the constant value of \"EoQ Connection Start\" instead of an \"EPP XML Instance\". The length of a valid data unit MUST be 24 octets, which includes 4 octets for the Total Length and 20 octets for the \"EoQ Connection Start\" constant value.",
+      "ja": "EoQ Connection Start Packetは、データユニット形式（セクション5）に従い、2つのフィールドを持ちます。データユニット全体の長さを示す32ビットのヘッダと、\"EPP XML Instance\" の代わりとなる定数値 \"EoQ Connection Start\" です。有効なデータユニットの長さは24オクテットでなければなりません (MUST)。これには、Total Lengthの4オクテットと、定数値 \"EoQ Connection Start\" の20オクテットが含まれます。"
+    },
+    {
+      "indent": 3,
+      "text": "If the EoQ Connection Start Packet received by the server is not valid (e.g., when the total length is not exactly 24 octets), the server MUST close that QUIC stream. The server MAY return an error indication prior to closing the stream.",
+      "ja": "サーバが受信したEoQ Connection Start Packetが有効でない場合（例: 全長がちょうど24オクテットではない場合）、サーバはそのQUICストリームを閉じなければなりません (MUST)。サーバは、ストリームを閉じる前にエラー表示を返してもよい (MAY)。"
+    },
+    {
+      "indent": 0,
+      "text": "7. Transport Considerations",
+      "section_title": true,
+      "ja": "7. トランスポートに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Section 2.1 of [RFC5730] describes considerations to be addressed by protocol transport mappings. This document addresses each of those considerations using a combination of features of the QUIC protocol and features of this document as discussed below:",
+      "ja": "[RFC5730] のセクション2.1は、プロトコルのトランスポートマッピングが対処すべき考慮事項を説明しています。本書は、以下に述べるとおり、QUICプロトコルの機能と本書の機能を組み合わせて、それらの各考慮事項に対処します。"
+    },
+    {
+      "indent": 3,
+      "text": "Command Order:",
+      "ja": "Command Order:"
+    },
+    {
+      "indent": 12,
+      "text": "QUIC guarantees ordered processing of data within each stream. Section 2 of [RFC9000] describes streams in detail.",
+      "ja": "QUICは、各ストリーム内のデータの順序どおりの処理を保証します。ストリームの詳細は [RFC9000] のセクション2に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Session Mapping:",
+      "ja": "Session Mapping:"
+    },
+    {
+      "indent": 12,
+      "text": "EPP session management utilizes QUIC streams and is described in Section 3.",
+      "ja": "EPPセッション管理はQUICストリームを利用し、セクション3に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Stateful Nature:",
+      "ja": "Stateful Nature:"
+    },
+    {
+      "indent": 12,
+      "text": "QUIC supports stateful communications between endpoints via Connection IDs and long-lived streams within each connection. QUIC streams on top of QUIC connections, defined in Sections 2 and 5 of [RFC9000], are used to create stateful communications between the client and server.",
+      "ja": "QUICは、Connection IDと各接続内の長期間存続するストリームを介して、エンドポイント間のステートフルな通信をサポートします。[RFC9000] のセクション2および5で定義されているQUIC接続上のQUICストリームは、クライアントとサーバの間のステートフルな通信を作成するために使用されます。"
+    },
+    {
+      "indent": 3,
+      "text": "Frame Data Units:",
+      "ja": "Frame Data Units:"
+    },
+    {
+      "indent": 12,
+      "text": "EoQ uses the packet framing defined in Section 5.",
+      "ja": "EoQは、セクション5で定義されているパケットフレーミングを使用します。"
+    },
+    {
+      "indent": 3,
+      "text": "Congestion Avoidance:",
+      "ja": "Congestion Avoidance:"
+    },
+    {
+      "indent": 12,
+      "text": "QUIC provides various mechanisms to help achieve congestion avoidance. [RFC9002] describes these mechanisms in detail.",
+      "ja": "QUICは、輻輳回避の実現を助けるさまざまなメカニズムを提供します。[RFC9002] がこれらのメカニズムを詳細に説明しています。"
+    },
+    {
+      "indent": 3,
+      "text": "Reliability:",
+      "ja": "Reliability:"
+    },
+    {
+      "indent": 12,
+      "text": "QUIC uses message acknowledgement, packet retransmission, and other features to ensure reliability. Section 13 of [RFC9000] describes these features in detail.",
+      "ja": "QUICは、メッセージの確認応答、パケットの再送、その他の機能を使用して信頼性を確保します。これらの機能の詳細は [RFC9000] のセクション13に記載されています。"
+    },
+    {
+      "indent": 3,
+      "text": "Pipelining:",
+      "ja": "Pipelining:"
+    },
+    {
+      "indent": 12,
+      "text": "Pipelining is allowed in EoQ. QUIC streams support sending multiple frames without waiting for responses from the other peer. This does not change the basic single command, single response operating mode of the core EPP.",
+      "ja": "EoQではパイプライン処理が許可されています。QUICストリームは、相手のピアからの応答を待たずに複数のフレームを送信することをサポートします。これは、コアEPPの「1つのコマンドに1つの応答」という基本的な動作モードを変更するものではありません。"
+    },
+    {
+      "indent": 12,
+      "text": "Commands MUST be processed independently and in the same order as sent from the client.",
+      "ja": "コマンドは、独立して、かつクライアントから送信されたのと同じ順序で処理しなければなりません (MUST)。"
+    },
+    {
+      "indent": 12,
+      "text": "Batch-oriented processing (combining multiple EPP commands in a single data unit) is not permitted. Each EPP data unit must contain a single EPP message.",
+      "ja": "バッチ指向の処理（複数のEPPコマンドを単一のデータユニットにまとめること）は許可されていません。各EPPデータユニットには、単一のEPPメッセージを含めなければなりません。"
+    },
+    {
+      "indent": 12,
+      "text": "An EPP x5zz \"Connection Management\" error response, defined in Section 3 of [RFC5730], of a well-formed EPP client packet results in the server closing the EoQ connection after returning the error response. A malformed EPP client packet results in the server closing the EoQ connection without providing an error response. All subsequent EPP commands sent on the EoQ connection will not be processed.",
+      "ja": "[RFC5730] のセクション3で定義されているEPPのx5zz \"Connection Management\" エラー応答を、整形式のEPPクライアントパケットに対して返した場合、サーバはそのエラー応答を返した後にEoQ接続を閉じます。不正な形式のEPPクライアントパケットの場合、サーバはエラー応答を返さずにEoQ接続を閉じます。そのEoQ接続上で送信されたそれ以降のEPPコマンドは、すべて処理されません。"
+    },
+    {
+      "indent": 0,
+      "text": "8. Operational Considerations",
+      "section_title": true,
+      "ja": "8. 運用上の考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "Some of the concerns examined within this section are also addressed in [RFC9308]. Authors of this specification encourage implementers to understand [RFC9308].",
+      "ja": "本セクションで検討する懸念事項の一部は、[RFC9308] でも扱われています。本仕様の著者は、実装者が [RFC9308] を理解することを推奨します。"
+    },
+    {
+      "indent": 0,
+      "text": "8.1. Clients Fall Back with Management of Multiple Transport",
+      "section_title": true,
+      "ja": "8.1. 複数のトランスポートの管理を伴うクライアントのフォールバック"
+    },
+    {
+      "indent": 3,
+      "text": "If the establishment of an EoQ connection fails, clients MAY attempt to fall back to EPP over TCP as specified in [RFC5734], depending on local deployment and security policy. It is up to clients to determine the mix of transports that best meets their business needs.",
+      "ja": "EoQ接続の確立に失敗した場合、クライアントは、ローカルの展開状況とセキュリティポリシーに応じて、[RFC5734] で規定されているTCP上のEPPへのフォールバックを試みてもよい (MAY)。ビジネス上のニーズに最も適したトランスポートの組み合わせを決定するのは、クライアント次第です。"
+    },
+    {
+      "indent": 0,
+      "text": "8.2. Port Number Reuse",
+      "section_title": true,
+      "ja": "8.2. ポート番号の再利用"
+    },
+    {
+      "indent": 3,
+      "text": "Although [RFC5734] does only a request for TCP, the companion UDP port number was also allocated. That practice was prior to [RFC6335] when TCP and UDP port numbers were simultaneously assigned when either was requested. Section 9.2 updates EPP UDP/700 allocation to be used exclusively for EoQ. This update does not introduce any operational issues given that there are no known implementations of EPP over UDP.",
+      "ja": "[RFC5734] はTCPのみを要求していますが、対になるUDPポート番号も割り当てられました。これは、どちらか一方が要求された場合にTCPとUDPのポート番号が同時に割り当てられていた、[RFC6335] より前の慣行によるものです。セクション9.2は、EPPのUDP/700の割り当てを、EoQ専用に使用するよう更新します。EPP over UDPの実装は知られていないため、この更新によって運用上の問題が生じることはありません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.3. QUIC Support Announcement and Discovery",
+      "section_title": true,
+      "ja": "8.3. QUICサポートの通知と発見"
+    },
+    {
+      "indent": 3,
+      "text": "There is no dedicated in-band mechanism defined in this specification for a server to explicitly announce EoQ support to clients. Operators MAY use out-of-band configuration or provisioning channels to advertise server EoQ support to clients in advance.",
+      "ja": "サーバがEoQのサポートをクライアントに明示的に通知するための、帯域内の専用メカニズムは、本仕様では定義されていません。運用者は、サーバのEoQサポートを事前にクライアントへ通知するために、帯域外の設定チャネルまたはプロビジョニングチャネルを使用してもよい (MAY)。"
+    },
+    {
+      "indent": 0,
+      "text": "8.4. Configuration Parameters",
+      "section_title": true,
+      "ja": "8.4. 設定パラメータ"
+    },
+    {
+      "indent": 3,
+      "text": "Implementations MAY configure operational parameters to control EoQ session behavior. These parameters can include idle session timeout, maximum QUIC streams per connection, command processing timeout, and maximum session timeout. Servers and clients SHOULD configure limits to avoid session disruption and resource exhaustion.",
+      "ja": "実装は、EoQセッションの動作を制御する運用パラメータを設定してもよい (MAY)。これらのパラメータには、アイドルセッションタイムアウト、接続あたりの最大QUICストリーム数、コマンド処理タイムアウト、最大セッションタイムアウトなどが含まれ得ます。サーバとクライアントは、セッションの中断とリソース枯渇を避けるために、制限を設定すべきです (SHOULD)。"
+    },
+    {
+      "indent": 12,
+      "text": "Implementation Note: There is no in-band protocol mechanism to align limits. Operators typically distribute standard settings via SDKs. Client timeout and stream limits shall be set lower than server values for graceful connection handling. Timeout rules are consistent across EoT and EoQ; per-connection stream limits are newly introduced in EoQ.",
+      "ja": "実装上の注記：制限値を揃えるための帯域内プロトコルメカニズムはありません。運用者は通常、標準設定をSDKを通じて配布します。接続を適切に処理するため、クライアントのタイムアウトとストリーム数の制限は、サーバの値よりも低く設定するものとします。タイムアウトの規則はEoTとEoQで共通です。接続あたりのストリーム数の制限は、EoQで新たに導入されたものです。"
+    },
+    {
+      "indent": 0,
+      "text": "8.5. Diagnostic and Troubleshooting",
+      "section_title": true,
+      "ja": "8.5. 診断とトラブルシューティング"
+    },
+    {
+      "indent": 3,
+      "text": "Operators SHOULD log the EoQ connection establishment status, stream lifecycle events, and command transaction results for diagnostic purposes. QUIC transport errors and EPP protocol failures ought to be distinguishable to facilitate efficient troubleshooting. Implementations MAY provide granular error reporting to help identify session termination, connection timeout, and stream closure root causes. Operators MUST redact sensitive data in the logs, such as user credentials and authorization information values.",
+      "ja": "運用者は、診断のために、EoQ接続の確立状況、ストリームのライフサイクルイベント、およびコマンドトランザクションの結果をログに記録すべきです (SHOULD)。効率的なトラブルシューティングを容易にするため、QUICトランスポートエラーとEPPプロトコルの失敗は区別できるようにしておくべきです。実装は、セッション終了、接続タイムアウト、ストリームクローズの根本原因の特定に役立つ、きめ細かいエラー報告を提供してもよい (MAY)。運用者は、ユーザ資格情報や認可情報の値など、ログ内の機微なデータを秘匿しなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "8.6. Address Validation",
+      "section_title": true,
+      "ja": "8.6. アドレス検証"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ implementations MUST follow the address validation requirements defined in Section 8 of [RFC9000] to mitigate potential amplification attacks and validate client address reachability.",
+      "ja": "EoQ実装は、潜在的な増幅攻撃を緩和し、クライアントアドレスの到達可能性を検証するために、[RFC9000]のセクション8で定義されているアドレス検証要件に従わなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "8.7. Authentication Considerations",
+      "section_title": true,
+      "ja": "8.7. 認証に関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ relies on the TLS authentication mechanisms defined in [RFC9001] for peer authentication and credential validation. Implementations MUST follow the same authentication practices specified for EPP over TLS in [RFC5734]. Server and client authentication procedures remain unchanged from existing EPP deployment models when running over QUIC transport.",
+      "ja": "EoQは、ピア認証と資格情報の検証について、[RFC9001]で定義されているTLS認証メカニズムに依拠します。実装は、[RFC5734]でTLS上のEPPについて規定されているものと同じ認証手法に従わなければなりません (MUST)。QUICトランスポート上で動作する場合も、サーバとクライアントの認証手順は、既存のEPP展開モデルから変更されません。"
+    },
+    {
+      "indent": 0,
+      "text": "8.8. 0-RTT and Session Resumption",
+      "section_title": true,
+      "ja": "8.8. 0-RTTとセッション再開"
+    },
+    {
+      "indent": 3,
+      "text": "Using 0-RTT for EoQ allows clients to establish connections and initiate EPP transactions without round-trip delay, enabling servers to use shorter idle timers and reduce connection overhead. Session resumption and 0-RTT introduce privacy and replay risks.",
+      "ja": "EoQで0-RTTを使用すると、クライアントはラウンドトリップの遅延なしに接続を確立してEPPトランザクションを開始でき、サーバはより短いアイドルタイマーを使用して接続のオーバーヘッドを削減できます。セッション再開と0-RTTは、プライバシーとリプレイのリスクをもたらします。"
+    },
+    {
+      "indent": 3,
+      "text": "EPP commands fall into three categories: session management, queries, and transform commands. EPP query commands perform read-only object information retrieval operations. Only read-only EPP query commands MAY be carried in 0-RTT STREAM frames; all other EPP commands MUST NOT use 0-RTT. Clients SHOULD use resumption tickets only once specified in [RFC9846]. Servers SHOULD issue session-resumption tickets with a sufficiently long lifetime (e.g., 6 hours). Servers SHOULD implement the anti-replay mechanisms specified in Section 8 of [RFC9846].",
+      "ja": "EPPコマンドは、セッション管理、クエリ、および変換コマンドの3種類に分類されます。EPPクエリコマンドは、オブジェクト情報を読み取り専用で取得する操作を行います。0-RTT STREAMフレームで運搬してもよい (MAY) のは、読み取り専用のEPPクエリコマンドのみです。その他のすべてのEPPコマンドは、0-RTTを使用してはなりません (MUST NOT)。クライアントは、[RFC9846]で規定されているとおり、再開チケットを1回だけ使用すべきです (SHOULD)。サーバは、十分に長い有効期間（例：6時間）のセッション再開チケットを発行すべきです (SHOULD)。サーバは、[RFC9846]のセクション8で規定されているリプレイ対策メカニズムを実装すべきです (SHOULD)。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ implementations SHOULD follow the guidance in [RFC9846] and [RFC9001] to balance performance and risk mitigation. Failure to do so increases privacy exposure and replay attack risks.",
+      "ja": "EoQ実装は、性能とリスク緩和のバランスをとるために、[RFC9846]と[RFC9001]のガイダンスに従うべきです (SHOULD)。従わない場合、プライバシーの露出とリプレイ攻撃のリスクが高まります。"
+    },
+    {
+      "indent": 0,
+      "text": "8.9. MTU and Fragmentation",
+      "section_title": true,
+      "ja": "8.9. MTUとフラグメンテーション"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ implementations MUST follow Section 14 of [RFC9000].",
+      "ja": "EoQ実装は、[RFC9000]のセクション14に従わなければなりません (MUST)。"
+    },
+    {
+      "indent": 0,
+      "text": "9. IANA Considerations",
+      "section_title": true,
+      "ja": "9. IANAに関する考慮事項"
+    },
+    {
+      "indent": 0,
+      "text": "9.1. Registration of an EoQ Identification String",
+      "section_title": true,
+      "ja": "9.1. EoQ識別文字列の登録"
+    },
+    {
+      "indent": 3,
+      "text": "This document creates a new registration for the identification of EoQ in the \"TLS Application-Layer Protocol Negotiation (ALPN) Protocol IDs\" registry under the \"Transport Layer Security (TLS) Extensions\" registry group available at <https://www.iana.org/assignments/tls-extensiontype-values/>.",
+      "ja": "本文書は、<https://www.iana.org/assignments/tls-extensiontype-values/> で公開されている「Transport Layer Security (TLS) Extensions」レジストリグループの「TLS Application-Layer Protocol Negotiation (ALPN) Protocol IDs」レジストリに、EoQを識別するための新しい登録を作成します。"
+    },
+    {
+      "indent": 3,
+      "text": "Protocol:",
+      "ja": "プロトコル："
+    },
+    {
+      "indent": 12,
+      "text": "EoQ",
+      "ja": "EoQ"
+    },
+    {
+      "indent": 3,
+      "text": "Identification Sequence:",
+      "ja": "識別シーケンス："
+    },
+    {
+      "indent": 12,
+      "text": "0x45 0x6F 0x51 (\"EoQ\")",
+      "ja": "0x45 0x6F 0x51 (\"EoQ\")"
+    },
+    {
+      "indent": 3,
+      "text": "Reference:",
+      "ja": "参照："
+    },
+    {
+      "indent": 12,
+      "text": "RFC 10087",
+      "ja": "RFC 10087"
+    },
+    {
+      "indent": 0,
+      "text": "9.2. Registration of Port Number",
+      "section_title": true,
+      "ja": "9.2. ポート番号の登録"
+    },
+    {
+      "indent": 3,
+      "text": "The \"Service Name and Transport Protocol Port Number Registry\" (<https://www.iana.org/assignments/service-names-port-numbers/>) contains an entry for EPP UDP/700. However, there is no known usage of EPP over UDP. This document therefore specifies EPP over UDP as defined here. IANA has updated the description field of the EPP UDP/700 entry to be \"EPP running over QUIC\" and added this document as an additional reference alongside [RFC5734].",
+      "ja": "「Service Name and Transport Protocol Port Number Registry」(<https://www.iana.org/assignments/service-names-port-numbers/>) には、EPP UDP/700のエントリが含まれています。しかし、UDP上のEPPの使用は知られていません。そのため本文書は、UDP上のEPPをここで定義するとおりに規定します。IANAは、EPP UDP/700エントリの説明フィールドを \"EPP running over QUIC\" に更新し、[RFC5734]に加えて本文書を追加の参照として加えました。"
+    },
+    {
+      "indent": 3,
+      "text": "Service Name:",
+      "ja": "サービス名："
+    },
+    {
+      "indent": 12,
+      "text": "epp",
+      "ja": "epp"
+    },
+    {
+      "indent": 3,
+      "text": "Port Number:",
+      "ja": "ポート番号："
+    },
+    {
+      "indent": 12,
+      "text": "700",
+      "ja": "700"
+    },
+    {
+      "indent": 3,
+      "text": "Transport Protocol(s):",
+      "ja": "トランスポートプロトコル："
+    },
+    {
+      "indent": 12,
+      "text": "UDP",
+      "ja": "UDP"
+    },
+    {
+      "indent": 3,
+      "text": "Assignee:",
+      "ja": "割り当て先："
+    },
+    {
+      "indent": 12,
+      "text": "IESG",
+      "ja": "IESG"
+    },
+    {
+      "indent": 3,
+      "text": "Contact:",
+      "ja": "連絡先："
+    },
+    {
+      "indent": 12,
+      "text": "IETF Chair",
+      "ja": "IETF Chair"
+    },
+    {
+      "indent": 3,
+      "text": "Description:",
+      "ja": "説明："
+    },
+    {
+      "indent": 12,
+      "text": "EPP running over QUIC",
+      "ja": "EPP running over QUIC"
+    },
+    {
+      "indent": 3,
+      "text": "Reference:",
+      "ja": "参照："
+    },
+    {
+      "indent": 12,
+      "text": "[RFC5734] RFC 10087",
+      "ja": "[RFC5734] RFC 10087"
+    },
+    {
+      "indent": 0,
+      "text": "10. Security Considerations",
+      "section_title": true,
+      "ja": "10. セキュリティに関する考慮事項"
+    },
+    {
+      "indent": 3,
+      "text": "EPP over QUIC provides similar security foundations as EPP over TCP with TLS, though the security properties of QUIC specified in Section 21.1 of [RFC9000] differ from those of TLS/TCP in that QUIC is an encrypted transport protocol. Some related security issues are discussed in [RFC5734] and [RFC9000]. Sections 8.7 and 8.8 of this document also discuss related security issues.",
+      "ja": "QUIC上のEPPは、TLSを用いたTCP上のEPPと同様のセキュリティ基盤を提供しますが、[RFC9000]のセクション21.1で規定されているQUICのセキュリティ特性は、QUICが暗号化されたトランスポートプロトコルである点でTLS/TCPのものとは異なります。関連するセキュリティ上の問題のいくつかは、[RFC5734]および[RFC9000]で論じられています。本文書のセクション8.7とセクション8.8でも、関連するセキュリティ上の問題を論じています。"
+    },
+    {
+      "indent": 3,
+      "text": "EoQ servers run the risk of a resource exhaustion attack by allowing the creation of unlimited QUIC streams per QUIC connection. As indicated in Section 8.4, servers should limit a client to a maximum number of QUIC streams per QUIC connection based on server capabilities and operational load. Absent such a limit, the server may be subject to overload that would exhaust its resources.",
+      "ja": "EoQサーバは、1つのQUIC接続あたりのQUICストリームの作成数を無制限に許すと、リソース枯渇攻撃を受ける危険があります。セクション8.4で示したとおり、サーバは、サーバの能力と運用上の負荷に基づいて、1つのQUIC接続あたりのQUICストリーム数の上限をクライアントに対して設けるべきです。このような上限がなければ、サーバは過負荷にさらされ、リソースを使い果たす可能性があります。"
+    },
+    {
+      "indent": 3,
+      "text": "The 32-bit total length field defined in Section 5 allows a declared payload size up to approximately 4 gigabytes. Implementations MUST validate the advertised total length against a locally configured maximum frame size limit before allocating memory or attempting to read the full frame. Without this check, an attacker could send a crafted frame with an excessively large length value to exhaust receiver memory and trigger a denial-of-service condition.",
+      "ja": "セクション5で定義されている32ビットの全長フィールドでは、宣言されるペイロードサイズが最大で約4ギガバイトになり得ます。実装は、メモリを割り当てる前、またはフレーム全体の読み取りを試みる前に、通知された全長をローカルに設定されたフレームサイズの上限と照合して検証しなければなりません (MUST)。この検査がなければ、攻撃者が過度に大きな長さの値を持つ細工されたフレームを送信して受信側のメモリを枯渇させ、サービス拒否状態を引き起こす可能性があります。"
+    },
+    {
+      "indent": 0,
+      "text": "11. References",
+      "section_title": true,
+      "ja": "11. 参考文献"
+    },
+    {
+      "indent": 0,
+      "text": "11.1. Normative References",
+      "section_title": true,
+      "ja": "11.1. 引用文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC2119]  Bradner, S., \"Key words for use in RFCs to Indicate\n           Requirement Levels\", BCP 14, RFC 2119,\n           DOI 10.17487/RFC2119, March 1997,\n           <https://www.rfc-editor.org/info/rfc2119>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5730]  Hollenbeck, S., \"Extensible Provisioning Protocol (EPP)\",\n           STD 69, RFC 5730, DOI 10.17487/RFC5730, August 2009,\n           <https://www.rfc-editor.org/info/rfc5730>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC5734]  Hollenbeck, S., \"Extensible Provisioning Protocol (EPP)\n           Transport over TCP\", STD 69, RFC 5734,\n           DOI 10.17487/RFC5734, August 2009,\n           <https://www.rfc-editor.org/info/rfc5734>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC6335]  Cotton, M., Eggert, L., Touch, J., Westerlund, M., and S.\n           Cheshire, \"Internet Assigned Numbers Authority (IANA)\n           Procedures for the Management of the Service Name and\n           Transport Protocol Port Number Registry\", BCP 165,\n           RFC 6335, DOI 10.17487/RFC6335, August 2011,\n           <https://www.rfc-editor.org/info/rfc6335>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC7301]  Friedl, S., Popov, A., Langley, A., and E. Stephan,\n           \"Transport Layer Security (TLS) Application-Layer Protocol\n           Negotiation Extension\", RFC 7301, DOI 10.17487/RFC7301,\n           July 2014, <https://www.rfc-editor.org/info/rfc7301>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC8174]  Leiba, B., \"Ambiguity of Uppercase vs Lowercase in RFC\n           2119 Key Words\", BCP 14, RFC 8174, DOI 10.17487/RFC8174,\n           May 2017, <https://www.rfc-editor.org/info/rfc8174>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9846]  Rescorla, E., \"The Transport Layer Security (TLS) Protocol\n           Version 1.3\", RFC 9846, DOI 10.17487/RFC9846, July 2026,\n           <https://www.rfc-editor.org/info/rfc9846>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9000]  Iyengar, J., Ed. and M. Thomson, Ed., \"QUIC: A UDP-Based\n           Multiplexed and Secure Transport\", RFC 9000,\n           DOI 10.17487/RFC9000, May 2021,\n           <https://www.rfc-editor.org/info/rfc9000>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9001]  Thomson, M., Ed. and S. Turner, Ed., \"Using TLS to Secure\n           QUIC\", RFC 9001, DOI 10.17487/RFC9001, May 2021,\n           <https://www.rfc-editor.org/info/rfc9001>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9002]  Iyengar, J., Ed. and I. Swett, Ed., \"QUIC Loss Detection\n           and Congestion Control\", RFC 9002, DOI 10.17487/RFC9002,\n           May 2021, <https://www.rfc-editor.org/info/rfc9002>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "11.2. Informative References",
+      "section_title": true,
+      "ja": "11.2. 参考情報文献"
+    },
+    {
+      "indent": 3,
+      "text": "[RFC9308]  Kühlewind, M. and B. Trammell, \"Applicability of the QUIC\n           Transport Protocol\", RFC 9308, DOI 10.17487/RFC9308,\n           September 2022, <https://www.rfc-editor.org/info/rfc9308>.",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 0,
+      "text": "Acknowledgements",
+      "section_title": true,
+      "ja": "謝辞"
+    },
+    {
+      "indent": 3,
+      "text": "The authors wish to thank the following persons for their feedback and suggestions: Scott Hollenbeck, Lucas Pardue, Martin Thomson, Mohamed Boucadair, Gorry Fairhurst, and Mahesh Jethanandani.",
+      "ja": "著者らは、次の方々のフィードバックと提案に感謝します：Scott Hollenbeck、Lucas Pardue、Martin Thomson、Mohamed Boucadair、Gorry Fairhurst、Mahesh Jethanandani。"
+    },
+    {
+      "indent": 0,
+      "text": "Authors' Addresses",
+      "section_title": true,
+      "ja": "著者の連絡先"
+    },
+    {
+      "indent": 3,
+      "text": "Jiankang Yao\nCNNIC\n4 South 4th Street, Zhongguancun, Haidian District\nBeijing\n100190\nChina\nPhone: +86 10 59116505\nEmail: yaojk@cnnic.cn",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Hongtao Li\nCNNIC\n4 South 4th Street, Zhongguancun, Haidian District\nBeijing\n100190\nChina\nEmail: lihongtao@cnnic.cn",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Man Zhang\nCNNIC\n4 South 4th Street, Zhongguancun, Haidian District\nBeijing\n100190\nChina\nEmail: zhangman@cnnic.cn",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "Daniel Keathley\nVeriSign, Inc.\n12061 Bluemont Way\nReston, VA 20190\nUnited States of America\nEmail: dkeathley@verisign.com\nURI:   http://www.verisigninc.com",
+      "raw": true,
+      "ja": ""
+    },
+    {
+      "indent": 3,
+      "text": "James Gould\nVeriSign, Inc.\n12061 Bluemont Way\nReston, VA 20190\nUnited States of America\nEmail: jgould@verisign.com\nURI:   http://www.verisigninc.com",
+      "raw": true,
+      "ja": ""
+    }
+  ]
+}
