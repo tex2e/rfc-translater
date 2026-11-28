@@ -51,6 +51,9 @@ CHECKS = {
     "W016": "助詞連鎖の破壊 (「をに」「がで」「のの」など、名詞が抜け落ちて助詞が連続している)",
     "W017": "RFC2119注釈の原語不一致 (同じ規範強度でも SHALL/REQUIRED 等を原文どおりに併記していない)",
     "W018": "RECOMMENDEDの訳語不統一 (推奨されます / 推奨されませんに統一する)",
+    "W019": "識別子の消失 (原文の CamelCase識別子 smLaunchOwner・メールアドレス・OID 等が訳文に大小文字を問わず残っていない。和訳・カタカナ化された疑い)",
+    "W020": "全角文字による表記破壊 (urn:ietf:… や IPv6アドレス、メールアドレスのコロン等が全角になっている、または全角英数字がある)",
+    "W021": "文脈誤訳語 (state=州、subject=被験者、challenge=挑戦 など、Google 翻訳由来の誤訳語を使っている)",
 }
 
 # RFC2119キーワード -> 規範強度クラス
@@ -1163,6 +1166,109 @@ def check_particle_chain(ja):
 
 
 # ------------------------------------------------------------------------------
+# Google 翻訳由来の識別子消失 (W019)・全角化 (W020)・文脈誤訳語 (W021)
+# ------------------------------------------------------------------------------
+
+# W019: smLaunchOwner, nextUpdate, iPAddress のような小文字始まりのCamelCase識別子。
+# 訳文に大小文字を問わず残っていなければ、和訳・カタカナ化・分割されている
+# (大小文字だけが崩れているものは E001 で扱う)。
+CAMEL_IDENT_RE = re.compile(r"(?<![\w.\-/])[a-z][a-z0-9]*(?:[A-Z][a-z0-9]+)+[A-Z]?(?![\w\-/])")
+
+
+# メールアドレスとOID (1.3.6.1.4.1 など) も、訳文で原文どおりに残るべき識別子として扱う
+EMAIL_IDENT_RE = re.compile(r"(?<![\w.\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}")
+OID_IDENT_RE = re.compile(r"(?<![\w.])\d+(?:\.\d+){3,}(?![\w])")
+
+
+def check_camel_identifier_loss(en, ja):
+    """W019: 原文の CamelCase 識別子・メールアドレス・OID が訳文から消えているものを返す。"""
+    ja_lower = ja.lower()
+    idents = {t for t in CAMEL_IDENT_RE.findall(en) if len(t) >= 6}
+    idents |= set(EMAIL_IDENT_RE.findall(en)) | set(OID_IDENT_RE.findall(en))
+    lost = sorted(t for t in idents if t.lower() not in ja_lower)
+    if not lost:
+        return None
+    return ("W019", f"識別子が訳文にない: {', '.join(lost[:6])}")
+
+
+# W020: urn:ietf:params:..., 2001:db8::1, a=rtpmap:0, user@example.com など、
+# 原文で ASCII の記号でつながった字句が、訳文では全角記号・空白入りになっているもの。
+# 「図2：」「付録F：」のような日本語の表記慣習は、原文の字句と照合して対象外にする。
+COLON_TOKEN_RE = re.compile(r"[A-Za-z0-9][\w.\-+=/@]*[:@][\w.\-+=/@:]*[A-Za-z0-9]")
+FULLWIDTH_ALNUM_RE = re.compile(r"[Ａ-Ｚａ-ｚ０-９＠]+")
+_ZENKAKU_TO_ASCII = str.maketrans(
+    {"：": ":", "．": ".", "＠": "@", "／": "/", "＝": "=", "＋": "+", "－": "-"}
+    | {chr(0xFF10 + i): str(i) for i in range(10)}
+    | {chr(0xFF21 + i): chr(0x41 + i) for i in range(26)}
+    | {chr(0xFF41 + i): chr(0x61 + i) for i in range(26)})
+
+
+def check_fullwidth_breakage(en, ja):
+    """W020: 原文の字句が全角化・空白混入で壊れている箇所を返す。"""
+    normalized = None
+    for t in sorted(set(COLON_TOKEN_RE.findall(en))):
+        if len(t) < 5 or t in ja:
+            continue
+        if normalized is None:
+            normalized = re.sub(r"\s+", "", ja.translate(_ZENKAKU_TO_ASCII))
+        if t in normalized:
+            return ("W020", f"原文の '{t}' が全角化・空白混入で壊れている")
+    m = FULLWIDTH_ALNUM_RE.search(ja)
+    if m:
+        return ("W020", f"全角英数字がある: 「{ja[max(0, m.start() - 10):m.end() + 5]}」")
+    return None
+
+
+# W021: 多義語を一般語の意味で訳した Google 翻訳由来の誤訳語。
+# (原文に含まれる語, 訳文の誤訳語, 誤訳語が正しくなる原文の文脈 or None, 正しい訳語の例)
+MISTRANSLATIONS = [
+    (r"\bstates?\b", r"(?<![各])州(?!立)",
+     r"\b(?:United States|U\.S\.|states? of (?:the )?(?:US|America)|California|Virginia|province|county)\b",
+     "状態"),
+    (r"\bsubjects?\b", r"被験者", None, "サブジェクト/主体"),
+    (r"\bchalleng", r"挑戦", None, "チャレンジ"),
+    (r"\benvelopes?\b", r"封筒", None, "エンベロープ"),
+    (r"\bflags?\b", r"旗", None, "フラグ"),
+    (r"\bdigests?\b", r"消化", None, "ダイジェスト"),
+    (r"\bhosts?\b", r"宿主|主催者", r"biolog|parasit", "ホスト"),
+    (r"\bports?\b", r"(?<![空漁])港", r"harbo|airport|seaport", "ポート"),
+    (r"\bbearer", r"持参人|無記名", None, "ベアラー"),
+    (r"\btraps?\b", r"罠|わな", None, "トラップ"),
+    (r"\bfields?\b", r"畑|田畑|野原", None, "フィールド"),
+    (r"\bdrop", r"滴|しずく", None, "破棄/ドロップ"),
+    (r"\bpart(?:y|ies)\b", r"宴会|政党", None, "当事者/パーティ"),
+    (r"\bframes?\b", r"額縁", None, "フレーム"),
+    (r"\bhandles?\b", r"取っ手", None, "ハンドル"),
+    (r"\bmailbox", r"郵便受け|郵便箱|郵便ポスト", None, "メールボックス"),
+    (r"\bpadd", r"詰め物", None, "パディング"),
+    (r"\bshells?\b", r"貝殻", None, "シェル"),
+    (r"\bkernels?\b", r"穀粒", None, "カーネル"),
+    (r"\bleases?\b", r"賃貸", None, "リース"),
+    (r"\bresolvers?\b", r"解決者", None, "リゾルバー"),
+    (r"\bsinks?\b", r"流し台", None, "シンク"),
+    (r"\bworms?\b", r"(?<!寄生)虫", None, "ワーム"),
+    (r"^\s*Abstract\s*$", r"抽象", None, "概要"),
+]
+MISTRANSLATIONS = [(re.compile(a, re.I | re.M), re.compile(b), re.compile(c, re.I) if c else None, d)
+                   for a, b, c, d in MISTRANSLATIONS]
+
+
+def check_mistranslation(en, ja):
+    """W021: 多義語の誤訳 (state=州 など) を返す。"""
+    found = []
+    for en_re, bad_re, exc_re, correct in MISTRANSLATIONS:
+        m_en = en_re.search(en)
+        if not m_en:
+            continue
+        m = bad_re.search(ja)
+        if not m or (exc_re and exc_re.search(en)):
+            continue
+        found.append(("W021", f"「{m.group(0)}」は誤訳の疑い (原文 '{m_en.group(0)}' → {correct}): "
+                              f"「{_snippet(ja, m.start(), m.end(), 12, 8)}」"))
+    return found
+
+
+# ------------------------------------------------------------------------------
 # ファイル単位の検査
 # ------------------------------------------------------------------------------
 
@@ -1548,6 +1654,20 @@ def lint_file(path, enabled):
         if "W016" in enabled and not is_title:
             for code, detail in check_particle_chain(ja):
                 findings.append(Finding(code, path, rfc, i, detail, en, ja))
+
+        # --- 識別子消失・全角化・文脈誤訳語 (参考文献エントリと raw 段落は対象外) ---
+        if not is_raw and ja and not (in_ref_section and not is_title):
+            if "W019" in enabled:
+                r = check_camel_identifier_loss(en, ja)
+                if r:
+                    findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+            if "W020" in enabled:
+                r = check_fullwidth_breakage(en, ja)
+                if r:
+                    findings.append(Finding(r[0], path, rfc, i, r[1], en, ja))
+            if "W021" in enabled:
+                for code, detail in check_mistranslation(en, ja):
+                    findings.append(Finding(code, path, rfc, i, detail, en, ja))
 
         # --- 文体 ---
         if is_title:
