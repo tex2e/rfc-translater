@@ -24,6 +24,9 @@
 #             Xを含める必要があります。   -> Xを含めるべきです (SHOULD)。
 #         MUST は動詞の活用を変えるため、活用の型が確定できるものだけを対象にする
 #         (漢字の直後の「る」は五段/一段を区別できないので対象外)。
+#   W020: 原文の字句 (DAV:href, urn:ietf:..., IPv6アドレス等) が全角化されたものを戻し、
+#         全角英数字を半角にする
+#         例) DAV：hrefプロパティ -> DAV:hrefプロパティ
 #   W006: 見出しのですます調を体言止めに変換する
 #         例) `hello'コマンドを処理します -> `hello'コマンドの処理
 #         サ変動詞の見出しのみ対象。それ以外は変換せず残す。
@@ -53,7 +56,36 @@ from lint_translation import (  # noqa: E402
     BCP14_REFERENCE_RE, NON_NORMATIVE_NEGATION, OTHER_NORMATIVE_WORDS,
     check_rfc2119_annotation_count, count_rfc2119_keywords, is_single_sentence,
     check_necessity_translation, ANNOTATION_RE, STRENGTH_PATTERNS, NECESSITY_RE,
+    COLON_TOKEN_RE, FULLWIDTH_ALNUM_RE, _ZENKAKU_TO_ASCII, OID_IDENT_RE,
 )
+
+# --- W020: 全角化された字句の復元 ---
+_ASCII_TO_ZENKAKU = {v: k for k, v in
+                     ((k if isinstance(k, str) else chr(k), v) for k, v in _ZENKAKU_TO_ASCII.items())}
+
+
+def fix_fullwidth_breakage(en, ja):
+    """W020: 原文の字句 (DAV:href, urn:ietf:..., 2001:db8::1 など) が全角記号・空白入りに
+    なっている箇所を原文の表記へ戻し、残った全角英数字を半角にする。"""
+    new = ja
+    tokens = set(COLON_TOKEN_RE.findall(en)) | set(OID_IDENT_RE.findall(en))
+    for t in sorted(tokens, key=len, reverse=True):
+        if len(t) < 5 or t in new:
+            continue
+        parts = []
+        for ch in t:
+            z = _ASCII_TO_ZENKAKU.get(ch)
+            if ch == ".":
+                z = "．。"  # OID の区切りが句点になっているもの (1。3。6。1) も戻す
+            alt = "[" + re.escape(ch) + re.escape(z) + "]" if z else re.escape(ch)
+            # 記号の前後に限り、機械翻訳が挿入した空白を許す
+            parts.append(r"[ \u3000]*" + alt + r"[ \u3000]*" if ch in ":@/=" else alt)
+        # \w は日本語にも一致するため、境界は ASCII の英数字で判定する
+        pat = re.compile(r"(?<![A-Za-z0-9_])" + "".join(parts) + r"(?![A-Za-z0-9_])")
+        new = pat.sub(lambda m: t, new)
+    new = FULLWIDTH_ALNUM_RE.sub(lambda m: m.group(0).translate(_ZENKAKU_TO_ASCII), new)
+    return new if new != ja else None
+
 
 # --- W006: 体言止めへの変換パターン ---
 # サ変名詞 (漢字2〜6文字) + します/する で終わる見出しのみを対象にする。
@@ -624,6 +656,17 @@ def process_file(path, checks, dry_run, samples, stats):
                 ja = new_ja
                 changed = True
 
+        if ("W020" in checks and c.get("raw") is not True and ja
+                and not (in_ref_section and not is_title)):
+            new_ja = fix_fullwidth_breakage(en, ja)
+            if new_ja:
+                if len(samples["W020"]) < 12:
+                    samples["W020"].append((os.path.basename(path), None, ja[:90], new_ja[:90]))
+                stats["W020"] += 1
+                c["ja"] = new_ja
+                ja = new_ja
+                changed = True
+
         if "W006" in checks and c.get("section_title") is True:
             new_ja = fix_taigendome(ja)
             if new_ja and new_ja != ja:
@@ -697,7 +740,7 @@ def collect_paths(rfcs, dirs):
 def main():
     p = argparse.ArgumentParser(description="翻訳の機械的修正")
     p.add_argument("--check", nargs="+", required=True,
-                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"])
+                   choices=["E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012", "W020"])
     p.add_argument("--rfc", nargs="*")
     p.add_argument("--dir", nargs="*")
     p.add_argument("--dry-run", action="store_true", help="ファイルを書き換えずに結果だけ表示")
@@ -711,7 +754,7 @@ def main():
 
     checks = set(args.check)
     stats = Counter()
-    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012")}
+    samples = {k: [] for k in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012", "W020")}
     files_changed = 0
 
     for path in paths:
@@ -740,6 +783,8 @@ def main():
         print(f"  W012 「必要があります」を訳語に修正: {stats['W012']} 段落")
     if "W011" in checks:
         print(f"  W011 RFC2119キーワード注釈を付与: {stats['W011']} 段落")
+    if "W020" in checks:
+        print(f"  W020 全角化した字句を復元: {stats['W020']} 段落")
     if "W006" in checks:
         print(f"  W006 体言止めに変換: {stats['W006']} 件")
         print(f"  W006 変換できず据え置き: {stats['W006_skipped']} 件 (要人手/AI対応)")
@@ -747,7 +792,7 @@ def main():
         print(f"  読み込み失敗: {stats['read_error']} 件")
 
     if not args.quiet:
-        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012"):
+        for code in ("E001", "E004", "E007", "E009", "E010", "E011", "E012", "W005", "W006", "W011", "W012", "W020"):
             if code in checks and samples[code]:
                 print(f"\n== {code} 変換例 ==")
                 for name, toks, before, after in samples[code]:
