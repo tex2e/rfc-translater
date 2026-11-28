@@ -14,12 +14,14 @@
 # ------------------------------------------------------------------------------
 
 import argparse
+import functools
 import glob
 import json
 import os
 import re
 import sys
 from collections import Counter, defaultdict
+from multiprocessing import Pool
 
 # ------------------------------------------------------------------------------
 # チェック定義
@@ -77,6 +79,8 @@ RFC2119 = [
     ("OPTIONAL", r"\bOPTIONAL\b", "任意"),
     ("MAY", r"\bMAY\b", "任意"),
 ]
+# 検出のたびに正規表現をコンパイルしないよう、あらかじめコンパイルしておく
+RFC2119_COMPILED = [(kw, re.compile(pattern), strength) for kw, pattern, strength in RFC2119]
 
 # 原文に含まれる否定表現。
 # "MUST reject" / "MUST be absent" / "MUST X but not Y" のように、
@@ -731,13 +735,21 @@ def _mask_hyphenated_identifiers(en):
 def detect_rfc2119(en):
     """原文に含まれるRFC2119キーワードを検出し、(キーワード, 強度)のリストを返す。
     長いキーワードを優先し、重複カウントを避ける。"""
+    return list(_detect_rfc2119_cached(en))
+
+
+# 同じ段落の原文を複数のチェックが繰り返し解析するため、結果をキャッシュする
+@functools.lru_cache(maxsize=65536)
+def _detect_rfc2119_cached(en):
     found = []
     masked = _mask_hyphenated_identifiers(en)
-    for kw, pattern, strength in RFC2119:
-        for _ in re.finditer(pattern, masked):
+    for kw, pattern, strength in RFC2119_COMPILED:
+        if kw.split()[0] not in masked:
+            continue  # キーワードの先頭語が含まれなければ正規表現を走らせない
+        for _ in pattern.finditer(masked):
             found.append((kw, strength))
-        masked = re.sub(pattern, "_" * 4, masked)
-    return found
+        masked = pattern.sub("_" * 4, masked)
+    return tuple(found)
 
 
 def is_single_sentence(en):
@@ -836,6 +848,13 @@ KEYWORD_DEFINITION_RE = re.compile(
 
 
 def count_rfc2119_keywords(en):
+    """原文の規範的なキーワードを原文の表記で数える (キーワード -> 個数)。
+    呼び出し側が結果を変更しても影響しないよう、キャッシュの複製を返す。"""
+    return Counter(_count_rfc2119_keywords_cached(en))
+
+
+@functools.lru_cache(maxsize=65536)
+def _count_rfc2119_keywords_cached(en):
     """原文の規範的なキーワードを原文の表記で数える (キーワード -> 個数)。
     引用符付きの言及 ("MUST") や冠詞付きの名詞的用法 (a MUST) は段落自身の指示では
     ないため除外する。"MUST also not" 等は MUST NOT として数える (訳文の注釈と揃える)。"""
@@ -1717,6 +1736,20 @@ def lint_file(path, enabled):
 # エントリポイント
 # ------------------------------------------------------------------------------
 
+def _lint_one(job):
+    path, enabled = job
+    return lint_file(path, enabled)
+
+
+def lint_files(paths, enabled, jobs=0):
+    """各ファイルの検出結果を paths の順に返す。ファイル数が多いときはプロセスを分けて並列に検査する。"""
+    jobs = jobs or os.cpu_count() or 1
+    if jobs <= 1 or len(paths) < 8:
+        return [lint_file(path, enabled) for path in paths]
+    with Pool(min(jobs, len(paths))) as pool:
+        return pool.map(_lint_one, [(path, enabled) for path in paths], chunksize=8)
+
+
 def collect_paths(rfcs, dirs=None):
     if dirs:
         paths = []
@@ -1745,7 +1778,15 @@ def main():
     p.add_argument("--max-examples", type=int, default=5, help="text形式で表示する件数/チェック")
     p.add_argument("--fail-on-error", action="store_true",
                    help="Eコードの検出があれば終了コード1を返す (CI用)")
+    p.add_argument("-j", "--jobs", type=int, default=0,
+                   help="並列に検査するプロセス数 (0: CPU数。対象が少ないときは1プロセス)")
+    p.add_argument("--root", help="data/ を含むディレクトリ (既定: カレントディレクトリ)。"
+                                 "マージベースから取り出したファイルの検査に使う")
     args = p.parse_args()
+    if args.output:
+        args.output = os.path.abspath(args.output)
+    if args.root:
+        os.chdir(args.root)
 
     enabled = set(args.check) if args.check else set(CHECKS)
     unknown = enabled - set(CHECKS)
@@ -1760,8 +1801,7 @@ def main():
 
     all_findings = []
     per_rfc = Counter()
-    for path in paths:
-        fs = lint_file(path, enabled)
+    for path, fs in zip(paths, lint_files(paths, enabled, args.jobs)):
         all_findings.extend(fs)
         if fs:
             per_rfc[os.path.basename(path).replace("-trans.json", "")] = len(fs)
