@@ -173,31 +173,48 @@ class RfcUi {
     }
   }
 
-  // 対象RFCが他のRFCで更新されていれば、更新したRFCへのリンクを表示する（廃止の警告の下に出す）
+  // 対象RFCが他のRFCで更新されていれば、ステータスの右隣に「更新あり」のバッジを出す。
+  // 更新したRFCの一覧は常には表示せず、バッジを押したときだけ廃止の警告の下に開く。
   _showAlertWhenUpdated(_rfcNumber, datum) {
     const domRfcAlert = this._getAlertHtmlDomElem();
+    const domRfcStatus = document.getElementById('rfc_status');
     const updatedBy = datum ? datum[RfcIndexJsonElem.UPDATED_BY] : null;
-    if (this.domRfcDraft || !domRfcAlert || !updatedBy || updatedBy.length === 0) {
+    if (this.domRfcDraft || !domRfcAlert || !domRfcStatus || !updatedBy || updatedBy.length === 0) {
       return;
     }
-    const domAlert = document.createElement('div');
-    domAlert.id = 'rfc_alert_updated_by';
-    domAlert.className = 'alert alert-warning';
-    domAlert.setAttribute('role', 'note');
-    domAlert.append('このRFCは ');
+    const domDetail = document.createElement('div');
+    domDetail.id = 'rfc_alert_updated_by';
+    domDetail.className = 'alert alert-warning';
+    domDetail.setAttribute('role', 'note');
+    domDetail.hidden = true;
+    domDetail.append('このRFCは ');
     updatedBy.forEach((rfcNumber, i) => {
       if (i > 0) {
-        domAlert.append(', ');
+        domDetail.append(', ');
       }
       const link = document.createElement('a');
       // RFC 2220 未満は翻訳対象外のため、IETFのサイトへリンクする
       link.href = (parseInt(rfcNumber) < 2220)
         ? `https://datatracker.ietf.org/doc/html/rfc${rfcNumber}` : `./rfc${rfcNumber}.html`;
       link.textContent = `RFC ${rfcNumber}`;
-      domAlert.appendChild(link);
+      domDetail.appendChild(link);
     });
-    domAlert.append(' によって更新されています。あわせて参照してください。');
-    domRfcAlert.after(domAlert);
+    domDetail.append(' によって更新されています。あわせて参照してください。');
+    domRfcAlert.after(domDetail);
+
+    const badge = document.createElement('button');
+    badge.type = 'button';
+    badge.id = 'rfc_updated_badge';
+    badge.className = 'badge badge-pill badge-warning';
+    badge.textContent = `更新あり ${updatedBy.length}`;
+    badge.title = 'このRFCを更新したRFCの一覧を表示します';
+    badge.setAttribute('aria-expanded', 'false');
+    badge.setAttribute('aria-controls', domDetail.id);
+    badge.addEventListener('click', () => {
+      domDetail.hidden = !domDetail.hidden;
+      badge.setAttribute('aria-expanded', String(!domDetail.hidden));
+    });
+    domRfcStatus.insertAdjacentElement('afterend', badge);
   }
 
   _showDate(_rfcNumber, datum) {
