@@ -96,3 +96,66 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
 
     # Save file
     rfc_status_repo.save(obj)
+
+    # errata (却下されたものを除く)。頻繁に変わるため、更新状況とは別のファイルに保存する
+    rfc_status_repo.save_errata(make_errata(obj, rfc_api.fetch_errata_json()))
+
+
+# Errataの状態・種類（JSONでは頭文字だけを保存する）
+ERRATA_STATUS_CODES = {'Verified': 'V', 'Held for Document Update': 'H', 'Reported': 'R'}
+ERRATA_TYPE_CODES = {'Technical': 'T', 'Editorial': 'E'}
+# 一覧に表示する「対象の節」の最大文字数（自由記述のため長い文が入っていることがある）
+ERRATA_SECTION_LABEL_MAX = 40
+
+
+def make_errata(obj: dict, errata_list: list) -> dict:
+    """RFC EditorのErrata一覧を、RFC番号ごとの [[ID, 状態, 種類, 対象の節, [節番号...]], ...] にまとめる"""
+    errata_by_rfc = {}
+    for errata in errata_list:
+        m = re.match(r'^RFC0*([0-9]+)$', errata.get('doc-id') or '')
+        status = ERRATA_STATUS_CODES.get(errata.get('errata_status_code'))
+        if not m or not status or m.group(1) not in obj:
+            continue  # 却下(Rejected)されたものとRFC以外の文書は含めない
+        label = ' '.join((errata.get('section') or '').split())
+        if len(label) > ERRATA_SECTION_LABEL_MAX:
+            label = label[:ERRATA_SECTION_LABEL_MAX - 1] + '…'
+        errata_by_rfc.setdefault(m.group(1), []).append([
+            int(errata['errata_id']),
+            status,
+            ERRATA_TYPE_CODES.get(errata.get('errata_type_code'), ''),
+            label,
+            parse_errata_sections(errata.get('section') or ''),
+        ])
+    for entries in errata_by_rfc.values():
+        entries.sort(key=lambda e: e[0])
+    return dict(sorted(errata_by_rfc.items(), key=lambda kv: int(kv[0])))
+
+
+def parse_errata_sections(text: str) -> list:
+    """Errataの「対象の節」（自由記述）から節番号を取り出す。
+    例: "4.2.10." → ["4.2.10"], "4.3.2, B.3.2" → ["4.3.2", "B.3.2"], "2.8 & Appx E" → ["2.8", "E"],
+        "12, pg.18" → ["12"], "Appendix D.6" → ["D.6"], "GLOBAL" → []"""
+    # ページ番号（"pg. 4", "page 2"）は節番号ではない
+    text = re.sub(r'\b(?:pg|pp|page)s?\.?\s*\d+(?:\s*-\s*\d+)?', ' ', text, flags=re.IGNORECASE)
+    sections = []
+    for part in re.split(r'\s*(?:,|&|;|\+|/|\band\b)\s*', text):
+        part = part.strip()
+        appendix = re.match(r'^(?:Appendix|Appx|App)\.?\s+', part, flags=re.IGNORECASE)
+        if appendix:
+            part = part[appendix.end():]
+        part = re.sub(r'^(?:Sections?|Sec)\.?\s*|^§\s*', '', part, flags=re.IGNORECASE)
+        m = re.match(r'^(\d+(?:\.\d+)*|[A-Z](?:\.\d+)*)\.?(?=$|\s|\(|:)', part)
+        if not m:
+            # 文中の "In Section 25.1:" "see Appendix B" のような書き方
+            m = re.search(r'\b(?:Sections?|Appendix)\s+(\d+(?:\.\d+)*|[A-Z](?:\.\d+)*)\b', part, flags=re.IGNORECASE)
+            if not m or not re.match(r'^(?:\d|[A-Z])', m.group(1)):
+                continue
+            appendix = appendix or re.match(r'[A-Z]', m.group(1))
+        number = m.group(1)
+        # 英字1文字だけの節（付録）は、"Appendix" が付いているか、その文字だけが書かれている場合に限る
+        # （"A grouping ..." のような文の書き出しを付録Aと誤らないため）
+        if re.fullmatch(r'[A-Z]', number) and not appendix and part.rstrip('.') != number:
+            continue
+        if number not in sections:
+            sections.append(number)
+    return sections

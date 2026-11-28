@@ -73,6 +73,11 @@ class RfcUi {
     // 廃止RFCの表示、WGの表示
     this._fetchDataRfcListJson();
 
+    // Errata（正誤表）の件数のバッジと、Errataがある節の見出しの印
+    if (!this.domRfcDraft && this.rfcNumber) {
+      new RfcErrataUi(parseInt(this.rfcNumber)).setup();
+    }
+
     // ダークモードへの切り替えボタンの表示
     this._dispDarkmodeButton();
 
@@ -433,6 +438,181 @@ class RfcUi {
 
 // ---------------------------------------------------------------------------
 // html/rfcXXXX.html : 本文中の節・参考文献の参照をページ内リンクにする
+
+// RFC Editor に報告されたErrata（正誤表）を表示する。
+// データは html/data-rfc-errata/N.json（RFC番号の千の位ごと）にあり、1件は [ID, 状態, 種類, 対象の節, [節番号...]]。
+// 却下（Rejected）されたものはデータに含めていない。
+class RfcErrataUi {
+  static FETCH_SHARD_DIR = 'data-rfc-errata';
+  static STATUS = {
+    V: { label: '確認済み', title: 'Verified: 誤りと確認されたもの', cls: 'verified' },
+    H: { label: '改訂時に対応', title: 'Held for Document Update: 次の改訂で検討するもの', cls: 'held' },
+    R: { label: '未確認', title: 'Reported: 報告されたが、まだ確認されていないもの', cls: 'reported' },
+  };
+  static TYPE = { T: '技術的', E: '編集上' };
+
+  constructor(rfcNumber) {
+    this.rfcNumber = rfcNumber;
+  }
+
+  setup() {
+    fetch(`${RfcErrataUi.FETCH_SHARD_DIR}/${Math.floor(this.rfcNumber / 1000)}.json`)
+      .then(res => res.ok ? res.json() : Promise.reject(res.status))
+      .then(data => {
+        const errata = data[this.rfcNumber];
+        if (errata && errata.length > 0) {
+          this._collectSections();
+          this._showBadge(errata);
+          this._markSections(errata);
+        }
+      })
+      .catch(err => console.warn('data-rfc-errata:', err));
+  }
+
+  _collectSections() {
+    this.sections = new Map();  // 節番号 → 見出しの要素
+    document.querySelectorAll('.container .sec-row [data-section][id]').forEach(el => {
+      if (!this.sections.has(el.dataset.section)) {
+        this.sections.set(el.dataset.section, el);
+      }
+    });
+  }
+
+  // ステータスの並び（WGのバッジの左）に「Errata N」のバッジを出し、押すと一覧を開く
+  _showBadge(errata) {
+    const domRfcAlert = document.getElementById('rfc_alert');
+    const domRfcWg = document.getElementById('rfc_wg');
+    if (!domRfcAlert || !domRfcWg) {
+      return;
+    }
+    const domDetail = document.createElement('div');
+    domDetail.id = 'rfc_errata_list';
+    domDetail.className = 'alert alert-info rfc-errata-panel';
+    domDetail.setAttribute('role', 'note');
+    domDetail.hidden = true;
+    const head = document.createElement('div');
+    head.append(`このRFCには、${errata.length}件の Errata（正誤表）が報告されています。`);
+    const linkAll = document.createElement('a');
+    linkAll.href = `https://www.rfc-editor.org/errata/rfc${this.rfcNumber}`;
+    linkAll.textContent = 'RFC Editor の一覧';
+    linkAll.target = '_blank';
+    linkAll.rel = 'noopener';
+    head.append('（', linkAll, '）');
+    domDetail.append(head, this._makeList(errata, true));
+    domRfcAlert.after(domDetail);
+
+    const counts = { V: 0, H: 0, R: 0 };
+    errata.forEach(e => { counts[e[1]] = (counts[e[1]] || 0) + 1; });
+    const badge = document.createElement('button');
+    badge.type = 'button';
+    badge.id = 'rfc_errata_badge';
+    badge.className = 'badge badge-pill badge-info';
+    badge.textContent = `Errata ${errata.length}`;
+    badge.title = 'Errata（正誤表）の一覧を表示します\n' +
+      Object.entries(RfcErrataUi.STATUS).map(([k, v]) => `${v.label}: ${counts[k] || 0}件`).join(' / ');
+    badge.setAttribute('aria-expanded', 'false');
+    badge.setAttribute('aria-controls', domDetail.id);
+    badge.addEventListener('click', () => {
+      domDetail.hidden = !domDetail.hidden;
+      badge.setAttribute('aria-expanded', String(!domDetail.hidden));
+    });
+    domRfcWg.insertAdjacentElement('beforebegin', badge);
+  }
+
+  // Errataの一覧（1件1行: 状態・種類・対象の節・ID）
+  _makeList(errata, withSection) {
+    const list = document.createElement('ul');
+    list.className = 'rfc-errata-list';
+    errata.forEach(([id, status, type, label, sections]) => {
+      const item = document.createElement('li');
+      const st = RfcErrataUi.STATUS[status] || { label: status, title: '', cls: '' };
+      const domStatus = document.createElement('span');
+      domStatus.className = `rfc-errata-status rfc-errata-${st.cls}`;
+      domStatus.textContent = st.label;
+      domStatus.title = st.title;
+      item.append(domStatus, ` ${RfcErrataUi.TYPE[type] || ''}`);
+      if (withSection) {
+        item.append(' ', this._makeSectionLabel(label, sections));
+      }
+      const link = document.createElement('a');
+      link.href = `https://www.rfc-editor.org/errata/eid${id}`;
+      link.textContent = `Errata ID ${id}`;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      item.append(' — ', link);
+      list.appendChild(item);
+    });
+    return list;
+  }
+
+  // 対象の節。ページ内にある節は見出しへのリンクにする（"GLOBAL" のような自由記述はそのまま出す）
+  _makeSectionLabel(label, sections) {
+    const domLabel = document.createElement('span');
+    domLabel.className = 'rfc-errata-section';
+    const linked = sections.filter(sec => this.sections.has(sec));
+    if (linked.length === 0) {
+      domLabel.textContent = label ? `（${label}）` : '';
+      return domLabel;
+    }
+    domLabel.append('（');
+    linked.forEach((sec, i) => {
+      if (i > 0) {
+        domLabel.append(', ');
+      }
+      const link = document.createElement('a');
+      link.href = `#${this.sections.get(sec).id}`;
+      link.textContent = /^[A-Z]/.test(sec) ? `付録${sec}` : `${sec}節`;
+      domLabel.appendChild(link);
+    });
+    domLabel.append('）');
+    return domLabel;
+  }
+
+  // Errataがある節の見出しに印を付け、押すとその節のErrataを見出しの下に開く。
+  // 印は見出し（.text）の外に置く（見出しの文字列を目次やリンクの概要表示が使うため）
+  _markSections(errata) {
+    const bySection = new Map();
+    errata.forEach(e => {
+      for (const sec of e[4]) {
+        if (this.sections.has(sec)) {
+          if (!bySection.has(sec)) {
+            bySection.set(sec, []);
+          }
+          bySection.get(sec).push(e);
+        }
+      }
+    });
+    bySection.forEach((items, sec) => {
+      const heading = this.sections.get(sec);
+      const row = heading.closest('.sec-row');
+      const cols = row ? row.querySelectorAll(':scope > div') : [];
+      const col = cols[cols.length - 1];
+      if (!col) {
+        return;
+      }
+      const panel = document.createElement('div');
+      panel.id = `errata-${heading.id}`;
+      panel.className = 'alert alert-info rfc-errata-panel rfc-errata-section-panel';
+      panel.hidden = true;
+      panel.append(`この節には、${items.length}件の Errata が報告されています。`, this._makeList(items, false));
+      row.after(panel);
+
+      const mark = document.createElement('button');
+      mark.type = 'button';
+      mark.className = 'badge badge-pill badge-info rfc-errata-mark';
+      mark.textContent = `Errata ${items.length}`;
+      mark.title = 'この節のErrata（正誤表）を表示します';
+      mark.setAttribute('aria-expanded', 'false');
+      mark.setAttribute('aria-controls', panel.id);
+      mark.addEventListener('click', () => {
+        panel.hidden = !panel.hidden;
+        mark.setAttribute('aria-expanded', String(!panel.hidden));
+      });
+      col.classList.add('rfc-errata-marked');
+      col.appendChild(mark);
+    });
+  }
+}
 
 class RfcInPageLinkUi {
   static CSSCLASS_LINK = 'rfc-inpage-link';
