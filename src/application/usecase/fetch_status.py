@@ -98,7 +98,10 @@ def fetch_status(rfc_status_repo: IRfcStatusRepository,
     rfc_status_repo.save(obj)
 
     # errata (却下されたものを除く)。頻繁に変わるため、更新状況とは別のファイルに保存する
-    rfc_status_repo.save_errata(make_errata(obj, rfc_api.fetch_errata_json()))
+    errata_list = rfc_api.fetch_errata_json()
+    rfc_status_repo.save_errata(make_errata(obj, errata_list))
+    # 各Errataの原文・修正文・補足は大きいため、RFCごとのファイルに分けて、表示するときだけ取得する
+    rfc_status_repo.save_errata_details(make_errata_details(obj, errata_list))
 
 
 # Errataの状態・種類（JSONでは頭文字だけを保存する）
@@ -129,6 +132,34 @@ def make_errata(obj: dict, errata_list: list) -> dict:
     for entries in errata_by_rfc.values():
         entries.sort(key=lambda e: e[0])
     return dict(sorted(errata_by_rfc.items(), key=lambda kv: int(kv[0])))
+
+
+def make_errata_details(obj: dict, errata_list: list) -> dict:
+    """RFC番号ごとに、各Errataの原文・修正文・補足をまとめる（却下されたものを除く）"""
+    details = {}
+    for errata in errata_list:
+        m = re.match(r'^RFC0*([0-9]+)$', errata.get('doc-id') or '')
+        if not m or errata.get('errata_status_code') not in ERRATA_STATUS_CODES or m.group(1) not in obj:
+            continue
+        details.setdefault(m.group(1), []).append({
+            'id': int(errata['errata_id']),
+            'status': errata.get('errata_status_code') or '',
+            'type': errata.get('errata_type_code') or '',
+            'section': ' '.join((errata.get('section') or '').split()),
+            'date': errata.get('submit_date') or '',
+            'orig': normalize_errata_text(errata.get('orig_text')),
+            'correct': normalize_errata_text(errata.get('correct_text')),
+            'notes': normalize_errata_text(errata.get('notes')),
+        })
+    for entries in details.values():
+        entries.sort(key=lambda e: e['id'])
+    return dict(sorted(details.items(), key=lambda kv: int(kv[0])))
+
+
+def normalize_errata_text(text) -> str:
+    """改行コードをLFに揃え、前後の空行と行末の空白を取り除く（字下げは図や構文のために残す）"""
+    lines = (text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    return '\n'.join(line.rstrip() for line in lines).strip('\n')
 
 
 def parse_errata_sections(text: str) -> list:

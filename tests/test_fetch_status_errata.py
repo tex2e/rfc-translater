@@ -2,7 +2,7 @@
 # python3 -m unittest discover -s tests -p "test_*.py"
 
 import unittest
-from src.application.usecase.fetch_status import make_errata, parse_errata_sections
+from src.application.usecase.fetch_status import make_errata, make_errata_details, normalize_errata_text, parse_errata_sections
 
 
 class TestParseErrataSections(unittest.TestCase):
@@ -60,6 +60,29 @@ class TestMakeErrata(unittest.TestCase):
             [5483, 'H', 'E', 'GLOBAL', []],
             [6146, 'V', 'T', '4.2.10.', ['4.2.10']],
         ]})
+
+
+class TestMakeErrataDetails(unittest.TestCase):
+
+    def test_make_errata_details(self):
+        obj = {'8446': {}}
+        details = make_errata_details(obj, [
+            {'errata_id': '6146', 'doc-id': 'RFC8446', 'errata_status_code': 'Verified',
+             'errata_type_code': 'Technical', 'section': ' 4.2.10. ', 'submit_date': '2020-04-29',
+             'orig_text': '   a = 1;  \r\n   b = 2;\r\n', 'correct_text': '   a = 2;', 'notes': None},
+            {'errata_id': '6120', 'doc-id': 'RFC8446', 'errata_status_code': 'Rejected',
+             'errata_type_code': 'Editorial', 'section': '1', 'orig_text': 'x', 'correct_text': 'y'},
+            {'errata_id': '1', 'doc-id': 'RFC9999', 'errata_status_code': 'Verified',
+             'errata_type_code': 'Editorial', 'section': '1'},
+        ])
+        self.assertEqual(details, {'8446': [{
+            'id': 6146, 'status': 'Verified', 'type': 'Technical', 'section': '4.2.10.',
+            'date': '2020-04-29', 'orig': '   a = 1;\n   b = 2;', 'correct': '   a = 2;', 'notes': '',
+        }]})
+
+    def test_normalize_errata_text(self):
+        self.assertEqual(normalize_errata_text('\r\n\r\n   indented  \r\nnext\r\n\r\n'), '   indented\nnext')
+        self.assertEqual(normalize_errata_text(None), '')
 
 
 if __name__ == '__main__':

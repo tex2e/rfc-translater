@@ -22,6 +22,7 @@ class RfcFile:
     GLOB_HTML_DRAFT_FILE = 'html/draft/draft-*.html'
     GLOB_DATA_TRANS_JSON_FILE = 'data/*/rfc*-trans.json'
     GLOB_DATA_DRAFT_TRANS_JSON_FILE = 'data/draft/draft-*-trans.json'
+    GLOB_DATA_ERRATA_JSON_FILE = 'data/*/rfc*-errata.json'
 
     TEMPLATE_HTML_INDEX = 'templates/index.html'
     TEMPLATE_HTML_RFC = 'templates/rfc.html'
@@ -83,6 +84,12 @@ class RfcFile:
             return os.path.join(dir_data, f'rfc{rfc.get_id()}-summary.json')
         elif isinstance(rfc, RfcDraft):
             return os.path.join(dir_data, f'{rfc.get_id()}-summary.json')
+
+    @staticmethod
+    def get_filepath_data_errata_json(rfc: Rfc) -> str:
+        """RFCのErrata（原文・修正文・補足）のJSONファイルパス"""
+        assert isinstance(rfc, Rfc)
+        return os.path.join(RfcFile.get_dir_data(rfc), f'rfc{rfc.get_id()}-errata.json')
 
     @staticmethod
     def get_filepath_html_rfc(rfc: IRfc) -> str:

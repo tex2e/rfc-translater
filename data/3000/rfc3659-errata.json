@@ -1,0 +1,75 @@
+{
+  "number": 3659,
+  "errata": [
+    {
+      "id": 899,
+      "status": "Verified",
+      "type": "Editorial",
+      "section": "6.5",
+      "date": "2007-04-14",
+      "orig": "   That those pathnames all exist does not imply that the TVFS sever\n   will necessarily grant any kind of access rights to the named paths,\n   or that access to the same file via different pathnames will\n   necessarily be granted equal rights.",
+      "correct": "   That those pathnames all exist does not imply that the TVFS server\n   will necessarily grant any kind of access rights to the named paths,\n   or that access to the same file via different pathnames will\n   necessarily be granted equal rights.",
+      "notes": "typo: sever --> server\n\nfrom pending"
+    },
+    {
+      "id": 900,
+      "status": "Verified",
+      "type": "Editorial",
+      "section": "7",
+      "date": "2007-04-14",
+      "orig": "   The MLST and MLSD commands also extend the FTP protocol as presented\n   in STD 9, RFC 959 [3] and STD 3, RFC 1123 [9] to allow that\n   transmission of 8-bit data over the control connection.",
+      "correct": "   The MLST and MLSD commands also extend the FTP protocol as presented\n   in STD 9, RFC 959 [3] and STD 3, RFC 1123 [9] to allow the\n   transmission of 8-bit data over the control connection.",
+      "notes": "typo: that --> the\n\nfrom pending"
+    },
+    {
+      "id": 903,
+      "status": "Held for Document Update",
+      "type": "Editorial",
+      "section": "9",
+      "date": "2007-04-14",
+      "orig": "                                 [...].  Unless the \"media-type\" fact is\n   provided in a MLSx response nor is any advice given here that would\n   allow determining the content type.  [...]",
+      "correct": "                                 [...].  Unless the \"media-type\" fact is\n   provided in a MLSx response, no advice is given here that would allow\n   determining the content type.  [...]",
+      "notes": "This sentence apparently is garbled a bit.\n\nfrom pending"
+    },
+    {
+      "id": 1500,
+      "status": "Held for Document Update",
+      "type": "Technical",
+      "section": "7.7.4",
+      "date": "2008-09-02",
+      "orig": "7.7.4.  A More Complex Example\n ...\nC> MLSD test\nS> 150 BINARY connection open for MLSD test\nD> Type=cdir;Perm=el;Unique=keVO1+ZF4; test\nD> Type=pdir;Perm=e;Unique=keVO1+d?3; ..\nD> Type=OS.unix=slink:/foobar;Perm=;Unique=keVO1+4G4; foobar",
+      "correct": "7.7.4.  A More Complex Example\n ...\nC> MLSD test\nS> 150 BINARY connection open for MLSD test\nD> Type=cdir;Perm=el;Unique=keVO1+ZF4; test\nD> Type=pdir;Perm=e;Unique=keVO1+d?3; ..\nD> Type=OS.unix=symlink;Perm=;Unique=keVO1+4G4; foobar\n     ... more lines ...\nD> Type=dir;Perm=;Unique=keVO1+4G4; /foobar; does originally point to here",
+      "notes": "The sample sequence in chapter 7.7.4 uses an example which is completely wrong, because it violates the basic BNF rules of its own document.\n\nPlease, see the definition, which is violated:\n\n7.2.  Format of MLSx Response\nThe format of a response to an MLSx command is as follows:\n      ...\n      entry            = [ facts ] SP pathname\n      facts            = 1*( fact \";\" )\n      fact             = factname \"=\" value\n      ...\n\nRemember, a fact may not contain \";\" or SPC (\" \")!\nNow take a look into the bad example:\n\n\n7.7.4.  A More Complex Example\n ...\n\tC> MLSD test\n\tS> 150 BINARY connection open for MLSD test\n\tD> Type=cdir;Perm=el;Unique=keVO1+ZF4; test\n\tD> Type=pdir;Perm=e;Unique=keVO1+d?3; ..\n\tD> Type=OS.unix=slink:/foobar;Perm=;Unique=keVO1+4G4; foobar\n\n\nthe last line uses the fact \"Type=OS.unix=slink:/foobar;\". While this line in special not violates the rules at the moment, it implies that \"Type=OS.unix=slink:\" starts printing the original link target of any given symbolic link. Not wrong till here, but in case a link points to an original directory which name contains a \";\" or, most worse, a \"; \" sequence, it will\nlead any client side PI into misinterpretation of the line.\n\nEven more worse, some actual public servers already use this bad syntax. Some can be found at least in the Swiss. It looks like they are running proftpd under Linux operating system, but this is unconfirmed for now.\n\n\nSolution:\n\nThe chapter 7 of the same document allows another approach to tell the client about the original destination of a symlink. This solution uses two lines of answer, see my example:\n\n\tC> MLSD test\n\tS> 150 BINARY connection open for MLSD test\n\tD> Type=cdir;Perm=el;Unique=keVO1+ZF4; test\n\tD> Type=pdir;Perm=e;Unique=keVO1+d?3; ..\n\tD> Type=OS.unix=symlink;Perm=;Unique=keVO1+4G4; foobar points somewhere else\n     ... more lines ...\n\tD> Type=dir;Perm=;Unique=keVO1+4G4; /foobar; does originally point to here\n\nbecause of the \"Unique\" fact, a client PI can now collect all lines with the fact \"Type=OS.unix=symlink\" and file it under an associative array (map, hastable) with \"keVO1+4G4\" as the access key. Once the client side parser again gets \"Unique=keVO1+4G4\", it now can record \"/foobar; does point to here\" as the original point where foobar points to.\n\nThis is exactly, what chapter 7.5.1.5 defines about the \"Unique\" fact. Please read:\n   Note: Where the underlying system supports a file type that is\n   essentially an indirect pointer to another file, the NVFS\n   representation of that type should normally be to represent the file\n   that the reference indicates.  That is, the underlying basic file\n   will appear more than once in the NVFS, each time with the \"unique\"\n   fact (see immediately following section) containing the same value,\n   indicating that the same file is represented by all such names.\n\n\nUseful to say, setting the slink into double quotes like suggested by some developers:\n\n\tD> Type=OS.unix=\"slink:/foobar\";Perm=;Unique=keVO1+4G4; foobar\n\nwould violate the same documents BNF rules (see RCHAR), as well it would require escaping of any DQUOTE in the link pathname itself. This, again, would violate RFC959 which not defines escaping of characters.\n\n\nFinally, FTP does not support 2 pathnames at the same line at all. This convention sould never been broken."
+    },
+    {
+      "id": 2496,
+      "status": "Held for Document Update",
+      "type": "Editorial",
+      "section": "GLOBAL",
+      "date": "2010-08-21",
+      "orig": "3.2\n...\nVarious 4xy replies are also possible in appropriate circumstances.\n\n4.2\n...\nVarious 4xy replies are also possible in appropriate circumstances.\n\n7.2.1\n   Many of the 4xy and 5xy responses defined in section 4.2 of STD 9,\n   RFC 959 [3] are possible in response to the MLST and MLSD commands.\n...\n   Other replies (530, 553, 503, 504, and any of the 4xy replies) are\n   also possible in appropriate circumstances.",
+      "correct": "3.2\n...\nVarious 4yz replies are also possible in appropriate circumstances.\n\n4.2\n...\nVarious 4yz replies are also possible in appropriate circumstances.\n\n7.2.1\n   Many of the 4yz and 5yz responses defined in section 4.2 of STD 9,\n   RFC 959 [3] are possible in response to the MLST and MLSD commands.\n...\n   Other replies (530, 553, 503, 504, and any of the 4yz replies) are\n   also possible in appropriate circumstances.",
+      "notes": "RFC 959, Section 4.2 refers to these reply codes as 4yz and 5yz, instead of 4xy and 5xy."
+    },
+    {
+      "id": 2850,
+      "status": "Held for Document Update",
+      "type": "Technical",
+      "section": "2.5",
+      "date": "2011-06-29",
+      "orig": "   and each sequence of\n   lines that begin \"D> \" was sent from the server-PI to the user-PI\n   over a data connection created just to send those lines and closed\n   immediately after.",
+      "correct": "   and each sequence of\n   lines that begin \"D> \" was sent from the server-DTP to the user-DTP\n   over a data connection created just to send those lines and closed\n   immediately after.",
+      "notes": "In this case the acting parties are DTPs, not PIs."
+    },
+    {
+      "id": 6252,
+      "status": "Verified",
+      "type": "Editorial",
+      "section": "10.2",
+      "date": "2020-08-08",
+      "orig": "To add a file type to this OS specific registry of OS specific file types, an applicant must send to the IANA a request, in which is specified the OS name, the OS specific file type, a definition of the syntax of the fact value, which must conform to the syntax of a token as given in this document, and a specification of the semantics to be associated with the particular fact and its values.",
+      "correct": "To add a file type to this OS specific registry of OS specific file types, an applicant must send to the IANA a request, in which is specified the OS name, the OS specific file type, and a specification of the semantics to be associated with the particular OS specific file type.",
+      "notes": "It appears that the text in section 10.2 has been copy/pasted from section 10.1, without applying the necessary adjustments for the differences between OS-specific facts and OS-specific filetypes. While OS-specific facts do have values (see section 7.2), there is no concept of a \"value\" of an OS-specific filetype defined in the RFC (see section 7.5.1.5).\n\nThis error effectively makes it impossible to register an OS-specific filetype with IANA, were IANA to follow the wording of the RFC to the letter – IANA must demand a \"definition of the syntax of the fact value\" for every filetype registration, despite the fact that request makes no sense for a filetype as defined in the RFC."
+    }
+  ]
+}

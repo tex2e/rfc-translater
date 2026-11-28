@@ -6,6 +6,8 @@
 - `data/N000/rfcNXXX.json` : 段落区切りの文書
 - `data/N000/rfcNXXX-trans.json` : 各文章の翻訳を付与した情報
 - `data/N000/rfcNXXX-summary.json` : RFCの要約
+- `data/N000/rfcNXXX-errata.json` : RFC Editor に報告された Errata（原文・修正文・補足）。`python3 main.py --fetch-status` で生成するので、手で編集しないこと
+- `html/data-rfc-errata/N.json` : RFCごとの Errata の一覧（ID・状態・種類・対象の節）。`--fetch-status` で生成する
 
 ### 要件定義
 

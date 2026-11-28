@@ -450,9 +450,28 @@ class RfcErrataUi {
     R: { label: '未確認', title: 'Reported: 報告されたが、まだ確認されていないもの', cls: 'reported' },
   };
   static TYPE = { T: '技術的', E: '編集上' };
+  // 原文と修正文の差分を強調する上限（単語数の積）。これを超える長さでは強調せずにそのまま出す
+  static DIFF_MAX_CELLS = 4000000;
 
   constructor(rfcNumber) {
     this.rfcNumber = rfcNumber;
+    this.details = null;  // 原文・修正文・補足（data/N000/rfcNXXX-errata.json）は開いたときだけ取得する
+  }
+
+  // 各Errataの原文・修正文・補足を取得する（ID → 内容）
+  _fetchDetails() {
+    if (!this.details) {
+      const dir = String(Math.floor(this.rfcNumber / 1000) * 1000).padStart(4, '0');
+      this.details = fetch(`../data/${dir}/rfc${this.rfcNumber}-errata.json`)
+        .then(res => res.ok ? res.json() : Promise.reject(res.status))
+        .then(data => new Map(data.errata.map(e => [e.id, e])))
+        .catch(err => {
+          console.warn('rfc-errata:', err);
+          this.details = null;  // 次に開いたときに取得し直す
+          return new Map();
+        });
+    }
+    return this.details;
   }
 
   setup() {
@@ -539,10 +558,122 @@ class RfcErrataUi {
       link.textContent = `Errata ID ${id}`;
       link.target = '_blank';
       link.rel = 'noopener';
-      item.append(' — ', link);
+      item.append(' — ', link, ' ', this._makeDetailToggle(id, item));
       list.appendChild(item);
     });
     return list;
+  }
+
+  // 「内容」ボタン。押すと原文・修正文・補足をその項目の下に開く
+  _makeDetailToggle(id, item) {
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'btn btn-link btn-sm rfc-errata-toggle';
+    toggle.textContent = '内容を見る';
+    toggle.setAttribute('aria-expanded', 'false');
+    let domDetail = null;
+    toggle.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true';
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.textContent = open ? '内容を閉じる' : '内容を見る';
+      if (domDetail) {
+        domDetail.hidden = !open;
+        return;
+      }
+      domDetail = document.createElement('div');
+      domDetail.className = 'rfc-errata-detail';
+      domDetail.textContent = '読み込み中…';
+      item.appendChild(domDetail);
+      this._fetchDetails().then(details => {
+        domDetail.textContent = '';
+        const detail = details.get(id);
+        if (!detail) {
+          domDetail.append('内容を取得できませんでした。RFC Editor のページを参照してください。');
+          return;
+        }
+        this._fillDetail(domDetail, detail);
+      });
+    });
+    return toggle;
+  }
+
+  // 原文・修正文（変わった単語を強調）・補足・報告日。原文は英語のまま表示する
+  _fillDetail(domDetail, detail) {
+    const [origMarked, correctMarked] = this._diffWords(detail.orig, detail.correct);
+    const addBlock = (title, nodes, cls) => {
+      if (nodes.length === 0) {
+        return;
+      }
+      const domTitle = document.createElement('div');
+      domTitle.className = 'rfc-errata-detail-title';
+      domTitle.textContent = title;
+      const domBody = document.createElement('pre');
+      domBody.className = `rfc-errata-detail-text ${cls}`;
+      domBody.append(...nodes);
+      domDetail.append(domTitle, domBody);
+    };
+    addBlock('誤り（Original Text）', origMarked, 'rfc-errata-orig');
+    addBlock('修正（Corrected Text）', correctMarked, 'rfc-errata-correct');
+    addBlock('補足（Notes）', detail.notes ? [detail.notes] : [], 'rfc-errata-notes');
+    if (detail.date) {
+      const domDate = document.createElement('div');
+      domDate.className = 'rfc-errata-detail-date';
+      domDate.textContent = `報告日: ${detail.date}`;
+      domDetail.appendChild(domDate);
+    }
+  }
+
+  // 原文と修正文を単語（空白を含む）単位で比べ、消えた語を <del>、加わった語を <ins> で囲む
+  _diffWords(orig, correct) {
+    const a = orig ? orig.split(/(\s+)/) : [];
+    const b = correct ? correct.split(/(\s+)/) : [];
+    const plain = (tokens) => tokens.length > 0 ? [tokens.join('')] : [];
+    if (a.length === 0 || b.length === 0 || a.length * b.length > RfcErrataUi.DIFF_MAX_CELLS) {
+      return [plain(a), plain(b)];
+    }
+    // 最長共通部分列（LCS）の長さの表
+    const n = a.length, m = b.length;
+    const lcs = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        lcs[i][j] = (a[i] === b[j]) ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+      }
+    }
+    const outA = [], outB = [];
+    const push = (out, tag, token) => {
+      const last = out[out.length - 1];
+      if (tag === null) {
+        if (typeof last === 'string') {
+          out[out.length - 1] = last + token;
+        } else {
+          out.push(token);
+        }
+      } else if (last && last.tagName === tag.toUpperCase()) {
+        last.textContent += token;
+      } else {
+        const el = document.createElement(tag);
+        el.textContent = token;
+        out.push(el);
+      }
+    };
+    // 空白だけの違いは強調しない
+    const isSpace = (t) => /^\s*$/.test(t);
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) {
+        push(outA, null, a[i++]);
+        push(outB, null, b[j++]);
+      } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+        push(outA, isSpace(a[i]) ? null : 'del', a[i]);
+        i++;
+      } else {
+        push(outB, isSpace(b[j]) ? null : 'ins', b[j]);
+        j++;
+      }
+    }
+    for (; i < n; i++) push(outA, isSpace(a[i]) ? null : 'del', a[i]);
+    for (; j < m; j++) push(outB, isSpace(b[j]) ? null : 'ins', b[j]);
+    return [outA, outB];
   }
 
   // 対象の節。ページ内にある節は見出しへのリンクにする（"GLOBAL" のような自由記述はそのまま出す）
@@ -594,7 +725,9 @@ class RfcErrataUi {
       panel.id = `errata-${heading.id}`;
       panel.className = 'alert alert-info rfc-errata-panel rfc-errata-section-panel';
       panel.hidden = true;
-      panel.append(`この節には、${items.length}件の Errata が報告されています。`, this._makeList(items, false));
+      const domMessage = document.createElement('div');
+      domMessage.textContent = `この節には、${items.length}件の Errata が報告されています。`;
+      panel.append(domMessage, this._makeList(items, false));
       row.after(panel);
 
       const mark = document.createElement('button');
@@ -607,6 +740,11 @@ class RfcErrataUi {
       mark.addEventListener('click', () => {
         panel.hidden = !panel.hidden;
         mark.setAttribute('aria-expanded', String(!panel.hidden));
+        // 節の中のErrataは件数が少ないため、原文と修正文を最初から開いておく
+        if (!panel.hidden && !panel.dataset.opened) {
+          panel.dataset.opened = '1';
+          panel.querySelectorAll('.rfc-errata-toggle[aria-expanded="false"]').forEach(btn => btn.click());
+        }
       });
       col.classList.add('rfc-errata-marked');
       col.appendChild(mark);
