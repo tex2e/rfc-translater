@@ -82,6 +82,8 @@ class RfcUi {
       // 目次と現在の節名の表示
       this.sectionNav = new RfcSectionNavUi();
       this.sectionNav.setup();
+      // 本文中のRFCへのリンクにマウスを乗せたときの概要表示
+      new RfcLinkPreviewUi(this.rfcNumber).setup();
     }
   }
 
@@ -379,6 +381,246 @@ class RfcUi {
     return `${RfcUi.ISSUE_URL}?${params.toString()}`;
   }
 
+}
+
+
+// ---------------------------------------------------------------------------
+// html/rfcXXXX.html : RFCへのリンクにマウスを乗せたときの概要表示
+
+class RfcLinkPreviewUi {
+  // 日本語タイトル・追加情報（千件ごとに分割したもの）のディレクトリ
+  static TITLE_SHARD_DIR = 'data-rfc-title';
+  static LIST_SHARD_DIR = 'data-rfc-list';
+  // マウスを乗せてから表示するまでの時間（通り過ぎただけでは出さない）
+  static SHOW_DELAY_MS = 250;
+  // マウスが離れてから消すまでの時間（カードへ移動する間に消えないようにする）
+  static HIDE_DELAY_MS = 150;
+  // 要約は最初の何文までを表示するか
+  static SUMMARY_SENTENCES = 2;
+
+  constructor(currentRfcNumber) {
+    this.currentRfcNumber = String(parseInt(currentRfcNumber));
+    // データの場所は index.js と同じディレクトリを基準にする（ドラフト版のページは1階層下にあるため）
+    const script = document.querySelector('script[src$="index.js"]');
+    this.baseUrl = new URL('.', script ? script.src : window.location.href);
+    this.shards = new Map();     // `${dir}/${n}` → Promise<object>
+    this.summaries = new Map();  // RFC番号 → Promise<string|null>
+    this.activeLink = null;
+    this.showTimer = null;
+    this.hideTimer = null;
+    this.card = null;
+  }
+
+  setup() {
+    // タッチ操作ではホバーがないため表示しない（タップでそのままリンク先へ移動する）
+    if (!window.matchMedia('(hover: hover)').matches) {
+      return;
+    }
+    document.addEventListener('mouseover', evt => this._onEnter(evt.target));
+    document.addEventListener('mouseout', evt => this._onLeave(evt.target, evt.relatedTarget));
+    document.addEventListener('focusin', evt => this._onEnter(evt.target));
+    document.addEventListener('focusout', evt => this._onLeave(evt.target, evt.relatedTarget));
+    document.addEventListener('keydown', evt => {
+      if (evt.key === 'Escape') {
+        this._hide();
+      }
+    });
+    window.addEventListener('scroll', () => this._hide(), { passive: true });
+  }
+
+  // リンク先のRFC番号（RFCへのリンクでなければnull）
+  _rfcNumberOf(link) {
+    if (!link || link.tagName !== 'A' || !link.closest('.container')) {
+      return null;
+    }
+    const href = link.getAttribute('href') || '';
+    const m = href.match(/(?:^|\/)rfc(\d+)\.html$/) || href.match(/^https:\/\/datatracker\.ietf\.org\/doc\/html\/rfc(\d+)$/);
+    if (!m) {
+      return null;
+    }
+    const number = String(parseInt(m[1]));
+    return number === this.currentRfcNumber ? null : number;
+  }
+
+  _onEnter(target) {
+    if (this.card && this.card.contains(target)) {
+      clearTimeout(this.hideTimer);
+      return;
+    }
+    const link = target.closest ? target.closest('a') : null;
+    const rfcNumber = this._rfcNumberOf(link);
+    if (!rfcNumber) {
+      return;
+    }
+    clearTimeout(this.hideTimer);
+    if (link === this.activeLink) {
+      return;
+    }
+    clearTimeout(this.showTimer);
+    this.showTimer = setTimeout(() => this._show(link, rfcNumber), RfcLinkPreviewUi.SHOW_DELAY_MS);
+  }
+
+  _onLeave(target, relatedTarget) {
+    const link = target.closest ? target.closest('a') : null;
+    const fromCard = this.card && this.card.contains(target);
+    if (!fromCard && !this._rfcNumberOf(link)) {
+      return;
+    }
+    // リンクとカードの間を移動しているときは消さない
+    if (relatedTarget && ((link && link.contains(relatedTarget)) || (this.card && this.card.contains(relatedTarget)))) {
+      return;
+    }
+    clearTimeout(this.showTimer);
+    this.hideTimer = setTimeout(() => this._hide(), RfcLinkPreviewUi.HIDE_DELAY_MS);
+  }
+
+  async _show(link, rfcNumber) {
+    this.activeLink = link;
+    this._render(link, rfcNumber, null);
+    const info = await this._fetchInfo(rfcNumber);
+    // 取得中に別のリンクへ移っていたら上書きしない
+    if (this.activeLink === link) {
+      this._render(link, rfcNumber, info);
+    }
+  }
+
+  _hide() {
+    clearTimeout(this.showTimer);
+    clearTimeout(this.hideTimer);
+    if (this.activeLink) {
+      this.activeLink.removeAttribute('aria-describedby');
+    }
+    this.activeLink = null;
+    if (this.card) {
+      this.card.hidden = true;
+    }
+  }
+
+  _fetchShard(dir, rfcNumber) {
+    const key = `${dir}/${Math.floor(parseInt(rfcNumber) / 1000)}`;
+    if (!this.shards.has(key)) {
+      this.shards.set(key, fetch(new URL(`${key}.json`, this.baseUrl))
+        .then(res => res.ok ? res.json() : {})
+        .catch(() => ({})));
+    }
+    return this.shards.get(key);
+  }
+
+  _fetchSummary(rfcNumber) {
+    // RFC 2220 未満は翻訳の対象外のため、要約もない
+    if (parseInt(rfcNumber) < 2220) {
+      return Promise.resolve(null);
+    }
+    if (!this.summaries.has(rfcNumber)) {
+      const dir = String(Math.floor(parseInt(rfcNumber) / 1000) * 1000).padStart(4, '0');
+      this.summaries.set(rfcNumber, fetch(new URL(`../data/${dir}/rfc${rfcNumber}-summary.json`, this.baseUrl))
+        .then(res => res.ok ? res.json() : null)
+        .then(obj => (obj && Array.isArray(obj[RfcSummaryJsonElem.SUMMARY])) ? obj[RfcSummaryJsonElem.SUMMARY] : null)
+        .catch(() => null));
+    }
+    return this.summaries.get(rfcNumber);
+  }
+
+  async _fetchInfo(rfcNumber) {
+    const [titles, list, summary] = await Promise.all([
+      this._fetchShard(RfcLinkPreviewUi.TITLE_SHARD_DIR, rfcNumber),
+      this._fetchShard(RfcLinkPreviewUi.LIST_SHARD_DIR, rfcNumber),
+      this._fetchSummary(rfcNumber),
+    ]);
+    return {
+      // カード見出しにRFC番号を表示するため、タイトル先頭の「RFC XXXX - 」は省く
+      title: (titles[rfcNumber] || '').replace(/^RFC\s*\d+\s*-\s*/, ''),
+      datum: list[rfcNumber] || {},
+      summary: summary ? summary.slice(0, RfcLinkPreviewUi.SUMMARY_SENTENCES).join('') : null,
+    };
+  }
+
+  _ensureCard() {
+    if (!this.card) {
+      this.card = document.createElement('div');
+      this.card.id = 'rfc_link_preview';
+      this.card.className = 'rfc-link-preview';
+      this.card.setAttribute('role', 'tooltip');
+      this.card.hidden = true;
+      document.body.appendChild(this.card);
+    }
+    return this.card;
+  }
+
+  _render(link, rfcNumber, info) {
+    const card = this._ensureCard();
+    card.innerHTML = `
+      <div class="rfc-link-preview-head">
+        <strong class="rfc-link-preview-number"></strong>
+        <span class="rfc-link-preview-badges"></span>
+        <span class="rfc-link-preview-date"></span>
+      </div>
+      <div class="rfc-link-preview-title"></div>
+      <div class="rfc-link-preview-obsoleted"></div>
+      <div class="rfc-link-preview-summary"></div>
+    `;
+    card.querySelector('.rfc-link-preview-number').textContent = `RFC ${rfcNumber}`;
+    const domTitle = card.querySelector('.rfc-link-preview-title');
+    const domSummary = card.querySelector('.rfc-link-preview-summary');
+    const domObsoleted = card.querySelector('.rfc-link-preview-obsoleted');
+
+    if (!info) {
+      domSummary.textContent = '読み込み中...';
+      domSummary.classList.add('rfc-link-preview-note');
+    } else {
+      const status = info.datum[RfcIndexJsonElem.CURRENT_STATUS];
+      if (status) {
+        const badge = document.createElement('span');
+        badge.className = `badge badge-pill badge-${RFC_STATUS_BADGE_CLASS[status] || 'light'}`;
+        badge.textContent = status;
+        card.querySelector('.rfc-link-preview-badges').appendChild(badge);
+      }
+      const date = formatRfcDate(info.datum[RfcIndexJsonElem.DATE]);
+      if (date) {
+        card.querySelector('.rfc-link-preview-date').textContent = `${date}発行`;
+      }
+      const obsBy = info.datum[RfcIndexJsonElem.OBSOLETED_BY];
+      if (obsBy && obsBy.length) {
+        domObsoleted.textContent = `廃止（後継: ${obsBy.map(n => `RFC ${n}`).join(', ')}）`;
+      }
+      domTitle.textContent = info.title;
+      if (info.summary) {
+        domSummary.textContent = info.summary;
+      } else if (/^https?:\/\//.test(link.getAttribute('href') || '')) {
+        // 本文を翻訳していないRFCは、タイトルだけを表示してリンク先がIETFのサイトであることを添える
+        domSummary.textContent = '本文の日本語訳はありません（リンク先はIETFのサイトです）';
+        domSummary.classList.add('rfc-link-preview-note');
+      }
+    }
+    for (const elem of [domTitle, domSummary, domObsoleted]) {
+      elem.hidden = !elem.textContent;
+    }
+
+    card.hidden = false;
+    link.setAttribute('aria-describedby', card.id);
+    this._place(link, card);
+  }
+
+  // リンクの下に表示する（下に収まらないときは上）。画面の左右からはみ出さないようにする
+  _place(link, card) {
+    const margin = 8;
+    const gap = 6;
+    // 折り返したリンクでは、マウスに近い最初の行の矩形を基準にする
+    const rect = link.getClientRects()[0] || link.getBoundingClientRect();
+    const viewW = document.documentElement.clientWidth;
+    const viewH = window.innerHeight;
+    card.style.left = '0px';
+    card.style.top = '0px';
+    const w = card.offsetWidth;
+    const h = card.offsetHeight;
+    let left = Math.min(Math.max(rect.left, margin), viewW - w - margin);
+    let top = rect.bottom + gap;
+    if (top + h > viewH - margin && rect.top - gap - h >= margin) {
+      top = rect.top - gap - h;
+    }
+    card.style.left = `${Math.max(left, margin) + window.scrollX}px`;
+    card.style.top = `${top + window.scrollY}px`;
+  }
 }
 
 
