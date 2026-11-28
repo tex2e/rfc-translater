@@ -1185,7 +1185,9 @@ def check_camel_identifier_loss(en, ja):
     ja_lower = ja.lower()
     idents = {t for t in CAMEL_IDENT_RE.findall(en) if len(t) >= 6}
     idents |= set(EMAIL_IDENT_RE.findall(en)) | set(OID_IDENT_RE.findall(en))
-    lost = sorted(t for t in idents if t.lower() not in ja_lower)
+    # 複数形 (vCards, securityNames) は、訳文では単数形で書かれることが多いので単数形でも可とする
+    lost = sorted(t for t in idents if t.lower() not in ja_lower
+                  and not (t.endswith("s") and t[:-1].lower() in ja_lower))
     if not lost:
         return None
     return ("W019", f"識別子が訳文にない: {', '.join(lost[:6])}")
@@ -1222,12 +1224,12 @@ def check_fullwidth_breakage(en, ja):
 # W021: 多義語を一般語の意味で訳した Google 翻訳由来の誤訳語。
 # (原文に含まれる語, 訳文の誤訳語, 誤訳語が正しくなる原文の文脈 or None, 正しい訳語の例)
 MISTRANSLATIONS = [
-    (r"\bstates?\b", r"(?<![各])州(?!立)",
-     r"\b(?:United States|U\.S\.|states? of (?:the )?(?:US|America)|California|Virginia|provinces?|count(?:y|ies)|state,? (?:and|or) local|state governments?)\b",
+    (r"\bstates?\b", r"(?<![各欧本豪九])州(?!立)",
+     r"\b(?:United States|U\.S\.|states? of (?:the )?(?:US|America)|California|Virginia|provinces?|count(?:y|ies)|state,? (?:and|or) local|local,? state|state,? or national|state governments?|city|country|civic)\b",
      "状態"),
     (r"\bsubjects?\b", r"被験者", None, "サブジェクト/主体"),
     (r"\bchalleng", r"挑戦", None, "チャレンジ"),
-    (r"\benvelopes?\b", r"封筒", None, "エンベロープ"),
+    (r"\benvelopes?\b", r"封筒", r"\b(?:media|paper|printers?|postal|print(?:ing)? jobs?)\b", "エンベロープ"),
     (r"\bflags?\b", r"旗", None, "フラグ"),
     (r"\bdigests?\b", r"消化", None, "ダイジェスト"),
     (r"\bhosts?\b", r"宿主|主催者", r"biolog|parasit", "ホスト"),
