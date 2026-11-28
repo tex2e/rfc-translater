@@ -1064,7 +1064,7 @@ GLOSSARY = [
      re.compile(r"共有シークレットキー|共有秘密キー|共有秘密の鍵|共有シークレット鍵(?!素材)"), "共有秘密鍵"),
     (re.compile(r"shared[- ]secret(?![- ]key)", re.I),
      re.compile(r"共有秘密(?!鍵)"), "共有シークレット"),
-    (re.compile(r"\bcongest", re.I), re.compile(r"混雑|渋滞"), "輻輳"),
+    (re.compile(r"\bcongest", re.I), re.compile(r"混雑|渋滞|うっ血"), "輻輳"),
     (re.compile(r"\bingress", re.I), re.compile(r"侵入"), "イングレス/入口"),
     (re.compile(r"\btraffic", re.I), re.compile(r"交通"), "トラフィック"),
     (re.compile(r"\bcells?\b", re.I), re.compile(r"細胞"), "セル"),
@@ -1250,6 +1250,32 @@ MISTRANSLATIONS = [
     (r"\bsinks?\b", r"流し台", None, "シンク"),
     (r"\bworms?\b", r"(?<!寄生)虫", None, "ワーム"),
     (r"^\s*Abstract\s*$", r"抽象", None, "概要"),
+    # 証明書の subject は「件名」ではない (電子メールの Subject ヘッダーの文脈は除く)
+    (r"\bsubject\b(?=[\s\S]*(?:certificat|X\.509|\bissuer\b|\bPKI\b|subjectAltName|\bDN\b))", r"件名",
+     r"\bSubject:|Subject (?:header|line)|e-?mail|\bmail\b|message subject|RFC ?5322|RFC ?2822", "サブジェクト"),
+    (r"distinguished names?", r"著名な名前|区別された名前|識別された名前|際立った名前", None, "識別名"),
+    (r"\bcommonName\b|\bcommon names?\b(?=.*(?:certificat|X\.509|\bCN\b|attribute|subject))",
+     r"通称|一般的な名前|共通の名前", r"\bmost common name|common name(?:space|s? for)", "commonName/コモンネーム"),
+    (r"resource records?", r"リソース記録|資源記録", None, "リソースレコード"),
+    (r"care-of", r"ケアの|お手入れ|世話", None, "気付 (care-of) アドレス"),
+    (r"\bwindows?\b", r"(?<!出)窓(?!口)", r"Microsoft|Windows (?:XP|NT|9\d|2000|Vista|Server|\d+)|a window through|\bdoors?\b", "ウィンドウ"),
+    (r"\bstreams?\b", r"小川", None, "ストリーム"),
+    (r"\bbinding", r"拘束", r"legally|binding (?:agreement|contract|obligation|on|for|both|intent|negotiation|standards|position|requirements?)|non-?binding|(?:not|non-?|final and) binding|binding\.|\b(?:license|licence|contract|terms|IPR)\b",
+     "バインディング/結び付け"),
+    (r"\bFinished\b", r"完成したメッセージ|仕上げメッセージ", None, "Finished メッセージ"),
+    (r"\bpayloads?\b", r"積載|搭載量", None, "ペイロード"),
+    (r"\bneighbou?rs?\b", r"近所", None, "近隣/ネイバー"),
+    (r"\bcertificat\w* authorit", r"証明書当局|認定機関の当局", None, "認証局"),
+    (r"\brecord layer|\bTLS record", r"記録層|記録レイヤ", None, "レコード層"),
+    (r"\btrailers?\b", r"予告編", None, "トレーラー"),
+    (r"plain ?text", r"平易なテキスト|平易な文章", None, "プレーンテキスト/平文"),
+    # 謝辞 (Acknowledgements 節・貢献者への謝意) と区別するため、プロトコルの確認応答の文脈に限る
+    (r"\bACKs?\b|\b(?:duplicate|cumulative|selective|negative|positive|delayed|partial|immediate|explicit|implicit|"
+     r"binding|TCP|DCCP|SCTP|QUIC|link-layer|end-to-end|hop-by-hop|transport|separate)\s+acknowledge?ments?"
+     r"|acknowledge?ments? (?:numbers?|packets?|messages?|frames?|ranges?|delay|timers?|of (?:the|a|data|each|receipt)|"
+     r"for (?:the|a|data|each|every|packets?|segments?)|(?:is|are|was|were) (?:sent|received|lost|delayed|generated))", r"謝辞",
+     r"^\s*(?:Appendix\s+[A-Z]\.?\s*|[A-Z](?:\.\d+)*\.\s*|[A-Z]?\d+(?:\.\d+)*\.?\s*)?(?:[\w ]+ and )?Acknowledge?ments?\s*$|Acknowledge?ments? (?:section|sections)\b|\bthank|grateful|contribut|review|comments? (?:from|by|on)|\bhelp",
+     "確認応答"),
 ]
 MISTRANSLATIONS = [(re.compile(a, re.I | re.M), re.compile(b), re.compile(c, re.I) if c else None, d)
                    for a, b, c, d in MISTRANSLATIONS]
