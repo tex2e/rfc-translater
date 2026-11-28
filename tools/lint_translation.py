@@ -1223,7 +1223,7 @@ def check_fullwidth_breakage(en, ja):
 # (原文に含まれる語, 訳文の誤訳語, 誤訳語が正しくなる原文の文脈 or None, 正しい訳語の例)
 MISTRANSLATIONS = [
     (r"\bstates?\b", r"(?<![各])州(?!立)",
-     r"\b(?:United States|U\.S\.|states? of (?:the )?(?:US|America)|California|Virginia|province|county)\b",
+     r"\b(?:United States|U\.S\.|states? of (?:the )?(?:US|America)|California|Virginia|provinces?|count(?:y|ies)|state,? (?:and|or) local|state governments?)\b",
      "状態"),
     (r"\bsubjects?\b", r"被験者", None, "サブジェクト/主体"),
     (r"\bchalleng", r"挑戦", None, "チャレンジ"),
