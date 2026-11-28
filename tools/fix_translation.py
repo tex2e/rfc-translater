@@ -83,7 +83,9 @@ def fix_fullwidth_breakage(en, ja):
         # \w は日本語にも一致するため、境界は ASCII の英数字で判定する
         pat = re.compile(r"(?<![A-Za-z0-9_])" + "".join(parts) + r"(?![A-Za-z0-9_])")
         new = pat.sub(lambda m: t, new)
-    new = FULLWIDTH_ALNUM_RE.sub(lambda m: m.group(0).translate(_ZENKAKU_TO_ASCII), new)
+    # 原文自体が全角文字を例示している場合 (PRECIS の幅マッピングなど) は変換しない
+    new = FULLWIDTH_ALNUM_RE.sub(
+        lambda m: m.group(0) if m.group(0) in en else m.group(0).translate(_ZENKAKU_TO_ASCII), new)
     return new if new != ja else None
 
 

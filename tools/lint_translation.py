@@ -1215,7 +1215,8 @@ def check_fullwidth_breakage(en, ja):
             normalized = re.sub(r"\s+", "", ja.translate(_ZENKAKU_TO_ASCII))
         if t in normalized:
             return ("W020", f"原文の '{t}' が全角化・空白混入で壊れている")
-    m = FULLWIDTH_ALNUM_RE.search(ja)
+    # 原文自体が全角文字を例示している場合 (PRECIS の幅マッピングなど) は対象外
+    m = next((m for m in FULLWIDTH_ALNUM_RE.finditer(ja) if m.group(0) not in en), None)
     if m:
         return ("W020", f"全角英数字がある: 「{ja[max(0, m.start() - 10):m.end() + 5]}」")
     return None
