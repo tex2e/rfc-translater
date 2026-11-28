@@ -62,43 +62,71 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
+      # 履歴全体 (約5GB) を取得するとチェックアウトだけで数分かかる。
+      # コミットとツリーだけを取得し (blob:none)、作業ツリーには tools/ だけを展開する。
+      # 翻訳ファイルは、変更されたものだけを次のステップでまとめて取得する。
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: tools
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
+      # 変更された翻訳ファイルの変更前後の版を1回の fetch でまとめて取得し、
+      # /tmp/head (変更後) と /tmp/base (マージベース) に展開する。
+      # (部分クローンで git show や git checkout を使うと1ファイルずつ取得するため遅い)
+      - name: Fetch changed translation files
+        id: changed
+        run: |
+          set -e
+          BASE=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          git diff --name-only --no-renames "$BASE" HEAD -- 'data/*/rfc*-trans.json' > /tmp/changed.txt
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "count=$(wc -l < /tmp/changed.txt)" >> "$GITHUB_OUTPUT"
+          if [ ! -s /tmp/changed.txt ]; then
+            echo "翻訳ファイルの変更なし。"
+            exit 0
+          fi
+          xargs -a /tmp/changed.txt git ls-tree HEAD -- > /tmp/head-tree.txt
+          xargs -a /tmp/changed.txt git ls-tree "$BASE" -- > /tmp/base-tree.txt
+          cat /tmp/head-tree.txt /tmp/base-tree.txt | awk '{print $3}' | sort -u \
+            | git -c fetch.negotiationAlgorithm=noop fetch -q origin --no-tags --no-write-fetch-head \
+                --recurse-submodules=no --filter=blob:none --stdin
+          for side in head base; do
+            REV=HEAD; [ "$side" = base ] && REV="$BASE"
+            mkdir -p "/tmp/$side"
+            cut -f2 "/tmp/$side-tree.txt" > "/tmp/$side-files.txt"
+            if [ -s "/tmp/$side-files.txt" ]; then
+              xargs -a "/tmp/$side-files.txt" env GIT_INDEX_FILE="/tmp/$side.idx" \
+                git --work-tree="/tmp/$side" checkout "$REV" --
+            fi
+          done
+          echo "変更された翻訳ファイル: $(wc -l < /tmp/changed.txt) 件 (マージベースに存在: $(wc -l < /tmp/base-files.txt) 件)"
+
       - name: Warn about translation and source formatting regressions
+        if: steps.changed.outputs.count != '0'
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: python tools/check_detached_clauses.py --compare-base "$BASE_REF" --format github
 
+      # 既存データには大量の未修正欠陥があるため（tools/QUALITY_BASELINE.md 参照）、
+      # 全件ではなく「このPRで変更された翻訳ファイル」だけを検査し、検出数が増えていないかを判定する。
+      # 変更前後とも最新の linter で検査する（基準を揃えるため）。
       - name: Lint changed translation files
+        if: steps.changed.outputs.count != '0'
         run: |
           set -e
-          BASE=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
-          CHANGED=$(git diff --name-only "$BASE" HEAD -- 'data/*/rfc*-trans.json')
-          if [ -z "$CHANGED" ]; then
-            echo "翻訳ファイルの変更なし。スキップします。"
-            exit 0
-          fi
-          RFCS=$(echo "$CHANGED" | sed -E 's#.*/rfc([0-9]+)-trans\.json#\1#' | sort -u)
+          RFCS=$(sed -E 's#.*/rfc([0-9]+)-trans\.json#\1#' /tmp/changed.txt | sort -u)
           echo "== 対象RFC: $(echo $RFCS) =="
 
-          # 変更後の検出数
-          python3 tools/lint_translation.py --rfc $RFCS --format text > /tmp/head.txt || true
+          # 変更後と変更前 (マージベース) の検出数。CPU数のプロセスで並列に検査する。
+          python3 tools/lint_translation.py --root /tmp/head --rfc $RFCS --format text -o /tmp/head.txt || true
           AFTER=$(grep -oP '検出総数: \K\d+' /tmp/head.txt || echo 0)
-
-          # 変更前(マージベース)の検出数。既存の欠陥でPRを落とさないため、
-          # 「増えていないか」だけを判定する。
-          # linter自体は常に最新版を使う（基準を揃えるため）。
-          git worktree add -q /tmp/base "$BASE"
-          mkdir -p /tmp/base/tools
-          cp tools/lint_translation.py /tmp/base/tools/
-          (cd /tmp/base && python3 tools/lint_translation.py --rfc $RFCS --format summary > /tmp/base.txt) || true
+          python3 tools/lint_translation.py --root /tmp/base --rfc $RFCS --format summary -o /tmp/base.txt 2>/dev/null || true
           BEFORE=$(grep -oP '検出総数: \K\d+' /tmp/base.txt || echo 0)
 
           echo "変更前: ${BEFORE:-0} 件 / 変更後: ${AFTER:-0} 件"

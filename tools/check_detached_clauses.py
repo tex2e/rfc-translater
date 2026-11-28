@@ -602,11 +602,33 @@ def changed_findings(base):
     paths = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", "-z", base, "HEAD",
                 "--", "data/*/rfc*-trans.json").split("\0")
     existing = set(git("ls-tree", "-r", "--name-only", "-z", base, "--", "data").split("\0"))
-    for path in filter(None, paths):
-        before = inspect(json.loads(git("show", f"{base}:{path}"))) if path in existing else ()
-        after = inspect(json.loads(git("show", f"HEAD:{path}")))
+    paths = [path for path in paths if path]
+    # git show をファイルごとに起動すると数千ファイルで数分かかるため、
+    # 変更前後の版を git cat-file --batch の1プロセスでまとめて読む。
+    specs = [f"HEAD:{path}" for path in paths] + [f"{base}:{path}" for path in paths if path in existing]
+    blobs = read_blobs(specs)
+    for path in paths:
+        before = inspect(json.loads(blobs[f"{base}:{path}"])) if path in existing else ()
+        after = inspect(json.loads(blobs[f"HEAD:{path}"]))
         for finding in introduced(before, after):
             yield path, finding
+
+
+def read_blobs(specs):
+    """'<rev>:<path>' の一覧を git cat-file --batch で読み、{spec: 内容} を返す。"""
+    request = "".join(f"{spec}\n" for spec in specs).encode("utf-8")
+    output = subprocess.run(["git", "cat-file", "--batch"], input=request,
+                            capture_output=True, check=True).stdout
+    blobs, pos = {}, 0
+    for spec in specs:
+        header_end = output.index(b"\n", pos)
+        header = output[pos:header_end].split()
+        if len(header) < 3 or header[-1] == b"missing":
+            raise RuntimeError(f"git cat-file: {spec} が見つかりません")
+        size = int(header[2])
+        blobs[spec] = output[header_end + 1:header_end + 1 + size].decode("utf-8")
+        pos = header_end + 1 + size + 1  # 内容の後ろの改行を飛ばす
+    return blobs
 
 
 def escape_annotation(value):
