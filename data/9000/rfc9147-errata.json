@@ -1,0 +1,105 @@
+{
+  "number": 9147,
+  "errata": [
+    {
+      "id": 8047,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "8",
+      "date": "2024-07-25",
+      "orig": "   As with TLS 1.3, DTLS 1.3 implementations send a KeyUpdate message to\n   indicate that they are updating their sending keys.  As with other\n   handshake messages with no built-in response, KeyUpdates MUST be\n   acknowledged.  In order to facilitate epoch reconstruction\n   (Section 4.2.2), implementations MUST NOT send records with the new\n   keys or send a new KeyUpdate until the previous KeyUpdate has been\n   acknowledged (this avoids having too many epochs in active use).",
+      "correct": "   As with TLS 1.3, DTLS 1.3 implementations send a KeyUpdate message to\n   indicate that they are updating their sending keys. As with other\n   handshake messages with no built-in response, KeyUpdates MUST be\n   acknowledged. Acknowledgements are used to both control\n   retransmission and transition to the next epoch. Implementations MUST\n   NOT send records with the new keys until the KeyUpdate and all\n   preceding messages have been acknowledged. This facilitates epoch\n   reconstruction (Section 4.2.2) and avoids too many epochs in active\n   use, by ensuring the peer has processed the KeyUpdate and started\n   receiving at the new epoch.\n\n   A KeyUpdate message terminates the post-handshake stream in an epoch.\n   After sending KeyUpdate in an epoch, implementations MUST NOT send\n   any new post-handshake messages in that epoch. Note that, if the\n   implementation has sent KeyUpdate but is waiting for an ACK, the next\n   epoch is not yet active. In this case, subsequent post-handshake\n   messages may not be sent until receiving the ACK.",
+      "notes": "See https://mailarchive.ietf.org/arch/msg/tls/_ku3-YDcroNmG_QKZsYTtqYzC0M/ for discussion. This is option 7 from that discussion, as well as the fix for the other issue described at the top of https://mailarchive.ietf.org/arch/msg/tls/GYX_teYy5CTFiGCBgbQJQwv_Fj4/"
+    },
+    {
+      "id": 8048,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "5.2",
+      "date": "2024-07-26",
+      "orig": "   The first message each side transmits in each association always has\n   message_seq = 0.  Whenever a new message is generated, the\n   message_seq value is incremented by one.  When a message is\n   retransmitted, the old message_seq value is reused, i.e., not\n   incremented.  From the perspective of the DTLS record layer, the\n   retransmission is a new record.  This record will have a new\n   DTLSPlaintext.sequence_number value.",
+      "correct": "   The first message each side transmits in each association always has\n   message_seq = 0.  Whenever a new message is generated, the\n   message_seq value is incremented by one.  Implementations MUST NOT\n   allow message_seq to wrap, but instead MUST establish a new\n   association, terminating the old association.  When a message is\n   retransmitted, the old message_seq value is reused, i.e., not\n   incremented.  From the perspective of the DTLS record layer, the\n   retransmission is a new record.  This record will have a new\n   DTLSPlaintext.sequence_number value.",
+      "notes": "While pondering what to do about https://mailarchive.ietf.org/arch/msg/tls/6y8wTv8Q_IPM-PCcbCAmDOYg6bM/, I noticed that we don't say anything about message_seq wrapping. Since we don't reset that counter, it's not only possible for it to wrap, but for the peer to induce you to wrap it. This seems warrant some text. I borrowed the \"MUST NOT allow ... to wrap, but instead ...\" phrasing from Section 4.2.1."
+    },
+    {
+      "id": 8050,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "8",
+      "date": "2024-07-26",
+      "orig": "   With a 128-bit key as in AES-128, rekeying 2^64 times has a high\n   probability of key reuse within a given connection.  Note that even\n   if the key repeats, the IV is also independently generated.  In order\n   to provide an extra margin of security, sending implementations MUST\n   NOT allow the epoch to exceed 2^48-1.  In order to allow this value\n   to be changed later, receiving implementations MUST NOT enforce this\n   rule.  If a sending implementation receives a KeyUpdate with\n   request_update set to \"update_requested\", it MUST NOT send its own\n   KeyUpdate if that would cause it to exceed these limits and SHOULD\n   instead ignore the \"update_requested\" flag.  Note: this overrides the\n   requirement in TLS 1.3 to always send a KeyUpdate in response to\n   \"update_requested\".",
+      "correct": "   With a 128-bit key as in AES-128, rekeying 2^64 times has a high\n   probability of key reuse within a given connection.  Note that even\n   if the key repeats, the IV is also independently generated.  In order\n   to provide an extra margin of security, sending implementations MUST\n   NOT allow the epoch to exceed 2^48-1.  If a sending implementation\n   receives a KeyUpdate with request_update set to \"update_requested\",\n   it MUST NOT send its own KeyUpdate if that would cause it to exceed\n   these limits and SHOULD instead ignore the \"update_requested\" flag.\n   Note: this overrides the requirement in TLS 1.3 to always send a\n   KeyUpdate in response to \"update_requested\".\n\n   Exceeding the above limit is not possible with the key update\n   mechanisms defined in this document.  After the handshake, each epoch\n   change consumes a message_seq value, which is limited to 2^16-1. Both\n   sending and receiving implementations MAY instead enforce an epoch\n   limit of 2^16-1.  In this case, the implementation MUST check for\n   this limit, if reached, terminate the association. In some cases, it\n   is otherwise possible for the epoch number to reach 2^16+1.",
+      "notes": "See https://mailarchive.ietf.org/arch/msg/tls/6y8wTv8Q_IPM-PCcbCAmDOYg6bM/ for details. Strictly speaking, as noted in the corrected text, the maximum epoch value does not *quite* fit in 2^16. However, bumping the implementation's size just to accommodate two more epochs seems pointless.\n\nThe 2^16-1 value comes from the minimum number of messages in the sending side of a handshake, 2 (ClientHello + Finished as a client). Post-handshake, epochs begin at 3. From there, we can send at most 2^16-2 KeyUpdates, ending at epoch 2^16-2+3 = 2^16+1.\n\nIn particular, I believe NSS stores the epoch as 16-bit in DTLS 1.3. We plan to do so in BoringSSL as well. It is a natural choice because epochs are 16-bit in DTLS 1.2. Without this erratum, I believe NSS, and any other implementation making this choice, is non-compliant because the spec says the receiver \"MUST NOT enforce this rule\".\n\nTo that end, I've deleted that sentence because we cannot *actually* change this value. DTLS 1.3 tried, but failed, to enable a larger epoch space. Maybe we can try again in DTLS 1.4, or decide we don't care and properly revert to 16-bit."
+    },
+    {
+      "id": 8051,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "6.1",
+      "date": "2024-07-26",
+      "orig": "   *  Epoch value (2) is used for messages protected using keys derived\n      from [sender]_handshake_traffic_secret.  Messages transmitted\n      during the initial handshake, such as EncryptedExtensions,\n      CertificateRequest, Certificate, CertificateVerify, and Finished,\n      belong to this category.  Note, however, that post-handshake\n      messages are protected under the appropriate application traffic\n      key and are not included in this category.",
+      "correct": "   *  Epoch value (2) is used for messages protected using keys derived\n      from [sender]_handshake_traffic_secret.  Messages transmitted\n      during the handshake, such as EncryptedExtensions,\n      CertificateRequest, Certificate, CertificateVerify, and Finished,\n      belong to this category.  Note, however, that post-handshake\n      messages are protected under the appropriate application traffic\n      key and are not included in this category.",
+      "notes": "The discussion of \"initial handshake\" appears to be a remnant of DTLS 1.2, where a single connection may have multiple handshakes via renegotiation. In (D)TLS 1.3, there is only one handshake per connection.\n\nLooking to RFC 8446, the only references to \"initial handshake\" refer to resumption, talking about the handshake in the initial connection, vs the handshake in resumption connections. This reference is not trying to distinguish initial vs resumption handshakes, so the use of \"initial handshake\" is a bit confusing. I believe plain \"handshake\" is the right terminology.\n\nNB: There are two other references to \"initial handshake\", one in the diagram in Section 8, and another in Section 11. I believe they too should be switched to \"handshake\"."
+    },
+    {
+      "id": 8066,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "5",
+      "date": "2024-08-06",
+      "orig": "   DTLS implementations do not use the TLS 1.3 \"compatibility mode\"\n   described in Appendix D.4 of [TLS13].  DTLS servers MUST NOT echo the\n   \"legacy_session_id\" value from the client and endpoints MUST NOT send\n   ChangeCipherSpec messages.\n\n   With these exceptions, the DTLS message formats, flows, and logic are\n   the same as those of TLS 1.3.",
+      "correct": "   DTLS implementations do not use the TLS 1.3 \"compatibility mode\"\n   described in Appendix D.4 of [TLS13].  DTLS endpoints MUST NOT send\n   ChangeCipherSpec messages when negotiating DTLS 1.3.\n\n   Additionally, the \"legacy_session_id_echo\" field of the ServerHello\n   message, described in Section 4.1.3 of [TLS13], MUST be empty in DTLS\n   1.3.  DTLS 1.3 servers MUST NOT echo the \"legacy_session_id\" value\n   from the ClientHello.  DTLS 1.3 clients MUST abort the handshake with\n   an \"illegal_parameter\" alert if the field is not empty.  This applies\n   even if the \"legacy_session_id\" field of the ClientHello is non-empty\n   due to a cached session ID set by a pre-DTLS 1.3 server (see Section\n   5.3).\n\n   With these exceptions, the DTLS message formats, flows, and logic are\n   the same as those of TLS 1.3.",
+      "notes": "DTLS 1.3's continuity with DTLS 1.2 makes this a little subtle. First, a DTLS-1.3-capable endpoint may well need to send ChangeCipherSpec if it negotiates DTLS 1.3, so add a small clarification here.\n\nMore importantly, the changes described here do more than disable the provisions of Appendix D.4. Compatibility mode is only half-negotiated in TLS 1.3, with the ServerHello provisions being unconditional from Section 4.1.3 of RFC 8446:\n\n   legacy_session_id_echo:  The contents of the client's\n      legacy_session_id field.  Note that this field is echoed even if\n      the client's value corresponded to a cached pre-TLS 1.3 session\n      which the server has chosen not to resume.  A client which\n      receives a legacy_session_id_echo field that does not match what\n      it sent in the ClientHello MUST abort the handshake with an\n      \"illegal_parameter\" alert.\n\nIn particular, even if we disable the provisions of D.4, a DTLS 1.3 client may still send a non-empty legacy_session_id if it is offering a DTLS 1.2 session. That means matching legacy_session_id and always being empty aren't *quite* the same.\n\nThe old text overrode 4.1.3's server text (though without citing the section) but not the client text. Leaving the client text as-is will lead to an interop problem in the 1.2 resumption case above, so let's make that clearer. Best also to cite the section we're overriding."
+    },
+    {
+      "id": 8067,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "5.3",
+      "date": "2024-08-08",
+      "orig": "   legacy_session_id:  Versions of TLS and DTLS before version 1.3\n      supported a \"session resumption\" feature, which has been merged\n      with pre-shared keys (PSK) in version 1.3.  A client which has a\n      cached session ID set by a pre-DTLS 1.3 server SHOULD set this\n      field to that value.  Otherwise, it MUST be set as a zero-length\n      vector (i.e., a zero-valued single byte length field).",
+      "correct": "   legacy_session_id:  Versions of TLS and DTLS before version 1.3\n      supported a \"session resumption\" feature, which has been merged\n      with pre-shared keys (PSK) in version 1.3.  A client which has a\n      cached session set by a pre-DTLS 1.3 server SHOULD set this\n      field according to that session.  Otherwise, it MUST be set as a\n      zero-length vector (i.e., a zero-valued single byte length field).",
+      "notes": "The old text is written as if only ID-based DTLS 1.2 sessions (as opposed to ticket-based DTLS 1.2 sessions) require filling in legacy_session_id. This is not quite true. (D)TLS 1.2 ticket sessions (usually!) also fill in legacy_session_id, but to a random value. See the second paragraph of Section 3.4 of RFC 5077. This is needed because a (D)TLS 1.2 server still indicates resumption by echoing the session ID.\n\nI say usually because RFC 5077 unhelpfully makes this behavior optional for the client. The client may instead leave session ID empty, in which case the ServerHello is ambiguous on whether resumption happened! Instead, the client must detect resumption based on whether ServerHello is followed by ChangeCipherSpec (resumption) or more cleartext handshake messages (full handshake). This is a mess for the state machine and, as far as I know, no one does this. (Except for RFC 4851. That was a mistake.) Moreover, this alternative does not work for DTLS, where ChangeCipherSpec is not sequenced relative to handshake messages. Although I cannot find any text that says this. It seems DTLS 1.2 implementors needed to figure that out for themselves.\n\nGiven this mess, I've opted to just be vague and say \"set this field according to that session\". We can't really say \"that value\" because, in the ticket case, you synthesize one. I'd also rather not wade into the mess that is this behavior being de jure optional, but de facto required, for DTLS 1.2.\n\nThis errata also applies to https://www.rfc-editor.org/errata/eid8066. In the replacement text, \"cached session ID\" should say \"cached session\"."
+    },
+    {
+      "id": 8100,
+      "status": "Verified",
+      "type": "Editorial",
+      "section": "4.1",
+      "date": "2024-09-12",
+      "orig": "   *  If the first byte is alert(21), handshake(22), or ack(proposed,\n      26), the record MUST be interpreted as a DTLSPlaintext record.",
+      "correct": "   *  If the first byte is alert(21), handshake(22), or ack(26), the\n      record MUST be interpreted as a DTLSPlaintext record.",
+      "notes": "This appears to be a remnant from before the codepoint was officially allocated."
+    },
+    {
+      "id": 8107,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "7",
+      "date": "2024-09-18",
+      "orig": "   During the handshake, ACK records MUST be sent with an epoch which is\n   equal to or higher than the record which is being acknowledged.  Note\n   that some care is required when processing flights spanning multiple\n   epochs.  For instance, if the client receives only the ServerHello\n   and Certificate and wishes to ACK them in a single record, it must do\n   so in epoch 2, as it is required to use an epoch greater than or\n   equal to 2 and cannot yet send with any greater epoch.\n   Implementations SHOULD simply use the highest current sending epoch,\n   which will generally be the highest available.  After the handshake,\n   implementations MUST use the highest available sending epoch.",
+      "correct": "   During the handshake, ACK records MUST be sent with an epoch which is\n   equal to or higher than the record which is being acknowledged.  Note\n   that some care is required when processing flights spanning multiple\n   epochs.  For instance, if the client receives only the ServerHello\n   and Certificate and wishes to ACK them in a single record, it must do\n   so in epoch 2, as it is required to use an epoch greater than or\n   equal to 2 and cannot yet send with any greater epoch.\n   Implementations SHOULD simply use the highest current sending epoch,\n   which will generally be the highest available.  The exception is that\n   implementations MUST NOT send ACK records in epoch 1 (early data). If\n   the highest current sending epoch is epoch 1 (early data),\n   implementations MUST use epoch 0 (unencrypted) to send ACK records.\n   After the handshake, implementations MUST use the highest available\n   sending epoch.",
+      "notes": "With the caveat that unencrypted ACKs are generally goofy (see https://mailarchive.ietf.org/arch/msg/tls/ZEj04LyL3hJXeK1nsiOBoB2vCsg/), the document currently believes they exist. As long as they exist, the rule in the text right now does not work. The server may reject 0-RTT, in which case it will never see epoch 1."
+    },
+    {
+      "id": 8108,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "7.2",
+      "date": "2024-09-18",
+      "orig": "   acknowledgements for records which have already been ACKed.  As noted\n   above, the receipt of any record responding to a given flight MUST be\n   taken as an implicit acknowledgement for the entire flight to which\n   it is responding.",
+      "correct": "   acknowledgements for records which have already been ACKed.  As noted\n   above, the receipt of any record responding to a given flight MUST be\n   taken as an implicit acknowledgement for the entire flight to which\n   it is responding.\n\n   If any element of record_numbers in the ACK references an epoch that\n   is higher than the epoch in which the ACK was received, the\n   implementation MUST terminate the connection with an\n   \"illegal_parameter\" alert.",
+      "notes": "Section 7 discusses that you cannot send ACKs for later epochs, but does not say anything about what the receiver does. To prevent an attacker from, e.g., using a plaintext ACK to interfere with ACKs of an encrypted epoch, I think we need to tell the receiver to check this.\n\nOtherwise we need to be much more explicit about the points at which the receiver MUST close old epochs. Honestly, we probably should be explicit about this too, but we should also be clear on this point."
+    },
+    {
+      "id": 8141,
+      "status": "Reported",
+      "type": "Technical",
+      "section": "4",
+      "date": "2024-10-15",
+      "orig": "   This 128-bit value is used in the ACK message as well as in the\n   \"record_sequence_number\" input to the Authenticated Encryption with\n   Associated Data (AEAD) function.",
+      "correct": "   This 128-bit value is used in the ACK message.",
+      "notes": "The end of this paragraph contradicts this by saying \"In DTLS 1.3 the 64-bit sequence_number is used as the sequence number for the AEAD computation\". If the 128-bit value was used as the \"record sequence number\" as described in RFC 8446 section 5.3, it appears that would require the AEAD to have an N_MAX of at least 16 bytes to fit all of the 128 bits, and none of the TLS 1.3 AEADs have an N_MAX that big. Thus, I assume the end of the paragraph is correct and the opening is incorrect."
+    }
+  ]
+}

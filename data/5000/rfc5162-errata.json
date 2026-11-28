@@ -1,0 +1,55 @@
+{
+  "number": 5162,
+  "errata": [
+    {
+      "id": 1365,
+      "status": "Held for Document Update",
+      "type": "Technical",
+      "section": "1. (ff.)",
+      "date": "2008-03-11",
+      "orig": "   A client making use of this extension MUST issue \"ENABLE QRESYNC\"\n   once it is authenticated.  A server MUST respond with a tagged BAD\n   response if the QRESYNC parameter to the SELECT/EXAMINE command or\n   the VANISHED UID FETCH modifier is specified and the client hasn't\n   issued \"ENABLE QRESYNC\" in the current connection.",
+      "correct": "   A client making use of this extension MUST issue \"ENABLE QRESYNC\"\n   once it is authenticated.  A server MUST respond with a tagged BAD\n   response if the QRESYNC parameter to the SELECT/EXAMINE command or\n   the VANISHED UID FETCH modifier is specified and the client hasn't\n|  issued \"ENABLE QRESYNC\", or the server has not positively responded\n|  to that command with \"ENABLED QRESYNC\", in the current connection.",
+      "notes": "Rationale:\nAccording to RFC 5161, the option enablement handshake is only\ncomplete, and hence the option(s) enabled on the server, if the\nserver has sent a positive (untagged) \"ENABLED <option>\" response\nto the ENABLE command.\nFor clarity, RFC 5162 should unambiguously reflect this causality\nchain.\n\nThis same issue recurs in Section 3.1 (last paragraph on page 4)\nand Section 3.6 (4th paragraph on page 13)."
+    },
+    {
+      "id": 1807,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "1",
+      "date": "2009-07-14",
+      "orig": "",
+      "correct": "   Once a \"CONDSTORE enabling command\" is issued by the client, the\n   server MUST automatically include both UID and mod-sequence data in\n   all subsequent untagged FETCH responses (until the connection is\n   closed), whether they were caused by a regular STORE/UID STORE, a\n   STORE/UID STORE with UNCHANGEDSINCE modifier, or an external agent.\n   Note that this rule doesn't affect untagged FETCH responses caused by\n   a FETCH command that doesn't include UID and/or MODSEQ FETCH data\n   item, or UID FETCH without the MODSEQ FETCH data item.",
+      "notes": "Rationale:\n\nIt's very difficult for clients to make use of unsolicited FETCH responses without the UID field. This is made even worse by the text that says \"servers SHOULD NOT send UIDs for previously expunged messages [in VANISHED replies]\". Since it's not a MUST NOT, a conversation with an RFC compliant server could be for example:\n\nA1 NOOP\n* 0 EXISTS\nA1 OK\nA2 NOOP\n* 10 EXISTS\n* VANISHED 1000:2000\n* 3 FETCH (FLAGS (\\Seen) MODSEQ (14749))\n* 5 FETCH (FLAGS (\\Seen) MODSEQ (14749))\n* VANISHED 2000:3000\nA2 OK NOOP Completed\n\nThe client couldn't do anything with the information from FETCH replies, because it can't know what messages they refer to."
+    },
+    {
+      "id": 1808,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "3.4",
+      "date": "2009-07-14",
+      "orig": "   If at least one message got expunged, the server MUST send\n   the updated per-mailbox modification\n   sequence using the HIGHESTMODSEQ response code (defined in\n   [CONDSTORE]) in the tagged OK response.\n\n      Example:    C: A202 CLOSE\n                  S: A202 OK [HIGHESTMODSEQ 20010715194045319] done",
+      "correct": "   The server MUST NOT send the updated per-mailbox modification\n   sequence using the HIGHESTMODSEQ response code (defined in\n   [CONDSTORE]) in the tagged OK response, as this might cause loss of\n   synchronization on the client.\n\n      Example:    C: A202 CLOSE\n                  S: A202 OK done",
+      "notes": "Rationale:\n\nThe HIGHESTMODSEQ can't be used reliably unless server sends to client all changes done by other clients. Even then it's difficult for both clients and servers to implement this. For example:\n\nC1: 2 STORE 1 +FLAGS.SILENT \\Deleted\nS1: * 1 FETCH (MODSEQ 1)\nS1: 2 OK\n\nC2: 1 STORE 2 +FLAGS.SILENT \\Deleted\nS1: * 2 FETCH (MODSEQ 2)\nS2: 1 OK\n\nC1: 3 CLOSE\nS1: 3 [HIGHESTMODSEQ 3]\n\nThe client probably thought that only message 1 was expunged, so it\ndoesn't register the second expunge. And it probably never will if it\nuses QRESYNC to find out only about new expunges.\n\nAnd even worse example would be if the second client had also removed\nthe \\Deleted flag from message 1. Then the first client would have\nregistered wrong message to be expunged."
+    },
+    {
+      "id": 1809,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "5",
+      "date": "2009-07-14",
+      "orig": "   After completing a full synchronization, the client MUST also take\n   note of any unsolicited MODSEQ FETCH data items received from the\n   server.  Whenever the client receives a tagged response to a command,\n   it calculates the highest value among all MODSEQ FETCH data items\n   received since the last tagged response.  If this value is bigger\n   than the client's copy of the HIGHESTMODSEQ value, then the client\n   MUST use this value as its new HIGHESTMODSEQ value.\n\n   Note: It is not safe to update the client's copy of the HIGHESTMODSEQ\n   value with a MODSEQ FETCH data item value as soon as it is received\n   because servers are not required to send MODSEQ FETCH data items in\n   increasing modseqence order.  This can lead to the client missing\n   some changes in case of connectivity loss.",
+      "correct": "   After completing a full synchronization, the client MUST also take\n   note of any unsolicited MODSEQ FETCH data items and HIGHESTMODSEQ\n   response codes received from the server.  Whenever the client receives\n   a tagged response to a command, it checks the received unsolicited\n   responses to calculate the new HIGHESTMODSEQ value.  If the\n   HIGHESTMODSEQ response code is received, the client MUST use it even\n   if it has seen higher mod-sequences.  Otherwise, the client calculates\n   the highest value among all MODSEQ FETCH data items received since the\n   last tagged response.  If this value is bigger than the client's copy\n   of the HIGHESTMODSEQ value, then the client MUST use this value as its\n   new HIGHESTMODSEQ value.\n\n      Example:    C: A1 STORE 1:2 (UNCHANGEDSINCE 96) +FLAGS.SILENT \\Seen\n                  S: * 1 FETCH (UID 6 MODSEQ (103))\n                  S: * 2 FETCH (UID 7 MODSEQ (101))\n                  S: * OK [HIGHESTMODSEQ 99] VANISHED reply with\n\t\t      MODSEQ 100 is delayed\n                  S: A1 OK [MODIFIED 3] done\n\n                  C: A2 STORE 3 +FLAGS.SILENT \\Seen\n                  S: * 3 FETCH (UID 8 MODSEQ (104))\n                  S: A2 OK [HIGHESTMODSEQ 99] Still delaying VANISHED\n\n                  C: A3 NOOP\n                  S: * VANISHED 8\n                  S: A3 OK [HIGHESTMODSEQ 104] done\n\n   Note: It is not safe to update the client's copy of the HIGHESTMODSEQ\n   value with a MODSEQ FETCH data item value as soon as it is received\n   because servers are not required to send MODSEQ FETCH data items in\n   increasing modseqence order.  Some commands may also delay EXPUNGE\n   (or VANISHED) replies with smaller mod-sequences. These can lead to\n   the client missing some changes in case of connectivity loss.",
+      "notes": "Rationale:\n\nOtherwise clients could lose changes in case of connectivity loss."
+    },
+    {
+      "id": 1810,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "1",
+      "date": "2009-07-14",
+      "orig": "",
+      "correct": "   Server implementing QRESYNC MUST send untagged events to client in a\n   way that client doesn't lose any changes in case of connectivity loss.\n   In particular this means that if server sends MODSEQ FETCH data items\n   while EXPUNGE (or VANISHED) replies with lower mod-sequences are being\n   delayed, the server MUST send HIGHESTMODSEQ response code with a lower\n   value than the EXPUNGE's mod-sequence. See example in section 5.",
+      "notes": "This is related to the other errata in section 5, which describes what the client's behavior should be. This describes what the server's behavior should be. Would have been nice to put them into the same section, but that probably would require larger changes."
+    }
+  ]
+}

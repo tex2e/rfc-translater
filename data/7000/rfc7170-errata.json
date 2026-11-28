@@ -1,0 +1,125 @@
+{
+  "number": 7170,
+  "errata": [
+    {
+      "id": 5127,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "5.2.",
+      "date": "2017-09-25",
+      "orig": "IMSK = First 32 octets of TLS-PRF(EMSK, \"TEAPbindkey@ietf.org\" |\n     \"\\0\" | 64)",
+      "correct": "IMSK = First 32 octets of TLS-PRF(EMSK, \"TEAPbindkey@ietf.org\" |\n     \"\\0\", 64)",
+      "notes": "According to\n\nRFC5246 The Transport Layer Security (TLS) Protocol Version 1.2\n\n5.  HMAC and the Pseudorandom Function\n\n\"TLS's PRF is created by applying P_hash to the secret as:\n\n      PRF(secret, label, seed) = P_<hash>(secret, label + seed)\""
+    },
+    {
+      "id": 5128,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "5.2.",
+      "date": "2017-09-25",
+      "orig": "IMCK[j] = TLS-PRF(S-IMCK[j-1], \"Inner Methods Compound Keys\",\n                IMSK[j], 60)",
+      "correct": "IMCK[j] = the first 60 octets of TLS-PRF(S-IMCK[j-1],\n              \"Inner Methods Compound Keys\",\n              IMSK[j])",
+      "notes": "According to\n\nRFC5246 The Transport Layer Security (TLS) Protocol Version 1.2\n\n5.  HMAC and the Pseudorandom Function\n\n\"TLS's PRF is created by applying P_hash to the secret as:\n\n     PRF(secret, label, seed) = P_<hash>(secret, label + seed)\"\n\nPaul Wouters(AD): Corrected the text proposed by the original submitter, as it now appears in 7170bis"
+    },
+    {
+      "id": 5765,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "4.2.2",
+      "date": "2019-06-28",
+      "orig": "   M\n\n      Mandatory, set to one (1)",
+      "correct": "   M\n\n      0 (Optional)",
+      "notes": "Authority-ID TLV is used only as an Outer TLV (in TEAP/Start) and Section 4.3.1 mandates all Outer TLVs to be marked as optional (\"Outer TLVs MUST be marked as optional\"). As such, Section 4.2.2 is incorrect in claiming the Authority-ID TLV to use M=1."
+    },
+    {
+      "id": 5767,
+      "status": "Held for Document Update",
+      "type": "Technical",
+      "section": "3.3.1",
+      "date": "2019-06-28",
+      "orig": "   EAP method messages are carried within EAP-Payload TLVs defined in\n   Section 4.2.10.  If more than one method is going to be executed in\n   the tunnel, then upon method completion, the server MUST send an\n   Intermediate-Result TLV indicating the result.",
+      "correct": "   EAP method messages are carried within EAP-Payload TLVs defined in\n   Section 4.2.10.  Upon completion of each EAP authentication method in\n   the tunnel, the server MUST send an Intermediate-Result TLV\n   indicating the result.",
+      "notes": "TEAP description is somewhat vague in discussion about \"EAP methods\" vs. \"EAP authentication methods\" as it comes to the EAP methods performed in Phase 2 within the TLS tunnel. RFC 3748 defines Identity request/response as an EAP method. However, this method is not an \"authentication method\" which is a special case of an method where the Type is 4 or greater.\n\nRFC 7170 uses correct terminology in the first paragraph of Section 3.3.1 when talking about multiple authentication methods not being allowed by RFC 3748 in a single EAP conversation. However, many, but not all, of the following \"[EAP] method\" instances are actually referring to \"[EAP] authentication method\". This results in incorrect claims on when the Intermediate-Result TLV and Crypto-Binding TLV are used. They are not used after an EAP non-authentication method like Identity (e.g., see the example in C.3); they are used after each EAP authentication method like EAP-pwd.\n\nFurthermore, the comment about \"more than one method is going to be executed in the tunnel\" does not sound accurate. This applies even if only a single EAP authentication method is executed in the tunnel (Identity method is not required to be executed). The proposed text in this errata entry addresses these two issues in Section 3.3.1. The following additional changes would be needed to make rest of the specification use the terms more accurately:\n\n3.3.3: \"after each successful EAP method\" --> \"after each successful EAP authentication method\"\n3.8.3: \"completion of the EAP method\" --> \"completion of the EAP authentication method\"\n4.2.11: \"between multiple inner EAP methods within EAP\" --> \"after each inner EAP authentication method\"\n4.2.13: \"after each successful EAP method\" --> \"after each successful EAP authentication method\""
+    },
+    {
+      "id": 5768,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "5.",
+      "date": "2019-06-29",
+      "orig": "   The Compound MAC computation is as follows:\n\n      CMK = CMK[j]\n      Compound-MAC = MAC( CMK, BUFFER )\n\n   where j is the number of the last successfully executed inner EAP\n   method, MAC is the MAC function negotiated in TLS 1.2 [RFC5246], and\n   BUFFER is created after concatenating these fields in the following\n   order:",
+      "correct": "The Compound MAC computation is as follows:\n\n    Compound-MAC = the first 20 octets of MAC( CMK[n], BUFFER )\n\nwhere n is the number of the last successfully executed inner method, MAC is the MAC function negotiated in TLS (e.g. TLS 1.2 in [RFC5246]), and BUFFER is created after concatenating these fields in the following order:",
+      "notes": "This definition of how Compound MAC is computed is not compatible with the definition of Compound MAC fields in the Crypto-Binding TLV. Those fields have a fixed length of 20 octets based on Section 4.2.13 (and that TLV is claimed to have a fixed length of 76 octets). However, the MAC function negotiated in TLS have variable mac_length (e.g., MAC=SHA256 used HMAC-SHA256 with mac_length=32).\n\nHow is this supposed to work? Is Section 4.2.13 wrong in claiming that the Compound MAC fields are 20 octets? Or is Section 5.3 wrong in not specifying MAC() function to truncate the output to 20 octets? One of those need to be changed since the current design would work only with the mac_length=20 case (i.e., MAC=SHA with HMAC-SHA1).\n\nFurthermore, that \"TLS 1.2\" part should not be hardcoding this to not allow TLS 1.3 or newer versions from being used.\n\nIt is also a bit strange to see the BUFFER include \"The EAP Type sent by the other party in the first TEAP message.\" since that can only be EAP Type=TEAP, i.e., 55. If that is indeed a fixed value, it does not seem to add any protection for a negotiated parameter as a part of the crypto binding. Regardless, it would be good to be clearer in the text on how this \"EAP Type\" is to be encoded here (assumable it is a single octet field with value 0x37).\n\nPaul Wouters(AD): Corrected Text provided by the WG and in 7170bis"
+    },
+    {
+      "id": 5770,
+      "status": "Held for Document Update",
+      "type": "Technical",
+      "section": "5.4",
+      "date": "2019-07-01",
+      "orig": "   TEAP authentication assures the Master Session Key (MSK) and Extended\n   Master Session Key (EMSK) output from the EAP method are the result\n   of all authentication conversations by generating an Intermediate\n   Compound Key (IMCK).  The IMCK is mutually derived by the peer and\n   the server as described in Section 5.2 by combining the MSKs from\n   inner EAP methods with key material from TEAP Phase 1.  The resulting\n   MSK and EMSK are generated as part of the IMCKn key hierarchy as\n   follows:\n\n      MSK  = TLS-PRF(S-IMCK[j], \"Session Key Generating Function\", 64)\n      EMSK = TLS-PRF(S-IMCK[j],\n           \"Extended Session Key Generating Function\", 64)\n\n   where j is the number of the last successfully executed inner EAP\n   method.",
+      "correct": "",
+      "notes": "Section 5.4 claims that IMCK (and as such, also) S-IMCK[j] is derived by combining the MSKs from inner EAP methods while Section 5.2 talks about two different derivations: one based on MSK and the other one based on EMSK. Section 5.2 seems clear on both MSK and EMSK based values being used in Compound MAC (since both are actually included in the Crypto-Binding TLV). However, Section 5.2 does not clarify how a unique S-IMCK[j] should be derived since there can be two different IMSK[j] values based on whether the inner EAP method generates MSK and EMSK. This gets even more confusing if there is a series of inner EAP methods of which at least one generates both MSK and EMSK, at least one generates only MSK, and at least one does not generate either MSK or EMSK. How exactly would MSK/EMSK from TEAP be derived in those cases? Based on Section 5.4, these are based on S-IMCK[j], but it is not clear how that is derived due to Section 5.2 having three different ways of deriving the IMSK[j] and two different Compound MAC values (and consequently, two different ways of deriving S-IMCK[j] after each successfully completed EAP authentication method).\n\nIt does not look like this could work in practice. There needs to be a clear definition of how to derive a single S-IMCK[j] value for TEAP MSK/EMSK derivation. It would also be helpful to clarify how CMK[j] is derived for each inner EAP method in case of different MSK/EMSK derivation support between the EAP methods used in the sequence.\n\nPaul Wouters(AD): This is curently all addressed in the 7170bis draft"
+    },
+    {
+      "id": 5775,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "5.",
+      "date": "2019-07-04",
+      "orig": "   For authentication methods that generate keying material, further\n   protection against man-in-the-middle attacks is provided through\n   cryptographically binding keying material established by both TEAP\n   Phase 1 and TEAP Phase 2 conversations.  After each successful inner\n   EAP authentication, EAP EMSK and/or MSKs are cryptographically\n   combined with key material from TEAP Phase 1 to generate a Compound\n   Session Key (CMK).  The CMK is used to calculate the Compound MAC as\n   part of the Crypto-Binding TLV described in Section 4.2.13, which\n   helps provide assurance that the same entities are involved in all\n   communications in TEAP.  During the calculation of the Compound MAC,\n   the MAC field is filled with zeros.\n\n   The Compound MAC computation is as follows:\n\n      CMK = CMK[j]\n      Compound-MAC = MAC( CMK, BUFFER )\n\n   where j is the number of the last successfully executed inner EAP\n   method, MAC is the MAC function negotiated in TLS 1.2 [RFC5246], and\n   BUFFER is created after concatenating these fields in the following\n   order:",
+      "correct": "[Append to the end of section 5.3]\n\nIf no key generating inner method is run then no EMSK or MSK will be generated. If an IMSK needs to be generated then the MSK and therefore the IMSK is set to all zeroes (i.e., IMSK = MSK = 32 octets of 0x00s).",
+      "notes": "Section 5.3 does not describe how CMK is derived for the case where not inner EAP authentication method is executed (e.g., when Basic-Password-Auth is used at TLV level). Section 5.4 seems to address that case by implying that S-IMCK = session_key_seed (S-IMCK[0] does indeed have that value, but MSK/EMSK derivation uses S-IMCK[j], so use of S-IMCK here is slightly misleading). This seems to imply that MSK/EMSK derivation uses S-IMCK[0] and as such, Compound MAC derivation might use CMK[0], but CMK[0] is not defined (Section 5.2 defines CMK[j] for j=1..n-1, but not for j=0.\n\nFurthermore, Section 4.2.13 is not clear on what Flags should be used in Crypto-Binding TLV when no inner EAP authentication method is executed. The only three values defined for Flags (1..3) all imply that either EMSK or MSK (or both) based Compound MAC is present, but there is no inner EAP method MSK/EMSK in this case since no such inner EAP method was executed. Maybe a new Flags value should be defined or alternatively, the MSK Compound MAC case could be extended to cover this no inner-EAP case with CMK[0] defined as proposed above to calculate the MSK Compound MAC.\n\nPaul Wouters(AD): Corrected Text provided by the WG and in 7170bis"
+    },
+    {
+      "id": 5844,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "C.1",
+      "date": "2019-08-24",
+      "orig": "                            <- Crypto-Binding TLV (Request),\n                                Result TLV (Success),\n                                (Optional PAC TLV)\n\n       Crypto-Binding TLV(Response),\n       Result TLV (Success),\n       (PAC-Acknowledgement TLV) ->",
+      "correct": "                            <- Intermediate-Result-TLV (Success),\n                                Crypto-Binding TLV (Request),\n                                Result TLV (Success),\n                                (Optional PAC TLV)\n\n       Intermediate-Result-TLV (Success),\n       Crypto-Binding TLV(Response),\n       Result TLV (Success),\n       (PAC-Acknowledgement TLV) ->",
+      "notes": "Section 3.3.2 implies that Intermediate-Result TLV is used after each round of Basic-Password-Auth-Req/Resp TLVs. However, the example sequence in C.1 does not show this. The proposed change in this errata adds the Intermediate-Result TLV indication here. Similar change should be done in C.2 (i.e., add Intermediate-Result TLV (Failure) to the messages that include Result TLV) since the language in 3.3.2 describe the indication to be used for both success and failure cases.\n\nIn addition to this change in C.1, it would be good to clarify the specification globally to avoid confusion about this case since almost all discussion regarding Intermediate-Result TLV currently is in the context of inner EAP authentication. 3.3.2 should have a MUST statement similar to 3.3.1. 3.6 should cover success or failure indications of basic password auth like it does EAP methods. 4.2.11 should note Intermediate-Result TLV is used with both inner EAP and basic password auth. 4.2.13 should mention basic password auth in the \"regardless of whether there is an inner EAP method authentication or not\" sentence."
+    },
+    {
+      "id": 5845,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "3.3.1",
+      "date": "2019-08-24",
+      "orig": "   EAP method messages are carried within EAP-Payload TLVs defined in\n   Section 4.2.10.  If more than one method is going to be executed in\n   the tunnel, then upon method completion, the server MUST send an\n   Intermediate-Result TLV indicating the result.",
+      "correct": "   EAP method messages are carried within EAP-Payload TLVs defined in\n   Section 4.2.10.  Upon method completion, the server MUST send an\n   Intermediate-Result TLV indicating the result.",
+      "notes": "Description of whether Intermediate-Result TLV is supposed to be used in the case where only a single inner EAP authentication method is used. Section 3.3.1 says \"more than one method is going to be executed in the tunnel, then upon method completion, the server MUST send an Intermediate-Result TLV indicating the result\", Section 3.3.3 says \"The Crypto-Binding TLV and Intermediate-Result TLV MUST be included to perform cryptographic binding after each successful EAP method in a sequence of one or more EAP methods\", 4.2.13 says \"It MUST be included with the Intermediate-Result TLV to perform cryptographic binding after each successful EAP method in a sequence of EAP methods\", Annex C.3 shows an example exchange with a single inner EAP authentication method with use of Intermediate-Result TLV.\n\nIt looks like the majority of the places discussion this topic implies that there is going to be an Intermediate-Result TLV after each inner EAP authentication method and the text in 3.3.1 is the only clear case of conflicting (or well, at least misleading if one were to claim it does not explicitly say MUST NOT for the one inner EAP authentication method case). As such, I'd conclude the Intermediate-Result TLV is indeed going to be exchanged after each EAP authentication method and the proposed text change to 3.3.1 covers that."
+    },
+    {
+      "id": 6157,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "4.2.9",
+      "date": "2020-05-04",
+      "orig": "  Status\n\n      The Status field is one octet.  This indicates the result if the\n      server does not process the action requested by the peer.",
+      "correct": "  Status\n\n      The Status field is one octet.  This indicates the result if the\n      party who receives this TLV does not process the action.",
+      "notes": "The status field is carried in the \"Request-Action\" frame.  As is stated at the start of the section, the frame can be sent either by the server or the peer."
+    },
+    {
+      "id": 7145,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "3.3.3",
+      "date": "2022-10-05",
+      "orig": "   The Crypto-Binding TLV MUST be exchanged and verified\n   before the final Result TLV exchange, regardless of whether or not\n   there is an inner EAP method authentication.",
+      "correct": "   Except as noted below, the Crypto-Binding TLV MUST be exchanged and verified\n   before the final Result TLV exchange, regardless of whether or not\n   there is an inner EAP method authentication",
+      "notes": "The text contradicts itself in the same paragraph, because it goes on to say:\n\n   The server may send the final Result TLV along with an\n   Intermediate-Result TLV and a Crypto-Binding TLV to indicate its\n   intention to end the conversation.  If the peer requires nothing more\n   from the server, it will respond with a Result TLV indicating success\n   accompanied by a Crypto-Binding TLV and Intermediate-Result TLV if\n   necessary.\n\nSo there are actually several legal combinations here:\n\n1. Server and peer perform a crypto-binding exchange in anticipation of later sending Result TLVs\n2. The server and peer combine their crypto-binding and Result TLV in the same message.\n3. One side initiates a crypto-binding TLV and the OTHER responds with both crypto-binding and Result TLV.\n\nThe practice seems to be to include the crypto-binding TLVs alongside Result TLVs."
+    },
+    {
+      "id": 7259,
+      "status": "Verified",
+      "type": "Technical",
+      "section": "3.3.2",
+      "date": "2022-12-01",
+      "orig": "   The use of EAP-FAST-GTC as defined in RFC 5421 [RFC5421] is NOT\n   RECOMMENDED with TEAPv1 because EAP-FAST-GTC is not compliant with\n   EAP-GTC defined in [RFC3748].  Implementations should instead make\n   use of the password authentication TLVs defined in this\n   specification.  The authentication server initiates password\n   authentication by sending a Basic-Password-Auth-Req TLV defined in\n   Section 4.2.14.  If the peer wishes to participate in password\n   authentication, then it responds with a Basic-Password-Auth-Resp TLV\n   as defined in Section 4.2.15 that contains the username and password.\n   If it does not wish to perform password authentication, then it\n   responds with a NAK TLV indicating the rejection of the Basic-\n   Password-Auth-Req TLV.  Upon receiving the response, the server\n   indicates the success or failure of the exchange using an\n   Intermediate-Result TLV.  Multiple round trips of password\n   authentication requests and responses MAY be used to support some\n   \"housecleaning\" functions such as a password or pin change before a\n   user is authenticated.",
+      "correct": "   The use of EAP-FAST-GTC as defined in RFC 5421 [RFC5421] is NOT\n   RECOMMENDED with TEAPv1 because EAP-FAST-GTC is not compliant with\n   EAP-GTC defined in [RFC3748].  Implementations should instead make\n   use of the password authentication TLVs defined in this\n   specification.  The authentication server initiates password\n   authentication by sending a Basic-Password-Auth-Req TLV defined in\n   Section 4.2.14.  If the peer wishes to participate in password\n   authentication, then it responds with a Basic-Password-Auth-Resp TLV\n   as defined in Section 4.2.15 that contains the username and password.\n   If it does not wish to perform password authentication, then it\n   responds with a NAK TLV indicating the rejection of the Basic-\n   Password-Auth-Req TLV.  Upon receiving the response, the server\n   indicates the success or failure of the exchange using an\n   Intermediate-Result TLV.  Multiple round trips of password\n   authentication requests and responses MAY be used to support some\n   \"housecleaning\" functions such as a password or pin change before a\n   user is authenticated.\n\n   If using EAP-MSCHAPv2 as an inner method, the EAP-FAST-MSCHAPv2\n   variant defined in [RFC5422] MUST be used.",
+      "notes": "While RFC 7170 does not really require this and would be technically correct as-is for this area, deployed implementations of EAP-TEAP seem to have used MSK/IMSK derivation for an inner EAP method in a manner that matches what was done with EAP-FAST. This could be called non-compliant, but for the sake of interoperability, it might make more sense to describe what is done in deployed implementation instead. The only technical difference here is in swapping the first and the second 16 octets of EAP-MSCHAPv2 MSK when it is used as the IMSK for EAP-TEAP."
+    }
+  ]
+}

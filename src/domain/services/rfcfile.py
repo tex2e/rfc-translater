@@ -13,6 +13,7 @@ class RfcFile:
     OUTPUT_HTML_INDEX_FILE = 'html/index.html'
     OUTPUT_HTML_RFC_LIST_JSON_FILE = 'html/data-rfc-list.json'
     OUTPUT_HTML_RFC_LIST_SHARD_DIR = 'html/data-rfc-list'
+    OUTPUT_HTML_RFC_ERRATA_SHARD_DIR = 'html/data-rfc-errata'
     OUTPUT_HTML_RFC_TITLE_JSON_FILE = 'html/data-rfc-title.json'
     OUTPUT_HTML_RFC_TITLE_SHARD_DIR = 'html/data-rfc-title'
     # 翻訳対象外（RFC 2220 未満）のRFCの日本語タイトル。リンク先の概要表示などに使う
@@ -21,6 +22,7 @@ class RfcFile:
     GLOB_HTML_DRAFT_FILE = 'html/draft/draft-*.html'
     GLOB_DATA_TRANS_JSON_FILE = 'data/*/rfc*-trans.json'
     GLOB_DATA_DRAFT_TRANS_JSON_FILE = 'data/draft/draft-*-trans.json'
+    GLOB_DATA_ERRATA_JSON_FILE = 'data/*/rfc*-errata.json'
 
     TEMPLATE_HTML_INDEX = 'templates/index.html'
     TEMPLATE_HTML_RFC = 'templates/rfc.html'
@@ -84,6 +86,12 @@ class RfcFile:
             return os.path.join(dir_data, f'{rfc.get_id()}-summary.json')
 
     @staticmethod
+    def get_filepath_data_errata_json(rfc: Rfc) -> str:
+        """RFCのErrata（原文・修正文・補足）のJSONファイルパス"""
+        assert isinstance(rfc, Rfc)
+        return os.path.join(RfcFile.get_dir_data(rfc), f'rfc{rfc.get_id()}-errata.json')
+
+    @staticmethod
     def get_filepath_html_rfc(rfc: IRfc) -> str:
         """RFCのHTMLファイルパス"""
         assert isinstance(rfc, IRfc)
@@ -124,6 +132,11 @@ class RfcFile:
     def get_url_rfc_index_xml():
         """RFC Indexの取得先URL (XML)"""
         return 'https://www.rfc-editor.org/rfc-index.xml'
+
+    @staticmethod
+    def get_url_errata_json():
+        """全RFCのErrata一覧（JSON）のURL"""
+        return 'https://www.rfc-editor.org/errata.json'
 
     @staticmethod
     def write_json_file(filepath: str, obj: object):
