@@ -82,7 +82,9 @@ class RfcUi {
       // 目次と現在の節名の表示
       this.sectionNav = new RfcSectionNavUi();
       this.sectionNav.setup();
-      // 本文中のRFCへのリンクにマウスを乗せたときの概要表示
+      // 本文中の「Section 4.2」「[BBK17]」を、節・参考文献へのページ内リンクにする
+      new RfcInPageLinkUi().setup();
+      // 本文中のRFC・節・参考文献へのリンクにマウスを乗せたときの概要表示
       new RfcLinkPreviewUi(this.rfcNumber).setup();
     }
   }
@@ -122,6 +124,7 @@ class RfcUi {
       .then(data => {
         const datum = data[rfcNumber];
         this._showAlertWhenObsoleted(rfcNumber, datum);
+        this._showAlertWhenUpdated(rfcNumber, datum);
         this._showDate(rfcNumber, datum);
         this._showWg(rfcNumber, datum);
 
@@ -168,6 +171,33 @@ class RfcUi {
         domRfcStatus.innerHTML = `<a href="https://www.rfc-editor.org/rfc/rfc2026#section-4.1" class="badge badge-pill badge-${badge_class}">${status}</a>`;
       }
     }
+  }
+
+  // 対象RFCが他のRFCで更新されていれば、更新したRFCへのリンクを表示する（廃止の警告の下に出す）
+  _showAlertWhenUpdated(_rfcNumber, datum) {
+    const domRfcAlert = this._getAlertHtmlDomElem();
+    const updatedBy = datum ? datum[RfcIndexJsonElem.UPDATED_BY] : null;
+    if (this.domRfcDraft || !domRfcAlert || !updatedBy || updatedBy.length === 0) {
+      return;
+    }
+    const domAlert = document.createElement('div');
+    domAlert.id = 'rfc_alert_updated_by';
+    domAlert.className = 'alert alert-warning';
+    domAlert.setAttribute('role', 'note');
+    domAlert.append('このRFCは ');
+    updatedBy.forEach((rfcNumber, i) => {
+      if (i > 0) {
+        domAlert.append(', ');
+      }
+      const link = document.createElement('a');
+      // RFC 2220 未満は翻訳対象外のため、IETFのサイトへリンクする
+      link.href = (parseInt(rfcNumber) < 2220)
+        ? `https://datatracker.ietf.org/doc/html/rfc${rfcNumber}` : `./rfc${rfcNumber}.html`;
+      link.textContent = `RFC ${rfcNumber}`;
+      domAlert.appendChild(link);
+    });
+    domAlert.append(' によって更新されています。あわせて参照してください。');
+    domRfcAlert.after(domAlert);
   }
 
   _showDate(_rfcNumber, datum) {
@@ -385,6 +415,217 @@ class RfcUi {
 
 
 // ---------------------------------------------------------------------------
+// html/rfcXXXX.html : 本文中の節・参考文献の参照をページ内リンクにする
+
+class RfcInPageLinkUi {
+  static CSSCLASS_LINK = 'rfc-inpage-link';
+  static KIND_SECTION = 'section';
+  static KIND_REF = 'ref';
+  // 節番号（"4.4.2", "A", "B.1"）。"4.e" や "4a" のように続きがあるものは節番号とみなさない
+  static NUM = '(?:[A-Z]|\\d+)(?:\\.\\d+)*(?![A-Za-z0-9]|\\.[A-Za-z0-9])';
+  // 英語: "Section 4.2", "Appendix A.1", "Sections 3 and 4.1", "Sections 4.1, 4.2, and 4.3"（古いRFCの小文字の "section 14.9" も含む）
+  static RE_EN = new RegExp(
+    `\\b([Ss]ections|[Aa]ppendices|[Ss]ection|[Aa]ppendix)\\s+(${RfcInPageLinkUi.NUM})` +
+    `((?:,?\\s*(?:,|and|or|through|to)\\s+${RfcInPageLinkUi.NUM})*)`, 'g');
+  // 日本語: "セクション4.2", "付録A", "4.2節", "第4節", "4.2.1項"
+  static RE_JA = new RegExp(
+    `(?:セクション|付録)\\s?(${RfcInPageLinkUi.NUM})|第?(${RfcInPageLinkUi.NUM})\\s?節|(\\d+(?:\\.\\d+)+)\\s?項`, 'g');
+  // 参考文献の引用（"[BBK17]", "[I-D.ietf-tls-esni]"）
+  static RE_REF = /\[([A-Za-z0-9][^\[\]\s]{0,63})\]/g;
+  // 直後が次の形なら他の文書の節を指している
+  //   「of [RFC5246]」「in RFC 5246」「from [RFC9843]」「, of [TLS1.0]」「in STD 10」「in the [RFC2911] document」「in the IPFIX protocol [RFC5101]」
+  //   「of CMS [RFC5652]」「of the DNS specification [RFC1035]」（文書名の後に引用が続く）
+  //   「of the RTP specification」「of that document」「of the RFC」（引用のない文書）
+  //   「of ICE」「of the TLP」「of Unicode Technical Standard #35」（大文字で始まる文書名）
+  //   「(as described in Section 3 of stringprep)」（括弧を閉じる直前の1語の文書名）
+  //   「of "The Internet Standards Process"」「of RFC-1787」「of the RFC 3102」「of <http://...>」
+  // 「of this document」「of the present document」はこの文書の節なので除く
+  // 「in」は「in the "Foo" registry」のようにこの文書の節でも続くことが多いため、引用とRFC番号だけを見る
+  // 「from」は変更履歴の「Changed text in Section 3.1.3 from "..."」があるため、引用とRFC番号だけを見る
+  static RE_OTHER_DOC_AFTER = new RegExp(
+    '^\\s*(?:' +
+      ',\\s*of\\s+\\[' +
+      '|of\\s+(?:\\[|(?:the\\s+)?[Rr][Ff][Cc][-\\s]?\\d|(?:the\\s+)?["\u201c<]' +
+        '|(?!this\\b|these\\b|the present\\b)(?:[^.;:\\[\\]()"\\n]|\\.(?=\\d)|\\([^()\\n]{0,40}\\)|"[^"\\n]{0,60}"){1,80}?\\[' +
+        '|(?:the|that|those)\\s+(?:same\\s+)?(?:document(?!\\s+body)|RFC|specification|spec|paper|memo|draft|standard|report)s?\\b' +
+        '|the\\s+(?!present\\b)(?:[^.;:\\[\\]()\\n]|\\.(?=\\d)){1,40}?\\s(?:specification|spec|document|standard|draft|protocol)\\b' +
+        '|(?:the\\s+)?(?!This\\b|These\\b)[A-Z]' +
+        '|[A-Za-z][\\w-]*\\s*\\))' +
+      '|in\\s+(?:\\[|(?:the\\s+)?RFC[-\\s]?\\d|["\u201c<]|(?:STD|BCP)\\s?\\d|the\\s+\\[|the\\s+(?:[\\w-]+\\s+){0,3}document\\b' +
+        '|the\\s+(?!IANA\\b)[A-Z][\\w-]*(?:\\s+[A-Z][\\w-]*)*(?:\\s+[a-z]+)?\\s+\\[' +
+        '|(?!this\\b|these\\b|the\\b)(?:[^.;:\\[\\]()\\n]|\\.(?=\\d)){1,60}?\\[)' +
+      '|from\\s+(?:\\[|(?:the\\s+)?RFC[-\\s]?\\d)' +
+    ')');
+  // 直前が次の形なら他の文書の節を指している
+  //   「[RFC5246], 」「RFC 5246 の」「[RFC5246]の」「[RFC6749]（OAuth 2.0）の」「「RFC8723」の」
+  //   「stringprep's Section 6」「RFC 793's Section 3」「[BEEP]'s Section 9」（「This document's」は除く）
+  //   「RFC 7613 (this document), Section 3.2」は、この文書の節なので除く
+  //   「DNS仕様の」「RTP仕様書の」「法的規定の」（「本仕様の」「このドキュメントの」はこの文書なので除く）
+  //   「（StringPrepの」「[QUIC-TLSの」（括弧の直後の英字の文書名。崩れた引用も含む）
+  //   「[RFC7926]のセクション1.1の」（他の文書の節に続く節。崩れた訳文に多い）
+  //   「Trust Legal Provisionsの」「TLPの」（著作権表示が参照する IETF Trust の規定）
+  //   「<https://.../FAQ.pdf>の」「（https://.../sp800-63b.html）の」（URLで示した文書）
+  static RE_OTHER_DOC_BEFORE = new RegExp(
+    '(?:' +
+      '(?:\\]|RFC\\s?\\d+)[）)」"\u201d]*\\s*(?:[（(](?![Tt]his\\b|この|本)[^（）()]{0,40}[）)])?,?\\s*(?:の\\s*)?' +
+      '|(?:(?<![Tt]his |the present |[Tt]his document|[Tt]his specification)\\b[A-Za-z0-9][\\w.-]*|\\])\'s\\s*' +
+      '|(?<!本|この|当|同)(?:仕様書?|文書|ドキュメント|規格|規定|契約)\\s*の\\s*' +
+      '|[\\[（(「"][A-Za-z][\\w.-]*\\s*の\\s*' +
+      '|(?:\\]|RFC\\s?\\d+)[）)」]*\\s*の\\s*(?:セクション|付録)\\s?[0-9A-Z.]+\\s*の\\s*' +
+      '|(?:Provisions|TLP)\\s*の\\s*' +
+      '|(?:>|\\.(?:pdf|html?|txt))[）)]?\\s*の\\s*' +
+    ')$');
+
+  setup() {
+    this.sections = new Map();  // 節番号 → 見出しのid
+    document.querySelectorAll('.container [data-section][id]').forEach(el => {
+      if (!this.sections.has(el.dataset.section)) {
+        this.sections.set(el.dataset.section, el.id);
+      }
+    });
+    this.refs = new Map();      // 引用ラベル → 参考文献の段落のid
+    this.refRows = new Set();
+    this._collectReferences();
+
+    const texts = document.querySelectorAll('.container .row:not(.sec-row) p.text');
+    texts.forEach(el => {
+      if (!this.refRows.has(el.closest('.row'))) {
+        this._linkify(el);
+      }
+    });
+  }
+
+  // 「References」の節にある「[ラベル] 著者, ...」で始まる段落を参考文献の項目とする
+  _collectReferences() {
+    let inReferences = false;
+    document.querySelectorAll('.container > .row').forEach(row => {
+      if (row.classList.contains('sec-row')) {
+        const heading = row.querySelector('.text');
+        inReferences = !!heading && /References|Bibliography/i.test(heading.textContent);
+        return;
+      }
+      if (!inReferences || !row.id) {
+        return;
+      }
+      const textEn = row.querySelector('.text');
+      const m = textEn && textEn.textContent.trim().match(/^\[([^\[\]\s]{1,64})\]/);
+      if (m) {
+        this.refRows.add(row);
+        if (!this.refs.has(m[1])) {
+          this.refs.set(m[1], row.id);
+        }
+      }
+    });
+  }
+
+  // 要素内の文字列を走査し、参照をリンクに置き換える（既存のリンクや強調の中身はそのまま）
+  _linkify(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: node => node.parentElement.closest('a') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const nodes = [];
+    while (walker.nextNode()) {
+      nodes.push(walker.currentNode);
+    }
+    nodes.forEach(node => this._linkifyTextNode(node));
+  }
+
+  _linkifyTextNode(node) {
+    const text = node.nodeValue;
+    const matches = [...this._findSections(node, text), ...this._findRefs(text)]
+      .sort((a, b) => a.start - b.start);
+    if (matches.length === 0) {
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    let pos = 0;
+    for (const m of matches) {
+      if (m.start < pos) {
+        continue;  // 重なる一致は先のものを優先する
+      }
+      frag.append(text.slice(pos, m.start));
+      const link = document.createElement('a');
+      link.href = `#${m.id}`;
+      link.className = RfcInPageLinkUi.CSSCLASS_LINK;
+      link.dataset.preview = m.kind;
+      link.textContent = text.slice(m.start, m.end);
+      frag.appendChild(link);
+      pos = m.end;
+    }
+    frag.append(text.slice(pos));
+    node.replaceWith(frag);
+  }
+
+  // 前後の兄弟ノードも含めた文脈（直前・直後の文字列）
+  _contextOf(node, text, start, end) {
+    let before = text.slice(0, start);
+    for (let n = node.previousSibling; n && before.length < 100; n = n.previousSibling) {
+      before = n.textContent + before;
+    }
+    let after = text.slice(end);
+    for (let n = node.nextSibling; n && after.length < 100; n = n.nextSibling) {
+      after = after + n.textContent;
+    }
+    return { before, after };
+  }
+
+  _findSections(node, text) {
+    const found = [];
+    const add = (start, end, number) => {
+      const id = this.sections.get(number.replace(/\.$/, ''));
+      if (id) {
+        found.push({ start, end, id, kind: RfcInPageLinkUi.KIND_SECTION });
+      }
+    };
+    const isOtherDoc = (start, end) => {
+      const { before, after } = this._contextOf(node, text, start, end);
+      return RfcInPageLinkUi.RE_OTHER_DOC_BEFORE.test(before) || RfcInPageLinkUi.RE_OTHER_DOC_AFTER.test(after);
+    };
+
+    for (const m of text.matchAll(RfcInPageLinkUi.RE_EN)) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (isOtherDoc(start, end)) {
+        continue;
+      }
+      // 先頭の番号は「Section 4.2」全体をリンクにする
+      const firstEnd = start + m[0].indexOf(m[2], m[1].length) + m[2].length;
+      add(start, firstEnd, m[2]);
+      // 複数形のときは「and 4.3」などの後続の番号もそれぞれリンクにする
+      if (m[3] && /s$|ices$/.test(m[1])) {
+        const numRe = new RegExp(RfcInPageLinkUi.NUM, 'g');
+        for (const n of m[3].matchAll(numRe)) {
+          const s = firstEnd + n.index;
+          add(s, s + n[0].length, n[0]);
+        }
+      }
+    }
+    for (const m of text.matchAll(RfcInPageLinkUi.RE_JA)) {
+      const start = m.index;
+      const end = start + m[0].length;
+      if (isOtherDoc(start, end)) {
+        continue;
+      }
+      add(start, end, m[1] || m[2] || m[3]);
+    }
+    return found;
+  }
+
+  _findRefs(text) {
+    const found = [];
+    for (const m of text.matchAll(RfcInPageLinkUi.RE_REF)) {
+      // [RFCxxxx] はRFCのページへのリンクになっているため対象外
+      const id = /^RFC\d+$/.test(m[1]) ? null : this.refs.get(m[1]);
+      if (id) {
+        found.push({ start: m.index, end: m.index + m[0].length, id, kind: RfcInPageLinkUi.KIND_REF });
+      }
+    }
+    return found;
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // html/rfcXXXX.html : RFCへのリンクにマウスを乗せたときの概要表示
 
 class RfcLinkPreviewUi {
@@ -397,6 +638,8 @@ class RfcLinkPreviewUi {
   static HIDE_DELAY_MS = 150;
   // 要約は最初の何文までを表示するか
   static SUMMARY_SENTENCES = 2;
+  // 節の最初の段落は何文字まで表示するか
+  static SECTION_TEXT_MAX = 160;
 
   constructor(currentRfcNumber) {
     this.currentRfcNumber = String(parseInt(currentRfcNumber));
@@ -442,14 +685,20 @@ class RfcLinkPreviewUi {
     return number === this.currentRfcNumber ? null : number;
   }
 
+  // RfcInPageLinkUi が付けた、節・参考文献へのページ内リンクか
+  _isInPageLink(link) {
+    return !!(link && link.classList.contains(RfcInPageLinkUi.CSSCLASS_LINK));
+  }
+
   _onEnter(target) {
     if (this.card && this.card.contains(target)) {
       clearTimeout(this.hideTimer);
       return;
     }
     const link = target.closest ? target.closest('a') : null;
-    const rfcNumber = this._rfcNumberOf(link);
-    if (!rfcNumber) {
+    const inPage = this._isInPageLink(link);
+    const rfcNumber = inPage ? null : this._rfcNumberOf(link);
+    if (!inPage && !rfcNumber) {
       return;
     }
     clearTimeout(this.hideTimer);
@@ -457,13 +706,19 @@ class RfcLinkPreviewUi {
       return;
     }
     clearTimeout(this.showTimer);
-    this.showTimer = setTimeout(() => this._show(link, rfcNumber), RfcLinkPreviewUi.SHOW_DELAY_MS);
+    this.showTimer = setTimeout(() => {
+      if (inPage) {
+        this._showInPage(link);
+      } else {
+        this._show(link, rfcNumber);
+      }
+    }, RfcLinkPreviewUi.SHOW_DELAY_MS);
   }
 
   _onLeave(target, relatedTarget) {
     const link = target.closest ? target.closest('a') : null;
     const fromCard = this.card && this.card.contains(target);
-    if (!fromCard && !this._rfcNumberOf(link)) {
+    if (!fromCard && !this._isInPageLink(link) && !this._rfcNumberOf(link)) {
       return;
     }
     // リンクとカードの間を移動しているときは消さない
@@ -482,6 +737,65 @@ class RfcLinkPreviewUi {
     if (this.activeLink === link) {
       this._render(link, rfcNumber, info);
     }
+  }
+
+  // 節・参考文献へのページ内リンクは、ページ内の見出し・段落・文献の項目から表示する
+  _showInPage(link) {
+    const target = document.getElementById(link.getAttribute('href').slice(1));
+    const row = target ? target.closest('.row') : null;
+    if (!row) {
+      return;
+    }
+    this.activeLink = link;
+    const card = this._ensureCard();
+    card.innerHTML = `
+      <div class="rfc-link-preview-title"></div>
+      <div class="rfc-link-preview-sub"></div>
+      <div class="rfc-link-preview-summary"></div>
+    `;
+    const domTitle = card.querySelector('.rfc-link-preview-title');
+    const domSub = card.querySelector('.rfc-link-preview-sub');
+    const domBody = card.querySelector('.rfc-link-preview-summary');
+    const [textEn, textJa] = Array.from(row.querySelectorAll('.text'), el => el.textContent.trim());
+
+    if (link.dataset.preview === RfcInPageLinkUi.KIND_SECTION) {
+      // 見出し（日本語訳がなければ原文）と、節の最初の段落の訳
+      domTitle.textContent = textJa || textEn || '';
+      if (textJa && textEn && textJa !== textEn) {
+        domSub.textContent = textEn;
+      }
+      domBody.textContent = this._truncate(this._firstParagraphOf(row), RfcLinkPreviewUi.SECTION_TEXT_MAX);
+    } else {
+      // 参考文献は著者名・文献名を原文のまま残す規約のため、原文の項目を表示する
+      const m = (textEn || '').match(/^(\[[^\]]+\])\s*([\s\S]*)$/);
+      domTitle.textContent = m ? m[1] : '';
+      domBody.textContent = m ? m[2] : (textEn || '');
+    }
+    for (const elem of [domTitle, domSub, domBody]) {
+      elem.hidden = !elem.textContent;
+    }
+    card.hidden = false;
+    link.setAttribute('aria-describedby', card.id);
+    this._place(link, card);
+  }
+
+  // 見出しの次から始まる最初の文章の段落（訳文があれば訳文）
+  _firstParagraphOf(headingRow) {
+    for (let row = headingRow.nextElementSibling; row; row = row.nextElementSibling) {
+      if (row.classList.contains('sec-row')) {
+        return '';
+      }
+      const texts = row.querySelectorAll('p.text');
+      if (texts.length > 0) {
+        return texts[texts.length - 1].textContent.trim() || texts[0].textContent.trim();
+      }
+    }
+    return '';
+  }
+
+  _truncate(text, max) {
+    const normalized = text.replace(/\s+/g, ' ');
+    return normalized.length > max ? normalized.slice(0, max) + '…' : normalized;
   }
 
   _hide() {
