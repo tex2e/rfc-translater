@@ -14,6 +14,9 @@ class RfcFile:
     OUTPUT_HTML_RFC_LIST_JSON_FILE = 'html/data-rfc-list.json'
     OUTPUT_HTML_RFC_LIST_SHARD_DIR = 'html/data-rfc-list'
     OUTPUT_HTML_RFC_TITLE_JSON_FILE = 'html/data-rfc-title.json'
+    OUTPUT_HTML_RFC_TITLE_SHARD_DIR = 'html/data-rfc-title'
+    # 翻訳対象外（RFC 2220 未満）のRFCの日本語タイトル。リンク先の概要表示などに使う
+    UNTRANSLATED_RFC_TITLE_JSON_FILE = 'data/rfc-title-untranslated.json'
     GLOB_HTML_FILE = 'html/rfc*.html'
     GLOB_HTML_DRAFT_FILE = 'html/draft/draft-*.html'
     GLOB_DATA_TRANS_JSON_FILE = 'data/*/rfc*-trans.json'
